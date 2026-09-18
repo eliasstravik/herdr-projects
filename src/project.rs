@@ -378,6 +378,8 @@ pub fn parse_repo_arg(arg: &str) -> Repo {
     }
 }
 
+const TASKS_TEMPLATE: &str = "# Tasks\n\n## Backlog\n";
+
 const INSTRUCTIONS_TEMPLATE: &str = "\
 # Instructions
 
@@ -435,6 +437,7 @@ pub fn create(root: &Path, name: &str, goal: &str, repos: Vec<Repo>) -> Result<P
         &dir.join("MEMORY.md"),
         b"# Memory\n\nOne line per memory file: `- [title](memory/file.md): what it holds`.\n",
     )?;
+    write_atomic(&dir.join("TASKS.md"), TASKS_TEMPLATE.as_bytes())?;
     write_json(&project.state_dir().join("project.json"), &ProjectState::default())?;
     // PROJECT.md last: a folder without it is not a project, so a half-made
     // skeleton is never picked up by `list` or the ticker.
@@ -498,6 +501,7 @@ mod tests {
             assert!(project.dir().join(sub).is_dir(), "{sub}");
         }
         assert!(project.dir().join("MEMORY.md").is_file());
+        assert!(project.dir().join("TASKS.md").is_file());
         let (settings, body) = project.read_project_md().unwrap();
         assert_eq!(settings.name, "Demo");
         assert_eq!(settings.goal, "Ship \"it\"");

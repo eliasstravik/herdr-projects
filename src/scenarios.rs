@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+use crate::coordinator;
 use crate::paths::{Ctx, Env};
 use crate::project::{self, Project};
 use crate::runner::Cmd;
@@ -1004,4 +1005,19 @@ fn a_remote_thread_without_a_repo_is_refused() {
     world.project("demo", "a.sock");
     let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), agent: None, base: None, task: "t".into() };
     assert!(threads::start(&world.ctx(), "demo", args).unwrap_err().to_string().contains("needs --repo"));
+}
+
+#[test]
+fn the_digest_prints_the_task_list_or_none() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let tasks = project.dir().join("TASKS.md");
+    std::fs::write(&tasks, "# Tasks\n\n## Backlog\n- [ ] Write the docs (me)\n").unwrap();
+    let digest = coordinator::digest(&world.ctx(), &project, "hp").unwrap().0;
+    let heading = digest.find("## Tasks (TASKS.md)").expect("tasks heading");
+    assert!(digest[heading..].contains("- [ ] Write the docs (me)"));
+
+    std::fs::remove_file(&tasks).unwrap();
+    let digest = coordinator::digest(&world.ctx(), &project, "hp").unwrap().0;
+    assert!(digest.contains("## Tasks (TASKS.md)\n(none)"));
 }
