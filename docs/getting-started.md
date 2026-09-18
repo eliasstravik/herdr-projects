@@ -46,6 +46,8 @@ Edit `PROJECT.md` in the project folder to write your standing instructions and 
 
 Type in the coordinator's pane, for example: "Add a billing page: API endpoint, the page itself, and end-to-end tests."
 
+You can also ask it to add, assign, delegate and show tasks. It keeps them in `TASKS.md`.
+
 By default it lists the threads it suggests and waits. Reply with a go-ahead that names them ("start all three"). Your agent then asks permission to run `thread start` for each one, unless you've allow-listed it (see [Operations](operations.md#the-allow-list-for-your-coordinator)).
 
 ## 5. Confirm the threads appear

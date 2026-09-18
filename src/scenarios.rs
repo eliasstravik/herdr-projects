@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+use crate::coordinator;
 use crate::paths::{Ctx, Env};
 use crate::project::{self, Project};
 use crate::runner::Cmd;
@@ -1044,4 +1045,19 @@ fn open_leaves_a_matching_label_alone_and_a_failed_rename_does_not_block_it() {
     world.runner.on("workspace rename", fail(1, "boom"));
     open_alive(&world, &project).unwrap();
     assert_eq!(world.runner.count("workspace rename"), 1);
+}
+
+#[test]
+fn the_digest_prints_the_task_list_or_none() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let tasks = project.dir().join("TASKS.md");
+    std::fs::write(&tasks, "# Tasks\n\n## Backlog\n- [ ] Write the docs (me)\n").unwrap();
+    let digest = coordinator::digest(&world.ctx(), &project, "hp").unwrap().0;
+    let heading = digest.find("## Tasks (TASKS.md)").expect("tasks heading");
+    assert!(digest[heading..].contains("- [ ] Write the docs (me)"));
+
+    std::fs::remove_file(&tasks).unwrap();
+    let digest = coordinator::digest(&world.ctx(), &project, "hp").unwrap().0;
+    assert!(digest.contains("## Tasks (TASKS.md)\n(none)"));
 }

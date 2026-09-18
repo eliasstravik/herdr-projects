@@ -17,6 +17,7 @@ How Herdr Projects works, what it writes where, what its safety settings do and 
 ~/.herdr-projects/<project>/
   PROJECT.md              settings (TOML between +++ lines) and your standing instructions; yours
   MEMORY.md, memory/      project memory; the coordinator's
+  TASKS.md                the task list; the coordinator's
   routines/<name>.md      routines; the coordinator's
   scratch/                the coordinator's temporary files
   threads/<id>.toml       thread record          threads/<id>.md   home copy of its report
