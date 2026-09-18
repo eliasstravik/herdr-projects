@@ -319,6 +319,16 @@ impl<'a> Herdr<'a> {
         self.call(&["worktree", "remove", "--workspace", workspace], Duration::from_secs(20)).map(|_| ())
     }
 
+    /// A workspace's label, as the sidebar shows it.
+    pub fn workspace_label(&self, workspace: &str) -> Result<String, HerdrError> {
+        let result = self.call(&["workspace", "get", workspace], CALL_TIMEOUT)?;
+        Ok(result["workspace"]["label"].as_str().unwrap_or_default().to_string())
+    }
+
+    pub fn workspace_rename(&self, workspace: &str, label: &str) -> Result<(), HerdrError> {
+        self.call(&["workspace", "rename", workspace, label], CALL_TIMEOUT).map(|_| ())
+    }
+
     /// The working directory herdr reports for a new tab's pane.
     pub fn pane_cwd(&self, pane: &str) -> Result<String, HerdrError> {
         let result = self.call(&["pane", "get", pane], CALL_TIMEOUT)?;

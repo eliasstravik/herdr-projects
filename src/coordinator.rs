@@ -118,11 +118,13 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
         .with_context(|| format!("the herdr session at {socket} is not reachable"))?;
     let prefix = current_prefix(&ctx.root)?;
     let prompt = priming_prompt(&prefix, slug);
+    let label = crate::project::display_name(&settings.name, slug);
 
     // Already open and alive: focus it.
     if let Some(record) = &previous
         && let Some(agent) = agents.iter().find(|a| agent_matches(record, a))
     {
+        sync_label(&herdr, &record.workspace_id, &label);
         let _ = herdr.agent_focus(&record.pane_id);
         report_tokens(&herdr, slug, &record.pane_id);
         if options.reprime {
@@ -141,11 +143,11 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     // the identity check compares against it.
     let dir = project.canonical_dir();
     let cwd = dir.to_string_lossy().into_owned();
-    let label = if settings.name.is_empty() { slug } else { &settings.name };
     let reusable = previous.as_ref().filter(|record| {
         panes.iter().any(|p| pane_matches(record, p)) && !agents.iter().any(|a| a.pane_id == record.pane_id)
     });
     let (workspace_id, tab_id, pane_id) = if let Some(record) = reusable {
+        sync_label(&herdr, &record.workspace_id, &label);
         (record.workspace_id.clone(), record.tab_id.clone(), record.pane_id.clone())
     } else {
         let workspace = previous
@@ -153,9 +155,12 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
             .map(|record| record.workspace_id.clone())
             .filter(|id| panes.iter().any(|p| &p.workspace_id == id && Path::new(&p.cwd).starts_with(&dir)));
         let created = match workspace {
-            Some(id) => herdr.tab_create(&id, &dir, "coordinator", true)?,
+            Some(id) => {
+                sync_label(&herdr, &id, &label);
+                herdr.tab_create(&id, &dir, "coordinator", true)?
+            }
             None => {
-                let created = herdr.workspace_create(&dir, label, true)?;
+                let created = herdr.workspace_create(&dir, &label, true)?;
                 let _ = herdr.call(
                     &["tab", "rename", &created.tab_id, "coordinator"],
                     crate::herdr::CALL_TIMEOUT,
@@ -196,6 +201,20 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     println!("opened `{slug}` in workspace {} (pane {})", record.workspace_id, record.pane_id);
     println!("Commands: {prefix}");
     Ok(())
+}
+
+/// Renames a recorded workspace whose label is not the project's display name,
+/// so a `name` edited in PROJECT.md shows on the next `open`. Never fails: a
+/// wrong label is cosmetic.
+fn sync_label(herdr: &Herdr, workspace_id: &str, label: &str) {
+    match herdr.workspace_label(workspace_id) {
+        Ok(current) if current != label => {
+            if let Err(error) = herdr.workspace_rename(workspace_id, label) {
+                println!("could not rename workspace {workspace_id} to `{label}` ({error})");
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Sends the priming prompt now when the agent is ready for one; otherwise
