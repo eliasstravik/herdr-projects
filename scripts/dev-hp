@@ -1,0 +1,7 @@
+#!/bin/sh
+# Development only: run the plugin binary with the scratch root and a scrubbed
+# environment. Pass --session hp-dev on open, adopt-workspace and doctor.
+repo=$(cd "$(dirname "$0")/.." && pwd)
+exec env -u HERDR_SOCKET_PATH -u HERDR_SESSION -u HERDR_PANE_ID -u HERDR_TAB_ID \
+  -u HERDR_WORKSPACE_ID -u HERDR_ENV \
+  HERDR_PROJECTS_ROOT="$repo/.dev-root" "$repo/target/release/herdr-projects" "$@"

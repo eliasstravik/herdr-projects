@@ -1,0 +1,90 @@
+id = "herdr-projects"
+name = "Projects"
+version = "0.1.0"
+min_herdr_version = "0.9.1"
+description = "A coordinator conversation, parallel worker threads, shared memory and an overview of what needs you."
+platforms = ["macos", "linux"]
+
+[[build]]
+command = ["cargo", "build", "--release", "--locked"]
+
+[[startup]]
+command = ["target/release/herdr-projects", "ticker", "start"]
+
+[[actions]]
+id = "new"
+title = "Projects: new project"
+contexts = ["workspace"]
+command = ["target/release/herdr-projects", "action", "new"]
+
+[[actions]]
+id = "open"
+title = "Projects: open project"
+contexts = ["workspace"]
+command = ["target/release/herdr-projects", "action", "open"]
+
+[[actions]]
+id = "overview"
+title = "Projects: overview"
+contexts = ["workspace"]
+command = ["target/release/herdr-projects", "action", "overview"]
+
+[[actions]]
+id = "focus"
+title = "Projects: focus sidebar on this project"
+contexts = ["workspace"]
+command = ["target/release/herdr-projects", "action", "focus"]
+
+[[actions]]
+id = "unfocus"
+title = "Projects: clear sidebar focus"
+contexts = ["workspace"]
+command = ["target/release/herdr-projects", "action", "unfocus"]
+
+[[actions]]
+id = "adopt-workspace"
+title = "Projects: continue this workspace as a project"
+contexts = ["workspace"]
+command = ["target/release/herdr-projects", "action", "adopt-workspace"]
+
+[[actions]]
+id = "pause"
+title = "Projects: pause project"
+contexts = ["workspace"]
+command = ["target/release/herdr-projects", "action", "pause"]
+
+[[actions]]
+id = "resume"
+title = "Projects: resume project"
+contexts = ["workspace"]
+command = ["target/release/herdr-projects", "action", "resume"]
+
+[[actions]]
+id = "doctor"
+title = "Projects: check setup"
+contexts = ["workspace"]
+command = ["target/release/herdr-projects", "action", "doctor"]
+
+[[panes]]
+id = "overview"
+title = "Project overview"
+placement = "popup"
+command = ["target/release/herdr-projects", "pane", "overview"]
+
+[[panes]]
+id = "new"
+title = "New project"
+placement = "popup"
+command = ["target/release/herdr-projects", "pane", "new"]
+
+[[panes]]
+id = "pick"
+title = "Pick a project"
+placement = "popup"
+command = ["target/release/herdr-projects", "pane", "pick"]
+
+[[panes]]
+id = "adopt"
+title = "Continue as a project"
+placement = "popup"
+command = ["target/release/herdr-projects", "pane", "adopt"]

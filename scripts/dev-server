@@ -1,0 +1,10 @@
+#!/bin/sh
+# Development only: start the throwaway `hp-dev` herdr server, detached, with a
+# clean environment (so agents started in it behave as they would for a user,
+# not like children of the builder's own agent) and the scratch root exported
+# before the server starts, because [[startup]], actions and popups inherit it.
+repo=$(cd "$(dirname "$0")/.." && pwd)
+log="${TMPDIR:-/tmp}/hp-dev-server.log"
+nohup env -i HOME="$HOME" USER="$USER" SHELL="$SHELL" PATH="$PATH" LANG="${LANG:-en_US.UTF-8}" \
+  TERM="${TERM:-xterm-256color}" SSH_AUTH_SOCK="${SSH_AUTH_SOCK:-}" \
+  HERDR_PROJECTS_ROOT="$repo/.dev-root" herdr --session hp-dev server >"$log" 2>&1 &

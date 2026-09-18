@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="500" viewBox="0 0 960 500" role="img" aria-labelledby="title desc">
+  <title id="title">One coordinator conversation, parallel threads, and an overview of what needs you</title>
+  <desc id="desc">Illustrated example: you tell a coordinator agent what you want, it starts three threads that each work on their own branch, and an overview groups them as ready for review, waiting on you, and working.</desc>
+  <rect width="960" height="500" rx="20" fill="#f6f8fa"/>
+  <rect x="28" y="28" width="904" height="444" rx="14" fill="#ffffff" stroke="#d0d7de" stroke-width="2"/>
+  <circle cx="54" cy="54" r="6" fill="#ff7b72"/><circle cx="74" cy="54" r="6" fill="#f2cc60"/><circle cx="94" cy="54" r="6" fill="#56d364"/>
+  <rect x="124" y="43" width="420" height="22" rx="11" fill="#eef1f4"/>
+  <g font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">
+
+    <!-- 1. the coordinator conversation -->
+    <rect x="58" y="100" width="250" height="324" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="2"/>
+    <rect x="78" y="124" width="210" height="34" rx="7" fill="#f6f8fa"/>
+    <circle cx="96" cy="141" r="5" fill="#4ac26b"/>
+    <text x="108" y="146" font-size="15" font-weight="700" fill="#24292f">Coordinator</text>
+    <rect x="112" y="172" width="176" height="46" rx="10" fill="#ddf4ff" stroke="#54aeff"/>
+    <text x="200" y="191" text-anchor="middle" font-size="12.5" fill="#0a3069">"Ship the new billing</text>
+    <text x="200" y="208" text-anchor="middle" font-size="12.5" fill="#0a3069">page this week."</text>
+    <rect x="78" y="228" width="186" height="62" rx="10" fill="#f6f8fa" stroke="#d0d7de"/>
+    <text x="171" y="247" text-anchor="middle" font-size="12.5" fill="#24292f">"I suggest three threads:</text>
+    <text x="171" y="264" text-anchor="middle" font-size="12.5" fill="#24292f">API, page, and tests.</text>
+    <text x="171" y="281" text-anchor="middle" font-size="12.5" fill="#24292f">Start them?"</text>
+    <rect x="198" y="300" width="90" height="30" rx="10" fill="#ddf4ff" stroke="#54aeff"/>
+    <text x="243" y="320" text-anchor="middle" font-size="12.5" fill="#0a3069">"Go ahead."</text>
+    <text x="183" y="358" text-anchor="middle" font-size="13" fill="#57606a">It never does the work itself,</text>
+    <text x="183" y="376" text-anchor="middle" font-size="13" fill="#57606a">so it is always free to answer.</text>
+    <text x="183" y="407" text-anchor="middle" font-size="15" font-weight="600" fill="#24292f">1. Tell it what you want</text>
+
+    <path d="M324 246h48" stroke="#8c959f" stroke-width="3" stroke-linecap="round"/><path d="m362 236 12 10-12 10" fill="none" stroke="#8c959f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- 2. the threads -->
+    <rect x="388" y="100" width="230" height="324" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="2"/>
+    <g>
+      <rect x="406" y="122" width="194" height="66" rx="9" fill="#f6f8fa" stroke="#d0d7de"/>
+      <text x="420" y="144" font-size="13.5" font-weight="700" fill="#24292f">t-0001 · Billing API</text>
+      <text x="420" y="163" font-size="11.5" fill="#57606a" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">hp/billing/t-0001-api</text>
+      <text x="420" y="179" font-size="11.5" fill="#57606a">own worktree, own agent</text>
+    </g>
+    <g>
+      <rect x="406" y="198" width="194" height="66" rx="9" fill="#f6f8fa" stroke="#d0d7de"/>
+      <text x="420" y="220" font-size="13.5" font-weight="700" fill="#24292f">t-0002 · Billing page</text>
+      <text x="420" y="239" font-size="11.5" fill="#57606a" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">hp/billing/t-0002-page</text>
+      <text x="420" y="255" font-size="11.5" fill="#57606a">own worktree, own agent</text>
+    </g>
+    <g>
+      <rect x="406" y="274" width="194" height="66" rx="9" fill="#f6f8fa" stroke="#d0d7de"/>
+      <text x="420" y="296" font-size="13.5" font-weight="700" fill="#24292f">t-0003 · End-to-end tests</text>
+      <text x="420" y="315" font-size="11.5" fill="#57606a" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">hp/billing/t-0003-tests</text>
+      <text x="420" y="331" font-size="11.5" fill="#57606a">on your other machine</text>
+    </g>
+    <text x="503" y="366" text-anchor="middle" font-size="13" fill="#57606a">Same instructions and memory</text>
+    <text x="503" y="384" text-anchor="middle" font-size="13" fill="#57606a">in every brief.</text>
+    <text x="503" y="407" text-anchor="middle" font-size="15" font-weight="600" fill="#24292f">2. Threads work in parallel</text>
+
+    <path d="M634 246h48" stroke="#8c959f" stroke-width="3" stroke-linecap="round"/><path d="m672 236 12 10-12 10" fill="none" stroke="#8c959f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- 3. the overview -->
+    <rect x="698" y="100" width="204" height="324" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="2"/>
+    <text x="716" y="134" font-size="12" font-weight="700" fill="#1a7f37" letter-spacing="0.4">READY FOR REVIEW</text>
+    <rect x="716" y="144" width="168" height="30" rx="7" fill="#dafbe1" stroke="#4ac26b"/>
+    <text x="728" y="164" font-size="12.5" fill="#24292f">t-0001 · report + PR</text>
+    <text x="716" y="204" font-size="12" font-weight="700" fill="#9a6700" letter-spacing="0.4">WAITING ON YOU</text>
+    <rect x="716" y="214" width="168" height="30" rx="7" fill="#fff8c5" stroke="#d4a72c"/>
+    <text x="728" y="234" font-size="12.5" fill="#24292f">t-0003 · asks a question</text>
+    <text x="716" y="274" font-size="12" font-weight="700" fill="#0969da" letter-spacing="0.4">WORKING</text>
+    <rect x="716" y="284" width="168" height="30" rx="7" fill="#ddf4ff" stroke="#54aeff"/>
+    <text x="728" y="304" font-size="12.5" fill="#24292f">t-0002 · building page</text>
+    <text x="800" y="348" text-anchor="middle" font-size="13" fill="#57606a">In the sidebar and in</text>
+    <text x="800" y="366" text-anchor="middle" font-size="13" fill="#57606a">a plain text popup.</text>
+    <text x="800" y="407" text-anchor="middle" font-size="15" font-weight="600" fill="#24292f">3. See what needs you</text>
+  </g>
+</svg>

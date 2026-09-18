@@ -1,0 +1,8 @@
+#!/bin/sh
+# Development only: run herdr against the throwaway `hp-dev` session with the
+# scratch root, never the default session. Pane variables inherited from an
+# enclosing herdr session are scrubbed so they cannot redirect the call.
+repo=$(cd "$(dirname "$0")/.." && pwd)
+exec env -u HERDR_SOCKET_PATH -u HERDR_SESSION -u HERDR_PANE_ID -u HERDR_TAB_ID \
+  -u HERDR_WORKSPACE_ID -u HERDR_ENV \
+  HERDR_PROJECTS_ROOT="$repo/.dev-root" herdr --session hp-dev "$@"
