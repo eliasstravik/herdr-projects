@@ -31,7 +31,7 @@ How Herdr Projects works, what it writes where, what its safety settings do and 
 
 Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`: `brief.md` (written by the binary), `report.md` and `library/` (written by the agent). In a git repository that folder is added to `info/exclude`, so nothing in it is committed. **Git therefore treats it as clean: removing a worktree deletes it**, which is why `--remove-worktree` insists on a complete copy home first.
 
-`PROJECT.md` settings: `name`, `goal`, `repos` (`path`, optional `machine`), `coordinator_agent`, `thread_agent` (default `claude`), `max_parallel_threads` (3), `auto_resolve_days` (7), `nudge` (`false`).
+`PROJECT.md` settings: `name` (the Herdr workspace label; a slug-like name such as `herdr-projects` is stored and shown as `Herdr Projects`, plain title case, so write `GTM AI` yourself if you want capitals; an edited name renames the workspace on the next `open`), `goal`, `repos` (`path`, optional `machine`), `coordinator_agent`, `thread_agent` (default `claude`), `max_parallel_threads` (3), `auto_resolve_days` (7), `nudge` (`false`).
 
 ## Commands
 

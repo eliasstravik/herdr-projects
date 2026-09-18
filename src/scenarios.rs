@@ -1005,3 +1005,43 @@ fn a_remote_thread_without_a_repo_is_refused() {
     let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), agent: None, base: None, task: "t".into() };
     assert!(threads::start(&world.ctx(), "demo", args).unwrap_err().to_string().contains("needs --repo"));
 }
+
+fn open_alive(world: &World, project: &Project) -> anyhow::Result<()> {
+    let cwd = project.canonical_dir().to_string_lossy().into_owned();
+    let name = format!("hp-{}-coordinator", project.slug);
+    *world.agents.borrow_mut() = format!("[{}]", agent_json("w1", "w1:t1", "w1:p1", &cwd, &name, "idle"));
+    let socket = world.home.path().join("a.sock");
+    let options = crate::coordinator::OpenOptions {
+        session: crate::paths::SessionFlags { session: None, socket: Some(socket) },
+        reprime: false,
+        rebind: false,
+    };
+    crate::coordinator::open(&world.ctx(), &project.slug, &options)
+}
+
+#[test]
+fn open_renames_a_workspace_whose_label_is_not_the_display_name() {
+    let world = World::new();
+    let project = world.project("herdr-projects", "a.sock");
+    world.runner.on("workspace get w1", ok(r#"{"result":{"workspace":{"workspace_id":"w1","label":"herdr-projects"}}}"#));
+    world.runner.on("workspace rename", ok(r#"{"result":{}}"#));
+    open_alive(&world, &project).unwrap();
+    let calls = world.runner.calls.borrow();
+    let rename = calls.iter().find(|c| c.display().contains("workspace rename")).unwrap();
+    assert!(rename.args.ends_with(&["w1".to_string(), "Herdr Projects".to_string()]), "{}", rename.display());
+}
+
+#[test]
+fn open_leaves_a_matching_label_alone_and_a_failed_rename_does_not_block_it() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    world.runner.on("workspace get w1", ok(r#"{"result":{"workspace":{"workspace_id":"w1","label":"Demo"}}}"#));
+    open_alive(&world, &project).unwrap();
+    assert_eq!(world.runner.count("workspace rename"), 0);
+
+    let text = std::fs::read_to_string(project.project_md()).unwrap();
+    std::fs::write(project.project_md(), text.replacen("name = \"Demo\"", "name = \"Renamed\"", 1)).unwrap();
+    world.runner.on("workspace rename", fail(1, "boom"));
+    open_alive(&world, &project).unwrap();
+    assert_eq!(world.runner.count("workspace rename"), 1);
+}

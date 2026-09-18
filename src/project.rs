@@ -56,6 +56,31 @@ pub fn slug_from_name(name: &str) -> Result<String> {
     Ok(slug)
 }
 
+/// Words split on `-` and `_`, each with its first letter upper-cased:
+/// `herdr-projects` becomes `Herdr Projects`. Plain title case, so `gtm-ai`
+/// becomes `Gtm Ai`; a user who wants `GTM AI` sets `name` in PROJECT.md.
+pub fn humanize(slug: &str) -> String {
+    slug.split(['-', '_'])
+        .filter(|word| !word.is_empty())
+        .map(|word| {
+            let mut chars = word.chars();
+            chars.next().map(|first| first.to_uppercase().chain(chars).collect::<String>()).unwrap_or_default()
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The name a project shows: `name` as given unless it is empty or looks like
+/// a slug (lower-case letters, digits, `-` and `_` only), else the humanized
+/// form of it or of `slug`. A herdr workspace never shows a bare slug, which
+/// would read the same as a repository's own workspace.
+pub fn display_name(name: &str, slug: &str) -> String {
+    let name = name.trim();
+    let base = if name.is_empty() { slug } else { name };
+    let slug_like = base.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_');
+    if slug_like { humanize(base) } else { base.to_string() }
+}
+
 /// Writes through a temporary file in the same directory plus a rename. It never
 /// creates parent directories: only `new` creates a project's directories.
 pub fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
@@ -419,7 +444,7 @@ pub fn create(root: &Path, name: &str, goal: &str, repos: Vec<Repo>) -> Result<P
         })
         .collect();
     let settings = Settings {
-        name: name.to_string(),
+        name: display_name(name, &slug),
         goal: goal.to_string(),
         repos,
         ..Settings::default()
@@ -470,6 +495,30 @@ mod tests {
         for bad in ["", "-a", "A", "a_b", "a/b", "../x", "a b", ".", "..", &"a".repeat(41)] {
             assert!(validate_slug(bad).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn a_slug_like_name_is_humanized_and_a_typed_name_is_kept() {
+        assert_eq!(humanize("herdr-projects"), "Herdr Projects");
+        assert_eq!(humanize("gtm_ai"), "Gtm Ai");
+        assert_eq!(humanize("-v2--api-"), "V2 Api");
+        assert_eq!(display_name("herdr-projects", "herdr-projects"), "Herdr Projects");
+        assert_eq!(display_name("", "herdr-projects"), "Herdr Projects");
+        assert_eq!(display_name("  ", "demo"), "Demo");
+        for typed in ["GTM AI", "my project", "Demo", "herdr-Projects"] {
+            assert_eq!(display_name(typed, "x"), typed);
+        }
+    }
+
+    #[test]
+    fn create_stores_a_display_name_and_keeps_the_slug() {
+        let root = tempfile::tempdir().unwrap();
+        let project = create(root.path(), "herdr-projects", "", vec![]).unwrap();
+        assert_eq!(project.slug, "herdr-projects");
+        assert_eq!(project.read_project_md().unwrap().0.name, "Herdr Projects");
+        let project = create(root.path(), "GTM AI", "", vec![]).unwrap();
+        assert_eq!(project.slug, "gtm-ai");
+        assert_eq!(project.read_project_md().unwrap().0.name, "GTM AI");
     }
 
     #[test]
