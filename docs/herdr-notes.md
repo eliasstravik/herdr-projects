@@ -130,3 +130,9 @@ Also learned:
 - `delete demo --force` moved the project to `.trash/` and left the scratch repository's thread branch in place.
 - Left in place for the client to decide: the plugin is linked on this Mac and on the second machine (source at `~/dev/herdr-projects` there), and `elias-macbook-pro-m1` is a saved herdr machine.
 - The README follows the structure of the client's `herdr-call` and `herdr-agent-progress` READMEs at the client's request; the detail the plan asked the README to carry (symlink, allow-list, soft-guard and routine warnings, the `unfocus` note) is in `docs/getting-started.md` and `docs/operations.md`, with the warnings summarised in the README's questions. The `/landingpage-readme` skill can only be run by the client, so it was not used.
+
+## After the build (2026-09-18, herdr servers restarted on 0.9.1 on both machines)
+
+- With both default servers on 0.9.1 the plugin loads in them: all nine actions are listed on this Mac and on the second machine, `plugin link` works there without a named session, and no ticker runs on either (no projects yet).
+- **A herdr server not started from a login shell gives plugins a minimal `PATH`.** The `doctor` action in this Mac's default session reported `gh` as not installed although it is at `/opt/homebrew/bin/gh`. A ticker started by `[[startup]]` would have silently skipped pull request follow-up. The binary now appends `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` and `~/.cargo/bin` to its own `PATH` at startup; the same action then reported `gh` and `gh auth` as ok.
+- `eliasstravik/herdr-projects` was created as a private repository with the `herdr-plugin` topic. The name had been a redirect to `herdr-tracker` (that repository's earlier name); creating the new repository replaced the redirect. No local clone used the old URL.
