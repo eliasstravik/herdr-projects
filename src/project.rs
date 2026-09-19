@@ -130,6 +130,10 @@ pub struct Settings {
     pub max_parallel_threads: u32,
     pub auto_resolve_days: u32,
     pub nudge: bool,
+    /// A file to print as the coordinator skill instead of the compiled-in
+    /// one; relative to the project folder or absolute.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coordinator_skill_file: Option<String>,
     pub repos: Vec<Repo>,
 }
 
@@ -146,6 +150,7 @@ impl Default for Settings {
             // text the user has half-typed (docs/herdr-notes.md, stage 2). With
             // `false` the ticker shows a herdr notification instead.
             nudge: false,
+            coordinator_skill_file: None,
             repos: Vec::new(),
         }
     }
@@ -295,6 +300,20 @@ impl Project {
         let text = std::fs::read_to_string(self.project_md())
             .with_context(|| format!("could not read {}", self.project_md().display()))?;
         parse_project_md(&text)
+    }
+
+    /// The coordinator skill text: the file named by `coordinator_skill_file`
+    /// when set, otherwise `default`.
+    pub fn coordinator_skill(&self, default: &str) -> Result<String> {
+        let (settings, _) = self.read_project_md()?;
+        match settings.coordinator_skill_file {
+            Some(file) => {
+                let path = self.dir().join(file);
+                std::fs::read_to_string(&path)
+                    .with_context(|| format!("could not read coordinator_skill_file {}", path.display()))
+            }
+            None => Ok(default.to_string()),
+        }
     }
 
     pub fn status(&self) -> Status {
