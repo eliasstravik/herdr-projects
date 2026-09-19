@@ -187,6 +187,9 @@ enum ThreadCommand {
         /// Agent kind (default: thread_agent in PROJECT.md)
         #[arg(long, value_name = "KIND")]
         agent: Option<String>,
+        /// Model id, passed to the agent as `--model <ID>` (default: thread_model in PROJECT.md)
+        #[arg(long, value_name = "ID")]
+        model: Option<String>,
         #[arg(long, value_name = "REF")]
         base: Option<String>,
         /// The task; `-` reads standard input
@@ -336,9 +339,9 @@ pub fn run() -> Result<()> {
             }
         },
         Command::Thread { command } => match command {
-            ThreadCommand::Start { slug, title, repo, machine, agent, base, task_file } => {
+            ThreadCommand::Start { slug, title, repo, machine, agent, model, base, task_file } => {
                 let task = read_text(&task_file)?;
-                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, agent, base, task })?;
+                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, agent, model, base, task })?;
                 println!("{}", serde_json::json!({ "id": thread.id, "kind": thread.kind, "branch": thread.branch, "pane_id": thread.pane_id }));
                 Ok(())
             }

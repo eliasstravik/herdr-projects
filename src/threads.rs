@@ -82,6 +82,7 @@ pub struct StartArgs {
     pub repo: Option<String>,
     pub machine: Option<String>,
     pub agent: Option<String>,
+    pub model: Option<String>,
     pub base: Option<String>,
     pub task: String,
 }
@@ -100,7 +101,13 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
     if args.task.trim().is_empty() {
         bail!("the task is empty");
     }
+    if let Some(model) = &args.model {
+        thread::validate_model(model)?;
+    }
     let (settings, _) = project.read_project_md()?;
+    if args.model.is_none() && !settings.thread_model.is_empty() {
+        thread::validate_model(&settings.thread_model).context("thread_model in PROJECT.md")?;
+    }
     // Without a running ticker nothing launches.
     ticker::start(ctx)?;
     let view = require_session(ctx, &project)?;
@@ -136,12 +143,14 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
     }
 
     let agent_kind = args.agent.clone().unwrap_or_else(|| settings.thread_agent.clone());
+    let model = args.model.clone().unwrap_or_else(|| settings.thread_model.clone());
     let record = thread::allocate(&project, |t| {
         t.title = args.title.trim().to_string();
         t.kind = if repo.is_empty() { Kind::Tab } else { Kind::Worktree };
         t.repo = repo.clone();
         t.machine = machine.clone();
         t.agent = agent_kind.clone();
+        t.model = model.clone();
         t.base = args.base.clone().unwrap_or_default();
     })?;
     let id = record.id.clone();
@@ -644,7 +653,8 @@ fn row(t: &Thread, view: Option<&SessionView>, now: jiff::Timestamp) -> Row {
 pub fn print_list(ctx: &Ctx, slug: &str) -> Result<()> {
     let project = Project::load(&ctx.root, slug)?;
     for row in rows(ctx, &project) {
-        println!("{}\t{}\t{}\t{}", row.thread.id, row.group.label(), row.note, row.thread.title);
+        let note = if row.thread.model.is_empty() { row.note } else { format!("{}, model {}", row.note, row.thread.model) };
+        println!("{}\t{}\t{}\t{}", row.thread.id, row.group.label(), note, row.thread.title);
     }
     Ok(())
 }

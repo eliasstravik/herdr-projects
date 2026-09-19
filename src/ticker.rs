@@ -453,7 +453,8 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
         let launched = (|| -> Result<()> {
             thread::update(project, &t.id, |t| t.launch_attempts += 1)?;
             let safety = project.safety(&ctx.config_dir)?;
-            herdr.on_machine(&t.machine).agent_start(&t.agent_name, &t.agent, &t.pane_id, &safety.thread_agent_args)?;
+            let agent_args = thread::launch_args(&safety.thread_agent_args, &t.model);
+            herdr.on_machine(&t.machine).agent_start(&t.agent_name, &t.agent, &t.pane_id, &agent_args)?;
             Ok(())
         })();
         errors.extend(launched.err().map(|e| e.context(format!("{}: launch", t.id))));

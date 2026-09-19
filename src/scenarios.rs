@@ -145,6 +145,10 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
     world.runner.on("agent start", ok(r#"{"result":{"agent":{"pane_id":"w2:p1","tab_id":"w2:t1","workspace_id":"w2"}}}"#));
     world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
 
+    // `new` writes the knob empty; the user fills it in.
+    let text = std::fs::read_to_string(project.project_md()).unwrap();
+    assert!(text.contains("thread_model = \"\"\n"));
+    std::fs::write(project.project_md(), text.replace("thread_model = \"\"", "thread_model = \"claude-sonnet-5\"")).unwrap();
     let ctx = world.ctx();
     let started = threads::start(
         &ctx,
@@ -154,6 +158,7 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
             repo: Some(repo.to_string_lossy().into_owned()),
             machine: None,
             agent: None,
+            model: None,
             base: None,
             task: "Do the thing.".into(),
         },
@@ -168,6 +173,8 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
     assert_eq!(started.base, "origin/main");
     assert_eq!(started.origin, "git@github.com:Owner/App.git");
     assert_eq!(started.agent_name, "hp-demo-t-0001");
+    // No --model given: the PROJECT.md default is recorded on the thread.
+    assert_eq!(started.model, "claude-sonnet-5");
     let brief = std::fs::read_to_string(worktree.join(".herdr-project/demo-t-0001/brief.md")).unwrap();
     assert!(brief.contains("Do the thing."));
     assert!(brief.contains("# Project instructions"));
@@ -183,6 +190,10 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
     assert_eq!(world.runner.count("agent start"), 1);
     assert_eq!(world.runner.count("agent prompt"), 0);
     assert_eq!(thread::load(&project, "t-0001").unwrap().launch_attempts, 1);
+    let calls = world.runner.calls.borrow();
+    let start = calls.iter().find(|c| c.display().contains("agent start")).unwrap();
+    assert_eq!(&start.args[start.args.len() - 3..], ["--", "--model", "claude-sonnet-5"]);
+    drop(calls);
 
     // Tick 2: the agent is ready: prompt once, no second start.
     *world.agents.borrow_mut() = format!("[{}]", agent_json("w2", "w2:t1", "w2:p1", &wt, "hp-demo-t-0001", "idle"));
@@ -340,6 +351,67 @@ fn restart_defers_to_the_ticker_and_resets_launch_attempts() {
 }
 
 #[test]
+fn a_thread_model_is_launched_after_the_safety_args_and_survives_restart() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let cwd = world.home.path().to_string_lossy().into_owned();
+    let cfg = world.home.path().join("cfg");
+    std::fs::create_dir_all(&cfg).unwrap();
+    std::fs::write(
+        cfg.join("config.toml"),
+        format!("[safety.\"{}\"]\nthread_agent_args = [\"--model\", \"x\", \"--flag\"]\n", project.canonical_dir().display()),
+    )
+    .unwrap();
+    world.thread(&project, world.home.path(), |t| {
+        t.model = "claude-opus-5".into();
+        t.prompt_pending = true;
+    });
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w2", "w2:t1", "w2:p1", &cwd));
+    world.runner.on("agent start", ok(r#"{"result":{"agent":{"pane_id":"w2:p1","tab_id":"w2:t1","workspace_id":"w2"}}}"#));
+    world.runner.on("rev-parse --git-path", fail(1, "not a repo"));
+
+    // The safety args come first, the thread's model last: it wins where the last flag wins.
+    assert!(ticker::tick_project(&world.ctx(), &project).unwrap());
+    let calls = world.runner.calls.borrow();
+    let start = calls.iter().find(|c| c.display().contains("agent start")).unwrap();
+    assert_eq!(&start.args[start.args.len() - 6..], ["--", "--model", "x", "--flag", "--model", "claude-opus-5"]);
+    drop(calls);
+
+    // A restart keeps the model on the record; the next launch uses it again.
+    thread::update(&project, "t-0001", |t| {
+        t.status = Status::Failed;
+        t.launch_attempts = 3;
+    })
+    .unwrap();
+    std::fs::write(thread::task_path(&project, "t-0001"), "The task.").unwrap();
+    let restarted = threads::restart(&world.ctx(), "demo", "t-0001").unwrap();
+    assert_eq!(restarted.model, "claude-opus-5");
+
+    // `thread list` shows the model only when one is set.
+    let row = threads::rows(&world.ctx(), &project).remove(0);
+    assert_eq!(row.thread.model, "claude-opus-5");
+}
+
+#[test]
+fn a_bad_model_id_is_refused_before_anything_is_created() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    for bad in ["", "  ", "--dangerously-skip-permissions"] {
+        let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, model: Some(bad.into()), base: None, task: "t".into() };
+        assert!(threads::start(&world.ctx(), "demo", args).is_err(), "{bad:?}");
+    }
+    assert!(thread::list(&project).is_empty());
+    assert!(world.runner.calls.borrow().is_empty());
+    // The same for a bad default in PROJECT.md.
+    let text = std::fs::read_to_string(project.project_md()).unwrap();
+    std::fs::write(project.project_md(), text.replace("thread_model = \"\"", "thread_model = \"--x\"")).unwrap();
+    let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, model: None, base: None, task: "t".into() };
+    let error = format!("{:#}", threads::start(&world.ctx(), "demo", args).unwrap_err());
+    assert!(error.contains("thread_model in PROJECT.md"), "{error}");
+    assert!(thread::list(&project).is_empty());
+}
+
+#[test]
 fn every_resolve_copies_first_and_remove_worktree_needs_a_complete_copy() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
@@ -397,7 +469,7 @@ fn thread_start_is_refused_when_paused() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
     project.set_status(project::Status::Paused).unwrap();
-    let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, model: None, base: None, task: "t".into() };
     let error = threads::start(&world.ctx(), "demo", args).unwrap_err().to_string();
     assert!(error.contains("paused"), "{error}");
     assert!(thread::list(&project).is_empty());
@@ -1003,7 +1075,7 @@ fn a_remote_thread_blocked_at_a_poll_is_waiting_on_you_at_once() {
 fn a_remote_thread_without_a_repo_is_refused() {
     let world = World::new();
     world.project("demo", "a.sock");
-    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), agent: None, base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), agent: None, model: None, base: None, task: "t".into() };
     assert!(threads::start(&world.ctx(), "demo", args).unwrap_err().to_string().contains("needs --repo"));
 }
 

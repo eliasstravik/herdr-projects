@@ -60,6 +60,9 @@ pub struct Thread {
     pub tab_id: String,
     pub pane_id: String,
     pub agent: String,
+    /// Passed to the agent as `--model <id>` at launch; empty means the
+    /// agent's own default (or whatever `thread_agent_args` says).
+    pub model: String,
     pub agent_name: String,
     pub cwd: String,
     pub created: String,
@@ -89,6 +92,31 @@ impl Thread {
     pub fn library_path(&self) -> String {
         format!("{}/library", self.thread_dir)
     }
+}
+
+/// A model id is passed through to the agent CLI unchanged; only the shapes
+/// that would be read as another flag, or as nothing, are refused.
+pub fn validate_model(model: &str) -> Result<()> {
+    if model.trim().is_empty() {
+        bail!("--model may not be empty");
+    }
+    if model.starts_with('-') {
+        bail!("`{model}` is not a model id (it starts with a dash)");
+    }
+    Ok(())
+}
+
+/// The arguments after `--` in `herdr agent start`: the project's
+/// `thread_agent_args`, then `--model <id>` when the thread has one. The
+/// thread's model comes last so it wins on CLIs where the last flag wins
+/// (Claude Code, Codex, Gemini); `thread_agent_args` is not a model lock.
+pub fn launch_args(base: &[String], model: &str) -> Vec<String> {
+    let mut args = base.to_vec();
+    if !model.is_empty() {
+        args.push("--model".into());
+        args.push(model.into());
+    }
+    args
 }
 
 pub fn validate_id(id: &str) -> Result<()> {
@@ -847,6 +875,21 @@ mod tests {
         let mut other = agent("hp-demo-t-0001", "/wt");
         other.agent_status = "blocked".into();
         assert_eq!(live_state(&t, &[other], &[], now()).state_secs, 0);
+    }
+
+    #[test]
+    fn model_ids_and_launch_args() {
+        assert!(validate_model("claude-opus-5").is_ok());
+        assert!(validate_model("gpt-5").is_ok());
+        assert!(validate_model("").is_err());
+        assert!(validate_model("  ").is_err());
+        assert!(validate_model("--dangerously-skip-permissions").is_err());
+        let base = vec!["--model".to_string(), "x".to_string(), "--flag".to_string()];
+        // No model: the safety args alone, untouched.
+        assert_eq!(launch_args(&base, ""), base);
+        // A model goes last, after whatever the safety args say.
+        assert_eq!(launch_args(&base, "claude-opus-5"), ["--model", "x", "--flag", "--model", "claude-opus-5"]);
+        assert_eq!(launch_args(&[], "claude-opus-5"), ["--model", "claude-opus-5"]);
     }
 
     #[test]

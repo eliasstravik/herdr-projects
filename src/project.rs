@@ -127,6 +127,8 @@ pub struct Settings {
     pub goal: String,
     pub coordinator_agent: String,
     pub thread_agent: String,
+    /// Passed to every thread's agent as `--model <id>`; empty means unset.
+    pub thread_model: String,
     pub max_parallel_threads: u32,
     pub auto_resolve_days: u32,
     pub nudge: bool,
@@ -140,6 +142,7 @@ impl Default for Settings {
             goal: String::new(),
             coordinator_agent: "claude".into(),
             thread_agent: "claude".into(),
+            thread_model: String::new(),
             max_parallel_threads: 3,
             auto_resolve_days: 7,
             // Off by default: on herdr 0.9.1 a prompt merges with, and submits,
@@ -577,7 +580,10 @@ mod tests {
         assert_eq!(settings.name, "X");
         assert!(settings.nudge);
         assert_eq!(settings.thread_agent, "claude");
+        assert_eq!(settings.thread_model, "");
         assert_eq!(body, "Body\n+++\nmore\n");
+        let (settings, _) = parse_project_md("+++\nthread_model = \"claude-opus-5\"\n+++\n").unwrap();
+        assert_eq!(settings.thread_model, "claude-opus-5");
         assert!(parse_project_md("no front matter").is_err());
         assert!(parse_project_md("+++\nname = \n+++\n").is_err());
         assert!(parse_project_md("+++\nname = \"X\"\n").is_err());

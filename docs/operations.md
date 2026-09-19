@@ -32,7 +32,7 @@ How Herdr Projects works, what it writes where, what its safety settings do and 
 
 Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`: `brief.md` (written by the binary), `report.md` and `library/` (written by the agent). In a git repository that folder is added to `info/exclude`, so nothing in it is committed. **Git therefore treats it as clean: removing a worktree deletes it**, which is why `--remove-worktree` insists on a complete copy home first.
 
-`PROJECT.md` settings: `name` (the Herdr workspace label; a slug-like name such as `herdr-projects` is stored and shown as `Herdr Projects`, plain title case, so write `GTM AI` yourself if you want capitals; an edited name renames the workspace on the next `open`), `goal`, `repos` (`path`, optional `machine`), `coordinator_agent`, `thread_agent` (default `claude`), `max_parallel_threads` (3), `auto_resolve_days` (7), `nudge` (`false`).
+`PROJECT.md` settings: `name` (the Herdr workspace label; a slug-like name such as `herdr-projects` is stored and shown as `Herdr Projects`, plain title case, so write `GTM AI` yourself if you want capitals; an edited name renames the workspace on the next `open`), `goal`, `repos` (`path`, optional `machine`), `coordinator_agent`, `thread_agent` (default `claude`), `thread_model` (empty: the agent's own default; otherwise passed to every thread's agent as `--model <id>`), `max_parallel_threads` (3), `auto_resolve_days` (7), `nudge` (`false`).
 
 ## Commands
 
@@ -43,7 +43,7 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 | `open <project> [--reprime] [--session N \| --socket P] [--rebind]` | Workspace, coordinator tab and coordinator agent; focuses it when it already runs. |
 | `context <project> [--peek]` | The digest the coordinator reads every turn. `--peek` records nothing. |
 | `inbox done <project> <item>... \| --all` | Mark inbox items handled. |
-| `thread start <project> --title T [--repo PATH] [--machine M] [--agent KIND] [--base REF] --task-file F` | New thread; `-` reads the task from standard input. Returns before the agent is up. |
+| `thread start <project> --title T [--repo PATH] [--machine M] [--agent KIND] [--model ID] [--base REF] --task-file F` | New thread; `-` reads the task from standard input. Returns before the agent is up. `--model` is recorded on the thread and passed to its agent as `--model ID`; without it, `thread_model` from `PROJECT.md` applies. |
 | `thread restart`, `thread prompt`, `thread adopt`, `thread list`, `thread show`, `thread ack`, `thread resolve` | See `--help` on each. |
 | `overview [<project>] [--wait]`, `focus [<project>]`, `unfocus` | Threads grouped by what needs you, as text and in the sidebar. |
 | `routine list`, `routine approve`, `safety show` | Routines and safety settings. |
@@ -67,6 +67,18 @@ routine_commands = false           # true lets approved routines run shell comma
 ```
 
 The table is keyed by the project folder's canonical path. It stays when you delete the project and applies to a new project at the same path.
+
+## Choosing a model per thread
+
+A thread's model is passed to its agent CLI as `--model <id>`, the same spelling for every agent kind. The id is passed through unchanged (only an empty id or one starting with a dash is refused), so use whatever your agent accepts, such as `claude-opus-5` for Claude Code. Precedence:
+
+1. `thread start --model <id>`, for one thread.
+2. `thread_model` in `PROJECT.md`, for every thread the project starts from then on.
+3. Neither: the agent's own default, or whatever `thread_agent_args` says.
+
+The model is recorded on the thread (`thread show` prints it, `thread list` adds `model <id>` to the live column when one is set), so `thread restart` brings the thread back on the same model. **A running thread keeps its model**: to change it, start a new thread.
+
+The launch arguments are `thread_agent_args` first, then `--model <id>`. On Claude Code, Codex and Gemini the last `--model` wins, so a thread's model overrides one in `thread_agent_args`. **`thread_agent_args` is therefore not a model lock**; it sets the model only for threads that don't choose one.
 
 ## The allow-list for your coordinator
 

@@ -40,7 +40,7 @@ herdr-projects open billing
 
 `new` creates `~/.herdr-projects/billing/`. `open` creates a Herdr workspace in that folder with a `coordinator` tab, starts your agent there, and sends it one priming line that tells it to print and follow the coordinator skill. The first time, your agent asks whether you trust the folder: answer it in the coordinator's pane. The ticker sends the priming line as soon as the agent is ready.
 
-Edit `PROJECT.md` in the project folder to write your standing instructions and to change the agent kind, `max_parallel_threads`, or the listed repos.
+Edit `PROJECT.md` in the project folder to write your standing instructions and to change the agent kind, the default model (`thread_model`), `max_parallel_threads`, or the listed repos.
 
 ## 4. Tell the coordinator what you want
 
@@ -48,7 +48,7 @@ Type in the coordinator's pane, for example: "Add a billing page: API endpoint, 
 
 You can also ask it to add, assign, delegate and show tasks. It keeps them in `TASKS.md`.
 
-By default it lists the threads it suggests and waits. Reply with a go-ahead that names them ("start all three"). Your agent then asks permission to run `thread start` for each one, unless you've allow-listed it (see [Operations](operations.md#the-allow-list-for-your-coordinator)).
+By default it lists the threads it suggests and waits. Reply with a go-ahead that names them ("start all three"). Name a model and it starts the thread on that model ("run the audit on claude-opus-5"); see [Operations](operations.md#choosing-a-model-per-thread). Your agent then asks permission to run `thread start` for each one, unless you've allow-listed it (see [Operations](operations.md#the-allow-list-for-your-coordinator)).
 
 ## 5. Confirm the threads appear
 

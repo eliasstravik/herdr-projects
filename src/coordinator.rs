@@ -261,8 +261,12 @@ pub fn digest(ctx: &Ctx, project: &Project, prefix: &str) -> Result<(String, Vec
             let _ = writeln!(out, "Goal: {}", if settings.goal.is_empty() { "(none set)" } else { &settings.goal });
             let _ = writeln!(
                 out,
-                "Settings: thread_agent={} max_parallel_threads={} auto_resolve_days={} nudge={}",
-                settings.thread_agent, settings.max_parallel_threads, settings.auto_resolve_days, settings.nudge
+                "Settings: thread_agent={} thread_model={} max_parallel_threads={} auto_resolve_days={} nudge={}",
+                settings.thread_agent,
+                if settings.thread_model.is_empty() { "(unset)" } else { &settings.thread_model },
+                settings.max_parallel_threads,
+                settings.auto_resolve_days,
+                settings.nudge
             );
             if settings.repos.is_empty() {
                 let _ = writeln!(out, "Repos: (none)");
