@@ -147,8 +147,8 @@ enum Command {
         #[command(subcommand)]
         command: SafetyCommand,
     },
-    /// Print the coordinator skill
-    Skill,
+    /// Print the coordinator skill; with a project, its `coordinator_skill_file` when set
+    Skill { slug: Option<String> },
     /// Check the setup: versions, tools, root, ticker and each project's session
     Doctor {
         #[command(flatten)]
@@ -409,8 +409,13 @@ pub fn run() -> Result<()> {
                 Ok(())
             }
         },
-        Command::Skill => {
-            print!("{}", include_str!("../skill/COORDINATOR.md"));
+        Command::Skill { slug } => {
+            let default = include_str!("../skill/COORDINATOR.md");
+            let text = match slug {
+                Some(slug) => Project::load(&ctx.root, &slug)?.coordinator_skill(default)?,
+                None => default.to_string(),
+            };
+            print!("{text}");
             Ok(())
         }
         Command::Doctor { session } => {

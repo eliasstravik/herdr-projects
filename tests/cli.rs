@@ -70,6 +70,48 @@ fn path_like_names_and_slugs_are_refused() {
 }
 
 #[test]
+fn skill_prints_the_built_in_sheet_unless_the_project_names_a_file() {
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("root");
+    let root_arg = root.to_str().unwrap();
+    assert!(hp(home.path(), &["--root", root_arg, "new", "demo"]).status.success());
+    let built_in = include_str!("../skill/COORDINATOR.md");
+
+    let bare = hp(home.path(), &["--root", root_arg, "skill"]);
+    assert!(bare.status.success());
+    assert_eq!(String::from_utf8_lossy(&bare.stdout), built_in);
+    let unset = hp(home.path(), &["--root", root_arg, "skill", "demo"]);
+    assert!(unset.status.success());
+    assert_eq!(String::from_utf8_lossy(&unset.stdout), built_in);
+
+    // A relative path resolves against the project folder.
+    let project_md = root.join("demo/PROJECT.md");
+    let text = std::fs::read_to_string(&project_md).unwrap();
+    std::fs::write(&project_md, text.replacen("+++\n", "+++\ncoordinator_skill_file = \"sheet.md\"\n", 1)).unwrap();
+    std::fs::write(root.join("demo/sheet.md"), "# Mine\n").unwrap();
+    let mine = hp(home.path(), &["--root", root_arg, "skill", "demo"]);
+    assert!(mine.status.success(), "{}", String::from_utf8_lossy(&mine.stderr));
+    assert_eq!(String::from_utf8_lossy(&mine.stdout), "# Mine\n");
+
+    // An absolute path is used as it is.
+    let elsewhere = home.path().join("elsewhere.md");
+    std::fs::write(&elsewhere, "# Elsewhere\n").unwrap();
+    let text = std::fs::read_to_string(&project_md).unwrap();
+    std::fs::write(&project_md, text.replace("\"sheet.md\"", &format!("{:?}", elsewhere.to_str().unwrap()))).unwrap();
+    let abs = hp(home.path(), &["--root", root_arg, "skill", "demo"]);
+    assert!(abs.status.success(), "{}", String::from_utf8_lossy(&abs.stderr));
+    assert_eq!(String::from_utf8_lossy(&abs.stdout), "# Elsewhere\n");
+
+    // A missing file is an error naming it, not a silent fallback.
+    let text = std::fs::read_to_string(&project_md).unwrap();
+    std::fs::write(&project_md, text.replace(elsewhere.to_str().unwrap(), "sheet.md")).unwrap();
+    std::fs::remove_file(root.join("demo/sheet.md")).unwrap();
+    let gone = hp(home.path(), &["--root", root_arg, "skill", "demo"]);
+    assert!(!gone.status.success());
+    assert!(String::from_utf8_lossy(&gone.stderr).contains("coordinator_skill_file"));
+}
+
+#[test]
 fn ticker_start_without_projects_creates_nothing() {
     let home = tempfile::tempdir().unwrap();
     assert!(hp(home.path(), &["ticker", "start"]).status.success());

@@ -38,7 +38,7 @@ pub fn agent_name(slug: &str) -> String {
 /// its working directory to start.
 pub fn priming_prompt(prefix: &str, slug: &str) -> String {
     format!(
-        "You are the coordinator of the herdr project `{slug}`. Run `{prefix} skill` and follow what it prints, then run `{prefix} context {slug}`."
+        "You are the coordinator of the herdr project `{slug}`. Run `{prefix} skill {slug}` and follow what it prints, then run `{prefix} context {slug}`."
     )
 }
 
@@ -358,7 +358,7 @@ mod tests {
     fn priming_prompt_is_one_line_with_the_prefix() {
         let prompt = priming_prompt("/bin/hp --root /r", "demo");
         assert!(!prompt.contains('\n'));
-        assert!(prompt.contains("/bin/hp --root /r skill"));
+        assert!(prompt.contains("/bin/hp --root /r skill demo"));
         assert!(prompt.contains("/bin/hp --root /r context demo"));
     }
 
