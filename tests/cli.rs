@@ -94,16 +94,7 @@ fn new_with_specific_agent_flags_overrides_agent() {
     let home = tempfile::tempdir().unwrap();
     let root = home.path().join("root");
     let root_arg = root.to_str().unwrap();
-    assert!(hp(home.path(), &[
-        "--root",
-        root_arg,
-        "new",
-        "Demo",
-        "--agent",
-        "omp",
-        "--coordinator-agent",
-        "custom-coord",
-    ]).status.success());
+    assert!(hp(home.path(), &["--root", root_arg, "new", "Demo", "--agent", "omp", "--coordinator-agent", "custom-coord"]).status.success());
 
     let project_md = std::fs::read_to_string(root.join("demo/PROJECT.md")).unwrap();
     assert!(project_md.contains("coordinator_agent = \"custom-coord\""), "expected custom coordinator_agent in:\n{project_md}");

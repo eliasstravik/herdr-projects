@@ -308,14 +308,7 @@ pub fn run() -> Result<()> {
     };
 
     match cli.command {
-        Command::New {
-            name,
-            goal,
-            repos,
-            agent,
-            coordinator_agent,
-            thread_agent,
-        } => {
+        Command::New { name, goal, repos, agent, coordinator_agent, thread_agent } => {
             let repos = repos.iter().map(|arg| project::parse_repo_arg(arg)).collect();
             let options = project::CreateOptions {
                 coordinator_agent: coordinator_agent.or_else(|| agent.clone()),
