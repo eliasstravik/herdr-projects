@@ -50,6 +50,15 @@ enum Command {
         /// A repository, as PATH or PATH@MACHINE; repeatable
         #[arg(long = "repo", value_name = "PATH[@MACHINE]")]
         repos: Vec<String>,
+        /// Agent kind for coordinator and threads (default: claude)
+        #[arg(long, value_name = "KIND")]
+        agent: Option<String>,
+        /// Coordinator agent kind (overrides --agent)
+        #[arg(long, value_name = "KIND")]
+        coordinator_agent: Option<String>,
+        /// Thread agent kind (overrides --agent)
+        #[arg(long, value_name = "KIND")]
+        thread_agent: Option<String>,
     },
     /// List projects
     List {
@@ -291,9 +300,20 @@ pub fn run() -> Result<()> {
     };
 
     match cli.command {
-        Command::New { name, goal, repos } => {
+        Command::New {
+            name,
+            goal,
+            repos,
+            agent,
+            coordinator_agent,
+            thread_agent,
+        } => {
             let repos = repos.iter().map(|arg| project::parse_repo_arg(arg)).collect();
-            let project = project::create(&ctx.root, &name, &goal, repos)?;
+            let options = project::CreateOptions {
+                coordinator_agent: coordinator_agent.or_else(|| agent.clone()),
+                thread_agent: thread_agent.or(agent),
+            };
+            let project = project::create_with_options(&ctx.root, &name, &goal, repos, options)?;
             println!("created `{}` at {}", project.slug, project.dir().display());
             println!("next: {} open {}", coordinator::current_prefix(&ctx.root)?, project.slug);
             Ok(())

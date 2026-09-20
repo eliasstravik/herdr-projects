@@ -419,9 +419,28 @@ is merged with, and submits, your half-typed text. With it off you get a herdr
 notification instead.
 ";
 
+/// Options when creating a project skeleton.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CreateOptions {
+    pub coordinator_agent: Option<String>,
+    pub thread_agent: Option<String>,
+}
+
+/// Creates the folder and skeleton files with default options.
+#[allow(dead_code)]
+pub fn create(root: &Path, name: &str, goal: &str, repos: Vec<Repo>) -> Result<Project> {
+    create_with_options(root, name, goal, repos, CreateOptions::default())
+}
+
 /// Creates the folder and skeleton files. The only code path that creates a
 /// project's directories. Fails if the slug exists.
-pub fn create(root: &Path, name: &str, goal: &str, repos: Vec<Repo>) -> Result<Project> {
+pub fn create_with_options(
+    root: &Path,
+    name: &str,
+    goal: &str,
+    repos: Vec<Repo>,
+    options: CreateOptions,
+) -> Result<Project> {
     let slug = slug_from_name(name)?;
     let project = Project {
         root: root.to_path_buf(),
@@ -445,14 +464,26 @@ pub fn create(root: &Path, name: &str, goal: &str, repos: Vec<Repo>) -> Result<P
             },
         })
         .collect();
+    let default_settings = Settings::default();
+    let coordinator_agent = options
+        .coordinator_agent
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(default_settings.coordinator_agent);
+    let thread_agent = options
+        .thread_agent
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(default_settings.thread_agent);
     let settings = Settings {
         name: display_name(name, &slug),
         goal: goal.to_string(),
+        coordinator_agent,
+        thread_agent,
         repos,
-        ..Settings::default()
+        ..default_settings
     };
     let front = toml::to_string(&settings)?;
-
     std::fs::create_dir_all(root)?;
     std::fs::create_dir(&dir).with_context(|| format!("could not create {}", dir.display()))?;
     for sub in ["memory", "scratch", "routines", "threads", "inbox", "inbox/done", "library", ".state"] {
@@ -651,5 +682,18 @@ mod tests {
             .unwrap()
             .flatten()
             .all(|e| !e.file_name().to_string_lossy().ends_with(".tmp")));
+    }
+
+    #[test]
+    fn create_with_agent_options() {
+        let root = tempfile::tempdir().unwrap();
+        let options = CreateOptions {
+            coordinator_agent: Some("omp".into()),
+            thread_agent: Some("custom-worker".into()),
+        };
+        let project = create_with_options(root.path(), "demo", "Goal", vec![], options).unwrap();
+        let (settings, _) = project.read_project_md().unwrap();
+        assert_eq!(settings.coordinator_agent, "omp");
+        assert_eq!(settings.thread_agent, "custom-worker");
     }
 }

@@ -152,7 +152,12 @@ pub fn run_pane(ctx: &Ctx, id: &str) -> Result<()> {
                 bail!("no name given");
             }
             let goal = ask("Goal (one line, optional)", "")?;
-            let project = project::create(&ctx.root, &name, &goal, Vec::new())?;
+            let agent = ask("Agent (optional)", "claude")?;
+            let options = project::CreateOptions {
+                coordinator_agent: Some(agent.clone()).filter(|s| !s.is_empty()),
+                thread_agent: Some(agent).filter(|s| !s.is_empty()),
+            };
+            let project = project::create_with_options(&ctx.root, &name, &goal, Vec::new(), options)?;
             println!("created `{}` at {}", project.slug, project.dir().display());
             run_on_slug(ctx, "open", &project.slug)
         })(),

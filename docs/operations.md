@@ -38,7 +38,7 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 
 | Command | What it does |
 | --- | --- |
-| `new <name> [--goal] [--repo PATH[@MACHINE]]...` | Create a project folder. |
+| `new <name> [--goal] [--repo PATH[@MACHINE]]... [--agent KIND] [--coordinator-agent KIND] [--thread-agent KIND]` | Create a project folder (`--agent` sets both agents, default `claude`). |
 | `list [--all]` | Projects with status and thread counts by group. |
 | `open <project> [--reprime] [--session N \| --socket P] [--rebind]` | Workspace, coordinator tab and coordinator agent; focuses it when it already runs. |
 | `context <project> [--peek]` | The digest the coordinator reads every turn. `--peek` records nothing. |
