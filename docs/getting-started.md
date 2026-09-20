@@ -31,12 +31,14 @@ herdr-projects doctor
 
 ## 3. Create and open a project
 
-From Herdr's action menu, run **Projects: new project**. It asks for a name and a goal, creates the project, and opens it. Or from a terminal inside Herdr:
+From Herdr's action menu, run **Projects: new project**. It asks for a name, a goal, and an agent (default `claude`), creates the project, and opens it. Or from a terminal inside Herdr:
 
 ```bash
 herdr-projects new "Billing" --goal "Ship the new billing page" --repo ~/dev/app
 herdr-projects open billing
 ```
+
+To use OMP, add `--agent omp` to `new`; this sets both coordinator and thread agents. Use `--coordinator-agent KIND` or `--thread-agent KIND` to override either role. Explicit empty or whitespace-only agent arguments are rejected before creating the project.
 
 `new` creates `~/.herdr-projects/billing/`. `open` creates a Herdr workspace in that folder with a `coordinator` tab, starts your agent there, and sends it one priming line that tells it to print and follow the coordinator skill. The first time, your agent asks whether you trust the folder: answer it in the coordinator's pane. The ticker sends the priming line as soon as the agent is ready.
 

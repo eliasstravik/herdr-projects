@@ -51,13 +51,13 @@ enum Command {
         #[arg(long = "repo", value_name = "PATH[@MACHINE]")]
         repos: Vec<String>,
         /// Agent kind for coordinator and threads (default: claude)
-        #[arg(long, value_name = "KIND")]
+        #[arg(long, value_name = "KIND", value_parser = parse_agent_kind)]
         agent: Option<String>,
         /// Coordinator agent kind (overrides --agent)
-        #[arg(long, value_name = "KIND")]
+        #[arg(long, value_name = "KIND", value_parser = parse_agent_kind)]
         coordinator_agent: Option<String>,
         /// Thread agent kind (overrides --agent)
-        #[arg(long, value_name = "KIND")]
+        #[arg(long, value_name = "KIND", value_parser = parse_agent_kind)]
         thread_agent: Option<String>,
     },
     /// List projects
@@ -245,6 +245,14 @@ enum ThreadCommand {
         #[arg(long, requires = "remove_worktree")]
         discard_uncopied: bool,
     },
+}
+
+fn parse_agent_kind(value: &str) -> std::result::Result<String, String> {
+    let kind = value.trim();
+    if kind.is_empty() {
+        return Err("agent kind must not be blank".into());
+    }
+    Ok(kind.to_owned())
 }
 
 /// `-` is standard input; a relative path is relative to the caller's directory.
