@@ -154,6 +154,7 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
             repo: Some(repo.to_string_lossy().into_owned()),
             machine: None,
             agent: None,
+            agent_args: None,
             base: None,
             task: "Do the thing.".into(),
         },
@@ -171,6 +172,11 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
     let brief = std::fs::read_to_string(worktree.join(".herdr-project/demo-t-0001/brief.md")).unwrap();
     assert!(brief.contains("Do the thing."));
     assert!(brief.contains("# Project instructions"));
+    // The brief has an identity of its own, so submission and receipt can be
+    // held against it rather than against the pane.
+    assert_eq!(started.brief_hash, thread::sha256_hex(brief.as_bytes()));
+    assert!(!started.brief_receipt_token.is_empty());
+    assert!(!thread::receipt_seen(&brief, &started.brief_receipt_token), "echoing the brief is not acknowledgment");
     // The hostile title reaches herdr as one argument, unchanged.
     let calls = world.runner.calls.borrow();
     let create = calls.iter().find(|c| c.display().contains("worktree create")).unwrap();
@@ -193,21 +199,30 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
     let prompt = calls.iter().find(|c| c.display().contains("agent prompt")).unwrap();
     assert_eq!(prompt.args.last().unwrap(), "Read .herdr-project/demo-t-0001/brief.md and do what it says.");
     drop(calls);
-    assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
+    let sent = thread::load(&project, "t-0001").unwrap();
+    assert!(!sent.prompt_pending);
+    // Submitted against that brief, and still unconfirmed.
+    assert_eq!(sent.brief_submitted_hash, sent.brief_hash);
+    assert!(sent.brief_receipt.is_empty());
+    assert_eq!(world.runner.count("agent read"), 0, "not read on the tick that submitted");
 
     // Delivering the brief to an idle agent is not "the thread went Idle".
-    assert_eq!(thread::load(&project, "t-0001").unwrap().last_group, "working");
+    assert_eq!(sent.last_group, "working");
     assert!(inbox::unhandled(&project).is_empty());
 
-    // Tick 3: nothing more to deliver.
+    // Tick 3: the helper acknowledges reading the brief.
+    world.runner.on("agent read", ok(&sent.brief_receipt_token));
     *world.agents.borrow_mut() = format!("[{}]", agent_json("w2", "w2:t1", "w2:p1", &wt, "hp-demo-t-0001", "working"));
     assert!(ticker::tick_project(&ctx, &project).unwrap());
     assert_eq!(world.runner.count("agent prompt"), 1);
+    let got = thread::load(&project, "t-0001").unwrap();
+    assert_eq!(got.brief_receipt_hash, got.brief_hash);
+    assert_eq!(got.brief_receipt_source, "first-turn");
     assert!(inbox::unhandled(&project).is_empty());
 }
 
 #[test]
-fn one_agent_start_per_project_per_tick_and_three_failures_give_failed() {
+fn each_eligible_thread_attempts_each_tick_and_three_failures_give_failed() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
     let cwd = world.home.path().to_path_buf();
@@ -233,9 +248,9 @@ fn one_agent_start_per_project_per_tick_and_three_failures_give_failed() {
     world.runner.on("agent start", fail(1, r#"{"error":{"code":"timeout","message":"timed out waiting for agent startup"}}"#));
 
     let ctx = world.ctx();
-    for tick in 1..=6 {
+    for tick in 1..=3 {
         let _ = ticker::tick_project(&ctx, &project);
-        assert_eq!(world.runner.count("agent start"), tick, "one start per tick");
+        assert_eq!(world.runner.count("agent start"), tick * 2, "one attempt per eligible thread per tick");
     }
     // Six starts: three each. The next ticks mark them failed and start nothing.
     let _ = ticker::tick_project(&ctx, &project);
@@ -397,7 +412,7 @@ fn thread_start_is_refused_when_paused() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
     project.set_status(project::Status::Paused).unwrap();
-    let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, agent_args: None, base: None, task: "t".into() };
     let error = threads::start(&world.ctx(), "demo", args).unwrap_err().to_string();
     assert!(error.contains("paused"), "{error}");
     assert!(thread::list(&project).is_empty());
@@ -414,6 +429,291 @@ fn unreachable_session_prints_records_without_treating_panes_as_gone() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].note, "session unreachable");
     assert_eq!(rows[0].group, thread::Group::Working);
+}
+
+// ------------------------------------------------- brief delivery receipts
+
+/// A thread that has had a brief written for it and is waiting for the ticker
+/// to deliver it. `hash` stands in for the brief `write_brief` would hash.
+fn awaiting_thread(world: &World, project: &Project, hash: &str) -> Thread {
+    let t = world.thread(project, world.home.path(), |t| {
+        t.prompt_pending = true;
+        t.brief_hash = hash.into();
+        t.brief_receipt_token = format!("brief-read:{hash}");
+    });
+    *world.panes.borrow_mut() = format!(
+        "[{},{}]",
+        world.coordinator_pane(project),
+        pane_json("w2", "w2:t1", "w2:p1", &world.home.path().to_string_lossy())
+    );
+    *world.agents.borrow_mut() = format!(
+        "[{}]",
+        agent_json("w2", "w2:t1", "w2:p1", &world.home.path().to_string_lossy(), "hp-demo-t-0001", "idle")
+    );
+    t
+}
+
+#[test]
+fn a_submitted_brief_is_only_settled_once_the_pane_shows_it_arrived() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    awaiting_thread(&world, &project, "brief-a");
+    world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
+    // The pane has not echoed anything yet.
+    world.runner.on("agent read", ok("> \n"));
+    let ctx = world.ctx();
+
+    // Tick 1 submits. Submission is recorded against the brief, and a
+    // successful CLI call on its own settles nothing.
+    ticker::tick_project(&ctx, &project).unwrap();
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert!(!t.prompt_pending, "the submission happened");
+    assert_eq!(t.brief_submitted_hash, "brief-a");
+    assert!(!t.brief_submitted.is_empty());
+    assert!(t.brief_receipt.is_empty(), "a successful submission is not a receipt");
+    assert!(thread::awaiting_receipt(&t));
+
+    // Tick 2: the helper replies with the brief acknowledgment.
+    let world = World { runner: FakeRunner::new(), ..world };
+    world.runner.on("agent list", ok(&format!(r#"{{"result":{{"agents":[{}]}}}}"#, agent_json("w2", "w2:t1", "w2:p1", &world.home.path().to_string_lossy(), "hp-demo-t-0001", "working"))));
+    world.runner.on("pane list", ok(&format!(r#"{{"result":{{"panes":[{}]}}}}"#, pane_json("w2", "w2:t1", "w2:p1", &world.home.path().to_string_lossy()))));
+    world.runner.on("report-metadata", ok(r#"{"result":{}}"#));
+    world.runner.on("agent read", ok("brief-read:brief-a\n"));
+    let ctx = world.ctx();
+    ticker::tick_project(&ctx, &project).unwrap();
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!(t.brief_receipt_hash, "brief-a");
+    assert_eq!(t.brief_receipt_source, "first-turn");
+    assert!(!thread::awaiting_receipt(&t));
+    assert_eq!(world.runner.count("agent read"), 1);
+
+    // Tick 3: settled threads are not read again.
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(world.runner.count("agent read"), 1, "a settled thread is not re-read");
+    assert!(items_of(&project, "brief-delivery").is_empty());
+}
+
+#[test]
+fn a_brief_that_never_arrives_alarms_once_into_the_inbox() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    awaiting_thread(&world, &project, "brief-a");
+    // Submitted longer ago than the bounded wait, and never seen in the pane.
+    thread::update(&project, "t-0001", |t| {
+        t.prompt_pending = false;
+        t.brief_submitted_hash = "brief-a".into();
+        t.brief_submitted = (jiff::Timestamp::now() - jiff::SignedDuration::from_secs(thread::RECEIPT_TIMEOUT_SECS + 30)).to_string();
+    })
+    .unwrap();
+    world.runner.on("agent read", ok("nothing relevant here\n"));
+    world.runner.on("notification show", ok(r#"{"result":{"shown":true}}"#));
+    let ctx = world.ctx();
+
+    ticker::tick_project(&ctx, &project).unwrap();
+    let items = items_of(&project, "brief-delivery");
+    assert_eq!(items.len(), 1, "{items:?}");
+    assert_eq!(items[0].subject, "t-0001");
+    assert!(items[0].summary.contains("t-0001"), "the item names the thread: {}", items[0].summary);
+    assert!(items[0].summary.contains("no receipt"), "{}", items[0].summary);
+
+    // One stuck launch is one item, however long it stays stuck.
+    ticker::tick_project(&ctx, &project).unwrap();
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(items_of(&project, "brief-delivery").len(), 1);
+}
+
+#[test]
+fn a_pane_echo_never_settles_a_brief_the_ticker_has_not_sent() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    awaiting_thread(&world, &project, "brief-a");
+    // A pane that already carries the launch line — a reused pane holding the
+    // previous run's echo, because the marker names the thread and not the
+    // attempt — while the ticker still has this brief to send. Believing it
+    // would clear `prompt_pending` and the brief would never be sent at all:
+    // the very failure this is meant to catch. The lead's own hand delivery
+    // is recorded with `thread prompt --delivered`, which says so plainly.
+    *world.agents.borrow_mut() = format!(
+        "[{}]",
+        agent_json("w2", "w2:t1", "w2:p1", &world.home.path().to_string_lossy(), "hp-demo-t-0001", "working")
+    );
+    world.runner.on("agent read", ok("brief-read:brief-a\n"));
+    let ctx = world.ctx();
+
+    ticker::tick_project(&ctx, &project).unwrap();
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!(world.runner.count("agent read"), 0, "an unsent brief is never confirmed from the pane");
+    assert!(t.brief_receipt.is_empty());
+    assert!(t.prompt_pending, "the ticker still owes it its brief");
+    assert!(items_of(&project, "brief-delivery").is_empty());
+}
+#[test]
+fn a_pane_that_cannot_be_read_is_not_mistaken_for_a_lost_brief() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    awaiting_thread(&world, &project, "brief-a");
+    thread::update(&project, "t-0001", |t| {
+        t.prompt_pending = false;
+        t.brief_submitted_hash = "brief-a".into();
+        t.brief_submitted = jiff::Timestamp::now().to_string();
+    })
+    .unwrap();
+    world.runner.on("agent read", fail(1, r#"{"error":{"code":"pane_not_found","message":"gone"}}"#));
+    let ctx = world.ctx();
+
+    // A failed read is reported like any other herdr failure and leaves the
+    // thread awaiting: it never records a receipt, and never turns into an
+    // alarm about a brief that may well have arrived.
+    let reported = ticker::tick_project(&ctx, &project).unwrap_err();
+    assert!(format!("{reported:#}").contains("brief receipt"), "{reported:#}");
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert!(t.brief_receipt.is_empty());
+    assert!(thread::awaiting_receipt(&t));
+    assert_eq!(world.runner.count("agent read"), 1, "the pane was read");
+    assert!(items_of(&project, "brief-delivery").is_empty(), "not overdue yet");
+}
+
+#[test]
+fn an_unreadable_pane_does_not_stop_the_launches_or_end_the_run() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    // t-0001 awaits a receipt; t-0002 is a fresh thread whose pane is still at
+    // a shell prompt and needs its agent started.
+    awaiting_thread(&world, &project, "brief-a");
+    thread::update(&project, "t-0001", |t| {
+        t.prompt_pending = false;
+        t.brief_submitted_hash = "brief-a".into();
+        t.brief_submitted = jiff::Timestamp::now().to_string();
+    })
+    .unwrap();
+    let waiting = world.thread(&project, world.home.path(), |t| {
+        t.prompt_pending = true;
+        t.brief_hash = "brief-b".into();
+        t.workspace_id = "w3".into();
+        t.tab_id = "w3:t1".into();
+        t.pane_id = "w3:p1".into();
+        t.agent_name = "hp-demo-t-0002".into();
+    });
+    assert_eq!(waiting.id, "t-0002");
+    let cwd = world.home.path().to_string_lossy().into_owned();
+    *world.panes.borrow_mut() = format!(
+        "[{},{},{}]",
+        world.coordinator_pane(&project),
+        pane_json("w2", "w2:t1", "w2:p1", &cwd),
+        pane_json("w3", "w3:t1", "w3:p1", &cwd)
+    );
+    *world.agents.borrow_mut() =
+        format!("[{}]", agent_json("w2", "w2:t1", "w2:p1", &cwd, "hp-demo-t-0001", "working"));
+    // herdr cannot read a pane whose agent is working, which is the state an
+    // agent is in from the moment it has its brief.
+    world.runner.on(
+        "agent read",
+        fail(1, r#"{"error":{"code":"agent_not_idle","message":"cannot read 200 lines while w2:p1 is working"}}"#),
+    );
+    let ctx = world.ctx();
+
+    // The failure is reported, and it is only a report: t-0002 still gets its
+    // agent started. Letting it fail the pass cost every thread its launch, so
+    // a pane kept no agent and its brief was never sent.
+    let reported = ticker::tick_project(&ctx, &project).unwrap_err();
+    assert!(format!("{reported:#}").contains("brief receipt"), "{reported:#}");
+    assert_eq!(world.runner.count("agent start"), 1, "the waiting thread was launched");
+    let started = thread::load(&project, "t-0002").unwrap();
+    assert_eq!(started.launch_attempts, 1);
+
+    // And the session still counts as reachable, so the run does not exit
+    // after five idle minutes while herdr is answering perfectly well.
+    let mut memory = Memory::new(&ctx);
+    assert!(ticker::tick_for_test(&ctx, &mut memory), "the session answered");
+}
+
+#[test]
+fn a_working_pane_is_read_from_the_screen_when_its_history_is_out_of_reach() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    awaiting_thread(&world, &project, "brief-a");
+    thread::update(&project, "t-0001", |t| {
+        t.prompt_pending = false;
+        t.brief_submitted_hash = "brief-a".into();
+        t.brief_submitted = jiff::Timestamp::now().to_string();
+    })
+    .unwrap();
+    *world.agents.borrow_mut() = format!(
+        "[{}]",
+        agent_json("w2", "w2:t1", "w2:p1", &world.home.path().to_string_lossy(), "hp-demo-t-0001", "working")
+    );
+    // The history read is refused and the screen read carries the marker.
+    world.runner.on(
+        "--source recent-unwrapped",
+        fail(1, r#"{"error":{"code":"agent_not_idle","message":"cannot read 200 lines while w2:p1 is working"}}"#),
+    );
+    world.runner.on("--source visible", ok("brief-read:brief-a\n"));
+    let ctx = world.ctx();
+
+    assert!(ticker::tick_project(&ctx, &project).unwrap());
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!(t.brief_receipt_hash, "brief-a", "the screen settled the brief");
+    assert_eq!(t.brief_receipt_source, "first-turn");
+    assert!(!thread::awaiting_receipt(&t));
+}
+
+#[test]
+fn thread_prompt_delivered_records_a_receipt_the_pane_can_no_longer_show() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    awaiting_thread(&world, &project, "brief-a");
+    world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
+    let ctx = world.ctx();
+
+    // Before: `thread prompt` refuses a thread that has not had its brief.
+    let refused = threads::prompt(&ctx, "demo", "t-0001", Some("ping"), false).unwrap_err().to_string();
+    assert!(refused.contains("has not received its brief"), "{refused}");
+
+    // The lead delivered it by hand and says so. That is a statement about the
+    // brief, so it needs no text and no reachable agent.
+    threads::prompt(&ctx, "demo", "t-0001", None, true).unwrap();
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!(t.brief_receipt_hash, "brief-a");
+    assert_eq!(t.brief_receipt_source, "manual");
+    // The lead sent it, not us: no submission is claimed on our behalf.
+    assert!(t.brief_submitted_hash.is_empty());
+    assert!(!t.prompt_pending);
+    assert!(!thread::awaiting_receipt(&t));
+    assert_eq!(world.runner.count("agent prompt"), 0, "nothing was sent");
+
+    // And the books being straight, an ordinary follow-up now goes through.
+    threads::prompt(&ctx, "demo", "t-0001", Some("ping"), false).unwrap();
+    assert_eq!(world.runner.count("agent prompt"), 1);
+}
+
+#[test]
+fn thread_prompt_delivered_straightens_a_thread_that_carries_no_brief() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    // A thread started before briefs were hashed, delivered by hand: it works
+    // away with `prompt_pending` still set, which is the bookkeeping saying
+    // one thing while the pane says another.
+    awaiting_thread(&world, &project, "");
+    let ctx = world.ctx();
+
+    threads::prompt(&ctx, "demo", "t-0001", None, true).unwrap();
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert!(!t.prompt_pending, "the books now agree with the pane");
+    // There is no brief to record a receipt against, and none is invented.
+    assert!(t.brief_receipt.is_empty());
+    assert!(t.brief_receipt_hash.is_empty());
+    assert!(!thread::awaiting_receipt(&t));
+}
+
+#[test]
+fn thread_prompt_delivered_needs_something_to_do() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    awaiting_thread(&world, &project, "brief-a");
+    let ctx = world.ctx();
+    let empty = threads::prompt(&ctx, "demo", "t-0001", None, false).unwrap_err().to_string();
+    assert!(empty.contains("--delivered"), "{empty}");
+    let _ = project;
 }
 
 // ------------------------------------------------------------------ stage 5
@@ -900,7 +1200,7 @@ fn is_machine_call(cmd: &Cmd) -> bool {
 }
 
 #[test]
-fn a_failed_machine_call_changes_nothing_and_the_machine_is_skipped_for_eight_ticks() {
+fn a_failed_machine_call_changes_nothing_and_is_reconsidered_each_tick() {
     let (world, project) = remote_world();
     let failing = World { runner: FakeRunner::new(), ..world };
     failing.runner.on_fn(is_machine_call, |_| Ok(crate::runner::fake::timeout()));
@@ -916,11 +1216,11 @@ fn a_failed_machine_call_changes_nothing_and_the_machine_is_skipped_for_eight_ti
         memory.tick = tick;
         let _ = ticker::tick_project_with(&ctx, &project, &mut memory);
     }
-    // Polled once at tick 1, then skipped for the next eight ticks.
-    assert_eq!(machine_calls(&failing), 1);
+    // Reconsidered every tick, without inventing state while unreachable.
+    assert_eq!(machine_calls(&failing), 9);
     memory.tick = 10;
     let _ = ticker::tick_project_with(&ctx, &project, &mut memory);
-    assert_eq!(machine_calls(&failing), 2);
+    assert_eq!(machine_calls(&failing), 10);
 
     // No state was read: no group change, no item, no copy.
     let t = thread::load(&project, "t-0001").unwrap();
@@ -1003,7 +1303,7 @@ fn a_remote_thread_blocked_at_a_poll_is_waiting_on_you_at_once() {
 fn a_remote_thread_without_a_repo_is_refused() {
     let world = World::new();
     world.project("demo", "a.sock");
-    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), agent: None, base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), agent: None, agent_args: None, base: None, task: "t".into() };
     assert!(threads::start(&world.ctx(), "demo", args).unwrap_err().to_string().contains("needs --repo"));
 }
 
@@ -1060,4 +1360,125 @@ fn the_digest_prints_the_task_list_or_none() {
     std::fs::remove_file(&tasks).unwrap();
     let digest = coordinator::digest(&world.ctx(), &project, "hp").unwrap().0;
     assert!(digest.contains("## Tasks (TASKS.md)\n(none)"));
+}
+
+#[test]
+fn three_failed_local_codex_launches_do_not_delay_four_remote_claude_launches() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    std::fs::write(project.project_md(), "+++\nthread_agent = \"claude\"\n[thread_agents.claude]\nargs = [\"--dangerously-skip-permissions\"]\n[thread_agents.codex]\nargs = [\"--dangerously-bypass-approvals-and-sandbox\"]\n[thread_agents.devin]\nargs = [\"--model\", \"swe-2-max\"]\n+++\n").unwrap();
+    let mut local = Vec::new();
+    let mut remote = Vec::new();
+    for n in 1..=7 {
+        thread::allocate(&project, |t| {
+            t.status = Status::Open;
+            t.prompt_pending = true;
+            t.agent = if n <= 3 { "codex" } else { "claude" }.into();
+            t.agent_name = format!("hp-demo-t-{n:04}");
+            t.machine = if n <= 3 { "" } else { "box" }.into();
+            t.workspace_id = "w2".into();
+            t.tab_id = format!("w2:t{n}");
+            t.pane_id = format!("w2:p{n}");
+            t.cwd = format!("/test/thread{n}");
+            let pane = pane_json(&t.workspace_id, &t.tab_id, &t.pane_id, &t.cwd);
+            if n <= 3 { local.push(pane); } else { remote.push(pane); }
+        }).unwrap();
+    }
+    // Machine rules come before the generic World rules.
+    let world = World { runner: FakeRunner::new(), ..world };
+    world.runner.on_fn(|c| is_machine_call(c) && c.display().contains("agent list"), |_| Ok(ok(r#"{"result":{"agents":[]}}"#)));
+    world.runner.on_fn(|c| is_machine_call(c) && c.display().contains("pane list"), move |_| Ok(ok(&format!(r#"{{"result":{{"panes":[{}]}}}}"#, remote.join(",")))));
+    world.runner.on_fn(|c| is_machine_call(c) && c.display().contains("agent start"), |c| {
+        assert_eq!(&c.args[c.args.iter().position(|a| a == "--").unwrap()+1..], &["--dangerously-skip-permissions"]);
+        Ok(ok(r#"{"result":{"agent":{"pane_id":"started","tab_id":"w2:t4","workspace_id":"w2","agent_status":"idle"}}}"#))
+    });
+    world.runner.on("agent list", ok(r#"{"result":{"agents":[]}}"#));
+    world.runner.on("pane list", ok(&format!(r#"{{"result":{{"panes":[{},{}]}}}}"#, world.coordinator_pane(&project), local.join(","))));
+    world.runner.on_fn(|c| c.display().contains("agent start"), |c| {
+        assert_eq!(&c.args[c.args.iter().position(|a| a == "--").unwrap()+1..], &["--dangerously-bypass-approvals-and-sandbox"]);
+        Ok(fail(1, "unexpected argument"))
+    });
+    // Even a report transport failure must leave launch attempts running.
+    world.runner.on("machine list --json", fail(1, "report transport unavailable"));
+    world.runner.on("report-metadata", ok("{}"));
+    let ctx = world.ctx();
+    let mut memory = Memory::new(&ctx);
+    memory.tick = 2; // Not a fourth-tick boundary.
+    assert!(ticker::tick_project_with(&ctx, &project, &mut memory).is_err());
+    assert_eq!(world.runner.count("agent start"), 7);
+    assert_eq!(*world.runner.batches.borrow(), vec![7], "all seven launches share one concurrent batch");
+    assert!(!memory.machines["box"].outage.last_error.is_empty(), "report failures retain outage accounting");
+    let calls = world.runner.calls.borrow();
+    assert_eq!(calls.iter().filter(|c| is_machine_call(c) && c.display().contains("agent start")).count(), 4);
+    for n in 1..=7 {
+        let t = thread::load(&project, &format!("t-{n:04}")).unwrap();
+        assert_eq!(t.launch_attempts, 1);
+        assert!(!t.launch_started.is_empty());
+        assert!(t.launch_deadline > t.launch_started);
+        assert_eq!(t.launch_error.is_empty(), n > 3);
+    }
+}
+
+#[test]
+fn failed_record_adopts_hand_started_agent_only_in_its_exact_pane_identity() {
+    for matching in [false, true] {
+        let world = World::new();
+        let project = world.project("demo", "a.sock");
+        let t = world.thread(&project, world.home.path(), |t| {
+            t.status = Status::Failed;
+            t.error = "launch exhausted".into();
+            t.prompt_pending = true;
+            t.launch_attempts = 3;
+        });
+        let cwd = if matching { t.cwd.as_str() } else { "/somewhere/else" };
+        *world.agents.borrow_mut() = format!("[{}]", agent_json("w2", "w2:t1", "w2:p1", cwd, "hand-started", "idle"));
+        *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+        world.runner.on("agent prompt", ok("{}"));
+        ticker::tick_project(&world.ctx(), &project).unwrap();
+        let got = thread::load(&project, &t.id).unwrap();
+        assert_eq!(got.status, if matching { Status::Open } else { Status::Failed });
+        assert_eq!(world.runner.count("agent prompt"), usize::from(matching));
+        assert_eq!(world.runner.count("agent start"), 0);
+        if matching { assert_eq!(got.agent_name, "hand-started"); assert!(got.error.is_empty()); }
+    }
+}
+
+#[test]
+fn echoed_launch_prompt_is_not_a_first_turn_receipt() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    awaiting_thread(&world, &project, "brief-a");
+    thread::update(&project, "t-0001", |t| {
+        t.prompt_pending = false;
+        t.brief_submitted_hash = t.brief_hash.clone();
+        t.brief_submitted = project::now();
+    }).unwrap();
+    world.runner.on("agent read", ok("> Read .herdr-project/demo-t-0001/brief.md and do what it says."));
+    ticker::tick_project(&world.ctx(), &project).unwrap();
+    assert!(thread::awaiting_receipt(&thread::load(&project, "t-0001").unwrap()));
+}
+
+#[test]
+fn ticker_uses_exact_kind_arguments_and_a_persisted_thread_override() {
+    for (kind, override_args, expected) in [
+        ("claude", None, vec!["--dangerously-skip-permissions"]),
+        ("codex", None, vec!["--yolo"]),
+        ("devin", None, vec!["--model", "swe-2-max"]),
+        ("codex", Some(vec!["--model".into(), "test-model".into()]), vec!["--model", "test-model"]),
+        ("claude", Some(vec![]), vec![]),
+    ] {
+        let world = World::new();
+        let project = world.project("demo", "a.sock");
+        std::fs::write(project.project_md(), "+++\n[thread_agents.claude]\nargs = [\"--dangerously-skip-permissions\"]\n[thread_agents.codex]\nargs = [\"--yolo\"]\n[thread_agents.devin]\nargs = [\"--model\", \"swe-2-max\"]\n+++\n").unwrap();
+        let t = world.thread(&project, world.home.path(), |t| {
+            t.agent = kind.into(); t.agent_args = override_args; t.prompt_pending = true;
+        });
+        *world.panes.borrow_mut() = format!("[{}]", pane_json(&t.workspace_id, &t.tab_id, &t.pane_id, &t.cwd));
+        world.runner.on("agent start", ok(r#"{"result":{"agent":{"pane_id":"w2:p1","tab_id":"w2:t1","workspace_id":"w2","agent_status":"idle"}}}"#));
+        ticker::tick_project(&world.ctx(), &project).unwrap();
+        let calls = world.runner.calls.borrow();
+        let start = calls.iter().find(|c| c.display().contains("agent start")).unwrap();
+        let actual = start.args.iter().position(|a| a == "--").map(|i| &start.args[i+1..]).unwrap_or(&[]);
+        assert_eq!(actual, expected, "{kind}");
+    }
 }

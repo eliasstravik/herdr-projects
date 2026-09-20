@@ -118,6 +118,13 @@ pub trait Runner {
     /// program is missing). A non-zero exit or a timeout is an `Ok(Output)`.
     fn run(&self, cmd: &Cmd) -> Result<Output>;
 
+    /// Ordered results for independent commands. Scripted runners stay serial;
+    /// the real runner overlaps waits. Callers bound each batch to eight commands.
+    fn run_batch(&self, commands: &[Cmd]) -> Vec<Result<Output>> {
+        commands.iter().map(|cmd| self.run(cmd)).collect()
+    }
+
+
     /// One JSON line to a herdr socket, one line back. The single exception to
     /// "talk to herdr through its CLI" (client decision during the build):
     /// herdr 0.9.1 has no CLI command for `agent.view.set` / `agent.view.clear`.
@@ -129,6 +136,13 @@ pub struct RealRunner;
 const POLL: Duration = Duration::from_millis(20);
 
 impl Runner for RealRunner {
+    fn run_batch(&self, commands: &[Cmd]) -> Vec<Result<Output>> {
+        commands.chunks(8).flat_map(|batch| std::thread::scope(|scope| {
+            let workers: Vec<_> = batch.iter().map(|cmd| scope.spawn(move || self.run(cmd))).collect();
+            workers.into_iter().map(|worker| worker.join().unwrap_or_else(|_| Err(anyhow::anyhow!("command worker panicked")))).collect::<Vec<_>>()
+        })).collect()
+    }
+
     fn run(&self, cmd: &Cmd) -> Result<Output> {
         let mut command = Command::new(&cmd.program);
         command.args(&cmd.args);
@@ -266,6 +280,7 @@ pub mod fake {
     pub struct FakeRunner {
         rules: RefCell<Vec<(Matcher, Box<dyn Fn(&Cmd) -> Result<Output>>)>>,
         pub calls: RefCell<Vec<Cmd>>,
+        pub batches: RefCell<Vec<usize>>,
         /// (socket, request line) of every socket request.
         pub socket_requests: RefCell<Vec<(PathBuf, String)>>,
     }
@@ -329,6 +344,11 @@ pub mod fake {
     }
 
     impl Runner for FakeRunner {
+        fn run_batch(&self, commands: &[Cmd]) -> Vec<Result<Output>> {
+            self.batches.borrow_mut().push(commands.len());
+            commands.iter().map(|cmd| self.run(cmd)).collect()
+        }
+
         fn run(&self, cmd: &Cmd) -> Result<Output> {
             self.calls.borrow_mut().push(cmd.clone());
             for (matcher, answer) in self.rules.borrow().iter() {
@@ -349,6 +369,22 @@ pub mod fake {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn independent_commands_in_a_batch_overlap_and_keep_result_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let left = dir.path().join("left").to_string_lossy().into_owned();
+        let right = dir.path().join("right").to_string_lossy().into_owned();
+        let script = "touch \"$1\"; while [ ! -e \"$2\" ]; do sleep 0.01; done; printf '%s' \"$3\"";
+        let commands = [
+            Cmd::new("sh", Duration::from_secs(5)).args(["-c", script, "sh", &left, &right, "left"]),
+            Cmd::new("sh", Duration::from_secs(5)).args(["-c", script, "sh", &right, &left, "right"]),
+        ];
+        let results = RealRunner.run_batch(&commands);
+        assert!(results.iter().all(|r| r.as_ref().is_ok_and(Output::success)));
+        assert_eq!(results[0].as_ref().unwrap().stdout, "left");
+        assert_eq!(results[1].as_ref().unwrap().stdout, "right");
+    }
 
     #[test]
     fn captures_output_and_exit_code() {

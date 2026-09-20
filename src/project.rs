@@ -118,8 +118,14 @@ pub struct Repo {
     pub machine: Option<String>,
 }
 
-/// `PROJECT.md` front matter. `repos` is last so the TOML tables follow the
-/// plain keys when `new` serializes it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct ThreadAgentSettings {
+    pub args: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub machines: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+/// `PROJECT.md` front matter. Tables follow the plain keys when serialized.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Settings {
@@ -131,6 +137,8 @@ pub struct Settings {
     pub auto_resolve_days: u32,
     pub nudge: bool,
     pub repos: Vec<Repo>,
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub thread_agents: std::collections::BTreeMap<String, ThreadAgentSettings>,
 }
 
 impl Default for Settings {
@@ -147,6 +155,23 @@ impl Default for Settings {
             // `false` the ticker shows a herdr notification instead.
             nudge: false,
             repos: Vec::new(),
+            thread_agents: std::collections::BTreeMap::new(),
+        }
+    }
+}
+
+impl Settings {
+    /// Thread overrides take precedence over machine and kind configuration.
+    /// The legacy flat list belongs only to the project's default thread kind.
+    pub fn thread_agent_args(&self, kind: &str, machine: &str, override_args: Option<&[String]>, safety: &Safety) -> Vec<String> {
+        if let Some(args) = override_args {
+            args.to_vec()
+        } else if let Some(config) = self.thread_agents.get(kind) {
+            config.machines.get(machine).unwrap_or(&config.args).clone()
+        } else if kind == self.thread_agent {
+            safety.thread_agent_args.clone()
+        } else {
+            Vec::new()
         }
     }
 }
@@ -568,6 +593,57 @@ mod tests {
         assert!(body.starts_with("# Instructions"));
         assert_eq!(project.status(), Status::Active);
         assert!(create(&root, "demo", "", vec![]).is_err());
+    }
+
+    #[test]
+    fn thread_launch_arguments_are_selected_by_kind_and_override() {
+        let (settings, _) = parse_project_md(r#"+++
+name = "Mixed agents"
+thread_agent = "claude"
+[[repos]]
+path = "/repo"
+[thread_agents.claude]
+args = ["--dangerously-skip-permissions", "--model", "opus[1m]", "--effort", "high"]
+[thread_agents.codex]
+args = ["--dangerously-bypass-approvals-and-sandbox", "--model", "gpt-6"]
+[thread_agents.codex.machines]
+"MacBook (local)" = ["--yolo"]
+"empty-host" = []
+[thread_agents.devin]
+args = ["--model", "configured-model"]
++++
+"#).unwrap();
+        let safety = Safety { thread_agent_args: vec!["--legacy-claude-flag".into()], ..Safety::default() };
+        assert_eq!(settings.thread_agent_args("claude", "", None, &safety),
+            ["--dangerously-skip-permissions", "--model", "opus[1m]", "--effort", "high"]);
+        assert_eq!(settings.thread_agent_args("codex", "", None, &safety),
+            ["--dangerously-bypass-approvals-and-sandbox", "--model", "gpt-6"]);
+        assert_eq!(settings.thread_agent_args("devin", "", None, &safety), ["--model", "configured-model"]);
+        assert_eq!(settings.thread_agent_args("codex", "MacBook (local)", None, &safety), ["--yolo"]);
+        assert_eq!(settings.thread_agent_args("codex", "other-host", None, &safety),
+            ["--dangerously-bypass-approvals-and-sandbox", "--model", "gpt-6"]);
+        assert!(settings.thread_agent_args("codex", "empty-host", None, &safety).is_empty());
+        let override_args = vec!["--model".into(), "thread-model".into()];
+        assert_eq!(settings.thread_agent_args("codex", "MacBook (local)", Some(&override_args), &safety),
+            ["--model", "thread-model"]);
+        assert!(settings.thread_agent_args("codex", "MacBook (local)", Some(&[]), &safety).is_empty());
+        assert!(settings.thread_agent_args("claude", "", Some(&[]), &safety).is_empty());
+        assert!(settings.thread_agent_args("unknown", "", None, &safety).is_empty());
+
+        // Config serialization must preserve kind tables alongside repository tables.
+        let serialized = toml::to_string(&settings).unwrap();
+        assert_eq!(toml::from_str::<Settings>(&serialized).unwrap(), settings);
+    }
+
+    #[test]
+    fn legacy_thread_arguments_only_apply_to_default_kind() {
+        let settings = Settings::default();
+        let safety = Safety { thread_agent_args: vec!["--dangerously-skip-permissions".into()], ..Safety::default() };
+        assert_eq!(settings.thread_agent_args("claude", "", None, &safety), ["--dangerously-skip-permissions"]);
+        assert!(settings.thread_agent_args("codex", "", None, &safety).is_empty());
+        assert!(settings.thread_agent_args("devin", "", None, &safety).is_empty());
+        let (configured_empty, _) = parse_project_md("+++\n[thread_agents.claude]\nargs = []\n+++\n").unwrap();
+        assert!(configured_empty.thread_agent_args("claude", "", None, &safety).is_empty());
     }
 
     #[test]

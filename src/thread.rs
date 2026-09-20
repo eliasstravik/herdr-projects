@@ -17,6 +17,9 @@ pub const NOT_READY_SECS: i64 = 60;
 pub const MEMORY_CAP_CHARS: usize = 32_000;
 pub const LIBRARY_CAP_KB: u64 = 50 * 1024;
 pub const MAX_LAUNCH_ATTEMPTS: u32 = 3;
+/// How long a submitted brief may go without a receipt before the ticker
+/// alarms. A launch that works is confirmed within a few seconds.
+pub const RECEIPT_TIMEOUT_SECS: i64 = 120;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
@@ -48,6 +51,27 @@ pub struct Thread {
     pub error: String,
     pub prompt_pending: bool,
     pub launch_attempts: u32,
+    pub launch_started: String,
+    pub launch_deadline: String,
+    pub launch_error: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_args: Option<Vec<String>>,
+    pub brief_receipt_token: String,
+    /// Delivery state, held per brief rather than as one pane-shaped bool: a
+    /// restart rewrites the brief, and the old brief's receipt does not count
+    /// for the new one. `brief_hash` is the brief that was last written,
+    /// `brief_submitted_hash` the one a `herdr agent prompt` accepted, and
+    /// `brief_receipt_hash` the one seen to have reached the pane.
+    pub brief_hash: String,
+    pub brief_submitted: String,
+    pub brief_submitted_hash: String,
+    pub brief_receipt: String,
+    pub brief_receipt_hash: String,
+    /// `first-turn` (acknowledgment), legacy `pane`, or `manual` (`--delivered`).
+    pub brief_receipt_source: String,
+    /// The brief an unacknowledged-launch alarm was already raised for, so one
+    /// stuck launch produces one inbox item.
+    pub delivery_alarm_hash: String,
     pub kind: Kind,
     pub repo: String,
     pub origin: String,
@@ -197,7 +221,75 @@ pub fn thread_dir(cwd: &str, slug: &str, id: &str) -> String {
 /// The one line the agent is prompted with; the relative path is the same for
 /// every kind. Nothing from outside is ever placed in a prompt.
 pub fn launch_prompt(slug: &str, id: &str) -> String {
-    format!("Read .herdr-project/{slug}-{id}/brief.md and do what it says.")
+    format!("Read {} and do what it says.", brief_path(slug, id))
+}
+
+// ------------------------------------------------------ delivery receipts
+
+/// The relative brief path used in the launch prompt. Its echo is not a receipt.
+pub fn brief_path(slug: &str, id: &str) -> String {
+    format!(".herdr-project/{slug}-{id}/brief.md")
+}
+
+/// Whether pane output shows the marker. herdr returns the pane as it is
+/// drawn, so a narrow pane can break the path across lines: whitespace is
+/// dropped from both sides before matching. The marker is long and carries the
+/// thread id, so dropping it cannot make two threads look alike.
+pub fn receipt_seen(pane_text: &str, marker: &str) -> bool {
+    fn squeeze(text: &str) -> String {
+        text.chars().filter(|c| !c.is_whitespace()).collect()
+    }
+    !marker.is_empty() && squeeze(pane_text).contains(&squeeze(marker))
+}
+
+const RECEIPT_PREFIX: &str = "brief-read:";
+
+pub fn receipt_token(nonce: &str) -> String {
+    format!("{RECEIPT_PREFIX}{nonce}")
+}
+
+pub fn receipt_instruction(nonce: &str) -> String {
+    format!("After reading this brief, acknowledge in your first reply by joining `{RECEIPT_PREFIX}` and `{nonce}` without spaces.")
+}
+
+pub struct GeneratedBrief {
+    pub text: String,
+    pub receipt_token: String,
+}
+
+/// The brief the record now carries has been seen to reach its pane.
+pub fn has_receipt(thread: &Thread) -> bool {
+    !thread.brief_receipt.is_empty() && thread.brief_receipt_hash == thread.brief_hash
+}
+
+/// The brief the record now carries was submitted, and has not been seen to
+/// arrive. Every predicate here is anchored on `brief_hash`, the brief the
+/// record carries: writing a brief clears the rest, so two anchors could only
+/// ever drift apart.
+pub fn awaiting_receipt(thread: &Thread) -> bool {
+    !thread.brief_hash.is_empty() && thread.brief_submitted_hash == thread.brief_hash && !has_receipt(thread)
+}
+
+/// Awaited for longer than the bounded wait. A resolved thread is never
+/// overdue: nobody is waiting on it.
+pub fn receipt_overdue(thread: &Thread, now: jiff::Timestamp) -> bool {
+    thread.status != Status::Resolved
+        && awaiting_receipt(thread)
+        && seconds_since(&thread.brief_submitted, now) >= RECEIPT_TIMEOUT_SECS
+}
+
+/// One line of delivery state, for `thread show` and `doctor`.
+pub fn delivery_note(thread: &Thread, now: jiff::Timestamp) -> String {
+    if has_receipt(thread) {
+        let source = if thread.brief_receipt_source.is_empty() { "unknown" } else { &thread.brief_receipt_source };
+        return format!("received {}s ago ({source})", seconds_since(&thread.brief_receipt, now));
+    }
+    if !awaiting_receipt(thread) {
+        return "not submitted".into();
+    }
+    let age = seconds_since(&thread.brief_submitted, now);
+    let overdue = if receipt_overdue(thread, now) { " (overdue)" } else { "" };
+    format!("submitted {age}s ago, no receipt{overdue}")
 }
 
 // ---------------------------------------------------------------- briefs
@@ -255,7 +347,7 @@ pub fn compose_brief(input: &BriefInput) -> String {
 }
 
 /// Reads the project's instructions and memory and composes the brief.
-pub fn brief_for(project: &Project, thread: &Thread, task: &str, restart: bool) -> Result<String> {
+pub fn brief_for(project: &Project, thread: &Thread, task: &str, restart: bool) -> Result<GeneratedBrief> {
     let (_, instructions) = project.read_project_md()?;
     let memory_index = std::fs::read_to_string(project.dir().join("MEMORY.md")).unwrap_or_default();
     let mut names: Vec<String> = std::fs::read_dir(project.dir().join("memory"))
@@ -277,7 +369,7 @@ pub fn brief_for(project: &Project, thread: &Thread, task: &str, restart: bool) 
             regular.then(|| std::fs::read_to_string(&path).ok()).flatten().map(|text| (name, text))
         })
         .collect();
-    Ok(compose_brief(&BriefInput {
+    let brief = compose_brief(&BriefInput {
         instructions: &instructions,
         memory_index: &memory_index,
         memory_files: &memory_files,
@@ -285,7 +377,12 @@ pub fn brief_for(project: &Project, thread: &Thread, task: &str, restart: bool) 
         restart,
         report_path: &thread.report_path(),
         library_path: &thread.library_path(),
-    }))
+    });
+    let nonce = sha256_hex(format!("{}:{}:{}", project.slug, thread.id, jiff::Timestamp::now()).as_bytes());
+    Ok(GeneratedBrief {
+        text: format!("# First-turn receipt\n\n{}\n\n{brief}", receipt_instruction(&nonce)),
+        receipt_token: receipt_token(&nonce),
+    })
 }
 
 // ---------------------------------------------------------------- groups
@@ -430,11 +527,16 @@ pub fn pane_matches(thread: &Thread, pane: &Pane) -> bool {
         && pane.cwd == thread.cwd
 }
 
-pub fn agent_matches(thread: &Thread, agent: &Agent) -> bool {
-    let ids = agent.pane_id == thread.pane_id
+/// Identity shared by ordinary matching and hand-start reconciliation.
+pub fn agent_pane_matches(thread: &Thread, agent: &Agent) -> bool {
+    agent.pane_id == thread.pane_id
         && agent.workspace_id == thread.workspace_id
         && agent.tab_id == thread.tab_id
-        && agent.cwd == thread.cwd;
+        && agent.cwd == thread.cwd
+}
+
+pub fn agent_matches(thread: &Thread, agent: &Agent) -> bool {
+    let ids = agent_pane_matches(thread, agent);
     match thread.kind {
         // Not started by the binary: whatever name herdr reported at adoption.
         Kind::Adopted => ids,
@@ -1011,5 +1113,73 @@ mod tests {
         runner.on("du -sk", ok("4\t/x\n"));
         runner.on("rsync", fail(23, "rsync: write failed"));
         assert!(matches!(copy_home_local(&project, &t, true, &runner).outcome, CopyOutcome::Failed(_)));
+    }
+
+    // ------------------------------------------------ brief delivery receipts
+
+    #[test]
+    fn the_launch_prompt_names_the_brief_path() {
+        let marker = brief_path("demo", "t-0001");
+        assert_eq!(marker, ".herdr-project/demo-t-0001/brief.md");
+        // Whatever the marker is, the prompt the agent is sent must contain it,
+        // or reading the pane back could never confirm anything.
+        assert!(launch_prompt("demo", "t-0001").contains(&marker));
+    }
+
+    #[test]
+    fn a_receipt_is_seen_even_when_the_terminal_wrapped_the_path() {
+        let marker = brief_path("demo", "t-0001");
+        let plain = "> Read .herdr-project/demo-t-0001/brief.md and do what it says.";
+        assert!(receipt_seen(plain, &marker));
+        // herdr returns the pane as it is drawn: a narrow pane breaks the path.
+        let wrapped = "> Read .herdr-project/demo-\n  t-0001/brief.md and do what\n  it says.";
+        assert!(receipt_seen(wrapped, &marker));
+        // Another thread's brief in the same pane is not this thread's receipt.
+        assert!(!receipt_seen("Read .herdr-project/demo-t-0002/brief.md", &marker));
+        assert!(!receipt_seen("", &marker));
+    }
+
+    #[test]
+    fn awaiting_receipt_is_per_brief_not_per_pane() {
+        // Nothing submitted yet: nothing is awaited.
+        let fresh = Thread { brief_hash: "a".into(), ..open_thread() };
+        assert!(!awaiting_receipt(&fresh));
+
+        // Submitted, no receipt: awaited.
+        let sent = Thread { brief_submitted: ago(10), brief_submitted_hash: "a".into(), ..fresh.clone() };
+        assert!(awaiting_receipt(&sent));
+
+        // Receipt for that brief: settled.
+        let got = Thread { brief_receipt: ago(5), brief_receipt_hash: "a".into(), ..sent.clone() };
+        assert!(!awaiting_receipt(&got));
+
+        // A restart rewrites the brief; the old receipt does not carry over.
+        let restarted = Thread { brief_hash: "b".into(), brief_submitted_hash: "b".into(), ..got };
+        assert!(awaiting_receipt(&restarted));
+    }
+
+    #[test]
+    fn a_receipt_is_overdue_only_after_the_bounded_wait() {
+        let young = Thread { brief_hash: "a".into(), brief_submitted: ago(RECEIPT_TIMEOUT_SECS - 1), brief_submitted_hash: "a".into(), ..open_thread() };
+        assert!(!receipt_overdue(&young, now()));
+        let old = Thread { brief_submitted: ago(RECEIPT_TIMEOUT_SECS + 1), ..young.clone() };
+        assert!(receipt_overdue(&old, now()));
+        // A resolved thread is nobody's problem.
+        let resolved = Thread { status: Status::Resolved, ..old.clone() };
+        assert!(!receipt_overdue(&resolved, now()));
+        // With a receipt in hand, age does not matter.
+        let got = Thread { brief_receipt: ago(1), brief_receipt_hash: "a".into(), ..old };
+        assert!(!receipt_overdue(&got, now()));
+    }
+
+    #[test]
+    fn the_delivery_note_says_which_of_the_three_states_a_thread_is_in() {
+        assert_eq!(delivery_note(&open_thread(), now()), "not submitted");
+        let sent = Thread { brief_submitted: ago(5), brief_submitted_hash: "a".into(), brief_hash: "a".into(), ..open_thread() };
+        assert_eq!(delivery_note(&sent, now()), "submitted 5s ago, no receipt");
+        let overdue = Thread { brief_submitted: ago(RECEIPT_TIMEOUT_SECS + 5), ..sent.clone() };
+        assert!(delivery_note(&overdue, now()).ends_with("no receipt (overdue)"), "{}", delivery_note(&overdue, now()));
+        let got = Thread { brief_receipt: ago(2), brief_receipt_hash: "a".into(), brief_receipt_source: "pane".into(), ..sent };
+        assert_eq!(delivery_note(&got, now()), "received 2s ago (pane)");
     }
 }

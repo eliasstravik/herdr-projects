@@ -7,7 +7,7 @@ How Herdr Projects works, what it writes where, what its safety settings do and 
 - **The coordinator is an ordinary agent** in a Herdr pane that follows a skill (`herdr-projects skill` prints it). Plugin code does not route messages, plan work or decide anything.
 - **The binary does mechanics.** Starting or restarting a thread, copying reports, marking inbox items handled: each is one deterministic subcommand. It talks to Herdr through Herdr's CLI. The one exception is `focus`/`unfocus`: Herdr 0.9.1 has no CLI command for `agent.view.set`, so those two send one JSON line to the project's socket.
 - **Files are the record, prompts are nudges.** Threads write a report file, the ticker writes events to an inbox folder, and the coordinator re-reads state with `context` at the start of every turn. A missed prompt loses nothing.
-- **One ticker per projects root** checks every 15 seconds: thread state and groups, pending prompts, changed reports, pull requests (every two minutes), routines, auto-resolve. Remote machines are polled once a minute.
+- **One ticker per projects root** checks every 15 seconds: thread state and groups, pending prompts, changed reports, pull requests (every two minutes), routines, auto-resolve. Remote machines are considered every tick. Each eligible thread gets one bounded launch attempt in batches of at most eight concurrent starts, so failed local starts cannot consume remote threads' opportunities.
 - **Tools are found even under a bare `PATH`.** A Herdr server started outside a login shell gives its plugins a minimal `PATH`; the binary appends `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` and `~/.cargo/bin` to its own, so the ticker finds `gh`, `rsync` and friends. `ticker status` and `doctor` show what resolved.
 - **Nothing destructive is automatic.** The binary never removes a worktree, deletes a branch, merges or pushes on its own. Text from reports, pull requests and command output is never placed in a prompt.
 
@@ -44,7 +44,7 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 | `context <project> [--peek]` | The digest the coordinator reads every turn. `--peek` records nothing. |
 | `inbox done <project> <item>... \| --all` | Mark inbox items handled. |
 | `thread start <project> --title T [--repo PATH] [--machine M] [--agent KIND] [--base REF] --task-file F` | New thread; `-` reads the task from standard input. Returns before the agent is up. |
-| `thread restart`, `thread prompt`, `thread adopt`, `thread list`, `thread show`, `thread ack`, `thread resolve` | See `--help` on each. |
+| `thread restart`, `thread prompt [--delivered]`, `thread adopt`, `thread list`, `thread show`, `thread ack`, `thread resolve` | See `--help` on each. |
 | `overview [<project>] [--wait]`, `focus [<project>]`, `unfocus` | Threads grouped by what needs you, as text and in the sidebar. |
 | `routine list`, `routine approve`, `safety show` | Routines and safety settings. |
 | `pause`, `resume`, `archive`, `unarchive`, `delete [--force]` | Project lifecycle. `delete` moves the folder to `.trash/`. |
@@ -62,7 +62,7 @@ Set per project in `~/.config/herdr-projects/config.toml`; `safety show <project
 [safety."/Users/you/.herdr-projects/billing"]
 start_threads = "propose"          # or "auto": the coordinator starts threads without asking
 coordinator_agent_args = []        # extra arguments for the coordinator's agent CLI
-thread_agent_args = []             # extra arguments for every thread's agent CLI
+thread_agent_args = []             # legacy arguments for the default thread agent kind only
 routine_commands = false           # true lets approved routines run shell commands
 ```
 
@@ -104,6 +104,31 @@ For other agents the principle is the same: allow reading and steering, keep any
 - **Prompt injection is reduced, not removed.** The coordinator reads reports and may choose to fetch pull request comments itself. Memory is a carrier: whatever it writes there is inlined into every later brief.
 - **Agent variety.** The skill and briefs are agent-neutral, but only Claude Code has been exercised.
 - **Cost.** Every thread is a full agent session, and each nudge and each `context` spends coordinator tokens.
+
+## Thread launch arguments
+
+Set complete argument lists by kind in the TOML front matter of `PROJECT.md`:
+
+```toml
+[thread_agents.claude]
+args = ["--dangerously-skip-permissions", "--model", "opus[1m]", "--effort", "high"]
+[thread_agents.codex]
+args = ["--dangerously-bypass-approvals-and-sandbox"]
+[thread_agents.codex.machines]
+"MacBook (local)" = ["--yolo"]
+[thread_agents.devin]
+args = ["--model", "swe-2-max"]
+```
+
+Use the flags supported by the CLI on the target machine (for example `--yolo` for a Codex version that supports it). Repeat `thread start --agent-arg=VALUE` to replace the selected kind's entire list for one thread; `--no-agent-args` selects an explicit empty list. That override is stored in the thread record and survives restart. A matching machine entry overrides its kind's arguments; a thread override takes precedence over both. A per-kind block, including an empty list, overrides the legacy safety list. Without a block, the safety list applies only to `thread_agent`, never to another kind. An unconfigured kind gets no extra arguments. The old flat `thread_agent_args` key in `PROJECT.md` is not supported; use the blocks above.
+
+`thread show` exposes `launch_attempts`, `launch_started`, `launch_deadline`, and `launch_error`. Each attempt has the Herdr startup timeout plus a five-second outer deadline. Local and remote startup waits overlap within each batch; additional batches follow in the same pass. The 15-second interval is a polling target, not a hard tick deadline. A successful start waits until that deadline before retry if the next snapshot has no agent. After three attempts, a fresh agent list must confirm that no agent occupies the pane before the record becomes failed. A hand-started agent reopens a pending or failed record when its workspace, tab, pane and working directory all match. Agents in a reused pane with a different directory are left alone. Remote report-copy failures do not prevent launches or prompt delivery.
+
+## Brief delivery receipts
+
+A successful `agent prompt` call records submission only. Each newly written brief asks the helper to join two pieces into a unique acknowledgment in its first reply. The ticker reads the pane on later ticks and settles delivery only when that joined acknowledgment appears. Echoing the launch prompt or the brief does not contain the joined token and cannot settle delivery. Restart writes a fresh token; an earlier turn cannot acknowledge the new brief. Older pending briefs get a hash-specific acknowledgment instruction when submitted.
+
+`thread show` prints delivery state and the receipt source (`first-turn`, or `manual` for an explicit `thread prompt --delivered`). A submitted brief without acknowledgment raises one `brief-delivery` inbox item after two minutes. A failed pane read leaves delivery unsettled and does not stop other threads. History is read when possible, with visible-screen fallback while an agent works. Existing already-submitted briefs without a token need a restart or an explicit manual receipt; the ticker does not send a second prompt to a working agent.
 
 ## Nudges and notifications
 

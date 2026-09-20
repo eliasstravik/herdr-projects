@@ -187,6 +187,12 @@ enum ThreadCommand {
         /// Agent kind (default: thread_agent in PROJECT.md)
         #[arg(long, value_name = "KIND")]
         agent: Option<String>,
+        /// Replace configured agent argv; repeat for each argument (use --agent-arg=--flag)
+        #[arg(long = "agent-arg", value_name = "ARG", action = clap::ArgAction::Append)]
+        agent_args: Vec<String>,
+        /// Launch without configured agent arguments
+        #[arg(long, conflicts_with = "agent_args")]
+        no_agent_args: bool,
         #[arg(long, value_name = "REF")]
         base: Option<String>,
         /// The task; `-` reads standard input
@@ -199,9 +205,12 @@ enum ThreadCommand {
     Prompt {
         slug: String,
         id: String,
-        /// The text; `-` reads standard input
+        /// The text; `-` reads standard input. Optional with --delivered
         #[arg(long, value_name = "FILE")]
-        text_file: String,
+        text_file: Option<String>,
+        /// Record that the brief reached this thread by some other route
+        #[arg(long)]
+        delivered: bool,
     },
     /// List threads with live state and group
     List { slug: String },
@@ -336,9 +345,10 @@ pub fn run() -> Result<()> {
             }
         },
         Command::Thread { command } => match command {
-            ThreadCommand::Start { slug, title, repo, machine, agent, base, task_file } => {
+            ThreadCommand::Start { slug, title, repo, machine, agent, agent_args, no_agent_args, base, task_file } => {
                 let task = read_text(&task_file)?;
-                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, agent, base, task })?;
+                let agent_args = if no_agent_args || !agent_args.is_empty() { Some(agent_args) } else { None };
+                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, agent, agent_args, base, task })?;
                 println!("{}", serde_json::json!({ "id": thread.id, "kind": thread.kind, "branch": thread.branch, "pane_id": thread.pane_id }));
                 Ok(())
             }
@@ -347,10 +357,13 @@ pub fn run() -> Result<()> {
                 println!("{} is back in pane {}; the ticker launches its agent", thread.id, thread.pane_id);
                 Ok(())
             }
-            ThreadCommand::Prompt { slug, id, text_file } => {
-                let text = read_text(&text_file)?;
-                let state = threads::prompt(&ctx, &slug, &id, &text)?;
-                println!("sent to {id} (agent was {state})");
+            ThreadCommand::Prompt { slug, id, text_file, delivered } => {
+                let text = text_file.map(|file| read_text(&file)).transpose()?;
+                let sending = text.is_some();
+                let state = threads::prompt(&ctx, &slug, &id, text.as_deref(), delivered)?;
+                if sending {
+                    println!("sent to {id} (agent was {state})");
+                }
                 Ok(())
             }
             ThreadCommand::Adopt { slug, pane, title, task_file } => {
@@ -425,5 +438,27 @@ pub fn run() -> Result<()> {
             TickerCommand::Stop => ticker::stop(&ctx.root),
             TickerCommand::Status => ticker::status(&ctx.root),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn thread_start_parses_exact_agent_arguments() {
+        let cli = Cli::try_parse_from([
+            "hp", "thread", "start", "demo", "--title", "Launch", "--agent", "codex",
+            "--agent-arg=--model", "--agent-arg", "model with spaces", "--agent-arg=--yolo", "--task-file", "task.md",
+        ]).unwrap();
+        let Command::Thread { command: ThreadCommand::Start { agent, agent_args, no_agent_args, .. } } = cli.command else {
+            panic!("expected thread start");
+        };
+        assert_eq!(agent.as_deref(), Some("codex"));
+        assert_eq!(agent_args, ["--model", "model with spaces", "--yolo"]);
+        assert!(!no_agent_args);
+        let base = ["hp", "thread", "start", "demo", "--title", "Launch", "--task-file", "task.md", "--no-agent-args"];
+        assert!(Cli::try_parse_from(base).is_ok());
+        assert!(Cli::try_parse_from(base.into_iter().chain(["--agent-arg=--yolo"])).is_err());
     }
 }

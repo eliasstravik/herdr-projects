@@ -82,6 +82,7 @@ pub struct StartArgs {
     pub repo: Option<String>,
     pub machine: Option<String>,
     pub agent: Option<String>,
+    pub agent_args: Option<Vec<String>>,
     pub base: Option<String>,
     pub task: String,
 }
@@ -142,6 +143,7 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
         t.repo = repo.clone();
         t.machine = machine.clone();
         t.agent = agent_kind.clone();
+        t.agent_args = args.agent_args.clone();
         t.base = args.base.clone().unwrap_or_default();
     })?;
     let id = record.id.clone();
@@ -241,8 +243,11 @@ fn write_brief(ctx: &Ctx, project: &Project, placed: &Thread, restart: bool) -> 
     let task = std::fs::read_to_string(thread::task_path(project, &placed.id)).unwrap_or_default();
     let brief = thread::brief_for(project, &with_dir, &task, restart)?;
     let target = remote::ssh_target(ctx.runner, &ctx.env.herdr_bin(), &ctx.config_dir, &placed.machine)?;
-    remote::write_brief(ctx.runner, &target, &placed.cwd, &dir, &brief)?;
-    thread::update(project, &placed.id, |t| t.thread_dir = dir)?;
+    remote::write_brief(ctx.runner, &target, &placed.cwd, &dir, &brief.text)?;
+    thread::update(project, &placed.id, |t| {
+        t.thread_dir = dir;
+        record_written_brief(t, &brief);
+    })?;
     Ok(())
 }
 
@@ -281,9 +286,32 @@ fn write_brief_local(ctx: &Ctx, project: &Project, placed: &Thread, restart: boo
     if placed.kind != Kind::Tab {
         exclude_from_git(ctx.runner, &placed.cwd)?;
     }
-    project::write_atomic(&Path::new(&dir).join("brief.md"), brief.as_bytes())?;
-    thread::update(project, &placed.id, |t| t.thread_dir = dir)?;
+    project::write_atomic(&Path::new(&dir).join("brief.md"), brief.text.as_bytes())?;
+    thread::update(project, &placed.id, |t| {
+        t.thread_dir = dir;
+        record_written_brief(t, &brief);
+    })?;
     Ok(())
+}
+
+pub fn record_written_brief(t: &mut Thread, brief: &thread::GeneratedBrief) {
+    record_new_brief(t, thread::sha256_hex(brief.text.as_bytes()));
+    t.brief_receipt_token = brief.receipt_token.clone();
+}
+
+/// A newly written brief is the one a receipt must now be for, so the previous
+/// brief's submission, receipt and alarm are cleared with it: they say nothing
+/// about this delivery. Callers importing legacy briefs may reuse a hash; even
+/// then the earlier receipt must not settle a new delivery.
+pub fn record_new_brief(t: &mut Thread, hash: String) {
+    t.brief_hash = hash;
+    t.brief_receipt_token.clear();
+    t.brief_submitted.clear();
+    t.brief_submitted_hash.clear();
+    t.brief_receipt.clear();
+    t.brief_receipt_hash.clear();
+    t.brief_receipt_source.clear();
+    t.delivery_alarm_hash.clear();
 }
 
 /// Adds `.herdr-project/` to the repository's `info/exclude` if it is not
@@ -314,6 +342,9 @@ fn finish_placement(project: &Project, view: &SessionView, id: &str) -> Result<T
         t.agent_name = thread::agent_name(&project.slug, &t.id);
         t.prompt_pending = true;
         t.launch_attempts = 0;
+        t.launch_started.clear();
+        t.launch_deadline.clear();
+        t.launch_error.clear();
         t.status = Status::Open;
         t.error.clear();
         t.last_state.clear();
@@ -426,18 +457,49 @@ pub fn restart(ctx: &Ctx, slug: &str, id: &str) -> Result<Thread> {
 
 /// Sends a follow-up. The one sender that does not use the ready-for-a-prompt
 /// predicate: agents queue a message that arrives while they work.
-pub fn prompt(ctx: &Ctx, slug: &str, id: &str, text: &str) -> Result<String> {
+pub fn prompt(ctx: &Ctx, slug: &str, id: &str, text: Option<&str>, delivered: bool) -> Result<String> {
     let project = Project::load(&ctx.root, slug)?;
     let record = thread::load(&project, id)?;
-    if text.trim().is_empty() {
-        bail!("the text is empty");
+    match text {
+        Some(text) if text.trim().is_empty() => bail!("the text is empty"),
+        None if !delivered => bail!("nothing to send: give some text, or pass --delivered to record that the brief arrived"),
+        _ => {}
     }
     if record.status == Status::Resolved {
         bail!("{id} is resolved");
     }
-    if record.prompt_pending {
+    if record.prompt_pending && !delivered {
         bail!("{id} has not received its brief yet; try again once it has started");
     }
+    // The lead saying the brief arrived is a statement about the brief, not a
+    // result of this call: it is recorded before anything is sent, and needs
+    // no reachable agent. A thread that carries no brief has nothing to record
+    // a receipt against, and none is invented for it; clearing the pending
+    // flag is still the correction worth making, because that flag saying
+    // "still to send" while the agent works is the books disagreeing with the
+    // pane.
+    if delivered {
+        let straightened = thread::update(&project, id, |t| {
+            t.prompt_pending = false;
+            if !t.brief_hash.is_empty() {
+                // Only a receipt is recorded. The lead sent it, so claiming a
+                // submission of our own would put a call in the record that
+                // was never made.
+                t.brief_receipt = project::now();
+                t.brief_receipt_hash = t.brief_hash.clone();
+                t.brief_receipt_source = "manual".into();
+            }
+        })?;
+        if straightened.brief_hash.is_empty() {
+            println!("{id}: nothing more is expected for it, but it carries no brief, so no receipt was recorded");
+        } else {
+            println!("{id}: brief recorded as delivered");
+        }
+    }
+    let Some(text) = text else {
+        return Ok("recorded".into());
+    };
+    let record = thread::load(&project, id)?;
     let view = require_session(ctx, &project)?;
     let (agents, _) = lists_for(&view, &record)?;
     let state = prompt_state(&record, &agents)?;
@@ -656,6 +718,7 @@ pub fn print_show(ctx: &Ctx, slug: &str, id: &str) -> Result<()> {
     let row = row(&record, view.as_ref(), jiff::Timestamp::now());
     println!("group = {:?}", row.group.label());
     println!("live = {:?}", row.note);
+    println!("delivery = {:?}", thread::delivery_note(&record, jiff::Timestamp::now()));
     print!("{}", toml::to_string(&record)?);
     let report = thread::home_report_path(&project, id);
     if report.is_file() {
@@ -690,6 +753,32 @@ mod tests {
 
     fn shell() -> Live {
         Live { pane_exists: true, agent_state: None, state_secs: 0 }
+    }
+
+    #[test]
+    fn a_rewritten_brief_always_needs_its_own_receipt() {
+        // A second restart writes the same text as the first, so the hash is
+        // unchanged. The delivery still has to be proved again: keeping the
+        // old receipt would settle a brief nobody watched arrive.
+        let mut t = Thread {
+            brief_hash: "a".into(),
+            brief_submitted: "t1".into(),
+            brief_submitted_hash: "a".into(),
+            brief_receipt: "t2".into(),
+            brief_receipt_hash: "a".into(),
+            brief_receipt_source: "pane".into(),
+            delivery_alarm_hash: "a".into(),
+            ..worktree_thread()
+        };
+        record_new_brief(&mut t, "a".into());
+        assert_eq!(t.brief_hash, "a");
+        assert!(t.brief_submitted.is_empty());
+        assert!(t.brief_submitted_hash.is_empty());
+        assert!(t.brief_receipt.is_empty());
+        assert!(t.brief_receipt_hash.is_empty());
+        assert!(t.brief_receipt_source.is_empty());
+        assert!(t.delivery_alarm_hash.is_empty());
+        assert!(!thread::has_receipt(&t));
     }
 
     #[test]

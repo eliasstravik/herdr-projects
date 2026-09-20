@@ -301,6 +301,11 @@ pub fn tick(ctx: &Ctx, log: &Log, memory: &mut Memory) -> bool {
         }
     }
     for (project, seen) in &reachable {
+        // A herdr call that failed for one thread is a note about that thread,
+        // never a reason to skip the launches and copies for all the others.
+        if let Some(error) = &seen.error {
+            log.line(&format!("{}: {error:#}", project.slug));
+        }
         for error in tick_slow(ctx, project, seen, memory) {
             log.line(&format!("{}: {error:#}", project.slug));
         }
@@ -324,6 +329,9 @@ pub struct Seen {
     /// The session answered, the project has at least two recorded local
     /// panes, and every one of them is missing: herdr was restarted.
     session_lost: bool,
+    /// The first herdr call that failed during the cheap pass. It is reported
+    /// and nothing more: the session answered, so the project is reachable.
+    error: Option<anyhow::Error>,
 }
 
 /// Both passes for one project; `Ok(false)` when its session is unreachable.
@@ -335,10 +343,13 @@ pub fn tick_project(ctx: &Ctx, project: &Project) -> Result<bool> {
 #[cfg(test)]
 pub fn tick_project_with(ctx: &Ctx, project: &Project, memory: &mut Memory) -> Result<bool> {
     match tick_cheap(ctx, project)? {
-        Some(seen) => match tick_slow(ctx, project, &seen, memory).into_iter().next() {
-            Some(error) => Err(error),
-            None => Ok(true),
-        },
+        Some(seen) => {
+            let slow = tick_slow(ctx, project, &seen, memory).into_iter().next();
+            match seen.error.or(slow) {
+                Some(error) => Err(error),
+                None => Ok(true),
+            }
+        }
         None => Ok(false),
     }
 }
@@ -356,9 +367,24 @@ fn thread_pass(project: &Project, herdr: &Herdr, threads: &[thread::Thread], age
     let slug = &project.slug;
     let now = jiff::Timestamp::now();
     let mut pass = Pass { transitions: Vec::new(), recorded_panes: 0, missing_panes: 0, error: None };
-    for t in threads {
+    for original in threads {
+        let mut reconciled = original.clone();
+        if matches!(original.status, thread::Status::Failed | thread::Status::Starting) || original.prompt_pending {
+            if let Some(agent) = agents.iter().find(|a| thread::agent_pane_matches(original, a)) {
+                reconciled = thread::update(project, &original.id, |t| {
+                    t.status = thread::Status::Open;
+                    t.error.clear();
+                    t.launch_error.clear();
+                    t.agent_name = agent.name.clone();
+                    if !agent.agent.is_empty() { t.agent = agent.agent.clone(); }
+                })?;
+            }
+        }
+        let t = &reconciled;
+        if t.status == thread::Status::Failed { continue; }
         if t.status == thread::Status::Starting {
-            if thread::seconds_since(&t.created, now) >= thread::STARTING_TIMEOUT_SECS {
+            if thread::seconds_since(&t.created, now) >= thread::STARTING_TIMEOUT_SECS
+                && !agents.iter().any(|a| a.pane_id == t.pane_id) {
                 thread::update(project, &t.id, |t| {
                     t.status = thread::Status::Failed;
                     t.error = "still starting after five minutes".into();
@@ -375,17 +401,36 @@ fn thread_pass(project: &Project, herdr: &Herdr, threads: &[thread::Thread], age
         if state != t.last_state {
             live.state_secs = 0;
         }
-        // A remote thread is polled once a minute, so `blocked` at a poll
-        // already counts: there is no finer clock to debounce against.
+
+        // Preserve the remote blocked-state behavior while polling more often.
         if t.is_remote() && state == "blocked" {
             live.state_secs = live.state_secs.max(thread::BLOCKED_DEBOUNCE_SECS);
         }
-
         let mut delivered = false;
+        let mut receipt_token = t.brief_receipt_token.clone();
+        let mut prompt = thread::launch_prompt(slug, &t.id);
+        if receipt_token.is_empty() && !t.brief_hash.is_empty() {
+            receipt_token = thread::receipt_token(&t.brief_hash);
+            prompt.push_str(&format!(" {}", thread::receipt_instruction(&t.brief_hash)));
+        }
         if t.prompt_pending && live.agent_state.as_deref().is_some_and(crate::herdr::ready_state) {
-            match herdr.agent_prompt(&t.pane_id, &thread::launch_prompt(slug, &t.id)) {
+            match herdr.agent_prompt(&t.pane_id, &prompt) {
                 Ok(()) => delivered = true,
                 Err(error) => pass.error = pass.error.or(Some(anyhow::anyhow!("{}: brief prompt: {error}", t.id))),
+            }
+        }
+
+        // Submission is not receipt. The brief is settled only once the pane
+        // shows it arrived, which also reconciles a send the lead made by
+        // hand. A read that fails leaves the thread awaiting, so a pane that
+        // cannot be read is never mistaken for a lost brief. The read is
+        // skipped on the tick that submitted, because the agent has not drawn
+        // the prompt yet.
+        let mut received = false;
+        if !delivered && receipt_wanted(t, &live) {
+            match herdr.on_machine(&t.machine).agent_read(&t.pane_id, RECEIPT_READ_LINES) {
+                Ok(text) => received = thread::receipt_seen(&text, &t.brief_receipt_token),
+                Err(error) => pass.error = pass.error.or(Some(anyhow::anyhow!("{}: brief receipt: {error}", t.id))),
             }
         }
 
@@ -405,10 +450,18 @@ fn thread_pass(project: &Project, herdr: &Herdr, threads: &[thread::Thread], age
             let note = if !live.pane_exists { "pane closed".to_string() } else if state.is_empty() { "no agent".to_string() } else { state.clone() };
             pass.transitions.push(Transition { id: t.id.clone(), to: group, note });
         }
-        if delivered || state != t.last_state || group.token() != t.last_group {
+        if delivered || received || state != t.last_state || group.token() != t.last_group {
             thread::update(project, &t.id, |t| {
                 if delivered {
                     t.prompt_pending = false;
+                    t.brief_receipt_token = receipt_token.clone();
+                    t.brief_submitted = project::now();
+                    t.brief_submitted_hash = t.brief_hash.clone();
+                }
+                if received {
+                    t.brief_receipt = project::now();
+                    t.brief_receipt_hash = t.brief_hash.clone();
+                    t.brief_receipt_source = "first-turn".into();
                 }
                 if state != t.last_state {
                     t.last_state = state.clone();
@@ -417,6 +470,22 @@ fn thread_pass(project: &Project, herdr: &Herdr, threads: &[thread::Thread], age
                 t.last_group = group.token().to_string();
             })?;
         }
+
+        // A launch that was never acknowledged is alarmed once per brief, so
+        // one stuck thread is one inbox item however long it stays stuck.
+        // Neither branch above can have fired here: a thread submitted or
+        // received this tick is not overdue.
+        if !delivered && !received && thread::receipt_overdue(t, now) && t.delivery_alarm_hash != t.brief_submitted_hash {
+            let summary = format!(
+                "{} \"{}\" was sent its brief {}s ago and its pane has never shown it: no receipt. Check whether it is sitting idle without its task.",
+                t.id,
+                t.title,
+                thread::seconds_since(&t.brief_submitted, now),
+            );
+            inbox::write(project, "brief-delivery", &t.id, &summary, "")?;
+            thread::update(project, &t.id, |t| t.delivery_alarm_hash = t.brief_submitted_hash.clone())?;
+        }
+
         if live.pane_exists {
             threads::report_thread_tokens(herdr, t, slug, group);
         }
@@ -424,46 +493,91 @@ fn thread_pass(project: &Project, herdr: &Herdr, threads: &[thread::Thread], age
     Ok(pass)
 }
 
-/// Launches pending threads whose pane is at a shell prompt. At most one
-/// `agent start` per project per tick (`may_start`), and never a start and a
-/// prompt for the same pane in one tick: prompts only go to agents that were
-/// already listed before any start.
-fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::Thread], agents: &[Agent], panes: &[Pane], may_start: &mut bool, errors: &mut Vec<anyhow::Error>) {
+/// Read enough pane history to find the helper's first-turn acknowledgment.
+const RECEIPT_READ_LINES: u32 = 200;
+
+/// Whether to read this thread's pane back this tick: the ticker submitted the
+/// brief the record carries, has not seen it arrive, and there is an agent in
+/// the pane to have received it.
+///
+/// The marker belongs to this brief only. A send made by another route is
+/// recorded explicitly with `thread prompt --delivered`.
+fn receipt_wanted(t: &thread::Thread, live: &thread::Live) -> bool {
+    t.status == thread::Status::Open && thread::awaiting_receipt(t) && live.agent_state.is_some()
+}
+
+/// Each eligible pane gets one bounded attempt per tick. A failed local
+/// launch cannot spend another thread's opportunity (including remotes).
+fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::Thread], agents: &[Agent], panes: &[Pane], launches: &mut Vec<(String, crate::runner::Cmd)>, errors: &mut Vec<anyhow::Error>) {
     let now = jiff::Timestamp::now();
     for t in threads {
         if t.status != thread::Status::Open || !t.prompt_pending {
             continue;
         }
         let live = thread::live_state(t, agents, panes, now);
-        if live.agent_state.is_some() || !live.pane_exists {
+        if agents.iter().any(|a| a.pane_id == t.pane_id) || !live.pane_exists {
+            continue;
+        }
+        if t.launch_error.is_empty() && t.launch_deadline.parse::<jiff::Timestamp>().is_ok_and(|deadline| now < deadline) {
             continue;
         }
         if t.launch_attempts >= thread::MAX_LAUNCH_ATTEMPTS {
-            let failed = thread::update(project, &t.id, |t| {
-                t.status = thread::Status::Failed;
-                t.error = format!("no `{}` agent appeared in the pane after {} launch attempts", t.agent, thread::MAX_LAUNCH_ATTEMPTS);
-            });
-            errors.extend(failed.err());
+            // Earlier launches can take time: re-read before calling the pane empty.
+            match herdr.on_machine(&t.machine).agent_list() {
+                Ok(current) if !current.iter().any(|a| a.pane_id == t.pane_id) => {
+                    errors.extend(thread::update(project, &t.id, |t| {
+                        t.status = thread::Status::Failed;
+                        t.error = format!("no `{}` agent appeared in the pane after {} launch attempts", t.agent, thread::MAX_LAUNCH_ATTEMPTS);
+                    }).err());
+                }
+                Ok(_) => {}
+                Err(error) => errors.push(error.into()),
+            }
             continue;
         }
-        if !*may_start {
-            continue;
-        }
-        *may_start = false;
-        let launched = (|| -> Result<()> {
-            thread::update(project, &t.id, |t| t.launch_attempts += 1)?;
+        let prepared = (|| -> Result<()> {
+            let (settings, _) = project.read_project_md()?;
             let safety = project.safety(&ctx.config_dir)?;
-            herdr.on_machine(&t.machine).agent_start(&t.agent_name, &t.agent, &t.pane_id, &safety.thread_agent_args)?;
+            let args = settings.thread_agent_args(&t.agent, &t.machine, t.agent_args.as_deref(), &safety);
+            let command = herdr.on_machine(&t.machine).agent_start_command(&t.agent_name, &t.agent, &t.pane_id, &args);
+            launches.push((t.id.clone(), command));
             Ok(())
         })();
-        errors.extend(launched.err().map(|e| e.context(format!("{}: launch", t.id))));
+        errors.extend(prepared.err().map(|error| error.context(format!("{}: launch", t.id))));
+    }
+}
+
+/// Local and remote attempts share a bounded batch, so startup timeouts overlap.
+fn run_launches(ctx: &Ctx, project: &Project, launches: &[(String, crate::runner::Cmd)], errors: &mut Vec<anyhow::Error>) {
+    for batch in launches.chunks(8) {
+        let mut ids = Vec::new();
+        let mut commands = Vec::new();
+        for (id, command) in batch {
+            let started = jiff::Timestamp::now();
+            let deadline = started + jiff::SignedDuration::from_secs(command.timeout.as_secs() as i64);
+            match thread::update(project, id, |t| {
+                t.launch_attempts += 1;
+                t.launch_started = started.to_string();
+                t.launch_deadline = deadline.to_string();
+                t.launch_error.clear();
+            }) {
+                Ok(_) => { ids.push(id); commands.push(command.clone()); }
+                Err(error) => errors.push(error),
+            }
+        }
+        for (id, output) in ids.into_iter().zip(ctx.runner.run_batch(&commands)) {
+            if let Err(error) = Herdr::agent_start_result(output) {
+                errors.extend(thread::update(project, id, |t| t.launch_error = error.to_string()).err());
+                errors.push(anyhow::anyhow!("{id}: launch: {error}"));
+            }
+        }
     }
 }
 
 fn open_threads(project: &Project, remote: bool) -> Vec<thread::Thread> {
     thread::list(project)
         .into_iter()
-        .filter(|t| t.is_remote() == remote && matches!(t.status, thread::Status::Open | thread::Status::Starting))
+        .filter(|t| t.is_remote() == remote && matches!(t.status, thread::Status::Open | thread::Status::Starting | thread::Status::Failed))
         .collect()
 }
 
@@ -521,33 +635,43 @@ fn tick_cheap(ctx: &Ctx, project: &Project) -> Result<Option<Seen>> {
         }
     }
 
-    match first_error {
-        Some(error) => Err(error),
-        None => Ok(Some(Seen {
-            socket: record.socket,
-            agents,
-            panes,
-            transitions: pass.transitions,
-            session_lost: recorded_panes >= 2 && missing_panes == recorded_panes,
-        })),
-    }
+    // `agent list` and `pane list` both answered, so the session is reachable
+    // however the calls for one thread went. Returning `Err` here instead cost
+    // the whole project its slow pass — no launch, so a pane kept no agent and
+    // its brief stayed unsent — and, with every tick failing, the run counted
+    // as unreachable and the ticker exited after five minutes.
+    Ok(Some(Seen {
+        socket: record.socket,
+        agents,
+        panes,
+        transitions: pass.transitions,
+        session_lost: recorded_panes >= 2 && missing_panes == recorded_panes,
+        error: first_error,
+    }))
 }
 
 /// One remote machine: one `agent list` (and `pane list`) through
 /// `herdr --machine`, one ssh call for every report hash, then the same thread
 /// pass, copies and launches as for local threads. If the machine cannot be
 /// reached nothing is read: no state, no group change, no copy, no inbox item.
-fn remote_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, machine: &str, threads: &[thread::Thread], may_start: &mut bool, copy_notes: &mut std::collections::BTreeMap<String, Vec<String>>, errors: &mut Vec<anyhow::Error>) -> Result<Vec<Transition>, String> {
+fn remote_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, machine: &str, threads: &[thread::Thread], launches: &mut Vec<(String, crate::runner::Cmd)>, copy_notes: &mut std::collections::BTreeMap<String, Vec<String>>, errors: &mut Vec<anyhow::Error>) -> Result<(Vec<Transition>, Option<String>), String> {
     let remote = herdr.on_machine(machine);
     let agents = remote.agent_list().map_err(|e| e.to_string())?;
     let panes = remote.pane_list().map_err(|e| e.to_string())?;
-    let target = crate::remote::ssh_target(ctx.runner, &ctx.env.herdr_bin(), &ctx.config_dir, machine).map_err(|e| format!("{e:#}"))?;
+    launch_pass(ctx, project, herdr, threads, &agents, &panes, launches, errors);
+    let target = crate::remote::ssh_target(ctx.runner, &ctx.env.herdr_bin(), &ctx.config_dir, machine);
     let dirs: Vec<(String, String)> = threads.iter().filter(|t| !t.thread_dir.is_empty()).map(|t| (t.id.clone(), t.thread_dir.clone())).collect();
-    let hashes = crate::remote::report_hashes(ctx.runner, &target, &dirs).map_err(|e| format!("{e:#}"))?;
+    let hashes = target.as_ref().map_err(|e| format!("{e:#}"))
+        .and_then(|target| crate::remote::report_hashes(ctx.runner, target, &dirs).map_err(|e| format!("{e:#}")));
+    let (hashes, report_error) = match hashes {
+        Ok(hashes) => (hashes, None),
+        Err(error) => (Default::default(), Some(error)),
+    };
 
     let pass = thread_pass(project, &remote, threads, &agents, &panes, Some(&hashes)).map_err(|e| format!("{e:#}"))?;
     errors.extend(pass.error);
 
+    let Ok(target) = target else { return Ok((pass.transitions, report_error)); };
     for t in threads {
         let Some(hash) = hashes.get(&t.id).filter(|h| **h != t.report_hash) else {
             continue;
@@ -567,8 +691,7 @@ fn remote_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, machine: &str, threa
             }
         }
     }
-    launch_pass(ctx, project, herdr, threads, &agents, &panes, may_start, errors);
-    Ok(pass.transitions)
+    Ok((pass.transitions, report_error))
 }
 
 /// Copies and launches, remote machines, then inbox items, pull requests,
@@ -578,14 +701,13 @@ fn tick_slow(ctx: &Ctx, project: &Project, seen: &Seen, memory: &mut Memory) -> 
     let mut copy_notes: std::collections::BTreeMap<String, Vec<String>> = Default::default();
     let herdr = Herdr::new(ctx.env.herdr_bin(), &seen.socket, ctx.runner);
     let now = jiff::Timestamp::now();
-    let mut may_start = true;
     let mut transitions = seen.transitions.clone();
+    let mut launches = Vec::new();
 
     if let Some(record) = project.coordinator().filter(|c| c.prime_pending) {
         let pane_alive = seen.panes.iter().any(|p| coordinator::pane_matches(&record, p));
         let pane_has_agent = seen.agents.iter().any(|a| a.pane_id == record.pane_id);
         if pane_alive && !pane_has_agent && record.launch_attempts < MAX_LAUNCH_ATTEMPTS {
-            may_start = false;
             let started = (|| -> Result<()> {
                 project.update_coordinator(|c| c.launch_attempts += 1)?;
                 let (settings, _) = project.read_project_md()?;
@@ -619,9 +741,9 @@ fn tick_slow(ctx: &Ctx, project: &Project, seen: &Seen, memory: &mut Memory) -> 
             }
         }
     }
-    launch_pass(ctx, project, &herdr, &local, &seen.agents, &seen.panes, &mut may_start, &mut errors);
+    launch_pass(ctx, project, &herdr, &local, &seen.agents, &seen.panes, &mut launches, &mut errors);
 
-    // Remote threads, one machine at a time, every fourth tick.
+    // Every remote machine is considered on every tick, including after an outage.
     let mut state = steps::load_state(project);
     let before = state.clone();
     let remote_threads = open_threads(project, true);
@@ -629,18 +751,21 @@ fn tick_slow(ctx: &Ctx, project: &Project, seen: &Seen, memory: &mut Memory) -> 
     machines.sort();
     machines.dedup();
     for machine in machines {
-        if !memory.machine_is_due(&machine) {
-            continue;
-        }
         let threads: Vec<thread::Thread> = remote_threads.iter().filter(|t| t.machine == machine).cloned().collect();
-        let outcome = remote_pass(ctx, project, &herdr, &machine, &threads, &mut may_start, &mut copy_notes, &mut errors);
-        let event = memory.record_machine(&machine, outcome.as_ref().err().map(String::as_str), now);
+        let outcome = remote_pass(ctx, project, &herdr, &machine, &threads, &mut launches, &mut copy_notes, &mut errors);
+        let machine_error = match &outcome { Ok((_, error)) => error.as_deref(), Err(error) => Some(error.as_str()) };
+        let event = memory.record_machine(&machine, machine_error, now);
         match outcome {
-            Ok(found) => transitions.extend(found),
+            Ok((found, error)) => {
+                transitions.extend(found);
+                if let Some(error) = error { errors.push(anyhow::anyhow!("{machine}: reports: {error}")); }
+            },
             Err(error) => errors.push(anyhow::anyhow!("{machine}: unreachable this tick: {error}")),
         }
         errors.extend(steps::write_machine_outage(project, &machine, event, memory).err());
     }
+
+    run_launches(ctx, project, &launches, &mut errors);
 
     errors.extend(steps::write_thread_items(project, &mut state, &transitions, seen.session_lost, &copy_notes).err());
     errors.extend(steps::pull_requests(ctx, project, &mut state, memory, now));

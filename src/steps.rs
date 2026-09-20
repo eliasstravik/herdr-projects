@@ -80,16 +80,9 @@ impl Outage {
     }
 }
 
-pub const REMOTE_EVERY_TICKS: u64 = 4;
-pub const SKIP_TICKS_AFTER_FAILURE: u64 = 8;
-
 #[derive(Debug, Clone, Default)]
 pub struct MachineMemory {
     pub outage: Outage,
-    /// Not polled again before this tick: one sleeping machine must not slow
-    /// the other projects' ticks.
-    pub skip_until_tick: u64,
-    pub last_poll_tick: u64,
 }
 
 /// What the ticker process remembers between ticks (not persisted).
@@ -113,24 +106,9 @@ impl Memory {
         }
     }
 
-    /// Remote machines are polled every fourth tick (about a minute), and not
-    /// at all for eight ticks after a failure.
-    pub fn machine_is_due(&mut self, machine: &str) -> bool {
-        let tick = self.tick;
-        let entry = self.machines.entry(machine.to_string()).or_default();
-        let due = tick >= entry.skip_until_tick && (entry.last_poll_tick == 0 || tick >= entry.last_poll_tick + REMOTE_EVERY_TICKS);
-        if due {
-            entry.last_poll_tick = tick;
-        }
-        due
-    }
-
     pub fn record_machine(&mut self, machine: &str, error: Option<&str>, now: jiff::Timestamp) -> Option<OutageEvent> {
-        let (tick, threshold) = (self.tick, self.outage_secs);
+        let threshold = self.outage_secs;
         let entry = self.machines.entry(machine.to_string()).or_default();
-        if error.is_some() {
-            entry.skip_until_tick = tick + SKIP_TICKS_AFTER_FAILURE + 1;
-        }
         entry.outage.record(error.is_none(), error.unwrap_or(""), now, threshold)
     }
 }

@@ -6,7 +6,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
-use crate::runner::{Cmd, Runner};
+use crate::runner::{Cmd, Output, Runner};
 
 pub const MIN_VERSION: Version = Version(0, 9, 1);
 pub const CALL_TIMEOUT: Duration = Duration::from_secs(10);
@@ -76,6 +76,35 @@ pub struct Herdr<'a> {
     /// A saved SSH machine: every call is forwarded as `herdr --machine M ...`.
     machine: Option<String>,
     runner: &'a dyn Runner,
+}
+
+fn decode_reply(command: &str, out: Output) -> Result<serde_json::Value, HerdrError> {
+    if out.timed_out {
+        return Err(HerdrError {
+            code: "timeout".into(),
+            message: format!("`herdr {}` timed out", command),
+        });
+    }
+    // herdr prints one JSON object; on failure it carries `error`, and
+    // which stream it lands on is not something to depend on.
+    let reply = [&out.stdout, &out.stderr]
+        .into_iter()
+        .find_map(|text| serde_json::from_str::<serde_json::Value>(text.trim()).ok());
+    if let Some(reply) = reply {
+        if let Some(error) = reply.get("error") {
+            return Err(HerdrError {
+                code: error["code"].as_str().unwrap_or("failed").to_string(),
+                message: error["message"].as_str().unwrap_or("").to_string(),
+            });
+        }
+        if out.success() {
+            return Ok(reply.get("result").cloned().unwrap_or(serde_json::Value::Null));
+        }
+    }
+    Err(HerdrError {
+        code: "failed".into(),
+        message: format!("`herdr {}`: {}", command, out.error_text()),
+    })
 }
 
 impl<'a> Herdr<'a> {
@@ -191,32 +220,7 @@ impl<'a> Herdr<'a> {
             code: "unreachable".into(),
             message: format!("{e:#}"),
         })?;
-        if out.timed_out {
-            return Err(HerdrError {
-                code: "timeout".into(),
-                message: format!("`herdr {}` timed out", args.join(" ")),
-            });
-        }
-        // herdr prints one JSON object; on failure it carries `error`, and
-        // which stream it lands on is not something to depend on.
-        let reply = [&out.stdout, &out.stderr]
-            .into_iter()
-            .find_map(|text| serde_json::from_str::<serde_json::Value>(text.trim()).ok());
-        if let Some(reply) = reply {
-            if let Some(error) = reply.get("error") {
-                return Err(HerdrError {
-                    code: error["code"].as_str().unwrap_or("failed").to_string(),
-                    message: error["message"].as_str().unwrap_or("").to_string(),
-                });
-            }
-            if out.success() {
-                return Ok(reply.get("result").cloned().unwrap_or(serde_json::Value::Null));
-            }
-        }
-        Err(HerdrError {
-            code: "failed".into(),
-            message: format!("`herdr {}`: {}", args.join(" "), out.error_text()),
-        })
+        decode_reply(&args.join(" "), out)
     }
 
     fn call_as<T: serde::de::DeserializeOwned>(
@@ -338,14 +342,23 @@ impl<'a> Herdr<'a> {
     /// Starts an agent in a pane that is at a shell prompt. Success means herdr
     /// detected the agent and it is ready for input.
     pub fn agent_start(&self, name: &str, kind: &str, pane: &str, agent_args: &[String]) -> Result<Agent, HerdrError> {
+        let command = self.agent_start_command(name, kind, pane, agent_args);
+        Self::agent_start_result(self.runner.run(&command))
+    }
+
+    pub fn agent_start_command(&self, name: &str, kind: &str, pane: &str, agent_args: &[String]) -> Cmd {
         let timeout_ms = AGENT_START_TIMEOUT.as_millis().to_string();
         let mut args = vec!["agent", "start", name, "--kind", kind, "--pane", pane, "--timeout", &timeout_ms];
         if !agent_args.is_empty() {
             args.push("--");
             args.extend(agent_args.iter().map(String::as_str));
         }
-        // herdr enforces the timeout itself; the outer deadline only guards a hang.
-        let result = self.call(&args, AGENT_START_TIMEOUT + Duration::from_secs(5))?;
+        self.cmd(AGENT_START_TIMEOUT + Duration::from_secs(5)).args(args)
+    }
+
+    pub fn agent_start_result(output: Result<Output>) -> Result<Agent, HerdrError> {
+        let out = output.map_err(|e| HerdrError { code: "unreachable".into(), message: format!("{e:#}") })?;
+        let result = decode_reply("agent start", out)?;
         serde_json::from_value(result["agent"].clone()).map_err(|e| HerdrError {
             code: "failed".into(),
             message: format!("`herdr agent start` reply changed: {e}"),
@@ -357,6 +370,54 @@ impl<'a> Herdr<'a> {
     /// position is accepted even when it starts with a dash (checked on 0.9.1).
     pub fn agent_prompt(&self, target: &str, text: &str) -> Result<(), HerdrError> {
         self.call(&["agent", "prompt", target, text], CALL_TIMEOUT).map(|_| ())
+    }
+
+    /// Reads a pane's recent terminal output. Unlike every other call this
+    /// one answers with the terminal text itself, not JSON, so it takes the
+    /// runner directly; a JSON body here means herdr refused, and that is an
+    /// error rather than an empty pane (an empty pane reads as "no receipt").
+    ///
+    /// `recent-unwrapped` carries history, which is what a receipt wants, but
+    /// herdr can only capture it while the agent is idle (`agent_not_idle` on
+    /// 0.9.1) — and an agent given its brief is working within the second, so
+    /// that is the ordinary case, not the rare one. herdr's own advice is
+    /// `--source visible`, which reads the drawn screen whatever the agent is
+    /// doing, so a busy pane falls back to it rather than going unread.
+    pub fn agent_read(&self, target: &str, lines: u32) -> Result<String, HerdrError> {
+        match self.read_source(target, lines, "recent-unwrapped") {
+            Err(error) if error.code == "agent_not_idle" => self.read_source(target, lines, "visible"),
+            other => other,
+        }
+    }
+
+    fn read_source(&self, target: &str, lines: u32, source: &str) -> Result<String, HerdrError> {
+        let lines = lines.to_string();
+        let args = ["agent", "read", target, "--source", source, "--lines", &lines];
+        let cmd = self.cmd(CALL_TIMEOUT).args(args);
+        let out = self.runner.run(&cmd).map_err(|e| HerdrError {
+            code: "unreachable".into(),
+            message: format!("{e:#}"),
+        })?;
+        if out.timed_out {
+            return Err(HerdrError { code: "timeout".into(), message: "`herdr agent read` timed out".into() });
+        }
+        if !out.success() {
+            let coded = [&out.stdout, &out.stderr]
+                .into_iter()
+                .find_map(|t| serde_json::from_str::<serde_json::Value>(t.trim()).ok())
+                .and_then(|reply| {
+                    let error = reply.get("error")?;
+                    Some(HerdrError {
+                        code: error["code"].as_str().unwrap_or("failed").to_string(),
+                        message: error["message"].as_str().unwrap_or("").to_string(),
+                    })
+                });
+            return Err(coded.unwrap_or_else(|| HerdrError {
+                code: "failed".into(),
+                message: format!("`herdr agent read {target}`: {}", out.error_text()),
+            }));
+        }
+        Ok(out.stdout)
     }
 
     pub fn agent_focus(&self, target: &str) -> Result<(), HerdrError> {
@@ -443,5 +504,52 @@ mod tests {
         assert_eq!(parse_version("herdr"), None);
         assert!(Version(0, 9, 0) < MIN_VERSION);
         assert!(Version(0, 10, 0) > MIN_VERSION);
+    }
+
+    #[test]
+    fn agent_read_returns_terminal_text_not_json() {
+        use crate::runner::fake::{FakeRunner, fail, ok};
+        // `herdr agent read` prints the pane as it is drawn. There is no
+        // global `--json`, so this one call cannot go through `call`.
+        let runner = FakeRunner::new();
+        runner.on("agent read", ok("> Read .herdr-project/demo-t-0001/brief.md and do what it says.\n"));
+        let herdr = Herdr::new("herdr", "/tmp/s.sock", &runner);
+        let text = herdr.agent_read("w2:p1", 40).unwrap();
+        assert!(text.contains(".herdr-project/demo-t-0001/brief.md"));
+        let call = runner.calls.borrow().last().unwrap().clone();
+        assert!(call.display().contains("--source recent-unwrapped"), "{}", call.display());
+        assert!(call.display().contains("--lines 40"), "{}", call.display());
+
+        // A failure is an error, never an empty pane: an empty pane would read
+        // as "no receipt" and silently look like a lost brief.
+        let broken = FakeRunner::new();
+        broken.on("agent read", fail(1, r#"{"error":{"code":"pane_not_found","message":"gone"}}"#));
+        let herdr = Herdr::new("herdr", "/tmp/s.sock", &broken);
+        assert_eq!(herdr.agent_read("w2:p1", 40).unwrap_err().code, "pane_not_found");
+    }
+
+    #[test]
+    fn a_busy_pane_falls_back_to_the_drawn_screen() {
+        use crate::runner::fake::{FakeRunner, fail, ok};
+        // herdr can only capture history while the agent is idle, and an agent
+        // that has its brief is working. Its own advice is `--source visible`.
+        let runner = FakeRunner::new();
+        runner.on(
+            "--source recent-unwrapped",
+            fail(1, r#"{"error":{"code":"agent_not_idle","message":"cannot read 200 lines while w2:p1 is working"}}"#),
+        );
+        runner.on("--source visible", ok("> Read .herdr-project/demo-t-0001/brief.md and do what it says.\n"));
+        let herdr = Herdr::new("herdr", "/tmp/s.sock", &runner);
+        let text = herdr.agent_read("w2:p1", 200).unwrap();
+        assert!(text.contains(".herdr-project/demo-t-0001/brief.md"));
+        assert_eq!(runner.count("agent read"), 2, "history first, then the screen");
+
+        // Any other refusal stays an error: only an unreadable history is
+        // worth a second, weaker read.
+        let gone = FakeRunner::new();
+        gone.on("agent read", fail(1, r#"{"error":{"code":"pane_not_found","message":"gone"}}"#));
+        let herdr = Herdr::new("herdr", "/tmp/s.sock", &gone);
+        assert_eq!(herdr.agent_read("w2:p1", 200).unwrap_err().code, "pane_not_found");
+        assert_eq!(gone.count("agent read"), 1, "no retry for a pane that is not there");
     }
 }

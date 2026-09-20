@@ -94,8 +94,11 @@ pub fn adopt(ctx: &Ctx, slug: &str, pane: &str, title: &str, task: Option<String
         let brief = thread::brief_for(&project, &with_dir, &task, false)?;
         std::fs::create_dir_all(Path::new(&dir).join("library")).with_context(|| format!("could not create {dir}"))?;
         threads::exclude_from_git(ctx.runner, &agent.cwd)?;
-        project::write_atomic(&Path::new(&dir).join("brief.md"), brief.as_bytes())?;
-        thread::update(&project, &id, |t| t.thread_dir = dir)?;
+        project::write_atomic(&Path::new(&dir).join("brief.md"), brief.text.as_bytes())?;
+        thread::update(&project, &id, |t| {
+            t.thread_dir = dir;
+            threads::record_written_brief(t, &brief);
+        })?;
         Ok(())
     })();
     if let Err(error) = briefed {
@@ -113,6 +116,12 @@ pub fn adopt(ctx: &Ctx, slug: &str, pane: &str, title: &str, task: Option<String
     let adopted = thread::update(&project, &id, |t| {
         t.status = Status::Open;
         t.prompt_pending = !sent;
+        // Adopt is the one sender outside the ticker, so it records its own
+        // submission; the ticker confirms it from the pane like any other.
+        if sent {
+            t.brief_submitted = project::now();
+            t.brief_submitted_hash = t.brief_hash.clone();
+        }
         t.last_state = agent.agent_status.clone();
         t.last_state_change = project::now();
     })?;
@@ -190,6 +199,11 @@ mod tests {
         assert_eq!(t.thread_dir, format!("{cwd}/.herdr-project/demo-t-0001"));
         let brief = std::fs::read_to_string(format!("{}/brief.md", t.thread_dir)).unwrap();
         assert!(brief.contains("Finish the refactor."));
+        // Adopt sends the brief itself, so it records the submission itself.
+        assert_eq!(t.brief_hash, thread::sha256_hex(brief.as_bytes()));
+        assert_eq!(t.brief_submitted_hash, t.brief_hash);
+        assert!(t.brief_receipt.is_empty(), "the ticker confirms it from the pane");
+        assert!(thread::awaiting_receipt(&t));
         assert_eq!(world.runner.count("agent prompt"), 1);
         assert_eq!(world.runner.count("agent start"), 0);
 
@@ -206,6 +220,8 @@ mod tests {
         let (world, project, cwd) = world_with_agent("working", "my-agent");
         let t = adopt(&world.ctx(), "demo", "w5:p1", "Busy", None).unwrap();
         assert!(t.prompt_pending);
+        assert!(!t.brief_hash.is_empty());
+        assert!(t.brief_submitted_hash.is_empty(), "nothing was submitted");
         assert_eq!(world.runner.count("agent prompt"), 0);
 
         *world.agents.borrow_mut() = format!("[{}]", agent_json("w5", "w5:t1", "w5:p1", &cwd, "my-agent", "done"));

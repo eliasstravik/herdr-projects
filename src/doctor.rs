@@ -10,8 +10,12 @@ use crate::herdr::{self, Herdr};
 use crate::paths::{self, Ctx, Env, SessionFlags};
 use crate::project;
 use crate::runner::{Cmd, Runner};
+use crate::{inbox, thread};
 
 const TOOL_TIMEOUT: Duration = Duration::from_secs(10);
+/// An unhandled inbox item older than this is worth a look: the coordinator
+/// reads the inbox every turn, so a backlog this old means it is not reading.
+const INBOX_STALE_SECS: i64 = 3600;
 
 /// Prints the report and returns whether every required check passed.
 pub fn run(ctx: &Ctx, session: &SessionFlags) -> Result<bool> {
@@ -195,6 +199,58 @@ fn report(
         }
     }
 
+    // What each project is waiting on: a backlog the coordinator has not read,
+    // and briefs that were sent but never seen to arrive. Neither is an
+    // installation fault, so neither fails the check.
+    let now = jiff::Timestamp::now();
+    for slug in project::list_slugs(root) {
+        let Ok(project) = project::Project::load(root, &slug) else {
+            continue;
+        };
+        let items = inbox::unhandled(&project);
+        // `project::now()` rounds to the nearest second, so a fresh item can
+        // carry a stamp just ahead of the clock; an age is never negative.
+        let oldest = items.first().map(|i| thread::seconds_since(&i.created, now).max(0));
+        check(
+            &mut out,
+            match oldest {
+                Some(age) if age >= INBOX_STALE_SECS => None,
+                _ => Some(true),
+            },
+            &format!("project {slug} inbox"),
+            match (items.first(), oldest) {
+                (Some(item), Some(age)) => format!("{} unhandled item(s), oldest {age}s ago ({})", items.len(), item.kind),
+                _ => "empty".into(),
+            },
+        );
+
+        let open: Vec<thread::Thread> = thread::list(&project)
+            .into_iter()
+            .filter(|t| t.status == thread::Status::Open)
+            .collect();
+        let waiting: Vec<&thread::Thread> = open.iter().filter(|t| thread::awaiting_receipt(t)).collect();
+        let overdue = waiting.iter().any(|t| thread::receipt_overdue(t, now));
+        // A brief on the record proves only that one was written. Counting
+        // those as received would report a delivery nobody watched arrive,
+        // which is the reporting this check exists to replace.
+        let carried = open.iter().filter(|t| !t.brief_hash.is_empty()).count();
+        let received = open.iter().filter(|t| thread::has_receipt(t)).count();
+        let detail = if open.is_empty() {
+            "no open threads".to_string()
+        } else if waiting.is_empty() && carried == 0 {
+            format!("{} thread(s), none carrying a brief to confirm", open.len())
+        } else if waiting.is_empty() {
+            format!("{} thread(s), {received} of {carried} brief(s) received", open.len())
+        } else {
+            waiting
+                .iter()
+                .map(|t| format!("{} {:?} {}", t.id, t.title, thread::delivery_note(t, now)))
+                .collect::<Vec<_>>()
+                .join("; ")
+        };
+        check(&mut out, if overdue { None } else { Some(true) }, &format!("project {slug} delivery"), detail);
+    }
+
     (out, healthy)
 }
 
@@ -250,5 +306,109 @@ mod tests {
         assert!(text.contains("[warn] root"));
         assert!(text.contains(&format!("root:       {}", root.display())));
         assert!(!root.exists(), "doctor must not create the root");
+    }
+
+    fn ago(secs: i64) -> String {
+        (jiff::Timestamp::now() - jiff::SignedDuration::from_secs(secs)).to_string()
+    }
+
+    #[test]
+    fn a_quiet_project_reports_an_empty_inbox_and_no_delivery_trouble() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let runner = runner_with_herdr("herdr 0.9.1\n");
+        let root = home.path().join("root");
+        let p = project::create(&root, "demo", "", vec![]).unwrap();
+        thread::allocate(&p, |t| {
+            t.status = thread::Status::Open;
+            t.brief_hash = "a".into();
+            t.brief_submitted = ago(5);
+            t.brief_submitted_hash = "a".into();
+            t.brief_receipt = ago(2);
+            t.brief_receipt_hash = "a".into();
+            t.brief_receipt_source = "pane".into();
+        })
+        .unwrap();
+
+        let (text, healthy) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner);
+        assert!(healthy, "{text}");
+        assert!(text.contains("[ok  ] project demo inbox: empty"), "{text}");
+        assert!(text.contains("[ok  ] project demo delivery: 1 thread(s), 1 of 1 brief(s) received"), "{text}");
+    }
+
+    #[test]
+    fn a_brief_that_was_written_but_never_sent_is_not_counted_as_received() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let runner = runner_with_herdr("herdr 0.9.1\n");
+        let root = home.path().join("root");
+        let p = project::create(&root, "demo", "", vec![]).unwrap();
+        // A brief on the record proves only that one was written for it.
+        thread::allocate(&p, |t| {
+            t.status = thread::Status::Open;
+            t.prompt_pending = true;
+            t.brief_hash = "a".into();
+        })
+        .unwrap();
+
+        let (text, _) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner);
+        assert!(text.contains("project demo delivery: 1 thread(s), 0 of 1 brief(s) received"), "{text}");
+    }
+
+    #[test]
+    fn threads_with_no_brief_on_record_are_not_counted_as_received() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let runner = runner_with_herdr("herdr 0.9.1\n");
+        let root = home.path().join("root");
+        let p = project::create(&root, "demo", "", vec![]).unwrap();
+        // A thread started before briefs were hashed carries no brief, so
+        // there is nothing to confirm and nothing to claim was confirmed.
+        thread::allocate(&p, |t| t.status = thread::Status::Open).unwrap();
+
+        let (text, healthy) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner);
+        assert!(healthy, "{text}");
+        assert!(text.contains("project demo delivery: 1 thread(s), none carrying a brief to confirm"), "{text}");
+    }
+
+    #[test]
+    fn an_old_inbox_item_and_an_unreceipted_brief_are_both_reported() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let runner = runner_with_herdr("herdr 0.9.1\n");
+        let root = home.path().join("root");
+        let p = project::create(&root, "demo", "", vec![]).unwrap();
+        // Written directly, so its age is fixed: `project::now()` rounds to the
+        // nearest second and can land just ahead of the clock.
+        let created = ago(INBOX_STALE_SECS + 40);
+        std::fs::write(
+            p.dir().join("inbox/20260917T000000Z-thread-state-t-0001-1.md"),
+            format!("+++\nid = \"20260917T000000Z-thread-state-t-0001-1\"\nkind = \"thread-state\"\nsubject = \"t-0001\"\ncreated = \"{created}\"\nsummary = \"something happened\"\n+++\n"),
+        )
+        .unwrap();
+        thread::allocate(&p, |t| {
+            t.title = "Stuck".into();
+            t.status = thread::Status::Open;
+            t.brief_hash = "a".into();
+            t.brief_submitted = ago(thread::RECEIPT_TIMEOUT_SECS + 40);
+            t.brief_submitted_hash = "a".into();
+        })
+        .unwrap();
+
+        let (text, healthy) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner);
+        // Neither is an installation fault, so neither fails the check.
+        assert!(healthy, "{text}");
+        assert!(text.contains("[warn] project demo inbox: 1 unhandled item(s)"), "{text}");
+        let age: i64 = text
+            .split("oldest ")
+            .nth(1)
+            .and_then(|rest| rest.split('s').next())
+            .and_then(|n| n.parse().ok())
+            .unwrap_or_default();
+        assert!((INBOX_STALE_SECS + 39..=INBOX_STALE_SECS + 41).contains(&age), "age {age} in {text}");
+        assert!(text.contains("ago (thread-state)"), "{text}");
+        assert!(text.contains("[warn] project demo delivery:"), "{text}");
+        assert!(text.contains("t-0001 \"Stuck\""), "{text}");
+        assert!(text.contains("no receipt (overdue)"), "{text}");
     }
 }
