@@ -19,6 +19,7 @@ const FETCH_TIMEOUT: Duration = Duration::from_secs(15);
 /// The project's session as the binary sees it right now.
 pub struct SessionView<'a> {
     pub herdr: Herdr<'a>,
+    pub socket: String,
     pub agents: Vec<Agent>,
     pub panes: Vec<Pane>,
 }
@@ -32,7 +33,7 @@ pub fn session_view<'a>(ctx: &'a Ctx, project: &Project) -> Option<SessionView<'
     let herdr = Herdr::new(ctx.env.herdr_bin(), &record.socket, ctx.runner);
     let agents = herdr.agent_list().ok()?;
     let panes = herdr.pane_list().ok()?;
-    Some(SessionView { herdr, agents, panes })
+    Some(SessionView { herdr, socket: record.socket, agents, panes })
 }
 
 fn require_session<'a>(ctx: &'a Ctx, project: &Project) -> Result<SessionView<'a>> {
@@ -710,11 +711,11 @@ pub fn rows(ctx: &Ctx, project: &Project) -> Vec<Row> {
     let now = jiff::Timestamp::now();
     thread::list(project)
         .into_iter()
-        .map(|t| row(&t, view.as_ref(), now))
+        .map(|t| row(&t, &project.root, view.as_ref(), now))
         .collect()
 }
 
-fn row(t: &Thread, view: Option<&SessionView>, now: jiff::Timestamp) -> Row {
+fn row(t: &Thread, root: &Path, view: Option<&SessionView>, now: jiff::Timestamp) -> Row {
     // Before the first poll a thread that is waiting for its launch is Working.
     let recorded = Group::from_token(&t.last_group).unwrap_or(if t.prompt_pending { Group::Working } else { Group::Idle });
     if t.status == Status::Resolved {
@@ -729,7 +730,7 @@ fn row(t: &Thread, view: Option<&SessionView>, now: jiff::Timestamp) -> Row {
         let state = if t.last_state.is_empty() { "not polled yet" } else { &t.last_state };
         return Row { thread: t.clone(), group: recorded, note: format!("{state}, on {}", t.machine) };
     }
-    let live = thread::live_state(t, &view.agents, &view.panes, now);
+    let live = thread::live_with_report(t, &view.agents, &view.panes, now, root, &view.socket);
     // A report the ticker has not hashed yet still counts, as it does for the ticker.
     let fresh = Thread { report_hash: thread::local_report_hash(t).unwrap_or_else(|| t.report_hash.clone()), ..t.clone() };
     let group = thread::group(&fresh, &live, now);
@@ -777,7 +778,7 @@ pub fn print_show(ctx: &Ctx, slug: &str, id: &str, json: bool) -> Result<()> {
     let project = Project::load(&ctx.root, slug)?;
     let record = thread::load(&project, id)?;
     let view = session_view(ctx, &project);
-    let row = row(&record, view.as_ref(), jiff::Timestamp::now());
+    let row = row(&record, &project.root, view.as_ref(), jiff::Timestamp::now());
     if json {
         println!("{}", serde_json::to_string_pretty(&row_json(&project, &row))?);
         return Ok(());
@@ -820,11 +821,11 @@ mod tests {
     }
 
     fn gone() -> Live {
-        Live { pane_exists: false, agent_state: None, state_secs: 0 }
+        Live { pane_exists: false, agent_state: None, state_secs: 0, ..Live::default() }
     }
 
     fn shell() -> Live {
-        Live { pane_exists: true, agent_state: None, state_secs: 0 }
+        Live { pane_exists: true, agent_state: None, state_secs: 0, ..Live::default() }
     }
 
     #[test]
@@ -847,7 +848,7 @@ mod tests {
 
     #[test]
     fn restart_case_d_refuses_a_running_thread() {
-        let running = Live { pane_exists: true, agent_state: Some("working".into()), state_secs: 0 };
+        let running = Live { pane_exists: true, agent_state: Some("working".into()), state_secs: 0, ..Live::default() };
         assert!(restart_plan(&worktree_thread(), &running, false, now()).is_err());
     }
 
