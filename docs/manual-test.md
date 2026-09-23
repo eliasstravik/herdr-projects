@@ -1,6 +1,30 @@
 # Manual test list
 
-The acceptance checks from the plan, by stage, with how each was checked on 2026-09-17 (herdr 0.9.1; macOS 26 on the home Mac, Linux aarch64 on the second machine). "Builder" means the builder ran it in the throwaway `hp-dev` session and read the result; "unit" means a test in `cargo test`; "client-witnessed" means it is visual and the client has to look. Details of each run are in [`herdr-notes.md`](herdr-notes.md).
+## 0.2.0: the Herdr-native redesign
+
+Checked on 2026-09-23 in a scratch `hp-dev` session (herdr 0.9.1, macOS, Claude Code 2.1.280). "Builder" means the builder ran it and read the result; "client-witnessed" needs a person looking at an attached Herdr client.
+
+| Slice | Check | How it was checked |
+| --- | --- | --- |
+| 1 | `new` writes `AGENTS.md`, `CLAUDE.md` → `AGENTS.md`, `uploads/`; `open` starts an agent there and its first reply runs `skill` and `context` through the absolute path | Builder (Claude Code). Codex and OpenCode: client-witnessed |
+| 1 | A `--kind tab` thread's first turn does not run them and does not call itself the coordinator | Builder |
+| 1 | A brief starts with the project header and has no operational settings; `thread prompt` lands under `## Follow-ups`; `thread show --json` has the Next list | Builder, unit |
+| 1 | `doctor --fix` adds the priming files and `routines/pr-followup.md` to an older project | Builder, unit |
+| 2 | After `configure`, a thread shows `hp_activity` within one turn; a thread that asks a question is `needs you` within one tick | Builder (hooks from a scratch settings file via `--settings`) |
+| 2 | `unconfigure` leaves the hook files byte-identical, keeping later user edits | Unit, builder |
+| 2 | A thread survives a server restart with native resume and keeps its group and name; a cleared name is re-applied | Builder (client attached through `script`) |
+| 3 | Tokens `hp_project`, `hp_rank`, `hp_state`, the display name and the Space token `hp` are set; old tokens cleared | Builder (`herdr api snapshot`) |
+| 3 | Four-line rows, colours, the project count and `projects: N need you` render; `focus <slug>` narrows and `unfocus` restores the by-need order | Client-witnessed |
+| 4 | `prefix+a` opens the popup scoped to the current project; `t` widens it; `↵` focuses the thread and the popup is gone | Client-witnessed (the same TUI was driven in a pane by the builder) |
+| 4 | A Next number key reaches the thread and its task file; `s` stops a working thread; a settings edit reaches PROJECT.md; `X` asks first | Builder |
+| 5 | Resolving a merged thread leaves no worktree, branch or workspace and keeps `threads/<id>.md` and `library/<id>/`; an unmerged one keeps its branch and says so | Builder |
+| 5 | `sweep --dry-run` lists a planted orphan worktree and `sweep --yes` removes it; `archive` closes and hides, `unarchive` reopens | Builder |
+| 6 | A real pull request is polled; a review comment fires `pr-followup` and the thread fixes it; forwarding "Merge the PR" merges it; the merge resolves and cleans the thread | Builder (private scratch repo `eliasstravik/hp-pr-probe`) |
+| 6 | A needs-you event gives one notification titled `<Project> · t-0009` with the request sound; `mute` silences it; the nudge waits for a minute of idle | Unit. Seeing the notification: client-witnessed |
+
+## Before 0.2.0
+
+The acceptance checks from the original plan, by stage, with how each was checked on 2026-09-17 (herdr 0.9.1; macOS 26 on the home Mac, Linux aarch64 on the second machine). "Builder" means the builder ran it in the throwaway `hp-dev` session and read the result; "unit" means a test in `cargo test`; "client-witnessed" means it is visual and the client has to look. Details of each run are in [`herdr-notes.md`](herdr-notes.md).
 
 ## Set up a throwaway session
 

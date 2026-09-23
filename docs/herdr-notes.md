@@ -136,3 +136,18 @@ Also learned:
 - With both default servers on 0.9.1 the plugin loads in them: all nine actions are listed on this Mac and on the second machine, `plugin link` works there without a named session, and no ticker runs on either (no projects yet).
 - **A herdr server not started from a login shell gives plugins a minimal `PATH`.** The `doctor` action in this Mac's default session reported `gh` as not installed although it is at `/opt/homebrew/bin/gh`. A ticker started by `[[startup]]` would have silently skipped pull request follow-up. The binary now appends `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` and `~/.cargo/bin` to its own `PATH` at startup; the same action then reported `gh` and `gh auth` as ok.
 - `eliasstravik/herdr-projects` was created as a private repository with the `herdr-plugin` topic. The name had been a redirect to `herdr-tracker` (that repository's earlier name); creating the new repository replaced the redirect. No local clone used the old URL.
+
+## The 0.2.0 redesign (2026-09-23, herdr 0.9.1)
+
+- **`pane current --current`** returns `pane_id`, `terminal_id`, `agent` and `agent_session` (`{agent, kind, source, value}`) for the calling pane; `agent get` and `agent list` also carry `state_change_seq`. The pane id works as the progress binding; the terminal id tells a reused pane id after a restart from the old pane.
+- **`pane report-metadata` answers success with an empty body.** The CLI wrapper treats an empty successful reply as success.
+- **A pane from `workspace create` is not an available shell for a moment**: `agent start` returns `agent_pane_busy`. `open` retries for up to ten seconds.
+- **Native resume needs a client.** After a server restart, a headless session resumes Claude panes only once a client attaches (`script -q /dev/null herdr --session <name>` is enough). In this run the resumed agents kept their names; the ticker still renames an unnamed one.
+- **`worktree remove --workspace <ws>`** removes the checkout, closes the linked workspace and keeps the branch.
+- **`workspace close`** without `--group` closed a repository's primary workspace when none of its linked worktrees were open.
+- **`herdr config check`** reads the file named by `HERDR_CONFIG_PATH`, so `configure` validates a candidate before writing the real config.
+- **`herdr --default-config`** lists the built-in keys as commented `# action = "key"` lines under `[keys]`; `prefix+a` is free in 0.9.1.
+- **`--display-agent`** changes the agent name a row shows; whether `--title` shows in any row token was not verifiable without a client, so it is not used.
+- **The globally linked plugin runs its `[[startup]]` in every session**, scratch ones included: after restarting a scratch server, the main checkout's ticker replaced the development ticker until it was restarted.
+- **Claude Code's `--settings <file>`** loads extra hooks, which is how the progress hooks were tested without touching `~/.claude/settings.json`.
+- **Codex hangs without a terminal** on this Mac (`codex --version` included), so Codex coordinators and threads were started but not exercised.
