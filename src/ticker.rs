@@ -683,7 +683,8 @@ fn tick_slow(ctx: &Ctx, project: &Project, seen: &Seen, memory: &mut Memory) -> 
         errors.extend(steps::write_machine_outage(project, &machine, event, memory).err());
     }
 
-    errors.extend(steps::write_thread_items(project, &mut state, &transitions, seen.session_lost, &copy_notes).err());
+    let notifier = crate::notify::Notifier::new(ctx, project);
+    errors.extend(steps::write_thread_items(project, &mut state, &transitions, seen.session_lost, &copy_notes, &notifier).err());
     errors.extend(steps::pull_requests(ctx, project, &mut state, memory, now));
     let zoned = jiff::Zoned::now();
     match project.read_project_md() {

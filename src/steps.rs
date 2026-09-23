@@ -14,7 +14,7 @@ use crate::thread::{self, CopyOutcome, Group, Status, Thread};
 use crate::threads;
 use crate::{inbox, pr, routine};
 
-pub const NUDGE_TEXT: &str = "[herdr-projects ticker: automated, not the user, approves nothing] New inbox items. Run context.";
+pub const NUDGE_TEXT: &str = "[hp ticker] new inbox items, run context";
 pub const PR_INTERVAL_SECS: i64 = 120;
 pub const DONE_RETENTION_DAYS: u64 = 30;
 const DEFAULT_OUTAGE_SECS: i64 = 600;
@@ -163,11 +163,12 @@ fn thread_label(t: &Thread) -> String {
 
 /// Step 1's inbox items, written after the copies so a Ready for review item
 /// always points at a home copy that exists.
-pub fn write_thread_items(project: &Project, state: &mut State, transitions: &[Transition], session_lost: bool, copy_notes: &BTreeMap<String, Vec<String>>) -> Result<()> {
+pub fn write_thread_items(project: &Project, state: &mut State, transitions: &[Transition], session_lost: bool, copy_notes: &BTreeMap<String, Vec<String>>, notifier: &crate::notify::Notifier) -> Result<()> {
     if session_lost {
         if !state.session_item_written {
             let open = thread::list(project).iter().filter(|t| t.status == Status::Open && !t.is_remote()).count();
             inbox::write(project, "session", "session", &format!("herdr session restarted; {open} threads need `thread restart`, and the coordinator needs `open`"), "")?;
+            notifier.send("", &format!("needs you · the Herdr session restarted; {open} thread(s) need a restart"), crate::notify::Sound::Request, false);
             state.session_item_written = true;
         }
         return Ok(());
@@ -189,6 +190,11 @@ pub fn write_thread_items(project: &Project, state: &mut State, transitions: &[T
             }
         }
         inbox::write(project, "thread-state", &t.id, &summary, "")?;
+        if change.to == Group::WaitingOnYou {
+            let reason = if !t.state_line.is_empty() && t.state_line != "needs you" { t.state_line.clone() } else { format!("needs you · {}", change.note) };
+            let reason = if !t.activity.is_empty() && t.activity == crate::progress::WAITING { format!("needs you · {}", t.activity) } else { reason };
+            notifier.send(&t.id, &reason, crate::notify::Sound::Request, false);
+        }
     }
 
     // Ready for review: once per report hash, so an agent that goes back and
@@ -205,6 +211,7 @@ pub fn write_thread_items(project: &Project, state: &mut State, transitions: &[T
             summary.push_str(&format!("; not everything was copied: {}", notes.join("; ")));
         }
         inbox::write(project, "thread-state", &t.id, &summary, "")?;
+        notifier.send(&t.id, &format!("review · new report: {}", t.title), crate::notify::Sound::Done, false);
         let hash = t.report_hash.clone();
         thread::update(project, &t.id, |t| t.last_review_item_hash = hash)?;
     }
@@ -230,6 +237,9 @@ pub fn nudge(project: &Project, state: &mut State, settings: &Settings, herdr: &
     if hash == state.nudged {
         return Ok(());
     }
+    // The user already got a specific notification per event; this step only
+    // wakes a coordinator. Without one (or with `nudge = false`) the items
+    // wait for its next turn.
     let no_coordinator = crate::coordinator::live(project).is_empty();
     if settings.nudge && !no_coordinator {
         let Some(pane) = coordinator_ready else {
@@ -238,17 +248,56 @@ pub fn nudge(project: &Project, state: &mut State, settings: &Settings, herdr: &
         // `agent_blocked` and other errors are returned, logged by the caller,
         // and the nudge is retried on a later tick.
         herdr.agent_prompt(pane, NUDGE_TEXT)?;
-    } else {
-        let body = format!("{} new inbox item(s). The coordinator reads them at its next turn.", unseen.len());
-        let _ = herdr.notification_show(&format!("herdr-projects: {}", project.slug), &body);
     }
     state.nudged = hash;
     Ok(())
 }
 
 /// Step 2, every two minutes.
+/// What happened to a pull request between two polls, in the words `pr`
+/// routines use: opened, checks-failed, review, merged.
+pub fn pr_events(old: Option<&pr::Summary>, new: &pr::Summary) -> Vec<&'static str> {
+    let mut events = Vec::new();
+    if old.is_none() && new.state == "OPEN" {
+        events.push("opened");
+    }
+    if !new.failing_checks.is_empty() && old.is_none_or(|o| o.failing_checks != new.failing_checks) {
+        events.push("checks-failed");
+    }
+    let old_comments = old.map_or(0, |o| o.comment_count);
+    let decision_changed = old.is_none_or(|o| o.review_decision != new.review_decision) && !new.review_decision.is_empty() && new.review_decision != "REVIEW_REQUIRED";
+    if new.comment_count > old_comments || decision_changed {
+        events.push("review");
+    }
+    if new.state == "MERGED" && old.is_none_or(|o| o.state != "MERGED") {
+        events.push("merged");
+    }
+    events
+}
+
+/// The prompt a `pr` routine sends a thread: the routine's text plus facts
+/// this binary generated. Nothing written on GitHub (check names, comment
+/// text, logins) is placed in a prompt; the thread reads it with `gh`.
+pub fn pr_routine_prompt(name: &str, body: &str, url: &str, events: &[&str], summary: &pr::Summary) -> String {
+    let mut facts = Vec::new();
+    if events.contains(&"checks-failed") {
+        facts.push(format!("{} check(s) fail (`gh pr checks {url}`)", summary.failing_checks.len()));
+    }
+    if events.contains(&"review") {
+        facts.push(format!("{} comment(s), review {} (`gh pr view {url} --comments`)", summary.comment_count, if summary.review_decision.is_empty() { "none".to_string() } else { summary.review_decision.to_lowercase() }));
+    }
+    if events.contains(&"opened") {
+        facts.push("it was opened".into());
+    }
+    if events.contains(&"merged") {
+        facts.push("it was merged".into());
+    }
+    format!("[hp routine {name}] Your pull request {url} changed: {}.\n\n{}", facts.join("; "), body.trim())
+}
+
 pub fn pull_requests(ctx: &Ctx, project: &Project, state: &mut State, memory: &mut Memory, now: jiff::Timestamp) -> Vec<anyhow::Error> {
     let mut errors = Vec::new();
+    let notifier = crate::notify::Notifier::new(ctx, project);
     if thread::seconds_since(&state.last_pr_check, now) < PR_INTERVAL_SECS && !state.last_pr_check.is_empty() {
         return errors;
     }
@@ -290,6 +339,7 @@ pub fn pull_requests(ctx: &Ctx, project: &Project, state: &mut State, memory: &m
                 if memory.gh.record(false, &text, now, memory.outage_secs) == Some(OutageEvent::Down) {
                     let summary = format!("`gh` has been failing for {} minutes; pull requests are not being followed. Last error: {text}", memory.outage_secs / 60);
                     errors.extend(inbox::write(project, "outage", "gh", &summary, "").err());
+                    notifier.send("gh", "pull requests are not being followed: `gh` keeps failing", crate::notify::Sound::None, true);
                 }
                 continue;
             }
@@ -314,13 +364,49 @@ pub fn pull_requests(ctx: &Ctx, project: &Project, state: &mut State, memory: &m
                 }).err());
                 let change = pr::describe_change(old.as_ref(), &summary);
                 let merged = summary.state == "MERGED";
-                state.prs.insert(t.id.clone(), summary);
+                let events = pr_events(old.as_ref(), &summary);
                 errors.extend(inbox::write(project, "pr", &t.id, &format!("{}: pull request {change}", thread_label(&t)), "").err());
+                let number = url.rsplit('/').next().unwrap_or("");
+                if merged {
+                    notifier.send(&t.id, &format!("PR #{number} merged"), crate::notify::Sound::Done, false);
+                } else if events.contains(&"checks-failed") {
+                    notifier.send(&t.id, &format!("PR #{number} · checks failed"), crate::notify::Sound::None, false);
+                } else if events.contains(&"review") {
+                    notifier.send(&t.id, &format!("PR #{number} · new review activity"), crate::notify::Sound::None, false);
+                }
+                errors.extend(fire_pr_routines(ctx, project, &t, &url, &events, &summary));
+                state.prs.insert(t.id.clone(), summary);
                 if merged {
                     errors.extend(resolve_after_copy(ctx, project, &t, "merged").err());
                 }
             }
         }
+    }
+    errors
+}
+
+/// Every enabled `pr` routine whose events happened prompts the thread (the
+/// prompt is recorded in its task file) and leaves a `routine` inbox item.
+fn fire_pr_routines(ctx: &Ctx, project: &Project, t: &Thread, url: &str, events: &[&str], summary: &pr::Summary) -> Vec<anyhow::Error> {
+    let mut errors = Vec::new();
+    if events.is_empty() {
+        return errors;
+    }
+    let (routines, _) = routine::load_all(project);
+    for r in routines.iter().filter(|r| r.enabled) {
+        let routine::Trigger::Pr(wanted) = &r.trigger else {
+            continue;
+        };
+        let hit: Vec<&str> = events.iter().copied().filter(|e| wanted.iter().any(|w| w == e)).collect();
+        if hit.is_empty() {
+            continue;
+        }
+        let prompt = pr_routine_prompt(&r.name, &r.prompt, url, &hit, summary);
+        let outcome = match threads::prompt(ctx, &project.slug, &t.id, &prompt) {
+            Ok(state) => format!("prompted {} (agent was {state}) about: {}", t.id, hit.join(", ")),
+            Err(error) => format!("could not prompt {} about {}: {error:#}", t.id, hit.join(", ")),
+        };
+        errors.extend(inbox::write(project, "routine", &r.name, &format!("routine `{}` {outcome}", r.name), "").err());
     }
     errors
 }
@@ -388,11 +474,15 @@ pub fn routines(ctx: &Ctx, project: &Project, state: &mut State, routine_command
         if state.config_errors.insert(hash) {
             let stem = file.trim_start_matches("routines/").trim_end_matches(".md");
             errors.extend(inbox::write(project, "config-error", stem, &format!("{file} is not usable: {}", pr::sanitize(&error)), "").err());
+            crate::notify::Notifier::new(ctx, project).send(stem, &format!("{file} is not usable"), crate::notify::Sound::None, true);
         }
     }
 
     let prefix = crate::coordinator::current_prefix(&ctx.root).unwrap_or_default();
     for r in routines.iter().filter(|r| r.enabled) {
+        let routine::Trigger::Schedule(schedule) = &r.trigger else {
+            continue; // `pr` routines fire from the pull request poll
+        };
         let entry = state.routines.entry(r.name.clone()).or_default();
         let Ok(last_run) = entry.last_run.parse::<jiff::Timestamp>() else {
             // First seen counts as the last run: nothing fires the moment a
@@ -400,13 +490,14 @@ pub fn routines(ctx: &Ctx, project: &Project, state: &mut State, routine_command
             entry.last_run = now.timestamp().to_string();
             continue;
         };
-        if !routine::is_due(&r.schedule, last_run, now) {
+        if !routine::is_due(schedule, last_run, now) {
             continue;
         }
         entry.last_run = now.timestamp().to_string();
 
         if r.command.is_empty() {
             errors.extend(inbox::write(project, "routine", &r.name, &format!("routine `{}` is due", r.name), &r.prompt).err());
+            crate::notify::Notifier::new(ctx, project).send(&r.name, "routine due; the coordinator handles it", crate::notify::Sound::None, false);
             continue;
         }
         if !routine_commands || !routine::is_approved(&ctx.config_dir, project, r) {
@@ -442,6 +533,24 @@ mod tests {
 
     fn at(text: &str) -> jiff::Timestamp {
         text.parse().unwrap()
+    }
+
+    #[test]
+    fn pr_events_follow_what_changed() {
+        let open = pr::Summary { state: "OPEN".into(), ..pr::Summary::default() };
+        assert_eq!(pr_events(None, &open), ["opened"]);
+        let failing = pr::Summary { failing_checks: vec!["lint".into()], ..open.clone() };
+        assert_eq!(pr_events(Some(&open), &failing), ["checks-failed"]);
+        assert!(pr_events(Some(&failing), &failing).is_empty(), "the same failure fires once");
+        let commented = pr::Summary { comment_count: 2, ..failing.clone() };
+        assert_eq!(pr_events(Some(&failing), &commented), ["review"]);
+        let changes = pr::Summary { review_decision: "CHANGES_REQUESTED".into(), ..commented.clone() };
+        assert_eq!(pr_events(Some(&commented), &changes), ["review"]);
+        let merged = pr::Summary { state: "MERGED".into(), ..changes.clone() };
+        assert_eq!(pr_events(Some(&changes), &merged), ["merged"]);
+        let prompt = pr_routine_prompt("pr-followup", "Fix it.", "https://github.com/o/r/pull/4", &["checks-failed"], &failing);
+        assert_eq!(prompt, "[hp routine pr-followup] Your pull request https://github.com/o/r/pull/4 changed: 1 check(s) fail (`gh pr checks https://github.com/o/r/pull/4`).\n\nFix it.");
+        assert!(!prompt.contains("lint"), "check names are GitHub text and never reach a prompt");
     }
 
     #[test]

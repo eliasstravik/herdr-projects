@@ -144,10 +144,10 @@ impl Default for Settings {
             thread_agent: "claude".into(),
             max_parallel_threads: 3,
             auto_resolve_days: 7,
-            // Off by default: on herdr 0.9.1 a prompt merges with, and submits,
-            // text the user has half-typed (docs/herdr-notes.md, stage 2). With
-            // `false` the ticker shows a herdr notification instead.
-            nudge: false,
+            // On by default (W15): the ticker prompts only a coordinator that
+            // has been idle for a minute, because on herdr 0.9.1 a prompt
+            // merges with half-typed text (docs/herdr-notes.md, stage 2).
+            nudge: true,
             mute: false,
             repos: Vec::new(),
         }
@@ -452,6 +452,22 @@ pub fn prefix_in_agents_md(text: &str) -> Option<String> {
     Some(rest[..end].to_string())
 }
 
+pub const PR_FOLLOWUP: &str = "routines/pr-followup.md";
+
+const PR_FOLLOWUP_TEMPLATE: &str = "+++\non = \"pr\"\nevents = [\"checks-failed\", \"review\"]\nenabled = true\n+++\n\nFix the failing checks and address the new review comments on your pull request. Read them with `gh`, push the fixes, reply where a reviewer asked something, and then rewrite your report. If a comment asks for something outside your task, say so in the report instead of doing it.\n";
+
+/// The ready-made `pr` routine (enabled by default; the popup or the
+/// coordinator turns it off). Written by `new` and by `doctor --fix` when
+/// missing.
+pub fn write_default_routine(project: &Project) -> Result<bool> {
+    let path = project.dir().join(PR_FOLLOWUP);
+    if path.exists() {
+        return Ok(false);
+    }
+    write_atomic(&path, PR_FOLLOWUP_TEMPLATE.as_bytes())?;
+    Ok(true)
+}
+
 /// Writes `AGENTS.md`, `CLAUDE.md` (a relative symbolic link to it) and
 /// creates `uploads/`. Idempotent; used by `new` and by `doctor --fix`.
 pub fn write_priming(project: &Project, prefix: &str) -> Result<()> {
@@ -476,6 +492,7 @@ pub fn write_priming(project: &Project, prefix: &str) -> Result<()> {
     if !dir.join("uploads").is_dir() {
         std::fs::create_dir(dir.join("uploads"))?;
     }
+    write_default_routine(project)?;
     Ok(())
 }
 
@@ -502,6 +519,9 @@ pub fn priming_problems(project: &Project, prefix: &str) -> Vec<String> {
     }
     if !dir.join("uploads").is_dir() {
         problems.push("uploads/ is missing".into());
+    }
+    if !dir.join(PR_FOLLOWUP).exists() {
+        problems.push("routines/pr-followup.md is missing".into());
     }
     problems
 }
@@ -550,6 +570,7 @@ pub fn create(root: &Path, name: &str, goal: &str, repos: Vec<Repo>) -> Result<P
         b"# Memory\n\nOne line per memory file: `- [title](memory/file.md): what it holds`.\n",
     )?;
     write_atomic(&dir.join("TASKS.md"), TASKS_TEMPLATE.as_bytes())?;
+    write_atomic(&dir.join(PR_FOLLOWUP), PR_FOLLOWUP_TEMPLATE.as_bytes())?;
     write_json(&project.state_dir().join("project.json"), &ProjectState::default())?;
     // PROJECT.md last: a folder without it is not a project, so a half-made
     // skeleton is never picked up by `list` or the ticker.
@@ -644,7 +665,9 @@ mod tests {
         assert_eq!(settings.coordinator_agent, "claude");
         assert_eq!(settings.max_parallel_threads, 3);
         assert_eq!(settings.auto_resolve_days, 7);
-        assert!(!settings.nudge);
+        assert!(settings.nudge);
+        assert!(project.dir().join(PR_FOLLOWUP).is_file());
+        assert!(crate::routine::load_all(&project).1.is_empty(), "the default routine parses");
         assert_eq!(
             settings.repos,
             vec![
