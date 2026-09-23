@@ -170,6 +170,8 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     if !crate::agents::is_kind(&kind) {
         bail!("`{kind}` is not a Herdr agent kind; `herdr agent start --help` lists them");
     }
+    // An agent can run `open` too: it may pick a model, never widen powers.
+    crate::settings::require_model_args(ctx, &project, &kind, &options.agent_args)?;
     let safety = project.safety(&ctx.config_dir)?;
     let session = paths::resolve_session(&options.session, ctx.env, ctx.runner)?;
     let socket = session.socket.to_string_lossy().into_owned();

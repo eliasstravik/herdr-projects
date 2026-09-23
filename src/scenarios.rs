@@ -467,6 +467,81 @@ fn thread_start_is_refused_when_paused() {
     assert!(thread::list(&project).is_empty());
 }
 
+fn strings(args: &[&str]) -> Vec<String> {
+    args.iter().map(|a| a.to_string()).collect()
+}
+
+#[test]
+fn thread_start_and_open_refuse_agent_args_other_than_a_model_flag() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    for bad in [&["--dangerously-skip-permissions"][..], &["--yolo"], &["--model"], &["--model", "--foo"], &["--model", "x", "--extra"]] {
+        let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, kind: Some(Kind::Tab), agent_args: strings(bad), base: None, task: "t".into() };
+        let error = threads::start(&world.ctx(), "demo", args).unwrap_err().to_string();
+        assert!(error.contains("--agent-arg only takes a model flag"), "{error}");
+        assert!(error.contains("thread_agent_args = []") && error.contains("[safety."), "the safety table is shown: {error}");
+        let options = coordinator::OpenOptions { session: Default::default(), rebind: false, agent: None, agent_args: strings(bad), new: true, here: false };
+        let error = coordinator::open(&world.ctx(), "demo", &options).unwrap_err().to_string();
+        assert!(error.contains("--agent-arg only takes a model flag"), "{error}");
+    }
+    assert!(thread::list(&project).is_empty());
+    assert_eq!(world.runner.count("agent start") + world.runner.count("create"), 0, "nothing was created or launched");
+}
+
+#[test]
+fn a_stored_launch_flag_is_dropped_at_launch_with_one_item() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let cwd = world.home.path().to_string_lossy().into_owned();
+    world.thread(&project, world.home.path(), |t| {
+        t.prompt_pending = true;
+        t.agent_args = strings(&["--model", "opus", "--dangerously-skip-permissions"]);
+    });
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w2", "w2:t1", "w2:p1", &cwd));
+    world.runner.on("agent start", fail(1, r#"{"error":{"code":"timeout","message":"timed out"}}"#));
+
+    let ctx = world.ctx();
+    let _ = ticker::tick_project(&ctx, &project);
+    let _ = ticker::tick_project(&ctx, &project);
+    assert_eq!(world.runner.count("agent start"), 2);
+    for call in world.runner.calls.borrow().iter().filter(|c| c.display().contains("agent start")) {
+        assert!(call.args.ends_with(&strings(&["--", "--model", "opus"])), "{}", call.display());
+        assert!(!call.display().contains("dangerously"), "{}", call.display());
+    }
+    assert_eq!(thread::load(&project, "t-0001").unwrap().agent_args, ["--model", "opus"]);
+    let items = items_of(&project, "thread-state");
+    assert_eq!(items.len(), 1, "one item, not one per attempt");
+    assert!(items[0].summary.contains("--dangerously-skip-permissions"), "{}", items[0].summary);
+}
+
+#[test]
+fn restart_keeps_the_model_and_refuses_other_flags() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let cwd = world.home.path().to_string_lossy().into_owned();
+    world.thread(&project, world.home.path(), |t| {
+        t.status = Status::Failed;
+        t.agent = "codex".into();
+        t.agent_args = strings(&["-m", "gpt-5.5"]);
+    });
+    std::fs::write(thread::task_path(&project, "t-0001"), "The task.").unwrap();
+    *world.panes.borrow_mut() = format!("[{}]", pane_json("w2", "w2:t1", "w2:p1", &cwd));
+    world.runner.on("rev-parse --git-path", fail(1, "not a repo"));
+    let ctx = world.ctx();
+
+    let t = threads::restart(&ctx, "demo", "t-0001", None, None).unwrap();
+    assert_eq!(t.agent_args, ["-m", "gpt-5.5"]);
+    let error = threads::restart(&ctx, "demo", "t-0001", None, Some(strings(&["--yolo"]))).unwrap_err().to_string();
+    assert!(error.contains("only takes a model flag"), "{error}");
+    // `-m` is Codex's alone: refused when the restart switches to Claude, and nothing changed.
+    assert!(threads::restart(&ctx, "demo", "t-0001", Some("claude"), Some(strings(&["-m", "opus"]))).is_err());
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!((t.agent.as_str(), t.agent_args.clone()), ("codex", strings(&["-m", "gpt-5.5"])));
+    thread::update(&project, "t-0001", |t| t.status = Status::Failed).unwrap();
+    let t = threads::restart(&ctx, "demo", "t-0001", Some("claude"), Some(strings(&["--model=opus"]))).unwrap();
+    assert_eq!((t.agent.as_str(), t.agent_args), ("claude", strings(&["--model=opus"])));
+}
+
 #[test]
 fn unreachable_session_prints_records_without_treating_panes_as_gone() {
     let world = World::new();
