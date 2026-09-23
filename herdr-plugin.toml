@@ -24,10 +24,10 @@ contexts = ["workspace"]
 command = ["target/release/herdr-projects", "action", "open"]
 
 [[actions]]
-id = "overview"
-title = "Projects: overview"
-contexts = ["workspace"]
-command = ["target/release/herdr-projects", "action", "overview"]
+id = "open-popup"
+title = "Projects"
+contexts = ["global", "workspace"]
+command = ["target/release/herdr-projects", "action", "open-popup"]
 
 [[actions]]
 id = "focus"
@@ -72,10 +72,12 @@ contexts = ["workspace"]
 command = ["target/release/herdr-projects", "action", "doctor"]
 
 [[panes]]
-id = "overview"
-title = "Project overview"
+id = "projects"
+title = "Projects"
 placement = "popup"
-command = ["target/release/herdr-projects", "pane", "overview"]
+width = "80%"
+height = "80%"
+command = ["target/release/herdr-projects", "pane", "projects"]
 
 [[panes]]
 id = "new"

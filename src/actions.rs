@@ -29,6 +29,8 @@ pub struct Handoff {
     pub workspace_label: String,
     pub workspace_cwd: String,
     pub socket: String,
+    /// The workspace the popup was opened from (new tabs go there).
+    pub workspace_id: String,
 }
 
 /// The originating pane and workspace, from the action's own environment or
@@ -82,7 +84,11 @@ pub fn run_action(ctx: &Ctx, id: &str) -> Result<()> {
     let base = Handoff { socket: socket(ctx).unwrap_or_default(), ..Handoff::default() };
     match id {
         "new" => open_pane(ctx, "new", &base),
-        "overview" => open_pane(ctx, "overview", &Handoff { slug: current_slug(ctx).unwrap_or_default(), ..base }),
+        "open-popup" | "overview" => {
+            let context = action_context(ctx);
+            let workspace = ctx.env.var("HERDR_WORKSPACE_ID").map(str::to_string).unwrap_or(context.workspace_id);
+            open_pane(ctx, "projects", &Handoff { slug: current_slug(ctx).unwrap_or_default(), workspace_id: workspace, ..base })
+        }
         "open" | "pause" | "resume" => match current_slug(ctx) {
             Some(slug) => run_on_slug(ctx, id, &slug),
             None => open_pane(ctx, "pick", &Handoff { command: id.to_string(), ..base }),
@@ -162,6 +168,7 @@ fn hold_open() {
 pub fn run_pane(ctx: &Ctx, id: &str) -> Result<()> {
     let handoff = read_handoff(ctx);
     let result = match id {
+        "projects" => return crate::popup::run(ctx, Some(handoff.slug.clone()).filter(|s| !s.is_empty()), handoff.workspace_id.clone()),
         "overview" => return overview::run(ctx, Some(handoff.slug.as_str()).filter(|s| !s.is_empty()), true),
         "new" => (|| {
             println!("New project\n");

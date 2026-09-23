@@ -184,7 +184,9 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     let cwd = dir.to_string_lossy().into_owned();
 
     // A coordinator is running: focus the most recently active one.
-    let running: Vec<&Agent> = agents.iter().filter(|a| a.cwd == cwd).collect();
+    // With an explicit kind, only a running coordinator of that kind is reused:
+    // choosing another kind in the popup starts one beside the others.
+    let running: Vec<&Agent> = agents.iter().filter(|a| a.cwd == cwd && options.agent.as_ref().is_none_or(|k| &a.agent == k)).collect();
     if let Some(agent) = running.iter().max_by_key(|a| a.state_change_seq)
         && !options.new
     {

@@ -34,6 +34,13 @@ pub fn project_for_workspace(ctx: &Ctx, workspace_id: &str, socket: &str) -> Opt
     })
 }
 
+/// The current workspace's project, without asking.
+pub fn resolve_slug_quiet(ctx: &Ctx) -> Option<String> {
+    let workspace = ctx.env.var("HERDR_WORKSPACE_ID").unwrap_or("");
+    let socket = ctx.env.var("HERDR_SOCKET_PATH").unwrap_or("");
+    project_for_workspace(ctx, workspace, socket)
+}
+
 pub enum Resolved {
     Slug(String),
     /// Nothing resolved and there is no terminal to ask on.

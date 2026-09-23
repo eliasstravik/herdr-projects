@@ -10,6 +10,7 @@ mod lifecycle;
 mod names;
 mod overview;
 mod paths;
+mod popup;
 mod pr;
 mod progress;
 mod project;
@@ -18,6 +19,7 @@ mod routine;
 mod runner;
 #[cfg(test)]
 mod scenarios;
+mod settings;
 mod setup;
 mod sidebar;
 mod steps;
