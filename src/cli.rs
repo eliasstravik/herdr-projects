@@ -168,6 +168,22 @@ enum Command {
         #[command(flatten)]
         session: SessionArgs,
     },
+    /// Change one setting in PROJECT.md (name, goal, coordinator_agent, thread_agent, max_parallel_threads, auto_resolve_days, nudge, mute, repos.add, repos.remove)
+    Set { slug: String, key: String, value: String },
+    /// Open a file: text in a new Herdr tab running $EDITOR, anything else with the system opener
+    OpenFile {
+        path: PathBuf,
+        /// The workspace to add the tab to (default: the current one)
+        #[arg(long, value_name = "ID")]
+        workspace: Option<String>,
+    },
+    /// Open a URL (a pull request) in the browser
+    OpenUrl { url: String },
+    /// The projects popup, in this terminal
+    Popup {
+        /// Scope it to one project (default: the current workspace's, else all)
+        slug: Option<String>,
+    },
     /// Install the plugin's hooks into Claude Code and Codex (progress self-reports)
     Configure {
         /// Harnesses to configure, comma-separated: claude, codex (default: those installed)
@@ -363,6 +379,15 @@ fn read_text(file: &str) -> Result<String> {
 
 #[derive(Subcommand)]
 enum RoutineCommand {
+    /// Enable or disable a routine
+    Toggle {
+        slug: String,
+        name: String,
+        #[arg(long, conflicts_with = "off")]
+        on: bool,
+        #[arg(long)]
+        off: bool,
+    },
     /// Approve a routine's command (a person at a terminal only)
     Approve { slug: String, name: String },
     /// List routines with their approval status
@@ -491,7 +516,27 @@ pub fn run() -> Result<()> {
                 threads::resolve(&ctx, &slug, &id, &ResolveArgs { reopen, remove_worktree, skip_copy, discard_uncopied })
             }
         },
+        Command::Set { slug, key, value } => crate::settings::set(&ctx, &slug, &key, &value),
+        Command::OpenFile { path, workspace } => crate::settings::open_file(&ctx, &path, workspace.as_deref()),
+        Command::OpenUrl { url } => {
+            if !url.starts_with("https://") {
+                bail!("only https URLs are opened");
+            }
+            crate::settings::system_open(&ctx, &url)
+        }
+        Command::Popup { slug } => {
+            let scope = match slug {
+                Some(slug) => Some(slug),
+                None => match overview::resolve_slug_quiet(&ctx) {
+                    Some(slug) => Some(slug),
+                    None => None,
+                },
+            };
+            let workspace = ctx.env.var("HERDR_WORKSPACE_ID").unwrap_or("").to_string();
+            crate::popup::run(&ctx, scope, workspace)
+        }
         Command::Routine { command } => match command {
+            RoutineCommand::Toggle { slug, name, on, off } => crate::settings::routine_toggle(&ctx, &slug, &name, if on { Some(true) } else if off { Some(false) } else { None }),
             RoutineCommand::Approve { slug, name } => {
                 let project = Project::load(&ctx.root, &slug)?;
                 routine::approve(&ctx.config_dir, &project, &name)
