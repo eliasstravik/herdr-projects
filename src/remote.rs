@@ -153,6 +153,27 @@ pub fn branch_exists(runner: &dyn Runner, target: &str, repo: &str, branch: &str
     Ok(ssh(runner, target, &script, None, SSH_TIMEOUT)?.success())
 }
 
+/// Adds a worktree on a new branch at `$HOME/<under_home>` on the machine and
+/// returns its path there. One ssh call.
+pub fn worktree_add(runner: &dyn Runner, target: &str, repo: &str, under_home: &str, branch: &str, base: &str) -> Result<String> {
+    let script = format!(
+        "cd {repo} && p=\"$HOME\"/{under_home} && git worktree add -b {branch} \"$p\" {base} >&2 && printf '%s\\n' \"$p\"",
+        repo = quote(repo),
+        under_home = quote(under_home),
+        branch = quote(branch),
+        base = quote(base),
+    );
+    let out = ssh(runner, target, &script, None, SSH_START_TIMEOUT)?;
+    if !out.success() {
+        bail!("could not add a worktree in {repo} on {target}: {}", out.error_text());
+    }
+    let path = out.stdout.trim().to_string();
+    if path.is_empty() {
+        bail!("adding a worktree in {repo} on {target} reported no path");
+    }
+    Ok(path)
+}
+
 /// Report hashes for every given thread on one machine, in one ssh call. Only
 /// a regular file inside a real (not symlinked) directory is hashed; anything
 /// else yields no hash. `sha256sum`, falling back to `shasum -a 256`.

@@ -155,6 +155,7 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
             machine: None,
             agent: None,
             base: None,
+            workspace: None,
             task: "Do the thing.".into(),
         },
     )
@@ -397,7 +398,7 @@ fn thread_start_is_refused_when_paused() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
     project.set_status(project::Status::Paused).unwrap();
-    let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, base: None, workspace: None, task: "t".into() };
     let error = threads::start(&world.ctx(), "demo", args).unwrap_err().to_string();
     assert!(error.contains("paused"), "{error}");
     assert!(thread::list(&project).is_empty());
@@ -1003,7 +1004,7 @@ fn a_remote_thread_blocked_at_a_poll_is_waiting_on_you_at_once() {
 fn a_remote_thread_without_a_repo_is_refused() {
     let world = World::new();
     world.project("demo", "a.sock");
-    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), agent: None, base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), agent: None, base: None, workspace: None, task: "t".into() };
     assert!(threads::start(&world.ctx(), "demo", args).unwrap_err().to_string().contains("needs --repo"));
 }
 
@@ -1060,4 +1061,455 @@ fn the_digest_prints_the_task_list_or_none() {
     std::fs::remove_file(&tasks).unwrap();
     let digest = coordinator::digest(&world.ctx(), &project, "hp").unwrap().0;
     assert!(digest.contains("## Tasks (TASKS.md)\n(none)"));
+}
+
+// ------------------------------------------------ threads placed as a tab
+
+/// Every herdr and git call that changes something: list and token calls left out.
+fn changing_calls(world: &World) -> Vec<String> {
+    world
+        .runner
+        .calls
+        .borrow()
+        .iter()
+        .filter(|c| c.program == "herdr" || c.program == "git")
+        .map(Cmd::display)
+        .filter(|line| !line.contains(" list") && !line.contains("report-metadata"))
+        .collect()
+}
+
+fn tab_reply(workspace: &str, tab: &str, pane: &str, cwd: &str) -> crate::runner::Output {
+    ok(&format!(r#"{{"result":{{"root_pane":{{"workspace_id":"{workspace}","tab_id":"{tab}","pane_id":"{pane}","cwd":"{cwd}"}}}}}}"#))
+}
+
+fn start_args(repo: Option<String>, machine: Option<&str>, workspace: Option<&str>) -> StartArgs {
+    StartArgs {
+        title: "Fix it".into(),
+        repo,
+        machine: machine.map(str::to_string),
+        agent: None,
+        base: None,
+        workspace: workspace.map(str::to_string),
+        task: "Do the thing.".into(),
+    }
+}
+
+#[test]
+fn a_thread_started_with_a_workspace_opens_as_a_tab_there_and_records_its_ids() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let repo = world.home.path().join("app");
+    std::fs::create_dir(&repo).unwrap();
+    let repo = std::fs::canonicalize(repo).unwrap().to_string_lossy().into_owned();
+    let wt = world.home.path().join(".herdr/worktrees/app/hp-demo-t-0001-fix-it").to_string_lossy().into_owned();
+    let host = pane_json("w5", "w5:t1", "w5:p1", "/elsewhere");
+    world.runner.on("rev-parse --show-toplevel", ok(&format!("{repo}\n")));
+    world.runner.on("remote get-url origin", fail(2, "no origin"));
+    world.runner.on("symbolic-ref", ok("origin/main\n"));
+    world.runner.on("rev-parse --git-path", fail(1, "not a repo"));
+    world.runner.on("worktree add", ok(""));
+    world.runner.on("tab create", tab_reply("w5", "w5:t2", "w5:p2", &wt));
+    world.runner.on("pane get", ok(&format!(r#"{{"result":{{"pane":{{"cwd":"{wt}"}}}}}}"#)));
+    world.runner.on("pane rename", ok(r#"{"result":{}}"#));
+    let ctx = world.ctx();
+
+    // A workspace that is not open is refused before git makes anything.
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    let refused = threads::start(&ctx, "demo", start_args(Some(repo.clone()), None, Some("w5"))).unwrap_err();
+    assert!(format!("{refused:#}").contains("workspace w5 is not open"), "{refused:#}");
+    assert_eq!(world.runner.count("worktree add"), 0);
+    std::fs::remove_file(thread::record_path(&project, "t-0001")).unwrap();
+
+    *world.panes.borrow_mut() = format!("[{},{host}]", world.coordinator_pane(&project));
+    world.runner.calls.borrow_mut().clear();
+    let started = threads::start(&ctx, "demo", start_args(Some(repo.clone()), None, Some("w5"))).unwrap();
+    assert_eq!(
+        changing_calls(&world),
+        vec![
+            format!("git -C {repo} rev-parse --show-toplevel"),
+            format!("git -C {repo} remote get-url origin"),
+            format!("git -C {repo} symbolic-ref --short refs/remotes/origin/HEAD"),
+            format!("git -C {repo} worktree add -b hp/demo/t-0001-fix-it {wt} origin/main"),
+            format!("herdr tab create --workspace w5 --cwd {wt} --label Fix it --no-focus"),
+            "herdr pane get w5:p2".to_string(),
+            format!("git -C {wt} rev-parse --git-path info/exclude"),
+            "herdr pane rename w5:p2 app ▸ t-0001 Fix it".to_string(),
+        ],
+        "no `worktree create`: herdr would open a workspace of its own"
+    );
+    assert_eq!((started.kind, started.status), (Kind::Worktree, Status::Open));
+    assert_eq!(started.host_workspace, "w5");
+    assert_eq!((started.workspace_id.as_str(), started.tab_id.as_str(), started.pane_id.as_str()), ("w5", "w5:t2", "w5:p2"));
+    assert_eq!((started.worktree_path.as_str(), started.cwd.as_str()), (wt.as_str(), wt.as_str()));
+    assert!(Path::new(&wt).join(".herdr-project/demo-t-0001/brief.md").is_file());
+
+    // The ticker finds the thread in its tab and launches there.
+    *world.panes.borrow_mut() = format!("[{},{host},{}]", world.coordinator_pane(&project), pane_json("w5", "w5:t2", "w5:p2", &wt));
+    world.runner.on("agent start", ok(r#"{"result":{"agent":{"pane_id":"w5:p2","tab_id":"w5:t2","workspace_id":"w5"}}}"#));
+    ticker::tick_project(&ctx, &project).unwrap();
+    let calls = world.runner.calls.borrow();
+    let start = calls.iter().find(|c| c.display().contains("agent start")).expect("launched");
+    assert!(start.args.windows(2).any(|w| w == ["--pane", "w5:p2"]), "{}", start.display());
+}
+
+#[test]
+fn a_workspace_needs_a_repository_and_a_name() {
+    let world = World::new();
+    world.project("demo", "a.sock");
+    let error = threads::start(&world.ctx(), "demo", start_args(None, None, Some("w5"))).unwrap_err().to_string();
+    assert!(error.contains("--workspace needs --repo"), "{error}");
+    let error = threads::start(&world.ctx(), "demo", start_args(Some(world.home.path().to_string_lossy().into_owned()), None, Some(" "))).unwrap_err().to_string();
+    assert!(error.contains("--workspace may not be empty"), "{error}");
+}
+
+#[test]
+fn on_another_machine_a_workspace_gets_a_worktree_over_ssh_and_a_tab_through_herdr() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let wt = "/home/me/.herdr/worktrees/app/hp-demo-t-0001-fix-it";
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w5", "w5:t1", "w5:p1", "/home/me"));
+    world.runner.on("machine list --json", ok(r#"[{"id":"1","label":"box","target":"me@box"}]"#));
+    world.runner.on("--show-toplevel", ok("git@github.com:Owner/App.git\norigin/main\n"));
+    world.runner.on("git worktree add", ok(&format!("{wt}\n")));
+    world.runner.on("brief.md", ok(""));
+    world.runner.on("tab create", tab_reply("w5", "w5:t2", "w5:p2", wt));
+    world.runner.on("pane get", ok(&format!(r#"{{"result":{{"pane":{{"cwd":"{wt}"}}}}}}"#)));
+    world.runner.on("pane rename", ok(r#"{"result":{}}"#));
+
+    let started = threads::start(&world.ctx(), "demo", start_args(Some("/home/me/app".into()), Some("box"), Some("w5"))).unwrap();
+    assert_eq!((started.machine.as_str(), started.host_workspace.as_str()), ("box", "w5"));
+    assert_eq!((started.workspace_id.as_str(), started.tab_id.as_str(), started.pane_id.as_str()), ("w5", "w5:t2", "w5:p2"));
+    assert_eq!(started.worktree_path, wt);
+    let calls = world.runner.calls.borrow();
+    let add = calls.iter().find(|c| c.program == "ssh" && c.display().contains("git worktree add")).unwrap();
+    assert!(add.display().contains(r#"p="$HOME"/.herdr/worktrees/app/hp-demo-t-0001-fix-it && git worktree add -b hp/demo/t-0001-fix-it "$p" origin/main"#), "{}", add.display());
+    let herdr: Vec<String> = calls.iter().filter(|c| c.program == "herdr").map(Cmd::display).collect();
+    assert!(herdr.contains(&format!("herdr --machine box tab create --workspace w5 --cwd {wt} --label Fix it --no-focus")), "{herdr:?}");
+    assert!(herdr.contains(&"herdr --machine box pane rename w5:p2 app ▸ t-0001 Fix it".to_string()), "{herdr:?}");
+    assert!(!herdr.iter().any(|c| c.contains("worktree create")), "{herdr:?}");
+}
+
+/// A thread placed as tab `w5:t2` in host workspace `w5`, next to the host's own tab `w5:t1`.
+fn tab_placed_world() -> (World, Project, String) {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let wt = world.home.path().join("wt");
+    let t = world.thread(&project, &wt, |t| {
+        t.host_workspace = "w5".into();
+        t.workspace_id = "w5".into();
+        t.tab_id = "w5:t2".into();
+        t.pane_id = "w5:p2".into();
+    });
+    let dir = PathBuf::from(&t.thread_dir);
+    std::fs::create_dir_all(dir.join("library")).unwrap();
+    std::fs::write(dir.join("report.md"), "## Report\nok\n").unwrap();
+    world.runner.on("du -sk", ok("4\t/x\n"));
+    world.runner.on("rsync", ok(""));
+    world.runner.on("worktree remove", ok(""));
+    world.runner.on("tab close", ok(r#"{"result":{}}"#));
+    world.runner.on("pane close", ok(r#"{"result":{}}"#));
+    (world, project, t.cwd)
+}
+
+#[test]
+fn removing_a_tab_placed_thread_closes_only_its_tab_and_never_the_host_workspace() {
+    let (world, project, wt) = tab_placed_world();
+    *world.panes.borrow_mut() = format!(
+        "[{},{},{}]",
+        world.coordinator_pane(&project),
+        pane_json("w5", "w5:t1", "w5:p1", "/host"),
+        pane_json("w5", "w5:t2", "w5:p2", &wt)
+    );
+    let ctx = world.ctx();
+
+    // A plain resolve closes and removes nothing.
+    threads::resolve(&ctx, "demo", "t-0001", &ResolveArgs::default()).unwrap();
+    assert_eq!(changing_calls(&world), Vec::<String>::new());
+    threads::resolve(&ctx, "demo", "t-0001", &ResolveArgs { reopen: true, ..ResolveArgs::default() }).unwrap();
+
+    threads::resolve(&ctx, "demo", "t-0001", &ResolveArgs { remove_worktree: true, ..ResolveArgs::default() }).unwrap();
+    // The worktree goes by path through git, never forced; only the thread's
+    // tab closes. Nothing names the host's tab, and herdr's `worktree remove`
+    // (which removes the workspace) is never called.
+    assert_eq!(changing_calls(&world), vec![format!("git -C /repo worktree remove {wt}"), "herdr tab close w5:t2".to_string()]);
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!(t.status, Status::Resolved);
+    assert!(t.worktree_path.is_empty());
+}
+
+#[test]
+fn a_tab_that_also_holds_a_host_pane_loses_only_the_thread_s_pane() {
+    let (world, project, wt) = tab_placed_world();
+    *world.panes.borrow_mut() = format!(
+        "[{},{},{}]",
+        world.coordinator_pane(&project),
+        pane_json("w5", "w5:t2", "w5:p2", &wt),
+        pane_json("w5", "w5:t2", "w5:p3", "/host")
+    );
+    threads::resolve(&world.ctx(), "demo", "t-0001", &ResolveArgs { remove_worktree: true, ..ResolveArgs::default() }).unwrap();
+    assert_eq!(changing_calls(&world), vec![format!("git -C /repo worktree remove {wt}"), "herdr pane close w5:p2".to_string()]);
+}
+
+#[test]
+fn in_the_host_s_last_tab_removal_never_closes_the_tab_that_would_take_the_workspace_with_it() {
+    // herdr closes a workspace with its last tab, and a tab with its last pane.
+    // The thread's tab is the only tab left in w5, with only the thread's pane:
+    // the worktree goes, and nothing is closed.
+    let (world, project, wt) = tab_placed_world();
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w5", "w5:t2", "w5:p2", &wt));
+    threads::resolve(&world.ctx(), "demo", "t-0001", &ResolveArgs { remove_worktree: true, ..ResolveArgs::default() }).unwrap();
+    assert_eq!(changing_calls(&world), vec![format!("git -C /repo worktree remove {wt}")]);
+    assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Resolved);
+
+    // A second pane of the thread's own keeps the tab, so only the thread's pane closes.
+    let (world, project, wt) = tab_placed_world();
+    *world.panes.borrow_mut() = format!(
+        "[{},{},{}]",
+        world.coordinator_pane(&project),
+        pane_json("w5", "w5:t2", "w5:p2", &wt),
+        pane_json("w5", "w5:t2", "w5:p3", &format!("{wt}/src"))
+    );
+    threads::resolve(&world.ctx(), "demo", "t-0001", &ResolveArgs { remove_worktree: true, ..ResolveArgs::default() }).unwrap();
+    assert_eq!(changing_calls(&world), vec![format!("git -C /repo worktree remove {wt}"), "herdr pane close w5:p2".to_string()]);
+}
+
+#[test]
+fn a_refused_worktree_removal_closes_nothing() {
+    let (world, project, wt) = tab_placed_world();
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w5", "w5:t2", "w5:p2", &wt));
+    let world = World { runner: FakeRunner::new(), ..world };
+    world.runner.on("agent list", ok(r#"{"result":{"agents":[]}}"#));
+    world.runner.on("pane list", ok(&format!(r#"{{"result":{{"panes":[{}]}}}}"#, pane_json("w5", "w5:t2", "w5:p2", &wt))));
+    world.runner.on("du -sk", ok("4\t/x\n"));
+    world.runner.on("rsync", ok(""));
+    world.runner.on("worktree remove", fail(128, "fatal: contains modified or untracked files, use --force to delete it"));
+    let error = threads::resolve(&world.ctx(), "demo", "t-0001", &ResolveArgs { remove_worktree: true, ..ResolveArgs::default() }).unwrap_err();
+    assert!(error.to_string().contains("use --force"), "{error}");
+    assert_eq!(world.runner.count("close"), 0);
+    assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Open);
+}
+
+/// `tab_placed_world` on machine `box`: worktree `/home/me/wt` of `/home/me/app`,
+/// thread tab `w5:t2` next to the host's own tab `w5:t1`, all on `box`.
+fn remote_tab_placed_world() -> (World, Project) {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    world.thread(&project, Path::new("/home/me/wt"), |t| {
+        t.machine = "box".into();
+        t.repo = "/home/me/app".into();
+        t.host_workspace = "w5".into();
+        t.workspace_id = "w5".into();
+        t.tab_id = "w5:t2".into();
+        t.pane_id = "w5:p2".into();
+    });
+    *world.panes.borrow_mut() = format!(
+        "[{},{},{}]",
+        world.coordinator_pane(&project),
+        pane_json("w5", "w5:t1", "w5:p1", "/home/me"),
+        pane_json("w5", "w5:t2", "w5:p2", "/home/me/wt")
+    );
+    world.runner.on("machine list --json", ok(r#"[{"id":"1","label":"box","target":"me@box"}]"#));
+    (world, project)
+}
+
+/// Every call that changes something on the thread's machine or in herdr, the
+/// script alone for ssh: list, token and copy calls left out.
+fn remote_changing_calls(world: &World) -> Vec<String> {
+    world
+        .runner
+        .calls
+        .borrow()
+        .iter()
+        .filter(|c| c.program == "herdr" || c.program == "ssh")
+        .map(|c| if c.program == "ssh" { format!("ssh {}", c.args[c.args.len() - 2..].join(" ")) } else { c.display() })
+        .filter(|line| !line.contains(" list") && !line.contains("report-metadata") && !line.contains("echo dir_ok"))
+        .collect()
+}
+
+#[test]
+fn on_another_machine_removing_a_tab_placed_thread_closes_only_its_tab_there() {
+    let (world, project) = remote_tab_placed_world();
+    world.runner.on("echo dir_ok", ok("dir_ok\nreport_ok\n"));
+    world.runner.on_fn(
+        |c| c.program == "scp",
+        |c| {
+            std::fs::write(c.args.last().unwrap(), "## Report\nok\n").unwrap();
+            Ok(ok(""))
+        },
+    );
+    world.runner.on("git worktree remove", ok(""));
+    world.runner.on("tab close", ok(r#"{"result":{}}"#));
+    threads::resolve(&world.ctx(), "demo", "t-0001", &ResolveArgs { remove_worktree: true, ..ResolveArgs::default() }).unwrap();
+    // git over ssh by path, never forced, then the thread's tab through
+    // `herdr --machine`; the host's tab `w5:t1` and `worktree remove` are never named.
+    assert_eq!(
+        remote_changing_calls(&world),
+        vec!["ssh me@box sh -c 'cd /home/me/app && git worktree remove /home/me/wt'".to_string(), "herdr --machine box tab close w5:t2".to_string()]
+    );
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!(t.status, Status::Resolved);
+    assert!(t.worktree_path.is_empty());
+}
+
+#[test]
+fn on_another_machine_restart_places_a_tab_placed_thread_again_as_a_tab_there() {
+    let (world, project) = remote_tab_placed_world();
+    thread::update(&project, "t-0001", |t| t.status = Status::Failed).unwrap();
+    std::fs::write(thread::task_path(&project, "t-0001"), "The task.").unwrap();
+    // The thread's tab is gone; the host workspace is still open on `box`.
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w5", "w5:t1", "w5:p1", "/home/me"));
+    world.runner.on("tab create", tab_reply("w5", "w5:t3", "w5:p4", "/home/me/wt"));
+    world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":"/home/me/wt"}}}"#));
+    world.runner.on("brief.md", ok(""));
+    world.runner.on("pane rename", ok(r#"{"result":{}}"#));
+
+    let t = threads::restart(&world.ctx(), "demo", "t-0001").unwrap();
+    let calls = remote_changing_calls(&world);
+    assert_eq!(calls.len(), 4, "{calls:#?}");
+    assert_eq!(calls[0], "herdr --machine box tab create --workspace w5 --cwd /home/me/wt --label Task --no-focus");
+    assert_eq!(calls[1], "herdr --machine box pane get w5:p4");
+    // The one script that writes the brief in the thread's folder on `box`.
+    assert!(calls[2].starts_with("ssh me@box sh -c 'set -e\nd=/home/me/wt/.herdr-project/demo-t-0001\n") && calls[2].contains("brief.md"), "{}", calls[2]);
+    assert_eq!(calls[3], "herdr --machine box pane rename w5:p4 app ▸ t-0001 Task");
+    assert_eq!((t.status, t.host_workspace.as_str()), (Status::Open, "w5"));
+    assert_eq!((t.workspace_id.as_str(), t.tab_id.as_str(), t.pane_id.as_str()), ("w5", "w5:t3", "w5:p4"));
+
+    // With the host workspace gone from `box`, restart refuses rather than open a workspace of its own.
+    thread::update(&project, "t-0001", |t| t.status = Status::Failed).unwrap();
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    world.runner.calls.borrow_mut().clear();
+    let error = threads::restart(&world.ctx(), "demo", "t-0001").unwrap_err().to_string();
+    assert!(error.contains("workspace w5 is not open"), "{error}");
+    assert_eq!(remote_changing_calls(&world), Vec::<String>::new());
+}
+
+#[test]
+fn restart_places_a_tab_placed_thread_again_as_a_tab_in_its_workspace() {
+    let (world, project, wt) = tab_placed_world();
+    thread::update(&project, "t-0001", |t| {
+        t.status = Status::Failed;
+        t.error = "pane gone".into();
+    })
+    .unwrap();
+    std::fs::write(thread::task_path(&project, "t-0001"), "The task.").unwrap();
+    // The thread's tab is gone; the host workspace is still open.
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w5", "w5:t1", "w5:p1", "/host"));
+    world.runner.on("tab create", tab_reply("w5", "w5:t3", "w5:p4", &wt));
+    world.runner.on("pane get", ok(&format!(r#"{{"result":{{"pane":{{"cwd":"{wt}"}}}}}}"#)));
+    world.runner.on("rev-parse --git-path", fail(1, "not a repo"));
+    world.runner.on("pane rename", ok(r#"{"result":{}}"#));
+
+    let t = threads::restart(&world.ctx(), "demo", "t-0001").unwrap();
+    assert_eq!(
+        changing_calls(&world),
+        vec![
+            format!("herdr tab create --workspace w5 --cwd {wt} --label Task --no-focus"),
+            "herdr pane get w5:p4".to_string(),
+            format!("git -C {wt} rev-parse --git-path info/exclude"),
+            "herdr pane rename w5:p4 repo ▸ t-0001 Task".to_string(),
+        ]
+    );
+    assert_eq!((t.status, t.host_workspace.as_str()), (Status::Open, "w5"));
+    assert_eq!((t.workspace_id.as_str(), t.tab_id.as_str(), t.pane_id.as_str()), ("w5", "w5:t3", "w5:p4"));
+
+    // With the host workspace gone too, restart refuses rather than open a workspace of its own.
+    thread::update(&project, "t-0001", |t| t.status = Status::Failed).unwrap();
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    let error = threads::restart(&world.ctx(), "demo", "t-0001").unwrap_err().to_string();
+    assert!(error.contains("workspace w5 is not open"), "{error}");
+    assert_eq!(world.runner.count("worktree open"), 0);
+}
+
+#[test]
+fn a_tab_that_fails_to_open_leaves_the_worktree_recorded_and_restart_reopens_it_as_a_tab() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let repo = world.home.path().join("app");
+    std::fs::create_dir(&repo).unwrap();
+    let repo = std::fs::canonicalize(repo).unwrap().to_string_lossy().into_owned();
+    let wt = world.home.path().join(".herdr/worktrees/app/hp-demo-t-0001-fix-it").to_string_lossy().into_owned();
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w5", "w5:t1", "w5:p1", "/elsewhere"));
+    world.runner.on("rev-parse --show-toplevel", ok(&format!("{repo}\n")));
+    world.runner.on("remote get-url origin", ok("git@github.com:Owner/App.git\n"));
+    world.runner.on("fetch origin", ok(""));
+    world.runner.on("symbolic-ref", ok("origin/main\n"));
+    world.runner.on("rev-parse --git-path", fail(1, "not a repo"));
+    world.runner.on("worktree add", ok(""));
+    // The first `tab create` times out; the next one opens the tab.
+    let tab_failed = Rc::new(std::cell::Cell::new(false));
+    let first = tab_failed.clone();
+    let tab = tab_reply("w5", "w5:t2", "w5:p2", &wt);
+    world.runner.on_fn(
+        |cmd| cmd.display().contains("tab create"),
+        move |_| Ok(if first.replace(true) { tab.clone() } else { crate::runner::fake::timeout() }),
+    );
+    world.runner.on("pane get", ok(&format!(r#"{{"result":{{"pane":{{"cwd":"{wt}"}}}}}}"#)));
+    world.runner.on("pane rename", ok(r#"{"result":{}}"#));
+    let ctx = world.ctx();
+
+    threads::start(&ctx, "demo", start_args(Some(repo.clone()), None, Some("w5"))).unwrap_err();
+    assert!(tab_failed.get());
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!(t.status, Status::Failed);
+    assert_eq!(
+        (t.worktree_path.as_str(), t.branch.as_str(), t.base.as_str(), t.origin.as_str()),
+        (wt.as_str(), "hp/demo/t-0001-fix-it", "origin/main", "git@github.com:Owner/App.git"),
+        "recorded before the tab, so neither restart nor --remove-worktree refuses"
+    );
+    assert!(t.pane_id.is_empty());
+
+    // Restart opens the recorded worktree as a tab; git adds nothing again.
+    world.runner.calls.borrow_mut().clear();
+    let t = threads::restart(&ctx, "demo", "t-0001").unwrap();
+    assert_eq!(
+        changing_calls(&world),
+        vec![
+            format!("herdr tab create --workspace w5 --cwd {wt} --label Fix it --no-focus"),
+            "herdr pane get w5:p2".to_string(),
+            format!("git -C {wt} rev-parse --git-path info/exclude"),
+            "herdr pane rename w5:p2 app ▸ t-0001 Fix it".to_string(),
+        ]
+    );
+    assert_eq!((t.status, t.worktree_path.as_str()), (Status::Open, wt.as_str()));
+    assert_eq!((t.workspace_id.as_str(), t.tab_id.as_str(), t.pane_id.as_str()), ("w5", "w5:t2", "w5:p2"));
+}
+
+#[test]
+fn every_placement_labels_its_pane_and_a_refused_label_fails_nothing() {
+    // Without --workspace: a worktree workspace, then a restart into the same pane.
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let wt = world.home.path().join("wt").to_string_lossy().into_owned();
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    world.runner.on("rev-parse --show-toplevel", ok("/repo\n"));
+    world.runner.on("remote get-url origin", fail(2, "no origin"));
+    world.runner.on("symbolic-ref", ok("origin/main\n"));
+    world.runner.on("rev-parse --git-path", fail(1, "not a repo"));
+    world.runner.on(
+        "worktree create",
+        ok(&format!(r#"{{"result":{{"root_pane":{{"workspace_id":"w2","tab_id":"w2:t1","pane_id":"w2:p1","cwd":"{wt}"}},"worktree":{{"path":"{wt}"}}}}}}"#)),
+    );
+    world.runner.on("pane rename", ok(r#"{"result":{}}"#));
+    let ctx = world.ctx();
+    let repo = world.home.path().join("app");
+    std::fs::create_dir(&repo).unwrap();
+    threads::start(&ctx, "demo", start_args(Some(repo.to_string_lossy().into_owned()), None, None)).unwrap();
+    assert_eq!(world.runner.count("worktree create"), 1);
+    assert_eq!(world.runner.count("pane rename w2:p1 app ▸ t-0001 Fix it"), 1);
+    thread::update(&project, "t-0001", |t| t.status = Status::Failed).unwrap();
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w2", "w2:t1", "w2:p1", &wt));
+    threads::restart(&ctx, "demo", "t-0001").unwrap();
+    assert_eq!(world.runner.count("pane rename w2:p1 app ▸ t-0001 Fix it"), 2);
+
+    // A task with no repository is labelled with the project's name, and a
+    // label herdr refuses leaves the thread started.
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    world.runner.on("tab create", tab_reply("w1", "w1:t2", "w1:p2", "/folder"));
+    world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":""}}}"#));
+    world.runner.on("pane rename", fail(1, "no such pane"));
+    let started = threads::start(&world.ctx(), "demo", start_args(None, None, None)).unwrap();
+    assert_eq!(started.status, Status::Open);
+    assert_eq!(world.runner.count("pane rename w1:p2 demo ▸ t-0001 Fix it"), 1);
 }

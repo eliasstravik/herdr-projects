@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 
-use crate::herdr::{Agent, Herdr, Pane};
+use crate::herdr::{Agent, Created, Herdr, Pane};
 use crate::paths::Ctx;
 use crate::project::{self, Project};
 use crate::runner::{Cmd, Runner};
@@ -83,6 +83,9 @@ pub struct StartArgs {
     pub machine: Option<String>,
     pub agent: Option<String>,
     pub base: Option<String>,
+    /// Place a worktree thread as a tab in this existing workspace instead of
+    /// in a workspace of its own.
+    pub workspace: Option<String>,
     pub task: String,
 }
 
@@ -126,6 +129,13 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
     if !machine.is_empty() && listed.is_none() {
         eprintln!("warning: {repo} on {machine} is not listed in `repos` in PROJECT.md");
     }
+    let host_workspace = args.workspace.as_deref().map(str::trim).unwrap_or_default().to_string();
+    if args.workspace.is_some() && host_workspace.is_empty() {
+        bail!("--workspace may not be empty");
+    }
+    if !host_workspace.is_empty() && repo.is_empty() {
+        bail!("--workspace needs --repo: a task with no repository already runs as a tab in the project's own workspace");
+    }
 
     let open_count = thread::list(&project).iter().filter(|t| t.status == Status::Open || t.status == Status::Starting).count();
     if open_count as u32 >= settings.max_parallel_threads {
@@ -143,6 +153,7 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
         t.machine = machine.clone();
         t.agent = agent_kind.clone();
         t.base = args.base.clone().unwrap_or_default();
+        t.host_workspace = host_workspace.clone();
     })?;
     let id = record.id.clone();
     {
@@ -177,7 +188,7 @@ fn place_and_brief(ctx: &Ctx, project: &Project, view: &SessionView, id: &str, r
             let target = remote::ssh_target(runner, &ctx.env.herdr_bin(), &ctx.config_dir, &record.machine)?;
             let (origin, base) = remote::repo_info(runner, &target, &record.repo, &record.base)?;
             let branch = thread::branch_name(slug, id, &record.title);
-            let (created, path, cwd) = view.herdr.on_machine(&record.machine).worktree_create(&record.repo, &branch, &base, &record.title)?;
+            let (created, path, cwd) = create_worktree(ctx, project, view, &record, Some(&target), &origin, &branch, &base)?;
             thread::update(project, id, |t| {
                 t.origin = origin;
                 t.base = base;
@@ -209,7 +220,7 @@ fn place_and_brief(ctx: &Ctx, project: &Project, view: &SessionView, id: &str, r
                 record.base.clone()
             };
             let branch = thread::branch_name(slug, id, &record.title);
-            let (created, path, cwd) = view.herdr.worktree_create(&record.repo, &branch, &base, &record.title)?;
+            let (created, path, cwd) = create_worktree(ctx, project, view, &record, None, &origin, &branch, &base)?;
             // Recorded immediately, so a command killed midway still leaves a
             // record `thread restart` can act on.
             thread::update(project, id, |t| {
@@ -228,6 +239,62 @@ fn place_and_brief(ctx: &Ctx, project: &Project, view: &SessionView, id: &str, r
     };
     write_brief(ctx, project, &placed, restart)?;
     finish_placement(project, view, id)
+}
+
+/// A new worktree and the pane it opens in: herdr's own worktree workspace, or,
+/// for a thread with a host workspace, a tab there. `target` is the ssh target
+/// of a remote thread. Returns (ids, checkout path, pane working directory).
+fn create_worktree(ctx: &Ctx, project: &Project, view: &SessionView, record: &Thread, target: Option<&str>, origin: &str, branch: &str, base: &str) -> Result<(Created, String, String)> {
+    if record.host_workspace.is_empty() {
+        return Ok(view.herdr.on_machine(&record.machine).worktree_create(&record.repo, branch, base, &record.title)?);
+    }
+    // `herdr worktree create` always opens a workspace of its own, so git makes
+    // the worktree, in the place herdr would have put it.
+    require_host(view, record)?;
+    let under_home = herdr_worktree_dir(&record.repo, branch);
+    let path = match target {
+        Some(target) => remote::worktree_add(ctx.runner, target, &record.repo, &under_home, branch, base)?,
+        None => {
+            let path = ctx.env.home.join(&under_home).to_string_lossy().into_owned();
+            git(ctx.runner, &record.repo, &["worktree", "add", "-b", branch, &path, base], Duration::from_secs(20))?;
+            path
+        }
+    };
+    // Recorded before the tab, so a host that closes or a `tab create` that
+    // times out leaves a thread `thread restart` reopens as a tab and
+    // `--remove-worktree` removes.
+    thread::update(project, &record.id, |t| {
+        t.origin = origin.to_string();
+        t.base = base.to_string();
+        t.branch = branch.to_string();
+        t.worktree_path = path.clone();
+    })?;
+    open_worktree_tab(view, record, &path)
+}
+
+/// `.herdr/worktrees/<repository folder>/<branch with hyphens>`: where herdr
+/// puts a worktree, relative to the home directory of the thread's machine.
+fn herdr_worktree_dir(repo: &str, branch: &str) -> String {
+    let name = Path::new(repo).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    format!(".herdr/worktrees/{name}/{}", branch.replace('/', "-"))
+}
+
+/// Refuses before anything is made when the host workspace is not open.
+fn require_host(view: &SessionView, record: &Thread) -> Result<()> {
+    let (_, panes) = lists_for(view, record)?;
+    if !panes.iter().any(|p| p.workspace_id == record.host_workspace) {
+        bail!("workspace {} is not open, so {} cannot be placed in it", record.host_workspace, record.id);
+    }
+    Ok(())
+}
+
+/// Opens an existing worktree as a tab in the thread's host workspace.
+fn open_worktree_tab(view: &SessionView, record: &Thread, path: &str) -> Result<(Created, String, String)> {
+    let herdr = view.herdr.on_machine(&record.machine);
+    let created = herdr.tab_create(&record.host_workspace, Path::new(path), &record.title, false)?;
+    let cwd = herdr.pane_cwd(&created.pane_id).unwrap_or_default();
+    let cwd = if cwd.is_empty() { path.to_string() } else { cwd };
+    Ok((created, path.to_string(), cwd))
 }
 
 /// The thread directory, the git exclude and `brief.md`, on the thread's own
@@ -319,8 +386,24 @@ fn finish_placement(project: &Project, view: &SessionView, id: &str) -> Result<T
         t.last_state.clear();
         t.last_state_change = project::now();
     })?;
+    label_pane(&view.herdr, &thread, &project.slug);
     report_thread_tokens(&view.herdr, &thread, &project.slug, Group::Working);
     Ok(thread)
+}
+
+/// `<repository folder> ▸ <id> <title>`; a thread with no repository has the
+/// project's name in the first place.
+fn pane_label(thread: &Thread, slug: &str) -> String {
+    let place = Path::new(&thread.repo).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| slug.to_string());
+    format!("{place} ▸ {} {}", thread.id, thread.title)
+}
+
+/// A label is never worth a failed placement, so a refusal is a warning.
+fn label_pane(herdr: &Herdr, thread: &Thread, slug: &str) {
+    let label = pane_label(thread, slug);
+    if let Err(error) = herdr.on_machine(&thread.machine).pane_rename(&thread.pane_id, &label) {
+        eprintln!("warning: could not label pane {} `{label}`: {error}", thread.pane_id);
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -405,7 +488,12 @@ pub fn restart(ctx: &Ctx, slug: &str, id: &str) -> Result<Thread> {
         RestartPlan::ReusePane => {}
         RestartPlan::Reopen => match record.kind {
             Kind::Worktree => {
-                let (created, path, cwd) = view.herdr.on_machine(&record.machine).worktree_open(&record.repo, &record.worktree_path, &record.title)?;
+                let (created, path, cwd) = if record.host_workspace.is_empty() {
+                    view.herdr.on_machine(&record.machine).worktree_open(&record.repo, &record.worktree_path, &record.title)?
+                } else {
+                    require_host(&view, &record)?;
+                    open_worktree_tab(&view, &record, &record.worktree_path)?
+                };
                 thread::update(&project, id, |t| {
                     t.worktree_path = path;
                     t.cwd = cwd;
@@ -538,6 +626,10 @@ pub fn resolve(ctx: &Ctx, slug: &str, id: &str, args: &ResolveArgs) -> Result<()
     if !args.remove_worktree {
         match resolved.kind {
             Kind::Worktree if resolved.worktree_path.is_empty() => println!("No worktree was recorded for it, so there is nothing to close or remove."),
+            Kind::Worktree if !resolved.host_workspace.is_empty() => println!(
+                "Its tab ({}) in workspace {}, worktree ({}) and branch ({}) were left alone. Close the tab in herdr, or run `thread resolve {slug} {id} --remove-worktree`.",
+                resolved.tab_id, resolved.host_workspace, resolved.worktree_path, resolved.branch
+            ),
             Kind::Worktree => println!(
                 "Its pane, workspace, worktree ({}) and branch ({}) were left alone. Close the workspace in herdr, or run `thread resolve {slug} {id} --remove-worktree`.",
                 resolved.worktree_path, resolved.branch
@@ -579,7 +671,10 @@ fn remove_worktree(ctx: &Ctx, project: &Project, record: &Thread) -> Result<()> 
     }
     let view = require_session(ctx, project)?;
     let (_, panes) = lists_for(&view, record)?;
-    let workspace_open = panes.iter().any(|p| p.workspace_id == record.workspace_id && Path::new(&p.cwd).starts_with(&record.worktree_path));
+    // A host workspace is never the thread's to remove: its worktree goes by
+    // path, and then only its own tab is closed.
+    let workspace_open = record.host_workspace.is_empty()
+        && panes.iter().any(|p| p.workspace_id == record.workspace_id && Path::new(&p.cwd).starts_with(&record.worktree_path));
     if workspace_open {
         return view.herdr.on_machine(&record.machine).worktree_remove(&record.workspace_id).map_err(|error| anyhow::anyhow!("{error}"));
     }
@@ -590,9 +685,51 @@ fn remove_worktree(ctx: &Ctx, project: &Project, record: &Thread) -> Result<()> 
         if !out.success() {
             bail!("{}", out.error_text());
         }
-        return Ok(());
+    } else {
+        git(ctx.runner, &record.repo, &["worktree", "remove", &record.worktree_path], Duration::from_secs(20))?;
     }
-    git(ctx.runner, &record.repo, &["worktree", "remove", &record.worktree_path], Duration::from_secs(20)).map(|_| ())
+    if !record.host_workspace.is_empty() {
+        close_thread_tab(&view.herdr.on_machine(&record.machine), record, &panes);
+    }
+    Ok(())
+}
+
+/// Closes a tab-placed thread's tab when every pane in it is in the thread's
+/// worktree, else only the thread's own pane; never its workspace. herdr
+/// closes a workspace with its last tab and a tab with its last pane, so in
+/// the workspace's last tab only the thread's pane closes, and only while
+/// another pane keeps the tab open; else the tab is left. The worktree is
+/// already gone, so a refusal is a warning.
+fn close_thread_tab(herdr: &Herdr, record: &Thread, panes: &[Pane]) {
+    let in_tab: Vec<&Pane> = panes.iter().filter(|p| p.workspace_id == record.workspace_id && p.tab_id == record.tab_id).collect();
+    if in_tab.is_empty() {
+        return;
+    }
+    let ours = |p: &&Pane| Path::new(&p.cwd).starts_with(&record.worktree_path);
+    let whole_tab = in_tab.iter().all(ours);
+    let own_pane = in_tab.iter().any(|p| p.pane_id == record.pane_id && ours(p));
+    let last_tab = panes.iter().filter(|p| p.workspace_id == record.workspace_id).all(|p| p.tab_id == record.tab_id);
+    let (what, closed) = if whole_tab && !last_tab {
+        (format!("its tab {}", record.tab_id), herdr.tab_close(&record.tab_id))
+    } else if own_pane && !(last_tab && in_tab.len() == 1) {
+        (format!("its pane {}", record.pane_id), herdr.pane_close(&record.pane_id))
+    } else if whole_tab || own_pane {
+        println!(
+            "Left its tab {} open: it is the last tab in workspace {}, and closing it would close the workspace.",
+            record.tab_id, record.workspace_id
+        );
+        return;
+    } else {
+        return;
+    };
+    match closed {
+        Ok(()) if last_tab => println!(
+            "Closed {what} in workspace {}. Its tab {} is the last tab there, so it stays open.",
+            record.workspace_id, record.tab_id
+        ),
+        Ok(()) => println!("Closed {what} in workspace {}.", record.workspace_id),
+        Err(error) => eprintln!("warning: could not close {what}: {error}"),
+    }
 }
 
 /// A thread with its live state and group, for `thread list`, `thread show`

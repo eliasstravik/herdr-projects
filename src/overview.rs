@@ -12,7 +12,8 @@ use crate::threads::{self, Row};
 
 /// The project a herdr workspace belongs to: the coordinator's workspace or a
 /// local thread's recorded workspace, and only among projects whose recorded
-/// socket is the current one (workspace ids repeat across sessions).
+/// socket is the current one (workspace ids repeat across sessions). A host
+/// workspace a thread was placed in as a tab stays its host's.
 pub fn project_for_workspace(ctx: &Ctx, workspace_id: &str, socket: &str) -> Option<String> {
     if workspace_id.is_empty() || socket.is_empty() {
         return None;
@@ -29,7 +30,7 @@ pub fn project_for_workspace(ctx: &Ctx, workspace_id: &str, socket: &str) -> Opt
         }
         record.workspace_id == workspace_id
             || thread::list(&project).iter().any(|t| {
-                !t.is_remote() && t.status != thread::Status::Resolved && t.workspace_id == workspace_id
+                !t.is_remote() && t.status != thread::Status::Resolved && t.host_workspace.is_empty() && t.workspace_id == workspace_id
             })
     })
 }
@@ -235,6 +236,18 @@ mod tests {
         assert_eq!(project_for_workspace(&ctx, "w7", &b_socket), None);
         assert_eq!(project_for_workspace(&ctx, "w9", &a_socket), None);
         assert_eq!(project_for_workspace(&ctx, "", &a_socket), None);
+    }
+
+    #[test]
+    fn a_host_workspace_is_not_claimed_by_a_thread_placed_in_it_as_a_tab() {
+        let world = World::new();
+        let alpha = world.project("alpha", "a.sock");
+        world.thread(&alpha, world.home.path(), |t| {
+            t.workspace_id = "w5".into();
+            t.host_workspace = "w5".into();
+        });
+        let socket = alpha.coordinator().unwrap().socket;
+        assert_eq!(project_for_workspace(&world.ctx(), "w5", &socket), None);
     }
 
     #[test]

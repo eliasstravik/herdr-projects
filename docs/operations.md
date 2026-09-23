@@ -43,7 +43,7 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 | `open <project> [--reprime] [--session N \| --socket P] [--rebind]` | Workspace, coordinator tab and coordinator agent; focuses it when it already runs. |
 | `context <project> [--peek]` | The digest the coordinator reads every turn. `--peek` records nothing. |
 | `inbox done <project> <item>... \| --all` | Mark inbox items handled. |
-| `thread start <project> --title T [--repo PATH] [--machine M] [--agent KIND] [--base REF] --task-file F` | New thread; `-` reads the task from standard input. Returns before the agent is up. |
+| `thread start <project> --title T [--repo PATH] [--machine M] [--agent KIND] [--base REF] [--workspace ID] --task-file F` | New thread; `-` reads the task from standard input. Returns before the agent is up. |
 | `thread restart`, `thread prompt`, `thread adopt`, `thread list`, `thread show`, `thread ack`, `thread resolve` | See `--help` on each. |
 | `overview [<project>] [--wait]`, `focus [<project>]`, `unfocus` | Threads grouped by what needs you, as text and in the sidebar. |
 | `routine list`, `routine approve`, `safety show` | Routines and safety settings. |
@@ -113,6 +113,12 @@ For other agents the principle is the same: allow reading and steering, keep any
 
 A file `routines/<name>.md`: TOML front matter with `schedule` (`every <N>m|h|d` or `daily HH:MM`, local time), optional `command`, `enabled`; the body is the prompt the coordinator receives as an inbox item when it is due. A routine with a `command` runs (`sh -c`, in the project folder, 60 second timeout) only when `routine_commands = true` **and** you have run `herdr-projects routine approve <project> <name>` in a terminal; its output reaches the coordinator capped at 4,000 characters inside a fence labelled as untrusted. Edit the command and it stops until approved again.
 
+## Threads as tabs in an existing workspace
+
+`thread start --repo <path> --workspace <id>` places a worktree thread as a tab in an existing workspace (for example the workspace of whoever started it) instead of in a new workspace of its own. `herdr worktree create` always opens a new workspace, so the binary runs `git worktree add` itself, at the path Herdr would have used (`~/.herdr/worktrees/<repository folder>/<branch with hyphens>`), and then `herdr tab create --workspace <id>`. The workspace must be open, or nothing is made. The record keeps the tab's `workspace_id`, `tab_id` and `pane_id`, and `host_workspace` names the workspace it was placed in. That workspace is never closed for the thread: `thread resolve --remove-worktree` runs `git worktree remove` (never forced), then closes the thread's tab, or only its pane when the tab holds panes from elsewhere. Herdr closes a workspace with its last tab and a tab with its last pane, so when the thread's tab is the workspace's last tab, only the thread's pane is closed, and only if another pane keeps the tab open; otherwise the tab is left open. The output says which. The worktree and branch are recorded as soon as `git worktree add` succeeds, so a tab that fails to open leaves a thread that `thread restart` opens as a tab; once a report is home, `--remove-worktree` removes it. `thread restart` opens it again as a tab in the same workspace, and refuses when that workspace is gone. `--workspace` can also name another thread's own worktree workspace; resolving that thread with `--remove-worktree` removes its workspace, and the placed tab goes with it. A task with no repository already runs as a tab in the project's workspace, so `--workspace` needs `--repo`.
+
+Every placement and restart labels the thread's pane `<repository folder> ▸ <thread id> <title>` (the project's name stands in when there is no repository) with `herdr pane rename`. A label Herdr refuses is a warning on standard error; the thread still starts.
+
 ## Threads on other machines
 
 Save the machine with `herdr machine add --label <label> <ssh target>` (both machines need Herdr 0.9.1), then list a repo as `--repo /path/on/machine@<label>` or pass `thread start --machine <label>`. The home machine owns the project; only outbound SSH from home is needed, in batch mode, so set up key-based login first.
@@ -121,6 +127,7 @@ Save the machine with `herdr machine add --label <label> <ssh target>` (both mac
 - A machine that doesn't answer is left alone: no state is read, threads keep their last group, and it is skipped for about two minutes. After ten minutes you get one `outage` inbox item, and one more when it is back.
 - A blocked remote thread needs you in its pane on that machine: select the machine in Herdr's sidebar, or run `herdr --remote <ssh target>`.
 - `focus` does not cover remote threads: their sidebar tokens are set on the remote Herdr server. They appear in `overview`, `thread list` and inbox items.
+- `--workspace <id>` works here too, naming a workspace on that machine: `git worktree add` runs over SSH in the remote home directory, and the tab and label are made through `herdr --machine`.
 - Tasks with no repository always run locally, as tabs.
 
 ## Laptop-closed operation

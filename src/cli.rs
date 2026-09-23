@@ -175,7 +175,7 @@ enum InboxCommand {
 
 #[derive(Subcommand)]
 enum ThreadCommand {
-    /// Start a thread: a worktree workspace for --repo, else a tab in the project workspace
+    /// Start a thread: a worktree workspace for --repo (or a tab in --workspace), else a tab in the project workspace
     Start {
         slug: String,
         #[arg(long)]
@@ -189,6 +189,9 @@ enum ThreadCommand {
         agent: Option<String>,
         #[arg(long, value_name = "REF")]
         base: Option<String>,
+        /// With --repo: open the worktree as a tab in this existing workspace instead of a new one
+        #[arg(long, value_name = "ID")]
+        workspace: Option<String>,
         /// The task; `-` reads standard input
         #[arg(long, value_name = "FILE")]
         task_file: String,
@@ -336,9 +339,9 @@ pub fn run() -> Result<()> {
             }
         },
         Command::Thread { command } => match command {
-            ThreadCommand::Start { slug, title, repo, machine, agent, base, task_file } => {
+            ThreadCommand::Start { slug, title, repo, machine, agent, base, workspace, task_file } => {
                 let task = read_text(&task_file)?;
-                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, agent, base, task })?;
+                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, agent, base, workspace, task })?;
                 println!("{}", serde_json::json!({ "id": thread.id, "kind": thread.kind, "branch": thread.branch, "pane_id": thread.pane_id }));
                 Ok(())
             }

@@ -56,6 +56,10 @@ pub struct Thread {
     pub machine: String,
     pub worktree_path: String,
     pub thread_dir: String,
+    /// Set when a worktree thread was placed as a tab in an existing workspace
+    /// (`thread start --workspace`): that workspace's id. The workspace is the
+    /// host's, not the thread's, so nothing that ends the thread closes it.
+    pub host_workspace: String,
     pub workspace_id: String,
     pub tab_id: String,
     pub pane_id: String,

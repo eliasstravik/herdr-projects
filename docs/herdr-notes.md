@@ -59,7 +59,7 @@ Also learned:
 Also learned:
 
 - **`worktree open` needs `--cwd <repo>`**; with `--path` alone it answers `worktree_not_found`.
-- **herdr puts worktrees under `~/.herdr/worktrees/<repo>/<branch-with-hyphens>`**, and `worktree create` also opens a workspace for the main repository when none is open. The binary records the path herdr returns and never builds it.
+- **herdr puts worktrees under `~/.herdr/worktrees/<repo>/<branch-with-hyphens>`**, and `worktree create` also opens a workspace for the main repository when none is open. The binary records the path herdr returns. Only for `thread start --workspace`, which runs `git worktree add` itself, does it build the same path.
 - **Excluded files do not protect a worktree from removal.** With only `.herdr-project/` (listed in `info/exclude`) present, `worktree remove` succeeds and deletes it. This is why `--remove-worktree` requires a complete final copy.
 - **Every new worktree shows claude's trust dialog** on this Mac, because `~/.herdr/worktrees` is not under a trusted parent. So under the defaults every worktree thread begins as `prompt_pending`, shows under Waiting on you after 60 s, and needs one Enter in its pane. **Tab threads do not** (their folder is under the project folder, which the user trusted when opening the coordinator). After the dialog, claude's ordinary first-edit and first-command prompts show the thread under Waiting on you after 30 s each, as the plan expects. The README says so.
 - **A failed `git worktree add` can leave the branch behind** (git creates the branch before the directory). `thread restart` then takes case (b) and asks for a human look, as designed.
