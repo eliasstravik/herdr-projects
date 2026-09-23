@@ -561,8 +561,10 @@ pub fn ack(ctx: &Ctx, slug: &str, id: &str) -> Result<()> {
 #[derive(Default)]
 pub struct ResolveArgs {
     pub reopen: bool,
-    pub remove_worktree: bool,
+    /// Keep the worktree (and so the branch) instead of cleaning up.
+    pub keep_worktree: bool,
     pub skip_copy: bool,
+    /// Remove the worktree even though the final copy was partial.
     pub discard_uncopied: bool,
 }
 
@@ -580,25 +582,21 @@ pub fn resolve(ctx: &Ctx, slug: &str, id: &str, args: &ResolveArgs) -> Result<()
         println!("{id} is open again. Nothing was started; `thread restart {slug} {id}` brings its agent back.");
         return Ok(());
     }
-    if args.skip_copy && args.remove_worktree {
-        bail!("--skip-copy cannot be combined with --remove-worktree");
-    }
-    if args.remove_worktree && record.kind != Kind::Worktree {
-        bail!("--remove-worktree is only for worktree threads; {id} is a {:?} thread", record.kind);
+    if record.status == Status::Resolved {
+        bail!("{id} is already resolved; `sweep {slug}` cleans what is left of it");
     }
 
     // Every path that resolves a thread performs a final copy first.
+    let mut copy_complete = !args.skip_copy;
     if !args.skip_copy {
         let copied = final_copy(ctx, &project, &record);
         match &copied.outcome {
             CopyOutcome::Complete => {}
             CopyOutcome::Partial(notes) => {
+                copy_complete = false;
                 println!("the final copy was partial:");
                 for note in notes {
                     println!("  - {note}");
-                }
-                if args.remove_worktree && !args.discard_uncopied {
-                    bail!("refusing --remove-worktree: removing the worktree would delete what was not copied. Pass --discard-uncopied to accept that loss.");
                 }
             }
             CopyOutcome::Failed(error) => {
@@ -606,34 +604,95 @@ pub fn resolve(ctx: &Ctx, slug: &str, id: &str, args: &ResolveArgs) -> Result<()
             }
         }
     }
-
-    if args.remove_worktree {
-        remove_worktree(ctx, &project, &record)?;
-        // The record says what exists: `delete` lists leftovers from it.
-        thread::update(&project, id, |t| t.worktree_path.clear())?;
-    }
     let resolved = thread::update(&project, id, |t| {
         t.status = Status::Resolved;
         t.resolved_reason = "manual".into();
         t.prompt_pending = false;
     })?;
-    if let Some(view) = session_view(ctx, &project) {
-        clear_thread_tokens(&view.herdr, &resolved);
+    let notes = clean(ctx, &project, &resolved, &Clean { keep_worktree: args.keep_worktree, copy_complete: copy_complete || args.discard_uncopied });
+    println!("{id} resolved; its report and library are kept.");
+    for note in &notes {
+        println!("  - {note}");
     }
-    println!("{id} resolved.");
-    if !args.remove_worktree {
-        match resolved.kind {
-            Kind::Worktree if resolved.worktree_path.is_empty() => println!("No worktree was recorded for it, so there is nothing to close or remove."),
-            Kind::Worktree => println!(
-                "Its pane, workspace, worktree ({}) and branch ({}) were left alone. Close the workspace in herdr, or run `thread resolve {slug} {id} --remove-worktree`.",
-                resolved.worktree_path, resolved.branch
-            ),
-            _ => println!("Its pane and tab were left alone; close them in herdr."),
-        }
-    } else {
-        println!("The worktree {} was removed; the branch {} was kept.", record.worktree_path, resolved.branch);
-    }
+    crate::inbox::write(&project, "thread-state", id, &format!("{id} \"{}\" was resolved: {}", resolved.title, notes.join("; ")), "")?;
     Ok(())
+}
+
+pub struct Clean {
+    pub keep_worktree: bool,
+    /// Everything the thread wrote is home: the worktree may go.
+    pub copy_complete: bool,
+}
+
+/// Cleans up after a resolved thread: its worktree (never forced), its local
+/// branch when the pull request is merged, its tab. Reports and library are
+/// never touched. Returns one note per thing, for the output and the inbox.
+pub fn clean(ctx: &Ctx, project: &Project, t: &Thread, options: &Clean) -> Vec<String> {
+    let mut notes = Vec::new();
+    let view = session_view(ctx, project);
+    let merged = t.pr_state.eq_ignore_ascii_case("merged");
+    match t.kind {
+        Kind::Worktree => {
+            let mut removed = t.worktree_path.is_empty();
+            if t.worktree_path.is_empty() {
+                notes.push("no worktree was recorded".into());
+            } else if options.keep_worktree {
+                notes.push(format!("worktree kept at {} (asked to keep it)", t.worktree_path));
+            } else if !options.copy_complete {
+                notes.push(format!("worktree kept at {}: not everything in it was copied home (`--discard-uncopied` removes it anyway)", t.worktree_path));
+            } else {
+                match remove_worktree(ctx, project, t, view.as_ref()) {
+                    Ok(()) => {
+                        removed = true;
+                        let _ = thread::update(project, &t.id, |t| t.worktree_path.clear());
+                        notes.push(format!("worktree {} removed and its workspace closed", t.worktree_path));
+                    }
+                    Err(error) => notes.push(format!("worktree kept at {}: {error:#}", t.worktree_path)),
+                }
+            }
+            if !t.branch.is_empty() {
+                if merged && removed {
+                    match delete_branch(ctx, t) {
+                        Ok(()) => notes.push(format!("branch {} deleted (its pull request is merged)", t.branch)),
+                        Err(error) => notes.push(format!("branch {} kept: {error:#}", t.branch)),
+                    }
+                } else if !merged {
+                    notes.push(format!("branch {} kept: its pull request is not merged", t.branch));
+                } else {
+                    notes.push(format!("branch {} kept: its worktree is still there", t.branch));
+                }
+            }
+        }
+        Kind::Tab | Kind::Checkout => match &view {
+            Some(view) if !t.pane_id.is_empty() && thread::live_state(t, &view.agents, &view.panes, jiff::Timestamp::now()).pane_exists => {
+                match view.herdr.call(&["tab", "close", &t.tab_id], crate::herdr::CALL_TIMEOUT) {
+                    Ok(_) => notes.push("its tab was closed".into()),
+                    Err(error) => notes.push(format!("its tab could not be closed ({error})")),
+                }
+            }
+            _ => notes.push("its tab was already closed".into()),
+        },
+        Kind::Adopted => notes.push("its pane was left alone (an adopted pane is yours)".into()),
+    }
+    if let Some(view) = &view {
+        clear_thread_tokens(&view.herdr, t);
+    }
+    notes
+}
+
+fn delete_branch(ctx: &Ctx, t: &Thread) -> Result<()> {
+    if t.is_remote() {
+        let target = remote::ssh_target(ctx.runner, &ctx.env.herdr_bin(), &ctx.config_dir, &t.machine)?;
+        let script = format!("cd {} && git branch -D {}", remote::quote(&t.repo), remote::quote(&t.branch));
+        let out = remote::ssh(ctx.runner, &target, &script, None, Duration::from_secs(20))?;
+        if !out.success() {
+            bail!("{}", out.error_text());
+        }
+        return Ok(());
+    }
+    // `-D`: GitHub says the pull request is merged, and a squash merge leaves
+    // the branch unmerged as far as git can tell.
+    git(ctx.runner, &t.repo, &["branch", "-D", &t.branch], GIT_TIMEOUT).map(|_| ())
 }
 
 /// The final report and library copy, storing the new report hash.
@@ -658,27 +717,32 @@ pub fn final_copy(ctx: &Ctx, project: &Project, record: &Thread) -> thread::Copi
 }
 
 /// Never forces. herdr's or git's refusal (for example uncommitted changes) is
-/// reported unchanged.
-fn remove_worktree(ctx: &Ctx, project: &Project, record: &Thread) -> Result<()> {
+/// reported unchanged. An open workspace goes through `herdr worktree remove
+/// --workspace`, which also closes it (checked on 0.9.1).
+pub fn remove_worktree(ctx: &Ctx, project: &Project, record: &Thread, view: Option<&SessionView>) -> Result<()> {
     if record.worktree_path.is_empty() {
         bail!("{} has no recorded worktree", record.id);
     }
-    let view = require_session(ctx, project)?;
-    let (_, panes) = lists_for(&view, record)?;
-    let workspace_open = panes.iter().any(|p| p.workspace_id == record.workspace_id && Path::new(&p.cwd).starts_with(&record.worktree_path));
-    if workspace_open {
-        return view.herdr.on_machine(&record.machine).worktree_remove(&record.workspace_id).map_err(|error| anyhow::anyhow!("{error}"));
+    let _ = project;
+    if let Some(view) = view {
+        let (_, panes) = lists_for(view, record)?;
+        let open = panes.iter().find(|p| Path::new(&p.cwd).starts_with(&record.worktree_path)).map(|p| p.workspace_id.clone());
+        if let Some(workspace) = open {
+            return view.herdr.on_machine(&record.machine).worktree_remove(&workspace).map_err(|error| anyhow::anyhow!("{error}"));
+        }
     }
     if record.is_remote() {
         let target = remote::ssh_target(ctx.runner, &ctx.env.herdr_bin(), &ctx.config_dir, &record.machine)?;
-        let script = format!("cd {} && git worktree remove {}", remote::quote(&record.repo), remote::quote(&record.worktree_path));
+        let script = format!("cd {} && git worktree remove {} && git worktree prune", remote::quote(&record.repo), remote::quote(&record.worktree_path));
         let out = remote::ssh(ctx.runner, &target, &script, None, Duration::from_secs(20))?;
         if !out.success() {
             bail!("{}", out.error_text());
         }
         return Ok(());
     }
-    git(ctx.runner, &record.repo, &["worktree", "remove", &record.worktree_path], Duration::from_secs(20)).map(|_| ())
+    git(ctx.runner, &record.repo, &["worktree", "remove", &record.worktree_path], Duration::from_secs(20))?;
+    let _ = git(ctx.runner, &record.repo, &["worktree", "prune"], GIT_TIMEOUT);
+    Ok(())
 }
 
 /// A thread with its live state and group, for `thread list`, `thread show`

@@ -329,14 +329,18 @@ pub fn pull_requests(ctx: &Ctx, project: &Project, state: &mut State, memory: &m
 /// thread is not resolved and the next tick tries again.
 fn resolve_after_copy(ctx: &Ctx, project: &Project, t: &Thread, reason: &str) -> Result<bool> {
     let copied = threads::final_copy(ctx, project, t);
-    if let CopyOutcome::Failed(error) = copied.outcome {
+    if let CopyOutcome::Failed(error) = &copied.outcome {
         anyhow::bail!("{}: not resolved ({reason}) because the final copy failed: {error}", t.id);
     }
-    thread::update(project, &t.id, |t| {
+    let resolved = thread::update(project, &t.id, |t| {
         t.status = Status::Resolved;
         t.resolved_reason = reason.to_string();
         t.prompt_pending = false;
     })?;
+    let complete = copied.outcome == CopyOutcome::Complete;
+    let notes = threads::clean(ctx, project, &resolved, &threads::Clean { keep_worktree: false, copy_complete: complete });
+    let why = if reason == "auto" { "it was idle for `auto_resolve_days` and was resolved automatically; `thread resolve --reopen` undoes it".to_string() } else { format!("resolved ({reason})") };
+    inbox::write(project, "thread-state", &t.id, &format!("{}: {why}: {}", thread_label(t), notes.join("; ")), "")?;
     Ok(true)
 }
 
@@ -363,9 +367,8 @@ pub fn auto_resolve(ctx: &Ctx, project: &Project, settings: &Settings, memory: &
         if since_thread.min(since_ticker_start) < limit {
             continue;
         }
-        match resolve_after_copy(ctx, project, &t, "auto") {
-            Ok(_) => errors.extend(inbox::write(project, "thread-state", &t.id, &format!("{} was idle for {} days and was resolved automatically; `thread resolve --reopen` undoes it", thread_label(&t), settings.auto_resolve_days), "").err()),
-            Err(error) => errors.push(error),
+        if let Err(error) = resolve_after_copy(ctx, project, &t, "auto") {
+            errors.push(error);
         }
     }
     errors
