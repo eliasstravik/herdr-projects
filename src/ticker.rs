@@ -486,8 +486,22 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
         let launched = (|| -> Result<()> {
             thread::update(project, &t.id, |t| t.launch_attempts += 1)?;
             let safety = project.safety(&ctx.config_dir)?;
+            // Stored arguments pass the same model-only check as `thread
+            // start`: a record written before it, or edited by hand, cannot
+            // smuggle in a launch flag. The refused ones are dropped for good.
+            let (model, refused) = crate::agents::split_model_args(&t.agent, &t.agent_args);
+            if !refused.is_empty() {
+                thread::update(project, &t.id, |t| t.agent_args = model.clone())?;
+                let summary = format!(
+                    "{}: launched without agent arguments that are not a model flag: {}. Only the user sets launch flags, in thread_agent_args (`herdr-projects safety show {}`)",
+                    t.id,
+                    refused.join(" "),
+                    project.slug
+                );
+                inbox::write(project, "thread-state", &t.id, &summary, "")?;
+            }
             let mut args = safety.thread_agent_args.clone();
-            args.extend(t.agent_args.iter().cloned());
+            args.extend(model);
             herdr.on_machine(&t.machine).agent_start(&t.agent_name, &t.agent, &t.pane_id, &args)?;
             Ok(())
         })();

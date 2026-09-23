@@ -49,8 +49,8 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 | `open <project> [--agent KIND] [--agent-arg A]... [--new] [--tab] [--session N \| --socket P] [--rebind]` | A coordinator agent in the project folder; focuses a running one. From a shell pane inside Herdr it runs in that pane and quitting it returns to the shell; `--tab`, the popup, actions and a terminal outside Herdr use a tab of the project's workspace. |
 | `context <project> [--peek]` | The digest the coordinator reads every turn. |
 | `coordinator prompt <project> --text-file F` | A sentence to the coordinator (the popup's task keys use it). |
-| `thread start <project> --title T [--repo PATH] [--kind worktree\|tab\|checkout] [--agent KIND] [--agent-arg A]... [--machine M] [--base REF] --task-file F` | New thread; `-` reads the task from standard input. |
-| `thread prompt`, `thread next [--line N \| --add TEXT]`, `thread stop`, `thread restart [--agent KIND]` | Steer a thread. Prompts are recorded in its task file. |
+| `thread start <project> --title T [--repo PATH] [--kind worktree\|tab\|checkout] [--agent KIND] [--agent-arg A]... [--machine M] [--base REF] --task-file F` | New thread; `-` reads the task from standard input. `--agent-arg` takes only a model flag (see below). |
+| `thread prompt`, `thread next [--line N \| --add TEXT]`, `thread stop`, `thread restart [--agent KIND] [--agent-arg A]...` | Steer a thread. Prompts are recorded in its task file. |
 | `thread list/show [--json]`, `thread ack`, `thread adopt` | Look at threads. |
 | `thread resolve [--keep-worktree] [--discard-uncopied] [--skip-copy] [--reopen]` | Final copy home, then clean up. |
 | `sweep <project> [--dry-run] [--yes]` | Remove what nothing uses any more. |
@@ -98,6 +98,8 @@ coordinator_agent_args = []        # extra arguments for every coordinator's age
 thread_agent_args = []             # extra arguments for every thread's agent CLI
 routine_commands = false           # true lets approved routines run shell commands
 ```
+
+`--agent-arg` on `open`, `thread start` and `thread restart` is for the model only: `--model NAME` or `--model=NAME` for every harness, plus `-m NAME` for Codex. Anything else is refused with the table above, because the coordinator sets `--agent-arg` and must never be able to widen an agent's powers (`--dangerously-skip-permissions`, `--yolo`). Other launch flags go in `thread_agent_args` and `coordinator_agent_args`, which only you set. The ticker checks a thread's stored arguments again at launch: any that are not a model flag are dropped and reported in one inbox item.
 
 ## The allow-list for your coordinator
 

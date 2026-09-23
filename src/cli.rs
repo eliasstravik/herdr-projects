@@ -65,7 +65,7 @@ enum Command {
         /// Herdr agent kind for the coordinator (default: coordinator_agent in PROJECT.md)
         #[arg(long, value_name = "KIND")]
         agent: Option<String>,
-        /// Extra argument for the agent CLI, repeatable (for example a model flag)
+        /// A model flag for the agent CLI, repeatable (--agent-arg --model --agent-arg NAME); nothing else is accepted
         #[arg(long = "agent-arg", value_name = "ARG", allow_hyphen_values = true)]
         agent_args: Vec<String>,
         /// Start another coordinator even though one is running
@@ -302,7 +302,7 @@ enum ThreadCommand {
         /// Placement: worktree (default with --repo), tab (default without), or checkout (a tab on the repo's main checkout)
         #[arg(long, value_name = "worktree|tab|checkout")]
         kind: Option<String>,
-        /// Extra argument for the agent CLI, repeatable (for example --agent-arg --model --agent-arg opus)
+        /// A model flag for the agent CLI, repeatable (--agent-arg --model --agent-arg opus); nothing else is accepted
         #[arg(long = "agent-arg", value_name = "ARG", allow_hyphen_values = true)]
         agent_args: Vec<String>,
         #[arg(long, value_name = "REF")]
@@ -318,7 +318,7 @@ enum ThreadCommand {
         /// Restart with another Herdr agent kind
         #[arg(long, value_name = "KIND")]
         agent: Option<String>,
-        /// Replace the extra agent CLI arguments (repeatable; none given keeps the old ones, unless the kind changes)
+        /// Replace the model flag (repeatable, model flags only; none given keeps the old ones, unless the kind changes)
         #[arg(long = "agent-arg", value_name = "ARG", allow_hyphen_values = true)]
         agent_args: Vec<String>,
     },
@@ -592,16 +592,7 @@ pub fn run() -> Result<()> {
         Command::Safety { command } => match command {
             SafetyCommand::Show { slug } => {
                 let project = Project::load(&ctx.root, &slug)?;
-                let safety = project.safety(&ctx.config_dir)?;
-                println!("Effective safety settings for `{slug}`:");
-                println!("  start_threads = {:?}", safety.start_threads);
-                println!("  coordinator_agent_args = {:?}", safety.coordinator_agent_args);
-                println!("  thread_agent_args = {:?}", safety.thread_agent_args);
-                println!("  routine_commands = {}", safety.routine_commands);
-                println!();
-                println!("To change one, edit {} by hand and add:", ctx.config_dir.join("config.toml").display());
-                println!();
-                println!("[safety.{:?}]", project.canonical_dir().to_string_lossy());
+                print!("{}", crate::settings::safety_text(&ctx, &project)?);
                 Ok(())
             }
         },

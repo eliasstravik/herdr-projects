@@ -70,7 +70,7 @@ pub struct StartArgs {
     /// Placement (`--kind worktree|tab|checkout`); default worktree with a
     /// repo, tab without one.
     pub kind: Option<Kind>,
-    /// Extra agent CLI arguments (`--agent-arg`, repeatable), e.g. a model flag.
+    /// Extra agent CLI arguments (`--agent-arg`, repeatable): a model flag only.
     pub agent_args: Vec<String>,
     pub base: Option<String>,
     pub task: String,
@@ -141,6 +141,7 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
     if !crate::agents::is_kind(&agent_kind) {
         bail!("`{agent_kind}` is not a Herdr agent kind; `herdr agent start --help` lists them");
     }
+    crate::settings::require_model_args(ctx, &project, &agent_kind, &args.agent_args)?;
     let kind = placement(args.kind, !repo.is_empty(), !machine.is_empty())?;
     let record = thread::allocate(&project, |t| {
         t.title = args.title.trim().to_string();
@@ -409,10 +410,19 @@ fn lists_for(view: &SessionView, record: &Thread) -> Result<(Vec<Agent>, Vec<Pan
 /// or a new tab, with the same or another harness.
 pub fn restart(ctx: &Ctx, slug: &str, id: &str, agent: Option<&str>, agent_args: Option<Vec<String>>) -> Result<Thread> {
     let project = Project::load(&ctx.root, slug)?;
+    if let Some(kind) = agent
+        && !crate::agents::is_kind(kind)
+    {
+        bail!("`{kind}` is not a Herdr agent kind; `herdr agent start --help` lists them");
+    }
+    if let Some(args) = &agent_args {
+        let kind = match agent {
+            Some(kind) => kind.to_string(),
+            None => thread::load(&project, id)?.agent,
+        };
+        crate::settings::require_model_args(ctx, &project, &kind, args)?;
+    }
     if let Some(kind) = agent {
-        if !crate::agents::is_kind(kind) {
-            bail!("`{kind}` is not a Herdr agent kind; `herdr agent start --help` lists them");
-        }
         // Another harness: the old arguments (a model flag) no longer apply.
         thread::update(&project, id, |t| {
             if t.agent != kind {
