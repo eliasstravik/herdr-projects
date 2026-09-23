@@ -1,6 +1,6 @@
 id = "herdr-projects"
 name = "Projects"
-version = "0.2.1"
+version = "0.2.2"
 min_herdr_version = "0.9.1"
 description = "A coordinator conversation, parallel worker threads, shared memory and an overview of what needs you."
 platforms = ["macos", "linux"]
