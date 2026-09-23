@@ -116,13 +116,18 @@ pub struct Current {
 }
 
 pub fn current(env: &Env, runner: &dyn Runner) -> Option<Current> {
+    current_within(env, runner, CALL_TIMEOUT)
+}
+
+/// The hook uses a short timeout: a slow server must not stall every tool call.
+pub fn current_within(env: &Env, runner: &dyn Runner, timeout: std::time::Duration) -> Option<Current> {
     if env.var("HERDR_ENV") != Some("1") {
         return None;
     }
     env.var("HERDR_PANE_ID")?;
     let socket = env.var("HERDR_SOCKET_PATH")?.to_string();
     let herdr = Herdr::new(env.herdr_bin(), &socket, runner);
-    let result = herdr.call(&["pane", "current", "--current"], CALL_TIMEOUT).ok()?;
+    let result = herdr.call(&["pane", "current", "--current"], timeout).ok()?;
     let pane = &result["pane"];
     let pane_id = pane["pane_id"].as_str()?.to_string();
     Some(Current {
@@ -236,6 +241,11 @@ pub fn respond(record: &mut Record, kind: &str, prefix: &str, now: i64) -> Optio
         }
         "UserPromptSubmit" => {
             record.reminded_at = now;
+            // The user answered: an old "Waiting for you" no longer holds.
+            if record.activity == WAITING {
+                record.activity.clear();
+                record.reported_at = 0;
+            }
             Some(format!("Before task tools or a blocking question, check whether this request starts new work; if so report a fresh estimate. Then report before waiting for the user, for example `{prefix} report --unknown --activity 'Waiting for you'`."))
         }
         "PostToolUse" => {
@@ -279,7 +289,7 @@ pub fn hook(ctx: &Ctx, agent: &str) -> Result<()> {
     // At SessionStart Herdr may not have detected the agent yet: wait briefly.
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
     let pane = loop {
-        match current(ctx.env, ctx.runner) {
+        match current_within(ctx.env, ctx.runner, std::time::Duration::from_secs(2)) {
             Some(p) if kind != "SessionStart" || !p.agent.is_empty() => break p,
             Some(p) if std::time::Instant::now() >= deadline => break p,
             None if kind != "SessionStart" || std::time::Instant::now() >= deadline => return Ok(()),
@@ -374,6 +384,9 @@ mod tests {
         record.percent = Some(100);
         assert!(respond(&mut record, "PostToolUse", "hp", 9000).is_none());
         assert!(respond(&mut record, "UserPromptSubmit", "hp", 9001).unwrap().contains("Waiting for you"));
+        let mut asked = Record { activity: WAITING.into(), percent: Some(40), reported_at: 5, ..Record::default() };
+        respond(&mut asked, "UserPromptSubmit", "hp", 10);
+        assert!(!asked.waiting(), "an answer clears the old question");
         assert!(respond(&mut record, "Stop", "hp", 9002).is_none());
     }
 

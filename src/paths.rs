@@ -64,6 +64,13 @@ impl Env {
     }
 }
 
+/// This binary's own path with symbolic links resolved, so a path written into
+/// hooks, AGENTS.md or the tab bar survives `~/.local/bin` links changing.
+pub fn binary() -> Result<PathBuf> {
+    let exe = std::env::current_exe().context("could not find this binary's own path")?;
+    Ok(std::fs::canonicalize(&exe).unwrap_or(exe))
+}
+
 /// What every subcommand works from: the environment, the resolved root and
 /// config directory, and the runner all external commands go through.
 pub struct Ctx<'a> {

@@ -96,6 +96,8 @@ pub struct MachineMemory {
 pub struct Memory {
     pub started: jiff::Timestamp,
     pub gh: Outage,
+    /// The login `gh` acts as, asked once (`None` until known).
+    pub gh_login: Option<String>,
     pub outage_secs: i64,
     pub tick: u64,
     pub machines: BTreeMap<String, MachineMemory>,
@@ -106,6 +108,7 @@ impl Memory {
         Memory {
             started: jiff::Timestamp::now(),
             gh: Outage::default(),
+            gh_login: None,
             // Overridable so an outage can be exercised without waiting ten minutes.
             outage_secs: ctx.env.var("HERDR_PROJECTS_OUTAGE_SECS").and_then(|v| v.parse().ok()).unwrap_or(DEFAULT_OUTAGE_SECS),
             tick: 0,
@@ -256,7 +259,7 @@ pub fn nudge(project: &Project, state: &mut State, settings: &Settings, herdr: &
 /// Step 2, every two minutes.
 /// What happened to a pull request between two polls, in the words `pr`
 /// routines use: opened, checks-failed, review, merged.
-pub fn pr_events(old: Option<&pr::Summary>, new: &pr::Summary) -> Vec<&'static str> {
+pub fn pr_events(old: Option<&pr::Summary>, new: &pr::Summary, own_login: Option<&str>) -> Vec<&'static str> {
     let mut events = Vec::new();
     if old.is_none() && new.state == "OPEN" {
         events.push("opened");
@@ -264,9 +267,11 @@ pub fn pr_events(old: Option<&pr::Summary>, new: &pr::Summary) -> Vec<&'static s
     if !new.failing_checks.is_empty() && old.is_none_or(|o| o.failing_checks != new.failing_checks) {
         events.push("checks-failed");
     }
-    let old_comments = old.map_or(0, |o| o.comment_count);
+    // New comments or reviews by anyone but the account the threads use (a
+    // thread's own reply must not prompt it again).
+    let others_grew = new.activity.iter().any(|(login, n)| Some(login.as_str()) != own_login && *n > old.and_then(|o| o.activity.get(login)).copied().unwrap_or(0));
     let decision_changed = old.is_none_or(|o| o.review_decision != new.review_decision) && !new.review_decision.is_empty() && new.review_decision != "REVIEW_REQUIRED";
-    if new.comment_count > old_comments || decision_changed {
+    if others_grew || decision_changed {
         events.push("review");
     }
     if new.state == "MERGED" && old.is_none_or(|o| o.state != "MERGED") {
@@ -364,7 +369,10 @@ pub fn pull_requests(ctx: &Ctx, project: &Project, state: &mut State, memory: &m
                 }).err());
                 let change = pr::describe_change(old.as_ref(), &summary);
                 let merged = summary.state == "MERGED";
-                let events = pr_events(old.as_ref(), &summary);
+                if memory.gh_login.is_none() {
+                    memory.gh_login = pr::own_login(ctx.runner);
+                }
+                let events = pr_events(old.as_ref(), &summary, memory.gh_login.as_deref());
                 errors.extend(inbox::write(project, "pr", &t.id, &format!("{}: pull request {change}", thread_label(&t)), "").err());
                 let number = url.rsplit('/').next().unwrap_or("");
                 if merged {
@@ -537,17 +545,22 @@ mod tests {
 
     #[test]
     fn pr_events_follow_what_changed() {
+        let me = Some("me");
         let open = pr::Summary { state: "OPEN".into(), ..pr::Summary::default() };
-        assert_eq!(pr_events(None, &open), ["opened"]);
+        assert_eq!(pr_events(None, &open, me), ["opened"]);
         let failing = pr::Summary { failing_checks: vec!["lint".into()], ..open.clone() };
-        assert_eq!(pr_events(Some(&open), &failing), ["checks-failed"]);
-        assert!(pr_events(Some(&failing), &failing).is_empty(), "the same failure fires once");
-        let commented = pr::Summary { comment_count: 2, ..failing.clone() };
-        assert_eq!(pr_events(Some(&failing), &commented), ["review"]);
-        let changes = pr::Summary { review_decision: "CHANGES_REQUESTED".into(), ..commented.clone() };
-        assert_eq!(pr_events(Some(&commented), &changes), ["review"]);
+        assert_eq!(pr_events(Some(&open), &failing, me), ["checks-failed"]);
+        assert!(pr_events(Some(&failing), &failing, me).is_empty(), "the same failure fires once");
+        let reviewed = pr::Summary { activity: [("alice".to_string(), 1)].into(), comment_count: 0, ..failing.clone() };
+        assert_eq!(pr_events(Some(&failing), &reviewed, me), ["review"], "an inline review counts");
+        let replied = pr::Summary { activity: [("alice".to_string(), 1), ("me".to_string(), 3)].into(), comment_count: 3, ..reviewed.clone() };
+        assert!(pr_events(Some(&reviewed), &replied, me).is_empty(), "the thread's own replies do not prompt it again");
+        let again = pr::Summary { activity: [("alice".to_string(), 2), ("me".to_string(), 3)].into(), ..replied.clone() };
+        assert_eq!(pr_events(Some(&replied), &again, me), ["review"]);
+        let changes = pr::Summary { review_decision: "CHANGES_REQUESTED".into(), ..again.clone() };
+        assert_eq!(pr_events(Some(&again), &changes, me), ["review"]);
         let merged = pr::Summary { state: "MERGED".into(), ..changes.clone() };
-        assert_eq!(pr_events(Some(&changes), &merged), ["merged"]);
+        assert_eq!(pr_events(Some(&changes), &merged, me), ["merged"]);
         let prompt = pr_routine_prompt("pr-followup", "Fix it.", "https://github.com/o/r/pull/4", &["checks-failed"], &failing);
         assert_eq!(prompt, "[hp routine pr-followup] Your pull request https://github.com/o/r/pull/4 changed: 1 check(s) fail (`gh pr checks https://github.com/o/r/pull/4`).\n\nFix it.");
         assert!(!prompt.contains("lint"), "check names are GitHub text and never reach a prompt");

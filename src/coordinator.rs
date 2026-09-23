@@ -32,7 +32,7 @@ pub fn command_prefix(binary: &Path, root: &Path) -> String {
 }
 
 pub fn current_prefix(root: &Path) -> Result<String> {
-    let binary = std::env::current_exe().context("could not find this binary's own path")?;
+    let binary = crate::paths::binary()?;
     Ok(command_prefix(&binary, root))
 }
 

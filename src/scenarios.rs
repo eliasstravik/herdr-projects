@@ -396,6 +396,10 @@ fn resolving_a_merged_thread_removes_worktree_and_branch_and_an_unmerged_one_kee
         *world.panes.borrow_mut() = format!("[{}]", pane_json("w2", "w2:t1", "w2:p1", &cwd));
         world.runner.on("worktree remove", ok(r#"{"result":{}}"#));
         world.runner.on("branch -D", ok(""));
+        world.runner.on("rev-parse --verify --quiet refs/heads/hp/demo/t-0001-task", ok("abc123\n"));
+        let mut state = crate::steps::load_state(&project);
+        state.prs.insert("t-0001".into(), crate::pr::Summary { state: "MERGED".into(), head_oid: "abc123".into(), ..Default::default() });
+        crate::steps::save_state(&project, &state).unwrap();
         threads::resolve(&world.ctx(), "demo", "t-0001", &ResolveArgs::default()).unwrap();
         assert_eq!(world.runner.count("worktree remove --workspace w2"), 1, "merged={merged}");
         assert_eq!(world.runner.count("branch -D hp/demo/t-0001-task"), usize::from(merged));
@@ -408,6 +412,30 @@ fn resolving_a_merged_thread_removes_worktree_and_branch_and_an_unmerged_one_kee
         }
         assert!(thread::record_path(&project, "t-0001").is_file());
     }
+}
+
+#[test]
+fn a_merged_branch_with_a_later_local_commit_is_kept() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    world.thread(&project, world.home.path(), |t| {
+        t.branch = "hp/demo/t-0001-task".into();
+        t.pr_state = "MERGED".into();
+    });
+    let cwd = world.home.path().to_string_lossy().into_owned();
+    *world.panes.borrow_mut() = format!("[{},{}]", pane_json("w2", "w2:t1", "w2:p1", &cwd), pane_json("w9", "w9:t1", "w9:p1", &cwd));
+    world.runner.on("worktree remove", ok(r#"{"result":{}}"#));
+    world.runner.on("rev-parse --verify --quiet refs/heads/", ok("local-only-commit\n"));
+    let mut state = crate::steps::load_state(&project);
+    state.prs.insert("t-0001".into(), crate::pr::Summary { state: "MERGED".into(), head_oid: "merged-head".into(), ..Default::default() });
+    crate::steps::save_state(&project, &state).unwrap();
+    threads::resolve(&world.ctx(), "demo", "t-0001", &ResolveArgs::default()).unwrap();
+    assert_eq!(world.runner.count("branch -D"), 0);
+    // Only the thread's own workspace (w2), not another pane in the same folder.
+    assert_eq!(world.runner.count("worktree remove --workspace w2"), 1);
+    assert_eq!(world.runner.count("--workspace w9"), 0);
+    let item = inbox::unhandled(&project).into_iter().find(|i| i.kind == "thread-state").unwrap();
+    assert!(item.summary.contains("commits that are not in the merged pull request"), "{}", item.summary);
 }
 
 #[test]
@@ -684,7 +712,7 @@ fn a_comment_gives_an_item_with_no_body_and_an_unchanged_summary_gives_nothing()
     crate::steps::save_state(&project, &state).unwrap();
     ticker::tick_project(&ctx, &project).unwrap();
     assert_eq!(items_of(&project, "pr").len(), 1);
-    let gh_calls = world.runner.calls.borrow().iter().filter(|c| c.program == "gh").count();
+    let gh_calls = world.runner.calls.borrow().iter().filter(|c| c.program == "gh" && c.args.first().is_some_and(|a| a == "pr")).count();
     assert_eq!(gh_calls, 2);
     // The default pr-followup routine prompted the thread once, with facts the
     // binary generated and nothing written on GitHub.
@@ -1253,4 +1281,24 @@ fn a_tab_thread_gets_a_brief_with_the_project_header_and_prompts_are_recorded() 
     let json = threads::row_json(&project, &threads::rows(&ctx, &project)[0]);
     assert_eq!(json["next"], serde_json::json!(["Open the PR", "Clean up the branch"]));
     assert_eq!(json["kind"], "tab");
+}
+
+#[test]
+fn sweep_leaves_kept_worktrees_and_copies_a_resolved_threads_files_first() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let kept = world.thread(&project, world.home.path(), |t| {
+        t.status = Status::Resolved;
+        t.branch = "hp/demo/t-0001-kept".into();
+        t.worktree_path = "/wt/kept".into();
+        t.kept_worktree = true;
+    });
+    let _ = kept;
+    let text = std::fs::read_to_string(project.project_md()).unwrap();
+    std::fs::write(project.project_md(), text.replacen("repos = []", "[[repos]]\npath = \"/repo\"", 1)).unwrap();
+    world.runner.on("worktree list --porcelain", ok("worktree /repo\nbranch refs/heads/main\n\nworktree /wt/kept\nbranch refs/heads/hp/demo/t-0001-kept\n\nworktree /wt/stray\nbranch refs/heads/hp/demo/t-0042-stray\n"));
+    world.runner.on("for-each-ref", ok(""));
+    let orphans = crate::sweep::find(&world.ctx(), &project);
+    assert_eq!(orphans.len(), 1, "{orphans:?}");
+    assert!(matches!(&orphans[0], crate::sweep::Orphan::Worktree { path, thread: None, .. } if path == "/wt/stray"));
 }

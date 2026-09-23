@@ -82,6 +82,11 @@ pub struct Summary {
     pub failing_checks: Vec<String>,
     pub comment_count: usize,
     pub commenters: Vec<String>,
+    /// Comments and reviews (inline ones included) per author login.
+    pub activity: std::collections::BTreeMap<String, usize>,
+    /// The pull request's head commit, so a merged branch is deleted only
+    /// when the local tip is what was merged.
+    pub head_oid: String,
 }
 
 #[derive(Debug, PartialEq)]
@@ -98,7 +103,9 @@ struct GhView {
     review_decision: String,
     status_check_rollup: Vec<GhCheck>,
     comments: Vec<GhComment>,
+    reviews: Vec<GhComment>,
     head_ref_name: String,
+    head_ref_oid: String,
     head_repository: Option<GhRepo>,
     head_repository_owner: Option<GhOwner>,
 }
@@ -173,6 +180,13 @@ pub fn reduce(json: &str, branch: &str, origin: &str) -> Result<Checked> {
         .collect();
     commenters.sort();
     commenters.dedup();
+    let mut activity = std::collections::BTreeMap::new();
+    for author in view.comments.iter().chain(view.reviews.iter()).filter_map(|c| c.author.as_ref()) {
+        let login = sanitize(&author.login);
+        if !login.is_empty() {
+            *activity.entry(login).or_insert(0) += 1;
+        }
+    }
 
     Ok(Checked::Summary(Summary {
         state: sanitize(&view.state).to_ascii_uppercase(),
@@ -180,7 +194,15 @@ pub fn reduce(json: &str, branch: &str, origin: &str) -> Result<Checked> {
         failing_checks: failing,
         comment_count: view.comments.len(),
         commenters,
+        activity,
+        head_oid: sanitize(&view.head_ref_oid),
     }))
+}
+
+/// The login `gh` acts as: comments by it are the threads' own replies.
+pub fn own_login(runner: &dyn Runner) -> Option<String> {
+    let out = runner.run(&Cmd::new("gh", GH_TIMEOUT).args(["api", "user", "--jq", ".login"])).ok()?;
+    out.success().then(|| sanitize(out.stdout.trim())).filter(|l| !l.is_empty())
 }
 
 pub fn view(runner: &dyn Runner, url: &str) -> Result<String> {
@@ -191,7 +213,7 @@ pub fn view(runner: &dyn Runner, url: &str) -> Result<String> {
         "pr",
         "view",
         "--json",
-        "state,reviewDecision,statusCheckRollup,comments,headRefName,headRepository,headRepositoryOwner",
+        "state,reviewDecision,statusCheckRollup,comments,reviews,headRefName,headRefOid,headRepository,headRepositoryOwner",
         "--",
         url,
     ]))?;
