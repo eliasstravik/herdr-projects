@@ -249,6 +249,12 @@ enum Command {
         #[arg(long, value_name = "ID")]
         pane: Option<String>,
     },
+    /// Update the plugin to the newest release: fetch, rebuild, `doctor --fix`, restart the ticker
+    Update {
+        /// Print the installed and the newest version and change nothing
+        #[arg(long)]
+        check: bool,
+    },
     /// The background ticker
     Ticker {
         #[command(subcommand)]
@@ -649,6 +655,7 @@ pub fn run() -> Result<()> {
             Ok(())
         }
         Command::Progress { pane } => crate::progress::print(&ctx, pane.as_deref()),
+        Command::Update { check } => crate::update::run(&ctx, check),
         Command::Ticker { command } => match command {
             TickerCommand::Start => ticker::start(&ctx),
             TickerCommand::Run => ticker::run(&ctx),
