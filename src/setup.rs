@@ -171,8 +171,11 @@ pub fn hooks(input: &str, command: &str, remove: bool) -> Result<String> {
 
 /// The hook command for a harness: the absolute binary path and the root,
 /// because hooks run outside the plugin environment.
+/// It always exits 0 and never writes to standard error: harnesses treat a
+/// failing UserPromptSubmit hook (exit 2) as "block this prompt", in every
+/// session on the machine, so a missing or older binary must not do that.
 pub fn hook_command(binary: &Path, root: &Path, agent: &str) -> String {
-    format!("{} --root {} hook --agent {agent}", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
+    format!("{} --root {} hook --agent {agent} 2>/dev/null || true", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
 }
 
 /// Where each harness keeps its hooks.
@@ -215,7 +218,7 @@ pub fn has_agent_progress_hooks(text: &str) -> bool {
 /// Installs the hooks. Every edit is journaled before it is made, so a killed
 /// run never leaves hooks `unconfigure` cannot identify as its own.
 pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
-    let binary = std::env::current_exe().context("could not find this binary's own path")?;
+    let binary = crate::paths::binary()?;
     let clients: Vec<String> = if options.clients.is_empty() {
         ["claude", "codex"]
             .into_iter()
@@ -375,7 +378,15 @@ pub fn apply_view(ctx: &Ctx) {
 mod tests {
     use super::*;
 
-    const CMD: &str = "'/p/herdr-projects' --root /r hook --agent claude";
+    const CMD: &str = "'/p/herdr-projects' --root /r hook --agent claude 2>/dev/null || true";
+
+    #[test]
+    fn the_hook_command_never_fails_even_with_a_missing_binary() {
+        let command = hook_command(Path::new("/no/such/herdr-projects"), Path::new("/r"), "claude");
+        let out = std::process::Command::new("/bin/sh").args(["-c", &command]).output().unwrap();
+        assert!(out.status.success());
+        assert!(out.stdout.is_empty() && out.stderr.is_empty());
+    }
 
     #[test]
     fn existing_hooks_comments_and_user_edits_survive() {

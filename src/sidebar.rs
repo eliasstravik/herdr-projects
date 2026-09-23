@@ -375,11 +375,16 @@ pub fn builtin_keys(default_config: &str) -> Vec<(String, String)> {
         let Some(rest) = trimmed.strip_prefix('#') else {
             continue;
         };
+        // The commented `[[keys.command]]` example is not a binding.
+        if rest.trim_start().starts_with("[[") {
+            inside = false;
+            continue;
+        }
         let Some((action, value)) = rest.split_once('=') else {
             continue;
         };
         let action = action.trim();
-        if action.is_empty() || action.contains(' ') {
+        if action.is_empty() || action.contains(' ') || matches!(action, "key" | "type" | "command" | "description" | "width" | "height") {
             continue;
         }
         let value = value.trim();
@@ -490,7 +495,7 @@ mod tests {
 
     #[test]
     fn keys_are_checked_against_the_users_and_herdrs_bindings() {
-        let defaults = "[ui]\n# x = 1\n[keys]\n# prefix = \"ctrl+b\"\n# previous_tab = \"prefix+p\"\n# rename_pane = \"prefix+shift+p\"\n# open_worktree = \"\"    # optional\n[other]\n# nope = \"prefix+a\"\n";
+        let defaults = "[ui]\n# x = 1\n[keys]\n# prefix = \"ctrl+b\"\n# previous_tab = \"prefix+p\"\n# rename_pane = \"prefix+shift+p\"\n# open_worktree = \"\"    # optional\n# [[keys.command]]\n# key = \"prefix+alt+g\"\n# command = \"lazygit\"\n[other]\n# nope = \"prefix+a\"\n";
         let builtin = builtin_keys(defaults);
         assert_eq!(builtin, [("prefix".to_string(), "ctrl+b".to_string()), ("previous_tab".into(), "prefix+p".into()), ("rename_pane".into(), "prefix+shift+p".into())]);
         assert!(key_conflict("", "prefix+a", &builtin).is_none());

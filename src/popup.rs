@@ -376,7 +376,7 @@ enum Mode {
     List,
     /// A scrollable text; `files` are selectable lines that open with ↵.
     Detail { title: String, lines: Vec<String>, files: Vec<PathBuf>, selected: usize, scroll: usize },
-    Confirm { question: String, action: Vec<String> },
+    Confirm { question: String, action: Vec<String>, lines: Vec<String> },
     Edit { label: String, buffer: String, action: Vec<String> },
     Pick { label: String, options: Vec<String>, selected: usize, action: Vec<String> },
 }
@@ -491,7 +491,7 @@ impl<'a> Popup<'a> {
                 }
                 _ => Mode::Detail { title, lines, files, selected, scroll },
             },
-            Mode::Confirm { question, action } => match key.code {
+            Mode::Confirm { question, action, lines } => match key.code {
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
                     self.run(&action, None);
                     Mode::List
@@ -500,7 +500,7 @@ impl<'a> Popup<'a> {
                     self.message = "cancelled".into();
                     Mode::List
                 }
-                _ => Mode::Confirm { question, action },
+                _ => Mode::Confirm { question, action, lines },
             },
             Mode::Edit { label, mut buffer, action } => match key.code {
                 KeyCode::Esc => {
@@ -625,7 +625,7 @@ impl<'a> Popup<'a> {
             if lines.iter().any(|l| l.starts_with("nothing to clean")) || lines.is_empty() {
                 self.message = format!("{slug}: nothing to clean");
             } else {
-                self.mode = Mode::Confirm { question: format!("{}  Clean all of this? y/N", lines.join(" | ")), action: vec!["sweep".into(), slug, "--yes".into()] };
+                self.mode = Mode::Confirm { question: format!("Remove all {} item(s) listed above from {slug}? y/N", lines.len()), action: vec!["sweep".into(), slug, "--yes".into()], lines };
             }
             return;
         }
@@ -665,7 +665,7 @@ impl<'a> Popup<'a> {
                 self.mode = Self::kind_picker(&format!("Restart {} with", t.id), &t.agent, action);
             }
             KeyCode::Char('x') => {
-                self.mode = Mode::Confirm { question: format!("Resolve {} \"{}\" and clean up its worktree, panes and merged branch? y/N", t.id, t.title), action: Self::thread_args(&row, "resolve") };
+                self.mode = Mode::Confirm { question: format!("Resolve {} \"{}\" and clean up its worktree, panes and merged branch? y/N", t.id, t.title), action: Self::thread_args(&row, "resolve"), lines: Vec::new() };
             }
             KeyCode::Char('o') => {
                 if t.pr.is_empty() {
@@ -790,10 +790,10 @@ impl<'a> Popup<'a> {
                 self.run(&[verb.into(), slug.to_string()], None);
             }
             KeyCode::Char('A') => {
-                self.mode = Mode::Confirm { question: format!("Archive {slug}? Its workspace closes and it is hidden; the folder stays. y/N"), action: vec!["archive".into(), slug.to_string()] };
+                self.mode = Mode::Confirm { question: format!("Archive {slug}? Its workspace closes and it is hidden; the folder stays. y/N"), action: vec!["archive".into(), slug.to_string()], lines: Vec::new() };
             }
             KeyCode::Char('X') => {
-                self.mode = Mode::Confirm { question: format!("Delete {slug}? Its folder moves to the trash. y/N"), action: vec!["delete".into(), slug.to_string(), "--force".into()] };
+                self.mode = Mode::Confirm { question: format!("Delete {slug}? Its folder moves to the trash. y/N"), action: vec!["delete".into(), slug.to_string(), "--force".into()], lines: Vec::new() };
             }
             _ => {}
         }
@@ -847,6 +847,15 @@ impl<'a> Popup<'a> {
                     } else {
                         queue!(out, Print(fit(line, width)))?;
                     }
+                }
+            }
+            Mode::Confirm { lines, .. } if !lines.is_empty() => {
+                queue!(out, cursor::MoveTo(0, body_top as u16), SetAttribute(Attribute::Bold), Print(fit(" This would remove:", width)), SetAttribute(Attribute::Reset))?;
+                for (i, line) in lines.iter().take(body_height.saturating_sub(2)).enumerate() {
+                    queue!(out, cursor::MoveTo(0, (body_top + 1 + i) as u16), Print(fit(&format!("  {line}"), width)))?;
+                }
+                if lines.len() > body_height.saturating_sub(2) {
+                    queue!(out, cursor::MoveTo(0, (body_top + body_height - 1) as u16), Print(fit(&format!("  … and {} more (run `sweep --dry-run` to see all)", lines.len() - body_height + 2), width)))?;
                 }
             }
             Mode::Pick { label, options, selected, .. } => {
@@ -968,7 +977,8 @@ pub fn run_hp(ctx: &Ctx, args: &[String], stdin: Option<&str>) -> (bool, String)
     let Ok(binary) = std::env::current_exe() else {
         return (false, "could not find this binary".into());
     };
-    let mut cmd = crate::runner::Cmd::new(binary.to_string_lossy(), Duration::from_secs(60)).arg("--root").arg(ctx.root.to_string_lossy()).args(args.iter().cloned());
+    // Sweep and resolve may remove many worktrees; allow them time.
+    let mut cmd = crate::runner::Cmd::new(binary.to_string_lossy(), Duration::from_secs(600)).arg("--root").arg(ctx.root.to_string_lossy()).args(args.iter().cloned());
     if let Some(text) = stdin {
         cmd = cmd.stdin(text);
     }
@@ -1069,7 +1079,7 @@ mod tests {
     #[test]
     fn pr_facts_read_like_the_plan() {
         let t = Thread { pr: "https://github.com/o/r/pull/4".into(), ..Thread::default() };
-        let s = crate::pr::Summary { state: "OPEN".into(), review_decision: "APPROVED".into(), failing_checks: vec![], comment_count: 2, commenters: vec![] };
+        let s = crate::pr::Summary { state: "OPEN".into(), review_decision: "APPROVED".into(), failing_checks: vec![], comment_count: 2, commenters: vec![], ..Default::default() };
         assert_eq!(pr_facts(&t, Some(&s)), "PR #4 · approved · checks ✓ · 2 comments");
         let failing = crate::pr::Summary { failing_checks: vec!["lint".into()], comment_count: 1, review_decision: String::new(), ..s };
         assert_eq!(pr_facts(&t, Some(&failing)), "PR #4 · checks ✗ 1 · 1 comment");

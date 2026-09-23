@@ -5,7 +5,7 @@
 //! days. `--dry-run` lists; otherwise each is removed after a confirmation.
 //! Remote machines are left to `thread resolve`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{Result, bail};
@@ -13,12 +13,14 @@ use anyhow::{Result, bail};
 use crate::paths::Ctx;
 use crate::project::Project;
 use crate::runner::Cmd;
-use crate::thread::{self, Kind, Status};
+use crate::thread::{self, Kind, Status, Thread};
 use crate::threads;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Orphan {
-    Worktree { repo: String, path: String, workspace: Option<String>, branch: String },
+    /// `thread` is the resolved thread that still owns it, if any: its files
+    /// are copied home again, completely, before the worktree may go.
+    Worktree { repo: String, path: String, workspace: Option<String>, branch: String, thread: Option<String> },
     Branch { repo: String, branch: String },
     Tab { id: String, tab: String },
     Folder { id: String, path: PathBuf },
@@ -86,15 +88,25 @@ pub fn find(ctx: &Ctx, project: &Project) -> Vec<Orphan> {
             if open(&branch, &path) {
                 continue;
             }
-            let workspace = view.as_ref().and_then(|v| v.panes.iter().find(|p| Path::new(&p.cwd).starts_with(&path)).map(|p| p.workspace_id.clone()));
-            orphans.push(Orphan::Worktree { repo: repo.clone(), path, workspace, branch });
+            let owner = threads.iter().find(|t| t.branch == branch || t.worktree_path == path);
+            if owner.is_some_and(|t| t.kept_worktree) {
+                continue; // resolved with --keep-worktree
+            }
+            // A workspace whose root is this worktree (herdr opens it there).
+            let workspace = view.as_ref().and_then(|v| v.panes.iter().find(|p| p.cwd == path).map(|p| p.workspace_id.clone()));
+            orphans.push(Orphan::Worktree { repo: repo.clone(), path, workspace, branch, thread: owner.map(|t| t.id.clone()) });
         }
         let branches = git(ctx, repo, &["for-each-ref", "--format=%(refname:short)", &format!("refs/heads/{prefix}")]).unwrap_or_default();
         for branch in branches.lines().map(str::trim).filter(|b| !b.is_empty()) {
             if with_worktree.iter().any(|b| b == branch) {
                 continue;
             }
-            let merged = threads.iter().any(|t| t.branch == branch && t.status == Status::Resolved && t.pr_state.eq_ignore_ascii_case("merged"));
+            let state = crate::steps::load_state(project);
+            let merged = threads.iter().any(|t| {
+                t.branch == branch && t.status == Status::Resolved && t.pr_state.eq_ignore_ascii_case("merged")
+                    // Only when the local tip is what was merged.
+                    && state.prs.get(&t.id).is_some_and(|s| !s.head_oid.is_empty() && git(ctx, repo, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{branch}")]).is_some_and(|tip| tip.trim() == s.head_oid))
+            });
             if merged {
                 orphans.push(Orphan::Branch { repo: repo.clone(), branch: branch.to_string() });
             }
@@ -127,7 +139,14 @@ pub fn find(ctx: &Ctx, project: &Project) -> Vec<Orphan> {
 
 fn remove(ctx: &Ctx, project: &Project, orphan: &Orphan) -> Result<()> {
     match orphan {
-        Orphan::Worktree { repo, path, workspace, .. } => {
+        Orphan::Worktree { repo, path, workspace, thread: owner, .. } => {
+            if let Some(id) = owner {
+                let t = thread::load(project, id)?;
+                let copied = threads::final_copy(ctx, project, &Thread { thread_dir: t.thread_dir.clone(), ..t });
+                if copied.outcome != thread::CopyOutcome::Complete {
+                    bail!("not everything in it could be copied home first");
+                }
+            }
             if let (Some(workspace), Some(view)) = (workspace, threads::session_view(ctx, project)) {
                 return view.herdr.worktree_remove(workspace).map_err(|e| anyhow::anyhow!("{e}"));
             }

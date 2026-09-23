@@ -474,7 +474,17 @@ pub fn write_priming(project: &Project, prefix: &str) -> Result<()> {
     let dir = project.dir();
     let (settings, _) = project.read_project_md()?;
     let name = display_name(&settings.name, &project.slug);
-    write_atomic(&dir.join("AGENTS.md"), agents_md(&name, &project.slug, prefix).as_bytes())?;
+    let agents = dir.join("AGENTS.md");
+    if let Ok(existing) = std::fs::read_to_string(&agents)
+        && !existing.contains("Written by herdr-projects")
+    {
+        // Someone else's AGENTS.md: keep its text beside ours, once.
+        let kept = dir.join("AGENTS.md.before-herdr-projects");
+        if !kept.exists() {
+            std::fs::rename(&agents, &kept)?;
+        }
+    }
+    write_atomic(&agents, agents_md(&name, &project.slug, prefix).as_bytes())?;
     let claude = dir.join("CLAUDE.md");
     let link_ok = std::fs::read_link(&claude).is_ok_and(|target| target == Path::new("AGENTS.md"));
     if !link_ok {
@@ -706,6 +716,10 @@ mod tests {
         write_priming(&project, &prefix).unwrap();
         assert!(priming_problems(&project, &prefix).is_empty());
 
+        // A foreign AGENTS.md is kept beside ours.
+        std::fs::write(project.dir().join("AGENTS.md"), "codex notes").unwrap();
+        write_priming(&project, &prefix).unwrap();
+        assert_eq!(std::fs::read_to_string(project.dir().join("AGENTS.md.before-herdr-projects")).unwrap(), "codex notes");
         // A hand-written CLAUDE.md is kept beside the link, not lost.
         std::fs::remove_file(project.dir().join("CLAUDE.md")).unwrap();
         std::fs::write(project.dir().join("CLAUDE.md"), "mine").unwrap();

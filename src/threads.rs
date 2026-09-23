@@ -637,6 +637,7 @@ pub fn clean(ctx: &Ctx, project: &Project, t: &Thread, options: &Clean) -> Vec<S
             if t.worktree_path.is_empty() {
                 notes.push("no worktree was recorded".into());
             } else if options.keep_worktree {
+                let _ = thread::update(project, &t.id, |t| t.kept_worktree = true);
                 notes.push(format!("worktree kept at {} (asked to keep it)", t.worktree_path));
             } else if !options.copy_complete {
                 notes.push(format!("worktree kept at {}: not everything in it was copied home (`--discard-uncopied` removes it anyway)", t.worktree_path));
@@ -652,7 +653,7 @@ pub fn clean(ctx: &Ctx, project: &Project, t: &Thread, options: &Clean) -> Vec<S
             }
             if !t.branch.is_empty() {
                 if merged && removed {
-                    match delete_branch(ctx, t) {
+                    match delete_branch(ctx, project, t) {
                         Ok(()) => notes.push(format!("branch {} deleted (its pull request is merged)", t.branch)),
                         Err(error) => notes.push(format!("branch {} kept: {error:#}", t.branch)),
                     }
@@ -665,7 +666,9 @@ pub fn clean(ctx: &Ctx, project: &Project, t: &Thread, options: &Clean) -> Vec<S
         }
         Kind::Tab | Kind::Checkout => match &view {
             Some(view) if !t.pane_id.is_empty() && thread::live_state(t, &view.agents, &view.panes, jiff::Timestamp::now()).pane_exists => {
-                match view.herdr.call(&["tab", "close", &t.tab_id], crate::herdr::CALL_TIMEOUT) {
+                // The live pane's tab, not the recorded one: ids move after a restart.
+                let tab = view.panes.iter().find(|p| thread::pane_matches(t, p)).map(|p| p.tab_id.clone()).or_else(|| view.agents.iter().find(|a| thread::agent_matches(t, a)).map(|a| a.tab_id.clone())).unwrap_or_else(|| t.tab_id.clone());
+                match view.herdr.call(&["tab", "close", &tab], crate::herdr::CALL_TIMEOUT) {
                     Ok(_) => notes.push("its tab was closed".into()),
                     Err(error) => notes.push(format!("its tab could not be closed ({error})")),
                 }
@@ -680,7 +683,23 @@ pub fn clean(ctx: &Ctx, project: &Project, t: &Thread, options: &Clean) -> Vec<S
     notes
 }
 
-fn delete_branch(ctx: &Ctx, t: &Thread) -> Result<()> {
+/// Deletes the local branch only when its tip is the pull request's merged
+/// head: a commit made after the merge and never pushed keeps the branch.
+fn delete_branch(ctx: &Ctx, project: &Project, t: &Thread) -> Result<()> {
+    let head = crate::steps::load_state(project).prs.get(&t.id).map(|s| s.head_oid.clone()).unwrap_or_default();
+    if head.is_empty() {
+        bail!("the merged pull request's head commit is not known");
+    }
+    let tip = if t.is_remote() {
+        let target = remote::ssh_target(ctx.runner, &ctx.env.herdr_bin(), &ctx.config_dir, &t.machine)?;
+        let script = format!("cd {} && git rev-parse --verify --quiet {}", remote::quote(&t.repo), remote::quote(&format!("refs/heads/{}", t.branch)));
+        remote::ssh(ctx.runner, &target, &script, None, Duration::from_secs(20))?.stdout.trim().to_string()
+    } else {
+        git(ctx.runner, &t.repo, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{}", t.branch)], GIT_TIMEOUT).unwrap_or_default()
+    };
+    if tip != head {
+        bail!("it has commits that are not in the merged pull request");
+    }
     if t.is_remote() {
         let target = remote::ssh_target(ctx.runner, &ctx.env.herdr_bin(), &ctx.config_dir, &t.machine)?;
         let script = format!("cd {} && git branch -D {}", remote::quote(&t.repo), remote::quote(&t.branch));
@@ -726,7 +745,9 @@ pub fn remove_worktree(ctx: &Ctx, project: &Project, record: &Thread, view: Opti
     let _ = project;
     if let Some(view) = view {
         let (_, panes) = lists_for(view, record)?;
-        let open = panes.iter().find(|p| Path::new(&p.cwd).starts_with(&record.worktree_path)).map(|p| p.workspace_id.clone());
+        // Only the thread's own workspace: a pane elsewhere that happens to
+        // have `cd`'d into this worktree must not get its workspace removed.
+        let open = panes.iter().find(|p| p.workspace_id == record.workspace_id && Path::new(&p.cwd).starts_with(&record.worktree_path)).map(|p| p.workspace_id.clone());
         if let Some(workspace) = open {
             return view.herdr.on_machine(&record.machine).worktree_remove(&workspace).map_err(|error| anyhow::anyhow!("{error}"));
         }

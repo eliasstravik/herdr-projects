@@ -241,7 +241,7 @@ fn report(
             check(&mut out, None, &label, format!("{} still runs the standalone agent-progress hooks; run `{launcher} unconfigure`, then `herdr plugin disable agent-progress`", file.display()));
         }
         let key = file.to_string_lossy().into_owned();
-        let binary = std::env::current_exe().unwrap_or_default();
+        let binary = crate::paths::binary().unwrap_or_default();
         let expected = crate::setup::hook_command(&binary, root, agent);
         match journal.get(&key) {
             None => check(&mut out, None, &label, "not configured; `configure` installs the progress hooks".into()),
@@ -261,7 +261,7 @@ fn report(
     // Herdr's config.toml: rows, popup key and a tab-bar entry that runs this binary.
     {
         let file = crate::setup::herdr_config_path(env);
-        let binary = std::env::current_exe().unwrap_or_default();
+        let binary = crate::paths::binary().unwrap_or_default();
         let expected = crate::setup::tab_command(&binary, root);
         let text = crate::setup::read(&file).ok().flatten().unwrap_or_default();
         let key = file.to_string_lossy().into_owned();

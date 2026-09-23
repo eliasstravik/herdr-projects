@@ -120,7 +120,7 @@ unsafe extern "C" {
 /// with the process group of whatever started it (an agent's shell tool).
 fn spawn(root: &Path) -> Result<()> {
     use std::os::unix::process::CommandExt;
-    let binary = std::env::current_exe().context("could not find this binary's own path")?;
+    let binary = crate::paths::binary()?;
     let mut command = Command::new(binary);
     command
         .arg("--root")

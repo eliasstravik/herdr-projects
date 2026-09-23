@@ -94,6 +94,8 @@ pub struct Thread {
     pub resolved_reason: String,
     /// The sidebar's line 3 as the ticker last computed it (`needs you · ~55%`).
     pub state_line: String,
+    /// Resolved with `--keep-worktree`: `sweep` leaves the worktree alone.
+    pub kept_worktree: bool,
     /// The agent's own last activity and percent (local threads).
     pub activity: String,
     pub percent: Option<u8>,
@@ -549,7 +551,9 @@ pub fn group(thread: &Thread, live: &Live, now: jiff::Timestamp) -> Group {
     let stuck_launch = thread.prompt_pending
         && state.is_some_and(|s| !ready_state(s))
         && live.state_secs >= NOT_READY_SECS;
-    if thread.status == Status::Failed || !live.pane_exists || stuck_launch {
+    // A pane closed after the thread wrote its report is finished work, not
+    // a thread that needs the user.
+    if thread.status == Status::Failed || (!live.pane_exists && !has_report) || stuck_launch {
         return Group::WaitingOnYou;
     }
     // 4: the harness shows a question or permission prompt, or the agent
@@ -963,10 +967,13 @@ mod tests {
     }
 
     #[test]
-    fn a_dead_pane_needs_you_even_with_a_report() {
+    fn a_closed_pane_needs_you_only_without_a_report() {
         let gone = Live { pane_exists: false, ..Live::default() };
         let t = Thread { report_hash: "h".into(), ..open_thread() };
-        assert_eq!(group(&t, &gone, now()), Group::WaitingOnYou);
+        assert_eq!(group(&t, &gone, now()), Group::ReadyForReview);
+        let acked = Thread { acked_report_hash: "h".into(), ..t };
+        assert_eq!(group(&acked, &gone, now()), Group::Idle);
+        assert_eq!(group(&open_thread(), &gone, now()), Group::WaitingOnYou);
     }
 
     fn reported(activity: &str, percent: Option<u8>, age: i64, state: &str) -> Live {
