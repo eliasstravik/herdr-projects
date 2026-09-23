@@ -152,3 +152,15 @@ Also learned:
 - **The globally linked plugin runs its `[[startup]]` in every session**, scratch ones included: after restarting a scratch server, the main checkout's ticker replaced the development ticker until it was restarted.
 - **Claude Code's `--settings <file>`** loads extra hooks, which is how the progress hooks were tested without touching `~/.claude/settings.json`.
 - **Codex hangs without a terminal** on this Mac (`codex --version` included), so Codex coordinators and threads were started but not exercised.
+
+## `update` (2026-09-23, herdr 0.9.1)
+
+Checked against a throwaway Herdr server with its own `HOME`, never the default session.
+
+- **Re-running `herdr plugin install OWNER/REPO` on an installed plugin updates it in place.** The preview ends with `replaces: herdr-projects from github:…@<old ref>`. Herdr clones into `plugins/.tmp-install-*/checkout`, runs the build there and swaps it in only when the build passes: the plugin root (`plugins/github/<repo>-<hash>/`) keeps its path, so `~/.local/bin` links, hooks and `AGENTS.md` paths stay valid. No uninstall is needed.
+- **A failed build leaves the old install as it was**: `Plugin was not installed.`, exit code 1. A missing `--ref` fails the same way, before anything is touched.
+- The build runs in the CLI process, with the caller's environment (`CARGO_HOME` and the like). `plugin install`, `plugin list` and `plugin uninstall` go to the server named by `HERDR_SOCKET_PATH`.
+- `plugin list --plugin ID --json` names the install type: `source.kind` is `github` (with `owner`, `repo`, `requested_ref`, `resolved_commit`, `managed_path`) or `local`, and `plugin_root` is the folder. The managed clone is a git checkout, detached at the fetched commit, with `origin` set to the GitHub repository.
+- `plugin link` does not build; `herdr plugin link` has no `--yes`.
+- Releases are the `vX.Y.Z` tags (GitHub releases). `update` reads them with `git ls-remote --tags --refs origin` in the plugin root, which works for both install types, and installs the newest tag with `--ref`. A release must be tagged for `update` and `doctor` to see it.
+- On macOS, copying a new binary over the file of one that has run gets the next run killed (exit 137, code signature cache). Cargo and Herdr's swap both write a new file, so neither is affected.
