@@ -620,7 +620,11 @@ pub fn resolve(ctx: &Ctx, slug: &str, id: &str, args: &ResolveArgs) -> Result<()
         t.resolved_reason = "manual".into();
         t.prompt_pending = false;
     })?;
-    let notes = clean(ctx, &project, &resolved, &Clean { keep_worktree: args.keep_worktree, copy_complete: copy_complete || args.discard_uncopied });
+    let notes = clean(ctx, &project, &resolved, &Clean {
+        keep_worktree: args.keep_worktree,
+        copy_complete: copy_complete || args.discard_uncopied,
+        merged_head: crate::steps::load_state(&project).prs.get(id).map(|s| s.head_oid.clone()).unwrap_or_default(),
+    });
     println!("{id} resolved; its report and library are kept.");
     for note in &notes {
         println!("  - {note}");
@@ -633,6 +637,9 @@ pub struct Clean {
     pub keep_worktree: bool,
     /// Everything the thread wrote is home: the worktree may go.
     pub copy_complete: bool,
+    /// The merged pull request's head commit. Passed in, not read from
+    /// `ticker.json`: the ticker saves that file only at the end of its tick.
+    pub merged_head: String,
 }
 
 /// Cleans up after a resolved thread: its worktree (never forced), its local
@@ -664,7 +671,7 @@ pub fn clean(ctx: &Ctx, project: &Project, t: &Thread, options: &Clean) -> Vec<S
             }
             if !t.branch.is_empty() {
                 if merged && removed {
-                    match delete_branch(ctx, project, t) {
+                    match delete_branch(ctx, t, &options.merged_head) {
                         Ok(()) => notes.push(format!("branch {} deleted (its pull request is merged)", t.branch)),
                         Err(error) => notes.push(format!("branch {} kept: {error:#}", t.branch)),
                     }
@@ -696,8 +703,7 @@ pub fn clean(ctx: &Ctx, project: &Project, t: &Thread, options: &Clean) -> Vec<S
 
 /// Deletes the local branch only when its tip is the pull request's merged
 /// head: a commit made after the merge and never pushed keeps the branch.
-fn delete_branch(ctx: &Ctx, project: &Project, t: &Thread) -> Result<()> {
-    let head = crate::steps::load_state(project).prs.get(&t.id).map(|s| s.head_oid.clone()).unwrap_or_default();
+fn delete_branch(ctx: &Ctx, t: &Thread, head: &str) -> Result<()> {
     if head.is_empty() {
         bail!("the merged pull request's head commit is not known");
     }

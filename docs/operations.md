@@ -147,6 +147,7 @@ A file `routines/<name>.md` with TOML front matter; the body is the prompt.
 
 ## Cleanup
 
+- **Resolve on merge**: the ticker resolves a thread whose pull request merged only when its agent is neither working nor waiting on you, and it has written a report since the merge or 10 minutes have passed. A thread that merged its own pull request can still tag, deploy and write its final report.
 - **Resolve** (popup `x`, chat, or `thread resolve`) copies the report and library home, then removes the worktree with `herdr worktree remove --workspace` (which also closes the workspace) or `git worktree remove` and `git worktree prune`, deletes the local branch if the pull request is merged, and closes a tab thread's tab. An adopted pane is left alone. The inbox item lists what was removed and what was kept, and why.
 - **Merged pull requests and auto-resolve** clean up the same way.
 - **Sweep** lists and removes worktrees on `hp/<project>/` branches with no open thread, branches of resolved threads whose pull request merged, tabs of resolved threads, working folders of tab threads resolved longer than `auto_resolve_days` ago, and handled inbox items older than 30 days. `doctor` shows the same list. Sweep covers local repositories.
