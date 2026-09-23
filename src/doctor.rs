@@ -13,9 +13,11 @@ use crate::runner::{Cmd, Runner};
 
 const TOOL_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Prints the report and returns whether every required check passed.
-pub fn run(ctx: &Ctx, session: &SessionFlags) -> Result<bool> {
-    let (text, healthy) = report(ctx.env, &ctx.root, &ctx.config_dir, session, ctx.runner);
+/// Prints the report and returns whether every required check passed. With
+/// `fix`, repairs what the binary owns: priming files, `uploads/`, and the
+/// absolute binary path they carry. Never edits another plugin's entries.
+pub fn run(ctx: &Ctx, session: &SessionFlags, fix: bool) -> Result<bool> {
+    let (text, healthy) = report(ctx.env, &ctx.root, &ctx.config_dir, session, ctx.runner, fix);
     print!("{text}");
     Ok(healthy)
 }
@@ -26,6 +28,7 @@ fn report(
     config_dir: &Path,
     session: &SessionFlags,
     runner: &dyn Runner,
+    fix: bool,
 ) -> (String, bool) {
     let mut out = String::new();
     let mut healthy = true;
@@ -140,8 +143,36 @@ fn report(
         ),
     }
 
-    for slug in project::list_slugs(root) {
-        let Ok(project) = project::Project::load(root, &slug) else {
+    // Every project's priming files, and the binary path they carry: a
+    // `plugin link` from another checkout or a moved plugin root breaks them
+    // silently, and `--fix` rewrites them.
+    let prefix = crate::coordinator::current_prefix(root).unwrap_or_default();
+    let slugs = project::list_slugs(root);
+    for slug in &slugs {
+        let Ok(project) = project::Project::load(root, slug) else {
+            continue;
+        };
+        let label = format!("files {slug}");
+        let problems = project::priming_problems(&project, &prefix);
+        if problems.is_empty() {
+            check(&mut out, Some(true), &label, "AGENTS.md, CLAUDE.md link and uploads/ are in place".into());
+        } else if fix {
+            match project::write_priming(&project, &prefix) {
+                Ok(()) => check(&mut out, Some(true), &label, format!("fixed: {}", problems.join("; "))),
+                Err(error) => check(&mut out, Some(false), &label, format!("could not fix ({error:#}): {}", problems.join("; "))),
+            }
+        } else {
+            check(&mut out, None, &label, format!("{}; `doctor --fix` repairs this", problems.join("; ")));
+        }
+        for other in &slugs {
+            if other > slug && crate::names::collide(slug, other) {
+                check(&mut out, Some(false), &format!("names {slug}"), format!("its agent names collide with `{other}` after truncation to 32 characters; rename one project"));
+            }
+        }
+    }
+
+    for slug in &slugs {
+        let Ok(project) = project::Project::load(root, slug) else {
             continue;
         };
         let label = format!("project {slug}");
@@ -154,26 +185,25 @@ fn report(
             continue;
         }
         let herdr = Herdr::new(&bin, &record.socket, runner);
-        match herdr.pane_list() {
-            Err(error) => check(&mut out, None, &label, format!("session at {} unreachable: {error}", record.socket)),
-            Ok(panes) => {
-                let workspace = panes.iter().any(|p| p.workspace_id == record.workspace_id);
-                let pane = panes.iter().any(|p| crate::coordinator::pane_matches(&record, p));
+        match (herdr.pane_list(), herdr.agent_list()) {
+            (Ok(panes), Ok(agents)) => {
+                let workspace = crate::coordinator::workspace_open(&record, &panes);
+                let coordinators: Vec<String> = agents.iter().filter(|a| crate::coordinator::is_coordinator(&record, a)).map(|a| format!("{} ({})", a.pane_id, a.agent)).collect();
                 check(
                     &mut out,
-                    if pane { Some(true) } else { None },
+                    if coordinators.is_empty() { None } else { Some(true) },
                     &label,
                     format!(
-                        "{}; socket {}; workspace {} {}; coordinator pane {} {}",
+                        "{}; socket {}; workspace {} {}; coordinators: {}",
                         project.status(),
                         record.socket,
                         record.workspace_id,
-                        if workspace { "exists" } else { "is gone" },
-                        record.pane_id,
-                        if pane { "exists" } else { "is gone (run `open`)" },
+                        if workspace { "open" } else { "closed" },
+                        if coordinators.is_empty() { "none (run `open`)".to_string() } else { coordinators.join(", ") },
                     ),
                 );
             }
+            (Err(error), _) | (_, Err(error)) => check(&mut out, None, &label, format!("session at {} unreachable: {error}", record.socket)),
         }
     }
 
@@ -226,6 +256,7 @@ mod tests {
             &home.path().join("cfg"),
             &SessionFlags::default(),
             &runner,
+            false,
         );
         assert!(!healthy);
         assert!(text.contains("[FAIL] herdr: 0.9.0"), "{text}");
@@ -244,11 +275,50 @@ mod tests {
             &home.path().join("cfg"),
             &SessionFlags::default(),
             &runner,
+            false,
         );
         assert!(healthy, "{text}");
         assert!(text.contains("[warn] gh auth"));
         assert!(text.contains("[warn] root"));
         assert!(text.contains(&format!("root:       {}", root.display())));
         assert!(!root.exists(), "doctor must not create the root");
+    }
+
+    #[test]
+    fn missing_priming_files_are_reported_and_fixed() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let runner = runner_with_herdr("herdr 0.9.1\n");
+        let root = home.path().join("root");
+        // A project made before AGENTS.md existed: no priming files, no uploads/.
+        let project = project::create(&root, "demo", "", vec![]).unwrap();
+        std::fs::remove_dir(project.dir().join("uploads")).unwrap();
+        let flags = SessionFlags::default();
+        let (text, _) = report(&env, &root, &home.path().join("cfg"), &flags, &runner, false);
+        assert!(text.contains("[warn] files demo: AGENTS.md is missing; CLAUDE.md is not a link to AGENTS.md; uploads/ is missing; `doctor --fix` repairs this"), "{text}");
+        assert!(!project.dir().join("AGENTS.md").exists());
+
+        let (text, _) = report(&env, &root, &home.path().join("cfg"), &flags, &runner, true);
+        assert!(text.contains("[ok  ] files demo: fixed: AGENTS.md is missing"), "{text}");
+        assert!(project.dir().join("AGENTS.md").is_file());
+        assert!(project.dir().join("uploads").is_dir());
+        let (text, _) = report(&env, &root, &home.path().join("cfg"), &flags, &runner, false);
+        assert!(text.contains("[ok  ] files demo: AGENTS.md, CLAUDE.md link and uploads/ are in place"), "{text}");
+    }
+
+    #[test]
+    fn colliding_agent_names_fail_the_report() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let runner = runner_with_herdr("herdr 0.9.1\n");
+        let root = home.path().join("root");
+        let long = "x".repeat(30);
+        for suffix in ["a", "b"] {
+            let project = project::create(&root, &format!("{long}-{suffix}"), "", vec![]).unwrap();
+            project::write_priming(&project, &crate::coordinator::current_prefix(&root).unwrap()).unwrap();
+        }
+        let (text, healthy) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner, false);
+        assert!(!healthy);
+        assert!(text.contains("[FAIL] names"), "{text}");
     }
 }

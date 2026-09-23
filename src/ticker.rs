@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
-use crate::coordinator::{self, MAX_LAUNCH_ATTEMPTS};
+use crate::coordinator;
 use crate::herdr::{Agent, Herdr, Pane};
 use crate::paths::Ctx;
 use crate::project::{self, Project, Status};
@@ -453,7 +453,9 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
         let launched = (|| -> Result<()> {
             thread::update(project, &t.id, |t| t.launch_attempts += 1)?;
             let safety = project.safety(&ctx.config_dir)?;
-            herdr.on_machine(&t.machine).agent_start(&t.agent_name, &t.agent, &t.pane_id, &safety.thread_agent_args)?;
+            let mut args = safety.thread_agent_args.clone();
+            args.extend(t.agent_args.iter().cloned());
+            herdr.on_machine(&t.machine).agent_start(&t.agent_name, &t.agent, &t.pane_id, &args)?;
             Ok(())
         })();
         errors.extend(launched.err().map(|e| e.context(format!("{}: launch", t.id))));
@@ -486,25 +488,33 @@ fn tick_cheap(ctx: &Ctx, project: &Project) -> Result<Option<Seen>> {
     let slug = &project.slug;
     let mut first_error = None;
 
-    // The coordinator: deliver a pending priming prompt, refresh its tokens.
-    let agent = agents.iter().find(|a| coordinator::agent_matches(&record, a));
-    if let Some(agent) = agent {
-        if record.prime_pending && agent.ready() {
-            let prefix = coordinator::current_prefix(&ctx.root)?;
-            match herdr.agent_prompt(&record.pane_id, &coordinator::priming_prompt(&prefix, slug)) {
-                Ok(()) => {
-                    project.update_coordinator(|c| c.prime_pending = false)?;
-                }
-                Err(error) => first_error = Some(anyhow::anyhow!("priming prompt: {error}")),
-            }
-        }
-        coordinator::report_tokens(&herdr, slug, &record.pane_id);
+    // The coordinators: every agent in the project folder. Nothing is
+    // launched or primed here; `open` starts them and AGENTS.md primes them.
+    let previous = coordinator::live(project);
+    let now_text = project::now();
+    let coordinators = coordinator::discover(&record, &previous, &agents, &now_text);
+    if coordinators != previous {
+        coordinator::save_live(project, &coordinators)?;
+    }
+    // The primary pane's native session id, for a later resume by `open`.
+    if let Some(primary) = coordinators.iter().find(|c| c.pane_id == record.pane_id)
+        && !primary.agent_session.is_empty()
+        && (primary.agent_session != record.agent_session || primary.agent != record.agent)
+    {
+        let (session_id, kind) = (primary.agent_session.clone(), primary.agent.clone());
+        project.update_coordinator(|c| {
+            c.agent_session = session_id;
+            c.agent = kind;
+        })?;
+    }
+    for c in &coordinators {
+        coordinator::report_tokens(&herdr, slug, &c.pane_id);
     }
 
     let pass = thread_pass(project, &herdr, &open_threads(project, false), &agents, &panes, None)?;
     first_error = first_error.or(pass.error);
     let coordinator_recorded = usize::from(!record.pane_id.is_empty());
-    let coordinator_missing = usize::from(coordinator_recorded == 1 && agent.is_none() && !panes.iter().any(|p| coordinator::pane_matches(&record, p)));
+    let coordinator_missing = usize::from(coordinator_recorded == 1 && coordinators.is_empty() && !panes.iter().any(|p| coordinator::pane_matches(&record, p)));
     let recorded_panes = pass.recorded_panes + coordinator_recorded;
     let missing_panes = pass.missing_panes + coordinator_missing;
 
@@ -512,7 +522,8 @@ fn tick_cheap(ctx: &Ctx, project: &Project) -> Result<Option<Seen>> {
     if let Ok((settings, _)) = project.read_project_md() {
         let mut state = steps::load_state(project);
         let before = state.nudged.clone();
-        let ready_pane = agent.filter(|a| a.ready()).map(|_| record.pane_id.as_str());
+        let target = coordinator::nudge_target(&coordinators, jiff::Timestamp::now());
+        let ready_pane = target.map(|c| c.pane_id.as_str());
         if let Err(error) = steps::nudge(project, &mut state, &settings, &herdr, ready_pane) {
             first_error = first_error.or(Some(error.context("nudge")));
         }
@@ -580,22 +591,6 @@ fn tick_slow(ctx: &Ctx, project: &Project, seen: &Seen, memory: &mut Memory) -> 
     let now = jiff::Timestamp::now();
     let mut may_start = true;
     let mut transitions = seen.transitions.clone();
-
-    if let Some(record) = project.coordinator().filter(|c| c.prime_pending) {
-        let pane_alive = seen.panes.iter().any(|p| coordinator::pane_matches(&record, p));
-        let pane_has_agent = seen.agents.iter().any(|a| a.pane_id == record.pane_id);
-        if pane_alive && !pane_has_agent && record.launch_attempts < MAX_LAUNCH_ATTEMPTS {
-            may_start = false;
-            let started = (|| -> Result<()> {
-                project.update_coordinator(|c| c.launch_attempts += 1)?;
-                let (settings, _) = project.read_project_md()?;
-                let safety = project.safety(&ctx.config_dir)?;
-                herdr.agent_start(&record.agent_name, &settings.coordinator_agent, &record.pane_id, &safety.coordinator_agent_args)?;
-                Ok(())
-            })();
-            errors.extend(started.err());
-        }
-    }
 
     // Local threads: copy home when the report changed, then launches.
     let local = open_threads(project, false);
@@ -734,8 +729,7 @@ mod tests {
         assert!(!stop_path(root.path()).exists());
     }
 
-    const AGENT_READY: &str = r#"{"result":{"agents":[{"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","name":"hp-demo-coordinator","agent":"claude","agent_status":"idle","cwd":"CWD"}]}}"#;
-    const AGENT_BLOCKED: &str = r#"{"result":{"agents":[{"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","name":"hp-demo-coordinator","agent":"claude","agent_status":"blocked","cwd":"CWD"}]}}"#;
+    const AGENT_READY: &str = r#"{"result":{"agents":[{"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","name":"hpc-demo","agent":"claude","agent_status":"idle","cwd":"CWD","state_change_seq":4,"agent_session":{"agent":"claude","kind":"id","source":"herdr:claude","value":"sess-1"}}]}}"#;
     const NO_AGENTS: &str = r#"{"result":{"agents":[]}}"#;
     const PANE: &str = r#"{"result":{"panes":[{"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","cwd":"CWD"}]}}"#;
 
@@ -746,7 +740,7 @@ mod tests {
         project: Project,
     }
 
-    fn fixture(pending: bool) -> Fixture {
+    fn fixture() -> Fixture {
         let home = tempfile::tempdir().unwrap();
         let root = home.path().join("root");
         let project = project::create(&root, "demo", "", vec![]).unwrap();
@@ -759,9 +753,9 @@ mod tests {
                 c.workspace_id = "w1".into();
                 c.tab_id = "w1:t1".into();
                 c.pane_id = "w1:p1".into();
-                c.agent_name = "hp-demo-coordinator".into();
+                c.agent_name = "hpc-demo".into();
                 c.cwd = cwd;
-                c.prime_pending = pending;
+                c.agent = "claude".into();
             })
             .unwrap();
         let env = Env::for_test(home.path(), &[]);
@@ -773,47 +767,48 @@ mod tests {
     }
 
     #[test]
-    fn pending_prime_is_delivered_only_to_a_ready_agent() {
-        let f = fixture(true);
+    fn the_ticker_discovers_coordinators_by_folder_and_never_launches_or_primes() {
+        let f = fixture();
         let runner = FakeRunner::new();
-        runner.on("agent list", ok(&with_cwd(AGENT_BLOCKED, &f)));
+        // Two agents in the project folder, one of them unnamed (started by hand).
+        let two = with_cwd(&AGENT_READY.replace(r#"]}}"#, r#",{"pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1","name":"","agent":"codex","agent_status":"working","cwd":"CWD","state_change_seq":9,"agent_session":{"value":"sess-2"}}]}}"#), &f);
+        runner.on("agent list", ok(&two));
         runner.on("pane list", ok(&with_cwd(PANE, &f)));
         runner.on("report-metadata", ok("{}"));
         let ctx = Ctx { env: &f.env, root: f.root.clone(), config_dir: f.root.join("cfg"), runner: &runner, detached_ticker: false };
         assert!(tick_project(&ctx, &f.project).unwrap());
         assert_eq!(runner.count("agent prompt"), 0);
-        assert!(f.project.coordinator().unwrap().prime_pending);
-
-        let runner = FakeRunner::new();
-        runner.on("agent list", ok(&with_cwd(AGENT_READY, &f)));
-        runner.on("pane list", ok(&with_cwd(PANE, &f)));
-        runner.on("agent prompt", ok(r#"{"result":{}}"#));
-        runner.on("report-metadata", ok("{}"));
-        let ctx = Ctx { env: &f.env, root: f.root.clone(), config_dir: f.root.join("cfg"), runner: &runner, detached_ticker: false };
-        assert!(tick_project(&ctx, &f.project).unwrap());
-        assert_eq!(runner.count("agent prompt"), 1);
-        assert!(!f.project.coordinator().unwrap().prime_pending);
-        // The prompt went to the recorded socket.
-        let calls = runner.calls.borrow();
-        let prompt = calls.iter().find(|c| c.display().contains("agent prompt")).unwrap();
-        assert!(prompt.env.iter().any(|(k, v)| k == "HERDR_SOCKET_PATH" && v == &f.project.coordinator().unwrap().socket));
+        assert_eq!(runner.count("agent start"), 0);
+        let live = coordinator::live(&f.project);
+        assert_eq!(live.len(), 2);
+        assert_eq!(live[1].agent, "codex");
+        assert_eq!(live[1].agent_session, "sess-2");
+        assert!(!live[0].pair_since.is_empty());
+        // Both coordinator panes get tokens.
+        assert_eq!(runner.count("report-metadata w1:p1"), 1);
+        assert_eq!(runner.count("report-metadata w1:p2"), 1);
+        // The primary pane's native session id is recorded for a later resume.
+        assert_eq!(f.project.coordinator().unwrap().agent_session, "sess-1");
     }
 
     #[test]
-    fn rejected_prime_stays_pending() {
-        let f = fixture(true);
+    fn a_shell_prompt_pane_is_not_launched_by_the_ticker() {
+        let f = fixture();
         let runner = FakeRunner::new();
-        runner.on("agent list", ok(&with_cwd(AGENT_READY, &f)));
+        runner.on("agent list", ok(NO_AGENTS));
         runner.on("pane list", ok(&with_cwd(PANE, &f)));
-        runner.on("agent prompt", fail(1, r#"{"error":{"code":"agent_blocked","message":"blocked"}}"#));
         let ctx = Ctx { env: &f.env, root: f.root.clone(), config_dir: f.root.join("cfg"), runner: &runner, detached_ticker: false };
-        assert!(tick_project(&ctx, &f.project).is_err());
-        assert!(f.project.coordinator().unwrap().prime_pending);
+        for _ in 0..3 {
+            let _ = tick_project(&ctx, &f.project);
+        }
+        assert_eq!(runner.count("agent start"), 0);
+        assert_eq!(runner.count("agent prompt"), 0);
+        assert!(coordinator::live(&f.project).is_empty());
     }
 
     #[test]
     fn a_pane_with_other_identity_is_left_alone() {
-        let f = fixture(true);
+        let f = fixture();
         let runner = FakeRunner::new();
         // Same ids, different working directory: not our pane.
         runner.on("agent list", ok(&AGENT_READY.replace("CWD", "/somewhere/else")));
@@ -826,23 +821,8 @@ mod tests {
     }
 
     #[test]
-    fn shell_prompt_pane_gets_at_most_three_launch_attempts() {
-        let f = fixture(true);
-        let runner = FakeRunner::new();
-        runner.on("agent list", ok(NO_AGENTS));
-        runner.on("pane list", ok(&with_cwd(PANE, &f)));
-        runner.on("agent start", fail(1, r#"{"error":{"code":"timeout","message":"no agent"}}"#));
-        let ctx = Ctx { env: &f.env, root: f.root.clone(), config_dir: f.root.join("cfg"), runner: &runner, detached_ticker: false };
-        for _ in 0..5 {
-            let _ = tick_project(&ctx, &f.project);
-        }
-        assert_eq!(runner.count("agent start"), 3);
-        assert_eq!(runner.count("agent prompt"), 0);
-    }
-
-    #[test]
     fn unreachable_session_reads_no_state() {
-        let f = fixture(true);
+        let f = fixture();
         let runner = FakeRunner::new();
         runner.on("agent list", fail(1, "connection refused"));
         let ctx = Ctx { env: &f.env, root: f.root.clone(), config_dir: f.root.join("cfg"), runner: &runner, detached_ticker: false };

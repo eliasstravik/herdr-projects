@@ -34,8 +34,8 @@ pub fn adoptable_agent(ctx: &Ctx, herdr: &Herdr, socket: &str, pane: &str) -> Re
         if record.socket != socket {
             continue;
         }
-        if record.pane_id == pane && coordinator::agent_matches(&record, &agent) {
-            bail!("pane {pane} is the coordinator of `{slug}`");
+        if coordinator::is_coordinator(&record, &agent) {
+            bail!("pane {pane} is a coordinator of `{slug}` (its working directory is the project folder)");
         }
         if let Some(t) = thread::list(&other).iter().find(|t| !t.is_remote() && t.status != Status::Resolved && t.pane_id == pane && thread::agent_matches(t, &agent)) {
             bail!("pane {pane} is already thread {} of `{slug}`", t.id);
@@ -152,8 +152,9 @@ pub fn adopt_workspace(ctx: &Ctx, args: &AdoptWorkspace) -> Result<()> {
     let repos = is_repo.map(|path| vec![project::Repo { path, machine: None }]).unwrap_or_default();
 
     let project = project::create(&ctx.root, &args.name, &args.goal, repos)?;
+    project::write_priming(&project, &coordinator::current_prefix(&ctx.root)?)?;
     println!("created `{}` at {}", project.slug, project.dir().display());
-    coordinator::open(ctx, &project.slug, &coordinator::OpenOptions { session: SessionFlags { session: None, socket: Some(session.socket.clone()) }, reprime: false, rebind: false })?;
+    coordinator::open(ctx, &project.slug, &coordinator::OpenOptions { session: SessionFlags { session: None, socket: Some(session.socket.clone()) }, rebind: false, agent: None, agent_args: Vec::new(), new: false })?;
     let adopted = adopt(ctx, &project.slug, &args.pane, &args.name, None)?;
     println!("adopted pane {} as thread {} of `{}`", args.pane, adopted.id, project.slug);
     Ok(())

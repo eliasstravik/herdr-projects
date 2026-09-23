@@ -1,11 +1,13 @@
 mod actions;
 mod adopt;
+mod agents;
 mod cli;
 mod coordinator;
 mod doctor;
 mod herdr;
 mod inbox;
 mod lifecycle;
+mod names;
 mod overview;
 mod paths;
 mod pr;

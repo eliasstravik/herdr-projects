@@ -81,9 +81,27 @@ pub struct StartArgs {
     pub title: String,
     pub repo: Option<String>,
     pub machine: Option<String>,
+    /// Herdr agent kind (`--agent`), default `thread_agent` in PROJECT.md.
     pub agent: Option<String>,
+    /// Placement (`--kind worktree|tab|checkout`); default worktree with a
+    /// repo, tab without one.
+    pub kind: Option<Kind>,
+    /// Extra agent CLI arguments (`--agent-arg`, repeatable), e.g. a model flag.
+    pub agent_args: Vec<String>,
     pub base: Option<String>,
     pub task: String,
+}
+
+/// The placement of a new thread from what was asked and whether it has a repo.
+pub fn placement(kind: Option<Kind>, has_repo: bool, remote: bool) -> Result<Kind> {
+    match (kind, has_repo) {
+        (None, true) => Ok(Kind::Worktree),
+        (None, false) => Ok(Kind::Tab),
+        (Some(Kind::Worktree), false) | (Some(Kind::Checkout), false) => bail!("a worktree or checkout thread needs --repo"),
+        (Some(Kind::Adopted), _) => bail!("an adopted thread is made with `thread adopt`"),
+        (Some(Kind::Tab), _) | (Some(Kind::Checkout), _) if remote => bail!("a tab or checkout thread runs in the project's own workspace, which is local; a remote repo needs a worktree thread"),
+        (Some(kind), _) => Ok(kind),
+    }
 }
 
 /// Creates the workspace or tab, the thread directory and the brief, then
@@ -136,12 +154,17 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
     }
 
     let agent_kind = args.agent.clone().unwrap_or_else(|| settings.thread_agent.clone());
+    if !crate::agents::is_kind(&agent_kind) {
+        bail!("`{agent_kind}` is not a Herdr agent kind; `herdr agent start --help` lists them");
+    }
+    let kind = placement(args.kind, !repo.is_empty(), !machine.is_empty())?;
     let record = thread::allocate(&project, |t| {
         t.title = args.title.trim().to_string();
-        t.kind = if repo.is_empty() { Kind::Tab } else { Kind::Worktree };
+        t.kind = kind;
         t.repo = repo.clone();
         t.machine = machine.clone();
         t.agent = agent_kind.clone();
+        t.agent_args = args.agent_args.clone();
         t.base = args.base.clone().unwrap_or_default();
     })?;
     let id = record.id.clone();
@@ -223,7 +246,7 @@ fn place_and_brief(ctx: &Ctx, project: &Project, view: &SessionView, id: &str, r
                 t.pane_id = created.pane_id;
             })?
         }
-        Kind::Tab => place_tab(project, view, &record)?,
+        Kind::Tab | Kind::Checkout => place_tab(project, view, &record)?,
         Kind::Adopted => bail!("an adopted thread is not placed by the binary"),
     };
     write_brief(ctx, project, &placed, restart)?;
@@ -246,18 +269,23 @@ fn write_brief(ctx: &Ctx, project: &Project, placed: &Thread, restart: bool) -> 
     Ok(())
 }
 
+/// A tab in the project workspace: in `threads/<id>/` for a tab thread, in the
+/// repo's main checkout for a checkout thread.
 fn place_tab(project: &Project, view: &SessionView, record: &Thread) -> Result<Thread> {
     let coordinator = project.coordinator().context("the project has never been opened")?;
-    if !view.panes.iter().any(|p| p.workspace_id == coordinator.workspace_id && coordinator::pane_matches(&coordinator, p)) {
+    if !coordinator::workspace_open(&coordinator, &view.panes) {
         bail!("the project's workspace is not open; run `open {}` first", project.slug);
     }
-    let folder = project.dir().join("threads").join(&record.id);
-    {
+    let folder = if record.kind == Kind::Checkout {
+        std::path::PathBuf::from(&record.repo)
+    } else {
+        let folder = project.dir().join("threads").join(&record.id);
         let _lock = project.lock()?;
         if !folder.is_dir() {
             std::fs::create_dir(&folder).with_context(|| format!("could not create {}", folder.display()))?;
         }
-    }
+        folder
+    };
     let folder = std::fs::canonicalize(&folder)?;
     let created = view.herdr.tab_create(&coordinator.workspace_id, &folder, &record.title, false)?;
     let cwd = view.herdr.pane_cwd(&created.pane_id).unwrap_or_default();
@@ -337,7 +365,7 @@ pub enum RestartPlan {
 pub fn restart_plan(thread: &Thread, live: &Live, branch_exists: bool, now: jiff::Timestamp) -> Result<RestartPlan> {
     match thread.kind {
         Kind::Adopted => bail!("an adopted thread cannot be restarted; adopt a new pane instead"),
-        Kind::Worktree | Kind::Tab => {}
+        Kind::Worktree | Kind::Tab | Kind::Checkout => {}
     }
     if thread.status == Status::Resolved {
         bail!("{} is resolved; `thread resolve --reopen` first", thread.id);
@@ -362,7 +390,7 @@ pub fn restart_plan(thread: &Thread, live: &Live, branch_exists: bool, now: jiff
         }
         return Ok(RestartPlan::Create);
     }
-    if thread.kind == Kind::Tab && thread.pane_id.is_empty() {
+    if matches!(thread.kind, Kind::Tab | Kind::Checkout) && thread.pane_id.is_empty() {
         return Ok(RestartPlan::Create);
     }
     if live.pane_exists {
@@ -382,8 +410,25 @@ fn lists_for(view: &SessionView, record: &Thread) -> Result<(Vec<Agent>, Vec<Pan
     Ok((herdr.agent_list().map_err(unreachable)?, herdr.pane_list().map_err(unreachable)?))
 }
 
-pub fn restart(ctx: &Ctx, slug: &str, id: &str) -> Result<Thread> {
+/// `thread restart [--agent KIND]`: brings a thread back in its pane, worktree
+/// or a new tab, with the same or another harness.
+pub fn restart(ctx: &Ctx, slug: &str, id: &str, agent: Option<&str>, agent_args: Option<Vec<String>>) -> Result<Thread> {
     let project = Project::load(&ctx.root, slug)?;
+    if let Some(kind) = agent {
+        if !crate::agents::is_kind(kind) {
+            bail!("`{kind}` is not a Herdr agent kind; `herdr agent start --help` lists them");
+        }
+        // Another harness: the old arguments (a model flag) no longer apply.
+        thread::update(&project, id, |t| {
+            if t.agent != kind {
+                t.agent_args.clear();
+            }
+            t.agent = kind.to_string();
+        })?;
+    }
+    if let Some(args) = agent_args {
+        thread::update(&project, id, |t| t.agent_args = args)?;
+    }
     let record = thread::load(&project, id)?;
     ticker::start(ctx)?;
     let view = require_session(ctx, &project)?;
@@ -445,7 +490,64 @@ pub fn prompt(ctx: &Ctx, slug: &str, id: &str, text: &str) -> Result<String> {
         .on_machine(&record.machine)
         .agent_prompt(&record.pane_id, text.trim())
         .map_err(|error| anyhow::anyhow!("{error}"))?;
+    // Written after the send, so the task file never claims a prompt that was
+    // refused; a restarted thread re-reads it with its task.
+    thread::append_follow_up(&project, id, text)?;
     Ok(state)
+}
+
+/// `thread next`: forward line N of the thread's Next list as a prompt, or add
+/// a line the coordinator wants on that list.
+pub fn next(ctx: &Ctx, slug: &str, id: &str, line: Option<usize>, add: Option<&str>) -> Result<()> {
+    let project = Project::load(&ctx.root, slug)?;
+    thread::load(&project, id)?;
+    if let Some(text) = add {
+        let text = text.trim();
+        if text.is_empty() || text.contains('\n') {
+            bail!("a Next line is one non-empty line");
+        }
+        let path = thread::extra_next_path(&project, id);
+        let _lock = project.lock()?;
+        let mut current = std::fs::read_to_string(&path).unwrap_or_default();
+        current.push_str(&format!("- {text}\n"));
+        project::write_atomic(&path, current.as_bytes())?;
+        println!("added to {id}'s Next list");
+        return Ok(());
+    }
+    let lines = thread::all_next(&project, id);
+    match line {
+        None => {
+            if lines.is_empty() {
+                println!("{id} has no Next list");
+            }
+            for (n, text) in lines.iter().enumerate() {
+                println!("{}. {text}", n + 1);
+            }
+            Ok(())
+        }
+        Some(n) => {
+            let text = lines.get(n.wrapping_sub(1)).with_context(|| format!("{id} has no Next line {n} ({} lines)", lines.len()))?;
+            let state = prompt(ctx, slug, id, text)?;
+            println!("sent Next line {n} to {id} (agent was {state}): {text}");
+            Ok(())
+        }
+    }
+}
+
+/// `thread stop`: Escape in the thread's pane, the harness's own interrupt.
+pub fn stop(ctx: &Ctx, slug: &str, id: &str) -> Result<()> {
+    let project = Project::load(&ctx.root, slug)?;
+    let record = thread::load(&project, id)?;
+    if record.status == Status::Resolved || record.pane_id.is_empty() {
+        bail!("{id} has no pane");
+    }
+    let view = require_session(ctx, &project)?;
+    view.herdr
+        .on_machine(&record.machine)
+        .call(&["agent", "send-keys", &record.pane_id, "esc"], crate::herdr::CALL_TIMEOUT)
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    println!("sent Escape to {id} (pane {})", record.pane_id);
+    Ok(())
 }
 
 /// The state a follow-up may be sent in, or the refusal.
@@ -641,25 +743,58 @@ fn row(t: &Thread, view: Option<&SessionView>, now: jiff::Timestamp) -> Row {
     Row { thread: t.clone(), group, note }
 }
 
-pub fn print_list(ctx: &Ctx, slug: &str) -> Result<()> {
+/// One thread as JSON: the record, its group and note, the Next list and the
+/// home report path.
+pub fn row_json(project: &Project, row: &Row) -> serde_json::Value {
+    let t = &row.thread;
+    let report = thread::home_report_path(project, &t.id);
+    let mut value = serde_json::to_value(t).unwrap_or_default();
+    value["group"] = row.group.label().into();
+    value["group_token"] = row.group.token().into();
+    value["rank"] = row.group.rank().into();
+    value["note"] = row.note.clone().into();
+    value["next"] = thread::all_next(project, &t.id).into();
+    value["report"] = if report.is_file() { report.to_string_lossy().into_owned().into() } else { serde_json::Value::Null };
+    value["library"] = project.dir().join("library").join(&t.id).to_string_lossy().into_owned().into();
+    value
+}
+
+pub fn print_list(ctx: &Ctx, slug: &str, json: bool) -> Result<()> {
     let project = Project::load(&ctx.root, slug)?;
-    for row in rows(ctx, &project) {
+    let rows = rows(ctx, &project);
+    if json {
+        let values: Vec<serde_json::Value> = rows.iter().map(|r| row_json(&project, r)).collect();
+        println!("{}", serde_json::to_string_pretty(&values)?);
+        return Ok(());
+    }
+    for row in rows {
         println!("{}\t{}\t{}\t{}", row.thread.id, row.group.label(), row.note, row.thread.title);
     }
     Ok(())
 }
 
-pub fn print_show(ctx: &Ctx, slug: &str, id: &str) -> Result<()> {
+pub fn print_show(ctx: &Ctx, slug: &str, id: &str, json: bool) -> Result<()> {
     let project = Project::load(&ctx.root, slug)?;
     let record = thread::load(&project, id)?;
     let view = session_view(ctx, &project);
     let row = row(&record, view.as_ref(), jiff::Timestamp::now());
+    if json {
+        println!("{}", serde_json::to_string_pretty(&row_json(&project, &row))?);
+        return Ok(());
+    }
     println!("group = {:?}", row.group.label());
     println!("live = {:?}", row.note);
     print!("{}", toml::to_string(&record)?);
     let report = thread::home_report_path(&project, id);
     if report.is_file() {
         println!("# home copy of the report: {}", report.display());
+    }
+    let next = thread::all_next(&project, id);
+    if !next.is_empty() {
+        println!("# next:");
+        for (n, line) in next.iter().enumerate() {
+            println!("#   {}. {line}", n + 1);
+        }
     }
     Ok(())
 }
@@ -753,6 +888,20 @@ mod tests {
         assert!(prompt_state(&t, &[agent("blocked")]).unwrap_err().to_string().contains("agent_blocked"));
         assert_eq!(prompt_state(&t, &[agent("working")]).unwrap(), "working");
         assert_eq!(prompt_state(&t, &[agent("idle")]).unwrap(), "idle");
+    }
+
+    #[test]
+    fn placement_follows_the_request_then_the_repo() {
+        assert_eq!(placement(None, true, false).unwrap(), Kind::Worktree);
+        assert_eq!(placement(None, false, false).unwrap(), Kind::Tab);
+        assert_eq!(placement(Some(Kind::Tab), true, false).unwrap(), Kind::Tab);
+        assert_eq!(placement(Some(Kind::Checkout), true, false).unwrap(), Kind::Checkout);
+        assert!(placement(Some(Kind::Checkout), false, false).is_err());
+        assert!(placement(Some(Kind::Worktree), false, false).is_err());
+        assert!(placement(Some(Kind::Tab), true, true).is_err());
+        assert!(placement(Some(Kind::Adopted), true, false).is_err());
+        assert_eq!(Kind::parse("checkout").unwrap(), Kind::Checkout);
+        assert!(Kind::parse("popup").is_err());
     }
 
     #[test]

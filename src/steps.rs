@@ -216,8 +216,10 @@ fn hash_ids(ids: &BTreeSet<String>) -> String {
 }
 
 /// Step 6. A given set of unseen items is announced once; there is no timed
-/// re-nudge. With `nudge = false` (the default) the user gets a herdr
-/// notification instead of a prompt in the coordinator.
+/// re-nudge. With `nudge = false` the user gets a herdr notification instead
+/// of a prompt in the coordinator; with no live coordinator the same.
+/// `coordinator_ready` is the pane of a coordinator idle long enough to be
+/// prompted (see `coordinator::nudge_target`).
 pub fn nudge(project: &Project, state: &mut State, settings: &Settings, herdr: &Herdr, coordinator_ready: Option<&str>) -> Result<()> {
     let seen = inbox::seen(project);
     let unseen: BTreeSet<String> = inbox::unhandled(project).into_iter().map(|i| i.id).filter(|id| !seen.contains(id)).collect();
@@ -228,9 +230,10 @@ pub fn nudge(project: &Project, state: &mut State, settings: &Settings, herdr: &
     if hash == state.nudged {
         return Ok(());
     }
-    if settings.nudge {
+    let no_coordinator = crate::coordinator::live(project).is_empty();
+    if settings.nudge && !no_coordinator {
         let Some(pane) = coordinator_ready else {
-            return Ok(()); // not idle or done: try again on a later tick
+            return Ok(()); // not idle long enough: try again on a later tick
         };
         // `agent_blocked` and other errors are returned, logged by the caller,
         // and the nudge is retried on a later tick.

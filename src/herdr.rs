@@ -148,6 +148,16 @@ pub struct Pane {
     pub workspace_id: String,
     #[serde(default)]
     pub cwd: String,
+    /// Stable across pane moves; restarts with the server.
+    #[serde(default)]
+    pub terminal_id: String,
+}
+
+/// The native session reference an official integration reported.
+#[derive(Debug, Clone, Deserialize, PartialEq, Default)]
+pub struct AgentSession {
+    #[serde(default)]
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Default)]
@@ -163,12 +173,22 @@ pub struct Agent {
     pub agent_status: String,
     #[serde(default)]
     pub cwd: String,
+    #[serde(default)]
+    pub terminal_id: String,
+    #[serde(default)]
+    pub state_change_seq: u64,
+    #[serde(default)]
+    pub agent_session: Option<AgentSession>,
 }
 
 impl Agent {
     /// The one "ready for a prompt" predicate: state `idle` or `done`.
     pub fn ready(&self) -> bool {
         ready_state(&self.agent_status)
+    }
+
+    pub fn session_id(&self) -> &str {
+        self.agent_session.as_ref().map(|s| s.value.as_str()).unwrap_or("")
     }
 }
 
@@ -361,6 +381,12 @@ impl<'a> Herdr<'a> {
 
     pub fn agent_focus(&self, target: &str) -> Result<(), HerdrError> {
         self.call(&["agent", "focus", target], CALL_TIMEOUT).map(|_| ())
+    }
+
+    /// Names an already detected agent (after Herdr's native resume leaves a
+    /// restored pane unnamed).
+    pub fn agent_rename(&self, pane: &str, name: &str) -> Result<(), HerdrError> {
+        self.call(&["agent", "rename", pane, name], CALL_TIMEOUT).map(|_| ())
     }
 
     pub fn notification_show(&self, title: &str, body: &str) -> Result<(), HerdrError> {

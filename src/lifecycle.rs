@@ -12,9 +12,13 @@ use crate::coordinator;
 fn alive_panes(project: &Project, view: &SessionView) -> Vec<(String, String, String)> {
     let mut alive = Vec::new();
     if let Some(record) = project.coordinator() {
-        let agent = view.agents.iter().find(|a| coordinator::agent_matches(&record, a));
-        if agent.is_some() || view.panes.iter().any(|p| coordinator::pane_matches(&record, p)) {
-            alive.push(("coordinator".to_string(), record.pane_id.clone(), agent.map(|a| a.agent_status.clone()).unwrap_or_default()));
+        let mut any = false;
+        for agent in view.agents.iter().filter(|a| coordinator::is_coordinator(&record, a)) {
+            any = true;
+            alive.push(("coordinator".to_string(), agent.pane_id.clone(), agent.agent_status.clone()));
+        }
+        if !any && view.panes.iter().any(|p| coordinator::pane_matches(&record, p)) {
+            alive.push(("coordinator".to_string(), record.pane_id.clone(), String::new()));
         }
     }
     let now = jiff::Timestamp::now();
