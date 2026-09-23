@@ -250,9 +250,11 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     // still leaves a record the ticker and a later `open` can act on.
     let taken: Vec<String> = agents.iter().map(|a| a.name.clone()).collect();
     let name = names::free_coordinator(slug, &taken);
+    // With --new the recorded session belongs to a coordinator that stays
+    // running: the new agent starts fresh and never inherits its session id.
     let resume = previous
         .as_ref()
-        .filter(|r| r.agent == kind && !r.agent_session.is_empty())
+        .filter(|r| !options.new && r.agent == kind && !r.agent_session.is_empty())
         .and_then(|r| crate::agents::resume_args(&kind, &r.agent_session))
         .unwrap_or_default();
     let record = project.update_coordinator(|c| {
@@ -265,7 +267,8 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
             agent_name: name.clone(),
             cwd: cwd.clone(),
             agent: kind.clone(),
-            agent_session: previous.as_ref().map(|r| r.agent_session.clone()).unwrap_or_default(),
+            // Kept only for the resume; the ticker records a fresh agent's own.
+            agent_session: if resume.is_empty() { String::new() } else { previous.as_ref().map(|r| r.agent_session.clone()).unwrap_or_default() },
             updated: String::new(),
         }
     })?;

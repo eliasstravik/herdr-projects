@@ -1240,6 +1240,44 @@ fn open_starts_a_coordinator_without_a_priming_prompt_then_focuses_it_and_resume
 }
 
 #[test]
+fn open_new_starts_a_fresh_coordinator_beside_a_live_one_without_its_session() {
+    let world = World::new();
+    let project = project::create(&world.root, "demo", "Ship it", vec![]).unwrap();
+    let socket = world.home.path().join("a.sock");
+    std::fs::write(&socket, b"").unwrap();
+    let dir = project.canonical_dir().to_string_lossy().into_owned();
+    world.runner.on("workspace create", ok(r#"{"result":{"root_pane":{"workspace_id":"w3","tab_id":"w3:t1","pane_id":"w3:p1"}}}"#));
+    world.runner.on("tab rename", ok(r#"{"result":{}}"#));
+    world.runner.on("workspace get", ok(r#"{"result":{"workspace":{"label":"Demo"}}}"#));
+    world.runner.on("agent start hpc-demo --kind claude --pane w3:p1", ok(r#"{"result":{"agent":{"pane_id":"w3:p1","tab_id":"w3:t1","workspace_id":"w3","name":"hpc-demo","agent":"claude","agent_status":"idle","agent_session":{"value":"sess-42"}}}}"#));
+    let options = |new: bool| crate::coordinator::OpenOptions {
+        session: crate::paths::SessionFlags { session: None, socket: Some(socket.clone()) },
+        rebind: false,
+        agent: None,
+        agent_args: Vec::new(),
+        new,
+    };
+    let ctx = world.ctx();
+    crate::coordinator::open(&ctx, "demo", &options(false)).unwrap();
+    assert_eq!(project.coordinator().unwrap().agent_session, "sess-42");
+
+    // The first coordinator is live; --new of the same kind starts a second
+    // pane that neither resumes nor records the first one's session.
+    *world.agents.borrow_mut() = format!("[{}]", agent_json("w3", "w3:t1", "w3:p1", &dir, "hpc-demo", "idle"));
+    *world.panes.borrow_mut() = format!("[{}]", pane_json("w3", "w3:t1", "w3:p1", &dir));
+    world.runner.on("tab create", ok(r#"{"result":{"root_pane":{"workspace_id":"w3","tab_id":"w3:t2","pane_id":"w3:p2"}}}"#));
+    world.runner.on("--pane w3:p2", ok(r#"{"result":{"agent":{"pane_id":"w3:p2","tab_id":"w3:t2","workspace_id":"w3","name":"hpc-demo-1","agent":"claude","agent_status":"idle"}}}"#));
+    crate::coordinator::open(&ctx, "demo", &options(true)).unwrap();
+    let calls = world.runner.calls.borrow();
+    let start = calls.iter().filter(|c| c.display().contains("agent start")).last().unwrap();
+    assert!(start.display().starts_with("herdr agent start hpc-demo-1 --kind claude --pane w3:p2"), "{}", start.display());
+    assert!(!start.display().contains("--resume") && !start.display().contains("sess-42"), "{}", start.display());
+    drop(calls);
+    let record = project.coordinator().unwrap();
+    assert_eq!((record.pane_id.as_str(), record.agent_session.as_str()), ("w3:p2", ""));
+}
+
+#[test]
 fn a_tab_thread_gets_a_brief_with_the_project_header_and_prompts_are_recorded() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
