@@ -1,8 +1,9 @@
 //! `open` and `context`: the coordinator's workspace and the digest it reads.
 //!
 //! A coordinator is any agent whose working directory is the project home;
-//! `AGENTS.md` in that folder primes it. `open` creates or focuses the
-//! workspace and starts an agent there; the ticker discovers every such agent.
+//! `AGENTS.md` in that folder primes it. `open` starts an agent in the pane it
+//! runs in, or in a tab of the project's workspace; the ticker discovers every
+//! such agent.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -43,19 +44,30 @@ pub fn pane_matches(record: &Coordinator, pane: &Pane) -> bool {
     pane.pane_id == record.pane_id
         && pane.workspace_id == record.workspace_id
         && pane.tab_id == record.tab_id
-        && pane.cwd == record.cwd
+        && (pane.cwd == record.cwd || pane.foreground_cwd == record.cwd)
 }
 
 /// A coordinator of the project: any agent whose working directory is the
-/// project home (the canonical path the record stores).
+/// project home (the canonical path the record stores), including one `open`
+/// started in a shell pane elsewhere.
 pub fn is_coordinator(record: &Coordinator, agent: &Agent) -> bool {
-    !record.cwd.is_empty() && agent.cwd == record.cwd
+    agent.works_in(&record.cwd)
 }
 
 /// The project's workspace is open when a listed pane of it works in the
 /// project folder (workspace ids repeat after a server restart).
 pub fn workspace_open(record: &Coordinator, panes: &[Pane]) -> bool {
     !record.workspace_id.is_empty() && !record.cwd.is_empty() && panes.iter().any(|p| p.workspace_id == record.workspace_id && Path::new(&p.cwd).starts_with(&record.cwd))
+}
+
+/// The workspace thread tabs go to: the recorded one while open, else any
+/// workspace with a shell in the project folder. A coordinator `open` started
+/// in some other workspace's pane leaves the record pointing there.
+pub fn project_workspace(record: &Coordinator, panes: &[Pane]) -> Option<String> {
+    if workspace_open(record, panes) {
+        return Some(record.workspace_id.clone());
+    }
+    panes.iter().find(|p| !record.cwd.is_empty() && Path::new(&p.cwd).starts_with(&record.cwd)).map(|p| p.workspace_id.clone())
 }
 
 /// One live coordinator pane, as the ticker last saw it (`.state/coordinators.json`).
@@ -126,6 +138,20 @@ pub struct OpenOptions {
     pub agent_args: Vec<String>,
     /// Start another coordinator although one is running.
     pub new: bool,
+    /// Start the agent in the pane this command runs in, when that is a shell
+    /// pane of the session (false: a new tab, as the popup and actions do).
+    pub here: bool,
+}
+
+/// The pane `open` runs in, when the coordinator can start right there: the
+/// command runs in a Herdr pane of this session that no agent occupies, and
+/// not in a plugin pane or action (the popup must never become the coordinator).
+fn here_pane(ctx: &Ctx, options: &OpenOptions, socket: &str, agents: &[Agent]) -> Option<String> {
+    if !options.here || ctx.env.var("HERDR_PLUGIN_STATE_DIR").is_some() || ctx.env.var("HERDR_SOCKET_PATH") != Some(socket) {
+        return None;
+    }
+    let pane = ctx.env.var("HERDR_PANE_ID")?;
+    (!agents.iter().any(|a| a.pane_id == pane)).then(|| pane.to_string())
 }
 
 pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
@@ -186,7 +212,7 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     // A coordinator is running: focus the most recently active one.
     // With an explicit kind, only a running coordinator of that kind is reused:
     // choosing another kind in the popup starts one beside the others.
-    let running: Vec<&Agent> = agents.iter().filter(|a| a.cwd == cwd && options.agent.as_ref().is_none_or(|k| &a.agent == k)).collect();
+    let running: Vec<&Agent> = agents.iter().filter(|a| a.works_in(&cwd) && options.agent.as_ref().is_none_or(|k| &a.agent == k)).collect();
     if let Some(agent) = running.iter().max_by_key(|a| a.state_change_seq)
         && !options.new
     {
@@ -215,13 +241,18 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
         return Ok(());
     }
 
-    // Reuse the recorded pane when it is still there at a shell prompt, else
-    // add a tab to the project's workspace, else make the workspace.
+    // Start in the pane this command runs in, else reuse the recorded pane
+    // when it is still there at a shell prompt, else add a tab to the
+    // project's workspace, else make the workspace.
     let panes = herdr.pane_list()?;
+    let here = here_pane(ctx, options, &socket, &agents);
     let reusable = previous.as_ref().filter(|record| {
         !options.new && panes.iter().any(|p| pane_matches(record, p)) && !agents.iter().any(|a| a.pane_id == record.pane_id)
     });
-    let (workspace_id, tab_id, pane_id) = if let Some(record) = reusable {
+    let (workspace_id, tab_id, pane_id) = if let Some(pane) = &here {
+        let pane = panes.iter().find(|p| &p.pane_id == pane).with_context(|| format!("pane {pane} is not listed by the herdr session at {socket}"))?;
+        (pane.workspace_id.clone(), pane.tab_id.clone(), pane.pane_id.clone())
+    } else if let Some(record) = reusable {
         sync_label(&herdr, &record.workspace_id, &label);
         (record.workspace_id.clone(), record.tab_id.clone(), record.pane_id.clone())
     } else {
@@ -277,6 +308,11 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     base_args.extend(options.agent_args.iter().cloned());
     let mut args = base_args.clone();
     args.extend(resume.iter().cloned());
+    if here.is_some() {
+        report_tokens(&herdr, slug, &label, &record.pane_id);
+        ticker::start(ctx)?;
+        return run_here(ctx, &herdr, &project, &record, &args, &base_args, &prefix);
+    }
     let mut started = start_when_shell_ready(&herdr, &name, &kind, &record.pane_id, &args);
     if let Err(error) = &started
         && !resume.is_empty()
@@ -310,6 +346,62 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     println!("opened `{slug}` in workspace {} (pane {})", record.workspace_id, record.pane_id);
     println!("Commands: {prefix}");
     Ok(())
+}
+
+/// Runs the coordinator agent on this terminal, in the project home, and
+/// returns when it exits: the pane is back at the user's shell. While it
+/// starts, the agent Herdr detects in the pane gets its name and its session
+/// is recorded. Nothing is printed while the agent owns the terminal.
+fn run_here(ctx: &Ctx, herdr: &Herdr, project: &Project, record: &Coordinator, args: &[String], base_args: &[String], prefix: &str) -> Result<()> {
+    let kind = &record.agent;
+    let resuming = args.len() > base_args.len();
+    if resuming {
+        println!("starting {kind} as {} in this pane, resuming session {}; quit it to return to this shell", record.agent_name, record.agent_session);
+    } else {
+        println!("starting {kind} as {} in this pane; it reads AGENTS.md and primes itself. Quit it to return to this shell", record.agent_name);
+    }
+    println!("Commands: {prefix}");
+    let run = |args: &[String]| -> Result<(Option<i32>, bool)> {
+        // A Herdr agent kind is also its executable's name.
+        let cmd = crate::runner::Cmd::new(kind, Duration::ZERO).args(args.iter().cloned()).cwd(&record.cwd).env("PWD", &record.cwd);
+        let deadline = std::time::Instant::now() + Duration::from_secs(60);
+        let mut detected = false;
+        let code = ctx.runner.run_foreground(&cmd, &mut || {
+            detected = detected || adopt_here(herdr, project, record);
+            detected || std::time::Instant::now() >= deadline
+        })?;
+        Ok((code, detected))
+    };
+    let (code, detected) = run(args)?;
+    if resuming && !detected && code != Some(0) {
+        // The recorded session may be gone: start fresh once.
+        println!("resuming session {} failed; starting a fresh {kind}", record.agent_session);
+        project.update_coordinator(|c| c.agent_session.clear())?;
+        run(base_args)?;
+    }
+    println!("{kind} exited; this pane is back at your shell");
+    Ok(())
+}
+
+/// Names the agent Herdr detects in the recorded pane and records its
+/// session. False until the agent shows up; errors count as not yet.
+fn adopt_here(herdr: &Herdr, project: &Project, record: &Coordinator) -> bool {
+    let Ok(agents) = herdr.agent_list() else {
+        return false;
+    };
+    let Some(agent) = agents.iter().find(|a| a.pane_id == record.pane_id && is_coordinator(record, a)) else {
+        return false;
+    };
+    if agent.name != record.agent_name {
+        let _ = herdr.agent_rename(&agent.pane_id, &record.agent_name);
+    }
+    let session_id = agent.session_id().to_string();
+    let _ = project.update_coordinator(|c| {
+        if !session_id.is_empty() {
+            c.agent_session = session_id;
+        }
+    });
+    true
 }
 
 /// A pane that was just created is not an available shell for a moment
@@ -532,6 +624,9 @@ mod tests {
         assert!(!is_coordinator(&record, &agent("w1:p1", "/elsewhere", "idle", 1)));
         let empty = Coordinator::default();
         assert!(!is_coordinator(&empty, &agent("w1:p1", "", "idle", 1)));
+        // `open` ran it in a shell pane elsewhere: its own directory counts.
+        let child = Agent { foreground_cwd: "/r/demo".into(), ..agent("w5:p1", "/tmp", "idle", 1) };
+        assert!(is_coordinator(&record, &child));
     }
 
     #[test]

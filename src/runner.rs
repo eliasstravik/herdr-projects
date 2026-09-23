@@ -122,6 +122,12 @@ pub trait Runner {
     /// "talk to herdr through its CLI" (client decision during the build):
     /// herdr 0.9.1 has no CLI command for `agent.view.set` / `agent.view.clear`.
     fn socket_request(&self, socket: &Path, line: &str, timeout: Duration) -> Result<String>;
+
+    /// Runs `cmd` on this process's terminal (an agent `open` starts in its own
+    /// pane) and waits for it; `cmd.timeout` and `cmd.stdin` are ignored.
+    /// While it runs, `poll` is called about twice a second until it returns
+    /// true. Returns the exit code, `None` when a signal ended it.
+    fn run_foreground(&self, cmd: &Cmd, poll: &mut dyn FnMut() -> bool) -> Result<Option<i32>>;
 }
 
 pub struct RealRunner;
@@ -203,6 +209,70 @@ impl Runner for RealRunner {
 
     fn socket_request(&self, socket: &Path, line: &str, timeout: Duration) -> Result<String> {
         socket_round_trip(socket, line, timeout)
+    }
+
+    fn run_foreground(&self, cmd: &Cmd, poll: &mut dyn FnMut() -> bool) -> Result<Option<i32>> {
+        let mut command = Command::new(&cmd.program);
+        command.args(&cmd.args);
+        for key in &cmd.env_remove {
+            command.env_remove(key);
+        }
+        for (key, value) in &cmd.env {
+            command.env(key, value);
+        }
+        if let Some(cwd) = &cmd.cwd {
+            // This process leads the pane's foreground group, and Herdr reports
+            // the leader's directory as the pane's `foreground_cwd`: it moves too.
+            std::env::set_current_dir(cwd).with_context(|| format!("could not enter {}", cwd.display()))?;
+            command.current_dir(cwd);
+        }
+        let mut child = command
+            .spawn()
+            .with_context(|| format!("could not run `{}`", cmd.program))?;
+        // Ctrl-C and Ctrl-\ reach the whole foreground group: they are the
+        // agent's to handle, and this process must outlive it so the shell
+        // does not take the terminal back from a running agent.
+        let _ignored = IgnoreInterrupts::new();
+        let mut polling = true;
+        let status = loop {
+            if let Some(status) = child.try_wait()? {
+                break status;
+            }
+            if polling {
+                polling = !poll();
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        };
+        Ok(status.code())
+    }
+}
+
+unsafe extern "C" {
+    fn signal(signum: i32, handler: usize) -> usize;
+}
+
+const SIGINT: i32 = 2;
+const SIGQUIT: i32 = 3;
+const SIG_IGN: usize = 1;
+
+/// SIGINT and SIGQUIT ignored in this process (set after the child's exec, so
+/// the child keeps the default), restored on drop.
+struct IgnoreInterrupts(usize, usize);
+
+impl IgnoreInterrupts {
+    fn new() -> Self {
+        // SAFETY: plain signal(2) calls with the ignore disposition.
+        unsafe { IgnoreInterrupts(signal(SIGINT, SIG_IGN), signal(SIGQUIT, SIG_IGN)) }
+    }
+}
+
+impl Drop for IgnoreInterrupts {
+    fn drop(&mut self) {
+        // SAFETY: restores the dispositions `new` returned.
+        unsafe {
+            signal(SIGINT, self.0);
+            signal(SIGQUIT, self.1);
+        }
     }
 }
 
@@ -342,6 +412,22 @@ pub mod fake {
         fn socket_request(&self, socket: &Path, line: &str, _timeout: Duration) -> Result<String> {
             self.socket_requests.borrow_mut().push((socket.to_path_buf(), line.to_string()));
             Ok(r#"{"id":"hp","result":{"type":"agent_view","active":true}}"#.to_string())
+        }
+
+        /// The first matching rule answers (it may change what later calls
+        /// see, as a starting agent does), then `poll` runs once and the
+        /// command exits with the rule's code.
+        fn run_foreground(&self, cmd: &Cmd, poll: &mut dyn FnMut() -> bool) -> Result<Option<i32>> {
+            self.calls.borrow_mut().push(cmd.clone());
+            let out = {
+                let rules = self.rules.borrow();
+                let Some((_, answer)) = rules.iter().find(|(matcher, _)| matcher(cmd)) else {
+                    anyhow::bail!("FakeRunner: no rule for `{}`", cmd.display())
+                };
+                answer(cmd)?
+            };
+            poll();
+            Ok(out.code)
         }
     }
 }

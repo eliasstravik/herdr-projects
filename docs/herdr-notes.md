@@ -141,6 +141,7 @@ Also learned:
 
 - **`pane current --current`** returns `pane_id`, `terminal_id`, `agent` and `agent_session` (`{agent, kind, source, value}`) for the calling pane; `agent get` and `agent list` also carry `state_change_seq`. The pane id works as the progress binding; the terminal id tells a reused pane id after a restart from the old pane.
 - **`pane report-metadata` answers success with an empty body.** The CLI wrapper treats an empty successful reply as success.
+- **An agent started as a child process is detected** (0.2.2, `open` in a shell pane): Herdr names the kind, state and session as for `agent start`. `agent list` then reports the shell's directory as `cwd` and the directory of the pane's foreground process-group leader (here `herdr-projects` itself, not the agent) as `foreground_cwd`, so `open` enters the project home before it starts the agent, and coordinators match on either field.
 - **A pane from `workspace create` is not an available shell for a moment**: `agent start` returns `agent_pane_busy`. `open` retries for up to ten seconds.
 - **Native resume needs a client.** After a server restart, a headless session resumes Claude panes only once a client attaches (`script -q /dev/null herdr --session <name>` is enough). In this run the resumed agents kept their names; the ticker still renames an unnamed one.
 - **`worktree remove --workspace <ws>`** removes the checkout, closes the linked workspace and keeps the branch.

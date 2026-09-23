@@ -1,3 +1,4 @@
+use std::io::IsTerminal as _;
 use std::path::PathBuf;
 
 use anyhow::{Result, bail};
@@ -57,7 +58,8 @@ enum Command {
         #[arg(long)]
         all: bool,
     },
-    /// Open a project: its workspace and a coordinator agent in its folder
+    /// Open a project: start a coordinator agent in its folder, in this pane when
+    /// run from a shell pane inside Herdr, else in the project's workspace
     Open {
         slug: String,
         /// Herdr agent kind for the coordinator (default: coordinator_agent in PROJECT.md)
@@ -69,6 +71,10 @@ enum Command {
         /// Start another coordinator even though one is running
         #[arg(long)]
         new: bool,
+        /// Start the coordinator in a new tab even when run from a shell pane
+        /// inside Herdr (by default it starts in that pane)
+        #[arg(long)]
+        tab: bool,
         /// Move the project to this session when its recorded socket no longer exists
         #[arg(long)]
         rebind: bool,
@@ -462,7 +468,7 @@ pub fn run() -> Result<()> {
             }
             Ok(())
         }
-        Command::Open { slug, agent, agent_args, new, rebind, session } => coordinator::open(
+        Command::Open { slug, agent, agent_args, new, tab, rebind, session } => coordinator::open(
             &ctx,
             &slug,
             &OpenOptions {
@@ -471,6 +477,9 @@ pub fn run() -> Result<()> {
                 agent,
                 agent_args,
                 new,
+                // Only a person at a terminal gets the agent in place; the
+                // popup and agents' shell tools run `open` without one.
+                here: !tab && std::io::stdin().is_terminal() && std::io::stdout().is_terminal(),
             },
         ),
         Command::Coordinator { command } => match command {

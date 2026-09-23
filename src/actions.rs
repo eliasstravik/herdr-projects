@@ -139,7 +139,7 @@ pub fn run_action(ctx: &Ctx, id: &str) -> Result<()> {
 
 fn run_on_slug(ctx: &Ctx, command: &str, slug: &str) -> Result<()> {
     match command {
-        "open" => coordinator::open(ctx, slug, &OpenOptions { session: SessionFlags { session: None, socket: Some(PathBuf::from(socket(ctx)?)) }, rebind: false, agent: None, agent_args: Vec::new(), new: false }),
+        "open" => coordinator::open(ctx, slug, &OpenOptions { session: SessionFlags { session: None, socket: Some(PathBuf::from(socket(ctx)?)) }, rebind: false, agent: None, agent_args: Vec::new(), new: false, here: false }),
         "pause" => lifecycle::set_status(ctx, slug, Status::Paused),
         "resume" => lifecycle::set_status(ctx, slug, Status::Active),
         other => bail!("`{other}` cannot be run from the picker"),
