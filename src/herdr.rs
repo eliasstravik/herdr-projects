@@ -232,6 +232,9 @@ impl<'a> Herdr<'a> {
             if out.success() {
                 return Ok(reply.get("result").cloned().unwrap_or(serde_json::Value::Null));
             }
+        } else if out.success() && out.stdout.trim().is_empty() {
+            // Metadata writes acknowledge success with the exit status alone.
+            return Ok(serde_json::Value::Null);
         }
         Err(HerdrError {
             code: "failed".into(),
@@ -393,27 +396,6 @@ impl<'a> Herdr<'a> {
         self.call(&["notification", "show", title, "--body", body], CALL_TIMEOUT).map(|_| ())
     }
 
-    /// Display tokens on a pane row, always with a TTL so they fade if the
-    /// ticker stops.
-    pub fn pane_report_tokens(&self, pane: &str, tokens: &[(&str, &str)], ttl: Duration) -> Result<(), HerdrError> {
-        let ttl = ttl.as_millis().to_string();
-        let pairs: Vec<String> = tokens.iter().map(|(k, v)| format!("{k}={v}")).collect();
-        let mut args = vec!["pane", "report-metadata", pane, "--source", SOURCE, "--ttl-ms", &ttl];
-        for pair in &pairs {
-            args.push("--token");
-            args.push(pair);
-        }
-        self.call(&args, CALL_TIMEOUT).map(|_| ())
-    }
-
-    pub fn pane_clear_tokens(&self, pane: &str, names: &[&str]) -> Result<(), HerdrError> {
-        let mut args = vec!["pane", "report-metadata", pane, "--source", SOURCE];
-        for name in names {
-            args.push("--clear-token");
-            args.push(name);
-        }
-        self.call(&args, CALL_TIMEOUT).map(|_| ())
-    }
 }
 
 pub const SOURCE: &str = "herdr-projects";
@@ -436,25 +418,12 @@ impl<'a> Herdr<'a> {
         }
     }
 
-    /// Filters the sidebar's agents to one project and sorts them by attention:
-    /// the coordinator (rank 0) first, then by the group's display-order digit.
-    /// herdr holds one transient view, so this replaces any other tool's view.
-    pub fn agent_view_set_project(&self, slug: &str) -> Result<(), HerdrError> {
-        self.request(
-            "agent.view.set",
-            serde_json::json!({
-                "source": SOURCE,
-                "label": format!("project: {slug}"),
-                "filter": { "op": "eq", "field": { "token": "project" }, "value": slug },
-                "sort": [{ "field": { "token": "rank" }, "order": "asc" }],
-            }),
-        )
-        .map(|_| ())
+    /// Installs an agent view (socket only in 0.9.1). One view is active
+    /// globally, so this replaces any other tool's view.
+    pub fn agent_view_set(&self, params: serde_json::Value) -> Result<(), HerdrError> {
+        self.request("agent.view.set", params).map(|_| ())
     }
 
-    pub fn agent_view_clear(&self) -> Result<(), HerdrError> {
-        self.request("agent.view.clear", serde_json::json!({})).map(|_| ())
-    }
 }
 
 #[cfg(test)]

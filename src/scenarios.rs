@@ -902,7 +902,10 @@ fn a_paused_project_is_skipped_by_the_ticker() {
     let _ = log_dir;
     let mut memory = Memory::new(&ctx);
     assert!(!ticker::tick_for_test(&ctx, &mut memory));
-    assert!(world.runner.calls.borrow().is_empty());
+    // Only the Space row is told it is paused; nothing else is read or sent.
+    let calls = world.runner.calls.borrow();
+    assert_eq!(calls.len(), 1, "{:?}", calls.iter().map(|c| c.display()).collect::<Vec<_>>());
+    assert!(calls[0].display().contains("workspace report-metadata w1 --source herdr-projects --token hp=paused"));
 }
 
 // ------------------------------------------------------------------ stage 6
@@ -997,7 +1000,8 @@ fn a_long_machine_outage_gives_one_item_and_one_recovery_item() {
     let calls = scripted.runner.calls.borrow();
     let tokens = calls.iter().find(|c| is_machine_call(c) && c.display().contains("report-metadata")).expect("remote tokens");
     assert!(tokens.display().contains("--ttl-ms 300000"));
-    assert!(tokens.display().contains("thread=t-0001"));
+    assert!(tokens.args.contains(&"t-0001 · Task".to_string()), "{}", tokens.display());
+    assert!(tokens.display().contains("hp_project=demo"));
 }
 
 #[test]

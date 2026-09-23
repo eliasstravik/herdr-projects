@@ -17,7 +17,6 @@ use crate::project::{self, Coordinator, Project, Status};
 use crate::remote::quote;
 use crate::{inbox, names, ticker};
 
-pub const TOKEN_TTL: Duration = Duration::from_secs(300);
 /// A coordinator counts as idle for a nudge once its `(agent_status,
 /// state_change_seq)` pair has been `idle` this long (four ticks).
 pub const NUDGE_IDLE_SECS: i64 = 60;
@@ -53,9 +52,10 @@ pub fn is_coordinator(record: &Coordinator, agent: &Agent) -> bool {
     !record.cwd.is_empty() && agent.cwd == record.cwd
 }
 
-/// The project's workspace is open when any listed pane belongs to it.
+/// The project's workspace is open when a listed pane of it works in the
+/// project folder (workspace ids repeat after a server restart).
 pub fn workspace_open(record: &Coordinator, panes: &[Pane]) -> bool {
-    !record.workspace_id.is_empty() && panes.iter().any(|p| p.workspace_id == record.workspace_id)
+    !record.workspace_id.is_empty() && !record.cwd.is_empty() && panes.iter().any(|p| p.workspace_id == record.workspace_id && Path::new(&p.cwd).starts_with(&record.cwd))
 }
 
 /// One live coordinator pane, as the ticker last saw it (`.state/coordinators.json`).
@@ -206,7 +206,7 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
                 c.agent_session = agent.session_id().to_string();
             }
         })?;
-        report_tokens(&herdr, slug, &record.pane_id);
+        report_tokens(&herdr, slug, &label, &record.pane_id);
         ticker::start(ctx)?;
         println!("coordinator is running in pane {} ({} more: pass --new to start another)", record.pane_id, running.len() - 1);
         println!("Commands: {prefix}");
@@ -300,7 +300,7 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
             record.pane_id
         ),
     }
-    report_tokens(&herdr, slug, &record.pane_id);
+    report_tokens(&herdr, slug, &label, &record.pane_id);
     ticker::start(ctx)?;
     println!("opened `{slug}` in workspace {} (pane {})", record.workspace_id, record.pane_id);
     println!("Commands: {prefix}");
@@ -321,12 +321,22 @@ fn start_when_shell_ready(herdr: &Herdr, name: &str, kind: &str, pane: &str, arg
     }
 }
 
-pub fn report_tokens(herdr: &Herdr, slug: &str, pane_id: &str) {
-    let _ = herdr.pane_report_tokens(
-        pane_id,
-        &[("project", slug), ("thread", "coordinator"), ("rank", "0")],
-        TOKEN_TTL,
-    );
+/// A coordinator's sidebar group and line 3, from Herdr's state and its own report.
+pub fn row_state(pane: &LivePane, report: Option<&crate::progress::Record>) -> (crate::thread::Group, String) {
+    use crate::thread::Group;
+    let percent = report.and_then(|r| r.percent).filter(|p| *p < 100).map(|p| format!(" · ~{p}%")).unwrap_or_default();
+    let waiting = report.is_some_and(|r| r.waiting()) && pane.agent_status != "working";
+    if pane.agent_status == "blocked" || waiting {
+        (Group::WaitingOnYou, format!("needs you{percent}"))
+    } else if pane.agent_status == "working" {
+        (Group::Working, format!("working{percent}"))
+    } else {
+        (Group::Idle, "idle".into())
+    }
+}
+
+pub fn report_tokens(herdr: &Herdr, slug: &str, name: &str, pane_id: &str) {
+    crate::sidebar::report_pane(herdr, pane_id, &crate::sidebar::coordinator_display(name), slug, crate::thread::Group::Idle, "idle");
 }
 
 /// Renames a recorded workspace whose label is not the project's display name,

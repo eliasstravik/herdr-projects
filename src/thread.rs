@@ -92,6 +92,11 @@ pub struct Thread {
     pub pr_state: String,
     pub pr_review: String,
     pub resolved_reason: String,
+    /// The sidebar's line 3 as the ticker last computed it (`needs you · ~55%`).
+    pub state_line: String,
+    /// The agent's own last activity and percent (local threads).
+    pub activity: String,
+    pub percent: Option<u8>,
 }
 
 impl Thread {
@@ -434,10 +439,10 @@ impl Group {
     /// separate from the precedence in `group()`.
     pub fn rank(self) -> u8 {
         match self {
-            Group::ReadyForReview => 1,
-            Group::WaitingOnYou => 2,
-            Group::Working => 3,
-            Group::Landing => 4,
+            Group::WaitingOnYou => 1,
+            Group::ReadyForReview => 2,
+            Group::Landing => 3,
+            Group::Working => 4,
             Group::Idle => 5,
             Group::Resolved => 6,
         }
@@ -479,11 +484,12 @@ impl Group {
         .find(|g| g.token() == token)
     }
 
+    /// Needs-you first: the sidebar sort, the popup and the overview agree.
     pub const DISPLAY_ORDER: [Group; 6] = [
-        Group::ReadyForReview,
         Group::WaitingOnYou,
-        Group::Working,
+        Group::ReadyForReview,
         Group::Landing,
+        Group::Working,
         Group::Idle,
         Group::Resolved,
     ];

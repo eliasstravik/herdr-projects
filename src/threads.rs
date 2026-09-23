@@ -53,29 +53,12 @@ fn git(runner: &dyn Runner, repo: &str, args: &[&str], timeout: Duration) -> Res
     Ok(out.stdout.trim().to_string())
 }
 
-pub fn thread_tokens(thread: &Thread, slug: &str, group: Group) -> Vec<(String, String)> {
-    vec![
-        ("project".into(), slug.to_string()),
-        ("thread".into(), thread.id.clone()),
-        ("review".into(), group.token().to_string()),
-        ("rank".into(), group.rank().to_string()),
-    ]
-}
-
 pub fn report_thread_tokens(herdr: &Herdr, thread: &Thread, slug: &str, group: Group) {
-    let tokens = thread_tokens(thread, slug, group);
-    let pairs: Vec<(&str, &str)> = tokens.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
-    let _ = herdr
-        .on_machine(&thread.machine)
-        .pane_report_tokens(&thread.pane_id, &pairs, coordinator::TOKEN_TTL);
+    crate::sidebar::report_pane(&herdr.on_machine(&thread.machine), &thread.pane_id, &crate::sidebar::thread_display(thread), slug, group, crate::sidebar::word(group));
 }
 
 fn clear_thread_tokens(herdr: &Herdr, thread: &Thread) {
-    if !thread.pane_id.is_empty() {
-        let _ = herdr
-            .on_machine(&thread.machine)
-            .pane_clear_tokens(&thread.pane_id, &["project", "thread", "review", "rank"]);
-    }
+    crate::sidebar::clear_pane(&herdr.on_machine(&thread.machine), &thread.pane_id);
 }
 
 pub struct StartArgs {
@@ -903,20 +886,6 @@ mod tests {
         assert!(placement(Some(Kind::Adopted), true, false).is_err());
         assert_eq!(Kind::parse("checkout").unwrap(), Kind::Checkout);
         assert!(Kind::parse("popup").is_err());
-    }
-
-    #[test]
-    fn token_values_and_ranks() {
-        let tokens = thread_tokens(&worktree_thread(), "demo", Group::WaitingOnYou);
-        assert_eq!(
-            tokens,
-            vec![
-                ("project".to_string(), "demo".to_string()),
-                ("thread".to_string(), "t-0001".to_string()),
-                ("review".to_string(), "waiting-on-you".to_string()),
-                ("rank".to_string(), "2".to_string()),
-            ]
-        );
     }
 
     #[test]
