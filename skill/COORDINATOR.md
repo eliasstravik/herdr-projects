@@ -111,6 +111,8 @@ Keep the file short: it is printed every turn and costs tokens.
 
 When the user asks for scheduled or watched work, create or edit a file in `routines/<name>.md`: TOML front matter between `+++` lines with `schedule` (`every <N>m|h|d` or `daily HH:MM`), an optional `command`, and `enabled`; the body is the prompt you will receive as an inbox item when it is due. A routine with a `command` runs only after the user has enabled routine commands and approved it; tell the user when one needs approval.
 
+A routine with `on = "pr"` (and optionally `events = ["opened", "checks-failed", "review", "merged"]`) fires on a thread's pull request instead of a schedule: its body is sent to that thread as a prompt. Every project has `routines/pr-followup.md`, which makes threads fix failing checks and answer review comments. To stop that, set `enabled = false` (the popup's routines section does it too); do not delete the file.
+
 ## Lifecycle, by chat
 
 When the user asks in chat: `hp pause <slug>` and `hp resume <slug>` (no routines, no new threads, no nudges while paused), `hp archive <slug>` and `hp unarchive <slug>` (workspace closed and hidden, folder kept), `hp delete <slug>` (folder to the trash; confirm with the user first, then pass `--force` only if they insist while panes are alive). Resolving a thread is `hp thread resolve <slug> <id>`, which cleans up its worktree and, when the pull request is merged, its branch.

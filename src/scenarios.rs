@@ -463,7 +463,9 @@ fn items_of(project: &Project, kind: &str) -> Vec<inbox::Item> {
 
 fn set_front_matter(project: &Project, extra: &str) {
     let text = std::fs::read_to_string(project.project_md()).unwrap();
-    std::fs::write(project.project_md(), text.replacen("+++\n", &format!("+++\n{extra}\n"), 1).replacen("nudge = false\n", "", 1)).unwrap();
+    let key = extra.split('=').next().unwrap_or("").trim();
+    let kept: String = text.lines().filter(|l| key.is_empty() || !l.starts_with(&format!("{key} ="))).map(|l| format!("{l}\n")).collect();
+    std::fs::write(project.project_md(), kept.replacen("+++\n", &format!("+++\n{extra}\n"), 1)).unwrap();
 }
 
 /// A world with the coordinator idle and one thread whose agent is `state`.
@@ -562,22 +564,32 @@ fn a_finishing_thread_gives_one_item_and_one_nudge_until_a_new_item_arrives() {
 }
 
 #[test]
-fn with_nudge_off_the_user_gets_one_notification_and_the_coordinator_no_prompt() {
-    let (world, project, _) = finished_world("idle");
-    settle(&project);
-    inbox::write(&project, "routine", "r", "due", "Prompt").unwrap();
-    let ctx = world.ctx();
-    for _ in 0..3 {
-        ticker::tick_project(&ctx, &project).unwrap();
+fn a_thread_that_needs_you_gives_one_specific_notification_with_sound_unless_muted() {
+    for mute in [false, true] {
+        let (world, project, _) = finished_world("blocked");
+        if mute {
+            set_front_matter(&project, "mute = true");
+        }
+        thread::update(&project, "t-0001", |t| {
+            t.last_state = "blocked".into();
+            t.last_state_change = "2026-01-01T00:00:00Z".into();
+        })
+        .unwrap();
+        let ctx = world.ctx();
+        for _ in 0..3 {
+            ticker::tick_project(&ctx, &project).unwrap();
+        }
+        let calls = world.runner.calls.borrow();
+        let shown: Vec<&Cmd> = calls.iter().filter(|c| c.display().contains("notification show")).collect();
+        if mute {
+            assert!(shown.is_empty());
+            continue;
+        }
+        assert_eq!(shown.len(), 1, "{:?}", shown.iter().map(|c| c.display()).collect::<Vec<_>>());
+        assert_eq!(&shown[0].args[2..], ["Demo · t-0001", "--body", "needs you · blocked", "--sound", "request"]);
+        // The batched "N new inbox items" notification is gone.
+        assert!(!calls.iter().any(|c| c.display().contains("new inbox item")));
     }
-    assert_eq!(world.runner.count("notification show"), 1);
-    assert_eq!(world.runner.count("agent prompt"), 0);
-    // Items `context` has shown are not announced again.
-    inbox::write(&project, "routine", "r", "due again", "Prompt").unwrap();
-    let ids: Vec<String> = inbox::unhandled(&project).into_iter().map(|i| i.id).collect();
-    inbox::mark_seen(&project, &ids).unwrap();
-    ticker::tick_project(&ctx, &project).unwrap();
-    assert_eq!(world.runner.count("notification show"), 1);
 }
 
 #[test]
@@ -672,7 +684,19 @@ fn a_comment_gives_an_item_with_no_body_and_an_unchanged_summary_gives_nothing()
     crate::steps::save_state(&project, &state).unwrap();
     ticker::tick_project(&ctx, &project).unwrap();
     assert_eq!(items_of(&project, "pr").len(), 1);
-    assert_eq!(world.runner.count("gh pr view"), 2);
+    let gh_calls = world.runner.calls.borrow().iter().filter(|c| c.program == "gh").count();
+    assert_eq!(gh_calls, 2);
+    // The default pr-followup routine prompted the thread once, with facts the
+    // binary generated and nothing written on GitHub.
+    let calls = world.runner.calls.borrow();
+    let prompts: Vec<&Cmd> = calls.iter().filter(|c| c.display().contains("agent prompt")).collect();
+    assert_eq!(prompts.len(), 1);
+    let text = prompts[0].args.last().unwrap();
+    assert!(text.starts_with("[hp routine pr-followup] Your pull request https://github.com/owner/app/pull/7 changed: 1 comment(s)"), "{text}");
+    assert!(!text.contains("mallory") && !text.contains("SECRET"));
+    drop(calls);
+    assert!(std::fs::read_to_string(thread::task_path(&project, "t-0001")).unwrap().contains("[hp routine pr-followup]"));
+    assert_eq!(items_of(&project, "routine").len(), 1);
 }
 
 #[test]

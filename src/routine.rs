@@ -79,18 +79,32 @@ struct Front {
     schedule: String,
     command: String,
     enabled: bool,
+    /// `"pr"`: fired by the ticker's pull request poll instead of a schedule.
+    on: String,
+    events: Vec<String>,
 }
 
 impl Default for Front {
     fn default() -> Self {
-        Front { schedule: String::new(), command: String::new(), enabled: true }
+        Front { schedule: String::new(), command: String::new(), enabled: true, on: String::new(), events: Vec::new() }
     }
+}
+
+/// The pull request events a `pr` routine can fire on.
+pub const PR_EVENTS: [&str; 4] = ["opened", "checks-failed", "review", "merged"];
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Trigger {
+    Schedule(Schedule),
+    /// `on = "pr"`, with the events it fires on (all of them when none are named).
+    Pr(Vec<String>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Routine {
     pub name: String,
-    pub schedule: Schedule,
+    pub trigger: Trigger,
+    /// The schedule as written, or `on pr: <events>`.
     pub schedule_text: String,
     /// Empty for a prompt-only routine.
     pub command: String,
@@ -118,10 +132,27 @@ pub fn parse(name: &str, text: &str) -> Result<Routine> {
     let rest = text.strip_prefix("+++\n").context("a routine must start with a `+++` line")?;
     let (front, body) = rest.split_once("\n+++\n").or_else(|| rest.strip_suffix("\n+++").map(|f| (f, ""))).context("no closing `+++` line")?;
     let front: Front = toml::from_str(front).context("front matter does not parse")?;
+    let (trigger, schedule_text) = match front.on.as_str() {
+        "" => (Trigger::Schedule(parse_schedule(&front.schedule)?), front.schedule.trim().to_string()),
+        "pr" => {
+            if !front.command.trim().is_empty() {
+                bail!("a `pr` routine prompts the thread; it has no `command`");
+            }
+            for event in &front.events {
+                if !PR_EVENTS.contains(&event.as_str()) {
+                    bail!("unknown pr event `{event}`; use {}", PR_EVENTS.join(", "));
+                }
+            }
+            let events = if front.events.is_empty() { PR_EVENTS.iter().map(|e| e.to_string()).collect() } else { front.events.clone() };
+            let text = format!("on pr: {}", events.join(", "));
+            (Trigger::Pr(events), text)
+        }
+        other => bail!("`on = \"{other}\"` is not a trigger; use `on = \"pr\"` or a `schedule`"),
+    };
     Ok(Routine {
         name: name.to_string(),
-        schedule: parse_schedule(&front.schedule)?,
-        schedule_text: front.schedule.trim().to_string(),
+        trigger,
+        schedule_text,
         command: front.command.trim().to_string(),
         enabled: front.enabled,
         prompt: body.trim().to_string(),
@@ -352,6 +383,13 @@ mod tests {
 
     #[test]
     fn routine_parsing_and_name_validation() {
+        let pr = parse("follow", "+++\non = \"pr\"\nevents = [\"checks-failed\", \"review\"]\n+++\nFix it.\n").unwrap();
+        assert_eq!(pr.trigger, Trigger::Pr(vec!["checks-failed".into(), "review".into()]));
+        assert_eq!(pr.schedule_text, "on pr: checks-failed, review");
+        assert!(matches!(parse("all", "+++\non = \"pr\"\n+++\nx").unwrap().trigger, Trigger::Pr(e) if e.len() == 4));
+        assert!(parse("bad", "+++\non = \"pr\"\nevents = [\"pushed\"]\n+++\n").is_err());
+        assert!(parse("bad", "+++\non = \"pr\"\ncommand = \"x\"\n+++\n").is_err());
+        assert!(parse("bad", "+++\non = \"slack\"\n+++\n").is_err());
         let r = parse("nightly", "+++\nschedule = \"daily 02:00\"\ncommand = \"./check.sh\"\n+++\n\nLook at the output.\n").unwrap();
         assert_eq!((r.name.as_str(), r.command.as_str(), r.enabled, r.prompt.as_str()), ("nightly", "./check.sh", true, "Look at the output."));
         let r = parse("p", "+++\nschedule = \"every 1h\"\nenabled = false\n+++\nPrompt").unwrap();
@@ -428,7 +466,8 @@ mod tests {
         std::fs::write(project.dir().join("routines/Bad Name.md"), "+++\nschedule = \"every 1h\"\n+++\nP").unwrap();
         std::fs::write(project.dir().join("routines/broken.md"), "+++\nschedule = \n+++\n").unwrap();
         let (routines, broken) = load_all(&project);
-        assert_eq!(routines.len(), 1);
+        // Theirs plus the default pr-followup routine.
+        assert_eq!(routines.len(), 2);
         assert_eq!(broken.len(), 2);
         assert!(broken.iter().all(|b| b.hash.len() == 64));
     }

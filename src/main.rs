@@ -8,6 +8,7 @@ mod herdr;
 mod inbox;
 mod lifecycle;
 mod names;
+mod notify;
 mod overview;
 mod paths;
 mod popup;
