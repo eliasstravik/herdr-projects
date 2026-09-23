@@ -737,13 +737,77 @@ fn pull_requests_are_checked_at_most_every_two_minutes() {
     assert_eq!(world.runner.count("gh pr view"), 1);
 }
 
+const MERGED_JSON: &str = r#"{"state":"MERGED","reviewDecision":"APPROVED","headRefName":"hp/demo/t-0001-task","headRefOid":"merged-head","headRepository":{"name":"app"},"headRepositoryOwner":{"login":"owner"}}"#;
+
+/// Backdates when the ticker first saw the merge.
+fn merged_seen_ago(project: &Project, secs: i64) {
+    let mut state = crate::steps::load_state(project);
+    let then = jiff::Timestamp::now().checked_sub(jiff::SignedDuration::from_secs(secs)).unwrap();
+    state.merged_seen.insert("t-0001".into(), then.to_string());
+    crate::steps::save_state(project, &state).unwrap();
+}
+
+fn merged_world(agent_state: &str) -> (World, Project) {
+    let (world, project) = pr_world(MERGED_JSON);
+    set_agents(&world, &project, agent_state);
+    world.runner.on("worktree remove", ok(r#"{"result":{}}"#));
+    world.runner.on("rev-parse --verify --quiet refs/heads/hp/demo/t-0001-task", ok("merged-head\n"));
+    world.runner.on("branch -D", ok(""));
+    (world, project)
+}
+
+/// A merge does not stop the agent: it may still tag, deploy and write its
+/// final report. Resolving it then kills it mid-work.
 #[test]
-fn a_merged_pull_request_resolves_its_thread_after_the_final_copy() {
-    let (world, project) = pr_world(r#"{"state":"MERGED","reviewDecision":"APPROVED","headRefName":"hp/demo/t-0001-task","headRepository":{"name":"app"},"headRepositoryOwner":{"login":"owner"}}"#);
-    ticker::tick_project(&world.ctx(), &project).unwrap();
+fn a_thread_merged_while_its_agent_works_is_not_resolved() {
+    let (world, project) = merged_world("working");
+    let ctx = world.ctx();
+    ticker::tick_project(&ctx, &project).unwrap();
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!((t.status, t.pr_state.as_str()), (Status::Open, "MERGED"));
+    // Still working long after the merge: still not resolved.
+    merged_seen_ago(&project, crate::steps::MERGE_GRACE_SECS + 60);
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Open);
+    assert_eq!(world.runner.count("worktree remove"), 0);
+}
+
+#[test]
+fn a_merged_thread_is_resolved_with_its_final_report_once_its_agent_is_done() {
+    let (world, project) = merged_world("working");
+    let ctx = world.ctx();
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Open);
+
+    // The agent finishes and writes its final report a minute after the merge.
+    merged_seen_ago(&project, 60);
+    let t = thread::load(&project, "t-0001").unwrap();
+    std::fs::create_dir_all(&t.thread_dir).unwrap();
+    std::fs::write(t.report_path(), format!("PR: {PR_URL}\n## Report\nmerged, tagged and deployed\n")).unwrap();
+    set_agents(&world, &project, "done");
+    ticker::tick_project(&ctx, &project).unwrap();
     let t = thread::load(&project, "t-0001").unwrap();
     assert_eq!((t.status, t.resolved_reason.as_str()), (Status::Resolved, "merged"));
+    assert!(std::fs::read_to_string(thread::home_report_path(&project, "t-0001")).unwrap().contains("deployed"));
+    assert_eq!(world.runner.count("worktree remove"), 1);
+    // The head commit from this tick's `gh` check, not only from a saved file.
+    assert_eq!(world.runner.count("branch -D hp/demo/t-0001-task"), 1);
     assert!(items_of(&project, "pr")[0].summary.contains("state MERGED"));
+    assert!(crate::steps::load_state(&project).merged_seen.is_empty());
+}
+
+/// Merged on GitHub while the agent sat idle with its report written: nothing
+/// new will come, so the thread is resolved after the grace period.
+#[test]
+fn a_merged_thread_whose_agent_stays_idle_is_resolved_after_the_grace_period() {
+    let (world, project) = merged_world("idle");
+    let ctx = world.ctx();
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Open);
+    merged_seen_ago(&project, crate::steps::MERGE_GRACE_SECS);
+    ticker::tick_project(&ctx, &project).unwrap();
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!((t.status, t.resolved_reason.as_str()), (Status::Resolved, "merged"));
 }
 
 #[test]

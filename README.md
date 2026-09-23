@@ -44,7 +44,7 @@ Say what you want once. The coordinator proposes threads and waits for your go-a
 
 ### 💬 Know when a thread needs an answer
 
-Agents report their own progress, so a thread that asked you something shows `needs you` even when it looks idle, and you get a notification that names the project and the thread. A background ticker follows pull requests: failing checks and review comments go back to the thread to fix, and a merged pull request resolves the thread and removes its worktree and branch.
+Agents report their own progress, so a thread that asked you something shows `needs you` even when it looks idle, and you get a notification that names the project and the thread. A background ticker follows pull requests: failing checks and review comments go back to the thread to fix, and a merged pull request resolves the thread and removes its worktree and branch once its agent has finished (it may still be tagging or deploying).
 
 ## Open your first project in three steps
 

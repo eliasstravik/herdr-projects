@@ -16,6 +16,9 @@ use crate::{inbox, pr, routine};
 
 pub const NUDGE_TEXT: &str = "[hp ticker] new inbox items, run context";
 pub const PR_INTERVAL_SECS: i64 = 120;
+/// A merged thread whose agent is not busy but wrote no report since the
+/// merge is resolved after this long.
+pub const MERGE_GRACE_SECS: i64 = 600;
 pub const DONE_RETENTION_DAYS: u64 = 30;
 const DEFAULT_OUTAGE_SECS: i64 = 600;
 
@@ -35,6 +38,8 @@ pub struct State {
     /// Hash of the set of unseen item ids that was last nudged.
     pub nudged: String,
     pub session_item_written: bool,
+    /// thread id -> when the ticker first saw its pull request merged.
+    pub merged_seen: BTreeMap<String, String>,
 }
 
 pub fn load_state(project: &Project) -> State {
@@ -384,9 +389,6 @@ pub fn pull_requests(ctx: &Ctx, project: &Project, state: &mut State, memory: &m
                 }
                 errors.extend(fire_pr_routines(ctx, project, &t, &url, &events, &summary));
                 state.prs.insert(t.id.clone(), summary);
-                if merged {
-                    errors.extend(resolve_after_copy(ctx, project, &t, "merged").err());
-                }
             }
         }
     }
@@ -419,9 +421,51 @@ fn fire_pr_routines(ctx: &Ctx, project: &Project, t: &Thread, url: &str, events:
     errors
 }
 
+/// Resolve-on-merge, every slow tick. A merge does not stop the agent: it may
+/// still tag, deploy or write its final report. So a merged thread is resolved
+/// only when its agent is neither working nor waiting on the user, and it has
+/// written a report since the merge or `MERGE_GRACE_SECS` have passed.
+pub fn resolve_merged(ctx: &Ctx, project: &Project, state: &mut State, now: jiff::Timestamp) -> Vec<anyhow::Error> {
+    let mut errors = Vec::new();
+    let threads = thread::list(project);
+    state.merged_seen.retain(|id, _| threads.iter().any(|t| t.id == *id && t.status == Status::Open));
+    for t in threads {
+        if t.status != Status::Open || !t.pr_state.eq_ignore_ascii_case("merged") {
+            continue;
+        }
+        let seen = state.merged_seen.entry(t.id.clone()).or_insert_with(|| now.to_string()).clone();
+        if !merged_thread_may_resolve(&t, &seen, now) {
+            continue;
+        }
+        let head = state.prs.get(&t.id).map(|s| s.head_oid.clone()).unwrap_or_default();
+        match resolve_after_copy(ctx, project, &t, "merged", head) {
+            Ok(_) => {
+                state.merged_seen.remove(&t.id);
+            }
+            Err(error) => errors.push(error),
+        }
+    }
+    errors
+}
+
+/// `seen`: when the ticker first saw the merge. `last_group` is fresh: the
+/// cheap tick computes it before the slow one runs.
+fn merged_thread_may_resolve(t: &Thread, seen: &str, now: jiff::Timestamp) -> bool {
+    let busy = [Group::Working, Group::WaitingOnYou].iter().any(|g| g.token() == t.last_group);
+    if busy {
+        return false;
+    }
+    let Ok(seen) = seen.parse::<jiff::Timestamp>() else {
+        return true;
+    };
+    let reported_since = t.last_report_change.parse::<jiff::Timestamp>().is_ok_and(|r| r > seen);
+    reported_since || now.as_second() - seen.as_second() >= MERGE_GRACE_SECS
+}
+
 /// Auto-resolve and resolve-on-merge: the final copy first; if it fails the
-/// thread is not resolved and the next tick tries again.
-fn resolve_after_copy(ctx: &Ctx, project: &Project, t: &Thread, reason: &str) -> Result<bool> {
+/// thread is not resolved and the next tick tries again. `merged_head` is the
+/// merged pull request's head commit (empty when there is none).
+fn resolve_after_copy(ctx: &Ctx, project: &Project, t: &Thread, reason: &str, merged_head: String) -> Result<bool> {
     let copied = threads::final_copy(ctx, project, t);
     if let CopyOutcome::Failed(error) = &copied.outcome {
         anyhow::bail!("{}: not resolved ({reason}) because the final copy failed: {error}", t.id);
@@ -432,7 +476,7 @@ fn resolve_after_copy(ctx: &Ctx, project: &Project, t: &Thread, reason: &str) ->
         t.prompt_pending = false;
     })?;
     let complete = copied.outcome == CopyOutcome::Complete;
-    let notes = threads::clean(ctx, project, &resolved, &threads::Clean { keep_worktree: false, copy_complete: complete });
+    let notes = threads::clean(ctx, project, &resolved, &threads::Clean { keep_worktree: false, copy_complete: complete, merged_head });
     let why = if reason == "auto" { "it was idle for `auto_resolve_days` and was resolved automatically; `thread resolve --reopen` undoes it".to_string() } else { format!("resolved ({reason})") };
     inbox::write(project, "thread-state", &t.id, &format!("{}: {why}: {}", thread_label(t), notes.join("; ")), "")?;
     Ok(true)
@@ -461,7 +505,7 @@ pub fn auto_resolve(ctx: &Ctx, project: &Project, settings: &Settings, memory: &
         if since_thread.min(since_ticker_start) < limit {
             continue;
         }
-        if let Err(error) = resolve_after_copy(ctx, project, &t, "auto") {
+        if let Err(error) = resolve_after_copy(ctx, project, &t, "auto", String::new()) {
             errors.push(error);
         }
     }
