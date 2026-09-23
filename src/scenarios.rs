@@ -8,7 +8,7 @@ use std::rc::Rc;
 use crate::coordinator;
 use crate::paths::{Ctx, Env};
 use crate::project::{self, Project};
-use crate::runner::Cmd;
+use crate::runner::{Cmd, Output};
 use crate::runner::fake::{FakeRunner, fail, ok};
 use crate::thread::{self, Kind, Status, Thread};
 use crate::threads::{self, ResolveArgs, StartArgs};
@@ -1127,6 +1127,7 @@ fn open_alive(world: &World, project: &Project) -> anyhow::Result<()> {
         agent: None,
         agent_args: Vec::new(),
         new: false,
+        here: false,
     };
     crate::coordinator::open(&world.ctx(), &project.slug, &options)
 }
@@ -1193,6 +1194,7 @@ fn open_starts_a_coordinator_without_a_priming_prompt_then_focuses_it_and_resume
         agent: None,
         agent_args: Vec::new(),
         new,
+        here: false,
     };
     let ctx = world.ctx();
 
@@ -1256,6 +1258,7 @@ fn open_new_starts_a_fresh_coordinator_beside_a_live_one_without_its_session() {
         agent: None,
         agent_args: Vec::new(),
         new,
+        here: false,
     };
     let ctx = world.ctx();
     crate::coordinator::open(&ctx, "demo", &options(false)).unwrap();
@@ -1339,4 +1342,203 @@ fn sweep_leaves_kept_worktrees_and_copies_a_resolved_threads_files_first() {
     let orphans = crate::sweep::find(&world.ctx(), &project);
     assert_eq!(orphans.len(), 1, "{orphans:?}");
     assert!(matches!(&orphans[0], crate::sweep::Orphan::Worktree { path, thread: None, .. } if path == "/wt/stray"));
+}
+
+// ------------------------------------------------------- open in this pane
+
+/// `open` run from shell pane `w5:p1` (working in /tmp) of the session at
+/// `a.sock`, with `vars` added to the pane's variables. Each run of the fake
+/// `claude` executable takes the next (exit code, `agent list`) from `runs`.
+struct Here {
+    world: World,
+    project: Project,
+    socket: PathBuf,
+    dir: String,
+    runs: Rc<RefCell<Vec<(i32, String)>>>,
+}
+
+impl Here {
+    fn new(vars: &[(&str, &str)]) -> Here {
+        let world = World::new();
+        let project = project::create(&world.root, "demo", "Ship it", vec![]).unwrap();
+        let socket = world.home.path().join("a.sock");
+        std::fs::write(&socket, b"").unwrap();
+        let socket_text = socket.to_string_lossy().into_owned();
+        let mut all = vec![("HERDR_PANE_ID", "w5:p1"), ("HERDR_SOCKET_PATH", socket_text.as_str())];
+        all.extend_from_slice(vars);
+        let world = World { env: Env::for_test(world.home.path(), &all), ..world };
+        *world.panes.borrow_mut() = format!("[{}]", pane_json("w5", "w5:t1", "w5:p1", "/tmp"));
+        world.runner.on("agent rename", ok(r#"{"result":{}}"#));
+        world.runner.on("agent focus", ok(r#"{"result":{}}"#));
+        world.runner.on("workspace get", ok(r#"{"result":{"workspace":{"label":"Demo"}}}"#));
+        world.runner.on("workspace create", ok(r#"{"result":{"root_pane":{"workspace_id":"w3","tab_id":"w3:t1","pane_id":"w3:p1"}}}"#));
+        world.runner.on("tab rename", ok(r#"{"result":{}}"#));
+        world.runner.on("agent start", ok(r#"{"result":{"agent":{"pane_id":"w3:p1","tab_id":"w3:t1","workspace_id":"w3","name":"hpc-demo","agent":"claude","agent_status":"idle"}}}"#));
+        let runs: Rc<RefCell<Vec<(i32, String)>>> = Rc::default();
+        let (agents, queue) = (world.agents.clone(), runs.clone());
+        world.runner.on_fn(
+            |cmd| cmd.program == "claude",
+            move |_| {
+                let (code, listed) = queue.borrow_mut().remove(0);
+                *agents.borrow_mut() = listed;
+                Ok(Output { code: Some(code), ..Output::default() })
+            },
+        );
+        let dir = project.canonical_dir().to_string_lossy().into_owned();
+        Here { world, project, socket, dir, runs }
+    }
+
+    /// An agent Herdr detects in `pane` as a child of `open`: the shell stays
+    /// in /tmp, the agent's own directory is the project home.
+    fn child_agent(&self, pane: &str, name: &str, session: &str) -> String {
+        let workspace = pane.split(':').next().unwrap();
+        format!(
+            r#"{{"pane_id":"{pane}","tab_id":"{workspace}:t1","workspace_id":"{workspace}","cwd":"/tmp","foreground_cwd":"{}","name":"{name}","agent":"claude","agent_status":"idle","agent_session":{{"value":"{session}"}}}}"#,
+            self.dir
+        )
+    }
+
+    fn open_with(&self, env: &Env, here: bool, new: bool) -> anyhow::Result<()> {
+        let options = crate::coordinator::OpenOptions {
+            session: crate::paths::SessionFlags { session: None, socket: Some(self.socket.clone()) },
+            rebind: false,
+            agent: None,
+            agent_args: Vec::new(),
+            new,
+            here,
+        };
+        crate::coordinator::open(&Ctx { env, ..self.world.ctx() }, "demo", &options)
+    }
+
+    fn open(&self, here: bool, new: bool) -> anyhow::Result<()> {
+        self.open_with(&self.world.env, here, new)
+    }
+
+    fn foreground(&self) -> Vec<Cmd> {
+        self.world.runner.calls.borrow().iter().filter(|c| c.program == "claude").cloned().collect()
+    }
+}
+
+#[test]
+fn open_from_a_shell_pane_runs_the_coordinator_there_then_focuses_it_and_new_starts_fresh_elsewhere() {
+    let h = Here::new(&[]);
+    h.runs.borrow_mut().push((0, format!("[{}]", h.child_agent("w5:p1", "", "sess-7"))));
+    h.open(true, false).unwrap();
+
+    // The agent ran in this pane, in the project home, not through a new tab.
+    assert_eq!(h.world.runner.count("agent start"), 0);
+    assert_eq!(h.world.runner.count("workspace create") + h.world.runner.count("tab create"), 0);
+    let runs = h.foreground();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].cwd.as_deref(), Some(h.project.canonical_dir().as_path()));
+    assert!(runs[0].args.is_empty(), "{}", runs[0].display());
+    assert!(runs[0].env.contains(&("PWD".to_string(), h.dir.clone())));
+    // Detected, named and recorded like any coordinator.
+    assert_eq!(h.world.runner.count("agent rename w5:p1 hpc-demo"), 1);
+    let record = h.project.coordinator().unwrap();
+    assert_eq!(
+        (record.workspace_id.as_str(), record.tab_id.as_str(), record.pane_id.as_str(), record.agent_name.as_str(), record.cwd.as_str(), record.agent_session.as_str()),
+        ("w5", "w5:t1", "w5:p1", "hpc-demo", h.dir.as_str(), "sess-7")
+    );
+    assert!(h.world.runner.calls.borrow().iter().any(|c| c.display().contains("report-metadata") && c.args.contains(&"w5:p1".to_string())));
+
+    // Running it again, from another shell pane, focuses it: no second agent.
+    *h.world.agents.borrow_mut() = format!("[{}]", h.child_agent("w5:p1", "hpc-demo", "sess-7"));
+    let socket = h.socket.to_string_lossy().into_owned();
+    let other = Env::for_test(h.world.home.path(), &[("HERDR_PANE_ID", "w6:p1"), ("HERDR_SOCKET_PATH", &socket)]);
+    h.open_with(&other, true, false).unwrap();
+    assert_eq!(h.foreground().len(), 1);
+    assert_eq!(h.world.runner.count("agent focus w5:p1"), 1);
+
+    // --new from that pane starts a second coordinator there, never resuming.
+    *h.world.panes.borrow_mut() = format!("[{},{}]", pane_json("w5", "w5:t1", "w5:p1", "/tmp"), pane_json("w6", "w6:t1", "w6:p1", "/tmp"));
+    h.runs.borrow_mut().push((0, format!("[{},{}]", h.child_agent("w5:p1", "hpc-demo", "sess-7"), h.child_agent("w6:p1", "", "sess-8"))));
+    h.open_with(&other, true, true).unwrap();
+    let runs = h.foreground();
+    assert_eq!(runs.len(), 2);
+    assert!(runs[1].args.is_empty(), "{}", runs[1].display());
+    assert_eq!(h.world.runner.count("agent rename w6:p1 hpc-demo-1"), 1);
+    let record = h.project.coordinator().unwrap();
+    assert_eq!((record.pane_id.as_str(), record.agent_session.as_str()), ("w6:p1", "sess-8"));
+}
+
+#[test]
+fn open_in_a_pane_resumes_the_recorded_session_and_starts_fresh_when_that_fails() {
+    let h = Here::new(&[]);
+    h.project
+        .update_coordinator(|c| {
+            c.socket = h.socket.to_string_lossy().into_owned();
+            c.agent = "claude".into();
+            c.agent_session = "sess-42".into();
+            c.cwd = h.dir.clone();
+        })
+        .unwrap();
+    h.runs.borrow_mut().push((0, format!("[{}]", h.child_agent("w5:p1", "", "sess-42"))));
+    h.open(true, false).unwrap();
+    assert_eq!(h.foreground()[0].args, ["--resume", "sess-42"]);
+    assert_eq!(h.project.coordinator().unwrap().agent_session, "sess-42");
+
+    // The session is gone: claude exits at once, never detected, and a fresh
+    // one starts in its place.
+    *h.world.agents.borrow_mut() = "[]".into();
+    h.runs.borrow_mut().push((1, "[]".into()));
+    h.runs.borrow_mut().push((0, format!("[{}]", h.child_agent("w5:p1", "", "sess-9"))));
+    h.open(true, false).unwrap();
+    let runs = h.foreground();
+    assert_eq!(runs.len(), 3);
+    assert_eq!(runs[1].args, ["--resume", "sess-42"]);
+    assert!(runs[2].args.is_empty(), "{}", runs[2].display());
+    assert_eq!(h.project.coordinator().unwrap().agent_session, "sess-9");
+}
+
+#[test]
+fn open_makes_a_tab_outside_a_shell_pane_from_the_popup_with_tab_or_from_an_agents_shell() {
+    let socket = |h: &Here| h.socket.to_string_lossy().into_owned();
+    // Not inside Herdr, --tab, the popup (a plugin pane), another session's
+    // pane, and a pane an agent occupies: all make a tab and run nothing here.
+    let cases: Vec<(&str, Box<dyn Fn(&Here) -> (Env, bool)>)> = vec![
+        ("outside herdr", Box::new(|h| (Env::for_test(h.world.home.path(), &[]), true))),
+        ("--tab", Box::new(|h| (h.world.env.clone(), false))),
+        ("popup", Box::new(|h| (Env::for_test(h.world.home.path(), &[("HERDR_PANE_ID", "w5:p1"), ("HERDR_SOCKET_PATH", &socket(h)), ("HERDR_PLUGIN_STATE_DIR", "/state")]), true))),
+        ("other session", Box::new(|h| (Env::for_test(h.world.home.path(), &[("HERDR_PANE_ID", "w5:p1"), ("HERDR_SOCKET_PATH", "/other.sock")]), true))),
+        ("agent's shell", Box::new(|h| {
+            *h.world.agents.borrow_mut() = format!("[{}]", agent_json("w5", "w5:t1", "w5:p1", "/tmp", "someone", "working"));
+            (h.world.env.clone(), true)
+        })),
+    ];
+    for (case, setup) in cases {
+        let h = Here::new(&[]);
+        let (env, here) = setup(&h);
+        h.open_with(&env, here, false).unwrap();
+        assert!(h.foreground().is_empty(), "{case}");
+        assert_eq!(h.world.runner.count("workspace create"), 1, "{case}");
+        assert_eq!(h.world.runner.count("agent start hpc-demo --kind claude --pane w3:p1"), 1, "{case}");
+        assert_eq!(h.project.coordinator().unwrap().pane_id, "w3:p1", "{case}");
+    }
+}
+
+#[test]
+fn a_tab_thread_of_a_coordinator_running_in_another_workspace_opens_the_project_workspace() {
+    let h = Here::new(&[]);
+    h.runs.borrow_mut().push((0, format!("[{}]", h.child_agent("w5:p1", "", "sess-7"))));
+    h.open(true, false).unwrap();
+    let folder = h.project.dir().join("threads/t-0001");
+    h.world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":""}}}"#));
+    let args = |title: &str| StartArgs { title: title.into(), repo: None, machine: None, agent: None, kind: Some(Kind::Tab), agent_args: vec![], base: None, task: "Look.".into() };
+    let t = threads::start(&h.world.ctx(), "demo", args("Research")).unwrap();
+    let calls = h.world.runner.calls.borrow();
+    let create = calls.iter().filter(|c| c.display().contains("workspace create")).last().unwrap();
+    assert!(create.display().contains("threads/t-0001") && create.args.contains(&"Demo".to_string()), "{}", create.display());
+    drop(calls);
+    // (`Here` scripts every new workspace as w3.)
+    assert_eq!(h.world.runner.count("tab rename w3:t1 Research"), 1);
+    assert_eq!((t.workspace_id.as_str(), t.pane_id.as_str()), ("w3", "w3:p1"));
+
+    // The next tab thread finds that workspace by its shell in the project folder.
+    let folder = std::fs::canonicalize(&folder).unwrap();
+    *h.world.panes.borrow_mut() = format!("[{},{}]", pane_json("w5", "w5:t1", "w5:p1", "/tmp"), pane_json("w3", "w3:t1", "w3:p1", &folder.to_string_lossy()));
+    h.world.runner.on("tab create", ok(r#"{"result":{"root_pane":{"workspace_id":"w3","tab_id":"w3:t2","pane_id":"w3:p2"}}}"#));
+    threads::start(&h.world.ctx(), "demo", args("More")).unwrap();
+    assert_eq!(h.world.runner.count("tab create --workspace w3"), 1);
+    assert_eq!(h.world.runner.count("workspace create"), 1);
 }

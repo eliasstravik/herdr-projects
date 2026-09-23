@@ -52,9 +52,11 @@ herdr-projects new "Billing" --goal "Ship the new billing page" --repo ~/dev/app
 herdr-projects open billing
 ```
 
-`new` creates `~/.herdr-projects/billing/` with an `AGENTS.md` (and `CLAUDE.md` linked to it). `open` makes a Herdr workspace in that folder and starts your agent there. The agent reads `AGENTS.md`, which tells it that it is the coordinator and which two commands to run. Nothing is typed into it for you.
+`new` creates `~/.herdr-projects/billing/` with an `AGENTS.md` (and `CLAUDE.md` linked to it). `open` starts your agent in that folder, right in the pane you typed it in. Quit the agent and you are back at your shell. The agent reads `AGENTS.md`, which tells it that it is the coordinator and which two commands to run. Nothing is typed into it for you.
 
-- `open billing --agent codex` starts another agent kind. Any agent you start by hand in that folder is a coordinator too, and several can run side by side (`open --new`).
+- `open billing --tab` starts it in a new tab of the project's own workspace instead. The action menu and the popup always do that, and so does `open` run outside Herdr.
+- When a coordinator is already running, `open` jumps to it. `open --new` starts another beside it, with a fresh conversation.
+- `open billing --agent codex` starts another agent kind. Any agent you start by hand in that folder is a coordinator too, and several can run side by side.
 - `open` resumes the agent's last session when Herdr recorded one for that kind.
 - The first time, your agent may ask whether you trust the folder: answer it in the coordinator's pane.
 

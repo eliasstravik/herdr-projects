@@ -148,6 +148,10 @@ pub struct Pane {
     pub workspace_id: String,
     #[serde(default)]
     pub cwd: String,
+    /// The working directory of the pane's foreground process; differs from
+    /// `cwd` (the shell's) while `open` runs a coordinator in the pane.
+    #[serde(default)]
+    pub foreground_cwd: String,
     /// Stable across pane moves; restarts with the server.
     #[serde(default)]
     pub terminal_id: String,
@@ -173,6 +177,9 @@ pub struct Agent {
     pub agent_status: String,
     #[serde(default)]
     pub cwd: String,
+    /// See `Pane::foreground_cwd`.
+    #[serde(default)]
+    pub foreground_cwd: String,
     #[serde(default)]
     pub terminal_id: String,
     #[serde(default)]
@@ -185,6 +192,12 @@ impl Agent {
     /// The one "ready for a prompt" predicate: state `idle` or `done`.
     pub fn ready(&self) -> bool {
         ready_state(&self.agent_status)
+    }
+
+    /// True when the agent works in `dir`: its shell's directory, or its own
+    /// when it runs as a child of `open` in a shell elsewhere.
+    pub fn works_in(&self, dir: &str) -> bool {
+        !dir.is_empty() && (self.cwd == dir || self.foreground_cwd == dir)
     }
 
     pub fn session_id(&self) -> &str {

@@ -46,7 +46,7 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 | Command | What it does |
 | --- | --- |
 | `new <name> [--goal] [--repo PATH[@MACHINE]]...` | Create a project folder. |
-| `open <project> [--agent KIND] [--agent-arg A]... [--new] [--session N \| --socket P] [--rebind]` | Workspace and a coordinator agent; focuses a running one. |
+| `open <project> [--agent KIND] [--agent-arg A]... [--new] [--tab] [--session N \| --socket P] [--rebind]` | A coordinator agent in the project folder; focuses a running one. From a shell pane inside Herdr it runs in that pane and quitting it returns to the shell; `--tab`, the popup, actions and a terminal outside Herdr use a tab of the project's workspace. |
 | `context <project> [--peek]` | The digest the coordinator reads every turn. |
 | `coordinator prompt <project> --text-file F` | A sentence to the coordinator (the popup's task keys use it). |
 | `thread start <project> --title T [--repo PATH] [--kind worktree\|tab\|checkout] [--agent KIND] [--agent-arg A]... [--machine M] [--base REF] --task-file F` | New thread; `-` reads the task from standard input. |
