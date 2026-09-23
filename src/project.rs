@@ -130,6 +130,8 @@ pub struct Settings {
     pub max_parallel_threads: u32,
     pub auto_resolve_days: u32,
     pub nudge: bool,
+    /// Silences every notification for the project except errors.
+    pub mute: bool,
     pub repos: Vec<Repo>,
 }
 
@@ -146,6 +148,7 @@ impl Default for Settings {
             // text the user has half-typed (docs/herdr-notes.md, stage 2). With
             // `false` the ticker shows a herdr notification instead.
             nudge: false,
+            mute: false,
             repos: Vec::new(),
         }
     }
@@ -192,7 +195,9 @@ struct ProjectState {
     status: Status,
 }
 
-/// The coordinator's pane and the session the project belongs to.
+/// The session and workspace the project belongs to, and the coordinator pane
+/// `open` last started or focused. Any agent whose working directory is `cwd`
+/// is a coordinator; the ticker lists them in `.state/coordinators.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(default)]
 pub struct Coordinator {
@@ -203,9 +208,12 @@ pub struct Coordinator {
     pub tab_id: String,
     pub pane_id: String,
     pub agent_name: String,
+    /// The canonical project folder.
     pub cwd: String,
-    pub prime_pending: bool,
-    pub launch_attempts: u32,
+    /// The Herdr agent kind `open` last started.
+    pub agent: String,
+    /// The last native session id Herdr reported for that kind, for resume.
+    pub agent_session: String,
     pub updated: String,
 }
 
@@ -410,14 +418,93 @@ const INSTRUCTIONS_TEMPLATE: &str = "\
 
 Standing instructions for this project. Every thread starts from this text and
 from the project's memory. Replace this paragraph with how you want work done:
-conventions, what to check before finishing, what never to do.
+conventions, what to check before finishing, what never to do. Ask the
+coordinator to change it, or edit it here.
 
-The settings above, between the `+++` lines, are yours to edit. `nudge = true`
-lets the ticker prompt the coordinator when something changed; it is off by
-default because a prompt that arrives while you are typing in the coordinator
-is merged with, and submits, your half-typed text. With it off you get a herdr
-notification instead.
+The settings above, between the `+++` lines, are changed from the projects
+popup or by asking the coordinator.
 ";
+
+/// The folders every project has. `uploads/` is yours (files for threads),
+/// `library/` holds what threads produced.
+pub const SUBDIRS: [&str; 9] = ["memory", "scratch", "routines", "threads", "inbox", "inbox/done", "library", "uploads", ".state"];
+
+/// The text of `AGENTS.md`. Harnesses load it from every ancestor of their
+/// working directory, and tab threads run under `threads/<id>/`, so it says
+/// who is who by working directory. `prefix` is `<absolute binary> --root
+/// <root>`: bare `hp` is on no harness's `PATH`.
+pub fn agents_md(name: &str, slug: &str, prefix: &str) -> String {
+    format!(
+        "# {name}\n\n\
+         This folder is the home of the Herdr project \"{name}\" (`{slug}`). Written by herdr-projects; `doctor --fix` refreshes it.\n\n\
+         If your working directory is exactly this folder, you are the coordinator of {name}: run `{prefix} skill` now and follow what it prints, and run `{prefix} context {slug}` now and whenever you need project state.\n\n\
+         If your working directory is under `threads/`, you are a thread: your brief is in your own folder (`.herdr-project/{slug}-<id>/brief.md`); ignore the rest of this file.\n"
+    )
+}
+
+/// The command prefix `AGENTS.md` carries, so `doctor` can check that its
+/// binary still exists.
+pub fn prefix_in_agents_md(text: &str) -> Option<String> {
+    let line = text.lines().find(|l| l.starts_with("If your working directory is exactly this folder"))?;
+    let start = line.find('`')? + 1;
+    let rest = &line[start..];
+    let end = rest.find(" skill`")?;
+    Some(rest[..end].to_string())
+}
+
+/// Writes `AGENTS.md`, `CLAUDE.md` (a relative symbolic link to it) and
+/// creates `uploads/`. Idempotent; used by `new` and by `doctor --fix`.
+pub fn write_priming(project: &Project, prefix: &str) -> Result<()> {
+    let dir = project.dir();
+    let (settings, _) = project.read_project_md()?;
+    let name = display_name(&settings.name, &project.slug);
+    write_atomic(&dir.join("AGENTS.md"), agents_md(&name, &project.slug, prefix).as_bytes())?;
+    let claude = dir.join("CLAUDE.md");
+    let link_ok = std::fs::read_link(&claude).is_ok_and(|target| target == Path::new("AGENTS.md"));
+    if !link_ok {
+        if std::fs::symlink_metadata(&claude).is_ok() {
+            // A regular file or a link elsewhere: keep its text beside it, once.
+            let kept = dir.join("CLAUDE.md.before-herdr-projects");
+            if !kept.exists() {
+                std::fs::rename(&claude, &kept)?;
+            } else {
+                std::fs::remove_file(&claude)?;
+            }
+        }
+        std::os::unix::fs::symlink("AGENTS.md", &claude).with_context(|| format!("could not link {}", claude.display()))?;
+    }
+    if !dir.join("uploads").is_dir() {
+        std::fs::create_dir(dir.join("uploads"))?;
+    }
+    Ok(())
+}
+
+/// What `doctor` finds wrong with a project's priming files, as short notes.
+pub fn priming_problems(project: &Project, prefix: &str) -> Vec<String> {
+    let dir = project.dir();
+    let mut problems = Vec::new();
+    match std::fs::read_to_string(dir.join("AGENTS.md")) {
+        Err(_) => problems.push("AGENTS.md is missing".into()),
+        Ok(text) => match prefix_in_agents_md(&text) {
+            None => problems.push("AGENTS.md does not name the binary".into()),
+            Some(found) => {
+                let binary = found.split(" --root ").next().unwrap_or("").trim_matches('\'');
+                if !Path::new(binary).is_file() {
+                    problems.push(format!("AGENTS.md points at a binary that does not exist ({binary})"));
+                } else if found != prefix {
+                    problems.push("AGENTS.md names another binary or root than this one".into());
+                }
+            }
+        },
+    }
+    if !std::fs::read_link(dir.join("CLAUDE.md")).is_ok_and(|t| t == Path::new("AGENTS.md")) {
+        problems.push("CLAUDE.md is not a link to AGENTS.md".into());
+    }
+    if !dir.join("uploads").is_dir() {
+        problems.push("uploads/ is missing".into());
+    }
+    problems
+}
 
 /// Creates the folder and skeleton files. The only code path that creates a
 /// project's directories. Fails if the slug exists.
@@ -455,7 +542,7 @@ pub fn create(root: &Path, name: &str, goal: &str, repos: Vec<Repo>) -> Result<P
 
     std::fs::create_dir_all(root)?;
     std::fs::create_dir(&dir).with_context(|| format!("could not create {}", dir.display()))?;
-    for sub in ["memory", "scratch", "routines", "threads", "inbox", "inbox/done", "library", ".state"] {
+    for sub in SUBDIRS {
         std::fs::create_dir_all(dir.join(sub))?;
     }
     write_atomic(
@@ -546,7 +633,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(project.slug, "demo");
-        for sub in ["memory", "scratch", "routines", "threads", "inbox/done", "library", ".state"] {
+        for sub in ["memory", "scratch", "routines", "threads", "inbox/done", "library", "uploads", ".state"] {
             assert!(project.dir().join(sub).is_dir(), "{sub}");
         }
         assert!(project.dir().join("MEMORY.md").is_file());
@@ -568,6 +655,41 @@ mod tests {
         assert!(body.starts_with("# Instructions"));
         assert_eq!(project.status(), Status::Active);
         assert!(create(&root, "demo", "", vec![]).is_err());
+    }
+
+    #[test]
+    fn priming_files_are_written_linked_and_checked() {
+        let root = tempfile::tempdir().unwrap();
+        let project = create(root.path(), "Demo Project", "", vec![]).unwrap();
+        let prefix = format!("{} --root {}", std::env::current_exe().unwrap().display(), root.path().display());
+        write_priming(&project, &prefix).unwrap();
+        let text = std::fs::read_to_string(project.dir().join("AGENTS.md")).unwrap();
+        assert!(text.contains("you are the coordinator of Demo Project"));
+        assert!(text.contains(&format!("`{prefix} skill`")));
+        assert!(text.contains(&format!("`{prefix} context demo-project`")));
+        assert!(text.contains("under `threads/`, you are a thread"));
+        assert_eq!(prefix_in_agents_md(&text).as_deref(), Some(prefix.as_str()));
+        assert_eq!(std::fs::read_link(project.dir().join("CLAUDE.md")).unwrap(), Path::new("AGENTS.md"));
+        assert!(project.dir().join("uploads").is_dir());
+        assert!(priming_problems(&project, &prefix).is_empty());
+
+        // Idempotent, and a stale binary path is reported.
+        write_priming(&project, &prefix).unwrap();
+        let stale = agents_md("Demo Project", "demo-project", "/no/such/binary --root /r");
+        std::fs::write(project.dir().join("AGENTS.md"), stale).unwrap();
+        let problems = priming_problems(&project, &prefix);
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].contains("does not exist"));
+        write_priming(&project, &prefix).unwrap();
+        assert!(priming_problems(&project, &prefix).is_empty());
+
+        // A hand-written CLAUDE.md is kept beside the link, not lost.
+        std::fs::remove_file(project.dir().join("CLAUDE.md")).unwrap();
+        std::fs::write(project.dir().join("CLAUDE.md"), "mine").unwrap();
+        assert!(priming_problems(&project, &prefix).iter().any(|p| p.contains("CLAUDE.md")));
+        write_priming(&project, &prefix).unwrap();
+        assert_eq!(std::fs::read_to_string(project.dir().join("CLAUDE.md.before-herdr-projects")).unwrap(), "mine");
+        assert!(priming_problems(&project, &prefix).is_empty());
     }
 
     #[test]
@@ -643,10 +765,10 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let project = create(root.path(), "demo", "", vec![]).unwrap();
         project.update_coordinator(|c| c.socket = "/s".into()).unwrap();
-        project.update_coordinator(|c| c.prime_pending = true).unwrap();
+        project.update_coordinator(|c| c.agent_session = "sess".into()).unwrap();
         let record = project.coordinator().unwrap();
         assert_eq!(record.socket, "/s");
-        assert!(record.prime_pending);
+        assert_eq!(record.agent_session, "sess");
         assert!(std::fs::read_dir(project.state_dir())
             .unwrap()
             .flatten()

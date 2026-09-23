@@ -34,7 +34,21 @@ pub enum Kind {
     #[default]
     Worktree,
     Tab,
+    /// A tab in the project workspace whose working directory is the repo's
+    /// main checkout, asked for explicitly with `thread start --kind checkout`.
+    Checkout,
     Adopted,
+}
+
+impl Kind {
+    pub fn parse(text: &str) -> Result<Kind> {
+        match text {
+            "worktree" => Ok(Kind::Worktree),
+            "tab" => Ok(Kind::Tab),
+            "checkout" => Ok(Kind::Checkout),
+            other => bail!("`{other}` is not a thread kind (worktree, tab or checkout)"),
+        }
+    }
 }
 
 /// `threads/<id>.toml`. An empty string means "not set". Paths are stored as
@@ -60,6 +74,9 @@ pub struct Thread {
     pub tab_id: String,
     pub pane_id: String,
     pub agent: String,
+    /// Extra arguments for the agent CLI at launch (a model flag, for example),
+    /// appended after the project's `thread_agent_args` safety setting.
+    pub agent_args: Vec<String>,
     pub agent_name: String,
     pub cwd: String,
     pub created: String,
@@ -186,7 +203,67 @@ pub fn branch_name(slug: &str, id: &str, title: &str) -> String {
 }
 
 pub fn agent_name(slug: &str, id: &str) -> String {
-    format!("hp-{slug}-{id}")
+    crate::names::thread(slug, id)
+}
+
+/// Appends a forwarded prompt to `threads/<id>.task.md` under `## Follow-ups`
+/// with a timestamp, so a restarted thread re-reads it with its task.
+pub fn append_follow_up(project: &Project, id: &str, text: &str) -> Result<()> {
+    let _lock = project.lock()?;
+    let path = task_path(project, id);
+    let mut task = std::fs::read_to_string(&path).unwrap_or_default();
+    if !task.ends_with('\n') && !task.is_empty() {
+        task.push('\n');
+    }
+    if !task.lines().any(|l| l.trim() == "## Follow-ups") {
+        task.push_str("\n## Follow-ups\n");
+    }
+    task.push_str(&format!("\n### {}\n\n{}\n", project::now(), text.trim()));
+    write_atomic(&path, task.as_bytes())
+}
+
+/// The lines of a report's `## Next` section: one recommended action per
+/// line, list markers removed, empty lines dropped.
+pub fn next_lines(report: &str) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut inside = false;
+    for line in report.lines() {
+        if line.starts_with("## ") {
+            inside = line.trim() == "## Next";
+            continue;
+        }
+        if !inside || line.starts_with('#') {
+            if line.starts_with('#') {
+                inside = false;
+            }
+            continue;
+        }
+        let text = line.trim();
+        let text = text
+            .strip_prefix("- ")
+            .or_else(|| text.strip_prefix("* "))
+            .or_else(|| text.split_once(". ").filter(|(n, _)| n.chars().all(|c| c.is_ascii_digit())).map(|(_, rest)| rest))
+            .unwrap_or(text)
+            .trim();
+        if !text.is_empty() {
+            lines.push(text.to_string());
+        }
+    }
+    lines
+}
+
+/// Lines the coordinator added to a thread's Next list (`threads/<id>.next.md`).
+pub fn extra_next_path(project: &Project, id: &str) -> PathBuf {
+    threads_dir(project).join(format!("{id}.next.md"))
+}
+
+/// The thread's Next list: the report's `## Next` lines, then the coordinator's.
+pub fn all_next(project: &Project, id: &str) -> Vec<String> {
+    let report = std::fs::read_to_string(home_report_path(project, id)).unwrap_or_default();
+    let mut lines = next_lines(&report);
+    let extra = std::fs::read_to_string(extra_next_path(project, id)).unwrap_or_default();
+    lines.extend(extra.lines().map(str::trim).filter(|l| !l.is_empty()).map(|l| l.trim_start_matches("- ").to_string()));
+    lines
 }
 
 /// `<agent working directory>/.herdr-project/<slug>-<id>`, for every kind.
@@ -203,6 +280,13 @@ pub fn launch_prompt(slug: &str, id: &str) -> String {
 // ---------------------------------------------------------------- briefs
 
 pub struct BriefInput<'a> {
+    pub project_name: &'a str,
+    pub slug: &'a str,
+    pub goal: &'a str,
+    pub repos: &'a [project::Repo],
+    /// The project's `uploads/` folder on the home machine.
+    pub uploads_path: &'a str,
+    pub remote: bool,
     pub instructions: &'a str,
     pub memory_index: &'a str,
     /// (file name, contents), in the order they should be inlined.
@@ -213,8 +297,34 @@ pub struct BriefInput<'a> {
     pub library_path: &'a str,
 }
 
+/// The header block every brief opens with: what the worker acts on, never
+/// the coordinator's or the ticker's settings.
+fn brief_header(input: &BriefInput) -> String {
+    let mut out = String::from("# Project\n\n");
+    out.push_str(&format!("- Project: {} (`{}`)\n", input.project_name, input.slug));
+    out.push_str(&format!("- Goal: {}\n", if input.goal.trim().is_empty() { "(none set)" } else { input.goal.trim() }));
+    if input.repos.is_empty() {
+        out.push_str("- Repos: (none)\n");
+    } else {
+        out.push_str("- Repos:\n");
+        for repo in input.repos {
+            match &repo.machine {
+                Some(machine) => out.push_str(&format!("  - {} on machine `{machine}`\n", repo.path)),
+                None => out.push_str(&format!("  - {} (local)\n", repo.path)),
+            }
+        }
+    }
+    let uploads_note = if input.remote { " (on the home machine; not copied to yours)" } else { "" };
+    out.push_str(&format!("- Uploads, files from the user: `{}`{uploads_note}\n", input.uploads_path));
+    out.push_str(&format!("- Library, files for the user: `{}`\n", input.library_path));
+    out.push_str(&format!("- Report: `{}`\n", input.report_path));
+    out
+}
+
 pub fn compose_brief(input: &BriefInput) -> String {
-    let mut brief = String::from(include_str!("../skill/THREAD.md").trim_end());
+    let mut brief = brief_header(input);
+    brief.push('\n');
+    brief.push_str(include_str!("../skill/THREAD.md").trim_end());
     brief.push_str("\n\n");
     if input.restart {
         brief.push_str(
@@ -248,15 +358,17 @@ pub fn compose_brief(input: &BriefInput) -> String {
     brief.push_str("\n# Task\n\n");
     brief.push_str(input.task.trim());
     brief.push_str(&format!(
-        "\n\n# Paths\n\n- Report: `{}`\n- Library folder for files meant for the user: `{}`\n",
-        input.report_path, input.library_path
+        "\n\n# Paths\n\n- Report: `{}`\n- Library folder for files meant for the user: `{}`\n- Uploads from the user: `{}`\n",
+        input.report_path, input.library_path, input.uploads_path
     ));
     brief
 }
 
 /// Reads the project's instructions and memory and composes the brief.
 pub fn brief_for(project: &Project, thread: &Thread, task: &str, restart: bool) -> Result<String> {
-    let (_, instructions) = project.read_project_md()?;
+    let (settings, instructions) = project.read_project_md()?;
+    let project_name = project::display_name(&settings.name, &project.slug);
+    let uploads = project.dir().join("uploads").to_string_lossy().into_owned();
     let memory_index = std::fs::read_to_string(project.dir().join("MEMORY.md")).unwrap_or_default();
     let mut names: Vec<String> = std::fs::read_dir(project.dir().join("memory"))
         .map(|entries| {
@@ -278,6 +390,12 @@ pub fn brief_for(project: &Project, thread: &Thread, task: &str, restart: bool) 
         })
         .collect();
     Ok(compose_brief(&BriefInput {
+        project_name: &project_name,
+        slug: &project.slug,
+        goal: &settings.goal,
+        repos: &settings.repos,
+        uploads_path: &uploads,
+        remote: thread.is_remote(),
         instructions: &instructions,
         memory_index: &memory_index,
         memory_files: &memory_files,
@@ -900,7 +1018,17 @@ mod tests {
             ("b.md".to_string(), "x".repeat(MEMORY_CAP_CHARS)),
             ("c.md".to_string(), "gamma fact".to_string()),
         ];
-        let brief = compose_brief(&BriefInput {
+        let repos = vec![
+            project::Repo { path: "/srv/app".into(), machine: Some("box".into()) },
+            project::Repo { path: "/home/me/lib".into(), machine: None },
+        ];
+        let input = BriefInput {
+            project_name: "Demo",
+            slug: "demo",
+            goal: "Ship it",
+            repos: &repos,
+            uploads_path: "/root/demo/uploads",
+            remote: false,
             instructions: "Always run the tests.",
             memory_index: "# Memory\n- a\n- b\n- c",
             memory_files: &files,
@@ -908,20 +1036,59 @@ mod tests {
             restart: true,
             report_path: "/wt/.herdr-project/demo-t-0001/report.md",
             library_path: "/wt/.herdr-project/demo-t-0001/library",
-        });
+        };
+        let brief = compose_brief(&input);
         let pos = |needle: &str| brief.find(needle).unwrap_or_else(|| panic!("missing {needle}"));
+        // The header comes first: name, goal, repos with machines, uploads, library, report.
+        assert!(brief.starts_with("# Project\n\n- Project: Demo (`demo`)\n- Goal: Ship it\n"));
+        assert!(pos("/srv/app on machine `box`") < pos("/home/me/lib (local)"));
+        assert!(pos("Uploads, files from the user: `/root/demo/uploads`") < pos("# Thread brief"));
         assert!(pos("# Thread brief") < pos("previous attempt"));
         assert!(pos("previous attempt") < pos("Always run the tests."));
         assert!(pos("Always run the tests.") < pos("# Memory"));
         assert!(pos("# Memory") < pos("alpha fact"));
         assert!(pos("alpha fact") < pos("Do the thing."));
-        assert!(pos("Do the thing.") < pos("/wt/.herdr-project/demo-t-0001/report.md"));
+        assert!(pos("Do the thing.") < pos("# Paths"));
         assert!(brief.contains("gamma fact"));
         assert!(brief.contains("Not inlined because project memory is over 32000 characters: memory/b.md."));
         assert!(!brief.contains(&"x".repeat(100)));
+        // No operational settings reach a thread.
+        for word in ["max_parallel_threads", "auto_resolve_days", "nudge", "coordinator_agent", "thread_agent"] {
+            assert!(!brief.contains(word), "{word}");
+        }
 
-        let fresh = compose_brief(&BriefInput { instructions: "", memory_index: "", memory_files: &[], task: "t", restart: false, report_path: "r", library_path: "l" });
+        let fresh = compose_brief(&BriefInput { goal: "", repos: &[], remote: true, instructions: "", memory_index: "", memory_files: &[], task: "t", restart: false, report_path: "r", library_path: "l", ..input });
         assert!(!fresh.contains("previous attempt"));
+        assert!(fresh.contains("- Goal: (none set)\n- Repos: (none)\n"));
+        assert!(fresh.contains("on the home machine; not copied"));
+    }
+
+    #[test]
+    fn next_lines_come_from_the_next_section_only() {
+        let report = "PR: https://github.com/o/r/pull/1\n## Report\n- not this\n## Next\n- Merge the PR\n* Fix CI\n3. Confirm assumption X\n\n## Remember\n- nor this\n";
+        assert_eq!(next_lines(report), ["Merge the PR", "Fix CI", "Confirm assumption X"]);
+        assert!(next_lines("## Report\nnothing\n").is_empty());
+        assert!(next_lines("## Next\n").is_empty());
+    }
+
+    #[test]
+    fn follow_ups_are_appended_to_the_task_file_with_a_timestamp() {
+        let root = tempfile::tempdir().unwrap();
+        let project = project::create(root.path(), "demo", "", vec![]).unwrap();
+        let t = allocate(&project, |_| {}).unwrap();
+        std::fs::write(task_path(&project, &t.id), "The task.").unwrap();
+        append_follow_up(&project, &t.id, "Also do Y.\n").unwrap();
+        append_follow_up(&project, &t.id, "And Z.").unwrap();
+        let text = std::fs::read_to_string(task_path(&project, &t.id)).unwrap();
+        assert!(text.starts_with("The task.\n\n## Follow-ups\n\n### 20"), "{text}");
+        assert_eq!(text.matches("## Follow-ups").count(), 1);
+        assert_eq!(text.matches("\n### ").count(), 2);
+        assert!(text.ends_with("And Z.\n"));
+
+        // The coordinator's extra Next lines come after the report's.
+        std::fs::write(home_report_path(&project, &t.id), "## Next\n- From the report\n").unwrap();
+        std::fs::write(extra_next_path(&project, &t.id), "- Added by the coordinator\n").unwrap();
+        assert_eq!(all_next(&project, &t.id), ["From the report", "Added by the coordinator"]);
     }
 
     fn local_thread(project: &Project, dir: &Path) -> Thread {

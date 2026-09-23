@@ -57,17 +57,28 @@ enum Command {
         #[arg(long)]
         all: bool,
     },
-    /// Open a project: its workspace, coordinator tab and coordinator agent
+    /// Open a project: its workspace and a coordinator agent in its folder
     Open {
         slug: String,
-        /// Send the priming prompt again
+        /// Herdr agent kind for the coordinator (default: coordinator_agent in PROJECT.md)
+        #[arg(long, value_name = "KIND")]
+        agent: Option<String>,
+        /// Extra argument for the agent CLI, repeatable (for example a model flag)
+        #[arg(long = "agent-arg", value_name = "ARG", allow_hyphen_values = true)]
+        agent_args: Vec<String>,
+        /// Start another coordinator even though one is running
         #[arg(long)]
-        reprime: bool,
+        new: bool,
         /// Move the project to this session when its recorded socket no longer exists
         #[arg(long)]
         rebind: bool,
         #[command(flatten)]
         session: SessionArgs,
+    },
+    /// The coordinator: send it a sentence
+    Coordinator {
+        #[command(subcommand)]
+        command: CoordinatorCommand,
     },
     /// Print the digest the coordinator reads at the start of every turn
     Context {
@@ -149,8 +160,11 @@ enum Command {
     },
     /// Print the coordinator skill
     Skill,
-    /// Check the setup: versions, tools, root, ticker and each project's session
+    /// Check the setup: versions, tools, root, ticker and each project's files and session
     Doctor {
+        /// Repair what can be repaired: priming files, uploads/, stale binary paths
+        #[arg(long)]
+        fix: bool,
         #[command(flatten)]
         session: SessionArgs,
     },
@@ -174,6 +188,17 @@ enum InboxCommand {
 }
 
 #[derive(Subcommand)]
+enum CoordinatorCommand {
+    /// Send a sentence to the project's coordinator (the popup's task keys use this)
+    Prompt {
+        slug: String,
+        /// The text; `-` reads standard input
+        #[arg(long, value_name = "FILE")]
+        text_file: String,
+    },
+}
+
+#[derive(Subcommand)]
 enum ThreadCommand {
     /// Start a thread: a worktree workspace for --repo, else a tab in the project workspace
     Start {
@@ -184,9 +209,15 @@ enum ThreadCommand {
         repo: Option<String>,
         #[arg(long, value_name = "LABEL")]
         machine: Option<String>,
-        /// Agent kind (default: thread_agent in PROJECT.md)
+        /// Herdr agent kind (default: thread_agent in PROJECT.md)
         #[arg(long, value_name = "KIND")]
         agent: Option<String>,
+        /// Placement: worktree (default with --repo), tab (default without), or checkout (a tab on the repo's main checkout)
+        #[arg(long, value_name = "worktree|tab|checkout")]
+        kind: Option<String>,
+        /// Extra argument for the agent CLI, repeatable (for example --agent-arg --model --agent-arg opus)
+        #[arg(long = "agent-arg", value_name = "ARG", allow_hyphen_values = true)]
+        agent_args: Vec<String>,
         #[arg(long, value_name = "REF")]
         base: Option<String>,
         /// The task; `-` reads standard input
@@ -194,8 +225,17 @@ enum ThreadCommand {
         task_file: String,
     },
     /// Bring back a thread whose pane is gone or whose start failed
-    Restart { slug: String, id: String },
-    /// Send a follow-up to a thread's agent
+    Restart {
+        slug: String,
+        id: String,
+        /// Restart with another Herdr agent kind
+        #[arg(long, value_name = "KIND")]
+        agent: Option<String>,
+        /// Replace the extra agent CLI arguments (repeatable; none given keeps the old ones, unless the kind changes)
+        #[arg(long = "agent-arg", value_name = "ARG", allow_hyphen_values = true)]
+        agent_args: Vec<String>,
+    },
+    /// Send a follow-up to a thread's agent (recorded in its task file)
     Prompt {
         slug: String,
         id: String,
@@ -203,10 +243,32 @@ enum ThreadCommand {
         #[arg(long, value_name = "FILE")]
         text_file: String,
     },
+    /// A thread's Next list: print it, forward line N as a prompt, or add a line
+    Next {
+        slug: String,
+        id: String,
+        /// Forward this line (1-based) to the thread as a prompt
+        #[arg(long, value_name = "N", conflicts_with = "add")]
+        line: Option<usize>,
+        /// Add a line to the list
+        #[arg(long, value_name = "TEXT")]
+        add: Option<String>,
+    },
+    /// Send Escape to a thread's pane (the harness's own interrupt)
+    Stop { slug: String, id: String },
     /// List threads with live state and group
-    List { slug: String },
-    /// Show one thread's record
-    Show { slug: String, id: String },
+    List {
+        slug: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show one thread's record, group, note and Next list
+    Show {
+        slug: String,
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
     /// Record an existing local agent pane as a thread of this project
     Adopt {
         slug: String,
@@ -294,8 +356,10 @@ pub fn run() -> Result<()> {
         Command::New { name, goal, repos } => {
             let repos = repos.iter().map(|arg| project::parse_repo_arg(arg)).collect();
             let project = project::create(&ctx.root, &name, &goal, repos)?;
+            let prefix = coordinator::current_prefix(&ctx.root)?;
+            project::write_priming(&project, &prefix)?;
             println!("created `{}` at {}", project.slug, project.dir().display());
-            println!("next: {} open {}", coordinator::current_prefix(&ctx.root)?, project.slug);
+            println!("next: {prefix} open {}", project.slug);
             Ok(())
         }
         Command::List { all } => {
@@ -314,15 +378,23 @@ pub fn run() -> Result<()> {
             }
             Ok(())
         }
-        Command::Open { slug, reprime, rebind, session } => coordinator::open(
+        Command::Open { slug, agent, agent_args, new, rebind, session } => coordinator::open(
             &ctx,
             &slug,
             &OpenOptions {
                 session: session.into(),
-                reprime,
                 rebind,
+                agent,
+                agent_args,
+                new,
             },
         ),
+        Command::Coordinator { command } => match command {
+            CoordinatorCommand::Prompt { slug, text_file } => {
+                let text = read_text(&text_file)?;
+                coordinator::prompt(&ctx, &slug, &text)
+            }
+        },
         Command::Context { slug, peek } => coordinator::context(&ctx, &slug, peek),
         Command::Overview { slug, wait } => overview::run(&ctx, slug.as_deref(), wait),
         Command::Focus { slug } => overview::focus(&ctx, slug.as_deref()),
@@ -336,17 +408,21 @@ pub fn run() -> Result<()> {
             }
         },
         Command::Thread { command } => match command {
-            ThreadCommand::Start { slug, title, repo, machine, agent, base, task_file } => {
+            ThreadCommand::Start { slug, title, repo, machine, agent, kind, agent_args, base, task_file } => {
                 let task = read_text(&task_file)?;
-                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, agent, base, task })?;
-                println!("{}", serde_json::json!({ "id": thread.id, "kind": thread.kind, "branch": thread.branch, "pane_id": thread.pane_id }));
+                let kind = kind.as_deref().map(crate::thread::Kind::parse).transpose()?;
+                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, agent, kind, agent_args, base, task })?;
+                println!("{}", serde_json::json!({ "id": thread.id, "kind": thread.kind, "agent": thread.agent, "branch": thread.branch, "pane_id": thread.pane_id }));
                 Ok(())
             }
-            ThreadCommand::Restart { slug, id } => {
-                let thread = threads::restart(&ctx, &slug, &id)?;
-                println!("{} is back in pane {}; the ticker launches its agent", thread.id, thread.pane_id);
+            ThreadCommand::Restart { slug, id, agent, agent_args } => {
+                let args = (!agent_args.is_empty()).then_some(agent_args);
+                let thread = threads::restart(&ctx, &slug, &id, agent.as_deref(), args)?;
+                println!("{} is back in pane {}; the ticker launches its {} agent", thread.id, thread.pane_id, thread.agent);
                 Ok(())
             }
+            ThreadCommand::Next { slug, id, line, add } => threads::next(&ctx, &slug, &id, line, add.as_deref()),
+            ThreadCommand::Stop { slug, id } => threads::stop(&ctx, &slug, &id),
             ThreadCommand::Prompt { slug, id, text_file } => {
                 let text = read_text(&text_file)?;
                 let state = threads::prompt(&ctx, &slug, &id, &text)?;
@@ -359,8 +435,8 @@ pub fn run() -> Result<()> {
                 println!("{}", serde_json::json!({ "id": thread.id, "kind": thread.kind, "pane_id": thread.pane_id, "prompt_pending": thread.prompt_pending }));
                 Ok(())
             }
-            ThreadCommand::List { slug } => threads::print_list(&ctx, &slug),
-            ThreadCommand::Show { slug, id } => threads::print_show(&ctx, &slug, &id),
+            ThreadCommand::List { slug, json } => threads::print_list(&ctx, &slug, json),
+            ThreadCommand::Show { slug, id, json } => threads::print_show(&ctx, &slug, &id, json),
             ThreadCommand::Ack { slug, id } => threads::ack(&ctx, &slug, &id),
             ThreadCommand::Resolve { slug, id, reopen, remove_worktree, skip_copy, discard_uncopied } => {
                 threads::resolve(&ctx, &slug, &id, &ResolveArgs { reopen, remove_worktree, skip_copy, discard_uncopied })
@@ -413,8 +489,8 @@ pub fn run() -> Result<()> {
             print!("{}", include_str!("../skill/COORDINATOR.md"));
             Ok(())
         }
-        Command::Doctor { session } => {
-            if !doctor::run(&ctx, &session.into())? {
+        Command::Doctor { fix, session } => {
+            if !doctor::run(&ctx, &session.into(), fix)? {
                 bail!("some checks failed");
             }
             Ok(())

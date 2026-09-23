@@ -103,7 +103,7 @@ pub fn run_action(ctx: &Ctx, id: &str) -> Result<()> {
             open_pane(ctx, "adopt", &Handoff { pane_id: pane, workspace_label: context.workspace_label, workspace_cwd: context.workspace_cwd, ..base })
         }
         "doctor" => {
-            let healthy = doctor::run(ctx, &SessionFlags::default())?;
+            let healthy = doctor::run(ctx, &SessionFlags::default(), false)?;
             let herdr = Herdr::new(ctx.env.herdr_bin(), socket(ctx)?, ctx.runner);
             let body = if healthy { "All required checks passed. Details: herdr plugin log --plugin herdr-projects" } else { "Some checks FAILED. Details: herdr plugin log --plugin herdr-projects" };
             let _ = herdr.notification_show("herdr-projects doctor", body);
@@ -115,7 +115,7 @@ pub fn run_action(ctx: &Ctx, id: &str) -> Result<()> {
 
 fn run_on_slug(ctx: &Ctx, command: &str, slug: &str) -> Result<()> {
     match command {
-        "open" => coordinator::open(ctx, slug, &OpenOptions { session: SessionFlags { session: None, socket: Some(PathBuf::from(socket(ctx)?)) }, reprime: false, rebind: false }),
+        "open" => coordinator::open(ctx, slug, &OpenOptions { session: SessionFlags { session: None, socket: Some(PathBuf::from(socket(ctx)?)) }, rebind: false, agent: None, agent_args: Vec::new(), new: false }),
         "pause" => lifecycle::set_status(ctx, slug, Status::Paused),
         "resume" => lifecycle::set_status(ctx, slug, Status::Active),
         other => bail!("`{other}` cannot be run from the picker"),

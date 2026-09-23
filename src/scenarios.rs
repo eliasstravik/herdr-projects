@@ -154,6 +154,8 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
             repo: Some(repo.to_string_lossy().into_owned()),
             machine: None,
             agent: None,
+            kind: None,
+            agent_args: vec!["--model".into(), "opus".into()],
             base: None,
             task: "Do the thing.".into(),
         },
@@ -183,6 +185,11 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
     assert_eq!(world.runner.count("agent start"), 1);
     assert_eq!(world.runner.count("agent prompt"), 0);
     assert_eq!(thread::load(&project, "t-0001").unwrap().launch_attempts, 1);
+    // The thread's own agent arguments follow `--`.
+    let calls = world.runner.calls.borrow();
+    let start = calls.iter().find(|c| c.display().contains("agent start")).unwrap();
+    assert!(start.args.ends_with(&["--".to_string(), "--model".to_string(), "opus".to_string()]), "{}", start.display());
+    drop(calls);
 
     // Tick 2: the agent is ready: prompt once, no second start.
     *world.agents.borrow_mut() = format!("[{}]", agent_json("w2", "w2:t1", "w2:p1", &wt, "hp-demo-t-0001", "idle"));
@@ -329,8 +336,10 @@ fn restart_defers_to_the_ticker_and_resets_launch_attempts() {
     *world.panes.borrow_mut() = format!("[{}]", pane_json("w2", "w2:t1", "w2:p1", &cwd));
     world.runner.on("rev-parse --git-path", fail(1, "not a repo"));
 
-    let t = threads::restart(&world.ctx(), "demo", "t-0001").unwrap();
+    let t = threads::restart(&world.ctx(), "demo", "t-0001", Some("codex"), None).unwrap();
     assert_eq!((t.status, t.prompt_pending, t.launch_attempts), (Status::Open, true, 0));
+    assert_eq!(t.agent, "codex");
+    assert!(threads::restart(&world.ctx(), "demo", "t-0001", Some("chatgpt"), None).is_err());
     assert!(t.error.is_empty());
     assert_eq!(world.runner.count("agent start"), 0);
     assert_eq!(world.runner.count("agent prompt"), 0);
@@ -397,7 +406,7 @@ fn thread_start_is_refused_when_paused() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
     project.set_status(project::Status::Paused).unwrap();
-    let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, kind: None, agent_args: vec![], base: None, task: "t".into() };
     let error = threads::start(&world.ctx(), "demo", args).unwrap_err().to_string();
     assert!(error.contains("paused"), "{error}");
     assert!(thread::list(&project).is_empty());
@@ -445,6 +454,16 @@ fn finished_world(state: &str) -> (World, Project, Thread) {
     (world, project, t)
 }
 
+/// Backdates every discovered coordinator's `pair_since`, so the idle guard
+/// lets the next tick nudge it.
+fn idle_for_a_minute(project: &Project) {
+    let mut panes = crate::coordinator::live(project);
+    for pane in &mut panes {
+        pane.pair_since = "2026-01-01T00:00:00Z".into();
+    }
+    crate::coordinator::save_live(project, &panes).unwrap();
+}
+
 /// Makes the fixture thread already Idle, so a test about something else does
 /// not also see its working-to-idle item.
 fn settle(project: &Project) {
@@ -474,8 +493,13 @@ fn a_finishing_thread_gives_one_item_and_one_nudge_until_a_new_item_arrives() {
     let ctx = world.ctx();
     let mut memory = Memory::new(&ctx);
 
-    // Tick 1 writes the item; tick 2 nudges; ticks 3 and 4 do nothing more.
-    for _ in 0..4 {
+    // Tick 1 writes the item and discovers the coordinator; a nudge waits
+    // until the coordinator has been idle for a minute; ticks 3 and 4 do
+    // nothing more.
+    ticker::tick_project_with(&ctx, &project, &mut memory).unwrap();
+    assert_eq!(world.runner.count("agent prompt"), 0);
+    idle_for_a_minute(&project);
+    for _ in 0..3 {
         ticker::tick_project_with(&ctx, &project, &mut memory).unwrap();
     }
     let items = items_of(&project, "thread-state");
@@ -499,9 +523,11 @@ fn a_finishing_thread_gives_one_item_and_one_nudge_until_a_new_item_arrives() {
     assert_eq!(items_of(&project, "thread-state").len(), 1);
     assert_eq!(nudges(&world), 1);
 
-    // A new report: one more item, one more nudge.
+    // A new report: one more item, one more nudge once the coordinator is idle.
     std::fs::write(Path::new(&t.thread_dir).join("report.md"), "## Report\nv2\n").unwrap();
-    for _ in 0..3 {
+    ticker::tick_project_with(&ctx, &project, &mut memory).unwrap();
+    idle_for_a_minute(&project);
+    for _ in 0..2 {
         ticker::tick_project_with(&ctx, &project, &mut memory).unwrap();
     }
     assert_eq!(items_of(&project, "thread-state").len(), 2);
@@ -1003,7 +1029,7 @@ fn a_remote_thread_blocked_at_a_poll_is_waiting_on_you_at_once() {
 fn a_remote_thread_without_a_repo_is_refused() {
     let world = World::new();
     world.project("demo", "a.sock");
-    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), agent: None, base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), agent: None, kind: None, agent_args: vec![], base: None, task: "t".into() };
     assert!(threads::start(&world.ctx(), "demo", args).unwrap_err().to_string().contains("needs --repo"));
 }
 
@@ -1014,8 +1040,10 @@ fn open_alive(world: &World, project: &Project) -> anyhow::Result<()> {
     let socket = world.home.path().join("a.sock");
     let options = crate::coordinator::OpenOptions {
         session: crate::paths::SessionFlags { session: None, socket: Some(socket) },
-        reprime: false,
         rebind: false,
+        agent: None,
+        agent_args: Vec::new(),
+        new: false,
     };
     crate::coordinator::open(&world.ctx(), &project.slug, &options)
 }
@@ -1060,4 +1088,114 @@ fn the_digest_prints_the_task_list_or_none() {
     std::fs::remove_file(&tasks).unwrap();
     let digest = coordinator::digest(&world.ctx(), &project, "hp").unwrap().0;
     assert!(digest.contains("## Tasks (TASKS.md)\n(none)"));
+}
+
+// ------------------------------------------------------------------ slice 1
+
+#[test]
+fn open_starts_a_coordinator_without_a_priming_prompt_then_focuses_it_and_resumes_a_known_session() {
+    let world = World::new();
+    let project = project::create(&world.root, "demo", "Ship it", vec![]).unwrap();
+    let socket = world.home.path().join("a.sock");
+    std::fs::write(&socket, b"").unwrap();
+    let dir = project.canonical_dir().to_string_lossy().into_owned();
+    world.runner.on("workspace create", ok(r#"{"result":{"root_pane":{"workspace_id":"w3","tab_id":"w3:t1","pane_id":"w3:p1"}}}"#));
+    world.runner.on("tab rename", ok(r#"{"result":{}}"#));
+    world.runner.on("workspace get", ok(r#"{"result":{"workspace":{"label":"Demo"}}}"#));
+    world.runner.on("agent focus", ok(r#"{"result":{}}"#));
+    world.runner.on("agent start", ok(r#"{"result":{"agent":{"pane_id":"w3:p1","tab_id":"w3:t1","workspace_id":"w3","name":"hpc-demo","agent":"claude","agent_status":"idle","agent_session":{"value":"sess-42"}}}}"#));
+    let options = |new: bool| crate::coordinator::OpenOptions {
+        session: crate::paths::SessionFlags { session: None, socket: Some(socket.clone()) },
+        rebind: false,
+        agent: None,
+        agent_args: Vec::new(),
+        new,
+    };
+    let ctx = world.ctx();
+
+    // First open: workspace, tab named coordinator, agent started, no prompt at all.
+    crate::coordinator::open(&ctx, "demo", &options(false)).unwrap();
+    assert_eq!(world.runner.count("agent prompt"), 0);
+    assert_eq!(world.runner.count("agent start"), 1);
+    let record = project.coordinator().unwrap();
+    assert_eq!((record.pane_id.as_str(), record.agent_name.as_str(), record.agent.as_str(), record.agent_session.as_str()), ("w3:p1", "hpc-demo", "claude", "sess-42"));
+    assert!(project.dir().join("AGENTS.md").is_file());
+    assert_eq!(std::fs::read_link(project.dir().join("CLAUDE.md")).unwrap().to_str(), Some("AGENTS.md"));
+    let calls = world.runner.calls.borrow();
+    let start = calls.iter().find(|c| c.display().contains("agent start")).unwrap();
+    assert!(start.display().starts_with("herdr agent start hpc-demo --kind claude --pane w3:p1"), "{}", start.display());
+    assert!(!start.display().contains("--resume"));
+    drop(calls);
+
+    // A coordinator is running in the folder (unnamed, started by hand): open focuses it.
+    *world.agents.borrow_mut() = format!("[{}]", agent_json("w3", "w3:t1", "w3:p1", &dir, "", "idle"));
+    crate::coordinator::open(&ctx, "demo", &options(false)).unwrap();
+    assert_eq!(world.runner.count("agent start"), 1);
+    assert_eq!(world.runner.count("agent focus"), 1);
+
+    // The pane is gone: a fresh open of the same kind resumes the recorded session.
+    *world.agents.borrow_mut() = "[]".into();
+    *world.panes.borrow_mut() = "[]".into();
+    crate::coordinator::open(&ctx, "demo", &options(false)).unwrap();
+    let calls = world.runner.calls.borrow();
+    let start = calls.iter().filter(|c| c.display().contains("agent start")).last().unwrap();
+    assert!(start.args.ends_with(&["--".to_string(), "--resume".to_string(), "sess-42".to_string()]), "{}", start.display());
+    drop(calls);
+
+    // Another kind never gets claude's session id, and --new starts beside a live one.
+    *world.agents.borrow_mut() = format!("[{}]", agent_json("w3", "w3:t1", "w3:p1", &dir, "hpc-demo", "idle"));
+    world.runner.on("tab create", ok(r#"{"result":{"root_pane":{"workspace_id":"w3","tab_id":"w3:t2","pane_id":"w3:p2"}}}"#));
+    *world.panes.borrow_mut() = format!("[{}]", pane_json("w3", "w3:t1", "w3:p1", &dir));
+    let another = crate::coordinator::OpenOptions { agent: Some("codex".into()), ..options(true) };
+    crate::coordinator::open(&ctx, "demo", &another).unwrap();
+    let calls = world.runner.calls.borrow();
+    let start = calls.iter().filter(|c| c.display().contains("agent start")).last().unwrap();
+    assert!(start.display().starts_with("herdr agent start hpc-demo-1 --kind codex --pane w3:p2"), "{}", start.display());
+    assert!(!start.display().contains("sess-42"));
+    drop(calls);
+    assert!(crate::coordinator::open(&ctx, "demo", &crate::coordinator::OpenOptions { agent: Some("chatgpt".into()), ..options(false) }).is_err());
+}
+
+#[test]
+fn a_tab_thread_gets_a_brief_with_the_project_header_and_prompts_are_recorded() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let text = std::fs::read_to_string(project.project_md()).unwrap();
+    std::fs::write(project.project_md(), text.replacen("goal = \"\"", "goal = \"Ship it\"", 1)).unwrap();
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    let folder = project.dir().join("threads/t-0001");
+    world.runner.on_fn(
+        |cmd| cmd.display().contains("tab create"),
+        move |_| Ok(ok(&format!(r#"{{"result":{{"root_pane":{{"workspace_id":"w1","tab_id":"w1:t2","pane_id":"w1:p2","cwd":"{}"}}}}}}"#, folder.display()))),
+    );
+    world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":""}}}"#));
+    world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
+    let ctx = world.ctx();
+    let t = threads::start(&ctx, "demo", StartArgs { title: "Research".into(), repo: None, machine: None, agent: None, kind: Some(Kind::Tab), agent_args: vec![], base: None, task: "Look into it.".into() }).unwrap();
+    assert_eq!(t.kind, Kind::Tab);
+    let brief = std::fs::read_to_string(Path::new(&t.thread_dir).join("brief.md")).unwrap();
+    assert!(brief.starts_with("# Project\n\n- Project: Demo (`demo`)\n- Goal: Ship it\n- Repos: (none)\n- Uploads"), "{brief}");
+    assert!(!brief.contains("max_parallel_threads"));
+
+    // A follow-up lands in the task file once it was accepted.
+    thread::update(&project, &t.id, |t| t.prompt_pending = false).unwrap();
+    *world.agents.borrow_mut() = format!("[{}]", agent_json("w1", "w1:t2", "w1:p2", &t.cwd, "hp-demo-t-0001", "working"));
+    threads::prompt(&ctx, "demo", "t-0001", "Also check the docs.").unwrap();
+    let task = std::fs::read_to_string(thread::task_path(&project, "t-0001")).unwrap();
+    assert!(task.contains("## Follow-ups"));
+    assert!(task.ends_with("Also check the docs.\n"));
+
+    // `thread next --line 1` forwards the report's own line and records it too.
+    std::fs::write(thread::home_report_path(&project, "t-0001"), "## Report\nok\n## Next\n- Open the PR\n").unwrap();
+    threads::next(&ctx, "demo", "t-0001", Some(1), None).unwrap();
+    let calls = world.runner.calls.borrow();
+    let last = calls.iter().filter(|c| c.display().contains("agent prompt")).last().unwrap();
+    assert_eq!(last.args.last().unwrap(), "Open the PR");
+    drop(calls);
+    assert!(threads::next(&ctx, "demo", "t-0001", Some(3), None).is_err());
+    threads::next(&ctx, "demo", "t-0001", None, Some("Clean up the branch")).unwrap();
+    assert_eq!(thread::all_next(&project, "t-0001"), ["Open the PR", "Clean up the branch"]);
+    let json = threads::row_json(&project, &threads::rows(&ctx, &project)[0]);
+    assert_eq!(json["next"], serde_json::json!(["Open the PR", "Clean up the branch"]));
+    assert_eq!(json["kind"], "tab");
 }
