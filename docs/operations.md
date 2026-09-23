@@ -60,6 +60,7 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 | `configure [--key K] [--hooks-only] [--dry-run]`, `unconfigure`, `report`, `progress` | Sidebar, keys, hooks, self-reports. |
 | `open-file <path>`, `open-url <url>` | Open a file in a new tab with `$EDITOR`, or a PR in the browser. |
 | `ticker start \| run \| stop \| status`, `doctor [--fix]`, `skill` | Housekeeping. |
+| `update [--check]` | Update to the newest release: fetch, rebuild, `doctor --fix`, restart the ticker. |
 
 ## Groups
 

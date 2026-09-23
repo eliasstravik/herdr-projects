@@ -67,6 +67,28 @@ Agents report their own progress, so a thread that asked you something shows `ne
 </tr>
 </table>
 
+## Updating
+
+**Once, if you're on 0.2.2 or older** (`herdr-projects --version`), which has no `update` yet:
+
+```bash
+herdr-projects ticker stop
+herdr plugin install eliasstravik/herdr-projects
+herdr-projects doctor --fix
+herdr-projects ticker start
+```
+
+Herdr rebuilds the plugin in the same folder, so your `~/.local/bin/herdr-projects` link keeps working. If you linked a local checkout with `herdr plugin link` instead, run `git pull` and `cargo build --release --locked` in it in place of the `herdr plugin install` line.
+
+**From then on:**
+
+```bash
+herdr-projects update           # fetch, rebuild, doctor --fix, restart the ticker
+herdr-projects update --check   # only print the installed and the newest version
+```
+
+`update` works for both install types and changes nothing when you're already on the newest release. A linked checkout must be on `main` with no uncommitted changes, or `update` stops and says why. When a build fails, the old version stays installed and the ticker is restarted. `doctor` says when a newer version is out.
+
 ## Get your questions answered
 
 ### Do I need to know how to code?

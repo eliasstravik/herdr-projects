@@ -53,6 +53,10 @@ fn report(
     let _ = writeln!(out, "config dir: {}", config_dir.display());
     let _ = writeln!(out);
 
+    if let Some(latest) = crate::update::newer_release(runner, crate::update::own_root().as_deref()) {
+        check(&mut out, None, "update", format!("a newer version is available ({latest}): run `herdr-projects update`"));
+    }
+
     let bin = env.herdr_bin();
     match herdr::version(&bin, runner) {
         Ok(version) if version >= herdr::MIN_VERSION => {
