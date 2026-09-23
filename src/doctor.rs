@@ -232,7 +232,7 @@ fn report(
             None => check(&mut out, None, &label, "not configured; `configure` installs the progress hooks".into()),
             Some(_) if text.contains(&expected) => check(&mut out, Some(true), &label, format!("{} runs this binary", file.display())),
             Some(_) if fix => {
-                let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false };
+                let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false, sidebar: false, key: None, herdr_config: None };
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
                 match crate::setup::configure(&ctx, &options) {
                     Ok(_) => check(&mut out, Some(true), &label, format!("fixed: {} now runs this binary", file.display())),
@@ -240,6 +240,29 @@ fn report(
                 }
             }
             Some(_) => check(&mut out, None, &label, format!("{} runs another binary or root; `doctor --fix` rewrites it", file.display())),
+        }
+    }
+
+    // Herdr's config.toml: rows, popup key and a tab-bar entry that runs this binary.
+    {
+        let file = crate::setup::herdr_config_path(env);
+        let binary = std::env::current_exe().unwrap_or_default();
+        let expected = crate::setup::tab_command(&binary, root);
+        let text = crate::setup::read(&file).ok().flatten().unwrap_or_default();
+        let key = file.to_string_lossy().into_owned();
+        match journal.get(&key) {
+            None => check(&mut out, None, "sidebar", "not configured; `configure` adds the sidebar rows, the popup key and the tab-bar count".into()),
+            Some(_) if text.contains(&expected) => check(&mut out, Some(true), "sidebar", format!("{} has the rows, the popup key and the tab-bar entry", file.display())),
+            Some(_) if fix => {
+                let options = crate::setup::ConfigureOptions { clients: vec![], claude_home: None, codex_home: None, dry_run: false, sidebar: true, key: None, herdr_config: None };
+                let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
+                let options = crate::setup::ConfigureOptions { clients: vec!["none".into()], ..options };
+                match crate::setup::configure(&ctx, &options) {
+                    Ok(_) => check(&mut out, Some(true), "sidebar", format!("fixed: {} now runs this binary in the tab bar", file.display())),
+                    Err(error) => check(&mut out, Some(false), "sidebar", format!("could not fix: {error:#}")),
+                }
+            }
+            Some(_) => check(&mut out, None, "sidebar", format!("{}'s tab-bar entry runs another binary or root; `doctor --fix` rewrites it", file.display())),
         }
     }
 

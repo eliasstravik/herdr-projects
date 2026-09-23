@@ -81,11 +81,32 @@ pub fn removal_baseline(previous: &Owned, current: &Owned) -> Result<Option<Stri
     current
         .before
         .as_deref()
-        .map(|text| match current.kind.as_str() {
-            "hooks" => hooks(text, current.command.as_deref().context("missing hook command")?, true),
-            other => bail!("unknown ownership kind {other}"),
-        })
+        .map(|text| remove_ours(&current.kind, text, current.command.as_deref()))
         .transpose()
+}
+
+/// A file's text with only this plugin's entries taken out.
+fn remove_ours(kind: &str, text: &str, command: Option<&str>) -> Result<String> {
+    match kind {
+        "hooks" => hooks(text, command.context("missing hook command")?, true),
+        "config" => crate::sidebar::config_edit(text, &crate::sidebar::Spec { key: String::new(), tab_command: command.unwrap_or("").to_string() }, true),
+        other => bail!("unknown ownership kind {other}"),
+    }
+}
+
+/// Herdr's config file: `HERDR_CONFIG_PATH`, else `$XDG_CONFIG_HOME/herdr`,
+/// else `~/.config/herdr/config.toml`.
+pub fn herdr_config_path(env: &Env) -> PathBuf {
+    if let Some(path) = env.var("HERDR_CONFIG_PATH") {
+        return PathBuf::from(path);
+    }
+    env.var("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| env.home.join(".config")).join("herdr/config.toml")
+}
+
+/// The tab-bar command: absolute paths, since it runs under `/bin/sh -lc` on
+/// the server with no plugin environment.
+pub fn tab_command(binary: &Path, root: &Path) -> String {
+    format!("{} --root {} needs-you --line", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
 }
 
 fn hook_entry(command: &str) -> serde_json::Value {
@@ -177,6 +198,11 @@ pub struct ConfigureOptions {
     pub claude_home: Option<PathBuf>,
     pub codex_home: Option<PathBuf>,
     pub dry_run: bool,
+    /// Also edit Herdr's config.toml: sidebar rows, popup key, tab-bar entry.
+    pub sidebar: bool,
+    /// The popup key (default: the one already configured, else `prefix+a`).
+    pub key: Option<String>,
+    pub herdr_config: Option<PathBuf>,
 }
 
 /// Whether the standalone agent-progress plugin's hooks are installed in a
@@ -202,7 +228,7 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
     let mut journal = load_journal(&ctx.config_dir);
     let mut edits: Vec<(PathBuf, Owned)> = Vec::new();
     let mut notes = Vec::new();
-    for client in &clients {
+    for client in clients.iter().filter(|c| matches!(c.as_str(), "claude" | "codex")) {
         let file = hook_file(ctx.env, client, options.claude_home.as_deref(), options.codex_home.as_deref());
         let command = hook_command(&binary, &ctx.root, client);
         let before = read(&file)?;
@@ -216,6 +242,35 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
         }
         notes.push(format!("{}: {} hook entries for `{command}`", file.display(), if before.is_some() { "adding" } else { "creating with" }));
         edits.push((file, Owned { before, after, kind: "hooks".into(), command: Some(command) }));
+    }
+    if options.sidebar {
+        let file = options.herdr_config.clone().unwrap_or_else(|| herdr_config_path(ctx.env));
+        let before = read(&file)?;
+        let text = before.clone().unwrap_or_default();
+        let current_key = text
+            .parse::<toml_edit::DocumentMut>()
+            .ok()
+            .and_then(|doc| {
+                doc.get("keys")?.get("command")?.as_array_of_tables()?.iter().find(|t| t.get("command").and_then(|c| c.as_str()) == Some(crate::sidebar::POPUP_ACTION))?.get("key")?.as_str().map(str::to_string)
+            });
+        let key = options.key.clone().or(current_key).unwrap_or_else(|| crate::sidebar::DEFAULT_KEY.to_string());
+        let defaults = ctx.runner.run(&crate::runner::Cmd::new(ctx.env.herdr_bin(), crate::herdr::CALL_TIMEOUT).arg("--default-config")).ok().filter(|o| o.success()).map(|o| o.stdout).unwrap_or_default();
+        let builtin = crate::sidebar::builtin_keys(&defaults);
+        if builtin.is_empty() {
+            notes.push("could not read Herdr's built-in key map (`herdr --default-config`); the popup key was checked against your config only".into());
+        }
+        if let Some(conflict) = crate::sidebar::key_conflict(&text, &key, &builtin) {
+            bail!("{conflict}; pick another popup key with `configure --key <key>`");
+        }
+        let command = tab_command(&binary, &ctx.root);
+        let after = crate::sidebar::config_edit(&text, &crate::sidebar::Spec { key: key.clone(), tab_command: command.clone() }, false)?;
+        if before.as_deref() == Some(after.as_str()) {
+            notes.push(format!("{}: sidebar rows, popup key `{key}` and tab-bar entry already in place", file.display()));
+        } else {
+            crate::sidebar::check_config(&ctx.env.herdr_bin(), ctx.runner, &after, &ctx.config_dir)?;
+            notes.push(format!("{}: adding the sidebar rows ($hp_state, $hp_activity, $hp), the popup key `{key}` and the tab-bar entry", file.display()));
+            edits.push((file, Owned { before, after, kind: "config".into(), command: Some(command) }));
+        }
     }
     if options.dry_run {
         return Ok(notes);
@@ -261,10 +316,7 @@ pub fn unconfigure(ctx: &Ctx) -> Result<Vec<String>> {
             }
             notes.push(format!("{key}: restored"));
         } else if let Some(text) = &current {
-            let cleaned = match owned.kind.as_str() {
-                "hooks" => hooks(text, owned.command.as_deref().unwrap_or(""), true)?,
-                other => bail!("unknown ownership kind {other}"),
-            };
+            let cleaned = remove_ours(&owned.kind, text, owned.command.as_deref())?;
             if cleaned != *text {
                 replace(path, &current, &cleaned)?;
             }
@@ -279,6 +331,44 @@ pub fn unconfigure(ctx: &Ctx) -> Result<Vec<String>> {
         notes.push("nothing was configured".into());
     }
     Ok(notes)
+}
+
+/// The session the user's shell or the plugin action talks to, if reachable.
+fn session_herdr<'a>(ctx: &'a Ctx) -> Option<crate::herdr::Herdr<'a>> {
+    let session = crate::paths::resolve_session(&crate::paths::SessionFlags::default(), ctx.env, ctx.runner).ok()?;
+    let herdr = crate::herdr::Herdr::new(ctx.env.herdr_bin(), &session.socket, ctx.runner);
+    herdr.reachable().then_some(herdr)
+}
+
+/// `herdr server reload-config`, so server-side settings (the tab-bar entry,
+/// keys) apply without a restart.
+pub fn reload_config(ctx: &Ctx) {
+    if let Some(herdr) = session_herdr(ctx) {
+        match herdr.call(&["server", "reload-config"], crate::herdr::CALL_TIMEOUT) {
+            Ok(_) => println!("reloaded the Herdr server's config"),
+            Err(error) => println!("could not reload the Herdr config ({error}); run `herdr server reload-config`"),
+        }
+    }
+}
+
+/// After `configure`: reload, then the default by-need agent order.
+pub fn apply_live(ctx: &Ctx) {
+    reload_config(ctx);
+    apply_view(ctx);
+    println!("Sidebar rows are drawn by your Herdr client: if they are not visible yet, run `reload config` in Herdr (prefix+shift+r).");
+}
+
+/// The default agent view, once the sidebar is configured. Herdr holds one
+/// view and has no way to read it, so this replaces another tool's view; it
+/// is applied at startup, after `configure` and on `unfocus` only.
+pub fn apply_view(ctx: &Ctx) {
+    let configured = load_journal(&ctx.config_dir).values().any(|o| o.kind == "config");
+    if !configured {
+        return;
+    }
+    if let Some(herdr) = session_herdr(ctx) {
+        let _ = herdr.agent_view_set(crate::sidebar::default_view());
+    }
 }
 
 #[cfg(test)]
@@ -338,7 +428,7 @@ mod tests {
         std::fs::write(claude.join("settings.json"), original).unwrap();
         let runner = crate::runner::fake::FakeRunner::new();
         let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
-        let options = ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(codex.clone()), dry_run: true };
+        let options = ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(codex.clone()), dry_run: true, sidebar: false, key: None, herdr_config: None };
         let notes = configure(&ctx, &options).unwrap();
         assert_eq!(notes.len(), 2, "{notes:?}");
         assert_eq!(std::fs::read_to_string(claude.join("settings.json")).unwrap(), original, "dry run changed a file");
@@ -380,5 +470,44 @@ mod tests {
         std::os::unix::fs::symlink(&target, &link).unwrap();
         assert!(read(&link).is_err());
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "{\"user\":true}");
+    }
+
+    #[test]
+    fn configure_edits_herdrs_config_checks_the_key_and_unconfigure_restores_it() {
+        use crate::runner::fake::{FakeRunner, fail, ok};
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let config = home.path().join("herdr.toml");
+        let original = "# my theme\n[theme]\nname = \"catppuccin\"\n";
+        std::fs::write(&config, original).unwrap();
+        let runner = FakeRunner::new();
+        runner.on("--default-config", ok("[keys]\n# previous_tab = \"prefix+p\"\n"));
+        runner.on("config check", ok(""));
+        let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
+        let options = |key: Option<&str>| ConfigureOptions { clients: vec!["claude".into()], claude_home: Some(home.path().join("claude")), codex_home: None, dry_run: false, sidebar: true, key: key.map(str::to_string), herdr_config: Some(config.clone()) };
+        std::fs::create_dir_all(home.path().join("claude")).unwrap();
+
+        // A key Herdr already uses is refused before anything is written.
+        assert!(configure(&ctx, &options(Some("prefix+p"))).unwrap_err().to_string().contains("previous_tab"));
+        assert_eq!(std::fs::read_to_string(&config).unwrap(), original);
+
+        configure(&ctx, &options(None)).unwrap();
+        let text = std::fs::read_to_string(&config).unwrap();
+        assert!(text.contains("# my theme") && text.contains("prefix+a") && text.contains("$hp_state") && text.contains("needs-you --line"));
+        assert_eq!(runner.count("config check"), 1);
+        // A second run keeps the configured key.
+        configure(&ctx, &options(None)).unwrap();
+        assert_eq!(std::fs::read_to_string(&config).unwrap(), text);
+
+        unconfigure(&ctx).unwrap();
+        assert_eq!(std::fs::read_to_string(&config).unwrap(), original);
+
+        // Herdr rejecting the candidate changes nothing.
+        let rejecting = FakeRunner::new();
+        rejecting.on("--default-config", ok(""));
+        rejecting.on("config check", fail(1, "bad row"));
+        let ctx = Ctx { runner: &rejecting, ..ctx };
+        assert!(configure(&ctx, &options(None)).is_err());
+        assert_eq!(std::fs::read_to_string(&config).unwrap(), original);
     }
 }

@@ -9,7 +9,7 @@ platforms = ["macos", "linux"]
 command = ["cargo", "build", "--release", "--locked"]
 
 [[startup]]
-command = ["target/release/herdr-projects", "ticker", "start"]
+command = ["target/release/herdr-projects", "startup"]
 
 [[actions]]
 id = "new"
@@ -58,6 +58,12 @@ id = "resume"
 title = "Projects: resume project"
 contexts = ["workspace"]
 command = ["target/release/herdr-projects", "action", "resume"]
+
+[[actions]]
+id = "configure"
+title = "Projects: set up the sidebar, popup key and progress hooks"
+contexts = ["workspace"]
+command = ["target/release/herdr-projects", "action", "configure"]
 
 [[actions]]
 id = "doctor"

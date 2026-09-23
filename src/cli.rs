@@ -180,7 +180,21 @@ enum Command {
         /// Print what would change and change nothing
         #[arg(long)]
         dry_run: bool,
+        /// The key that opens the projects popup (default: prefix+a)
+        #[arg(long, value_name = "KEY")]
+        key: Option<String>,
+        /// Only the hooks: leave Herdr's config.toml alone
+        #[arg(long)]
+        hooks_only: bool,
     },
+    /// Print `projects: N need you` for the tab bar (nothing when none, or when the ticker is not running)
+    NeedsYou {
+        #[arg(long)]
+        line: bool,
+    },
+    /// Run by Herdr at startup: the ticker and the default sidebar order
+    #[command(hide = true)]
+    Startup,
     /// Remove exactly what `configure` added
     Unconfigure,
     /// Report your progress (run by an agent in its own Herdr pane)
@@ -530,22 +544,37 @@ pub fn run() -> Result<()> {
             }
             Ok(())
         }
-        Command::Configure { clients, claude_home, codex_home, dry_run } => {
-            let options = crate::setup::ConfigureOptions { clients, claude_home, codex_home, dry_run };
+        Command::Configure { clients, claude_home, codex_home, dry_run, key, hooks_only } => {
+            let options = crate::setup::ConfigureOptions { clients, claude_home, codex_home, dry_run, sidebar: !hooks_only, key, herdr_config: None };
             for note in crate::setup::configure(&ctx, &options)? {
                 println!("{note}");
             }
             if dry_run {
                 println!("dry run: nothing was changed");
-            } else {
-                println!("configured. `unconfigure` removes exactly these entries.");
+                return Ok(());
             }
+            println!("configured. `unconfigure` removes exactly these entries.");
+            if !hooks_only {
+                crate::setup::apply_live(&ctx);
+            }
+            Ok(())
+        }
+        Command::NeedsYou { line: _ } => {
+            if let Some(line) = crate::sidebar::needs_you_line(&ctx.root) {
+                println!("{line}");
+            }
+            Ok(())
+        }
+        Command::Startup => {
+            ticker::start(&ctx)?;
+            crate::setup::apply_view(&ctx);
             Ok(())
         }
         Command::Unconfigure => {
             for note in crate::setup::unconfigure(&ctx)? {
                 println!("{note}");
             }
+            crate::setup::reload_config(&ctx);
             Ok(())
         }
         Command::Report { percent, unknown: _, activity } => crate::progress::report(&ctx, percent, &activity),

@@ -17,7 +17,7 @@ use crate::herdr::{Agent, Herdr, Pane};
 use crate::paths::Ctx;
 use crate::project::{self, Project, Status};
 use crate::steps::{self, Memory, Transition};
-use crate::{inbox, thread, threads};
+use crate::{inbox, thread};
 
 pub const TICK: Duration = Duration::from_secs(15);
 const STOP_WAIT: Duration = Duration::from_secs(60);
@@ -291,6 +291,10 @@ pub fn tick(ctx: &Ctx, log: &Log, memory: &mut Memory) -> bool {
         let Ok(project) = Project::load(&ctx.root, &slug) else {
             continue;
         };
+        if project.status() == Status::Paused {
+            mark_paused(ctx, &project);
+            continue;
+        }
         if project.status() != Status::Active {
             continue;
         }
@@ -306,6 +310,18 @@ pub fn tick(ctx: &Ctx, log: &Log, memory: &mut Memory) -> bool {
         }
     }
     !reachable.is_empty()
+}
+
+/// A paused project is skipped, but its Space row still says so.
+fn mark_paused(ctx: &Ctx, project: &Project) {
+    let Some(record) = project.coordinator() else {
+        return;
+    };
+    if record.socket.is_empty() || !Path::new(&record.socket).exists() {
+        return;
+    }
+    let herdr = Herdr::new(ctx.env.herdr_bin(), &record.socket, ctx.runner);
+    crate::sidebar::report_workspace(&herdr, &record.workspace_id, "paused");
 }
 
 #[cfg(test)]
@@ -411,7 +427,13 @@ fn thread_pass(project: &Project, herdr: &Herdr, socket: &str, threads: &[thread
             let note = if !live.pane_exists { "pane closed".to_string() } else if state.is_empty() { "no agent".to_string() } else { state.clone() };
             pass.transitions.push(Transition { id: t.id.clone(), to: group, note });
         }
-        if delivered || state != t.last_state || group.token() != t.last_group {
+        let line = crate::sidebar::state_line(group, &after, &live, now);
+        let (activity, percent) = match &live.self_report {
+            Some(record) => (record.activity.clone(), record.percent),
+            None => (String::new(), None),
+        };
+        let self_changed = !t.is_remote() && (activity != t.activity || percent != t.percent);
+        if delivered || state != t.last_state || group.token() != t.last_group || line != t.state_line || self_changed {
             thread::update(project, &t.id, |t| {
                 if delivered {
                     t.prompt_pending = false;
@@ -421,10 +443,15 @@ fn thread_pass(project: &Project, herdr: &Herdr, socket: &str, threads: &[thread
                     t.last_state_change = project::now();
                 }
                 t.last_group = group.token().to_string();
+                t.state_line = line.clone();
+                if self_changed {
+                    t.activity = activity.clone();
+                    t.percent = percent;
+                }
             })?;
         }
         if live.pane_exists {
-            threads::report_thread_tokens(herdr, t, slug, group);
+            crate::sidebar::report_pane(herdr, &t.pane_id, &crate::sidebar::thread_display(t), slug, group, &line);
         }
     }
     Ok(pass)
@@ -513,11 +540,20 @@ fn tick_cheap(ctx: &Ctx, project: &Project) -> Result<Option<Seen>> {
             c.agent = kind;
         })?;
     }
+    let name = project.read_project_md().map(|(s, _)| project::display_name(&s.name, slug)).unwrap_or_else(|_| slug.clone());
     for c in &coordinators {
-        coordinator::report_tokens(&herdr, slug, &c.pane_id);
+        let terminal = agents.iter().find(|a| a.pane_id == c.pane_id).map(|a| a.terminal_id.clone()).unwrap_or_default();
+        let report = crate::progress::self_report(&ctx.root, &record.socket, &c.pane_id, &terminal);
+        let (group, line) = coordinator::row_state(c, report.as_ref());
+        crate::sidebar::report_pane(&herdr, &c.pane_id, &crate::sidebar::coordinator_display(&name), slug, group, &line);
     }
 
     let pass = thread_pass(project, &herdr, &record.socket, &open_threads(project, false), &agents, &panes, None)?;
+    // The project's Space row.
+    if coordinator::workspace_open(&record, &panes) {
+        let line = crate::sidebar::project_line(&crate::sidebar::recorded_groups(project), false);
+        crate::sidebar::report_workspace(&herdr, &record.workspace_id, &line);
+    }
     // Progress records of panes that are gone are dropped; a new agent in a
     // reused pane id is told apart by its terminal id.
     let live_ids: Vec<String> = panes.iter().map(|p| p.pane_id.clone()).collect();

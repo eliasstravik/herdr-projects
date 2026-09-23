@@ -168,17 +168,17 @@ pub fn focus(ctx: &Ctx, slug: Option<&str>) -> Result<()> {
     let project = Project::load(&ctx.root, &slug)?;
     let view = threads::session_view(ctx, &project)
         .ok_or_else(|| anyhow::anyhow!("the herdr session of `{slug}` is not reachable; run `open {slug}` first"))?;
-    view.herdr.agent_view_set_project(&slug).map_err(|e| anyhow::anyhow!("{e}"))?;
-    println!("sidebar focused on `{slug}`; `unfocus` clears it (this replaced any view another tool had set)");
+    view.herdr.agent_view_set(crate::sidebar::project_view(&slug)).map_err(|e| anyhow::anyhow!("{e}"))?;
+    println!("sidebar focused on `{slug}`; `unfocus` restores the by-need order (this replaced any view another tool had set)");
     Ok(())
 }
 
-/// `unfocus`: herdr holds a single transient view, so this clears whatever is set.
+/// `unfocus`: back to the default view, every agent sorted by need.
 pub fn unfocus(ctx: &Ctx, session: &crate::paths::SessionFlags) -> Result<()> {
     let session = crate::paths::resolve_session(session, ctx.env, ctx.runner)?;
     let herdr = crate::herdr::Herdr::new(ctx.env.herdr_bin(), &session.socket, ctx.runner);
-    herdr.agent_view_clear().map_err(|e| anyhow::anyhow!("{e}"))?;
-    println!("sidebar view cleared");
+    herdr.agent_view_set(crate::sidebar::default_view()).map_err(|e| anyhow::anyhow!("{e}"))?;
+    println!("sidebar shows every agent, sorted by need");
     Ok(())
 }
 
@@ -209,7 +209,7 @@ mod tests {
             row("t-0006", Group::Landing, "idle"),
         ];
         let text = render(&project, &rows);
-        let order: Vec<usize> = ["Ready for review", "Waiting on you", "Working", "Landing", "Idle", "Resolved"]
+        let order: Vec<usize> = ["Waiting on you", "Ready for review", "Landing", "Working", "Idle", "Resolved"]
             .iter()
             .map(|label| text.find(&format!("\n{label} (")).unwrap_or_else(|| panic!("{label} missing in\n{text}")))
             .collect();
@@ -248,8 +248,8 @@ mod tests {
         let request: serde_json::Value = serde_json::from_str(&requests[0].1).unwrap();
         assert_eq!(request["method"], "agent.view.set");
         assert_eq!(request["params"]["source"], "herdr-projects");
-        assert_eq!(request["params"]["filter"], serde_json::json!({"op":"eq","field":{"token":"project"},"value":"demo"}));
-        assert_eq!(request["params"]["sort"], serde_json::json!([{"field":{"token":"rank"},"order":"asc"}]));
+        assert_eq!(request["params"]["filter"], serde_json::json!({"op":"eq","field":{"token":"hp_project"},"value":"demo"}));
+        assert_eq!(request["params"]["sort"], serde_json::json!([{"field":{"token":"hp_rank"},"order":"asc"}]));
     }
 
     #[test]

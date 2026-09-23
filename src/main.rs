@@ -19,6 +19,7 @@ mod runner;
 #[cfg(test)]
 mod scenarios;
 mod setup;
+mod sidebar;
 mod steps;
 mod thread;
 mod threads;

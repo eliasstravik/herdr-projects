@@ -58,7 +58,10 @@ pub fn set_status(ctx: &Ctx, slug: &str, status: Status) -> Result<()> {
             println!("It is hidden from `list` and `overview`, the ticker skips it, and `open` is refused until `unarchive`.");
             if let Some(view) = &view {
                 for (_, pane, _) in alive_panes(&project, view) {
-                    let _ = view.herdr.pane_clear_tokens(&pane, &["project", "thread", "review", "rank"]);
+                    crate::sidebar::clear_pane(&view.herdr, &pane);
+                }
+                if let Some(record) = project.coordinator() {
+                    crate::sidebar::clear_workspace(&view.herdr, &record.workspace_id);
                 }
             }
         }
