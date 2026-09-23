@@ -45,12 +45,12 @@ impl Section {
 
     fn keys(self) -> &'static str {
         match self {
-            Section::Threads => "↵ jump  1-9 next  s stop  r restart  a ack  x resolve  o PR  i detail  c coordinator  S sweep  t scope",
-            Section::Tasks => "↵ jump  d delegate  m done  D drop  t scope",
-            Section::Inbox => "↵ detail  a done  t scope",
-            Section::Routines => "↵ toggle  i prompt  t scope",
-            Section::Settings => "↵ edit  p pause/resume  A archive  X delete  t scope",
-            Section::Memory => "↵ read  t scope",
+            Section::Threads => "↵ jump  1-9 next  s stop  r restart  a ack  x resolve  o PR  i detail  c coordinator  S sweep  t/T project",
+            Section::Tasks => "↵ jump  d delegate  m done  D drop  t/T project",
+            Section::Inbox => "↵ detail  a done  t/T project",
+            Section::Routines => "↵ toggle  i prompt  t/T project",
+            Section::Settings => "↵ edit  p pause/resume  A archive  X delete  t/T project",
+            Section::Memory => "↵ read  t/T project",
         }
     }
 }
@@ -151,6 +151,25 @@ fn projects_in_scope(root: &Path, scope: Option<&str>, show_archived: bool) -> V
         .filter_map(|s| Project::load(root, &s).ok())
         .filter(|p| show_archived || p.status() != Status::Archived)
         .collect()
+}
+
+/// The scope after `scope` when `t` (forward) or `T` (backward) cycles through
+/// the ring: the home project, all projects, then every other listed project.
+/// With no home project the ring starts at all projects. A scope outside the
+/// ring (an archived project opened from settings) continues from the ring's
+/// start.
+pub fn cycle_scope(home: Option<&str>, projects: &[String], scope: Option<&str>, forward: bool) -> Option<String> {
+    let mut ring: Vec<Option<&str>> = home.map(Some).into_iter().collect();
+    ring.push(None);
+    ring.extend(projects.iter().map(String::as_str).filter(|p| Some(*p) != home).map(Some));
+    let position = ring.iter().position(|s| *s == scope);
+    let next = match (position, forward) {
+        (Some(i), true) => (i + 1) % ring.len(),
+        (Some(i), false) => (i + ring.len() - 1) % ring.len(),
+        (None, true) => 0,
+        (None, false) => ring.len() - 1,
+    };
+    ring[next].map(str::to_string)
 }
 
 pub fn thread_rows(root: &Path, scope: Option<&str>) -> Vec<ThreadRow> {
@@ -383,7 +402,7 @@ enum Mode {
 
 pub struct Popup<'a> {
     ctx: &'a Ctx<'a>,
-    /// The project the popup opened in (the scope toggle returns to it).
+    /// The project the popup opened in (the scope cycle starts and ends there).
     home: Option<String>,
     scope: Option<String>,
     section: usize,
@@ -570,8 +589,9 @@ impl<'a> Popup<'a> {
             }
             KeyCode::Down | KeyCode::Char('j') => self.move_by(1),
             KeyCode::Up | KeyCode::Char('k') => self.move_by(-1),
-            KeyCode::Char('t') => {
-                self.scope = if self.scope.is_some() { None } else { self.home.clone() };
+            KeyCode::Char(c @ ('t' | 'T')) => {
+                let projects: Vec<String> = projects_in_scope(&self.ctx.root, None, false).into_iter().map(|p| p.slug).collect();
+                self.scope = cycle_scope(self.home.as_deref(), &projects, self.scope.as_deref(), c == 't');
                 if self.scope.is_none() && self.home.is_none() {
                     self.message = "showing all projects (this workspace is not a project)".into();
                 }
@@ -1114,5 +1134,37 @@ mod tests {
         assert!(!build(&world.root, Section::Tasks, Some("demo")).is_empty());
         assert!(!build(&world.root, Section::Memory, Some("demo")).is_empty());
         assert_eq!(summary(&world.root), "1 project · 1 need you");
+    }
+
+    #[test]
+    fn t_and_shift_t_cycle_through_home_all_and_every_other_project() {
+        let projects: Vec<String> = ["alpha", "beta", "gamma"].map(String::from).to_vec();
+        let step = |scope: Option<&str>, forward| cycle_scope(Some("beta"), &projects, scope, forward);
+        // Forwards: home → all → the others in listed order → home.
+        assert_eq!(step(Some("beta"), true), None);
+        assert_eq!(step(None, true).as_deref(), Some("alpha"));
+        assert_eq!(step(Some("alpha"), true).as_deref(), Some("gamma"));
+        assert_eq!(step(Some("gamma"), true).as_deref(), Some("beta"));
+        // Backwards walks the same ring the other way and wraps.
+        assert_eq!(step(Some("beta"), false).as_deref(), Some("gamma"));
+        assert_eq!(step(Some("gamma"), false).as_deref(), Some("alpha"));
+        assert_eq!(step(Some("alpha"), false), None);
+        assert_eq!(step(None, false).as_deref(), Some("beta"));
+        // A scope outside the ring (an archived project) continues from the start.
+        assert_eq!(step(Some("old"), true).as_deref(), Some("beta"));
+        assert_eq!(step(Some("old"), false).as_deref(), Some("gamma"));
+    }
+
+    #[test]
+    fn cycle_without_home_or_with_one_project() {
+        let projects: Vec<String> = ["alpha", "beta"].map(String::from).to_vec();
+        assert_eq!(cycle_scope(None, &projects, None, true).as_deref(), Some("alpha"));
+        assert_eq!(cycle_scope(None, &projects, Some("beta"), true), None);
+        assert_eq!(cycle_scope(None, &projects, None, false).as_deref(), Some("beta"));
+        let one = vec!["solo".to_string()];
+        assert_eq!(cycle_scope(Some("solo"), &one, Some("solo"), true), None);
+        assert_eq!(cycle_scope(Some("solo"), &one, None, true).as_deref(), Some("solo"));
+        assert_eq!(cycle_scope(Some("solo"), &one, None, false).as_deref(), Some("solo"));
+        assert_eq!(cycle_scope(None, &[], None, true), None);
     }
 }
