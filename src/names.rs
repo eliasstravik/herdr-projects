@@ -1,6 +1,7 @@
 //! Herdr agent names. `agent start` names must be unique among live agents and
 //! match `[a-z][a-z0-9_-]{0,31}` (32 characters), so slugs are truncated.
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub const MAX_AGENT_NAME: usize = 32;
 
 fn head(slug: &str, n: usize) -> String {
@@ -26,6 +27,7 @@ pub fn thread(slug: &str, id: &str) -> String {
     format!("hp-{}-{id}", head(slug, 21))
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn is_valid(name: &str) -> bool {
     let mut chars = name.chars();
     chars.next().is_some_and(|c| c.is_ascii_lowercase())

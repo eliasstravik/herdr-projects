@@ -168,6 +168,41 @@ enum Command {
         #[command(flatten)]
         session: SessionArgs,
     },
+    /// Install the plugin's hooks into Claude Code and Codex (progress self-reports)
+    Configure {
+        /// Harnesses to configure, comma-separated: claude, codex (default: those installed)
+        #[arg(long, value_delimiter = ',', value_parser = ["claude", "codex"])]
+        clients: Vec<String>,
+        #[arg(long, value_name = "DIR")]
+        claude_home: Option<PathBuf>,
+        #[arg(long, value_name = "DIR")]
+        codex_home: Option<PathBuf>,
+        /// Print what would change and change nothing
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Remove exactly what `configure` added
+    Unconfigure,
+    /// Report your progress (run by an agent in its own Herdr pane)
+    Report {
+        #[arg(long, value_parser = clap::value_parser!(u8).range(0..=100), required_unless_present = "unknown", conflicts_with = "unknown")]
+        percent: Option<u8>,
+        #[arg(long)]
+        unknown: bool,
+        #[arg(long)]
+        activity: String,
+    },
+    /// Harness hook entry point (installed by `configure`)
+    #[command(hide = true)]
+    Hook {
+        #[arg(long, value_parser = ["claude", "codex"])]
+        agent: String,
+    },
+    /// Print the progress record of this pane, or of --pane
+    Progress {
+        #[arg(long, value_name = "ID")]
+        pane: Option<String>,
+    },
     /// The background ticker
     Ticker {
         #[command(subcommand)]
@@ -495,6 +530,31 @@ pub fn run() -> Result<()> {
             }
             Ok(())
         }
+        Command::Configure { clients, claude_home, codex_home, dry_run } => {
+            let options = crate::setup::ConfigureOptions { clients, claude_home, codex_home, dry_run };
+            for note in crate::setup::configure(&ctx, &options)? {
+                println!("{note}");
+            }
+            if dry_run {
+                println!("dry run: nothing was changed");
+            } else {
+                println!("configured. `unconfigure` removes exactly these entries.");
+            }
+            Ok(())
+        }
+        Command::Unconfigure => {
+            for note in crate::setup::unconfigure(&ctx)? {
+                println!("{note}");
+            }
+            Ok(())
+        }
+        Command::Report { percent, unknown: _, activity } => crate::progress::report(&ctx, percent, &activity),
+        Command::Hook { agent } => {
+            // A hook must never fail the harness: errors are swallowed.
+            let _ = crate::progress::hook(&ctx, &agent);
+            Ok(())
+        }
+        Command::Progress { pane } => crate::progress::print(&ctx, pane.as_deref()),
         Command::Ticker { command } => match command {
             TickerCommand::Start => ticker::start(&ctx),
             TickerCommand::Run => ticker::run(&ctx),

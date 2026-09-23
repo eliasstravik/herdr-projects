@@ -352,7 +352,7 @@ struct Pass {
     error: Option<anyhow::Error>,
 }
 
-fn thread_pass(project: &Project, herdr: &Herdr, threads: &[thread::Thread], agents: &[Agent], panes: &[Pane], hashes: Option<&std::collections::BTreeMap<String, String>>) -> Result<Pass> {
+fn thread_pass(project: &Project, herdr: &Herdr, socket: &str, threads: &[thread::Thread], agents: &[Agent], panes: &[Pane], hashes: Option<&std::collections::BTreeMap<String, String>>) -> Result<Pass> {
     let slug = &project.slug;
     let now = jiff::Timestamp::now();
     let mut pass = Pass { transitions: Vec::new(), recorded_panes: 0, missing_panes: 0, error: None };
@@ -366,7 +366,13 @@ fn thread_pass(project: &Project, herdr: &Herdr, threads: &[thread::Thread], age
             }
             continue;
         }
-        let mut live = thread::live_state(t, agents, panes, now);
+        let mut live = thread::live_with_report(t, agents, panes, now, &project.root, socket);
+        // Herdr's native resume starts our agent again without its name.
+        if let Some(agent) = agents.iter().find(|a| thread::needs_rename(t, a))
+            && let Err(error) = herdr.agent_rename(&agent.pane_id, &t.agent_name)
+        {
+            pass.error = pass.error.or(Some(anyhow::anyhow!("{}: rename: {error}", t.id)));
+        }
         if !t.pane_id.is_empty() {
             pass.recorded_panes += 1;
             pass.missing_panes += usize::from(!live.pane_exists);
@@ -511,7 +517,11 @@ fn tick_cheap(ctx: &Ctx, project: &Project) -> Result<Option<Seen>> {
         coordinator::report_tokens(&herdr, slug, &c.pane_id);
     }
 
-    let pass = thread_pass(project, &herdr, &open_threads(project, false), &agents, &panes, None)?;
+    let pass = thread_pass(project, &herdr, &record.socket, &open_threads(project, false), &agents, &panes, None)?;
+    // Progress records of panes that are gone are dropped; a new agent in a
+    // reused pane id is told apart by its terminal id.
+    let live_ids: Vec<String> = panes.iter().map(|p| p.pane_id.clone()).collect();
+    crate::progress::prune(&ctx.root, &record.socket, &live_ids);
     first_error = first_error.or(pass.error);
     let coordinator_recorded = usize::from(!record.pane_id.is_empty());
     let coordinator_missing = usize::from(coordinator_recorded == 1 && coordinators.is_empty() && !panes.iter().any(|p| coordinator::pane_matches(&record, p)));
@@ -556,7 +566,7 @@ fn remote_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, machine: &str, threa
     let dirs: Vec<(String, String)> = threads.iter().filter(|t| !t.thread_dir.is_empty()).map(|t| (t.id.clone(), t.thread_dir.clone())).collect();
     let hashes = crate::remote::report_hashes(ctx.runner, &target, &dirs).map_err(|e| format!("{e:#}"))?;
 
-    let pass = thread_pass(project, &remote, threads, &agents, &panes, Some(&hashes)).map_err(|e| format!("{e:#}"))?;
+    let pass = thread_pass(project, &remote, "", threads, &agents, &panes, Some(&hashes)).map_err(|e| format!("{e:#}"))?;
     errors.extend(pass.error);
 
     for t in threads {

@@ -11,12 +11,14 @@ mod names;
 mod overview;
 mod paths;
 mod pr;
+mod progress;
 mod project;
 mod remote;
 mod routine;
 mod runner;
 #[cfg(test)]
 mod scenarios;
+mod setup;
 mod steps;
 mod thread;
 mod threads;

@@ -207,6 +207,42 @@ fn report(
         }
     }
 
+    // Hooks: ours in place and pointing at this binary; the standalone
+    // agent-progress plugin's hooks gone (never edited by this plugin).
+    let journal = crate::setup::load_journal(config_dir);
+    for agent in ["claude", "codex"] {
+        let file = crate::setup::hook_file(env, agent, None, None);
+        let Ok(Some(text)) = crate::setup::read(&file) else {
+            continue;
+        };
+        let label = format!("hooks {agent}");
+        if crate::setup::has_agent_progress_hooks(&text) {
+            let launcher = text
+                .split('"')
+                .find(|s| s.contains("herdr-progress") && s.contains(" hook --agent "))
+                .and_then(|s| s.split(" hook --agent ").next())
+                .unwrap_or("herdr-progress")
+                .to_string();
+            check(&mut out, None, &label, format!("{} still runs the standalone agent-progress hooks; run `{launcher} unconfigure`, then `herdr plugin disable agent-progress`", file.display()));
+        }
+        let key = file.to_string_lossy().into_owned();
+        let binary = std::env::current_exe().unwrap_or_default();
+        let expected = crate::setup::hook_command(&binary, root, agent);
+        match journal.get(&key) {
+            None => check(&mut out, None, &label, "not configured; `configure` installs the progress hooks".into()),
+            Some(_) if text.contains(&expected) => check(&mut out, Some(true), &label, format!("{} runs this binary", file.display())),
+            Some(_) if fix => {
+                let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false };
+                let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
+                match crate::setup::configure(&ctx, &options) {
+                    Ok(_) => check(&mut out, Some(true), &label, format!("fixed: {} now runs this binary", file.display())),
+                    Err(error) => check(&mut out, Some(false), &label, format!("could not fix: {error:#}")),
+                }
+            }
+            Some(_) => check(&mut out, None, &label, format!("{} runs another binary or root; `doctor --fix` rewrites it", file.display())),
+        }
+    }
+
     // Machines that projects use need an SSH target for report and library copies.
     let mut machines = std::collections::BTreeSet::new();
     for slug in project::list_slugs(root) {

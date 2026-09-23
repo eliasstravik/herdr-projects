@@ -1,0 +1,384 @@
+//! `configure` and `unconfigure`: the edits the plugin makes to the user's
+//! files, each recorded in an ownership journal so `unconfigure` restores
+//! exactly what `configure` changed. Hook files are edited as JSONC through
+//! a concrete syntax tree, so comments and formatting survive.
+
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result, bail, ensure};
+use jsonc_parser::cst::{CstInputValue, CstRootNode};
+use serde::{Deserialize, Serialize};
+
+use crate::paths::{Ctx, Env};
+use crate::remote::quote;
+
+pub const HOOK_EVENTS: [&str; 3] = ["SessionStart", "PostToolUse", "UserPromptSubmit"];
+
+/// One file the plugin edited: its text before the first edit, after the last
+/// one, what kind of edit, and the hook command (for hook files).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Owned {
+    pub before: Option<String>,
+    pub after: String,
+    pub kind: String,
+    #[serde(default)]
+    pub command: Option<String>,
+}
+
+pub type Journal = BTreeMap<String, Owned>;
+
+pub fn journal_path(config_dir: &Path) -> PathBuf {
+    config_dir.join("owned.json")
+}
+
+pub fn load_journal(config_dir: &Path) -> Journal {
+    crate::project::read_json(&journal_path(config_dir)).unwrap_or_default()
+}
+
+pub fn save_journal(config_dir: &Path, journal: &Journal) -> Result<()> {
+    std::fs::create_dir_all(config_dir)?;
+    crate::project::write_json(&journal_path(config_dir), journal)
+}
+
+/// Reads a config file, refusing a file that is a symbolic link (a dotfile
+/// manager's link would be replaced by a plain file) rather than editing it.
+pub fn read(path: &Path) -> Result<Option<String>> {
+    if let Ok(m) = std::fs::symlink_metadata(path) {
+        ensure!(!m.file_type().is_symlink(), "refusing to edit {}: it is a symbolic link; edit its target's hooks by hand or pass --claude-home/--codex-home", path.display());
+    }
+    match std::fs::read_to_string(path) {
+        Ok(s) => Ok(Some(s)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Replaces a file's text only if it still reads as `before`.
+pub fn replace(path: &Path, before: &Option<String>, after: &str) -> Result<()> {
+    ensure!(&read(path)? == before, "{} changed while configuring; run the command again", path.display());
+    std::fs::create_dir_all(path.parent().context("config path has no parent")?)?;
+    let tmp = path.with_file_name(format!(".herdr-projects-{}.tmp", std::process::id()));
+    std::fs::write(&tmp, after)?;
+    if path.exists() {
+        std::fs::set_permissions(&tmp, std::fs::metadata(path)?.permissions())?;
+    }
+    if &read(path)? != before {
+        let _ = std::fs::remove_file(&tmp);
+        bail!("{} changed while configuring; run the command again", path.display());
+    }
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+/// The removal baseline after a repeated `configure`: the original text when
+/// nothing else changed in between, else the current text with our entries
+/// taken out, so a later `unconfigure` keeps edits made since.
+pub fn removal_baseline(previous: &Owned, current: &Owned) -> Result<Option<String>> {
+    if current.before.as_ref() == Some(&previous.after) {
+        return Ok(previous.before.clone());
+    }
+    current
+        .before
+        .as_deref()
+        .map(|text| match current.kind.as_str() {
+            "hooks" => hooks(text, current.command.as_deref().context("missing hook command")?, true),
+            other => bail!("unknown ownership kind {other}"),
+        })
+        .transpose()
+}
+
+fn hook_entry(command: &str) -> serde_json::Value {
+    serde_json::json!({"matcher":"*","hooks":[{"type":"command","command":command,"timeout":10}]})
+}
+
+/// Whether a hook entry is one of ours: it runs `herdr-projects … hook`.
+fn is_our_entry(value: &serde_json::Value) -> bool {
+    value["hooks"]
+        .as_array()
+        .is_some_and(|hooks| hooks.iter().any(|h| h["command"].as_str().is_some_and(|c| c.contains("herdr-projects") && c.contains(" hook --agent "))))
+}
+
+/// Adds (or removes) the plugin's hook entry under each event, keeping
+/// everything else, including comments. Any earlier entry of ours (a moved
+/// binary) is replaced on add. Idempotent.
+pub fn hooks(input: &str, command: &str, remove: bool) -> Result<String> {
+    let root = CstRootNode::parse(input, &Default::default()).context("hook file does not parse")?;
+    let obj = root.object_value().context("hook configuration must be a JSON object")?;
+    let hooks = match obj.get("hooks") {
+        Some(p) => p.object_value().context("`hooks` must be an object")?,
+        None if remove => return Ok(input.into()),
+        None => obj.append("hooks", CstInputValue::Object(vec![])).object_value().unwrap(),
+    };
+    let expected = hook_entry(command);
+    for event in HOOK_EVENTS {
+        let entries = match hooks.get(event) {
+            Some(p) => p.array_value().with_context(|| format!("`hooks.{event}` must be an array"))?,
+            None if remove => continue,
+            None => hooks.append(event, CstInputValue::Array(vec![])).array_value().unwrap(),
+        };
+        let mut found = false;
+        for entry in entries.elements() {
+            let value = entry.to_serde_value();
+            if value.as_ref() == Some(&expected) {
+                if remove {
+                    entry.remove();
+                } else {
+                    found = true;
+                }
+            } else if value.as_ref().is_some_and(is_our_entry) {
+                // Ours, but with another command (the binary moved): replaced.
+                entry.remove();
+            }
+        }
+        if !remove && !found {
+            entries.append(CstInputValue::Object(vec![
+                ("matcher".into(), "*".into()),
+                (
+                    "hooks".into(),
+                    CstInputValue::Array(vec![CstInputValue::Object(vec![
+                        ("type".into(), "command".into()),
+                        ("command".into(), command.into()),
+                        ("timeout".into(), 10u64.into()),
+                    ])]),
+                ),
+            ]));
+        }
+    }
+    Ok(root.to_string())
+}
+
+/// The hook command for a harness: the absolute binary path and the root,
+/// because hooks run outside the plugin environment.
+pub fn hook_command(binary: &Path, root: &Path, agent: &str) -> String {
+    format!("{} --root {} hook --agent {agent}", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
+}
+
+/// Where each harness keeps its hooks.
+pub fn hook_file(env: &Env, agent: &str, claude_home: Option<&Path>, codex_home: Option<&Path>) -> PathBuf {
+    match agent {
+        "claude" => claude_home
+            .map(Path::to_path_buf)
+            .or_else(|| env.var("CLAUDE_CONFIG_DIR").map(PathBuf::from))
+            .unwrap_or_else(|| env.home.join(".claude"))
+            .join("settings.json"),
+        _ => codex_home
+            .map(Path::to_path_buf)
+            .or_else(|| env.var("CODEX_HOME").map(PathBuf::from))
+            .unwrap_or_else(|| env.home.join(".codex"))
+            .join("hooks.json"),
+    }
+}
+
+pub struct ConfigureOptions {
+    /// `claude`, `codex`, or both; empty means every harness whose config
+    /// directory exists.
+    pub clients: Vec<String>,
+    pub claude_home: Option<PathBuf>,
+    pub codex_home: Option<PathBuf>,
+    pub dry_run: bool,
+}
+
+/// Whether the standalone agent-progress plugin's hooks are installed in a
+/// hook file: `doctor` tells the user to remove them with that plugin's own
+/// `unconfigure`, since this plugin never edits another plugin's entries.
+pub fn has_agent_progress_hooks(text: &str) -> bool {
+    text.contains("herdr-progress") && text.contains(" hook --agent ")
+}
+
+/// Installs the hooks. Every edit is journaled before it is made, so a killed
+/// run never leaves hooks `unconfigure` cannot identify as its own.
+pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
+    let binary = std::env::current_exe().context("could not find this binary's own path")?;
+    let clients: Vec<String> = if options.clients.is_empty() {
+        ["claude", "codex"]
+            .into_iter()
+            .filter(|c| hook_file(ctx.env, c, options.claude_home.as_deref(), options.codex_home.as_deref()).parent().is_some_and(Path::is_dir))
+            .map(str::to_owned)
+            .collect()
+    } else {
+        options.clients.clone()
+    };
+    let mut journal = load_journal(&ctx.config_dir);
+    let mut edits: Vec<(PathBuf, Owned)> = Vec::new();
+    let mut notes = Vec::new();
+    for client in &clients {
+        let file = hook_file(ctx.env, client, options.claude_home.as_deref(), options.codex_home.as_deref());
+        let command = hook_command(&binary, &ctx.root, client);
+        let before = read(&file)?;
+        let after = hooks(before.as_deref().unwrap_or("{}"), &command, false)?;
+        if before.as_deref().is_some_and(has_agent_progress_hooks) {
+            notes.push(format!("{} also runs the standalone agent-progress hooks; run that plugin's `unconfigure` (see `doctor`) so only one set fires", file.display()));
+        }
+        if before.as_deref() == Some(after.as_str()) {
+            notes.push(format!("{}: hooks already in place", file.display()));
+            continue;
+        }
+        notes.push(format!("{}: {} hook entries for `{command}`", file.display(), if before.is_some() { "adding" } else { "creating with" }));
+        edits.push((file, Owned { before, after, kind: "hooks".into(), command: Some(command) }));
+    }
+    if options.dry_run {
+        return Ok(notes);
+    }
+    for (path, edit) in &edits {
+        let key = path.to_string_lossy().into_owned();
+        let mut owned = edit.clone();
+        if let Some(previous) = journal.get(&key) {
+            owned.before = removal_baseline(previous, &owned)?;
+        }
+        journal.insert(key, owned);
+    }
+    save_journal(&ctx.config_dir, &journal)?;
+    for (index, (path, edit)) in edits.iter().enumerate() {
+        if let Err(error) = replace(path, &edit.before, &edit.after) {
+            for (path, edit) in edits[..index].iter().rev() {
+                if read(path)?.as_deref() == Some(edit.after.as_str()) {
+                    match &edit.before {
+                        Some(text) => replace(path, &Some(edit.after.clone()), text)?,
+                        None => std::fs::remove_file(path)?,
+                    }
+                }
+            }
+            return Err(error);
+        }
+    }
+    Ok(notes)
+}
+
+/// Removes exactly what `configure` added: the file goes back to its journaled
+/// text when nothing else changed, else only our entries are taken out.
+pub fn unconfigure(ctx: &Ctx) -> Result<Vec<String>> {
+    let journal = load_journal(&ctx.config_dir);
+    let mut notes = Vec::new();
+    let mut remaining = journal.clone();
+    for (key, owned) in &journal {
+        let path = Path::new(key);
+        let current = read(path)?;
+        if current.as_deref() == Some(owned.after.as_str()) {
+            match &owned.before {
+                Some(text) => replace(path, &current, text)?,
+                None => std::fs::remove_file(path)?,
+            }
+            notes.push(format!("{key}: restored"));
+        } else if let Some(text) = &current {
+            let cleaned = match owned.kind.as_str() {
+                "hooks" => hooks(text, owned.command.as_deref().unwrap_or(""), true)?,
+                other => bail!("unknown ownership kind {other}"),
+            };
+            if cleaned != *text {
+                replace(path, &current, &cleaned)?;
+            }
+            notes.push(format!("{key}: edited since configure; only the plugin's entries were removed"));
+        } else {
+            notes.push(format!("{key}: already gone"));
+        }
+        remaining.remove(key);
+    }
+    save_journal(&ctx.config_dir, &remaining)?;
+    if journal.is_empty() {
+        notes.push("nothing was configured".into());
+    }
+    Ok(notes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CMD: &str = "'/p/herdr-projects' --root /r hook --agent claude";
+
+    #[test]
+    fn existing_hooks_comments_and_user_edits_survive() {
+        let original = "{\n// user's comment\n\"theme\": \"dark\",\"hooks\":{\"SessionStart\":[{\"hooks\":[{\"command\":\"keep\"}]}]}}";
+        let added = hooks(original, CMD, false).unwrap();
+        assert!(added.contains("// user's comment"));
+        assert!(added.contains("keep"));
+        assert_eq!(added.matches("hook --agent claude").count(), 3);
+        assert_eq!(hooks(&added, CMD, false).unwrap(), added);
+        let removed = hooks(&added, CMD, true).unwrap();
+        assert!(!removed.contains("herdr-projects"));
+        assert!(removed.contains("keep"));
+        assert!(hooks("[]", CMD, false).is_err());
+    }
+
+    #[test]
+    fn a_moved_binary_replaces_the_old_entries_and_other_plugins_are_left_alone() {
+        let old = hooks("{}", CMD, false).unwrap();
+        let moved = hooks(&old, "'/new/herdr-projects' --root /r hook --agent claude", false).unwrap();
+        assert!(!moved.contains("/p/herdr-projects"));
+        assert_eq!(moved.matches("/new/herdr-projects").count(), 3);
+        let with_other = "{\"hooks\":{\"PostToolUse\":[{\"matcher\":\"*\",\"hooks\":[{\"type\":\"command\",\"command\":\"'/x/herdr-progress' hook --agent claude\",\"timeout\":10}]}]}}";
+        let added = hooks(with_other, CMD, false).unwrap();
+        assert!(added.contains("herdr-progress"));
+        assert!(has_agent_progress_hooks(&added));
+        let removed = hooks(&added, CMD, true).unwrap();
+        assert!(removed.contains("herdr-progress") && !removed.contains("herdr-projects"));
+    }
+
+    #[test]
+    fn removal_baseline_keeps_the_original_or_the_users_later_edits() {
+        let previous = Owned { before: Some("original".into()), after: "configured".into(), kind: "hooks".into(), command: Some(CMD.into()) };
+        let unchanged = Owned { before: Some("configured".into()), after: "configured2".into(), kind: "hooks".into(), command: Some(CMD.into()) };
+        assert_eq!(removal_baseline(&previous, &unchanged).unwrap().as_deref(), Some("original"));
+        let edited_text = format!("{}\n", hooks("{\"theme\":\"dark\"}", CMD, false).unwrap());
+        let edited = Owned { before: Some(edited_text.clone()), after: "x".into(), kind: "hooks".into(), command: Some(CMD.into()) };
+        let baseline = removal_baseline(&previous, &edited).unwrap().unwrap();
+        assert!(baseline.contains("dark") && !baseline.contains("herdr-projects"));
+    }
+
+    #[test]
+    fn configure_and_unconfigure_round_trip_byte_for_byte_and_keep_user_additions() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let claude = home.path().join("claude");
+        let codex = home.path().join("codex");
+        std::fs::create_dir_all(&claude).unwrap();
+        std::fs::create_dir_all(&codex).unwrap();
+        let original = "{\n  // mine\n  \"permissions\": {\"allow\": [\"Bash(ls:*)\"]},\n  \"hooks\": {\"Stop\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"say done\"}]}]}\n}\n";
+        std::fs::write(claude.join("settings.json"), original).unwrap();
+        let runner = crate::runner::fake::FakeRunner::new();
+        let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
+        let options = ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(codex.clone()), dry_run: true };
+        let notes = configure(&ctx, &options).unwrap();
+        assert_eq!(notes.len(), 2, "{notes:?}");
+        assert_eq!(std::fs::read_to_string(claude.join("settings.json")).unwrap(), original, "dry run changed a file");
+
+        let options = ConfigureOptions { dry_run: false, ..options };
+        configure(&ctx, &options).unwrap();
+        let configured = std::fs::read_to_string(claude.join("settings.json")).unwrap();
+        assert!(configured.contains("// mine") && configured.contains("say done"));
+        assert_eq!(configured.matches("hook --agent claude").count(), 3);
+        let codex_text = std::fs::read_to_string(codex.join("hooks.json")).unwrap();
+        assert_eq!(codex_text.matches("hook --agent codex").count(), 3);
+        assert_eq!(load_journal(&ctx.config_dir).len(), 2);
+        // Idempotent.
+        configure(&ctx, &options).unwrap();
+        assert_eq!(std::fs::read_to_string(claude.join("settings.json")).unwrap(), configured);
+
+        // Unconfigure: byte-identical when nothing else changed; the created file is removed.
+        unconfigure(&ctx).unwrap();
+        assert_eq!(std::fs::read_to_string(claude.join("settings.json")).unwrap(), original);
+        assert!(!codex.join("hooks.json").exists());
+        assert!(load_journal(&ctx.config_dir).is_empty());
+
+        // A user edit made after configure survives unconfigure.
+        configure(&ctx, &options).unwrap();
+        let text = std::fs::read_to_string(claude.join("settings.json")).unwrap();
+        std::fs::write(claude.join("settings.json"), text.replace("\"theme\"", "\"theme\"").replacen("{\n", "{\n  \"model\": \"opus\",\n", 1)).unwrap();
+        unconfigure(&ctx).unwrap();
+        let after = std::fs::read_to_string(claude.join("settings.json")).unwrap();
+        assert!(after.contains("\"model\": \"opus\"") && after.contains("say done") && !after.contains("herdr-projects"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_config_is_refused_without_touching_the_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("real.json");
+        let link = dir.path().join("settings.json");
+        std::fs::write(&target, "{\"user\":true}").unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        assert!(read(&link).is_err());
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "{\"user\":true}");
+    }
+}
