@@ -168,6 +168,16 @@ enum Command {
         #[command(flatten)]
         session: SessionArgs,
     },
+    /// List what a project left behind (orphan worktrees, merged branches, tabs, old folders) and remove it
+    Sweep {
+        slug: String,
+        /// Only list
+        #[arg(long)]
+        dry_run: bool,
+        /// Remove without asking
+        #[arg(long)]
+        yes: bool,
+    },
     /// Change one setting in PROJECT.md (name, goal, coordinator_agent, thread_agent, max_parallel_threads, auto_resolve_days, nudge, mute, repos.add, repos.remove)
     Set { slug: String, key: String, value: String },
     /// Open a file: text in a new Herdr tab running $EDITOR, anything else with the system opener
@@ -347,20 +357,20 @@ enum ThreadCommand {
     },
     /// Record that the user has seen the current report
     Ack { slug: String, id: String },
-    /// Resolve a thread (final copy first), or reopen a resolved one
+    /// Resolve a thread: final copy home, then its worktree, merged branch and tab are cleaned up (reports and library are kept)
     Resolve {
         slug: String,
         id: String,
-        #[arg(long, conflicts_with_all = ["remove_worktree", "skip_copy", "discard_uncopied"])]
+        #[arg(long, conflicts_with_all = ["keep_worktree", "skip_copy", "discard_uncopied"])]
         reopen: bool,
-        /// Also remove the worktree (never forced; the branch is kept)
+        /// Keep the worktree and branch
         #[arg(long)]
-        remove_worktree: bool,
-        /// Resolve even though the final copy cannot be made
+        keep_worktree: bool,
+        /// Resolve even though the final copy cannot be made (the worktree is then kept)
         #[arg(long)]
         skip_copy: bool,
-        /// With --remove-worktree: accept losing what could not be copied
-        #[arg(long, requires = "remove_worktree")]
+        /// Remove the worktree even though not everything in it was copied home
+        #[arg(long)]
         discard_uncopied: bool,
     },
 }
@@ -512,10 +522,11 @@ pub fn run() -> Result<()> {
             ThreadCommand::List { slug, json } => threads::print_list(&ctx, &slug, json),
             ThreadCommand::Show { slug, id, json } => threads::print_show(&ctx, &slug, &id, json),
             ThreadCommand::Ack { slug, id } => threads::ack(&ctx, &slug, &id),
-            ThreadCommand::Resolve { slug, id, reopen, remove_worktree, skip_copy, discard_uncopied } => {
-                threads::resolve(&ctx, &slug, &id, &ResolveArgs { reopen, remove_worktree, skip_copy, discard_uncopied })
+            ThreadCommand::Resolve { slug, id, reopen, keep_worktree, skip_copy, discard_uncopied } => {
+                threads::resolve(&ctx, &slug, &id, &ResolveArgs { reopen, keep_worktree, skip_copy, discard_uncopied })
             }
         },
+        Command::Sweep { slug, dry_run, yes } => crate::sweep::run(&ctx, &slug, dry_run, yes),
         Command::Set { slug, key, value } => crate::settings::set(&ctx, &slug, &key, &value),
         Command::OpenFile { path, workspace } => crate::settings::open_file(&ctx, &path, workspace.as_deref()),
         Command::OpenUrl { url } => {

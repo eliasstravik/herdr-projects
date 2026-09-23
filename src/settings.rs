@@ -46,6 +46,30 @@ fn parse_bool(value: &str) -> Result<bool> {
     }
 }
 
+/// `new` writes `repos = []` (or inline tables): turn it into `[[repos]]`
+/// tables so entries can be added and removed.
+fn normalize_repos(doc: &mut DocumentMut) -> Result<()> {
+    let tables = match doc.get("repos") {
+        None => Some(ArrayOfTables::new()),
+        Some(Item::ArrayOfTables(_)) => None,
+        Some(Item::Value(toml_edit::Value::Array(array))) => {
+            let mut tables = ArrayOfTables::new();
+            for value in array.iter() {
+                let inline = value.as_inline_table().context("`repos` entries must be tables")?;
+                tables.push(inline.clone().into_table());
+            }
+            Some(tables)
+        }
+        Some(_) => bail!("`repos` must be a list of tables"),
+    };
+    if let Some(tables) = tables {
+        // Array-of-tables must come after the plain keys: re-insert at the end.
+        doc.remove("repos");
+        doc["repos"] = Item::ArrayOfTables(tables);
+    }
+    Ok(())
+}
+
 /// Applies one setting to PROJECT.md's text, validating the result.
 pub fn set_in(text: &str, key: &str, value: &str) -> Result<String> {
     let (front, body) = split(text)?;
@@ -81,9 +105,7 @@ pub fn set_in(text: &str, key: &str, value: &str) -> Result<String> {
                 Some(_) => repo.path.clone(),
                 None => std::fs::canonicalize(&repo.path).map(|p| p.to_string_lossy().into_owned()).unwrap_or(repo.path.clone()),
             };
-            if doc.get("repos").is_none() {
-                doc["repos"] = Item::ArrayOfTables(ArrayOfTables::new());
-            }
+            normalize_repos(&mut doc)?;
             let repos = doc["repos"].as_array_of_tables_mut().context("`repos` must be [[repos]] tables")?;
             if repos.iter().any(|t| t.get("path").and_then(Item::as_str) == Some(path.as_str()) && t.get("machine").and_then(Item::as_str) == repo.machine.as_deref()) {
                 bail!("{value} is already listed");
@@ -96,6 +118,7 @@ pub fn set_in(text: &str, key: &str, value: &str) -> Result<String> {
             repos.push(table);
         }
         "repos.remove" => {
+            normalize_repos(&mut doc)?;
             let repos = doc.get_mut("repos").and_then(Item::as_array_of_tables_mut).context("no repos are listed")?;
             let before = repos.len();
             let wanted = project::parse_repo_arg(value);
@@ -245,6 +268,11 @@ mod tests {
         assert_eq!(settings.repos.len(), 1);
         assert_eq!(settings.repos[0].path, "/srv/lib");
         assert!(set_in(&removed, "repos.remove", "/nope").is_err());
+        // What `new` writes: an empty inline array, then more keys.
+        let fresh = "+++\nname = \"X\"\nrepos = []\nnudge = false\n+++\nBody\n";
+        let added = set_in(fresh, "repos.add", "/x@m").unwrap();
+        let (settings, body) = project::parse_project_md(&added).unwrap();
+        assert_eq!((settings.repos.len(), settings.nudge, body.as_str()), (1, false, "Body\n"));
         // A file with no repos yet.
         let bare = "+++\nname = \"X\"\n+++\n";
         let added = set_in(bare, "repos.add", "/x@m").unwrap();

@@ -23,6 +23,7 @@ mod settings;
 mod setup;
 mod sidebar;
 mod steps;
+mod sweep;
 mod thread;
 mod threads;
 mod ticker;

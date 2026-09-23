@@ -34,6 +34,35 @@ fn alive_panes(project: &Project, view: &SessionView) -> Vec<(String, String, St
     alive
 }
 
+/// Closes the open workspaces of local threads, then the project's own.
+/// Never `--group`: the plugin never closes a repository's primary workspace,
+/// and Herdr's refusal (`workspace_group_close_required`) is reported.
+fn close_workspaces(project: &Project, view: &SessionView) -> Vec<String> {
+    let mut notes = Vec::new();
+    let mut close = |workspace: &str, what: &str| match view.herdr.call(&["workspace", "close", workspace], crate::herdr::CALL_TIMEOUT) {
+        Ok(_) => notes.push(format!("closed {what} (workspace {workspace})")),
+        Err(error) if error.code == "workspace_group_close_required" => notes.push(format!("left {what} open: it is a repository's primary workspace")),
+        Err(error) => notes.push(format!("could not close {what}: {error}")),
+    };
+    let mut done = Vec::new();
+    for t in thread::list(project).iter().filter(|t| t.status != thread::Status::Resolved && !t.is_remote() && t.kind == thread::Kind::Worktree) {
+        let workspace = view.panes.iter().find(|p| !t.worktree_path.is_empty() && std::path::Path::new(&p.cwd).starts_with(&t.worktree_path)).map(|p| p.workspace_id.clone());
+        if let Some(workspace) = workspace
+            && !done.contains(&workspace)
+        {
+            close(&workspace, &format!("{}'s workspace", t.id));
+            done.push(workspace);
+        }
+    }
+    if let Some(record) = project.coordinator()
+        && coordinator::workspace_open(&record, &view.panes)
+    {
+        crate::sidebar::clear_workspace(&view.herdr, &record.workspace_id);
+        close(&record.workspace_id, "the project workspace");
+    }
+    notes
+}
+
 pub fn set_status(ctx: &Ctx, slug: &str, status: Status) -> Result<()> {
     let project = Project::load(&ctx.root, slug)?;
     let current = project.status();
@@ -55,14 +84,21 @@ pub fn set_status(ctx: &Ctx, slug: &str, status: Status) -> Result<()> {
             }
         }
         Status::Archived => {
-            println!("It is hidden from `list` and `overview`, the ticker skips it, and `open` is refused until `unarchive`.");
+            println!("It is hidden from `list` and the popup, the ticker skips it, and `open` is refused until `unarchive`. Its folder and every unresolved thread's worktree stay.");
             if let Some(view) = &view {
                 for (_, pane, _) in alive_panes(&project, view) {
                     crate::sidebar::clear_pane(&view.herdr, &pane);
                 }
-                if let Some(record) = project.coordinator() {
-                    crate::sidebar::clear_workspace(&view.herdr, &record.workspace_id);
+                for note in close_workspaces(&project, view) {
+                    println!("  {note}");
                 }
+            }
+        }
+        Status::Active if current == Status::Archived => {
+            // Unarchive reopens it: the workspace and a coordinator.
+            let options = crate::coordinator::OpenOptions { session: crate::paths::SessionFlags::default(), rebind: false, agent: None, agent_args: Vec::new(), new: false };
+            if let Err(error) = crate::coordinator::open(ctx, slug, &options) {
+                println!("reopen it with `open {slug}` ({error:#})");
             }
         }
         Status::Active => {}

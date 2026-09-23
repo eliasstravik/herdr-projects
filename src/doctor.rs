@@ -171,6 +171,21 @@ fn report(
         }
     }
 
+    // Orphans, as `sweep --dry-run` would list them.
+    {
+        let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
+        for slug in &slugs {
+            let Ok(project) = project::Project::load(root, slug) else {
+                continue;
+            };
+            let orphans = crate::sweep::find(&ctx, &project);
+            if !orphans.is_empty() {
+                let list: Vec<String> = orphans.iter().map(|o| o.describe()).collect();
+                check(&mut out, None, &format!("sweep {slug}"), format!("{}; `sweep {slug}` removes them", list.join("; ")));
+            }
+        }
+    }
+
     for slug in &slugs {
         let Ok(project) = project::Project::load(root, slug) else {
             continue;

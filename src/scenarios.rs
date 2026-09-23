@@ -349,7 +349,7 @@ fn restart_defers_to_the_ticker_and_resets_launch_attempts() {
 }
 
 #[test]
-fn every_resolve_copies_first_and_remove_worktree_needs_a_complete_copy() {
+fn a_partial_copy_keeps_the_worktree_unless_the_loss_is_accepted() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
     let t = world.thread(&project, world.home.path(), |_| {});
@@ -360,27 +360,54 @@ fn every_resolve_copies_first_and_remove_worktree_needs_a_complete_copy() {
     world.runner.on("du -sk", ok("4\t/x\n"));
     world.runner.on("rsync", ok(""));
     world.runner.on("worktree remove", ok(r#"{"result":{}}"#));
+    let cwd = world.home.path().to_string_lossy().into_owned();
+    *world.panes.borrow_mut() = format!("[{}]", pane_json("w2", "w2:t1", "w2:p1", &cwd));
     let ctx = world.ctx();
 
-    // Partial copy: --remove-worktree refuses, the thread stays open, but the
-    // report written since the last tick is already home.
-    let refused = threads::resolve(&ctx, "demo", "t-0001", &ResolveArgs { remove_worktree: true, ..ResolveArgs::default() });
-    assert!(refused.unwrap_err().to_string().contains("--discard-uncopied"));
-    assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Open);
-    assert_eq!(std::fs::read_to_string(thread::home_report_path(&project, "t-0001")).unwrap(), "late report");
-    assert_eq!(world.runner.count("worktree remove"), 0);
-
-    // A plain resolve accepts a partial copy.
+    // Partial copy: resolved, report home, worktree kept and the item says why.
     threads::resolve(&ctx, "demo", "t-0001", &ResolveArgs::default()).unwrap();
     let resolved = thread::load(&project, "t-0001").unwrap();
     assert_eq!((resolved.status, resolved.resolved_reason.as_str()), (Status::Resolved, "manual"));
+    assert_eq!(std::fs::read_to_string(thread::home_report_path(&project, "t-0001")).unwrap(), "late report");
+    assert_eq!(world.runner.count("worktree remove"), 0);
+    assert!(!resolved.worktree_path.is_empty());
+    let item = inbox::unhandled(&project).into_iter().find(|i| i.kind == "thread-state").unwrap();
+    assert!(item.summary.contains("worktree kept") && item.summary.contains("not everything"), "{}", item.summary);
 
-    // --reopen starts nothing.
+    // --reopen starts nothing; --discard-uncopied removes it through herdr.
     threads::resolve(&ctx, "demo", "t-0001", &ResolveArgs { reopen: true, ..ResolveArgs::default() }).unwrap();
-    let reopened = thread::load(&project, "t-0001").unwrap();
-    assert_eq!(reopened.status, Status::Open);
-    assert!(reopened.resolved_reason.is_empty());
+    assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Open);
     assert_eq!(world.runner.count("agent start"), 0);
+    threads::resolve(&ctx, "demo", "t-0001", &ResolveArgs { discard_uncopied: true, ..ResolveArgs::default() }).unwrap();
+    assert_eq!(world.runner.count("worktree remove --workspace w2"), 1);
+    assert!(thread::load(&project, "t-0001").unwrap().worktree_path.is_empty());
+}
+
+#[test]
+fn resolving_a_merged_thread_removes_worktree_and_branch_and_an_unmerged_one_keeps_the_branch() {
+    for merged in [true, false] {
+        let world = World::new();
+        let project = world.project("demo", "a.sock");
+        world.thread(&project, world.home.path(), |t| {
+            t.branch = "hp/demo/t-0001-task".into();
+            t.pr_state = if merged { "MERGED".into() } else { "OPEN".into() };
+        });
+        let cwd = world.home.path().to_string_lossy().into_owned();
+        *world.panes.borrow_mut() = format!("[{}]", pane_json("w2", "w2:t1", "w2:p1", &cwd));
+        world.runner.on("worktree remove", ok(r#"{"result":{}}"#));
+        world.runner.on("branch -D", ok(""));
+        threads::resolve(&world.ctx(), "demo", "t-0001", &ResolveArgs::default()).unwrap();
+        assert_eq!(world.runner.count("worktree remove --workspace w2"), 1, "merged={merged}");
+        assert_eq!(world.runner.count("branch -D hp/demo/t-0001-task"), usize::from(merged));
+        assert!(thread::load(&project, "t-0001").unwrap().worktree_path.is_empty());
+        let item = inbox::unhandled(&project).into_iter().find(|i| i.kind == "thread-state").unwrap();
+        if merged {
+            assert!(item.summary.contains("deleted (its pull request is merged)"), "{}", item.summary);
+        } else {
+            assert!(item.summary.contains("kept: its pull request is not merged"), "{}", item.summary);
+        }
+        assert!(thread::record_path(&project, "t-0001").is_file());
+    }
 }
 
 #[test]
@@ -395,10 +422,10 @@ fn a_failed_final_copy_blocks_resolve_unless_skipped() {
 
     assert!(threads::resolve(&ctx, "demo", "t-0001", &ResolveArgs::default()).is_err());
     assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Open);
-    let both = ResolveArgs { skip_copy: true, remove_worktree: true, ..ResolveArgs::default() };
-    assert!(threads::resolve(&ctx, "demo", "t-0001", &both).is_err());
     threads::resolve(&ctx, "demo", "t-0001", &ResolveArgs { skip_copy: true, ..ResolveArgs::default() }).unwrap();
     assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Resolved);
+    // Without a copy the worktree is kept.
+    assert_eq!(world.runner.count("worktree remove"), 0);
 }
 
 #[test]
