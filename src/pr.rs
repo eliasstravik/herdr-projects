@@ -223,6 +223,54 @@ pub fn view(runner: &dyn Runner, url: &str) -> Result<String> {
     Ok(out.stdout)
 }
 
+#[derive(Deserialize, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct GhListed {
+    url: String,
+    state: String,
+    created_at: String,
+}
+
+/// The pull request whose head is `branch` in the `origin` repository, for a
+/// thread whose report names none: open first, then merged, then closed,
+/// newest first. A thread may open and merge its pull request between two
+/// ticker passes, so merged and closed ones count. One `gh` call; `None`
+/// without asking when `origin` is not on GitHub. A fork's pull request lives
+/// upstream and is found only through the report's `PR:` line.
+pub fn find_by_branch(runner: &dyn Runner, origin: &str, branch: &str) -> Result<Option<String>> {
+    let Some(repo) = normalize_origin(origin) else {
+        return Ok(None);
+    };
+    if branch.is_empty() {
+        return Ok(None);
+    }
+    let out = runner.run(&Cmd::new("gh", GH_TIMEOUT).args([
+        "pr",
+        "list",
+        "--repo",
+        &repo,
+        &format!("--head={branch}"),
+        "--state",
+        "all",
+        "--limit",
+        "20",
+        "--json",
+        "url,state,createdAt",
+    ]))?;
+    if !out.success() {
+        bail!("gh pr list: {}", out.error_text());
+    }
+    let mut listed: Vec<GhListed> = serde_json::from_str(&out.stdout)?;
+    listed.retain(|p| valid_pr_url(&p.url));
+    let rank = |state: &str| match state.to_ascii_uppercase().as_str() {
+        "OPEN" => 0,
+        "MERGED" => 1,
+        _ => 2,
+    };
+    listed.sort_by(|a, b| rank(&a.state).cmp(&rank(&b.state)).then_with(|| b.created_at.cmp(&a.created_at)));
+    Ok(listed.into_iter().next().map(|p| p.url))
+}
+
 /// One line describing what changed between two summaries; fields only.
 pub fn describe_change(old: Option<&Summary>, new: &Summary) -> String {
     let mut parts = vec![format!("state {}", new.state)];
@@ -329,6 +377,27 @@ mod tests {
         assert!(text.contains("new commenters: bob"), "{text}");
         assert!(!text.contains("alice"));
         assert!(text.contains("2 comment(s)"));
+    }
+
+    #[test]
+    fn a_branch_lookup_prefers_open_then_merged_then_closed_and_the_newest() {
+        use crate::runner::fake::{FakeRunner, ok};
+        let runner = FakeRunner::new();
+        runner.on(
+            "gh pr list",
+            ok(r#"[
+                {"url":"https://github.com/o/r/pull/1","state":"CLOSED","createdAt":"2026-01-03T00:00:00Z"},
+                {"url":"https://github.com/o/r/pull/2","state":"MERGED","createdAt":"2026-01-01T00:00:00Z"},
+                {"url":"https://github.com/o/r/pull/3","state":"MERGED","createdAt":"2026-01-02T00:00:00Z"},
+                {"url":"--web","state":"OPEN","createdAt":"2026-01-04T00:00:00Z"}]"#),
+        );
+        let found = find_by_branch(&runner, "git@github.com:O/R.git", "hp/demo/t-0001-x").unwrap();
+        assert_eq!(found.as_deref(), Some("https://github.com/o/r/pull/3"));
+        let calls = runner.calls.borrow();
+        assert!(calls[0].display().contains("--repo o/r --head=hp/demo/t-0001-x --state all"), "{}", calls[0].display());
+        drop(calls);
+        assert_eq!(find_by_branch(&FakeRunner::new(), "https://gitlab.com/o/r", "b").unwrap(), None);
+        assert_eq!(find_by_branch(&FakeRunner::new(), "git@github.com:o/r.git", "").unwrap(), None);
     }
 
     #[test]

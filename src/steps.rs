@@ -165,7 +165,7 @@ pub struct Transition {
     pub note: String,
 }
 
-fn thread_label(t: &Thread) -> String {
+pub fn thread_label(t: &Thread) -> String {
     format!("{} \"{}\"", t.id, t.title)
 }
 
@@ -329,6 +329,25 @@ pub fn pull_requests(ctx: &Ctx, project: &Project, state: &mut State, memory: &m
                 String::new()
             }
         };
+        // No `PR:` line: the one found by its branch earlier, or a lookup now.
+        let url = if !url.is_empty() {
+            url
+        } else if !t.pr.is_empty() {
+            t.pr.clone()
+        } else if t.kind == thread::Kind::Worktree {
+            match pr::find_by_branch(ctx.runner, &t.origin, &t.branch) {
+                Ok(found) => {
+                    gh_worked(project, memory, now, &mut errors);
+                    found.unwrap_or_default()
+                }
+                Err(error) => {
+                    gh_failed(project, &notifier, memory, &error, now, &mut errors);
+                    continue;
+                }
+            }
+        } else {
+            String::new()
+        };
         if url != t.pr {
             let new_url = url.clone();
             errors.extend(thread::update(project, &t.id, |t| t.pr = new_url).err());
@@ -339,18 +358,11 @@ pub fn pull_requests(ctx: &Ctx, project: &Project, state: &mut State, memory: &m
 
         let json = match pr::view(ctx.runner, &url) {
             Ok(json) => {
-                if memory.gh.record(true, "", now, memory.outage_secs) == Some(OutageEvent::Recovered) {
-                    errors.extend(inbox::write(project, "outage", "gh", "`gh` is working again; pull request follow-up has resumed", "").err());
-                }
+                gh_worked(project, memory, now, &mut errors);
                 json
             }
             Err(error) => {
-                let text = pr::sanitize(&format!("{error:#}"));
-                if memory.gh.record(false, &text, now, memory.outage_secs) == Some(OutageEvent::Down) {
-                    let summary = format!("`gh` has been failing for {} minutes; pull requests are not being followed. Last error: {text}", memory.outage_secs / 60);
-                    errors.extend(inbox::write(project, "outage", "gh", &summary, "").err());
-                    notifier.send("gh", "pull requests are not being followed: `gh` keeps failing", crate::notify::Sound::None, true);
-                }
+                gh_failed(project, &notifier, memory, &error, now, &mut errors);
                 continue;
             }
         };
@@ -393,6 +405,21 @@ pub fn pull_requests(ctx: &Ctx, project: &Project, state: &mut State, memory: &m
         }
     }
     errors
+}
+
+fn gh_worked(project: &Project, memory: &mut Memory, now: jiff::Timestamp, errors: &mut Vec<anyhow::Error>) {
+    if memory.gh.record(true, "", now, memory.outage_secs) == Some(OutageEvent::Recovered) {
+        errors.extend(inbox::write(project, "outage", "gh", "`gh` is working again; pull request follow-up has resumed", "").err());
+    }
+}
+
+fn gh_failed(project: &Project, notifier: &crate::notify::Notifier, memory: &mut Memory, error: &anyhow::Error, now: jiff::Timestamp, errors: &mut Vec<anyhow::Error>) {
+    let text = pr::sanitize(&format!("{error:#}"));
+    if memory.gh.record(false, &text, now, memory.outage_secs) == Some(OutageEvent::Down) {
+        let summary = format!("`gh` has been failing for {} minutes; pull requests are not being followed. Last error: {text}", memory.outage_secs / 60);
+        errors.extend(inbox::write(project, "outage", "gh", &summary, "").err());
+        notifier.send("gh", "pull requests are not being followed: `gh` keeps failing", crate::notify::Sound::None, true);
+    }
 }
 
 /// Every enabled `pr` routine whose events happened prompts the thread (the
