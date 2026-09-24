@@ -885,6 +885,70 @@ fn a_merged_thread_whose_agent_stays_idle_is_resolved_after_the_grace_period() {
     assert_eq!((t.status, t.resolved_reason.as_str()), (Status::Resolved, "merged"));
 }
 
+const MERGED_LIST: &str = r#"[{"url":"https://github.com/owner/app/pull/7","state":"MERGED","createdAt":"2026-01-01T00:00:00Z"}]"#;
+
+/// A thread opened and merged its pull request between two ticker passes and
+/// has no `PR:` line yet: the ticker finds it by its branch.
+#[test]
+fn a_pull_request_opened_and_merged_between_two_passes_is_linked_and_its_branch_deleted() {
+    let (world, project) = merged_world("working");
+    std::fs::write(thread::home_report_path(&project, "t-0001"), "## Report\nworking\n").unwrap();
+    let opened = Rc::new(RefCell::new(false));
+    let flag = opened.clone();
+    world.runner.on_fn(
+        |cmd| cmd.display().contains("gh pr list --repo owner/app --head=hp/demo/t-0001-task --state all"),
+        move |_| Ok(ok(if *flag.borrow() { MERGED_LIST } else { "[]" })),
+    );
+    let ctx = world.ctx();
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert!(thread::load(&project, "t-0001").unwrap().pr.is_empty());
+
+    *opened.borrow_mut() = true;
+    let mut state = crate::steps::load_state(&project);
+    state.last_pr_check = "2026-01-01T00:00:00Z".into();
+    crate::steps::save_state(&project, &state).unwrap();
+    ticker::tick_project(&ctx, &project).unwrap();
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!((t.pr.as_str(), t.pr_state.as_str()), (PR_URL, "MERGED"));
+    assert!(items_of(&project, "pr")[0].summary.contains("state MERGED"));
+
+    // Linked: later passes ask for the pull request itself, not the branch.
+    let mut state = crate::steps::load_state(&project);
+    state.last_pr_check = "2026-01-01T00:00:00Z".into();
+    crate::steps::save_state(&project, &state).unwrap();
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(world.runner.count("gh pr list"), 2);
+    assert_eq!(thread::load(&project, "t-0001").unwrap().pr, PR_URL);
+
+    threads::resolve(&ctx, "demo", "t-0001", &ResolveArgs::default()).unwrap();
+    assert_eq!(world.runner.count("branch -D hp/demo/t-0001-task"), 1);
+    let item = items_of(&project, "thread-state").into_iter().find(|i| i.summary.contains("resolved")).unwrap();
+    assert!(item.summary.contains("deleted (its pull request is merged)"), "{}", item.summary);
+}
+
+/// Resolved before the ticker ever looked at its merged pull request, with and
+/// without a `PR:` line: resolve looks once more and deletes the branch.
+#[test]
+fn resolving_a_thread_with_an_unlinked_merged_pull_request_deletes_its_branch() {
+    for pr_line in [true, false] {
+        let (world, project) = merged_world("done");
+        let report = if pr_line { format!("PR: {PR_URL}\n## Report\nmerged\n") } else { "## Report\nmerged\n".to_string() };
+        std::fs::write(thread::home_report_path(&project, "t-0001"), report).unwrap();
+        world.runner.on("gh pr list", ok(MERGED_LIST));
+        let ctx = world.ctx();
+        assert!(thread::load(&project, "t-0001").unwrap().pr.is_empty());
+
+        threads::resolve(&ctx, "demo", "t-0001", &ResolveArgs::default()).unwrap();
+        let t = thread::load(&project, "t-0001").unwrap();
+        assert_eq!((t.status, t.pr.as_str(), t.pr_state.as_str()), (Status::Resolved, PR_URL, "MERGED"), "pr_line={pr_line}");
+        assert_eq!(world.runner.count("gh pr list"), usize::from(!pr_line));
+        assert_eq!(world.runner.count("branch -D hp/demo/t-0001-task"), 1, "pr_line={pr_line}");
+        assert!(items_of(&project, "pr")[0].summary.contains("state MERGED"));
+        let item = items_of(&project, "thread-state").into_iter().find(|i| i.summary.contains("resolved")).unwrap();
+        assert!(item.summary.contains("deleted (its pull request is merged)"), "{}", item.summary);
+    }
+}
+
 #[test]
 fn a_pull_request_from_another_branch_or_repository_is_ignored_with_one_item() {
     let (world, project) = pr_world(r#"{"state":"MERGED","headRefName":"someone-elses-branch","headRepository":{"name":"app"},"headRepositoryOwner":{"login":"owner"}}"#);

@@ -658,7 +658,16 @@ pub struct Clean {
 pub fn clean(ctx: &Ctx, project: &Project, t: &Thread, options: &Clean) -> Vec<String> {
     let mut notes = Vec::new();
     let view = session_view(ctx, project);
-    let merged = t.pr_state.eq_ignore_ascii_case("merged");
+    let mut merged = t.pr_state.eq_ignore_ascii_case("merged");
+    let mut merged_head = options.merged_head.clone();
+    if t.kind == Kind::Worktree
+        && !t.branch.is_empty()
+        && (!merged || merged_head.is_empty())
+        && let Some(summary) = last_pr_lookup(ctx, project, t)
+    {
+        merged = summary.state == "MERGED";
+        merged_head = summary.head_oid;
+    }
     match t.kind {
         Kind::Worktree => {
             let mut removed = t.worktree_path.is_empty();
@@ -681,7 +690,7 @@ pub fn clean(ctx: &Ctx, project: &Project, t: &Thread, options: &Clean) -> Vec<S
             }
             if !t.branch.is_empty() {
                 if merged && removed {
-                    match delete_branch(ctx, t, &options.merged_head) {
+                    match delete_branch(ctx, t, &merged_head) {
                         Ok(()) => notes.push(format!("branch {} deleted (its pull request is merged)", t.branch)),
                         Err(error) => notes.push(format!("branch {} kept: {error:#}", t.branch)),
                     }
@@ -709,6 +718,34 @@ pub fn clean(ctx: &Ctx, project: &Project, t: &Thread, options: &Clean) -> Vec<S
         clear_thread_tokens(&view.herdr, t);
     }
     notes
+}
+
+/// A last look for the thread's pull request before its branch is judged. The
+/// ticker checks pull requests every two minutes, so a thread that opens and
+/// merges one and is resolved in between would otherwise keep its branch.
+/// What it finds is recorded, with the usual `pr` item when it is news.
+fn last_pr_lookup(ctx: &Ctx, project: &Project, t: &Thread) -> Option<crate::pr::Summary> {
+    use crate::pr;
+    let report = std::fs::read_to_string(thread::home_report_path(project, &t.id)).unwrap_or_default();
+    let url = match pr::pr_line(&report) {
+        Ok(Some(url)) => url,
+        _ if !t.pr.is_empty() => t.pr.clone(),
+        _ => pr::find_by_branch(ctx.runner, &t.origin, &t.branch).ok()??,
+    };
+    let json = pr::view(ctx.runner, &url).ok()?;
+    let pr::Checked::Summary(summary) = pr::reduce(&json, &t.branch, &t.origin).ok()? else {
+        return None;
+    };
+    if t.pr != url || t.pr_state != summary.state {
+        let (new_url, state, review) = (url.clone(), summary.state.clone(), summary.review_decision.clone());
+        let _ = thread::update(project, &t.id, |r| {
+            r.pr = new_url;
+            r.pr_state = state;
+            r.pr_review = review;
+        });
+        let _ = crate::inbox::write(project, "pr", &t.id, &format!("{}: pull request {} (found at resolve)", crate::steps::thread_label(t), pr::describe_change(None, &summary)), "");
+    }
+    Some(summary)
 }
 
 /// Deletes the local branch only when its tip is the pull request's merged
