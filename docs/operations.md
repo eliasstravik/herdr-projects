@@ -76,7 +76,7 @@ Threads idle for `auto_resolve_days` are resolved (and cleaned) after a final co
 
 ## The popup
 
-`prefix+a` (or the **Projects** action) opens it, scoped to the current workspace's project. From any section, `t` cycles forwards through this project → all projects → each other project in list order → back to this project, and `T` walks the same ring backwards (archived projects are skipped; `↵` on a settings project row jumps there and the cycle continues from it). Outside a project the ring is all projects → each project. Every key runs a CLI command; the popup can do nothing the CLI cannot.
+`prefix+a` (or the **Projects** action) opens it, scoped to the current workspace's project: the coordinator's workspace or a thread's, found by where its panes work. From any section, `P` opens a project picker with All projects first and the current scope highlighted: `↑`/`↓` (or `k`/`j`) move, `↵` switches, `esc` closes (archived projects are skipped; `↵` on a settings project row still jumps there). In the picker `/` filters by name or slug as you type; `esc` clears the filter, then closes. `/` in any section opens the picker straight into the filter. Outside a project it opens on all projects. Every key runs a CLI command; the popup can do nothing the CLI cannot.
 
 | Section | Keys |
 | --- | --- |

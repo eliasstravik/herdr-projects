@@ -45,12 +45,12 @@ impl Section {
 
     fn keys(self) -> &'static str {
         match self {
-            Section::Threads => "↵ jump  1-9 next  s stop  r restart  a ack  x resolve  o PR  i detail  c coordinator  S sweep  t/T project",
-            Section::Tasks => "↵ jump  d delegate  m done  D drop  t/T project",
-            Section::Inbox => "↵ detail  a done  t/T project",
-            Section::Routines => "↵ toggle  i prompt  t/T project",
-            Section::Settings => "↵ edit  p pause/resume  A archive  X delete  t/T project",
-            Section::Memory => "↵ read  t/T project",
+            Section::Threads => "↵ jump  1-9 next  s stop  r restart  a ack  x resolve  o PR  i detail  c coordinator  S sweep",
+            Section::Tasks => "↵ jump  d delegate  m done  D drop",
+            Section::Inbox => "↵ detail  a done",
+            Section::Routines => "↵ toggle  i prompt",
+            Section::Settings => "↵ edit  p pause/resume  A archive  X delete",
+            Section::Memory => "↵ read",
         }
     }
 }
@@ -153,23 +153,104 @@ fn projects_in_scope(root: &Path, scope: Option<&str>, show_archived: bool) -> V
         .collect()
 }
 
-/// The scope after `scope` when `t` (forward) or `T` (backward) cycles through
-/// the ring: the home project, all projects, then every other listed project.
-/// With no home project the ring starts at all projects. A scope outside the
-/// ring (an archived project opened from settings) continues from the ring's
-/// start.
-pub fn cycle_scope(home: Option<&str>, projects: &[String], scope: Option<&str>, forward: bool) -> Option<String> {
-    let mut ring: Vec<Option<&str>> = home.map(Some).into_iter().collect();
-    ring.push(None);
-    ring.extend(projects.iter().map(String::as_str).filter(|p| Some(*p) != home).map(Some));
-    let position = ring.iter().position(|s| *s == scope);
-    let next = match (position, forward) {
-        (Some(i), true) => (i + 1) % ring.len(),
-        (Some(i), false) => (i + ring.len() - 1) % ring.len(),
-        (None, true) => 0,
-        (None, false) => ring.len() - 1,
-    };
-    ring[next].map(str::to_string)
+/// One row of the project picker; `slug` is `None` for "All projects".
+#[derive(Debug, Clone, PartialEq)]
+pub struct PickerRow {
+    pub slug: Option<String>,
+    pub name: String,
+    pub status: String,
+}
+
+/// The rows `P` and `/` offer: "All projects", then every listed project.
+pub fn picker_rows(root: &Path) -> Vec<PickerRow> {
+    let mut rows = vec![PickerRow { slug: None, name: "All projects".into(), status: summary(root) }];
+    for project in projects_in_scope(root, None, false) {
+        let name = project.read_project_md().map(|(s, _)| project::display_name(&s.name, &project.slug)).unwrap_or_else(|_| project.slug.clone());
+        let status = crate::sidebar::project_line(&crate::sidebar::recorded_groups(&project), project.status() == Status::Paused);
+        rows.push(PickerRow { slug: Some(project.slug.clone()), name, status });
+    }
+    rows
+}
+
+/// The project picker: ↑↓ move (wrapping), ↵ switches the scope, `/` filters
+/// on name and slug, esc clears the filter and then closes.
+#[derive(Debug, Clone)]
+pub struct Picker {
+    pub rows: Vec<PickerRow>,
+    /// The typed filter while filtering.
+    pub filter: Option<String>,
+    /// An index into `visible()`.
+    pub selected: usize,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum PickerOutcome {
+    Stay,
+    Close,
+    Pick(Option<String>),
+}
+
+impl Picker {
+    /// Opens on the current scope; `filtering` starts with an empty filter.
+    pub fn new(rows: Vec<PickerRow>, scope: Option<&str>, filtering: bool) -> Picker {
+        let selected = rows.iter().position(|r| r.slug.as_deref() == scope).unwrap_or(0);
+        Picker { rows, filter: filtering.then(String::new), selected }
+    }
+
+    pub fn visible(&self) -> Vec<&PickerRow> {
+        let needle = self.filter.as_deref().unwrap_or("").to_lowercase();
+        self.rows.iter().filter(|r| r.name.to_lowercase().contains(&needle) || r.slug.as_deref().is_some_and(|s| s.contains(&needle))).collect()
+    }
+
+    fn step(&mut self, forward: bool) {
+        let n = self.visible().len();
+        if n > 0 {
+            self.selected = if forward { (self.selected + 1) % n } else { (self.selected + n - 1) % n };
+        }
+    }
+
+    pub fn key(&mut self, key: KeyEvent) -> PickerOutcome {
+        let filtering = self.filter.is_some();
+        match key.code {
+            KeyCode::Up => self.step(false),
+            KeyCode::Down => self.step(true),
+            KeyCode::Char('k') if !filtering => self.step(false),
+            KeyCode::Char('j') if !filtering => self.step(true),
+            KeyCode::Enter => {
+                if let Some(row) = self.visible().get(self.selected) {
+                    return PickerOutcome::Pick(row.slug.clone());
+                }
+            }
+            KeyCode::Esc => {
+                // A typed filter is cleared first, keeping the highlighted row.
+                if self.filter.as_ref().is_some_and(|f| !f.is_empty()) {
+                    let highlighted = self.visible().get(self.selected).map(|r| r.slug.clone());
+                    self.filter = None;
+                    self.selected = highlighted.and_then(|slug| self.rows.iter().position(|r| r.slug == slug)).unwrap_or(0);
+                } else {
+                    return PickerOutcome::Close;
+                }
+            }
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => return PickerOutcome::Close,
+            KeyCode::Char('/') if !filtering => {
+                self.filter = Some(String::new());
+            }
+            KeyCode::Backspace if filtering => {
+                if let Some(filter) = &mut self.filter {
+                    filter.pop();
+                }
+                self.selected = 0;
+            }
+            KeyCode::Char(c) if filtering && !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(filter) = &mut self.filter {
+                    filter.push(c);
+                }
+                self.selected = 0;
+            }
+            _ => {}
+        }
+        PickerOutcome::Stay
+    }
 }
 
 pub fn thread_rows(root: &Path, scope: Option<&str>) -> Vec<ThreadRow> {
@@ -398,12 +479,12 @@ enum Mode {
     Confirm { question: String, action: Vec<String>, lines: Vec<String> },
     Edit { label: String, buffer: String, action: Vec<String> },
     Pick { label: String, options: Vec<String>, selected: usize, action: Vec<String> },
+    /// The project picker (`P`, or `/` straight into its filter).
+    Projects(Picker),
 }
 
 pub struct Popup<'a> {
     ctx: &'a Ctx<'a>,
-    /// The project the popup opened in (the scope cycle starts and ends there).
-    home: Option<String>,
     scope: Option<String>,
     section: usize,
     selected: usize,
@@ -418,7 +499,7 @@ pub struct Popup<'a> {
 
 impl<'a> Popup<'a> {
     pub fn new(ctx: &'a Ctx<'a>, scope: Option<String>, workspace: String) -> Self {
-        let mut popup = Popup { ctx, home: scope.clone(), scope, section: 0, selected: 0, rows: Vec::new(), mode: Mode::List, message: String::new(), workspace, quit: false, jump: None };
+        let mut popup = Popup { ctx, scope, section: 0, selected: 0, rows: Vec::new(), mode: Mode::List, message: String::new(), workspace, quit: false, jump: None };
         popup.reload();
         popup
     }
@@ -562,6 +643,16 @@ impl<'a> Popup<'a> {
                 }
                 _ => Mode::Pick { label, options, selected, action },
             },
+            Mode::Projects(mut picker) => match picker.key(key) {
+                PickerOutcome::Stay => Mode::Projects(picker),
+                PickerOutcome::Close => Mode::List,
+                PickerOutcome::Pick(scope) => {
+                    self.scope = scope;
+                    self.selected = 0;
+                    self.reload();
+                    Mode::List
+                }
+            },
         };
     }
 
@@ -589,15 +680,7 @@ impl<'a> Popup<'a> {
             }
             KeyCode::Down | KeyCode::Char('j') => self.move_by(1),
             KeyCode::Up | KeyCode::Char('k') => self.move_by(-1),
-            KeyCode::Char(c @ ('t' | 'T')) => {
-                let projects: Vec<String> = projects_in_scope(&self.ctx.root, None, false).into_iter().map(|p| p.slug).collect();
-                self.scope = cycle_scope(self.home.as_deref(), &projects, self.scope.as_deref(), c == 't');
-                if self.scope.is_none() && self.home.is_none() {
-                    self.message = "showing all projects (this workspace is not a project)".into();
-                }
-                self.selected = 0;
-                self.reload();
-            }
+            KeyCode::Char(c @ ('P' | '/')) => self.mode = Mode::Projects(Picker::new(picker_rows(&self.ctx.root), self.scope.as_deref(), c == '/')),
             _ => match section {
                 Section::Threads => self.thread_key(key),
                 Section::Tasks => self.task_key(key),
@@ -623,7 +706,7 @@ impl<'a> Popup<'a> {
         });
         if key.code == KeyCode::Char('c') {
             let Some(slug) = slug_for_coordinator else {
-                self.message = "select a thread of the project, or press t to scope to one".into();
+                self.message = "select a thread of the project, or press P to pick one".into();
                 return;
             };
             let default = Project::load(&self.ctx.root, &slug).and_then(|p| p.read_project_md()).map(|(s, _)| s.coordinator_agent).unwrap_or_else(|_| "claude".into());
@@ -637,7 +720,7 @@ impl<'a> Popup<'a> {
         }
         if key.code == KeyCode::Char('S') {
             let Some(slug) = slug_for_coordinator else {
-                self.message = "press t to scope to a project first".into();
+                self.message = "press P to pick a project first".into();
                 return;
             };
             let (_, text) = run_hp(self.ctx, &["sweep".into(), slug.clone(), "--dry-run".into()], None);
@@ -891,6 +974,32 @@ impl<'a> Popup<'a> {
                     }
                 }
             }
+            Mode::Projects(picker) => {
+                let title = match &picker.filter {
+                    Some(filter) => format!(" Switch to project  / {filter}▏"),
+                    None => " Switch to project".to_string(),
+                };
+                queue!(out, cursor::MoveTo(0, body_top as u16), SetAttribute(Attribute::Bold), Print(fit(&title, width)), SetAttribute(Attribute::Reset))?;
+                let visible = picker.visible();
+                if visible.is_empty() {
+                    queue!(out, cursor::MoveTo(0, (body_top + 1) as u16), SetAttribute(Attribute::Dim), Print(fit("  no projects match", width)), SetAttribute(Attribute::Reset))?;
+                }
+                let start = picker.selected.saturating_sub(body_height.saturating_sub(2));
+                for (i, row) in visible.iter().enumerate().skip(start).take(body_height.saturating_sub(1)) {
+                    queue!(out, cursor::MoveTo(0, (body_top + 1 + i - start) as u16))?;
+                    let current = if row.slug == self.scope { "•" } else { " " };
+                    let label = match &row.slug {
+                        Some(slug) if *slug != row.name => format!("{} ({slug})", row.name),
+                        _ => row.name.clone(),
+                    };
+                    let text = fit(&format!(" {current} {label} · {}", row.status), width);
+                    if i == picker.selected {
+                        queue!(out, SetAttribute(Attribute::Reverse), Print(text), SetAttribute(Attribute::Reset))?;
+                    } else {
+                        queue!(out, Print(text))?;
+                    }
+                }
+            }
             _ => {
                 let start = self.selected.saturating_sub(body_height.saturating_sub(1) / 2).min(self.rows.len().saturating_sub(body_height));
                 for (i, row) in self.rows.iter().enumerate().skip(start).take(body_height) {
@@ -919,7 +1028,9 @@ impl<'a> Popup<'a> {
         let footer = height.saturating_sub(2) as u16;
         queue!(out, cursor::MoveTo(0, footer), Print("─".repeat(width)), cursor::MoveTo(0, footer + 1))?;
         let hint = match &self.mode {
-            Mode::List => format!("{}  tab section  esc close", SECTIONS[self.section].keys()),
+            Mode::List => format!("{}  P project  / find  tab section  esc close", SECTIONS[self.section].keys()),
+            Mode::Projects(Picker { filter: Some(_), .. }) => "type to filter  ↑↓ choose  ↵ switch  esc clear/close".into(),
+            Mode::Projects(_) => "↑↓ choose  ↵ switch  / filter  esc close".into(),
             Mode::Detail { files, .. } if !files.is_empty() => "↑↓ file  ↵ open  y copy path  esc back".into(),
             Mode::Detail { .. } => "↑↓ scroll  esc back".into(),
             Mode::Confirm { question, .. } => question.clone(),
@@ -1136,35 +1247,147 @@ mod tests {
         assert_eq!(summary(&world.root), "1 project · 1 need you");
     }
 
-    #[test]
-    fn t_and_shift_t_cycle_through_home_all_and_every_other_project() {
-        let projects: Vec<String> = ["alpha", "beta", "gamma"].map(String::from).to_vec();
-        let step = |scope: Option<&str>, forward| cycle_scope(Some("beta"), &projects, scope, forward);
-        // Forwards: home → all → the others in listed order → home.
-        assert_eq!(step(Some("beta"), true), None);
-        assert_eq!(step(None, true).as_deref(), Some("alpha"));
-        assert_eq!(step(Some("alpha"), true).as_deref(), Some("gamma"));
-        assert_eq!(step(Some("gamma"), true).as_deref(), Some("beta"));
-        // Backwards walks the same ring the other way and wraps.
-        assert_eq!(step(Some("beta"), false).as_deref(), Some("gamma"));
-        assert_eq!(step(Some("gamma"), false).as_deref(), Some("alpha"));
-        assert_eq!(step(Some("alpha"), false), None);
-        assert_eq!(step(None, false).as_deref(), Some("beta"));
-        // A scope outside the ring (an archived project) continues from the start.
-        assert_eq!(step(Some("old"), true).as_deref(), Some("beta"));
-        assert_eq!(step(Some("old"), false).as_deref(), Some("gamma"));
+    fn rows() -> Vec<PickerRow> {
+        let row = |slug: Option<&str>, name: &str| PickerRow { slug: slug.map(String::from), name: name.into(), status: "idle".into() };
+        vec![row(None, "All projects"), row(Some("gtm-ai"), "GTM AI"), row(Some("herdr-projects"), "Herdr Projects"), row(Some("pi"), "pi")]
+    }
+
+    fn press(picker: &mut Picker, code: KeyCode) -> PickerOutcome {
+        picker.key(KeyEvent::new(code, KeyModifiers::NONE))
+    }
+
+    fn typed(picker: &mut Picker, text: &str) {
+        for c in text.chars() {
+            assert_eq!(press(picker, KeyCode::Char(c)), PickerOutcome::Stay);
+        }
+    }
+
+    fn names(picker: &Picker) -> Vec<&str> {
+        picker.visible().iter().map(|r| r.name.as_str()).collect()
     }
 
     #[test]
-    fn cycle_without_home_or_with_one_project() {
-        let projects: Vec<String> = ["alpha", "beta"].map(String::from).to_vec();
-        assert_eq!(cycle_scope(None, &projects, None, true).as_deref(), Some("alpha"));
-        assert_eq!(cycle_scope(None, &projects, Some("beta"), true), None);
-        assert_eq!(cycle_scope(None, &projects, None, false).as_deref(), Some("beta"));
-        let one = vec!["solo".to_string()];
-        assert_eq!(cycle_scope(Some("solo"), &one, Some("solo"), true), None);
-        assert_eq!(cycle_scope(Some("solo"), &one, None, true).as_deref(), Some("solo"));
-        assert_eq!(cycle_scope(Some("solo"), &one, None, false).as_deref(), Some("solo"));
-        assert_eq!(cycle_scope(None, &[], None, true), None);
+    fn the_picker_opens_on_the_current_scope_and_wraps_both_ways() {
+        let mut picker = Picker::new(rows(), Some("herdr-projects"), false);
+        assert_eq!(picker.selected, 2);
+        press(&mut picker, KeyCode::Down);
+        assert_eq!(picker.selected, 3);
+        press(&mut picker, KeyCode::Char('j'));
+        assert_eq!(picker.selected, 0, "wraps from the last row to All projects");
+        press(&mut picker, KeyCode::Up);
+        assert_eq!(picker.selected, 3, "wraps from the first row to the last");
+        press(&mut picker, KeyCode::Char('k'));
+        assert_eq!(press(&mut picker, KeyCode::Enter), PickerOutcome::Pick(Some("herdr-projects".into())));
+        // All projects is the first row, and the scope when there is none.
+        let mut all = Picker::new(rows(), None, false);
+        assert_eq!(all.selected, 0);
+        assert_eq!(press(&mut all, KeyCode::Enter), PickerOutcome::Pick(None));
+        // A scope that is not listed (an archived project) starts at the top.
+        assert_eq!(Picker::new(rows(), Some("old"), false).selected, 0);
+        // Esc closes without a pick; other letters do nothing.
+        let mut picker = Picker::new(rows(), Some("pi"), false);
+        assert_eq!(press(&mut picker, KeyCode::Char('x')), PickerOutcome::Stay);
+        assert_eq!(picker.selected, 3);
+        assert_eq!(press(&mut picker, KeyCode::Esc), PickerOutcome::Close);
+    }
+
+    #[test]
+    fn the_filter_narrows_on_name_and_slug_and_picks_the_highlighted_match() {
+        let mut picker = Picker::new(rows(), None, false);
+        press(&mut picker, KeyCode::Char('/'));
+        assert_eq!(picker.filter.as_deref(), Some(""));
+        assert_eq!(names(&picker).len(), 4);
+        // Case-insensitive on the name; j and k are text while filtering.
+        typed(&mut picker, "HERDR");
+        assert_eq!(names(&picker), ["Herdr Projects"]);
+        press(&mut picker, KeyCode::Backspace);
+        assert_eq!(picker.filter.as_deref(), Some("HERD"));
+        // On the slug too.
+        let mut picker = Picker::new(rows(), None, true);
+        typed(&mut picker, "gtm-");
+        assert_eq!(names(&picker), ["GTM AI"]);
+        // Several matches: ↓ moves among them (wrapping), ↵ picks.
+        let mut picker = Picker::new(rows(), None, true);
+        typed(&mut picker, "p");
+        assert_eq!(names(&picker), ["All projects", "Herdr Projects", "pi"]);
+        assert_eq!(picker.selected, 0);
+        press(&mut picker, KeyCode::Down);
+        press(&mut picker, KeyCode::Down);
+        assert_eq!(press(&mut picker, KeyCode::Enter), PickerOutcome::Pick(Some("pi".into())));
+        let mut picker = Picker::new(rows(), None, true);
+        typed(&mut picker, "zz");
+        assert_eq!(names(&picker), Vec::<&str>::new());
+        assert_eq!(press(&mut picker, KeyCode::Enter), PickerOutcome::Stay, "no match: nothing to pick");
+    }
+
+    #[test]
+    fn esc_clears_a_typed_filter_first_and_closes_on_the_second_press() {
+        let mut picker = Picker::new(rows(), None, true);
+        typed(&mut picker, "gtm");
+        assert_eq!(press(&mut picker, KeyCode::Esc), PickerOutcome::Stay);
+        assert_eq!(picker.filter, None);
+        assert_eq!(names(&picker).len(), 4);
+        assert_eq!(picker.selected, 1, "the match stays highlighted in the full list");
+        assert_eq!(press(&mut picker, KeyCode::Esc), PickerOutcome::Close);
+        // An empty filter has nothing to clear: esc closes at once.
+        let mut picker = Picker::new(rows(), None, true);
+        assert_eq!(press(&mut picker, KeyCode::Esc), PickerOutcome::Close);
+        // So does a filter cleared with backspace.
+        let mut picker = Picker::new(rows(), None, true);
+        typed(&mut picker, "x");
+        press(&mut picker, KeyCode::Backspace);
+        assert_eq!(press(&mut picker, KeyCode::Esc), PickerOutcome::Close);
+    }
+
+    #[test]
+    fn slash_and_shift_p_open_the_picker_and_settings_enter_still_scopes() {
+        let world = crate::scenarios::World::new();
+        world.project("alpha", "a.sock");
+        world.project("beta", "a.sock");
+        let ctx = world.ctx();
+        let mut popup = Popup::new(&ctx, Some("alpha".into()), String::new());
+        let key = |popup: &mut Popup, code| popup.key(KeyEvent::new(code, KeyModifiers::NONE));
+        // `/` from the list goes straight into the filter; j is text there.
+        key(&mut popup, KeyCode::Char('/'));
+        assert!(matches!(&popup.mode, Mode::Projects(p) if p.filter.as_deref() == Some("")));
+        for c in "bej".chars() {
+            key(&mut popup, KeyCode::Char(c));
+        }
+        assert!(matches!(&popup.mode, Mode::Projects(p) if p.filter.as_deref() == Some("bej") && p.visible().is_empty()));
+        key(&mut popup, KeyCode::Backspace);
+        key(&mut popup, KeyCode::Enter);
+        assert!(matches!(popup.mode, Mode::List));
+        assert_eq!(popup.scope.as_deref(), Some("beta"));
+        // P opens on the current scope; esc leaves it unchanged.
+        key(&mut popup, KeyCode::Char('P'));
+        assert!(matches!(&popup.mode, Mode::Projects(p) if p.filter.is_none() && p.selected == 2));
+        key(&mut popup, KeyCode::Up);
+        key(&mut popup, KeyCode::Up);
+        key(&mut popup, KeyCode::Esc);
+        assert_eq!(popup.scope.as_deref(), Some("beta"));
+        key(&mut popup, KeyCode::Char('P'));
+        key(&mut popup, KeyCode::Up);
+        key(&mut popup, KeyCode::Up);
+        key(&mut popup, KeyCode::Enter);
+        assert_eq!(popup.scope, None);
+        // The settings rows of all projects: ↵ on a project still scopes to it.
+        popup.section = SECTIONS.iter().position(|s| *s == Section::Settings).unwrap();
+        popup.reload();
+        key(&mut popup, KeyCode::Enter);
+        assert_eq!(popup.scope.as_deref(), Some("alpha"));
+    }
+
+    #[test]
+    fn picker_rows_start_with_all_projects_and_leave_out_archived_ones() {
+        let world = crate::scenarios::World::new();
+        let project = world.project("demo", "a.sock");
+        world.thread(&project, world.home.path(), |t| t.last_group = "waiting-on-you".into());
+        world.project("old", "a.sock");
+        crate::lifecycle::set_status(&world.ctx(), "old", Status::Archived).ok();
+        let rows = picker_rows(&world.root);
+        let slugs: Vec<Option<&str>> = rows.iter().map(|r| r.slug.as_deref()).collect();
+        assert_eq!(slugs, [None, Some("demo")]);
+        assert_eq!(rows[0].status, "1 project · 1 need you");
+        assert_eq!(rows[1].status, "1 need you");
     }
 }

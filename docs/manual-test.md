@@ -15,7 +15,7 @@ Checked on 2026-09-23 in a scratch `hp-dev` session (herdr 0.9.1, macOS, Claude 
 | 2 | A thread survives a server restart with native resume and keeps its group and name; a cleared name is re-applied | Builder (client attached through `script`) |
 | 3 | Tokens `hp_project`, `hp_rank`, `hp_state`, the display name and the Space token `hp` are set; old tokens cleared | Builder (`herdr api snapshot`) |
 | 3 | Four-line rows, colours, the project count and `projects: N need you` render; `focus <slug>` narrows and `unfocus` restores the by-need order | Client-witnessed |
-| 4 | `prefix+a` opens the popup scoped to the current project; `t` cycles this project → all → each other project → back, `T` backwards, from any section; `↵` focuses the thread and the popup is gone | Client-witnessed (the same TUI was driven in a pane by the builder) |
+| 4 | `prefix+a` opens the popup scoped to the current project (also in a thread's workspace), and on all projects elsewhere; `P` opens the project picker on the current scope, `/` filters it, `esc` clears then closes, from any section; `↵` focuses the thread and the popup is gone | Client-witnessed (the same TUI was driven in a pane by the builder) |
 | 4 | A Next number key reaches the thread and its task file; `s` stops a working thread; a settings edit reaches PROJECT.md; `X` asks first | Builder |
 | 5 | Resolving a merged thread leaves no worktree, branch or workspace and keeps `threads/<id>.md` and `library/<id>/`; an unmerged one keeps its branch and says so | Builder |
 | 5 | `sweep --dry-run` lists a planted orphan worktree and `sweep --yes` removes it; `archive` closes and hides, `unarchive` reopens | Builder |
