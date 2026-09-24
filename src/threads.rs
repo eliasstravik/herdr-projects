@@ -24,12 +24,18 @@ pub struct SessionView<'a> {
     pub panes: Vec<Pane>,
 }
 
-/// `None` when the project was never opened or its session is unreachable.
+/// `None` when the project's session is unreachable, or it has no usable
+/// record and no agent works in its folder in the current session.
 pub fn session_view<'a>(ctx: &'a Ctx, project: &Project) -> Option<SessionView<'a>> {
-    let record = project.coordinator()?;
-    if record.socket.is_empty() || !Path::new(&record.socket).exists() {
-        return None;
-    }
+    let record = match project.coordinator().filter(|r| !r.socket.is_empty() && Path::new(&r.socket).exists()) {
+        Some(record) => record,
+        None => {
+            let session = crate::paths::resolve_session(&Default::default(), ctx.env, ctx.runner).ok()?;
+            let socket = session.socket.to_string_lossy().into_owned();
+            let agents = Herdr::new(ctx.env.herdr_bin(), &socket, ctx.runner).agent_list().ok()?;
+            crate::coordinator::record_found(project, &socket, &session.name.unwrap_or_default(), &agents).ok()??
+        }
+    };
     let herdr = Herdr::new(ctx.env.herdr_bin(), &record.socket, ctx.runner);
     let agents = herdr.agent_list().ok()?;
     let panes = herdr.pane_list().ok()?;

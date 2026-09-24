@@ -195,34 +195,52 @@ fn report(
             continue;
         };
         let label = format!("project {slug}");
-        let Some(record) = project.coordinator() else {
-            check(&mut out, Some(true), &label, format!("{}; never opened", project.status()));
-            continue;
+        let none = format!("no coordinator running (start any agent in {}, or `open {slug}`)", project.dir().display());
+        // With no usable record, the agents the ticker would discover: the
+        // ones working in the project folder in this session.
+        let (record, mut notes) = match project.coordinator() {
+            Some(record) if Path::new(&record.socket).exists() => (Some(record), Vec::new()),
+            Some(record) => (None, vec![format!("recorded socket {} no longer exists", record.socket)]),
+            None => (None, Vec::new()),
         };
-        if !Path::new(&record.socket).exists() {
-            check(&mut out, None, &label, format!("recorded socket {} no longer exists; `open --rebind` moves it", record.socket));
-            continue;
-        }
-        let herdr = Herdr::new(&bin, &record.socket, runner);
+        let socket = match (&record, paths::resolve_session(session, env, runner)) {
+            (Some(record), _) => record.socket.clone(),
+            (None, Ok(found)) => found.socket.to_string_lossy().into_owned(),
+            (None, Err(_)) => {
+                notes.push(none);
+                check(&mut out, Some(true), &label, format!("{}; {}", project.status(), notes.join("; ")));
+                continue;
+            }
+        };
+        let herdr = Herdr::new(&bin, &socket, runner);
         match (herdr.pane_list(), herdr.agent_list()) {
             (Ok(panes), Ok(agents)) => {
-                let workspace = crate::coordinator::workspace_open(&record, &panes);
-                let coordinators: Vec<String> = agents.iter().filter(|a| crate::coordinator::is_coordinator(&record, a)).map(|a| format!("{} ({})", a.pane_id, a.agent)).collect();
+                let dir = project.canonical_dir().to_string_lossy().into_owned();
+                let coordinators: Vec<String> = agents
+                    .iter()
+                    .filter(|a| a.works_in(&dir))
+                    .map(|a| if a.name.starts_with("hpc-") { format!("{} ({})", a.pane_id, a.agent) } else { format!("{} ({}, started by hand)", a.pane_id, a.agent) })
+                    .collect();
+                if let Some(record) = &record {
+                    let workspace = crate::coordinator::workspace_open(record, &panes);
+                    notes.push(format!("socket {}; workspace {} {}", record.socket, record.workspace_id, if workspace { "open" } else { "closed" }));
+                }
+                if coordinators.is_empty() {
+                    notes.push(none);
+                } else {
+                    notes.push(format!("coordinator: {}", coordinators.join(", ")));
+                    if record.is_none() {
+                        notes.push("the ticker records it on its next tick".into());
+                    }
+                }
                 check(
                     &mut out,
-                    if coordinators.is_empty() { None } else { Some(true) },
+                    if coordinators.is_empty() && record.is_some() { None } else { Some(true) },
                     &label,
-                    format!(
-                        "{}; socket {}; workspace {} {}; coordinators: {}",
-                        project.status(),
-                        record.socket,
-                        record.workspace_id,
-                        if workspace { "open" } else { "closed" },
-                        if coordinators.is_empty() { "none (run `open`)".to_string() } else { coordinators.join(", ") },
-                    ),
+                    format!("{}; {}", project.status(), notes.join("; ")),
                 );
             }
-            (Err(error), _) | (_, Err(error)) => check(&mut out, None, &label, format!("session at {} unreachable: {error}", record.socket)),
+            (Err(error), _) | (_, Err(error)) => check(&mut out, None, &label, format!("session at {socket} unreachable: {error}")),
         }
     }
 

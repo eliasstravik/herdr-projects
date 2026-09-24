@@ -1745,3 +1745,87 @@ fn a_tab_thread_of_a_coordinator_running_in_another_workspace_opens_the_project_
     assert_eq!(h.world.runner.count("tab create --workspace w3"), 1);
     assert_eq!(h.world.runner.count("workspace create"), 1);
 }
+
+/// Herdr's default socket, where the ticker looks for hand-started agents.
+fn default_socket(world: &World) -> String {
+    let socket = world.home.path().join(".config/herdr/herdr.sock");
+    std::fs::create_dir_all(socket.parent().unwrap()).unwrap();
+    std::fs::write(&socket, b"").unwrap();
+    socket.to_string_lossy().into_owned()
+}
+
+#[test]
+fn an_agent_started_by_hand_in_a_never_opened_project_becomes_its_coordinator() {
+    let world = World::new();
+    let socket = default_socket(&world);
+    let project = project::create(&world.root, "auto", "", vec![]).unwrap();
+    let other = project::create(&world.root, "other", "", vec![]).unwrap();
+    assert!(project.coordinator().is_none());
+    let dir = project.canonical_dir().to_string_lossy().into_owned();
+    *world.agents.borrow_mut() = format!("[{}]", agent_json("wGM", "wGM:t1", "wGM:p1", &dir, "", "idle").replace(r#""agent":"claude""#, r#""agent":"opencode""#));
+    *world.panes.borrow_mut() = format!("[{}]", pane_json("wGM", "wGM:t1", "wGM:p1", &dir));
+    write_routine(&project, "autopilot", "+++\nschedule = \"every 5m\"\n+++\nKeep going.\n");
+    make_due(&project, "autopilot");
+    let ctx = world.ctx();
+    let mut memory = crate::steps::Memory::new(&ctx);
+
+    assert!(ticker::tick_for_test(&ctx, &mut memory));
+    let record = project.coordinator().expect("the hand-started agent is recorded");
+    assert_eq!((record.socket.as_str(), record.pane_id.as_str(), record.workspace_id.as_str(), record.agent.as_str()), (socket.as_str(), "wGM:p1", "wGM", "opencode"));
+    assert_eq!(record.cwd, dir);
+    assert!(other.coordinator().is_none(), "no agent works in the other project's folder");
+    // Both projects were looked for in one agent list.
+    assert_eq!(world.runner.count("agent list"), 1);
+    // Its routine fired, and its pane and Space row carry tokens.
+    assert_eq!(items_of(&project, "routine").len(), 1);
+    assert_eq!(crate::coordinator::live(&project).len(), 1);
+    assert_eq!(world.runner.count("pane report-metadata wGM:p1"), 1);
+    assert_eq!(world.runner.count("workspace report-metadata wGM"), 1);
+}
+
+#[test]
+fn a_routine_fires_without_any_coordinator_and_waits_while_its_item_is_unhandled() {
+    let world = World::new();
+    let project = project::create(&world.root, "demo", "", vec![]).unwrap();
+    write_routine(&project, "standup", "+++\nschedule = \"every 5m\"\n+++\nSummarise.\n");
+    let ctx = world.ctx();
+    let mut memory = crate::steps::Memory::new(&ctx);
+    // First seen: nothing fires.
+    ticker::tick_for_test(&ctx, &mut memory);
+    assert!(inbox::unhandled(&project).is_empty());
+
+    make_due(&project, "standup");
+    ticker::tick_for_test(&ctx, &mut memory);
+    let items = items_of(&project, "routine");
+    assert_eq!(items.len(), 1);
+    assert!(project.coordinator().is_none());
+
+    // Due again while the item waits: no second item, the skipped run counted.
+    make_due(&project, "standup");
+    ticker::tick_for_test(&ctx, &mut memory);
+    assert_eq!(items_of(&project, "routine").len(), 1);
+    assert_eq!(crate::steps::load_state(&project).routines["standup"].skipped, 1);
+
+    // Handled: the next run writes a fresh item.
+    inbox::done(&project, &[items[0].id.clone()], false).unwrap();
+    make_due(&project, "standup");
+    ticker::tick_for_test(&ctx, &mut memory);
+    assert_eq!(items_of(&project, "routine").len(), 1);
+    assert_eq!(crate::steps::load_state(&project).routines["standup"].skipped, 0);
+}
+
+#[test]
+fn an_agent_in_the_threads_folder_is_not_the_coordinator() {
+    let world = World::new();
+    default_socket(&world);
+    let project = project::create(&world.root, "demo", "", vec![]).unwrap();
+    let thread_dir = project.canonical_dir().join("threads").join("t-0001");
+    std::fs::create_dir_all(&thread_dir).unwrap();
+    let cwd = thread_dir.to_string_lossy().into_owned();
+    *world.agents.borrow_mut() = format!("[{}]", agent_json("w2", "w2:t1", "w2:p1", &cwd, "hp-demo-t-0001", "idle"));
+    *world.panes.borrow_mut() = format!("[{}]", pane_json("w2", "w2:t1", "w2:p1", &cwd));
+    let ctx = world.ctx();
+    ticker::tick_for_test(&ctx, &mut crate::steps::Memory::new(&ctx));
+    assert!(project.coordinator().is_none());
+    assert_eq!(world.runner.count("report-metadata"), 0);
+}

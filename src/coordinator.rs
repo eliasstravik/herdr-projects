@@ -70,6 +70,31 @@ pub fn project_workspace(record: &Coordinator, panes: &[Pane]) -> Option<String>
     panes.iter().find(|p| !record.cwd.is_empty() && Path::new(&p.cwd).starts_with(&record.cwd)).map(|p| p.workspace_id.clone())
 }
 
+/// Records the most recently active agent working in the project folder as
+/// the coordinator, exactly as `open` records one it finds running. `None`
+/// when no agent in `agents` works there.
+pub fn record_found(project: &Project, socket: &str, session: &str, agents: &[Agent]) -> Result<Option<Coordinator>> {
+    let cwd = project.canonical_dir().to_string_lossy().into_owned();
+    let Some(agent) = agents.iter().filter(|a| a.works_in(&cwd)).max_by_key(|a| a.state_change_seq) else {
+        return Ok(None);
+    };
+    let record = project.update_coordinator(|c| {
+        *c = Coordinator {
+            socket: socket.to_string(),
+            session: session.to_string(),
+            workspace_id: agent.workspace_id.clone(),
+            tab_id: agent.tab_id.clone(),
+            pane_id: agent.pane_id.clone(),
+            agent_name: agent.name.clone(),
+            cwd: cwd.clone(),
+            agent: agent.agent.clone(),
+            agent_session: agent.session_id().to_string(),
+            updated: String::new(),
+        }
+    })?;
+    Ok(Some(record))
+}
+
 /// One live coordinator pane, as the ticker last saw it (`.state/coordinators.json`).
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(default)]
