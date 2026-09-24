@@ -194,6 +194,56 @@ pub fn hook_file(env: &Env, agent: &str, claude_home: Option<&Path>, codex_home:
     }
 }
 
+/// The skill bundled with the plugin, linked into each harness by `configure`.
+pub const SKILL: &str = "autoproject";
+
+/// The bundled skill in the plugin checkout this binary was built in, so the
+/// link follows the installed plugin, not the directory `configure` ran in.
+pub fn skill_source() -> Option<PathBuf> {
+    crate::update::own_root().map(|root| root.join("skill").join(SKILL))
+}
+
+/// Where a harness looks for user skills: Claude Code's `<config dir>/skills`,
+/// Codex's user scope `~/.agents/skills` (not under `CODEX_HOME`). A skills
+/// directory that is itself a link is resolved, so a shared directory gets
+/// one link and one journal key.
+pub fn skill_link(env: &Env, agent: &str, claude_home: Option<&Path>) -> PathBuf {
+    let dir = match agent {
+        "claude" => claude_home
+            .map(Path::to_path_buf)
+            .or_else(|| env.var("CLAUDE_CONFIG_DIR").map(PathBuf::from))
+            .unwrap_or_else(|| env.home.join(".claude"))
+            .join("skills"),
+        _ => env.home.join(".agents/skills"),
+    };
+    std::fs::canonicalize(&dir).unwrap_or(dir).join(SKILL)
+}
+
+#[derive(Debug, PartialEq)]
+pub enum SkillState {
+    /// A link to `source`.
+    Ours,
+    Missing,
+    /// A link to somewhere else: ours from an older checkout when journaled.
+    Elsewhere(PathBuf),
+    /// A directory or file: never touched.
+    Foreign,
+}
+
+pub fn skill_state(link: &Path, source: &Path) -> SkillState {
+    let Ok(meta) = std::fs::symlink_metadata(link) else {
+        return SkillState::Missing;
+    };
+    if !meta.file_type().is_symlink() {
+        return SkillState::Foreign;
+    }
+    match std::fs::read_link(link) {
+        Ok(target) if target == source => SkillState::Ours,
+        Ok(target) => SkillState::Elsewhere(target),
+        Err(_) => SkillState::Foreign,
+    }
+}
+
 pub struct ConfigureOptions {
     /// `claude`, `codex`, or both; empty means every harness whose config
     /// directory exists.
@@ -206,6 +256,8 @@ pub struct ConfigureOptions {
     /// The popup key (default: the one already configured, else `prefix+a`).
     pub key: Option<String>,
     pub herdr_config: Option<PathBuf>,
+    /// The skill directory to link (`skill_source()`); `None` links nothing.
+    pub skill: Option<PathBuf>,
 }
 
 /// Whether the standalone agent-progress plugin's hooks are installed in a
@@ -245,6 +297,41 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
         }
         notes.push(format!("{}: {} hook entries for `{command}`", file.display(), if before.is_some() { "adding" } else { "creating with" }));
         edits.push((file, Owned { before, after, kind: "hooks".into(), command: Some(command) }));
+    }
+    let mut links: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
+    if let Some(source) = &options.skill {
+        let mut seen = Vec::new();
+        for client in clients.iter().filter(|c| matches!(c.as_str(), "claude" | "codex")) {
+            let link = skill_link(ctx.env, client, options.claude_home.as_deref());
+            if seen.contains(&link) {
+                continue;
+            }
+            seen.push(link.clone());
+            if !source.join("SKILL.md").is_file() {
+                notes.push(format!("{}: no bundled skill at {}; not linked", link.display(), source.display()));
+                break;
+            }
+            let journaled = journal.get(&link.to_string_lossy().into_owned()).is_some_and(|o| o.kind == "skill");
+            match skill_state(&link, source) {
+                SkillState::Ours => {
+                    notes.push(format!("{}: skill link already in place", link.display()));
+                    if !journaled {
+                        links.push((link, None));
+                    }
+                }
+                SkillState::Missing => {
+                    notes.push(format!("{}: linking the `{SKILL}` skill to {}", link.display(), source.display()));
+                    links.push((link, Some(source.clone())));
+                }
+                SkillState::Elsewhere(old) if journaled => {
+                    notes.push(format!("{}: relinking the `{SKILL}` skill from {} to {}", link.display(), old.display(), source.display()));
+                    links.push((link, Some(source.clone())));
+                }
+                SkillState::Elsewhere(_) | SkillState::Foreign => {
+                    notes.push(format!("{}: left alone, it is not this plugin's link; move it away and run `configure` again to install the bundled `{SKILL}` skill", link.display()));
+                }
+            }
+        }
     }
     if options.sidebar {
         let file = options.herdr_config.clone().unwrap_or_else(|| herdr_config_path(ctx.env));
@@ -286,6 +373,10 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
         }
         journal.insert(key, owned);
     }
+    let source = options.skill.as_ref().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    for (link, _) in &links {
+        journal.insert(link.to_string_lossy().into_owned(), Owned { before: None, after: source.clone(), kind: "skill".into(), command: None });
+    }
     save_journal(&ctx.config_dir, &journal)?;
     for (index, (path, edit)) in edits.iter().enumerate() {
         if let Err(error) = replace(path, &edit.before, &edit.after) {
@@ -300,6 +391,14 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
             return Err(error);
         }
     }
+    for (link, source) in &links {
+        let Some(source) = source else { continue };
+        if std::fs::symlink_metadata(link).is_ok() {
+            std::fs::remove_file(link)?;
+        }
+        std::fs::create_dir_all(link.parent().context("skill link has no parent")?)?;
+        std::os::unix::fs::symlink(source, link).with_context(|| format!("could not link {}", link.display()))?;
+    }
     Ok(notes)
 }
 
@@ -311,6 +410,18 @@ pub fn unconfigure(ctx: &Ctx) -> Result<Vec<String>> {
     let mut remaining = journal.clone();
     for (key, owned) in &journal {
         let path = Path::new(key);
+        if owned.kind == "skill" {
+            match skill_state(path, Path::new(&owned.after)) {
+                SkillState::Ours => {
+                    std::fs::remove_file(path)?;
+                    notes.push(format!("{key}: skill link removed"));
+                }
+                SkillState::Missing => notes.push(format!("{key}: already gone")),
+                _ => notes.push(format!("{key}: no longer this plugin's link; left alone")),
+            }
+            remaining.remove(key);
+            continue;
+        }
         let current = read(path)?;
         if current.as_deref() == Some(owned.after.as_str()) {
             match &owned.before {
@@ -439,7 +550,7 @@ mod tests {
         std::fs::write(claude.join("settings.json"), original).unwrap();
         let runner = crate::runner::fake::FakeRunner::new();
         let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
-        let options = ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(codex.clone()), dry_run: true, sidebar: false, key: None, herdr_config: None };
+        let options = ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(codex.clone()), dry_run: true, sidebar: false, key: None, herdr_config: None, skill: None };
         let notes = configure(&ctx, &options).unwrap();
         assert_eq!(notes.len(), 2, "{notes:?}");
         assert_eq!(std::fs::read_to_string(claude.join("settings.json")).unwrap(), original, "dry run changed a file");
@@ -471,6 +582,62 @@ mod tests {
         assert!(after.contains("\"model\": \"opus\"") && after.contains("say done") && !after.contains("herdr-projects"));
     }
 
+    #[test]
+    fn the_skill_is_linked_once_into_a_shared_skills_dir_and_foreign_ones_are_left_alone() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let claude = home.path().join("claude");
+        let shared = home.path().join(".agents/skills");
+        std::fs::create_dir_all(&shared).unwrap();
+        std::fs::create_dir_all(home.path().join("codex")).unwrap();
+        std::fs::create_dir_all(&claude).unwrap();
+        // Like this Mac: Claude's skills dir is itself a link to ~/.agents/skills.
+        std::os::unix::fs::symlink(&shared, claude.join("skills")).unwrap();
+        let source = home.path().join("plugin/skill/autoproject");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("SKILL.md"), "---\nname: autoproject\n---\n").unwrap();
+        let runner = crate::runner::fake::FakeRunner::new();
+        let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
+        let options = |dry_run: bool, skill: &Path| ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(home.path().join("codex")), dry_run, sidebar: false, key: None, herdr_config: None, skill: Some(skill.to_path_buf()) };
+        let link = std::fs::canonicalize(&shared).unwrap().join(SKILL);
+
+        // A plain directory already there (the old personal copy) is never touched.
+        std::fs::create_dir_all(shared.join(SKILL)).unwrap();
+        let notes = configure(&ctx, &options(false, &source)).unwrap();
+        assert!(notes.iter().any(|n| n.contains("left alone")), "{notes:?}");
+        assert_eq!(skill_state(&link, &source), SkillState::Foreign);
+        std::fs::remove_dir(shared.join(SKILL)).unwrap();
+        unconfigure(&ctx).unwrap();
+
+        // Dry run: nothing linked.
+        configure(&ctx, &options(true, &source)).unwrap();
+        assert_eq!(skill_state(&link, &source), SkillState::Missing);
+
+        let notes = configure(&ctx, &options(false, &source)).unwrap();
+        assert_eq!(notes.iter().filter(|n| n.contains("linking")).count(), 1, "{notes:?}");
+        assert_eq!(skill_state(&link, &source), SkillState::Ours);
+        assert!(claude.join("skills").join(SKILL).join("SKILL.md").is_file());
+        assert!(claude.join("skills").is_symlink(), "the shared dir link was replaced");
+
+        // A moved plugin checkout relinks our own link.
+        let moved = home.path().join("moved/skill/autoproject");
+        std::fs::create_dir_all(&moved).unwrap();
+        std::fs::write(moved.join("SKILL.md"), "x").unwrap();
+        configure(&ctx, &options(false, &moved)).unwrap();
+        assert_eq!(skill_state(&link, &moved), SkillState::Ours);
+
+        // Unconfigure removes only our link; a foreign link in its place survives.
+        unconfigure(&ctx).unwrap();
+        assert_eq!(skill_state(&link, &moved), SkillState::Missing);
+        assert!(shared.is_dir());
+        configure(&ctx, &options(false, &moved)).unwrap();
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(home.path(), &link).unwrap();
+        let notes = unconfigure(&ctx).unwrap();
+        assert!(notes.iter().any(|n| n.contains("left alone")), "{notes:?}");
+        assert!(link.is_symlink());
+    }
+
     #[cfg(unix)]
     #[test]
     fn symlinked_config_is_refused_without_touching_the_target() {
@@ -495,7 +662,7 @@ mod tests {
         runner.on("--default-config", ok("[keys]\n# previous_tab = \"prefix+p\"\n"));
         runner.on("config check", ok(""));
         let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
-        let options = |key: Option<&str>| ConfigureOptions { clients: vec!["claude".into()], claude_home: Some(home.path().join("claude")), codex_home: None, dry_run: false, sidebar: true, key: key.map(str::to_string), herdr_config: Some(config.clone()) };
+        let options = |key: Option<&str>| ConfigureOptions { clients: vec!["claude".into()], claude_home: Some(home.path().join("claude")), codex_home: None, dry_run: false, sidebar: true, key: key.map(str::to_string), herdr_config: Some(config.clone()), skill: None };
         std::fs::create_dir_all(home.path().join("claude")).unwrap();
 
         // A key Herdr already uses is refused before anything is written.

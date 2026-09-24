@@ -34,10 +34,11 @@ herdr-projects configure --dry-run   # shows what it would change
 herdr-projects configure
 ```
 
-Or run `herdr plugin action invoke configure --plugin herdr-projects`. It changes three things and records each change, so `herdr-projects unconfigure` removes exactly what it added:
+Or run `herdr plugin action invoke configure --plugin herdr-projects`. It changes four things and records each change, so `herdr-projects unconfigure` removes exactly what it added:
 
 - **Your Herdr config** (`~/.config/herdr/config.toml`). Two agent rows (`$hp_state`, the state line; `$hp_activity`, what the agent says it is doing), one Space row (`$hp`, the project count), the popup key `prefix+a` and a tab-bar entry `projects: N need you`. Herdr checks the result with `herdr config check` before anything is written. Pick another key with `configure --key prefix+y`; a key Herdr or you already use is refused.
 - **Claude Code hooks** in `~/.claude/settings.json` and **Codex hooks** in `~/.codex/hooks.json`. They tell an agent running in a Herdr pane how to report its progress, and remind it about once a minute. Outside Herdr they do nothing. Existing hooks and comments are kept.
+- **The `autoproject` skill**, linked from the plugin's `skill/autoproject` into `~/.claude/skills` and Codex's `~/.agents/skills`. A coordinator loads it with `/autoproject` to run an independently reviewed improvement loop. A skill of that name that is not the plugin's link is left alone, and `doctor` names it.
 
 Configure reloads the Herdr server's config. The sidebar rows are drawn by your client: if they don't show yet, run **reload config** in Herdr (`prefix+shift+r`).
 

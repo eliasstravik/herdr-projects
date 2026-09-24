@@ -200,7 +200,7 @@ enum Command {
         /// Scope it to one project (default: the current workspace's, else all)
         slug: Option<String>,
     },
-    /// Install the plugin's hooks into Claude Code and Codex (progress self-reports)
+    /// Install the plugin's hooks (progress self-reports) and its `autoproject` skill into Claude Code and Codex
     Configure {
         /// Harnesses to configure, comma-separated: claude, codex (default: those installed)
         #[arg(long, value_delimiter = ',', value_parser = ["claude", "codex"])]
@@ -607,7 +607,7 @@ pub fn run() -> Result<()> {
             Ok(())
         }
         Command::Configure { clients, claude_home, codex_home, dry_run, key, hooks_only } => {
-            let options = crate::setup::ConfigureOptions { clients, claude_home, codex_home, dry_run, sidebar: !hooks_only, key, herdr_config: None };
+            let options = crate::setup::ConfigureOptions { clients, claude_home, codex_home, dry_run, sidebar: !hooks_only, key, herdr_config: None, skill: crate::setup::skill_source() };
             for note in crate::setup::configure(&ctx, &options)? {
                 println!("{note}");
             }
