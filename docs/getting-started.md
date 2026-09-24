@@ -4,7 +4,7 @@ Install the plugin, run `configure` once, create a project, and talk to its coor
 
 ## 1. Check the prerequisites
 
-- macOS or Linux, and [Herdr](https://herdr.dev) 0.9.1 or newer. Check with `herdr status`: both the client and the running server must be 0.9.1. After `herdr update`, a server that was already running stays on the old version until you restart it, and `herdr plugin link` or `install` then fails with `plugin_requires_newer_herdr`.
+- macOS or Linux, and [Herdr](https://herdr.dev) 0.9.1 or newer. Check with `herdr status`: both the client and the running server must be 0.9.1 or newer. After `herdr update`, a server that was already running stays on the old version until you restart it, and `herdr plugin link` or `install` then fails with `plugin_requires_newer_herdr`.
 - Rust/Cargo 1.89 or newer and a C compiler. Herdr builds the executable during installation. On macOS, `xcode-select --install` installs Apple's build tools. Install Rust with [rustup](https://rustup.rs).
 - Git.
 - An agent CLI Herdr can start, on `PATH`. Any of Herdr's 24 agent kinds works (`claude`, `codex`, `opencode`, `cursor`, `gemini` and more). Claude Code is the one exercised most. Progress self-reports come through hooks, which `configure` installs for Claude Code and Codex; other agents still work, with the state Herdr detects on its own.
@@ -34,7 +34,7 @@ herdr-projects configure --dry-run   # shows what it would change
 herdr-projects configure
 ```
 
-Or run the **Projects: set up the sidebar, popup key and progress hooks** action. It changes three things and records each change, so `herdr-projects unconfigure` removes exactly what it added:
+Or run `herdr plugin action invoke configure --plugin herdr-projects`. It changes three things and records each change, so `herdr-projects unconfigure` removes exactly what it added:
 
 - **Your Herdr config** (`~/.config/herdr/config.toml`). Two agent rows (`$hp_state`, the state line; `$hp_activity`, what the agent says it is doing), one Space row (`$hp`, the project count), the popup key `prefix+a` and a tab-bar entry `projects: N need you`. Herdr checks the result with `herdr config check` before anything is written. Pick another key with `configure --key prefix+y`; a key Herdr or you already use is refused.
 - **Claude Code hooks** in `~/.claude/settings.json` and **Codex hooks** in `~/.codex/hooks.json`. They tell an agent running in a Herdr pane how to report its progress, and remind it about once a minute. Outside Herdr they do nothing. Existing hooks and comments are kept.
@@ -45,7 +45,7 @@ If you used the standalone Agent Progress plugin, `doctor` prints the two comman
 
 ## 4. Create and open a project
 
-From Herdr's action menu, run **Projects: new project**. It asks for a name and a goal, creates the project, and opens it. Or from a terminal inside Herdr:
+From a Herdr pane, run **Projects: new project** with `herdr plugin action invoke new --plugin herdr-projects`. It asks for a name and a goal, creates the project, and opens it. Or from a terminal inside Herdr:
 
 ```bash
 herdr-projects new "Billing" --goal "Ship the new billing page" --repo ~/dev/app
@@ -54,7 +54,7 @@ herdr-projects open billing
 
 `new` creates `~/.herdr-projects/billing/` with an `AGENTS.md` (and `CLAUDE.md` linked to it). `open` starts your agent in that folder, right in the pane you typed it in. Quit the agent and you are back at your shell. The agent reads `AGENTS.md`, which tells it that it is the coordinator and which two commands to run. Nothing is typed into it for you.
 
-- `open billing --tab` starts it in a new tab of the project's own workspace instead. The action menu and the popup always do that, and so does `open` run outside Herdr.
+- `open billing --tab` starts it in a new tab of the project's own workspace instead. The plugin's actions and the popup always do that, and so does `open` run outside Herdr.
 - When a coordinator is already running, `open` jumps to it. `open --new` starts another beside it, with a fresh conversation.
 - `open billing --agent codex` starts another agent kind. Any agent you start by hand in that folder is a coordinator too, and several can run side by side.
 - `open` resumes the agent's last session when Herdr recorded one for that kind.

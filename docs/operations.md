@@ -4,7 +4,7 @@ How Herdr Projects works, what it writes where, what its safety settings do and 
 
 ## How it works
 
-- **It relies on Herdr and nothing else.** No other plugin is needed or called. Pull requests open in your browser, files open in a new Herdr tab running `$EDITOR`.
+- **It relies on Herdr and nothing else.** No other plugin is needed or called. Pull requests open in your browser, text files open in a new Herdr tab running `$EDITOR`.
 - **A project is a folder.** `~/.herdr-projects/<slug>/` holds `AGENTS.md`, which tells any agent started in that folder that it is the coordinator and which commands to run. `CLAUDE.md` is a link to it. Several coordinators can share the folder.
 - **The coordinator is an ordinary agent** following a skill (`herdr-projects skill` prints it). Plugin code does not route messages, plan work or decide anything.
 - **The binary does mechanics.** Starting a thread, copying reports, cleaning up after a resolve: each is one deterministic subcommand. It talks to Herdr through Herdr's CLI. The exception is the agent view (`focus`, `unfocus`, the default sort): Herdr 0.9.1 has no CLI for `agent.view.set`, so those send one JSON line to the socket.
@@ -58,7 +58,7 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 | `pause`, `resume`, `archive`, `unarchive`, `delete [--force]` | Project lifecycle. |
 | `popup [project]`, `focus [project]`, `unfocus`, `overview [project]`, `needs-you --line` | Views. |
 | `configure [--key K] [--hooks-only] [--dry-run]`, `unconfigure`, `report`, `progress` | Sidebar, keys, hooks, self-reports. |
-| `open-file <path>`, `open-url <url>` | Open a file in a new tab with `$EDITOR`, or a PR in the browser. |
+| `open-file <path>`, `open-url <url>` | Open a text file in a new tab with `$EDITOR`, or a PR in the browser. |
 | `ticker start \| run \| stop \| status`, `doctor [--fix]`, `skill` | Housekeeping. |
 | `update [--check]` | Update to the newest release: fetch, rebuild, `doctor --fix`, restart the ticker. |
 
@@ -66,7 +66,7 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 
 Every thread is in one group, shown in the sidebar, the popup and the digest, needs-you first:
 
-1. **Waiting on you** (`needs you`): a failed start, a pane that is gone, a launch stuck on a dialog, the agent blocked on a question or permission for 30 seconds, or the agent's own report `Waiting for you` while it is not working.
+1. **Waiting on you** (`needs you`): a failed start, a pane that is gone before a report, a launch stuck on a dialog, the agent blocked on a question or permission for 30 seconds, or the agent's own report `Waiting for you` while it is not working.
 2. **Ready for review** (`review`): a report you haven't acknowledged, or a report with an open pull request, while the agent is not working.
 3. **Landing**: an open pull request that is approved.
 4. **Working**: the agent works, a launch is under way, or the agent reported progress under 100% in the last five minutes.
@@ -76,7 +76,7 @@ Threads idle for `auto_resolve_days` are resolved (and cleaned) after a final co
 
 ## The popup
 
-`prefix+a` (or the **Projects** action) opens it, scoped to the current workspace's project. From any section, `t` cycles forwards through this project → all projects → each other project in list order → back to this project, and `T` walks the same ring backwards (archived projects are skipped; `↵` on a settings project row jumps there and the cycle continues from it). Outside a project the ring is all projects → each project. Every key runs a command from the table above; the popup can do nothing the CLI cannot.
+`prefix+a` (or the **Projects** action) opens it, scoped to the current workspace's project. From any section, `t` cycles forwards through this project → all projects → each other project in list order → back to this project, and `T` walks the same ring backwards (archived projects are skipped; `↵` on a settings project row jumps there and the cycle continues from it). Outside a project the ring is all projects → each project. Every key runs a CLI command; the popup can do nothing the CLI cannot.
 
 | Section | Keys |
 | --- | --- |
