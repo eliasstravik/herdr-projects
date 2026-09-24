@@ -223,7 +223,19 @@ pub struct Safety {
     pub start_threads: String,
     pub coordinator_agent_args: Vec<String>,
     pub thread_agent_args: Vec<String>,
+    /// Launch flags for one agent kind, used instead of `thread_agent_args`
+    /// for threads of that kind, with optional per-machine lists.
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub thread_agents: std::collections::BTreeMap<String, KindArgs>,
     pub routine_commands: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
+pub struct KindArgs {
+    pub args: Vec<String>,
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub machines: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 impl Default for Safety {
@@ -232,7 +244,20 @@ impl Default for Safety {
             start_threads: "propose".into(),
             coordinator_agent_args: Vec::new(),
             thread_agent_args: Vec::new(),
+            thread_agents: std::collections::BTreeMap::new(),
             routine_commands: false,
+        }
+    }
+}
+
+impl Safety {
+    /// The user's launch flags for a thread of `kind` on `machine` (empty for
+    /// a local thread): that kind's list for the machine, else the kind's
+    /// list, else `thread_agent_args`.
+    pub fn thread_args_for(&self, kind: &str, machine: &str) -> Vec<String> {
+        match self.thread_agents.get(kind) {
+            Some(config) => config.machines.get(machine).unwrap_or(&config.args).clone(),
+            None => self.thread_agent_args.clone(),
         }
     }
 }
@@ -752,6 +777,28 @@ mod tests {
         // An `@` inside a path is not a machine.
         assert_eq!(parse_repo_arg("/a@b/c").machine, None);
         assert_eq!(parse_repo_arg("/a@b/c").path, "/a@b/c");
+    }
+
+    #[test]
+    fn thread_launch_flags_can_be_set_per_kind_and_per_machine() {
+        let config = tempfile::tempdir().unwrap();
+        std::fs::write(
+            config.path().join("config.toml"),
+            "[safety.\"/projects/demo\"]\nthread_agent_args = [\"--dangerously-skip-permissions\"]\n\
+             [safety.\"/projects/demo\".thread_agents.codex]\nargs = [\"--dangerously-bypass-approvals-and-sandbox\"]\n\
+             [safety.\"/projects/demo\".thread_agents.codex.machines]\nlaptop = [\"--yolo\"]\n",
+        )
+        .unwrap();
+        let safety = load_safety(config.path(), Path::new("/projects/demo")).unwrap();
+        // A listed kind uses its own list, per machine where one is given.
+        assert_eq!(safety.thread_args_for("codex", ""), ["--dangerously-bypass-approvals-and-sandbox"]);
+        assert_eq!(safety.thread_args_for("codex", "laptop"), ["--yolo"]);
+        assert_eq!(safety.thread_args_for("codex", "other"), ["--dangerously-bypass-approvals-and-sandbox"]);
+        // Any other kind keeps thread_agent_args, as before.
+        assert_eq!(safety.thread_args_for("claude", ""), ["--dangerously-skip-permissions"]);
+        assert_eq!(safety.thread_args_for("opencode", "laptop"), ["--dangerously-skip-permissions"]);
+        // With no tables at all nothing changes.
+        assert_eq!(Safety::default().thread_args_for("codex", ""), Vec::<String>::new());
     }
 
     #[test]

@@ -545,6 +545,9 @@ pub fn digest(ctx: &Ctx, project: &Project, prefix: &str) -> Result<(String, Vec
                 "Safety: start_threads={} routine_commands={} thread_agent_args={:?} coordinator_agent_args={:?}",
                 safety.start_threads, safety.routine_commands, safety.thread_agent_args, safety.coordinator_agent_args
             );
+            for (kind, config) in &safety.thread_agents {
+                let _ = writeln!(out, "Safety: thread_agents.{kind}={:?} machines={:?}", config.args, config.machines);
+            }
         }
         Err(error) => {
             let _ = writeln!(out, "config-error: {error:#}");

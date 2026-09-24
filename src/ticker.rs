@@ -613,14 +613,14 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
             if !refused.is_empty() {
                 thread::update(project, &t.id, |t| t.agent_args = model.clone())?;
                 let summary = format!(
-                    "{}: launched without agent arguments that are not a model flag: {}. Only the user sets launch flags, in thread_agent_args (`herdr-projects safety show {}`)",
+                    "{}: launched without agent arguments that are not a model flag: {}. Only the user sets launch flags, in thread_agent_args or thread_agents (`herdr-projects safety show {}`)",
                     t.id,
                     refused.join(" "),
                     project.slug
                 );
                 inbox::write(project, "thread-state", &t.id, &summary, "")?;
             }
-            let mut args = safety.thread_agent_args.clone();
+            let mut args = safety.thread_args_for(&t.agent, &t.machine);
             args.extend(model);
             herdr.on_machine(&t.machine).agent_start(&t.agent_name, &t.agent, &t.pane_id, &args)?;
             Ok(())

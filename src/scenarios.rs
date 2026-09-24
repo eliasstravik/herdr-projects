@@ -541,6 +541,37 @@ fn a_stored_launch_flag_is_dropped_at_launch_with_one_item() {
 }
 
 #[test]
+fn a_thread_launches_with_its_kinds_own_flags() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let cfg = world.home.path().join("cfg");
+    std::fs::create_dir_all(&cfg).unwrap();
+    std::fs::write(
+        cfg.join("config.toml"),
+        format!(
+            "[safety.\"{0}\"]\nthread_agent_args = [\"--dangerously-skip-permissions\"]\n[safety.\"{0}\".thread_agents.codex]\nargs = [\"--dangerously-bypass-approvals-and-sandbox\"]\n",
+            project.canonical_dir().display()
+        ),
+    )
+    .unwrap();
+    let cwd = world.home.path().to_string_lossy().into_owned();
+    world.thread(&project, world.home.path(), |t| {
+        t.prompt_pending = true;
+        t.agent = "codex".into();
+        t.agent_args = strings(&["-m", "gpt-5.5"]);
+    });
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w2", "w2:t1", "w2:p1", &cwd));
+    world.runner.on("agent start", fail(1, r#"{"error":{"code":"timeout","message":"timed out"}}"#));
+
+    let _ = ticker::tick_project(&world.ctx(), &project);
+    let calls = world.runner.calls.borrow();
+    let start = calls.iter().find(|c| c.display().contains("agent start")).expect("a launch");
+    // Codex gets its own list, not the Claude flag in thread_agent_args, then the model.
+    assert!(start.args.ends_with(&strings(&["--", "--dangerously-bypass-approvals-and-sandbox", "-m", "gpt-5.5"])), "{}", start.display());
+    assert!(!start.display().contains("--dangerously-skip-permissions"), "{}", start.display());
+}
+
+#[test]
 fn restart_keeps_the_model_and_refuses_other_flags() {
     let world = World::new();
     let project = world.project("demo", "a.sock");

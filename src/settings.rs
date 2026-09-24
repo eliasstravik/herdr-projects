@@ -29,10 +29,14 @@ pub const KEYS: [(&str, &str); 10] = [
 pub fn safety_text(ctx: &Ctx, project: &Project) -> Result<String> {
     let safety = project.safety(&ctx.config_dir)?;
     Ok(format!(
-        "Effective safety settings for `{slug}`:\n  start_threads = {:?}\n  coordinator_agent_args = {:?}\n  thread_agent_args = {:?}\n  routine_commands = {}\n\nTo change one, edit {} by hand and add:\n\n[safety.{:?}]\n",
+        "Effective safety settings for `{slug}`:\n  start_threads = {:?}\n  coordinator_agent_args = {:?}\n  thread_agent_args = {:?}\n{}  routine_commands = {}\n\nTo change one, edit {} by hand and add:\n\n[safety.{:?}]\n",
         safety.start_threads,
         safety.coordinator_agent_args,
         safety.thread_agent_args,
+        safety.thread_agents.iter().map(|(kind, c)| {
+            let machines: String = c.machines.iter().map(|(m, a)| format!("  thread_agents.{kind}.machines.{m:?} = {a:?}\n")).collect();
+            format!("  thread_agents.{kind}.args = {:?}\n{machines}", c.args)
+        }).collect::<String>(),
         safety.routine_commands,
         ctx.config_dir.join("config.toml").display(),
         project.canonical_dir().to_string_lossy(),
@@ -48,7 +52,7 @@ pub fn require_model_args(ctx: &Ctx, project: &Project, kind: &str, args: &[Stri
     }
     let table = safety_text(ctx, project).unwrap_or_else(|e| format!("(`herdr-projects safety show {}` failed: {e:#})\n", project.slug));
     bail!(
-        "--agent-arg only takes a model flag (--model <name>{}); refused: {}. Other launch flags belong in thread_agent_args or coordinator_agent_args, which only the user sets (`herdr-projects safety show {}`).\n\n{}",
+        "--agent-arg only takes a model flag (--model <name>{}); refused: {}. Other launch flags belong in thread_agent_args, thread_agents or coordinator_agent_args, which only the user sets (`herdr-projects safety show {}`).\n\n{}",
         if kind == "codex" { ", or -m <name>" } else { "" },
         refused.join(" "),
         project.slug,

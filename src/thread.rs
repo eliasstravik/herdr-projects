@@ -78,7 +78,8 @@ pub struct Thread {
     pub pane_id: String,
     pub agent: String,
     /// A model flag for the agent CLI at launch (checked again by the ticker),
-    /// appended after the project's `thread_agent_args` safety setting.
+    /// appended after the user's launch flags for the thread's kind
+    /// (`thread_agents`, else `thread_agent_args`).
     pub agent_args: Vec<String>,
     pub agent_name: String,
     pub cwd: String,

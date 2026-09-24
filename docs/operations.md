@@ -97,9 +97,15 @@ start_threads = "propose"          # or "auto": the coordinator starts threads w
 coordinator_agent_args = []        # extra arguments for every coordinator's agent CLI
 thread_agent_args = []             # extra arguments for every thread's agent CLI
 routine_commands = false           # true lets approved routines run shell commands
+
+# Optional: flags for one agent kind, used instead of thread_agent_args for its
+# threads; `machines` gives a list per saved machine. Other kinds keep thread_agent_args.
+[safety."/Users/you/.herdr-projects/billing".thread_agents.codex]
+args = ["--dangerously-bypass-approvals-and-sandbox"]
+machines = { laptop = ["--yolo"] }
 ```
 
-`--agent-arg` on `open`, `thread start` and `thread restart` is for the model only: `--model NAME` or `--model=NAME` for every harness, plus `-m NAME` for Codex. Anything else is refused with the table above, because the coordinator sets `--agent-arg` and must never be able to widen an agent's powers (`--dangerously-skip-permissions`, `--yolo`). Other launch flags go in `thread_agent_args` and `coordinator_agent_args`, which only you set. The ticker checks a thread's stored arguments again at launch: any that are not a model flag are dropped and reported in one inbox item.
+`--agent-arg` on `open`, `thread start` and `thread restart` is for the model only: `--model NAME` or `--model=NAME` for every harness, plus `-m NAME` for Codex. Anything else is refused with the table above, because the coordinator sets `--agent-arg` and must never be able to widen an agent's powers (`--dangerously-skip-permissions`, `--yolo`). Other launch flags go in `thread_agent_args` (or a kind's `thread_agents` list) and `coordinator_agent_args`, which only you set. The ticker checks a thread's stored arguments again at launch: any that are not a model flag are dropped and reported in one inbox item.
 
 ## The allow-list for your coordinator
 
