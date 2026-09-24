@@ -1810,34 +1810,128 @@ fn an_agent_started_by_hand_in_a_never_opened_project_becomes_its_coordinator() 
 }
 
 #[test]
-fn a_routine_fires_without_any_coordinator_and_waits_while_its_item_is_unhandled() {
+fn a_routine_due_with_no_coordinator_does_nothing_and_is_recorded_as_skipped() {
     let world = World::new();
     let project = project::create(&world.root, "demo", "", vec![]).unwrap();
     write_routine(&project, "standup", "+++\nschedule = \"every 5m\"\n+++\nSummarise.\n");
+    write_routine(&project, "watch", "+++\nschedule = \"every 5m\"\ncommand = \"echo watched\"\n+++\nLook.\n");
+    allow_commands(&world, &project);
+    world.runner.on("sh -c", ok("watched\n"));
     let ctx = world.ctx();
     let mut memory = crate::steps::Memory::new(&ctx);
     // First seen: nothing fires.
     ticker::tick_for_test(&ctx, &mut memory);
     assert!(inbox::unhandled(&project).is_empty());
 
+    for run in 1..=2 {
+        make_due(&project, "standup");
+        make_due(&project, "watch");
+        ticker::tick_for_test(&ctx, &mut memory);
+        // No item of any kind, no command, no notification.
+        assert!(inbox::unhandled(&project).is_empty(), "{:?}", inbox::unhandled(&project));
+        assert_eq!(world.runner.count("sh -c"), 0);
+        assert_eq!(world.runner.count("notification show"), 0);
+        let state = crate::steps::load_state(&project);
+        for name in ["standup", "watch"] {
+            let r = &state.routines[name];
+            assert_eq!(r.no_coordinator, run);
+            assert!(r.last_run.parse::<jiff::Timestamp>().unwrap() > "2026-09-01T00:00:00Z".parse().unwrap(), "the skipped run counts as the last one");
+        }
+    }
+}
+
+#[test]
+fn a_coordinator_that_appears_later_gets_the_next_scheduled_run_only() {
+    let world = World::new();
+    default_socket(&world);
+    let project = project::create(&world.root, "demo", "", vec![]).unwrap();
+    set_front_matter(&project, "nudge = true");
+    write_routine(&project, "standup", "+++\nschedule = \"every 5m\"\n+++\nSummarise.\n");
+    world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
+    let ctx = world.ctx();
+    let mut memory = crate::steps::Memory::new(&ctx);
+    ticker::tick_for_test(&ctx, &mut memory);
+    make_due(&project, "standup");
+    ticker::tick_for_test(&ctx, &mut memory);
+    assert_eq!(crate::steps::load_state(&project).routines["standup"].no_coordinator, 1);
+
+    // An agent starts in the project folder: the missed run does not fire.
+    let dir = project.canonical_dir().to_string_lossy().into_owned();
+    *world.agents.borrow_mut() = format!("[{}]", agent_json("w1", "w1:t1", "w1:p1", &dir, "", "idle"));
+    *world.panes.borrow_mut() = format!("[{}]", pane_json("w1", "w1:t1", "w1:p1", &dir));
+    ticker::tick_for_test(&ctx, &mut memory);
+    assert!(project.coordinator().is_some());
+    assert!(items_of(&project, "routine").is_empty());
+    assert_eq!(world.runner.count("agent prompt"), 0);
+
+    // Its next scheduled run fires, and the skip count is cleared.
     make_due(&project, "standup");
     ticker::tick_for_test(&ctx, &mut memory);
     let items = items_of(&project, "routine");
     assert_eq!(items.len(), 1);
-    assert!(project.coordinator().is_none());
+    assert_eq!(items[0].body, "Summarise.");
+    assert_eq!(crate::steps::load_state(&project).routines["standup"].no_coordinator, 0);
 
-    // Due again while the item waits: no second item, the skipped run counted.
+    // Due again while its item waits: no second item, the skipped run counted.
     make_due(&project, "standup");
     ticker::tick_for_test(&ctx, &mut memory);
     assert_eq!(items_of(&project, "routine").len(), 1);
     assert_eq!(crate::steps::load_state(&project).routines["standup"].skipped, 1);
-
-    // Handled: the next run writes a fresh item.
-    inbox::done(&project, &[items[0].id.clone()], false).unwrap();
-    make_due(&project, "standup");
+    // Once idle for a minute, the nudge goes to that coordinator.
+    idle_for_a_minute(&project);
     ticker::tick_for_test(&ctx, &mut memory);
-    assert_eq!(items_of(&project, "routine").len(), 1);
-    assert_eq!(crate::steps::load_state(&project).routines["standup"].skipped, 0);
+    assert_eq!(world.runner.count("agent prompt w1:p1"), 1);
+}
+
+#[test]
+fn a_routine_in_one_project_never_reaches_another_projects_coordinator() {
+    let world = World::new();
+    default_socket(&world);
+    let a = project::create(&world.root, "alpha", "", vec![]).unwrap();
+    let b = project::create(&world.root, "beta", "", vec![]).unwrap();
+    for p in [&a, &b] {
+        set_front_matter(p, "nudge = true");
+    }
+    write_routine(&a, "standup", "+++\nschedule = \"every 5m\"\n+++\nSummarise.\n");
+    world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
+    // Only beta has a coordinator; alpha has a thread agent in its worktree.
+    let (a_dir, b_dir) = (a.canonical_dir().to_string_lossy().into_owned(), b.canonical_dir().to_string_lossy().into_owned());
+    let a_thread = a.canonical_dir().join("threads/t-0001").to_string_lossy().into_owned();
+    std::fs::create_dir_all(&a_thread).unwrap();
+    let set = |agents: &[String]| {
+        *world.agents.borrow_mut() = format!("[{}]", agents.join(","));
+        let panes: Vec<String> = agents.iter().map(|a| {
+            let v: serde_json::Value = serde_json::from_str(a).unwrap();
+            let s = |k: &str| v[k].as_str().unwrap().to_string();
+            pane_json(&s("workspace_id"), &s("tab_id"), &s("pane_id"), &s("cwd"))
+        }).collect();
+        *world.panes.borrow_mut() = format!("[{}]", panes.join(","));
+    };
+    set(&[agent_json("wB", "wB:t1", "wB:p1", &b_dir, "", "idle"), agent_json("wT", "wT:t1", "wT:p1", &a_thread, "hp-alpha-t-0001", "idle")]);
+    let ctx = world.ctx();
+    let mut memory = crate::steps::Memory::new(&ctx);
+    ticker::tick_for_test(&ctx, &mut memory);
+    make_due(&a, "standup");
+    ticker::tick_for_test(&ctx, &mut memory);
+    idle_for_a_minute(&b);
+    ticker::tick_for_test(&ctx, &mut memory);
+    assert!(inbox::unhandled(&a).is_empty() && inbox::unhandled(&b).is_empty());
+    assert_eq!(crate::steps::load_state(&a).routines["standup"].no_coordinator, 1);
+    assert_eq!(world.runner.count("agent prompt"), 0, "neither beta's coordinator nor alpha's thread is prompted");
+
+    // Alpha gets its own coordinator: its item and nudge reach that pane only.
+    set(&[agent_json("wB", "wB:t1", "wB:p1", &b_dir, "", "idle"), agent_json("wT", "wT:t1", "wT:p1", &a_thread, "hp-alpha-t-0001", "idle"), agent_json("wA", "wA:t1", "wA:p1", &a_dir, "", "idle")]);
+    ticker::tick_for_test(&ctx, &mut memory);
+    make_due(&a, "standup");
+    ticker::tick_for_test(&ctx, &mut memory);
+    idle_for_a_minute(&a);
+    idle_for_a_minute(&b);
+    ticker::tick_for_test(&ctx, &mut memory);
+    assert_eq!(items_of(&a, "routine").len(), 1);
+    assert!(inbox::unhandled(&b).is_empty());
+    assert_eq!(world.runner.count("agent prompt wA:p1"), 1);
+    assert_eq!(world.runner.count("agent prompt wB:p1"), 0);
+    assert_eq!(world.runner.count("agent prompt wT:p1"), 0);
 }
 
 #[test]

@@ -244,6 +244,24 @@ fn report(
         }
     }
 
+    // Scheduled routines whose last due run did nothing: no coordinator ran.
+    for slug in &slugs {
+        let Ok(project) = project::Project::load(root, slug) else {
+            continue;
+        };
+        let states = crate::steps::load_state(&project).routines;
+        let now = jiff::Zoned::now();
+        let skipped: Vec<String> = crate::routine::load_all(&project)
+            .0
+            .iter()
+            .filter(|r| r.enabled && states.get(&r.name).is_some_and(|s| s.no_coordinator > 0))
+            .map(|r| format!("{}: {}", r.name, crate::routine::when_text(r, states.get(&r.name), &now)))
+            .collect();
+        if !skipped.is_empty() {
+            check(&mut out, None, &format!("routines {slug}"), format!("{}; routines run only while a coordinator runs", skipped.join("; ")));
+        }
+    }
+
     // Hooks: ours in place and pointing at this binary; the standalone
     // agent-progress plugin's hooks gone (never edited by this plugin).
     let journal = crate::setup::load_journal(config_dir);
@@ -400,6 +418,24 @@ mod tests {
         assert!(project.dir().join("uploads").is_dir());
         let (text, _) = report(&env, &root, &home.path().join("cfg"), &flags, &runner, false);
         assert!(text.contains("[ok  ] files demo: AGENTS.md, CLAUDE.md link and uploads/ are in place"), "{text}");
+    }
+
+    #[test]
+    fn routines_skipped_for_want_of_a_coordinator_are_named() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let runner = runner_with_herdr("herdr 0.9.1\n");
+        let root = home.path().join("root");
+        let project = project::create(&root, "demo", "", vec![]).unwrap();
+        std::fs::write(project.dir().join("routines/standup.md"), "+++\nschedule = \"every 5m\"\n+++\nGo.\n").unwrap();
+        let (text, _) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner, false);
+        assert!(!text.contains("routines demo"), "{text}");
+        let mut state = crate::steps::State::default();
+        state.routines.insert("standup".into(), crate::routine::State { last_run: "2026-09-24T09:00:00Z".into(), no_coordinator: 2, ..Default::default() });
+        crate::steps::save_state(&project, &state).unwrap();
+        let (text, _) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner, false);
+        assert!(text.contains("[warn] routines demo: standup: last "), "{text}");
+        assert!(text.contains("skipped: no coordinator (2 run(s)); routines run only while a coordinator runs"), "{text}");
     }
 
     #[test]
