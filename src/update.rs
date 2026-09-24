@@ -3,11 +3,15 @@
 //!
 //! A release is a `vX.Y.Z` tag on the plugin's `origin`. Two install types:
 //! - `herdr plugin install`: Herdr's own managed clone. Re-running the install
-//!   builds in a temporary checkout and swaps it in only when the build passes,
-//!   at the same plugin root, so the old binary keeps working on a failure.
+//!   runs the manifest's build step in a temporary checkout and swaps it in only
+//!   when that passes, at the same plugin root, so the old binary keeps working
+//!   on a failure.
 //! - `herdr plugin link` to a git checkout: `git pull --ff-only` on `main`, then
-//!   the manifest's own `cargo build --release --locked`. Cargo replaces the
-//!   binary only when the build succeeds.
+//!   the same build step, `scripts/install.sh`. It replaces the binary only when
+//!   the download or the build succeeds.
+//!
+//! The build step downloads the release's prebuilt binary and falls back to
+//! `cargo build --release --locked`.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -187,7 +191,7 @@ fn tail(text: &str) -> String {
 fn fetch_and_build(ctx: &Ctx, herdr: &Herdr, install: &Install, latest: Version) -> Result<()> {
     match install {
         Install::Github { repo, .. } => {
-            println!("installing {repo} v{latest} with Herdr (it builds the plugin; this takes a minute or two)…");
+            println!("installing {repo} v{latest} with Herdr (it downloads the prebuilt binary, or builds it when there is none)…");
             let tag = format!("v{latest}");
             let out = ctx.runner.run(&herdr.cmd(BUILD_TIMEOUT).args(["plugin", "install", repo, "--ref", &tag, "--yes"]))?;
             if !out.success() {
@@ -200,10 +204,14 @@ fn fetch_and_build(ctx: &Ctx, herdr: &Herdr, install: &Install, latest: Version)
             if !out.success() {
                 bail!("`git pull --ff-only origin main` failed: {}", out.error_text());
             }
-            println!("building (cargo build --release --locked; this takes a minute or two)…");
-            let out = ctx.runner.run(&Cmd::new("cargo", BUILD_TIMEOUT).args(["build", "--release", "--locked"]).cwd(root))?;
+            println!("installing the binary (scripts/install.sh: the prebuilt download, or a source build when there is none)…");
+            let out = ctx.runner.run(&Cmd::new("sh", BUILD_TIMEOUT).arg("scripts/install.sh").cwd(root))?;
             if !out.success() {
-                bail!("the build failed:\n{}", tail(&out.stderr));
+                bail!("the install failed:\n{}", tail(&format!("{}\n{}", out.stdout, out.stderr)));
+            }
+            // Its own lines say whether it downloaded or fell back to a build.
+            for line in out.stderr.lines().filter(|l| l.starts_with("herdr-projects install:")) {
+                println!("{line}");
             }
         }
     }

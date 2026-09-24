@@ -8,7 +8,8 @@ The repository is public and carries the `herdr-plugin` topic, so the Herdr mark
 - [ ] `cargo build --release --locked` and `cargo test` pass on macOS and on Linux.
 - [ ] Walk through `docs/manual-test.md`, including the client-witnessed checks.
 - [ ] Tag `v<version>` on `main`, push the tag, and create the GitHub release with notes in user terms.
-- [ ] On every machine that runs the plugin from a checkout: `git pull`, `cargo build --release --locked`, then `herdr-projects doctor` and `doctor --fix`.
+- [ ] The `Release binaries` workflow passes: it attaches the four binaries and `SHA256SUMS` to the release, and fails when one is missing.
+- [ ] On every machine that runs the plugin from a checkout: `git pull`, `sh scripts/install.sh`, then `herdr-projects doctor` and `doctor --fix`.
 
 ## Done
 
@@ -18,6 +19,5 @@ The repository is public and carries the `herdr-plugin` topic, so the Herdr mark
 
 ## Open
 
-- [ ] Verify `herdr plugin install eliasstravik/herdr-projects` from a clean machine: it clones, builds with `cargo build --release --locked`, and registers the actions and popups.
-- [ ] Optional: prebuilt release binaries so users need no Rust toolchain.
+- [ ] Verify `herdr plugin install eliasstravik/herdr-projects` from a clean machine: it clones, downloads the prebuilt binary, and registers the actions and popups.
 - [ ] `docs/herdr-notes.md` and `docs/manual-test.md` name the author's machines and home paths. Generalise them.

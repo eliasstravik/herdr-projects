@@ -1,0 +1,127 @@
+# Attaches prebuilt binaries and SHA256SUMS to a GitHub release.
+#
+# Runs when a release is published (`gh release create vX.Y.Z --verify-tag`).
+# Run it by hand with a tag to (re)build the assets of an existing release.
+# scripts/install.sh downloads these; every asset below must be present, or
+# the run fails so a broken release is noticed.
+name: Release binaries
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, e.g. v0.2.7
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-14
+            runs: true
+          - target: x86_64-apple-darwin
+            os: macos-14
+            runs: false
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            runs: true
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-24.04
+            runs: true
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          fetch-depth: 0
+
+      - name: Check the tag matches the manifest and Cargo.toml
+        run: |
+          version="${TAG#v}"
+          grep -qx "version = \"$version\"" herdr-plugin.toml || { echo "::error::herdr-plugin.toml version is not $version"; exit 1; }
+          grep -qx "version = \"$version\"" Cargo.toml || { echo "::error::Cargo.toml version is not $version"; exit 1; }
+
+      - name: Install musl tools
+        if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --target ${{ matrix.target }}
+          rustup default stable
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Name the binary
+        run: |
+          mkdir dist
+          cp target/${{ matrix.target }}/release/herdr-projects dist/herdr-projects-${{ matrix.target }}
+
+      - name: Check it runs and reports the release version
+        if: matrix.runs
+        run: |
+          out=$(dist/herdr-projects-${{ matrix.target }} --version)
+          echo "$out"
+          case "$out" in
+            "herdr-projects ${TAG#v}" | "herdr-projects ${TAG#v}+"*) ;;
+            *) echo "::error::expected herdr-projects ${TAG#v}"; exit 1 ;;
+          esac
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: herdr-projects-${{ matrix.target }}
+          path: dist/herdr-projects-${{ matrix.target }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ASSETS: >-
+        herdr-projects-aarch64-apple-darwin
+        herdr-projects-x86_64-apple-darwin
+        herdr-projects-aarch64-unknown-linux-musl
+        herdr-projects-x86_64-unknown-linux-musl
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Check every binary is there and write SHA256SUMS
+        working-directory: dist
+        run: |
+          for asset in $ASSETS; do
+            [ -s "$asset" ] || { echo "::error::$asset is missing"; exit 1; }
+          done
+          # shellcheck disable=SC2086 # $ASSETS is a word list
+          sha256sum $ASSETS > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload to the release
+        working-directory: dist
+        run: |
+          # shellcheck disable=SC2086 # $ASSETS is a word list
+          gh release upload "$TAG" $ASSETS SHA256SUMS --clobber
+
+      - name: Check the release carries every asset
+        run: |
+          names=$(gh release view "$TAG" --json assets --jq '.assets[].name')
+          for asset in $ASSETS SHA256SUMS; do
+            printf '%s\n' "$names" | grep -qx "$asset" || { echo "::error::release $TAG has no $asset"; exit 1; }
+          done
+          echo "release $TAG carries all binaries and SHA256SUMS"

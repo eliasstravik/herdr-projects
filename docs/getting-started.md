@@ -5,7 +5,7 @@ Install the plugin, run `configure` once, create a project, and talk to its coor
 ## 1. Check the prerequisites
 
 - macOS or Linux, and [Herdr](https://herdr.dev) 0.9.1 or newer. Check with `herdr status`: both the client and the running server must be 0.9.1 or newer. After `herdr update`, a server that was already running stays on the old version until you restart it, and `herdr plugin link` or `install` then fails with `plugin_requires_newer_herdr`.
-- Rust/Cargo 1.89 or newer and a C compiler. Herdr builds the executable during installation. On macOS, `xcode-select --install` installs Apple's build tools. Install Rust with [rustup](https://rustup.rs).
+- Only to build from source: Rust/Cargo 1.89 or newer and a C compiler. Releases carry prebuilt binaries for macOS and Linux on Apple Silicon/arm64 and Intel/x86_64, so most installs need neither. On macOS, `xcode-select --install` installs Apple's build tools. Install Rust with [rustup](https://rustup.rs).
 - Git.
 - An agent CLI Herdr can start, on `PATH`. Any of Herdr's 24 agent kinds works (`claude`, `codex`, `opencode`, `cursor`, `gemini` and more). Claude Code is the one exercised most. Progress self-reports come through hooks, which `configure` installs for Claude Code and Codex; other agents still work, with the state Herdr detects on its own.
 - Optional: `gh`, logged in, for pull request follow-up; `ssh` and `rsync` for threads on other machines.
@@ -18,7 +18,7 @@ The plugin needs no hosted service and no API key. It depends on Herdr and nothi
 herdr plugin install eliasstravik/herdr-projects
 ```
 
-Review the install preview. Herdr clones the repository, runs its locked Cargo release build, and registers the plugin. Its startup command starts a background ticker only when you have at least one project.
+Review the install preview. Herdr clones the repository, runs `scripts/install.sh`, and registers the plugin. The script downloads the release's prebuilt binary for your machine and checks it against the release's `SHA256SUMS`. When there is no such binary, the download fails or the checksum does not match, it says so and runs the locked Cargo release build instead. Set `HERDR_PROJECTS_BUILD=source` to always build from source. A checkout with local changes, or on a commit after the release, also builds from source. Its startup command starts a background ticker only when you have at least one project.
 
 To run the binary from a terminal, link it onto your `PATH`. `herdr plugin list` prints the plugin's folder:
 
@@ -104,16 +104,16 @@ herdr-projects doctor --fix
 herdr-projects ticker start
 ```
 
-Herdr rebuilds the plugin in the same folder, so your `~/.local/bin/herdr-projects` link keeps working. If you linked a local checkout with `herdr plugin link` instead, run `git pull` and `cargo build --release --locked` in it in place of the `herdr plugin install` line.
+Herdr reinstalls the plugin in the same folder, so your `~/.local/bin/herdr-projects` link keeps working. If you linked a local checkout with `herdr plugin link` instead, run `git pull` and `sh scripts/install.sh` in it in place of the `herdr plugin install` line.
 
 **From then on:**
 
 ```bash
-herdr-projects update           # fetch, rebuild, doctor --fix, restart the ticker
+herdr-projects update           # fetch, install the new binary, doctor --fix, restart the ticker
 herdr-projects update --check   # only print the installed and the newest version
 ```
 
-`update` works for both install types and changes nothing when you're already on the newest release. A linked checkout must be on `main` with no uncommitted changes, or `update` stops and says why. When a build fails, the old version stays installed and the ticker is restarted. `doctor` says when a newer version is out.
+`update` works for both install types and changes nothing when you're already on the newest release. A linked checkout must be on `main` with no uncommitted changes, or `update` stops and says why. When the install fails, the old version stays installed and the ticker is restarted. `doctor` says when a newer version is out.
 
 ## Remove
 
