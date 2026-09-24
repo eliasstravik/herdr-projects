@@ -102,7 +102,8 @@ pub fn when_text(routine: &Routine, state: Option<&State>, now: &jiff::Zoned) ->
         None => "-".to_string(),
     };
     let skipped = state.map(|s| s.skipped).filter(|n| *n > 0).map(|n| format!(" · {n} run(s) skipped while its item was unhandled")).unwrap_or_default();
-    format!("last {} · next {next}{skipped}", last.map(local).unwrap_or_else(|| "never".into()))
+    let alone = state.map(|s| s.no_coordinator).filter(|n| *n > 0).map(|n| format!(" · skipped: no coordinator ({n} run(s))")).unwrap_or_default();
+    format!("last {} · next {next}{skipped}{alone}", last.map(local).unwrap_or_else(|| "never".into()))
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -363,6 +364,9 @@ pub struct State {
     /// Runs of a prompt-only routine that wrote nothing because its last item
     /// was still unhandled.
     pub skipped: u32,
+    /// Due runs that did nothing because the project had no live
+    /// coordinator; back to 0 once one runs.
+    pub no_coordinator: u32,
 }
 
 pub type States = BTreeMap<String, State>;
@@ -383,6 +387,8 @@ mod tests {
         let state = State { last_run: "2026-09-24T09:00:00Z".into(), skipped: 2, ..State::default() };
         assert_eq!(when_text(&r, Some(&state), &now), "last 2026-09-24 09:00 · next due now · 2 run(s) skipped while its item was unhandled");
         assert_eq!(when_text(&r, None, &now), "last never · next 2026-09-24 10:05");
+        let alone = State { last_run: "2026-09-24T09:58:00Z".into(), no_coordinator: 3, ..State::default() };
+        assert_eq!(when_text(&r, Some(&alone), &now), "last 2026-09-24 09:58 · next 2026-09-24 10:03 · skipped: no coordinator (3 run(s))");
     }
 
     fn zoned(text: &str) -> jiff::Zoned {

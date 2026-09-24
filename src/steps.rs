@@ -539,8 +539,11 @@ pub fn auto_resolve(ctx: &Ctx, project: &Project, settings: &Settings, memory: &
     errors
 }
 
-/// Step 3, plus `config-error` items for files that do not parse.
-pub fn routines(ctx: &Ctx, project: &Project, state: &mut State, routine_commands: bool, project_md_error: Option<(String, String)>, now: &jiff::Zoned) -> Vec<anyhow::Error> {
+/// Step 3, plus `config-error` items for files that do not parse. A due
+/// scheduled routine does nothing unless the project has a live coordinator
+/// (`coordinator`): no item, no command. The run still counts as its last, so
+/// a coordinator that appears later gets the next scheduled run, not a backlog.
+pub fn routines(ctx: &Ctx, project: &Project, state: &mut State, routine_commands: bool, coordinator: bool, project_md_error: Option<(String, String)>, now: &jiff::Zoned) -> Vec<anyhow::Error> {
     let mut errors = Vec::new();
     let (routines, broken) = routine::load_all(project);
 
@@ -573,6 +576,11 @@ pub fn routines(ctx: &Ctx, project: &Project, state: &mut State, routine_command
             continue;
         }
         entry.last_run = now.timestamp().to_string();
+        if !coordinator {
+            entry.no_coordinator += 1;
+            continue;
+        }
+        entry.no_coordinator = 0;
 
         if r.command.is_empty() {
             // One unhandled item per routine: a run while it waits is counted.

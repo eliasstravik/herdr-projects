@@ -311,7 +311,7 @@ pub fn tick(ctx: &Ctx, log: &Log, memory: &mut Memory) -> bool {
             log.line(&format!("{}: {error:#}", project.slug));
         }
     }
-    // Routines only write inbox items, so they never wait for a coordinator.
+    // No coordinator: due routines are recorded as skipped, nothing fires.
     for project in &unreachable {
         for error in headless_routines(ctx, project) {
             log.line(&format!("{}: {error:#}", project.slug));
@@ -400,28 +400,29 @@ fn discover_record(ctx: &Ctx, project: &Project, sessions: &mut Sessions) -> Res
 }
 
 /// Due routines of a project whose session cannot be reached or that has no
-/// coordinator: the items wait in the inbox for the next one.
+/// coordinator: each is recorded as skipped, with no item and no command.
 fn headless_routines(ctx: &Ctx, project: &Project) -> Vec<anyhow::Error> {
     let mut state = steps::load_state(project);
     let before = state.clone();
-    let mut errors = routine_pass(ctx, project, &mut state);
+    let mut errors = routine_pass(ctx, project, &mut state, false);
     if state != before {
         errors.extend(steps::save_state(project, &state).err());
     }
     errors
 }
 
-fn routine_pass(ctx: &Ctx, project: &Project, state: &mut steps::State) -> Vec<anyhow::Error> {
+/// `coordinator`: the project has a live coordinator this tick.
+fn routine_pass(ctx: &Ctx, project: &Project, state: &mut steps::State, coordinator: bool) -> Vec<anyhow::Error> {
     let zoned = jiff::Zoned::now();
     match project.read_project_md() {
         Ok(_) => {
             let commands = project.safety(&ctx.config_dir).map(|s| s.routine_commands).unwrap_or(false);
-            steps::routines(ctx, project, state, commands, None, &zoned)
+            steps::routines(ctx, project, state, commands, coordinator, None, &zoned)
         }
         Err(error) => {
             let text = std::fs::read(project.project_md()).unwrap_or_default();
             let problem = Some((thread::sha256_hex(&text), format!("{error:#}")));
-            steps::routines(ctx, project, state, false, problem, &zoned)
+            steps::routines(ctx, project, state, false, coordinator, problem, &zoned)
         }
     }
 }
@@ -451,6 +452,8 @@ pub struct Seen {
     panes: Vec<Pane>,
     /// Group changes of this tick, turned into inbox items after the copies.
     transitions: Vec<Transition>,
+    /// At least one agent works in the project folder: routines may fire.
+    coordinator: bool,
     /// The session answered, the project has at least two recorded local
     /// panes, and every one of them is missing: herdr was restarted.
     session_lost: bool,
@@ -716,6 +719,7 @@ fn tick_cheap(ctx: &Ctx, project: &Project, sessions: &mut Sessions) -> Result<O
             agents,
             panes,
             transitions: pass.transitions,
+            coordinator: !coordinators.is_empty(),
             session_lost: recorded_panes >= 2 && missing_panes == recorded_panes,
         })),
     }
@@ -818,7 +822,7 @@ fn tick_slow(ctx: &Ctx, project: &Project, seen: &Seen, memory: &mut Memory) -> 
     errors.extend(steps::write_thread_items(project, &mut state, &transitions, seen.session_lost, &copy_notes, &notifier).err());
     errors.extend(steps::pull_requests(ctx, project, &mut state, memory, now));
     errors.extend(steps::resolve_merged(ctx, project, &mut state, now));
-    errors.extend(routine_pass(ctx, project, &mut state));
+    errors.extend(routine_pass(ctx, project, &mut state, seen.coordinator));
     if let Ok((settings, _)) = project.read_project_md() {
         errors.extend(steps::auto_resolve(ctx, project, &settings, memory, now));
     }
