@@ -287,6 +287,8 @@ pub fn run(ctx: &Ctx) -> Result<()> {
 pub fn tick(ctx: &Ctx, log: &Log, memory: &mut Memory) -> bool {
     memory.tick += 1;
     let mut reachable = Vec::new();
+    let mut unreachable = Vec::new();
+    let mut sessions = Sessions::new(ctx);
     for slug in project::list_slugs(&ctx.root) {
         let Ok(project) = Project::load(&ctx.root, &slug) else {
             continue;
@@ -298,9 +300,9 @@ pub fn tick(ctx: &Ctx, log: &Log, memory: &mut Memory) -> bool {
         if project.status() != Status::Active {
             continue;
         }
-        match tick_cheap(ctx, &project) {
+        match tick_cheap(ctx, &project, &mut sessions) {
             Ok(Some(seen)) => reachable.push((project, seen)),
-            Ok(None) => {}
+            Ok(None) => unreachable.push(project),
             Err(error) => log.line(&format!("{slug}: {error:#}")),
         }
     }
@@ -309,7 +311,119 @@ pub fn tick(ctx: &Ctx, log: &Log, memory: &mut Memory) -> bool {
             log.line(&format!("{}: {error:#}", project.slug));
         }
     }
-    !reachable.is_empty()
+    // Routines only write inbox items, so they never wait for a coordinator.
+    for project in &unreachable {
+        for error in headless_routines(ctx, project) {
+            log.line(&format!("{}: {error:#}", project.slug));
+        }
+    }
+    !reachable.is_empty() || sessions.any_reachable()
+}
+
+/// One session's agent and pane lists.
+type Lists = (Vec<Agent>, Vec<Pane>);
+
+/// Herdr's agent and pane lists, asked for at most once per session per tick
+/// and shared by every project in that session.
+pub struct Sessions {
+    lists: std::collections::BTreeMap<String, Option<Lists>>,
+    /// The sockets a project without a live record is looked for in: the
+    /// default session first, then every other project's recorded socket.
+    candidates: Option<Vec<(String, String)>>,
+    known: Vec<String>,
+}
+
+impl Sessions {
+    pub fn new(ctx: &Ctx) -> Sessions {
+        let mut known: Vec<String> = project::list_slugs(&ctx.root)
+            .iter()
+            .filter_map(|slug| Project::load(&ctx.root, slug).ok()?.coordinator())
+            .map(|record| record.socket)
+            .filter(|socket| !socket.is_empty())
+            .collect();
+        known.sort();
+        known.dedup();
+        Sessions { lists: Default::default(), candidates: None, known }
+    }
+
+    /// `None` when the socket is gone or the session does not answer.
+    fn get(&mut self, ctx: &Ctx, socket: &str) -> Option<&Lists> {
+        self.lists
+            .entry(socket.to_string())
+            .or_insert_with(|| {
+                if socket.is_empty() || !Path::new(socket).exists() {
+                    return None;
+                }
+                let herdr = Herdr::new(ctx.env.herdr_bin(), socket, ctx.runner);
+                Some((herdr.agent_list().ok()?, herdr.pane_list().ok()?))
+            })
+            .as_ref()
+    }
+
+    /// `(socket, session name)` pairs, the default session first.
+    fn candidates(&mut self, ctx: &Ctx) -> Vec<(String, String)> {
+        if let Some(found) = &self.candidates {
+            return found.clone();
+        }
+        let mut found = Vec::new();
+        if let Ok(session) = crate::paths::resolve_session(&Default::default(), ctx.env, ctx.runner) {
+            found.push((session.socket.to_string_lossy().into_owned(), session.name.unwrap_or_default()));
+        }
+        for socket in &self.known {
+            if !found.iter().any(|(s, _)| s == socket) {
+                found.push((socket.clone(), String::new()));
+            }
+        }
+        self.candidates = Some(found.clone());
+        found
+    }
+
+    fn any_reachable(&self) -> bool {
+        self.lists.values().any(Option::is_some)
+    }
+}
+
+/// A project with no record, or one whose socket is gone: the first agent
+/// working in the project folder, in the default session or any session
+/// another project uses, becomes its coordinator and is recorded just as
+/// `open` records one. Agents in `threads/` or a worktree are threads.
+fn discover_record(ctx: &Ctx, project: &Project, sessions: &mut Sessions) -> Result<Option<project::Coordinator>> {
+    for (socket, name) in sessions.candidates(ctx) {
+        let Some((agents, _)) = sessions.get(ctx, &socket) else {
+            continue;
+        };
+        if let Some(found) = coordinator::found(project, &socket, &name, agents) {
+            return project.update_coordinator(|c| *c = found).map(Some);
+        }
+    }
+    Ok(None)
+}
+
+/// Due routines of a project whose session cannot be reached or that has no
+/// coordinator: the items wait in the inbox for the next one.
+fn headless_routines(ctx: &Ctx, project: &Project) -> Vec<anyhow::Error> {
+    let mut state = steps::load_state(project);
+    let before = state.clone();
+    let mut errors = routine_pass(ctx, project, &mut state);
+    if state != before {
+        errors.extend(steps::save_state(project, &state).err());
+    }
+    errors
+}
+
+fn routine_pass(ctx: &Ctx, project: &Project, state: &mut steps::State) -> Vec<anyhow::Error> {
+    let zoned = jiff::Zoned::now();
+    match project.read_project_md() {
+        Ok(_) => {
+            let commands = project.safety(&ctx.config_dir).map(|s| s.routine_commands).unwrap_or(false);
+            steps::routines(ctx, project, state, commands, None, &zoned)
+        }
+        Err(error) => {
+            let text = std::fs::read(project.project_md()).unwrap_or_default();
+            let problem = Some((thread::sha256_hex(&text), format!("{error:#}")));
+            steps::routines(ctx, project, state, false, problem, &zoned)
+        }
+    }
 }
 
 /// A paused project is skipped, but its Space row still says so.
@@ -350,12 +464,15 @@ pub fn tick_project(ctx: &Ctx, project: &Project) -> Result<bool> {
 
 #[cfg(test)]
 pub fn tick_project_with(ctx: &Ctx, project: &Project, memory: &mut Memory) -> Result<bool> {
-    match tick_cheap(ctx, project)? {
+    match tick_cheap(ctx, project, &mut Sessions::new(ctx))? {
         Some(seen) => match tick_slow(ctx, project, &seen, memory).into_iter().next() {
             Some(error) => Err(error),
             None => Ok(true),
         },
-        None => Ok(false),
+        None => match headless_routines(ctx, project).into_iter().next() {
+            Some(error) => Err(error),
+            None => Ok(false),
+        },
     }
 }
 
@@ -516,22 +633,22 @@ fn open_threads(project: &Project, remote: bool) -> Vec<thread::Thread> {
         .collect()
 }
 
-/// Returns `Ok(None)` when the project's session cannot be reached: then no
-/// state is read, so nothing is ever reported as gone.
-fn tick_cheap(ctx: &Ctx, project: &Project) -> Result<Option<Seen>> {
-    let Some(record) = project.coordinator() else {
+/// Returns `Ok(None)` when the project's session cannot be reached, or it has
+/// no record and no agent works in its folder: then no state is read, so
+/// nothing is ever reported as gone.
+fn tick_cheap(ctx: &Ctx, project: &Project, sessions: &mut Sessions) -> Result<Option<Seen>> {
+    let recorded = project.coordinator().filter(|r| !r.socket.is_empty() && Path::new(&r.socket).exists());
+    let record = match recorded {
+        Some(record) => record,
+        None => match discover_record(ctx, project, sessions)? {
+            Some(record) => record,
+            None => return Ok(None),
+        },
+    };
+    let Some((agents, panes)) = sessions.get(ctx, &record.socket).cloned() else {
         return Ok(None);
     };
-    if record.socket.is_empty() || !Path::new(&record.socket).exists() {
-        return Ok(None);
-    }
     let herdr = Herdr::new(ctx.env.herdr_bin(), &record.socket, ctx.runner);
-    let Ok(agents) = herdr.agent_list() else {
-        return Ok(None);
-    };
-    let Ok(panes) = herdr.pane_list() else {
-        return Ok(None);
-    };
     let slug = &project.slug;
     let mut first_error = None;
 
@@ -701,18 +818,9 @@ fn tick_slow(ctx: &Ctx, project: &Project, seen: &Seen, memory: &mut Memory) -> 
     errors.extend(steps::write_thread_items(project, &mut state, &transitions, seen.session_lost, &copy_notes, &notifier).err());
     errors.extend(steps::pull_requests(ctx, project, &mut state, memory, now));
     errors.extend(steps::resolve_merged(ctx, project, &mut state, now));
-    let zoned = jiff::Zoned::now();
-    match project.read_project_md() {
-        Ok((settings, _)) => {
-            let commands = project.safety(&ctx.config_dir).map(|s| s.routine_commands).unwrap_or(false);
-            errors.extend(steps::routines(ctx, project, &mut state, commands, None, &zoned));
-            errors.extend(steps::auto_resolve(ctx, project, &settings, memory, now));
-        }
-        Err(error) => {
-            let text = std::fs::read(project.project_md()).unwrap_or_default();
-            let problem = Some((thread::sha256_hex(&text), format!("{error:#}")));
-            errors.extend(steps::routines(ctx, project, &mut state, false, problem, &zoned));
-        }
+    errors.extend(routine_pass(ctx, project, &mut state));
+    if let Ok((settings, _)) = project.read_project_md() {
+        errors.extend(steps::auto_resolve(ctx, project, &settings, memory, now));
     }
     inbox::prune_done(project, steps::DONE_RETENTION_DAYS);
     if state != before {
@@ -890,12 +998,15 @@ mod tests {
         let ctx = Ctx { env: &f.env, root: f.root.clone(), config_dir: f.root.join("cfg"), runner: &runner, detached_ticker: false };
         assert!(!tick_project(&ctx, &f.project).unwrap());
 
-        // A socket file that is gone is not even called.
-        std::fs::remove_file(f.project.coordinator().unwrap().socket).unwrap();
+        // A socket file that is gone is not even called; only the default
+        // session is looked in for an agent in the project folder.
+        let gone = f.project.coordinator().unwrap().socket;
+        std::fs::remove_file(&gone).unwrap();
         let runner = FakeRunner::new();
         let ctx = Ctx { env: &f.env, root: f.root.clone(), config_dir: f.root.join("cfg"), runner: &runner, detached_ticker: false };
         assert!(!tick_project(&ctx, &f.project).unwrap());
-        assert!(runner.calls.borrow().is_empty());
+        assert!(runner.calls.borrow().iter().all(|c| !c.env.iter().any(|(_, v)| *v == gone)));
+        assert_eq!(runner.count("agent list"), 0);
     }
 
     #[test]

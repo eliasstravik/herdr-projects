@@ -56,7 +56,7 @@ herdr-projects open billing
 
 - `open billing --tab` starts it in a new tab of the project's own workspace instead. The plugin's actions and the popup always do that, and so does `open` run outside Herdr.
 - When a coordinator is already running, `open` jumps to it. `open --new` starts another beside it, with a fresh conversation.
-- `open billing --agent codex` starts another agent kind. Any agent you start by hand in that folder is a coordinator too, and several can run side by side.
+- `open billing --agent codex` starts another agent kind. Any agent you start by hand in that folder is a coordinator too, with no `open` needed, and several can run side by side.
 - `open` resumes the agent's last session when Herdr recorded one for that kind.
 - The first time, your agent may ask whether you trust the folder: answer it in the coordinator's pane.
 

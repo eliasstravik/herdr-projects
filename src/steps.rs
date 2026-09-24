@@ -575,6 +575,12 @@ pub fn routines(ctx: &Ctx, project: &Project, state: &mut State, routine_command
         entry.last_run = now.timestamp().to_string();
 
         if r.command.is_empty() {
+            // One unhandled item per routine: a run while it waits is counted.
+            if inbox::unhandled(project).iter().any(|i| i.kind == "routine" && i.subject == r.name) {
+                entry.skipped += 1;
+                continue;
+            }
+            entry.skipped = 0;
             errors.extend(inbox::write(project, "routine", &r.name, &format!("routine `{}` is due", r.name), &r.prompt).err());
             crate::notify::Notifier::new(ctx, project).send(&r.name, "routine due; the coordinator handles it", crate::notify::Sound::None, false);
             continue;

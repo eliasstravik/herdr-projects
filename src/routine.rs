@@ -73,6 +73,38 @@ pub fn is_due(schedule: &Schedule, last_run: jiff::Timestamp, now: &jiff::Zoned)
     }
 }
 
+/// When a routine is next due: the interval after its last run, or the first
+/// `HH:MM` after it. With no last run yet, the ticker's first look only
+/// records one, so the next run is a schedule from now.
+pub fn next_run(schedule: &Schedule, last_run: Option<jiff::Timestamp>, now: &jiff::Zoned) -> Option<jiff::Timestamp> {
+    let last = last_run.unwrap_or(now.timestamp());
+    match schedule {
+        Schedule::Every(seconds) => last.checked_add(jiff::SignedDuration::from_secs(*seconds)).ok(),
+        Schedule::Daily(hour, minute) => {
+            let at = last.to_zoned(now.time_zone().clone()).with().hour(*hour).minute(*minute).second(0).subsec_nanosecond(0).build().ok()?;
+            let at = if at.timestamp() > last { at } else { at.tomorrow().ok()? };
+            Some(at.timestamp())
+        }
+    }
+}
+
+/// `last <time> · next <time>` for a scheduled routine, in local time.
+pub fn when_text(routine: &Routine, state: Option<&State>, now: &jiff::Zoned) -> String {
+    let Trigger::Schedule(schedule) = &routine.trigger else {
+        return String::new();
+    };
+    let local = |t: jiff::Timestamp| t.to_zoned(now.time_zone().clone()).strftime("%Y-%m-%d %H:%M").to_string();
+    let last = state.and_then(|s| s.last_run.parse::<jiff::Timestamp>().ok());
+    let next = match next_run(schedule, last, now) {
+        _ if !routine.enabled => "- (disabled)".to_string(),
+        Some(t) if t <= now.timestamp() => "due now".to_string(),
+        Some(t) => local(t),
+        None => "-".to_string(),
+    };
+    let skipped = state.map(|s| s.skipped).filter(|n| *n > 0).map(|n| format!(" · {n} run(s) skipped while its item was unhandled")).unwrap_or_default();
+    format!("last {} · next {next}{skipped}", last.map(local).unwrap_or_else(|| "never".into()))
+}
+
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(default)]
 struct Front {
@@ -253,6 +285,8 @@ pub fn approve(config_dir: &Path, project: &Project, name: &str) -> Result<()> {
 
 pub fn print_list(config_dir: &Path, project: &Project, routine_commands: bool) {
     let (routines, broken) = load_all(project);
+    let states = crate::steps::load_state(project).routines;
+    let now = jiff::Zoned::now();
     if routines.is_empty() && broken.is_empty() {
         println!("no routines");
     }
@@ -266,7 +300,8 @@ pub fn print_list(config_dir: &Path, project: &Project, routine_commands: bool) 
         } else {
             "command: NOT approved (or edited since approval)".to_string()
         };
-        println!("{}\t{}\t{}\t{kind}", r.name, r.schedule_text, if r.enabled { "enabled" } else { "disabled" });
+        let when = when_text(r, states.get(&r.name), &now);
+        println!("{}\t{}\t{}\t{kind}\t{when}", r.name, r.schedule_text, if r.enabled { "enabled" } else { "disabled" });
     }
     for b in &broken {
         println!("{}\tconfig-error: {}", b.file, b.error);
@@ -325,6 +360,9 @@ pub struct State {
     pub output_hash: String,
     /// Command hash the last "needs approval" item was written for.
     pub approval_item_for: String,
+    /// Runs of a prompt-only routine that wrote nothing because its last item
+    /// was still unhandled.
+    pub skipped: u32,
 }
 
 pub type States = BTreeMap<String, State>;
@@ -332,6 +370,20 @@ pub type States = BTreeMap<String, State>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn next_run_follows_the_schedule_and_says_when_it_is_due() {
+        let now: jiff::Zoned = "2026-09-24T10:00:00+00:00[UTC]".parse().unwrap();
+        let at = |t: &str| t.parse::<jiff::Timestamp>().unwrap();
+        assert_eq!(next_run(&Schedule::Every(300), Some(at("2026-09-24T09:58:00Z")), &now), Some(at("2026-09-24T10:03:00Z")));
+        assert_eq!(next_run(&Schedule::Every(300), None, &now), Some(at("2026-09-24T10:05:00Z")));
+        assert_eq!(next_run(&Schedule::Daily(9, 0), Some(at("2026-09-24T09:00:00Z")), &now), Some(at("2026-09-25T09:00:00Z")));
+        assert_eq!(next_run(&Schedule::Daily(9, 0), Some(at("2026-09-23T08:00:00Z")), &now), Some(at("2026-09-23T09:00:00Z")));
+        let r = parse("autopilot", "+++\nschedule = \"every 5m\"\n+++\nGo.\n").unwrap();
+        let state = State { last_run: "2026-09-24T09:00:00Z".into(), skipped: 2, ..State::default() };
+        assert_eq!(when_text(&r, Some(&state), &now), "last 2026-09-24 09:00 · next due now · 2 run(s) skipped while its item was unhandled");
+        assert_eq!(when_text(&r, None, &now), "last never · next 2026-09-24 10:05");
+    }
 
     fn zoned(text: &str) -> jiff::Zoned {
         text.parse().unwrap()

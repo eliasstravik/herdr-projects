@@ -383,13 +383,17 @@ pub fn build(root: &Path, section: Section, scope: Option<&str>) -> Vec<Row> {
             for project in projects_in_scope(root, scope, false) {
                 let (routines, broken) = crate::routine::load_all(&project);
                 let state = crate::steps::load_state(&project);
+                let now = jiff::Zoned::now();
                 for r in routines {
-                    let last = state.routines.get(&r.name).map(|s| s.last_run.clone()).filter(|s| !s.is_empty()).unwrap_or_else(|| "never".into());
+                    let last = match crate::routine::when_text(&r, state.routines.get(&r.name), &now) {
+                        text if text.is_empty() => String::new(),
+                        text => format!(" · {text}"),
+                    };
                     let prefix = if scope.is_none() { format!("{} · ", project.slug) } else { String::new() };
                     let when = if r.schedule_text.is_empty() { "on pr".to_string() } else { r.schedule_text.clone() };
                     rows.push(Row {
                         header: false,
-                        text: format!("{prefix}{} · {when} · {} · last {last}", r.name, if r.enabled { "enabled" } else { "disabled" }),
+                        text: format!("{prefix}{} · {when} · {}{last}", r.name, if r.enabled { "enabled" } else { "disabled" }),
                         color: if r.enabled { None } else { Some(Color::DarkGrey) },
                         kind: RowKind::Routine { slug: project.slug.clone(), name: r.name.clone(), prompt: r.prompt.clone() },
                     });
