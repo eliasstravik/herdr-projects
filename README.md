@@ -78,22 +78,22 @@ herdr-projects doctor --fix
 herdr-projects ticker start
 ```
 
-Herdr rebuilds the plugin in the same folder, so your `~/.local/bin/herdr-projects` link keeps working. If you linked a local checkout with `herdr plugin link` instead, run `git pull` and `cargo build --release --locked` in it in place of the `herdr plugin install` line.
+Herdr reinstalls the plugin in the same folder, so your `~/.local/bin/herdr-projects` link keeps working. If you linked a local checkout with `herdr plugin link` instead, run `git pull` and `sh scripts/install.sh` in it in place of the `herdr plugin install` line.
 
 **From then on:**
 
 ```bash
-herdr-projects update           # fetch, rebuild, doctor --fix, restart the ticker
+herdr-projects update           # fetch, install the new binary, doctor --fix, restart the ticker
 herdr-projects update --check   # only print the installed and the newest version
 ```
 
-`update` works for both install types and changes nothing when you're already on the newest release. A linked checkout must be on `main` with no uncommitted changes, or `update` stops and says why. When a build fails, the old version stays installed and the ticker is restarted. `doctor` says when a newer version is out.
+`update` works for both install types and changes nothing when you're already on the newest release. A linked checkout must be on `main` with no uncommitted changes, or `update` stops and says why. When the install fails, the old version stays installed and the ticker is restarted. `doctor` says when a newer version is out.
 
 ## Get your questions answered
 
 ### Do I need to know how to code?
 
-You need to be comfortable in a terminal. The plugin builds itself on install, and a project is a plain folder of Markdown and TOML files, but you never have to edit them: everything changes by asking the coordinator or from the popup. You'll need macOS or Linux, Herdr 0.9.1 or newer, Rust/Cargo, Git, and an agent CLI Herdr can start, such as Claude Code. The [getting-started guide](docs/getting-started.md) covers the prerequisites.
+You need to be comfortable in a terminal. The plugin downloads its own prebuilt binary on install, and a project is a plain folder of Markdown and TOML files, but you never have to edit them: everything changes by asking the coordinator or from the popup. You'll need macOS or Linux, Herdr 0.9.1 or newer, Git, and an agent CLI Herdr can start, such as Claude Code. Rust/Cargo is needed only when there is no prebuilt binary for your machine. The [getting-started guide](docs/getting-started.md) covers the prerequisites.
 
 ### How do I check that Herdr Projects is running?
 

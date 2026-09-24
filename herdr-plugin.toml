@@ -6,7 +6,8 @@ description = "A coordinator conversation, parallel worker threads, shared memor
 platforms = ["macos", "linux"]
 
 [[build]]
-command = ["cargo", "build", "--release", "--locked"]
+# Downloads the release binary; falls back to `cargo build --release --locked`.
+command = ["sh", "scripts/install.sh"]
 
 [[startup]]
 command = ["target/release/herdr-projects", "startup"]
