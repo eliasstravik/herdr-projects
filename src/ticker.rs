@@ -392,8 +392,8 @@ fn discover_record(ctx: &Ctx, project: &Project, sessions: &mut Sessions) -> Res
         let Some((agents, _)) = sessions.get(ctx, &socket) else {
             continue;
         };
-        if let Some(record) = coordinator::record_found(project, &socket, &name, agents)? {
-            return Ok(Some(record));
+        if let Some(found) = coordinator::found(project, &socket, &name, agents) {
+            return project.update_coordinator(|c| *c = found).map(Some);
         }
     }
     Ok(None)
