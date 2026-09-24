@@ -607,7 +607,7 @@ pub fn run() -> Result<()> {
             Ok(())
         }
         Command::Configure { clients, claude_home, codex_home, dry_run, key, hooks_only } => {
-            let options = crate::setup::ConfigureOptions { clients, claude_home, codex_home, dry_run, sidebar: !hooks_only, key, herdr_config: None, skill: crate::setup::skill_source() };
+            let options = crate::setup::ConfigureOptions { clients, claude_home, codex_home, dry_run, hooks: true, sidebar: !hooks_only, key, herdr_config: None, skill: crate::setup::skill_source() };
             for note in crate::setup::configure(&ctx, &options)? {
                 println!("{note}");
             }

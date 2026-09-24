@@ -87,7 +87,7 @@ herdr-projects update           # fetch, install the new binary, doctor --fix, r
 herdr-projects update --check   # only print the installed and the newest version
 ```
 
-`update` works for both install types and changes nothing when you're already on the newest release. A linked checkout must be on `main` with no uncommitted changes, or `update` stops and says why. When the install fails, the old version stays installed and the ticker is restarted. `doctor` says when a newer version is out.
+`update` works for both install types and changes nothing when you're already on the newest release. Its `doctor --fix` also links the `autoproject` skill for each harness you configured, so existing users don't need to run `configure` again. A linked checkout must be on `main` with no uncommitted changes, or `update` stops and says why. When the install fails, the old version stays installed and the ticker is restarted. `doctor` says when a newer version is out.
 
 ## Get your questions answered
 

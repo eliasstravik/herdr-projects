@@ -14,10 +14,11 @@ use crate::runner::{Cmd, Runner};
 const TOOL_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Prints the report and returns whether every required check passed. With
-/// `fix`, repairs what the binary owns: priming files, `uploads/`, and the
-/// absolute binary path they carry. Never edits another plugin's entries.
+/// `fix`, repairs what the binary owns: priming files, `uploads/`, the
+/// absolute binary path they carry, and the skill link for a configured harness. Never edits another plugin's entries.
 pub fn run(ctx: &Ctx, session: &SessionFlags, fix: bool) -> Result<bool> {
-    let (text, healthy) = report(ctx.env, &ctx.root, &ctx.config_dir, session, ctx.runner, fix);
+    let skill = crate::setup::skill_source();
+    let (text, healthy) = report(ctx.env, &ctx.root, &ctx.config_dir, session, ctx.runner, fix, skill.as_deref());
     print!("{text}");
     Ok(healthy)
 }
@@ -29,6 +30,7 @@ fn report(
     session: &SessionFlags,
     runner: &dyn Runner,
     fix: bool,
+    skill: Option<&Path>,
 ) -> (String, bool) {
     let mut out = String::new();
     let mut healthy = true;
@@ -287,7 +289,7 @@ fn report(
             None => check(&mut out, None, &label, "not configured; `configure` installs the progress hooks".into()),
             Some(_) if text.contains(&expected) => check(&mut out, Some(true), &label, format!("{} runs this binary", file.display())),
             Some(_) if fix => {
-                let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false, sidebar: false, key: None, herdr_config: None, skill: crate::setup::skill_source() };
+                let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: crate::setup::skill_source() };
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
                 match crate::setup::configure(&ctx, &options) {
                     Ok(_) => check(&mut out, Some(true), &label, format!("fixed: {} now runs this binary", file.display())),
@@ -299,7 +301,10 @@ fn report(
     }
 
     // The bundled skill, linked where each installed harness looks for skills.
-    if let Some(source) = crate::setup::skill_source().filter(|s| s.join("SKILL.md").is_file()) {
+    // `--fix` links it only for a harness the user already ran `configure`
+    // for (its hooks or the link are journaled), so `update` alone brings a
+    // newly bundled skill to existing users without a new opt-in.
+    if let Some(source) = skill.map(Path::to_path_buf).filter(|s| s.join("SKILL.md").is_file()) {
         for agent in ["claude", "codex"] {
             if !crate::setup::hook_file(env, agent, None, None).parent().is_some_and(Path::is_dir) {
                 continue;
@@ -307,11 +312,24 @@ fn report(
             let link = crate::setup::skill_link(env, agent, None);
             let label = format!("skill {agent}");
             let journaled = journal.contains_key(&*link.to_string_lossy());
-            match crate::setup::skill_state(&link, &source) {
+            let opted_in = journaled || journal.get(&*crate::setup::hook_file(env, agent, None, None).to_string_lossy()).is_some_and(|o| o.kind == "hooks");
+            let state = crate::setup::skill_state(&link, &source);
+            let repairable = matches!(state, crate::setup::SkillState::Missing) || matches!(state, crate::setup::SkillState::Elsewhere(_) if journaled);
+            if fix && opted_in && repairable {
+                let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false, hooks: false, sidebar: false, key: None, herdr_config: None, skill: Some(source.clone()) };
+                let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
+                match crate::setup::configure(&ctx, &options) {
+                    Ok(_) => check(&mut out, Some(true), &label, format!("fixed: {} now links the bundled `{}` skill", link.display(), crate::setup::SKILL)),
+                    Err(error) => check(&mut out, Some(false), &label, format!("could not fix: {error:#}")),
+                }
+                continue;
+            }
+            let repair = if opted_in { "`doctor --fix`" } else { "`configure`" };
+            match state {
                 crate::setup::SkillState::Ours => check(&mut out, Some(true), &label, format!("{} links the bundled `{}` skill", link.display(), crate::setup::SKILL)),
-                crate::setup::SkillState::Missing => check(&mut out, None, &label, format!("{} is missing; `configure` links the bundled skill", link.display())),
-                crate::setup::SkillState::Elsewhere(old) if journaled => check(&mut out, None, &label, format!("{} links {}, another checkout; `configure` relinks it", link.display(), old.display())),
-                _ => check(&mut out, None, &label, format!("{} is not this plugin's link, so the bundled skill is not installed; move it away and run `configure`", link.display())),
+                crate::setup::SkillState::Missing => check(&mut out, None, &label, format!("{} is missing; {repair} links the bundled skill", link.display())),
+                crate::setup::SkillState::Elsewhere(old) if journaled => check(&mut out, None, &label, format!("{} links {}, another checkout; {repair} relinks it", link.display(), old.display())),
+                _ => check(&mut out, None, &label, format!("{} is not this plugin's link, so the bundled skill is not installed; move it away and run {repair}", link.display())),
             }
         }
     }
@@ -327,7 +345,7 @@ fn report(
             None => check(&mut out, None, "sidebar", "not configured; `configure` adds the sidebar rows, the popup key and the tab-bar count".into()),
             Some(_) if text.contains(&expected) => check(&mut out, Some(true), "sidebar", format!("{} has the rows, the popup key and the tab-bar entry", file.display())),
             Some(_) if fix => {
-                let options = crate::setup::ConfigureOptions { clients: vec![], claude_home: None, codex_home: None, dry_run: false, sidebar: true, key: None, herdr_config: None, skill: crate::setup::skill_source() };
+                let options = crate::setup::ConfigureOptions { clients: vec![], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: true, key: None, herdr_config: None, skill: crate::setup::skill_source() };
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
                 let options = crate::setup::ConfigureOptions { clients: vec!["none".into()], ..options };
                 match crate::setup::configure(&ctx, &options) {
@@ -389,6 +407,7 @@ mod tests {
             &SessionFlags::default(),
             &runner,
             false,
+            None,
         );
         assert!(!healthy);
         assert!(text.contains("[FAIL] herdr: 0.9.0"), "{text}");
@@ -408,6 +427,7 @@ mod tests {
             &SessionFlags::default(),
             &runner,
             false,
+            None,
         );
         assert!(healthy, "{text}");
         assert!(text.contains("[warn] gh auth"));
@@ -426,15 +446,15 @@ mod tests {
         let project = project::create(&root, "demo", "", vec![]).unwrap();
         std::fs::remove_dir(project.dir().join("uploads")).unwrap();
         let flags = SessionFlags::default();
-        let (text, _) = report(&env, &root, &home.path().join("cfg"), &flags, &runner, false);
+        let (text, _) = report(&env, &root, &home.path().join("cfg"), &flags, &runner, false, None);
         assert!(text.contains("[warn] files demo: AGENTS.md is missing; CLAUDE.md is not a link to AGENTS.md; uploads/ is missing; `doctor --fix` repairs this"), "{text}");
         assert!(!project.dir().join("AGENTS.md").exists());
 
-        let (text, _) = report(&env, &root, &home.path().join("cfg"), &flags, &runner, true);
+        let (text, _) = report(&env, &root, &home.path().join("cfg"), &flags, &runner, true, None);
         assert!(text.contains("[ok  ] files demo: fixed: AGENTS.md is missing"), "{text}");
         assert!(project.dir().join("AGENTS.md").is_file());
         assert!(project.dir().join("uploads").is_dir());
-        let (text, _) = report(&env, &root, &home.path().join("cfg"), &flags, &runner, false);
+        let (text, _) = report(&env, &root, &home.path().join("cfg"), &flags, &runner, false, None);
         assert!(text.contains("[ok  ] files demo: AGENTS.md, CLAUDE.md link and uploads/ are in place"), "{text}");
     }
 
@@ -446,14 +466,59 @@ mod tests {
         let root = home.path().join("root");
         let project = project::create(&root, "demo", "", vec![]).unwrap();
         std::fs::write(project.dir().join("routines/standup.md"), "+++\nschedule = \"every 5m\"\n+++\nGo.\n").unwrap();
-        let (text, _) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner, false);
+        let (text, _) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner, false, None);
         assert!(!text.contains("routines demo"), "{text}");
         let mut state = crate::steps::State::default();
         state.routines.insert("standup".into(), crate::routine::State { last_run: "2026-09-24T09:00:00Z".into(), no_coordinator: 2, ..Default::default() });
         crate::steps::save_state(&project, &state).unwrap();
-        let (text, _) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner, false);
+        let (text, _) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner, false, None);
         assert!(text.contains("[warn] routines demo: standup: last "), "{text}");
         assert!(text.contains("skipped: no coordinator (2 run(s)); routines run only while a coordinator runs"), "{text}");
+    }
+
+    #[test]
+    fn fix_links_the_skill_only_for_a_configured_harness_and_never_over_a_foreign_one() {
+        let home = tempfile::tempdir().unwrap();
+        let claude = home.path().join("claude-config");
+        let env = Env::for_test(home.path(), &[("CLAUDE_CONFIG_DIR", claude.to_str().unwrap())]);
+        let runner = runner_with_herdr("herdr 0.9.1\n");
+        let root = home.path().join("root");
+        let cfg = home.path().join("cfg");
+        let flags = SessionFlags::default();
+        std::fs::create_dir_all(&claude).unwrap();
+        let source = home.path().join("plugin/skill/autoproject");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("SKILL.md"), "---\nname: autoproject\n---\n").unwrap();
+        let link = claude.join("skills").join(crate::setup::SKILL);
+
+        // Never configured: `--fix` only points to `configure`.
+        let (text, _) = report(&env, &root, &cfg, &flags, &runner, true, Some(&source));
+        assert!(text.contains("[warn] skill claude:") && text.contains("`configure` links the bundled skill"), "{text}");
+        assert_eq!(crate::setup::skill_state(&link, &source), crate::setup::SkillState::Missing);
+
+        // Configured before the skill shipped: hooks journaled, no link yet.
+        let hooks = crate::setup::Owned { before: None, after: "{}".into(), kind: "hooks".into(), command: Some("x".into()) };
+        crate::setup::save_journal(&cfg, &[(claude.join("settings.json").to_string_lossy().into_owned(), hooks)].into()).unwrap();
+        let (text, _) = report(&env, &root, &cfg, &flags, &runner, false, Some(&source));
+        assert!(text.contains("`doctor --fix` links the bundled skill"), "{text}");
+        let (text, healthy) = report(&env, &root, &cfg, &flags, &runner, true, Some(&source));
+        assert!(healthy && text.contains("[ok  ] skill claude: fixed:"), "{text}");
+        assert_eq!(crate::setup::skill_state(&link, &source), crate::setup::SkillState::Ours);
+        assert!(!claude.join("settings.json").exists(), "the hooks were touched");
+
+        // A moved checkout: our journaled link is relinked.
+        let moved = home.path().join("moved/skill/autoproject");
+        std::fs::create_dir_all(&moved).unwrap();
+        std::fs::write(moved.join("SKILL.md"), "x").unwrap();
+        report(&env, &root, &cfg, &flags, &runner, true, Some(&moved));
+        assert_eq!(crate::setup::skill_state(&link, &moved), crate::setup::SkillState::Ours);
+
+        // A directory of the same name is never touched.
+        std::fs::remove_file(&link).unwrap();
+        std::fs::create_dir(&link).unwrap();
+        let (text, _) = report(&env, &root, &cfg, &flags, &runner, true, Some(&moved));
+        assert!(text.contains("is not this plugin's link"), "{text}");
+        assert_eq!(crate::setup::skill_state(&link, &moved), crate::setup::SkillState::Foreign);
     }
 
     #[test]
@@ -467,7 +532,7 @@ mod tests {
             let project = project::create(&root, &format!("{long}-{suffix}"), "", vec![]).unwrap();
             project::write_priming(&project, &crate::coordinator::current_prefix(&root).unwrap()).unwrap();
         }
-        let (text, healthy) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner, false);
+        let (text, healthy) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner, false, None);
         assert!(!healthy);
         assert!(text.contains("[FAIL] names"), "{text}");
     }

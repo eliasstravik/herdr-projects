@@ -206,7 +206,8 @@ pub fn skill_source() -> Option<PathBuf> {
 /// Where a harness looks for user skills: Claude Code's `<config dir>/skills`,
 /// Codex's user scope `~/.agents/skills` (not under `CODEX_HOME`). A skills
 /// directory that is itself a link is resolved, so a shared directory gets
-/// one link and one journal key.
+/// one link and one journal key; a missing one is resolved through its
+/// parent, so the key stays the same once it exists.
 pub fn skill_link(env: &Env, agent: &str, claude_home: Option<&Path>) -> PathBuf {
     let dir = match agent {
         "claude" => claude_home
@@ -216,7 +217,8 @@ pub fn skill_link(env: &Env, agent: &str, claude_home: Option<&Path>) -> PathBuf
             .join("skills"),
         _ => env.home.join(".agents/skills"),
     };
-    std::fs::canonicalize(&dir).unwrap_or(dir).join(SKILL)
+    let resolved = std::fs::canonicalize(&dir).or_else(|_| std::fs::canonicalize(dir.parent().unwrap_or(&dir)).map(|p| p.join("skills")));
+    resolved.unwrap_or(dir).join(SKILL)
 }
 
 #[derive(Debug, PartialEq)]
@@ -251,6 +253,8 @@ pub struct ConfigureOptions {
     pub claude_home: Option<PathBuf>,
     pub codex_home: Option<PathBuf>,
     pub dry_run: bool,
+    /// Install the progress hooks; `false` links only the skill (`doctor --fix`).
+    pub hooks: bool,
     /// Also edit Herdr's config.toml: sidebar rows, popup key, tab-bar entry.
     pub sidebar: bool,
     /// The popup key (default: the one already configured, else `prefix+a`).
@@ -283,7 +287,7 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
     let mut journal = load_journal(&ctx.config_dir);
     let mut edits: Vec<(PathBuf, Owned)> = Vec::new();
     let mut notes = Vec::new();
-    for client in clients.iter().filter(|c| matches!(c.as_str(), "claude" | "codex")) {
+    for client in clients.iter().filter(|c| options.hooks && matches!(c.as_str(), "claude" | "codex")) {
         let file = hook_file(ctx.env, client, options.claude_home.as_deref(), options.codex_home.as_deref());
         let command = hook_command(&binary, &ctx.root, client);
         let before = read(&file)?;
@@ -550,7 +554,7 @@ mod tests {
         std::fs::write(claude.join("settings.json"), original).unwrap();
         let runner = crate::runner::fake::FakeRunner::new();
         let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
-        let options = ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(codex.clone()), dry_run: true, sidebar: false, key: None, herdr_config: None, skill: None };
+        let options = ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(codex.clone()), dry_run: true, hooks: true, sidebar: false, key: None, herdr_config: None, skill: None };
         let notes = configure(&ctx, &options).unwrap();
         assert_eq!(notes.len(), 2, "{notes:?}");
         assert_eq!(std::fs::read_to_string(claude.join("settings.json")).unwrap(), original, "dry run changed a file");
@@ -598,7 +602,7 @@ mod tests {
         std::fs::write(source.join("SKILL.md"), "---\nname: autoproject\n---\n").unwrap();
         let runner = crate::runner::fake::FakeRunner::new();
         let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
-        let options = |dry_run: bool, skill: &Path| ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(home.path().join("codex")), dry_run, sidebar: false, key: None, herdr_config: None, skill: Some(skill.to_path_buf()) };
+        let options = |dry_run: bool, skill: &Path| ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(home.path().join("codex")), dry_run, hooks: true, sidebar: false, key: None, herdr_config: None, skill: Some(skill.to_path_buf()) };
         let link = std::fs::canonicalize(&shared).unwrap().join(SKILL);
 
         // A plain directory already there (the old personal copy) is never touched.
@@ -662,7 +666,7 @@ mod tests {
         runner.on("--default-config", ok("[keys]\n# previous_tab = \"prefix+p\"\n"));
         runner.on("config check", ok(""));
         let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
-        let options = |key: Option<&str>| ConfigureOptions { clients: vec!["claude".into()], claude_home: Some(home.path().join("claude")), codex_home: None, dry_run: false, sidebar: true, key: key.map(str::to_string), herdr_config: Some(config.clone()), skill: None };
+        let options = |key: Option<&str>| ConfigureOptions { clients: vec!["claude".into()], claude_home: Some(home.path().join("claude")), codex_home: None, dry_run: false, hooks: true, sidebar: true, key: key.map(str::to_string), herdr_config: Some(config.clone()), skill: None };
         std::fs::create_dir_all(home.path().join("claude")).unwrap();
 
         // A key Herdr already uses is refused before anything is written.

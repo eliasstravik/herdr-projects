@@ -109,7 +109,7 @@ pub fn run_action(ctx: &Ctx, id: &str) -> Result<()> {
             open_pane(ctx, "adopt", &Handoff { pane_id: pane, workspace_label: context.workspace_label, workspace_cwd: context.workspace_cwd, ..base })
         }
         "configure" => {
-            let options = crate::setup::ConfigureOptions { clients: vec![], claude_home: None, codex_home: None, dry_run: false, sidebar: true, key: None, herdr_config: None, skill: crate::setup::skill_source() };
+            let options = crate::setup::ConfigureOptions { clients: vec![], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: true, key: None, herdr_config: None, skill: crate::setup::skill_source() };
             let herdr = Herdr::new(ctx.env.herdr_bin(), socket(ctx)?, ctx.runner);
             match crate::setup::configure(ctx, &options) {
                 Ok(notes) => {
