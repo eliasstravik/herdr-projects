@@ -62,7 +62,7 @@ command = ["target/release/herdr-projects", "action", "resume"]
 
 [[actions]]
 id = "configure"
-title = "Projects: set up the sidebar, popup key and progress hooks"
+title = "Projects: set up the sidebar, popup key, progress hooks and skill"
 contexts = ["workspace"]
 command = ["target/release/herdr-projects", "action", "configure"]
 

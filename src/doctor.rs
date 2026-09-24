@@ -287,7 +287,7 @@ fn report(
             None => check(&mut out, None, &label, "not configured; `configure` installs the progress hooks".into()),
             Some(_) if text.contains(&expected) => check(&mut out, Some(true), &label, format!("{} runs this binary", file.display())),
             Some(_) if fix => {
-                let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false, sidebar: false, key: None, herdr_config: None };
+                let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false, sidebar: false, key: None, herdr_config: None, skill: crate::setup::skill_source() };
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
                 match crate::setup::configure(&ctx, &options) {
                     Ok(_) => check(&mut out, Some(true), &label, format!("fixed: {} now runs this binary", file.display())),
@@ -295,6 +295,24 @@ fn report(
                 }
             }
             Some(_) => check(&mut out, None, &label, format!("{} runs another binary or root; `doctor --fix` rewrites it", file.display())),
+        }
+    }
+
+    // The bundled skill, linked where each installed harness looks for skills.
+    if let Some(source) = crate::setup::skill_source().filter(|s| s.join("SKILL.md").is_file()) {
+        for agent in ["claude", "codex"] {
+            if !crate::setup::hook_file(env, agent, None, None).parent().is_some_and(Path::is_dir) {
+                continue;
+            }
+            let link = crate::setup::skill_link(env, agent, None);
+            let label = format!("skill {agent}");
+            let journaled = journal.contains_key(&*link.to_string_lossy());
+            match crate::setup::skill_state(&link, &source) {
+                crate::setup::SkillState::Ours => check(&mut out, Some(true), &label, format!("{} links the bundled `{}` skill", link.display(), crate::setup::SKILL)),
+                crate::setup::SkillState::Missing => check(&mut out, None, &label, format!("{} is missing; `configure` links the bundled skill", link.display())),
+                crate::setup::SkillState::Elsewhere(old) if journaled => check(&mut out, None, &label, format!("{} links {}, another checkout; `configure` relinks it", link.display(), old.display())),
+                _ => check(&mut out, None, &label, format!("{} is not this plugin's link, so the bundled skill is not installed; move it away and run `configure`", link.display())),
+            }
         }
     }
 
@@ -309,7 +327,7 @@ fn report(
             None => check(&mut out, None, "sidebar", "not configured; `configure` adds the sidebar rows, the popup key and the tab-bar count".into()),
             Some(_) if text.contains(&expected) => check(&mut out, Some(true), "sidebar", format!("{} has the rows, the popup key and the tab-bar entry", file.display())),
             Some(_) if fix => {
-                let options = crate::setup::ConfigureOptions { clients: vec![], claude_home: None, codex_home: None, dry_run: false, sidebar: true, key: None, herdr_config: None };
+                let options = crate::setup::ConfigureOptions { clients: vec![], claude_home: None, codex_home: None, dry_run: false, sidebar: true, key: None, herdr_config: None, skill: crate::setup::skill_source() };
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
                 let options = crate::setup::ConfigureOptions { clients: vec!["none".into()], ..options };
                 match crate::setup::configure(&ctx, &options) {
