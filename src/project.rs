@@ -195,6 +195,14 @@ struct ProjectState {
     status: Status,
 }
 
+/// A launch owned by an `open` invocation, not yet confirmed by its startup
+/// result. The ticker may observe its first native session but cannot verify it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PendingCoordinatorLaunch {
+    pub token: String,
+    pub observed_session: String,
+}
+
 /// The session and workspace the project belongs to, and the coordinator pane
 /// `open` last started or focused. Any agent whose working directory is `cwd`
 /// is a coordinator; the ticker lists them in `.state/coordinators.json`.
@@ -212,6 +220,12 @@ pub struct Coordinator {
     pub cwd: String,
     /// The Herdr agent kind `open` last started.
     pub agent: String,
+    /// The trusted profile used by the last launch, empty for an unprofiled agent.
+    pub profile: String,
+    /// True only for a launch whose pane/session provenance this binary verified.
+    /// Discovery or focusing an unknown session must not authorize native resume.
+    pub launch_verified: bool,
+    pub pending_launch: Option<PendingCoordinatorLaunch>,
     /// The last native session id Herdr reported for that kind, for resume.
     pub agent_session: String,
     pub updated: String,
@@ -223,6 +237,10 @@ pub struct Safety {
     pub start_threads: String,
     pub coordinator_agent_args: Vec<String>,
     pub thread_agent_args: Vec<String>,
+    pub coordinator_profile: String,
+    pub thread_profile: String,
+    pub coordinator_profiles: Vec<String>,
+    pub thread_profiles: Vec<String>,
     pub routine_commands: bool,
 }
 
@@ -232,6 +250,10 @@ impl Default for Safety {
             start_threads: "propose".into(),
             coordinator_agent_args: Vec::new(),
             thread_agent_args: Vec::new(),
+            coordinator_profile: String::new(),
+            thread_profile: String::new(),
+            coordinator_profiles: Vec::new(),
+            thread_profiles: Vec::new(),
             routine_commands: false,
         }
     }
@@ -332,7 +354,7 @@ impl Project {
     }
 
     pub fn safety(&self, config_dir: &Path) -> Result<Safety> {
-        load_safety(config_dir, &self.canonical_dir())
+        crate::launch::load_safety(config_dir, &self.canonical_dir())
     }
 }
 
@@ -345,34 +367,6 @@ pub fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let mut text = serde_json::to_string_pretty(value)?;
     text.push('\n');
     write_atomic(path, text.as_bytes())
-}
-
-/// The effective safety settings: `[safety."<canonical project path>"]` in
-/// `<config_dir>/config.toml`, with defaults for an absent table or key.
-pub fn load_safety(config_dir: &Path, canonical_project_dir: &Path) -> Result<Safety> {
-    #[derive(Deserialize, Default)]
-    struct Config {
-        #[serde(default)]
-        safety: std::collections::BTreeMap<String, Safety>,
-    }
-    let file = config_dir.join("config.toml");
-    let Ok(text) = std::fs::read_to_string(&file) else {
-        return Ok(Safety::default());
-    };
-    let mut config: Config =
-        toml::from_str(&text).with_context(|| format!("{} does not parse", file.display()))?;
-    let safety = config
-        .safety
-        .remove(&*canonical_project_dir.to_string_lossy())
-        .unwrap_or_default();
-    if !matches!(safety.start_threads.as_str(), "propose" | "auto") {
-        bail!(
-            "{}: start_threads must be \"propose\" or \"auto\", not {:?}",
-            file.display(),
-            safety.start_threads
-        );
-    }
-    Ok(safety)
 }
 
 /// Slugs of the projects in `root`: folders that contain `PROJECT.md`. Entries
@@ -538,8 +532,14 @@ pub fn priming_problems(project: &Project, prefix: &str) -> Vec<String> {
 
 /// Creates the folder and skeleton files. The only code path that creates a
 /// project's directories. Fails if the slug exists.
-pub fn create(root: &Path, name: &str, goal: &str, repos: Vec<Repo>) -> Result<Project> {
+pub fn create(root: &Path, name: &str, goal: &str, repos: Vec<Repo>, agents: (String, String)) -> Result<Project> {
     let slug = slug_from_name(name)?;
+    let (coordinator_agent, thread_agent) = agents;
+    for kind in [&coordinator_agent, &thread_agent] {
+        if !crate::agents::is_kind(kind) {
+            bail!("`{kind}` is not a Herdr agent kind");
+        }
+    }
     let project = Project {
         root: root.to_path_buf(),
         slug: slug.clone(),
@@ -566,6 +566,8 @@ pub fn create(root: &Path, name: &str, goal: &str, repos: Vec<Repo>) -> Result<P
         name: display_name(name, &slug),
         goal: goal.to_string(),
         repos,
+        coordinator_agent,
+        thread_agent,
         ..Settings::default()
     };
     let front = toml::to_string(&settings)?;
@@ -634,10 +636,10 @@ mod tests {
     #[test]
     fn create_stores_a_display_name_and_keeps_the_slug() {
         let root = tempfile::tempdir().unwrap();
-        let project = create(root.path(), "herdr-projects", "", vec![]).unwrap();
+        let project = create(root.path(), "herdr-projects", "", vec![], ("claude".into(), "claude".into())).unwrap();
         assert_eq!(project.slug, "herdr-projects");
         assert_eq!(project.read_project_md().unwrap().0.name, "Herdr Projects");
-        let project = create(root.path(), "GTM AI", "", vec![]).unwrap();
+        let project = create(root.path(), "GTM AI", "", vec![], ("claude".into(), "claude".into())).unwrap();
         assert_eq!(project.slug, "gtm-ai");
         assert_eq!(project.read_project_md().unwrap().0.name, "GTM AI");
     }
@@ -661,6 +663,7 @@ mod tests {
             "Demo",
             "Ship \"it\"",
             vec![parse_repo_arg("/srv/app@box"), parse_repo_arg("/no/such/repo")],
+            ("claude".into(), "claude".into()),
         )
         .unwrap();
         assert_eq!(project.slug, "demo");
@@ -687,13 +690,13 @@ mod tests {
         );
         assert!(body.starts_with("# Instructions"));
         assert_eq!(project.status(), Status::Active);
-        assert!(create(&root, "demo", "", vec![]).is_err());
+        assert!(create(&root, "demo", "", vec![], ("claude".into(), "claude".into())).is_err());
     }
 
     #[test]
     fn priming_files_are_written_linked_and_checked() {
         let root = tempfile::tempdir().unwrap();
-        let project = create(root.path(), "Demo Project", "", vec![]).unwrap();
+        let project = create(root.path(), "Demo Project", "", vec![], ("claude".into(), "claude".into())).unwrap();
         let prefix = format!("{} --root {}", std::env::current_exe().unwrap().display(), root.path().display());
         write_priming(&project, &prefix).unwrap();
         let text = std::fs::read_to_string(project.dir().join("AGENTS.md")).unwrap();
@@ -758,20 +761,20 @@ mod tests {
     fn safety_defaults_and_overrides_keyed_by_canonical_path() {
         let config = tempfile::tempdir().unwrap();
         let here = Path::new("/projects/demo");
-        assert_eq!(load_safety(config.path(), here).unwrap(), Safety::default());
+        assert_eq!(crate::launch::load_safety(config.path(), here).unwrap(), Safety::default());
 
         std::fs::write(
             config.path().join("config.toml"),
             "root = \"/projects\"\n\n[safety.\"/projects/demo\"]\nstart_threads = \"auto\"\nthread_agent_args = [\"--x\"]\n",
         )
         .unwrap();
-        let safety = load_safety(config.path(), here).unwrap();
+        let safety = crate::launch::load_safety(config.path(), here).unwrap();
         assert_eq!(safety.start_threads, "auto");
         assert_eq!(safety.thread_agent_args, ["--x"]);
         assert!(!safety.routine_commands);
         assert!(safety.coordinator_agent_args.is_empty());
         assert_eq!(
-            load_safety(config.path(), Path::new("/projects/other")).unwrap(),
+            crate::launch::load_safety(config.path(), Path::new("/projects/other")).unwrap(),
             Safety::default()
         );
 
@@ -780,13 +783,13 @@ mod tests {
             "[safety.\"/projects/demo\"]\nstart_threads = \"yolo\"\n",
         )
         .unwrap();
-        assert!(load_safety(config.path(), here).is_err());
+        assert!(crate::launch::load_safety(config.path(), here).is_err());
     }
 
     #[test]
     fn writers_drop_their_write_when_project_md_is_gone() {
         let root = tempfile::tempdir().unwrap();
-        let project = create(root.path(), "demo", "", vec![]).unwrap();
+        let project = create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         std::fs::remove_file(project.project_md()).unwrap();
         assert!(project.update_coordinator(|c| c.pane_id = "w1:p1".into()).is_err());
         assert!(project.coordinator().is_none());
@@ -800,7 +803,7 @@ mod tests {
     #[test]
     fn coordinator_updates_keep_other_fields() {
         let root = tempfile::tempdir().unwrap();
-        let project = create(root.path(), "demo", "", vec![]).unwrap();
+        let project = create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         project.update_coordinator(|c| c.socket = "/s".into()).unwrap();
         project.update_coordinator(|c| c.agent_session = "sess".into()).unwrap();
         let record = project.coordinator().unwrap();

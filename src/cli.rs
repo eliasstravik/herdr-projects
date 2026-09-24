@@ -51,6 +51,12 @@ enum Command {
         /// A repository, as PATH or PATH@MACHINE; repeatable
         #[arg(long = "repo", value_name = "PATH[@MACHINE]")]
         repos: Vec<String>,
+        /// Herdr agent kind for coordinators (default: global coordinator_agent, then claude)
+        #[arg(long, value_name = "KIND")]
+        coordinator_agent: Option<String>,
+        /// Herdr agent kind for threads (default: global thread_agent, then claude)
+        #[arg(long, value_name = "KIND")]
+        thread_agent: Option<String>,
     },
     /// List projects
     List {
@@ -62,9 +68,12 @@ enum Command {
     /// run from a shell pane inside Herdr, else in the project's workspace
     Open {
         slug: String,
-        /// Herdr agent kind for the coordinator (default: coordinator_agent in PROJECT.md)
+        /// Herdr agent kind, opting out of the default profile (otherwise: default profile, then coordinator_agent in PROJECT.md)
         #[arg(long, value_name = "KIND")]
         agent: Option<String>,
+        /// Trusted coordinator profile; explicit or default profiles always start a fresh conversation
+        #[arg(long, value_name = "NAME", conflicts_with_all = ["agent", "agent_args"])]
+        profile: Option<String>,
         /// A model flag for the agent CLI, repeatable (--agent-arg --model --agent-arg NAME); nothing else is accepted
         #[arg(long = "agent-arg", value_name = "ARG", allow_hyphen_values = true)]
         agent_args: Vec<String>,
@@ -296,9 +305,12 @@ enum ThreadCommand {
         repo: Option<String>,
         #[arg(long, value_name = "LABEL")]
         machine: Option<String>,
-        /// Herdr agent kind (default: thread_agent in PROJECT.md)
+        /// Herdr agent kind, opting out of the default profile (otherwise: default profile, then thread_agent in PROJECT.md)
         #[arg(long, value_name = "KIND")]
         agent: Option<String>,
+        /// Trusted thread profile configured and allowed by the user
+        #[arg(long, value_name = "NAME", conflicts_with_all = ["agent", "agent_args"])]
+        profile: Option<String>,
         /// Placement: worktree (default with --repo), tab (default without), or checkout (a tab on the repo's main checkout)
         #[arg(long, value_name = "worktree|tab|checkout")]
         kind: Option<String>,
@@ -315,9 +327,12 @@ enum ThreadCommand {
     Restart {
         slug: String,
         id: String,
-        /// Restart with another Herdr agent kind
+        /// Restart with this Herdr agent kind, clearing any stored profile
         #[arg(long, value_name = "KIND")]
         agent: Option<String>,
+        /// Restart with a trusted thread profile configured and allowed by the user
+        #[arg(long, value_name = "NAME", conflicts_with_all = ["agent", "agent_args"])]
+        profile: Option<String>,
         /// Replace the model flag (repeatable, model flags only; none given keeps the old ones, unless the kind changes)
         #[arg(long = "agent-arg", value_name = "ARG", allow_hyphen_values = true)]
         agent_args: Vec<String>,
@@ -449,9 +464,10 @@ pub fn run() -> Result<()> {
     };
 
     match cli.command {
-        Command::New { name, goal, repos } => {
+        Command::New { name, goal, repos, coordinator_agent, thread_agent } => {
             let repos = repos.iter().map(|arg| project::parse_repo_arg(arg)).collect();
-            let project = project::create(&ctx.root, &name, &goal, repos)?;
+            let agents = crate::launch::creation_agents(&ctx.config_dir, coordinator_agent, thread_agent)?;
+            let project = project::create(&ctx.root, &name, &goal, repos, agents)?;
             let prefix = coordinator::current_prefix(&ctx.root)?;
             project::write_priming(&project, &prefix)?;
             println!("created `{}` at {}", project.slug, project.dir().display());
@@ -474,13 +490,14 @@ pub fn run() -> Result<()> {
             }
             Ok(())
         }
-        Command::Open { slug, agent, agent_args, new, tab, rebind, session } => coordinator::open(
+        Command::Open { slug, agent, profile, agent_args, new, tab, rebind, session } => coordinator::open(
             &ctx,
             &slug,
             &OpenOptions {
                 session: session.into(),
                 rebind,
                 agent,
+                profile,
                 agent_args,
                 new,
                 // Only a person at a terminal gets the agent in place; the
@@ -507,16 +524,16 @@ pub fn run() -> Result<()> {
             }
         },
         Command::Thread { command } => match command {
-            ThreadCommand::Start { slug, title, repo, machine, agent, kind, agent_args, base, task_file } => {
+            ThreadCommand::Start { slug, title, repo, machine, agent, profile, kind, agent_args, base, task_file } => {
                 let task = read_text(&task_file)?;
                 let kind = kind.as_deref().map(crate::thread::Kind::parse).transpose()?;
-                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, agent, kind, agent_args, base, task })?;
+                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, agent, profile, kind, agent_args, base, task })?;
                 println!("{}", serde_json::json!({ "id": thread.id, "kind": thread.kind, "agent": thread.agent, "branch": thread.branch, "pane_id": thread.pane_id }));
                 Ok(())
             }
-            ThreadCommand::Restart { slug, id, agent, agent_args } => {
+            ThreadCommand::Restart { slug, id, agent, profile, agent_args } => {
                 let args = (!agent_args.is_empty()).then_some(agent_args);
-                let thread = threads::restart(&ctx, &slug, &id, agent.as_deref(), args)?;
+                let thread = threads::restart(&ctx, &slug, &id, agent.as_deref(), args, profile.as_deref())?;
                 println!("{} is back in pane {}; the ticker launches its {} agent", thread.id, thread.pane_id, thread.agent);
                 Ok(())
             }

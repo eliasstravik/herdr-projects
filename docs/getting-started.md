@@ -53,12 +53,14 @@ herdr-projects new "Billing" --goal "Ship the new billing page" --repo ~/dev/app
 herdr-projects open billing
 ```
 
+Choose the two agent kinds when creating the project, for example `new "Billing" --coordinator-agent omp --thread-agent codex`. Without flags, creation uses `[defaults]` in `~/.config/herdr-projects/config.toml`, falling back to Claude. `new` has no `--kind`; `thread start --kind` selects workspace placement. See [global defaults and trusted launch profiles](operations.md#global-agent-defaults) for full OMP configuration files and administrator-approved per-thread choices.
+
 `new` creates `~/.herdr-projects/billing/` with an `AGENTS.md` (and `CLAUDE.md` linked to it). `open` starts your agent in that folder, right in the pane you typed it in. Quit the agent and you are back at your shell. The agent reads `AGENTS.md`, which tells it that it is the coordinator and which two commands to run. Nothing is typed into it for you.
 
 - `open billing --tab` starts it in a new tab of the project's own workspace instead. The plugin's actions and the popup always do that, and so does `open` run outside Herdr.
-- When a coordinator is already running, `open` jumps to it. `open --new` starts another beside it, with a fresh conversation.
-- `open billing --agent codex` starts another agent kind. Any agent you start by hand in that folder is a coordinator too, with no `open` needed, and several can run side by side.
-- `open` resumes the agent's last session when Herdr recorded one for that kind.
+- When a coordinator is already running, an unprofiled `open` jumps to it. `open --new` starts another beside it, with a fresh conversation.
+- `open billing --agent codex` explicitly selects an unprofiled agent kind. It reuses a running coordinator only if its saved pane/session identity verifies that unprofiled launch; otherwise it starts fresh. Any agent you start by hand in that folder is a coordinator too, with no `open` needed, and several can run side by side.
+- Unprofiled `open` resumes only a verified unprofiled native session. Discovering or focusing an unknown session does not authorize resume. An explicit or default launch profile always starts fresh, rather than focusing or resuming a potentially different configuration.
 - The first time, your agent may ask whether you trust the folder: answer it in the coordinator's pane.
 
 ## 5. Tell the coordinator what you want
@@ -67,7 +69,7 @@ Type in the coordinator's pane, for example: "Add a billing page: API endpoint, 
 
 On a new project it restates the goal, lists the repos, and asks for the first piece of work. It proposes threads and waits until you name the ones to start (or say "all"). Tell it how you like threads run ("workers use codex", "at most two at a time") and it remembers.
 
-Everything about the project can be changed in chat: goal, instructions, repos, settings, tasks, routines, memory. You never need to edit a file.
+Project goals, instructions, repos, settings, tasks, routines and memory can be changed in chat. Trusted launch profiles, launch arguments and their role permissions are administrator-owned: edit `~/.config/herdr-projects/config.toml` yourself, never through the coordinator.
 
 ## 6. Watch the threads
 
@@ -75,6 +77,7 @@ Each code thread runs in its own worktree workspace on a branch named `hp/<proje
 
 - **The sidebar** shows each thread as `t-0003 · <title>` with a state line under it: `needs you · ~55%` (red), `review · PR #4` (yellow), `working · ~40%`, `working · 12m quiet`, `landing · PR #4`, `idle`. The line after it is the agent's own activity. The project's Space row says `2 need you · 3 working` or `paused`, the tab bar says `projects: 2 need you`, and the agent list is sorted with what needs you first.
 - **The popup** (`prefix+a`) lists threads, tasks, inbox, routines, settings and memory. Every thread report ends with a `## Next` list; press a number to send that line back to the thread, which then does it with its own tools. Other keys jump to a thread, stop it, restart it with another agent, resolve it, open its PR, edit settings, pause or archive the project.
+- The popup's restart picker defaults to **Keep current**, preserving the thread's profile. Its coordinator picker defaults to **Project default**, honoring a configured coordinator profile; without one, it explicitly selects the project's coordinator kind instead of focusing an arbitrary live coordinator. Profile switches are separate choices; **Kind only: KIND (no profile)** explicitly clears or bypasses a profile.
 - **Notifications** name the project and thread: `Billing · t-0003`, `needs you · blocked` with a sound; a new report or a merge with a softer one. `mute = true` (popup settings) silences a project.
 
 New worktrees are folders your agent hasn't trusted yet, so a code thread usually starts with your agent's trust dialog and shows `needs you` until you answer it in its pane.

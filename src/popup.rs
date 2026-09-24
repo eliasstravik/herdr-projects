@@ -476,13 +476,25 @@ pub fn summary(root: &Path) -> String {
 
 // ---------------------------------------------------------------- the loop
 
+struct PickOption {
+    label: String,
+    /// Replaces the action's placeholder with zero or more argv entries.
+    args: Vec<String>,
+}
+
+impl PickOption {
+    fn value(value: String) -> Self {
+        Self { label: value.clone(), args: vec![value] }
+    }
+}
+
 enum Mode {
     List,
     /// A scrollable text; `files` are selectable lines that open with ↵.
     Detail { title: String, lines: Vec<String>, files: Vec<PathBuf>, selected: usize, scroll: usize },
     Confirm { question: String, action: Vec<String>, lines: Vec<String> },
     Edit { label: String, buffer: String, action: Vec<String> },
-    Pick { label: String, options: Vec<String>, selected: usize, action: Vec<String> },
+    Pick { label: String, options: Vec<PickOption>, selected: usize, action: Vec<String> },
     /// The project picker (`P`, or `/` straight into its filter).
     Projects(Picker),
 }
@@ -641,7 +653,9 @@ impl<'a> Popup<'a> {
                     Mode::Pick { label, options, selected, action }
                 }
                 KeyCode::Enter => {
-                    let args: Vec<String> = action.iter().map(|a| if a == "{}" { options[selected].clone() } else { a.clone() }).collect();
+                    let args: Vec<String> = action.iter().flat_map(|a| {
+                        if a == "{}" { options[selected].args.as_slice() } else { std::slice::from_ref(a) }
+                    }).cloned().collect();
                     self.run(&args, None);
                     Mode::List
                 }
@@ -661,8 +675,22 @@ impl<'a> Popup<'a> {
     }
 
     fn kind_picker(label: &str, default: &str, action: Vec<String>) -> Mode {
-        let mut options: Vec<String> = vec![default.to_string()];
-        options.extend(crate::agents::KINDS.iter().filter(|k| **k != default).map(|k| k.to_string()));
+        let mut options = vec![PickOption::value(default.to_string())];
+        options.extend(crate::agents::KINDS.iter().filter(|k| **k != default).map(|k| PickOption::value(k.to_string())));
+        Mode::Pick { label: label.into(), options, selected: 0, action }
+    }
+
+    fn launch_picker(label: &str, first: PickOption, profiles: &[String], kind: &str, mut action: Vec<String>) -> Mode {
+        let mut options = vec![first];
+        options.extend(profiles.iter().map(|name| PickOption {
+            label: format!("Profile: {name}"),
+            args: vec!["--profile".into(), name.clone()],
+        }));
+        options.extend(std::iter::once(kind).chain(crate::agents::KINDS.iter().copied().filter(|k| *k != kind)).map(|kind| PickOption {
+            label: format!("Kind only: {kind} (no profile)"),
+            args: vec!["--agent".into(), kind.to_string()],
+        }));
+        action.push("{}".into());
         Mode::Pick { label: label.into(), options, selected: 0, action }
     }
 
@@ -713,13 +741,28 @@ impl<'a> Popup<'a> {
                 self.message = "select a thread of the project, or press P to pick one".into();
                 return;
             };
-            let default = Project::load(&self.ctx.root, &slug).and_then(|p| p.read_project_md()).map(|(s, _)| s.coordinator_agent).unwrap_or_else(|_| "claude".into());
+            let config = Project::load(&self.ctx.root, &slug).and_then(|p| Ok((p.read_project_md()?.0, p.safety(&self.ctx.config_dir)?)));
+            let (settings, safety) = match config {
+                Ok(config) => config,
+                Err(error) => {
+                    self.message = format!("cannot select a coordinator: {error:#}");
+                    return;
+                }
+            };
+            let default = if safety.coordinator_profile.is_empty() {
+                PickOption {
+                    label: format!("Project default: {} (no profile)", settings.coordinator_agent),
+                    args: vec!["--agent".into(), settings.coordinator_agent.clone()],
+                }
+            } else {
+                PickOption { label: format!("Project default: profile {}", safety.coordinator_profile), args: Vec::new() }
+            };
             let socket = self.ctx.env.var("HERDR_SOCKET_PATH").unwrap_or("").to_string();
-            let mut action = vec!["open".to_string(), slug, "--agent".into(), "{}".into()];
+            let mut action = vec!["open".to_string(), slug];
             if !socket.is_empty() {
                 action.extend(["--socket".into(), socket]);
             }
-            self.mode = Self::kind_picker("Start or focus a coordinator with", &default, action);
+            self.mode = Self::launch_picker("Start or focus a coordinator with", default, &safety.coordinator_profiles, &settings.coordinator_agent, action);
             return;
         }
         if key.code == KeyCode::Char('S') {
@@ -767,9 +810,19 @@ impl<'a> Popup<'a> {
                 self.run(&Self::thread_args(&row, "ack"), None);
             }
             KeyCode::Char('r') => {
-                let mut action = Self::thread_args(&row, "restart");
-                action.extend(["--agent".into(), "{}".into()]);
-                self.mode = Self::kind_picker(&format!("Restart {} with", t.id), &t.agent, action);
+                let safety = match Project::load(&self.ctx.root, &row.slug).and_then(|p| p.safety(&self.ctx.config_dir)) {
+                    Ok(safety) => safety,
+                    Err(error) => {
+                        self.message = format!("cannot select a restart: {error:#}");
+                        return;
+                    }
+                };
+                let current = if t.profile.is_empty() {
+                    format!("Keep current: {} (no profile; keep model arguments)", t.agent)
+                } else {
+                    format!("Keep current: profile {} ({})", t.profile, t.agent)
+                };
+                self.mode = Self::launch_picker(&format!("Restart {} with", t.id), PickOption { label: current, args: Vec::new() }, &safety.thread_profiles, &t.agent, Self::thread_args(&row, "restart"));
             }
             KeyCode::Char('x') => {
                 self.mode = Mode::Confirm { question: format!("Resolve {} \"{}\" and clean up its worktree, panes and merged branch? y/N", t.id, t.title), action: Self::thread_args(&row, "resolve"), lines: Vec::new() };
@@ -862,10 +915,10 @@ impl<'a> Popup<'a> {
                         "nudge" | "mute" => {
                             let mut action = action;
                             action.push("{}".into());
-                            Mode::Pick { label: name.clone(), options: vec![(value != "true").to_string(), value.clone()], selected: 0, action }
+                            Mode::Pick { label: name.clone(), options: vec![PickOption::value((value != "true").to_string()), PickOption::value(value.clone())], selected: 0, action }
                         }
                         "repos.remove" => {
-                            let options: Vec<String> = value.split(", ").filter(|s| *s != "(none)").map(str::to_string).collect();
+                            let options: Vec<PickOption> = value.split(", ").filter(|s| *s != "(none)").map(|s| PickOption::value(s.to_string())).collect();
                             if options.is_empty() {
                                 self.message = "no repos to remove".into();
                                 Mode::List
@@ -970,7 +1023,7 @@ impl<'a> Popup<'a> {
                 let start = selected.saturating_sub(body_height.saturating_sub(2));
                 for (i, option) in options.iter().enumerate().skip(start).take(body_height.saturating_sub(1)) {
                     queue!(out, cursor::MoveTo(0, (body_top + 1 + i - start) as u16))?;
-                    let text = fit(&format!("  {option}"), width);
+                    let text = fit(&format!("  {}", option.label), width);
                     if i == *selected {
                         queue!(out, SetAttribute(Attribute::Reverse), Print(text), SetAttribute(Attribute::Reset))?;
                     } else {
@@ -1199,6 +1252,103 @@ pub fn run(ctx: &Ctx, scope: Option<String>, workspace: String) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn popup_launch_actions_preserve_selection_unless_profile_or_kind_is_explicit() {
+        let world = crate::scenarios::World::new();
+        let project = world.project("demo", "a.sock");
+        let t = world.thread(&project, world.home.path(), |t| {
+            t.agent = "omp".into();
+            t.profile = "astra".into();
+            t.last_group = "waiting-on-you".into();
+        });
+        let ctx = world.ctx();
+        crate::settings::set(&ctx, "demo", "coordinator_agent", "omp").unwrap();
+        std::fs::create_dir_all(&ctx.config_dir).unwrap();
+        std::fs::write(ctx.config_dir.join("config.toml"), r#"
+[defaults.safety]
+coordinator_profile = "luna"
+coordinator_profiles = ["luna"]
+thread_profiles = ["astra"]
+"#).unwrap();
+        world.runner.on("thread restart", crate::runner::fake::ok("restarted"));
+        world.runner.on("open demo", crate::runner::fake::ok("opened"));
+        let mut popup = Popup::new(&ctx, Some("demo".into()), String::new());
+        let press = |popup: &mut Popup, code| popup.key(KeyEvent::new(code, KeyModifiers::NONE));
+        // First row retains the saved worker selection or the project's
+        // coordinator default. Second chooses a profile; third opts out.
+        for (key, base) in [
+            ('r', vec!["thread", "restart", "demo", t.id.as_str()]),
+            ('c', vec!["open", "demo"]),
+        ] {
+            for (downs, extra) in [
+                (0, vec![]),
+                (1, vec!["--profile", if key == 'r' { "astra" } else { "luna" }]),
+                (2, vec!["--agent", "omp"]),
+            ] {
+                press(&mut popup, KeyCode::Char(key));
+                for _ in 0..downs { press(&mut popup, KeyCode::Down); }
+                press(&mut popup, KeyCode::Enter);
+                let mut expected = base.clone();
+                expected.extend(extra);
+                let calls = world.runner.calls.borrow();
+                let command = calls.last().unwrap();
+                assert_eq!(&command.args[2..], expected.as_slice());
+            }
+        }
+        // Malformed admin configuration must not substitute a kind-only menu.
+        std::fs::write(ctx.config_dir.join("config.toml"), "[defaults.safety").unwrap();
+        for key in ['r', 'c'] {
+            let before = world.runner.calls.borrow().len();
+            press(&mut popup, KeyCode::Char(key));
+            assert!(matches!(popup.mode, Mode::List));
+            assert_eq!(world.runner.calls.borrow().len(), before);
+        }
+    }
+
+    #[test]
+    fn popup_unprofiled_project_default_starts_that_kind_despite_a_competing_coordinator() {
+        for competing_kind in ["codex", "omp"] {
+            let world = crate::scenarios::World::new();
+            let project = world.project("demo", "a.sock");
+            let ctx = world.ctx();
+            crate::settings::set(&ctx, "demo", "coordinator_agent", "omp").unwrap();
+            let cwd = project.canonical_dir().to_string_lossy().into_owned();
+            project.update_coordinator(|c| {
+                c.agent = competing_kind.into();
+                c.profile = "luna".into();
+                c.launch_verified = true;
+                c.agent_session = "competing-session".into();
+            }).unwrap();
+            *world.agents.borrow_mut() = serde_json::json!([{
+                "workspace_id":"w1", "tab_id":"w1:t1", "pane_id":"w1:p1", "cwd":cwd,
+                "name":"competing", "agent":competing_kind, "agent_status":"idle",
+                "agent_session":{"value":"competing-session"}
+            }]).to_string();
+            *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+            world.runner.on("open demo", crate::runner::fake::ok("selected"));
+            world.runner.on("workspace get", crate::runner::fake::ok(r#"{"result":{"workspace":{"label":"Demo"}}}"#));
+            world.runner.on("tab create", crate::runner::fake::ok(r#"{"result":{"root_pane":{"workspace_id":"w1","tab_id":"w1:t2","pane_id":"w1:p2"}}}"#));
+            world.runner.on("agent start", crate::runner::fake::ok(r#"{"result":{"agent":{"workspace_id":"w1","tab_id":"w1:t2","pane_id":"w1:p2","agent":"omp","agent_session":{"value":"plain-session"}}}}"#));
+            let mut popup = Popup::new(&ctx, Some("demo".into()), String::new());
+            popup.key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+            popup.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+            let command = world.runner.calls.borrow().last().unwrap().clone();
+            assert_eq!(&command.args[2..], ["open", "demo", "--agent", "omp"]);
+            // Exercise the command handler with the popup's actual selection.
+            let agent = command.args.windows(2).find(|a| a[0] == "--agent").map(|a| a[1].clone());
+            crate::coordinator::open(&ctx, "demo", &crate::coordinator::OpenOptions {
+                session: crate::paths::SessionFlags { session: None, socket: Some(world.home.path().join("a.sock")) },
+                rebind: false, agent, profile: None, agent_args: Vec::new(), new: false, here: false,
+            }).unwrap();
+            assert_eq!(world.runner.count("agent focus"), 0);
+            assert_eq!(world.runner.count("agent start"), 1);
+            let record = project.coordinator().unwrap();
+            assert_eq!(record.pane_id, "w1:p2");
+            assert_eq!(record.agent, "omp");
+            assert!(record.profile.is_empty() && record.launch_verified);
+        }
+    }
 
     #[test]
     fn tasks_parse_with_lists_owners_and_threads() {

@@ -96,7 +96,7 @@ pub fn set_status(ctx: &Ctx, slug: &str, status: Status) -> Result<()> {
         }
         Status::Active if current == Status::Archived => {
             // Unarchive reopens it: the workspace and a coordinator.
-            let options = crate::coordinator::OpenOptions { session: crate::paths::SessionFlags::default(), rebind: false, agent: None, agent_args: Vec::new(), new: false, here: false };
+            let options = crate::coordinator::OpenOptions { session: crate::paths::SessionFlags::default(), rebind: false, agent: None, profile: None, agent_args: Vec::new(), new: false, here: false };
             if let Err(error) = crate::coordinator::open(ctx, slug, &options) {
                 println!("reopen it with `open {slug}` ({error:#})");
             }

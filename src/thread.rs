@@ -77,6 +77,8 @@ pub struct Thread {
     pub tab_id: String,
     pub pane_id: String,
     pub agent: String,
+    /// Administrator-owned profile name; trusted arguments are never stored here.
+    pub profile: String,
     /// A model flag for the agent CLI at launch (checked again by the ticker),
     /// appended after the project's `thread_agent_args` safety setting.
     pub agent_args: Vec<String>,
@@ -1097,7 +1099,7 @@ mod tests {
     #[test]
     fn id_allocation_under_contention() {
         let root = tempfile::tempdir().unwrap();
-        let project = project::create(root.path(), "demo", "", vec![]).unwrap();
+        let project = project::create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         let handles: Vec<_> = (0..8)
             .map(|_| {
                 let project = project.clone();
@@ -1115,7 +1117,7 @@ mod tests {
     #[test]
     fn updates_are_atomic_and_keep_other_fields() {
         let root = tempfile::tempdir().unwrap();
-        let project = project::create(root.path(), "demo", "", vec![]).unwrap();
+        let project = project::create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         let t = allocate(&project, |t| t.title = "Hello".into()).unwrap();
         update(&project, &t.id, |t| t.pane_id = "w1:p2".into()).unwrap();
         update(&project, &t.id, |t| t.prompt_pending = true).unwrap();
@@ -1190,7 +1192,7 @@ mod tests {
     #[test]
     fn follow_ups_are_appended_to_the_task_file_with_a_timestamp() {
         let root = tempfile::tempdir().unwrap();
-        let project = project::create(root.path(), "demo", "", vec![]).unwrap();
+        let project = project::create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         let t = allocate(&project, |_| {}).unwrap();
         std::fs::write(task_path(&project, &t.id), "The task.").unwrap();
         append_follow_up(&project, &t.id, "Also do Y.\n").unwrap();
@@ -1217,7 +1219,7 @@ mod tests {
     fn copies_report_and_library_and_skips_symlinks() {
         let root = tempfile::tempdir().unwrap();
         let work = tempfile::tempdir().unwrap();
-        let project = project::create(root.path(), "demo", "", vec![]).unwrap();
+        let project = project::create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         let dir = work.path().join(".herdr-project/demo-t-0001");
         let t = local_thread(&project, &dir);
         std::fs::write(dir.join("report.md"), "## Report\nok\n").unwrap();
@@ -1239,7 +1241,7 @@ mod tests {
     fn symlinked_library_report_and_thread_dir_are_not_copied() {
         let root = tempfile::tempdir().unwrap();
         let work = tempfile::tempdir().unwrap();
-        let project = project::create(root.path(), "demo", "", vec![]).unwrap();
+        let project = project::create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         let dir = work.path().join(".herdr-project/demo-t-0001");
         let t = local_thread(&project, &dir);
         std::fs::remove_dir(dir.join("library")).unwrap();
@@ -1270,7 +1272,7 @@ mod tests {
         use crate::runner::fake::{FakeRunner, ok};
         let root = tempfile::tempdir().unwrap();
         let work = tempfile::tempdir().unwrap();
-        let project = project::create(root.path(), "demo", "", vec![]).unwrap();
+        let project = project::create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         let dir = work.path().join(".herdr-project/demo-t-0001");
         let t = local_thread(&project, &dir);
         std::fs::write(dir.join("report.md"), "r").unwrap();
@@ -1287,7 +1289,7 @@ mod tests {
         use crate::runner::fake::{FakeRunner, fail, ok};
         let root = tempfile::tempdir().unwrap();
         let work = tempfile::tempdir().unwrap();
-        let project = project::create(root.path(), "demo", "", vec![]).unwrap();
+        let project = project::create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         let dir = work.path().join(".herdr-project/demo-t-0001");
         let t = local_thread(&project, &dir);
         let runner = FakeRunner::new();

@@ -63,7 +63,7 @@ impl World {
 
     /// A project that has been opened: coordinator in `w1:p1` of `socket`.
     pub fn project(&self, slug: &str, socket: &str) -> Project {
-        let project = project::create(&self.root, slug, "", vec![]).unwrap();
+        let project = project::create(&self.root, slug, "", vec![], ("claude".into(), "claude".into())).unwrap();
         let socket = self.home.path().join(socket);
         std::fs::write(&socket, b"").unwrap();
         let cwd = project.canonical_dir().to_string_lossy().into_owned();
@@ -154,6 +154,7 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
             repo: Some(repo.to_string_lossy().into_owned()),
             machine: None,
             agent: None,
+            profile: None,
             kind: None,
             agent_args: vec!["--model".into(), "opus".into()],
             base: None,
@@ -336,10 +337,10 @@ fn restart_defers_to_the_ticker_and_resets_launch_attempts() {
     *world.panes.borrow_mut() = format!("[{}]", pane_json("w2", "w2:t1", "w2:p1", &cwd));
     world.runner.on("rev-parse --git-path", fail(1, "not a repo"));
 
-    let t = threads::restart(&world.ctx(), "demo", "t-0001", Some("codex"), None).unwrap();
+    let t = threads::restart(&world.ctx(), "demo", "t-0001", Some("codex"), None, None).unwrap();
     assert_eq!((t.status, t.prompt_pending, t.launch_attempts), (Status::Open, true, 0));
     assert_eq!(t.agent, "codex");
-    assert!(threads::restart(&world.ctx(), "demo", "t-0001", Some("chatgpt"), None).is_err());
+    assert!(threads::restart(&world.ctx(), "demo", "t-0001", Some("chatgpt"), None, None).is_err());
     assert!(t.error.is_empty());
     assert_eq!(world.runner.count("agent start"), 0);
     assert_eq!(world.runner.count("agent prompt"), 0);
@@ -487,7 +488,7 @@ fn thread_start_is_refused_when_paused() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
     project.set_status(project::Status::Paused).unwrap();
-    let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, kind: None, agent_args: vec![], base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, profile: None, kind: None, agent_args: vec![], base: None, task: "t".into() };
     let error = threads::start(&world.ctx(), "demo", args).unwrap_err().to_string();
     assert!(error.contains("paused"), "{error}");
     assert!(thread::list(&project).is_empty());
@@ -502,11 +503,11 @@ fn thread_start_and_open_refuse_agent_args_other_than_a_model_flag() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
     for bad in [&["--dangerously-skip-permissions"][..], &["--yolo"], &["--model"], &["--model", "--foo"], &["--model", "x", "--extra"]] {
-        let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, kind: Some(Kind::Tab), agent_args: strings(bad), base: None, task: "t".into() };
+        let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, profile: None, kind: Some(Kind::Tab), agent_args: strings(bad), base: None, task: "t".into() };
         let error = threads::start(&world.ctx(), "demo", args).unwrap_err().to_string();
         assert!(error.contains("--agent-arg only takes a model flag"), "{error}");
         assert!(error.contains("thread_agent_args = []") && error.contains("[safety."), "the safety table is shown: {error}");
-        let options = coordinator::OpenOptions { session: Default::default(), rebind: false, agent: None, agent_args: strings(bad), new: true, here: false };
+        let options = coordinator::OpenOptions { session: Default::default(), rebind: false, agent: None, profile: None, agent_args: strings(bad), new: true, here: false };
         let error = coordinator::open(&world.ctx(), "demo", &options).unwrap_err().to_string();
         assert!(error.contains("--agent-arg only takes a model flag"), "{error}");
     }
@@ -555,17 +556,633 @@ fn restart_keeps_the_model_and_refuses_other_flags() {
     world.runner.on("rev-parse --git-path", fail(1, "not a repo"));
     let ctx = world.ctx();
 
-    let t = threads::restart(&ctx, "demo", "t-0001", None, None).unwrap();
+    let t = threads::restart(&ctx, "demo", "t-0001", None, None, None).unwrap();
     assert_eq!(t.agent_args, ["-m", "gpt-5.5"]);
-    let error = threads::restart(&ctx, "demo", "t-0001", None, Some(strings(&["--yolo"]))).unwrap_err().to_string();
+    let error = threads::restart(&ctx, "demo", "t-0001", None, Some(strings(&["--yolo"])), None).unwrap_err().to_string();
     assert!(error.contains("only takes a model flag"), "{error}");
     // `-m` is Codex's alone: refused when the restart switches to Claude, and nothing changed.
-    assert!(threads::restart(&ctx, "demo", "t-0001", Some("claude"), Some(strings(&["-m", "opus"]))).is_err());
+    assert!(threads::restart(&ctx, "demo", "t-0001", Some("claude"), Some(strings(&["-m", "opus"])), None).is_err());
     let t = thread::load(&project, "t-0001").unwrap();
     assert_eq!((t.agent.as_str(), t.agent_args.clone()), ("codex", strings(&["-m", "gpt-5.5"])));
     thread::update(&project, "t-0001", |t| t.status = Status::Failed).unwrap();
-    let t = threads::restart(&ctx, "demo", "t-0001", Some("claude"), Some(strings(&["--model=opus"]))).unwrap();
+    let t = threads::restart(&ctx, "demo", "t-0001", Some("claude"), Some(strings(&["--model=opus"])), None).unwrap();
     assert_eq!((t.agent.as_str(), t.agent_args), ("claude", strings(&["--model=opus"])));
+}
+
+fn profile_config(world: &World, extra: &str) {
+    let dir = world.ctx().config_dir;
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("config.toml"), format!(r#"
+[profiles.astra]
+agent = "omp"
+args = ["--config", "/admin/astra full.yml"]
+[profiles.sol]
+agent = "omp"
+args = ["--config", "/admin/sol.yml"]
+{extra}
+"#)).unwrap();
+}
+
+#[test]
+fn threads_keep_distinct_profiles_and_launch_with_current_full_config() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    profile_config(&world, r#"
+[defaults.safety]
+thread_profile = "astra"
+thread_profiles = ["astra", "sol"]
+thread_agent_args = ["--config", "/wrong-global.yml"]
+"#);
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    let next_pane = Rc::new(RefCell::new(1));
+    world.runner.on_fn(
+        |cmd| cmd.display().contains("tab create"),
+        move |_| {
+            *next_pane.borrow_mut() += 1;
+            let n = *next_pane.borrow();
+            Ok(ok(&format!(r#"{{"result":{{"root_pane":{{"workspace_id":"w1","tab_id":"w1:t{n}","pane_id":"w1:p{n}"}}}}}}"#)))
+        },
+    );
+    world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":""}}}"#));
+    world.runner.on("agent start", ok(r#"{"result":{"agent":{"agent":"omp","agent_status":"idle"}}}"#));
+    let ctx = world.ctx();
+    let start = |profile: Option<&str>| threads::start(&ctx, "demo", StartArgs {
+        title: "Research".into(), repo: None, machine: None, agent: None,
+        profile: profile.map(str::to_string), kind: Some(Kind::Tab),
+        agent_args: vec![], base: None, task: "Investigate.".into(),
+    }).unwrap();
+    let astra = start(None);
+    let sol = start(Some("sol"));
+    assert_eq!((astra.agent.as_str(), astra.profile.as_str(), sol.agent.as_str(), sol.profile.as_str()), ("omp", "astra", "omp", "sol"));
+    assert!(astra.agent_args.is_empty() && sol.agent_args.is_empty());
+    // Change the role default after selection: neither worker changes profile.
+    profile_config(&world, r#"
+[defaults.safety]
+thread_profile = "sol"
+thread_profiles = ["astra", "sol"]
+thread_agent_args = ["--config", "/wrong-global.yml"]
+"#);
+    let file = ctx.config_dir.join("config.toml");
+    let config = std::fs::read_to_string(&file).unwrap();
+    std::fs::write(&file, config.replace("/admin/astra full.yml", "/admin/updated astra.yml")).unwrap();
+    *world.panes.borrow_mut() = format!("[{},{},{}]", world.coordinator_pane(&project),
+        pane_json("w1", &astra.tab_id, &astra.pane_id, &astra.cwd),
+        pane_json("w1", &sol.tab_id, &sol.pane_id, &sol.cwd));
+    let _ = ticker::tick_project(&ctx, &project);
+    thread::update(&project, &astra.id, |t| t.prompt_pending = false).unwrap();
+    let _ = ticker::tick_project(&ctx, &project);
+    let calls = world.runner.calls.borrow();
+    let starts: Vec<_> = calls.iter().filter(|c| c.args.starts_with(&strings(&["agent", "start"]))).collect();
+    assert_eq!(starts.len(), 2);
+    for (call, pane, path) in [(starts[0], &astra.pane_id, "/admin/updated astra.yml"), (starts[1], &sol.pane_id, "/admin/sol.yml")] {
+        assert!(call.args.windows(2).any(|a| a == ["--kind", "omp"]));
+        assert!(call.args.windows(2).any(|a| a == ["--pane", pane.as_str()]));
+        let separator = call.args.iter().position(|a| a == "--").unwrap();
+        assert_eq!(&call.args[separator + 1..], &strings(&["--config", path]));
+    }
+}
+
+#[test]
+fn ticker_fails_closed_for_revoked_removed_repurposed_and_tampered_profiles() {
+    for case in ["revoked", "removed", "repurposed", "model"] {
+        let world = World::new();
+        let project = world.project("demo", "a.sock");
+        profile_config(&world, r#"[defaults.safety]
+thread_profiles = ["astra", "sol"]"#);
+        let ctx = world.ctx();
+        let file = ctx.config_dir.join("config.toml");
+        let config = std::fs::read_to_string(&file).unwrap();
+        let config = match case {
+            "revoked" => config.replace("[\"astra\", \"sol\"]", "[\"sol\"]"),
+            "removed" => config.replace("[profiles.astra]", "[profiles.renamed]"),
+            "repurposed" => config.replacen("agent = \"omp\"", "agent = \"codex\"", 1),
+            _ => config,
+        };
+        std::fs::write(&file, config).unwrap();
+        let t = world.thread(&project, world.home.path(), |t| {
+            t.agent = "omp".into();
+            t.profile = "astra".into();
+            t.prompt_pending = true;
+            if case == "model" {
+                t.agent_args = strings(&["--model", "override"]);
+            }
+        });
+        *world.panes.borrow_mut() = format!("[{}]", pane_json("w2", "w2:t1", "w2:p1", &t.cwd));
+        let _ = ticker::tick_project(&ctx, &project);
+        let failed = thread::load(&project, &t.id).unwrap();
+        assert_eq!(failed.status, Status::Failed, "{case}");
+        assert_eq!(failed.profile, "astra");
+        assert_eq!(world.runner.count("agent start"), 0, "{case}");
+        let items = items_of(&project, "thread-state");
+        assert!(items.iter().any(|i| i.summary == failed.error), "{case}");
+    }
+}
+
+#[test]
+fn restart_retains_replaces_and_clears_profiles_without_retaining_models() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    profile_config(&world, r#"[defaults.safety]
+thread_profile = "sol"
+thread_profiles = ["astra", "sol"]"#);
+    let t = world.thread(&project, world.home.path(), |t| {
+        t.status = Status::Failed;
+        t.agent = "omp".into();
+        t.profile = "astra".into();
+    });
+    std::fs::write(thread::task_path(&project, &t.id), "The task.").unwrap();
+    *world.panes.borrow_mut() = format!("[{}]", pane_json("w2", "w2:t1", "w2:p1", &t.cwd));
+    world.runner.on("rev-parse --git-path", fail(1, "not a repo"));
+    let ctx = world.ctx();
+    let retained = threads::restart(&ctx, "demo", &t.id, None, None, None).unwrap();
+    assert_eq!(retained.profile, "astra");
+    thread::update(&project, &t.id, |t| t.status = Status::Failed).unwrap();
+    assert!(threads::restart(&ctx, "demo", &t.id, None, Some(strings(&["--model", "x"])), None).is_err());
+    let replaced = threads::restart(&ctx, "demo", &t.id, None, None, Some("sol")).unwrap();
+    assert_eq!(replaced.profile, "sol");
+    thread::update(&project, &t.id, |t| t.status = Status::Failed).unwrap();
+    let plain = threads::restart(&ctx, "demo", &t.id, Some("omp"), Some(strings(&["--model", "x"])), None).unwrap();
+    assert!(plain.profile.is_empty());
+    assert_eq!(plain.agent_args, strings(&["--model", "x"]));
+    world.runner.on("agent start", ok(r#"{"result":{"agent":{"agent":"omp","agent_status":"idle"}}}"#));
+    let _ = ticker::tick_project(&ctx, &project);
+    {
+        let calls = world.runner.calls.borrow();
+        let call = calls.iter().find(|c| c.args.starts_with(&strings(&["agent", "start"]))).unwrap();
+        let separator = call.args.iter().position(|a| a == "--").unwrap();
+        assert_eq!(&call.args[separator + 1..], &strings(&["--model", "x"]));
+    }
+    thread::update(&project, &t.id, |t| t.status = Status::Failed).unwrap();
+    let selected = threads::restart(&ctx, "demo", &t.id, None, None, Some("astra")).unwrap();
+    assert_eq!(selected.profile, "astra");
+    assert!(selected.agent_args.is_empty());
+    thread::update(&project, &t.id, |t| t.status = Status::Failed).unwrap();
+    profile_config(&world, r#"[defaults.safety]
+thread_profiles = ["sol"]"#);
+    assert!(threads::restart(&ctx, "demo", &t.id, None, None, None).is_err());
+    assert_eq!(thread::load(&project, &t.id).unwrap().profile, "astra");
+    let recovered = threads::restart(&ctx, "demo", &t.id, None, None, Some("sol")).unwrap();
+    assert_eq!(recovered.profile, "sol");
+}
+
+#[test]
+fn profile_model_conflicts_fail_before_open_or_thread_placement() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    profile_config(&world, r#"[defaults.safety]
+coordinator_profile = "astra"
+thread_profile = "astra"
+coordinator_profiles = ["astra"]
+thread_profiles = ["astra"]"#);
+    let args = StartArgs { title: "Task".into(), repo: None, machine: None, agent: None, profile: None,
+        kind: Some(Kind::Tab), agent_args: strings(&["--model", "x"]), base: None, task: "Work.".into() };
+    assert!(threads::start(&world.ctx(), "demo", args).is_err());
+    let options = coordinator::OpenOptions { session: Default::default(), rebind: false, agent: None, profile: None,
+        agent_args: strings(&["--model", "x"]), new: false, here: false };
+    assert!(coordinator::open(&world.ctx(), "demo", &options).is_err());
+    assert!(thread::list(&project).is_empty());
+    assert_eq!(world.runner.count("tab create"), 0);
+    assert_eq!(world.runner.count("agent start"), 0);
+}
+
+#[test]
+fn coordinator_profiles_never_focus_or_resume_a_differently_configured_session() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    profile_config(&world, r#"[defaults.safety]
+coordinator_profile = "astra"
+coordinator_profiles = ["astra"]"#);
+    project.update_coordinator(|c| {
+        c.agent = "omp".into();
+        c.agent_session = "old-session".into();
+    }).unwrap();
+    let cwd = project.canonical_dir().to_string_lossy().into_owned();
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    *world.agents.borrow_mut() = format!("[{}]", agent_json("w1", "w1:t1", "w1:p1", &cwd, "existing", "idle").replace("\"claude\"", "\"omp\""));
+    world.runner.on("tab create", ok(r#"{"result":{"root_pane":{"workspace_id":"w1","tab_id":"w1:t2","pane_id":"w1:p2"}}}"#));
+    world.runner.on("agent start", ok(r#"{"result":{"agent":{"agent":"omp","agent_status":"idle","agent_session":{"value":"profile-session"}}}}"#));
+    let ctx = world.ctx();
+    for (profile, agent) in [(Some("astra"), None), (None, None), (None, Some("omp"))] {
+        let options = coordinator::OpenOptions {
+            session: crate::paths::SessionFlags { session: None, socket: Some(world.home.path().join("a.sock")) },
+            rebind: false, agent: agent.map(str::to_string), profile: profile.map(str::to_string),
+            agent_args: vec![], new: false, here: false,
+        };
+        coordinator::open(&ctx, "demo", &options).unwrap();
+        *world.agents.borrow_mut() = "[]".into();
+        *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w1", "w1:t2", "w1:p2", &cwd));
+    }
+    assert_eq!(world.runner.count("agent focus"), 0);
+    let calls = world.runner.calls.borrow();
+    let starts: Vec<_> = calls.iter().filter(|c| c.args.starts_with(&strings(&["agent", "start"]))).collect();
+    assert_eq!(starts.len(), 3);
+    for call in &starts[..2] {
+        let separator = call.args.iter().position(|a| a == "--").unwrap();
+        assert_eq!(&call.args[separator + 1..], &strings(&["--config", "/admin/astra full.yml"]));
+    }
+    assert!(!starts[2].args.iter().any(|a| a == "--"));
+    assert!(project.coordinator().unwrap().profile.is_empty());
+}
+
+#[test]
+fn explicit_unprofiled_open_does_not_reuse_luna_and_unknown_focus_cannot_authorize_resume() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let ctx = world.ctx();
+    std::fs::create_dir_all(&ctx.config_dir).unwrap();
+    std::fs::write(ctx.config_dir.join("config.toml"), r#"
+[profiles.luna]
+agent = "omp"
+args = ["--config", "/admin/luna.yml"]
+[defaults.safety]
+coordinator_profiles = ["luna"]
+"#).unwrap();
+    let cwd = project.canonical_dir().to_string_lossy().into_owned();
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    world.runner.on("workspace get", ok(r#"{"result":{"workspace":{"label":"Demo"}}}"#));
+    world.runner.on("tab create", ok(r#"{"result":{"root_pane":{"workspace_id":"w1","tab_id":"w1:t2","pane_id":"w1:p2"}}}"#));
+    world.runner.on("agent focus", ok(r#"{"result":{}}"#));
+    world.runner.on_fn(
+        |cmd| cmd.args.starts_with(&strings(&["agent", "start"])),
+        |cmd| {
+            let session = if cmd.args.iter().any(|a| a == "/admin/luna.yml") { "luna-session" } else { "plain-session" };
+            let pane = &cmd.args[cmd.args.iter().position(|a| a == "--pane").unwrap() + 1];
+            let tab = if pane == "w1:p1" { "w1:t1" } else { "w1:t2" };
+            Ok(ok(&serde_json::json!({"result":{"agent":{
+                "workspace_id":"w1", "tab_id":tab, "pane_id":pane,
+                "agent":"omp", "agent_session":{"value":session}
+            }}}).to_string()))
+        },
+    );
+    let options = |agent: Option<&str>, profile: Option<&str>| coordinator::OpenOptions {
+        session: crate::paths::SessionFlags { session: None, socket: Some(world.home.path().join("a.sock")) },
+        rebind: false, agent: agent.map(str::to_string), profile: profile.map(str::to_string),
+        agent_args: vec![], new: false, here: false,
+    };
+    coordinator::open(&ctx, "demo", &options(None, Some("luna"))).unwrap();
+    let luna = serde_json::json!({
+        "workspace_id":"w1", "tab_id":"w1:t1", "pane_id":"w1:p1", "cwd":cwd,
+        "agent":"omp", "name":"luna", "agent_status":"idle", "state_change_seq":20,
+        "agent_session":{"value":"luna-session"}
+    });
+    *world.agents.borrow_mut() = serde_json::json!([luna]).to_string();
+    coordinator::open(&ctx, "demo", &options(Some("omp"), None)).unwrap();
+    assert_eq!(world.runner.count("agent start"), 2);
+    assert_eq!(world.runner.count("agent focus"), 0);
+    let plain = project.coordinator().unwrap();
+    assert_eq!(plain.pane_id, "w1:p2");
+    assert_eq!(plain.agent_session, "plain-session");
+    assert!(plain.profile.is_empty() && plain.launch_verified);
+    // Verified unprofiled reuse remains possible; an arbitrary same-kind
+    // coordinator is not evidence that --agent's opt-out was respected.
+    let plain_agent = serde_json::json!({
+        "workspace_id":"w1", "tab_id":"w1:t2", "pane_id":"w1:p2", "cwd":cwd,
+        "agent":"omp", "name":"plain", "agent_status":"idle", "state_change_seq":10,
+        "agent_session":{"value":"plain-session"}
+    });
+    *world.agents.borrow_mut() = serde_json::json!([luna, plain_agent]).to_string();
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w1", "w1:t2", "w1:p2", &cwd));
+    coordinator::open(&ctx, "demo", &options(Some("omp"), None)).unwrap();
+    assert_eq!(world.runner.count("agent start"), 2);
+    assert_eq!(project.coordinator().unwrap().pane_id, "w1:p2");
+
+    // Unqualified focus selects the more active Luna, whose profile provenance
+    // is no longer in the single primary record. It must not inherit plain's.
+    coordinator::open(&ctx, "demo", &options(None, None)).unwrap();
+    let focused = project.coordinator().unwrap();
+    assert_eq!(focused.pane_id, "w1:p1");
+    assert_eq!(focused.agent_session, "luna-session");
+    assert!(!focused.launch_verified && focused.profile.is_empty());
+    let _ = ticker::tick_project(&ctx, &project);
+    assert!(!project.coordinator().unwrap().launch_verified);
+    *world.agents.borrow_mut() = "[]".into();
+    coordinator::open(&ctx, "demo", &options(Some("omp"), None)).unwrap();
+    let calls = world.runner.calls.borrow();
+    let starts: Vec<_> = calls.iter().filter(|c| c.args.starts_with(&strings(&["agent", "start"]))).collect();
+    assert_eq!(starts.len(), 3);
+    assert!(starts[0].args.ends_with(&strings(&["--", "--config", "/admin/luna.yml"])));
+    assert!(starts[1..].iter().all(|c| !c.args.iter().any(|a| a == "--")));
+    drop(calls);
+
+    // Missing session identity must clear the old saved session, not retain it.
+    let mut unknown = luna;
+    unknown["agent_session"] = serde_json::Value::Null;
+    *world.agents.borrow_mut() = serde_json::json!([unknown]).to_string();
+    coordinator::open(&ctx, "demo", &options(None, None)).unwrap();
+    let unknown = project.coordinator().unwrap();
+    assert!(!unknown.launch_verified && unknown.agent_session.is_empty());
+    coordinator::open(&ctx, "demo", &options(Some("omp"), None)).unwrap();
+    assert_eq!(world.runner.count("agent start"), 4);
+}
+
+#[test]
+fn ticker_clears_launch_provenance_when_a_different_session_occupies_the_primary_pane() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    project.update_coordinator(|c| {
+        c.agent = "omp".into();
+        c.profile = "luna".into();
+        c.agent_session = "luna-session".into();
+        c.launch_verified = true;
+    }).unwrap();
+    let cwd = project.canonical_dir().to_string_lossy().into_owned();
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    *world.agents.borrow_mut() = serde_json::json!([{
+        "workspace_id":"w1", "tab_id":"w1:t1", "pane_id":"w1:p1", "cwd":cwd,
+        "agent":"omp", "name":"replacement", "agent_status":"idle",
+        "agent_session":{"value":"other-session"}
+    }]).to_string();
+    let _ = ticker::tick_project(&world.ctx(), &project);
+    let record = project.coordinator().unwrap();
+    assert_eq!(record.agent_session, "other-session");
+    assert!(!record.launch_verified && record.profile.is_empty());
+}
+
+#[derive(Clone, Copy)]
+enum StartupObserver {
+    Ticker,
+    Focus,
+    TickerThenFocus,
+}
+
+fn assert_profile_startup_interleaving(foreground: bool, replacement: Option<&str>, live: bool, observer: StartupObserver) {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let socket = world.home.path().join("a.sock");
+    let env = if foreground {
+        Env::for_test(world.home.path(), &[("HERDR_PANE_ID", "w1:p1"), ("HERDR_SOCKET_PATH", socket.to_str().unwrap())])
+    } else {
+        world.env.clone()
+    };
+    let world = Rc::new(World { env, ..world });
+    let ctx = world.ctx();
+    std::fs::create_dir_all(&ctx.config_dir).unwrap();
+    std::fs::write(ctx.config_dir.join("config.toml"), r#"
+[profiles.luna]
+agent = "omp"
+args = ["--config", "/admin/luna.yml"]
+[defaults.safety]
+coordinator_profiles = ["luna"]
+"#).unwrap();
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    world.runner.on("workspace get", ok(r#"{"result":{"workspace":{"label":"Demo"}}}"#));
+    world.runner.on("agent rename", ok(r#"{"result":{}}"#));
+    world.runner.on("agent focus", ok(r#"{"result":{}}"#));
+    world.runner.on("tab create", ok(r#"{"result":{"root_pane":{"workspace_id":"w1","tab_id":"w1:t2","pane_id":"w1:p2"}}}"#));
+    let snapshot = Rc::new(RefCell::new(None));
+    let (weak, saved, launched_project) = (Rc::downgrade(&world), snapshot.clone(), project.clone());
+    let replacement = replacement.map(str::to_string);
+    let replaced = replacement.is_some();
+    world.runner.on_fn(
+        |cmd| cmd.program == "omp" || cmd.args.starts_with(&strings(&["agent", "start"])),
+        move |_| {
+            let world = weak.upgrade().unwrap();
+            let pending = launched_project.coordinator().unwrap();
+            let profiled = pending.profile == "luna";
+            let session = if profiled { "luna-session" } else { "plain-session" };
+            let live = serde_json::json!({
+                "workspace_id":pending.workspace_id, "tab_id":pending.tab_id,
+                "pane_id":pending.pane_id, "cwd":pending.cwd, "agent":"omp",
+                "name":if foreground { "" } else { &pending.agent_name },
+                "agent_status":"idle", "agent_session":{"value":session}
+            });
+            if profiled {
+                assert!(pending.pending_launch.is_some() && !pending.launch_verified);
+                *saved.borrow_mut() = Some(pending.clone());
+                *world.agents.borrow_mut() = serde_json::json!([live]).to_string();
+                // Herdr detects the agent before agent_start returns, or before
+                // the foreground launch owner's first adoption callback.
+                let observe = || match observer {
+                    StartupObserver::Ticker => { ticker::tick_project(&world.ctx(), &launched_project).unwrap(); }
+                    StartupObserver::Focus | StartupObserver::TickerThenFocus => {
+                        coordinator::open(&world.ctx(), "demo", &coordinator::OpenOptions {
+                            session: crate::paths::SessionFlags { session: None, socket: Some(PathBuf::from(&pending.socket)) },
+                            rebind: false, agent: None, profile: None, agent_args: Vec::new(), new: false, here: false,
+                        }).unwrap();
+                    }
+                };
+                if matches!(observer, StartupObserver::TickerThenFocus) {
+                    ticker::tick_project(&world.ctx(), &launched_project).unwrap();
+                }
+                observe();
+                let discovered = launched_project.coordinator().unwrap();
+                assert_eq!(discovered.profile, "luna");
+                assert!(!discovered.launch_verified);
+                assert_eq!(discovered.pending_launch.as_ref().unwrap().observed_session, "luna-session");
+                assert_eq!(discovered.pending_launch.as_ref().unwrap().token, pending.pending_launch.as_ref().unwrap().token);
+                assert_eq!(discovered.agent_name, pending.agent_name);
+                if !matches!(observer, StartupObserver::Ticker) {
+                    assert_eq!(world.runner.count("agent focus"), 1);
+                }
+                if let Some(kind) = &replacement {
+                    let mut other = live.clone();
+                    other["agent"] = serde_json::json!(kind);
+                    other["agent_session"] = serde_json::json!({"value":"replacement-session"});
+                    *world.agents.borrow_mut() = serde_json::json!([other]).to_string();
+                    observe();
+                    let invalidated = launched_project.coordinator().unwrap();
+                    assert!(invalidated.pending_launch.is_none());
+                    assert!(!invalidated.launch_verified && invalidated.profile.is_empty());
+                }
+            }
+            Ok(ok(&serde_json::json!({"result":{"agent":live}}).to_string()))
+        },
+    );
+    let options = coordinator::OpenOptions {
+        session: crate::paths::SessionFlags { session: None, socket: Some(socket) },
+        rebind: false, agent: None, profile: Some("luna".into()), agent_args: Vec::new(),
+        new: false, here: foreground,
+    };
+    let result = coordinator::open(&ctx, "demo", &options);
+    let completed = project.coordinator().unwrap();
+    assert!(completed.pending_launch.is_none());
+    if replaced {
+        assert_eq!(world.runner.count("agent rename"), 0, "a stale foreground owner must not rename its replacement");
+        if !foreground {
+            assert!(result.is_err(), "a late tab-launch reply cannot verify a replacement");
+        }
+        assert!(!completed.launch_verified && completed.profile.is_empty());
+        assert_eq!(completed.agent_session, "replacement-session");
+    } else {
+        result.unwrap();
+        assert!(completed.launch_verified);
+        assert_eq!(completed.profile, "luna");
+        assert_eq!(completed.agent_session, "luna-session");
+        // A poll taken before completion but delivered after it cannot undo
+        // the completed identity, even if its agent data differs.
+        let old = snapshot.borrow().as_ref().unwrap().clone();
+        let stale_agent: crate::herdr::Agent = serde_json::from_value(serde_json::json!({
+            "workspace_id":old.workspace_id, "tab_id":old.tab_id, "pane_id":old.pane_id,
+            "cwd":old.cwd, "agent":"codex", "agent_session":{"value":"stale-session"}
+        })).unwrap();
+        coordinator::observe_launch(&project, &old, &stale_agent).unwrap();
+        let after_stale_poll = project.coordinator().unwrap();
+        assert!(after_stale_poll.launch_verified && after_stale_poll.pending_launch.is_none());
+        assert_eq!(after_stale_poll.profile, "luna");
+        assert_eq!(after_stale_poll.agent, "omp");
+        assert_eq!(after_stale_poll.agent_session, "luna-session");
+    }
+    // Whether startup succeeded or was invalidated, explicit unprofiled OMP
+    // must start separately and must never inherit Luna's native session.
+    if !live {
+        *world.agents.borrow_mut() = "[]".into();
+    }
+    let before = world.runner.count("agent start");
+    let focused = world.runner.count("agent focus");
+    coordinator::open(&ctx, "demo", &coordinator::OpenOptions {
+        agent: Some("omp".into()), profile: None, here: false, ..options
+    }).unwrap();
+    assert_eq!(world.runner.count("agent start"), before + 1);
+    assert_eq!(world.runner.count("agent focus"), focused);
+    let calls = world.runner.calls.borrow();
+    let start = calls.iter().rev().find(|c| c.args.starts_with(&strings(&["agent", "start"]))).unwrap();
+    assert!(!start.args.iter().any(|a| a == "--"));
+}
+
+#[test]
+fn profile_startup_keeps_identity_when_ticker_discovers_the_expected_native_session() {
+    for foreground in [false, true] {
+        for live in [false, true] {
+            assert_profile_startup_interleaving(foreground, None, live, StartupObserver::Ticker);
+        }
+    }
+}
+
+#[test]
+fn startup_completion_does_not_reverify_a_replacement_observed_by_the_ticker() {
+    for foreground in [false, true] {
+        for kind in ["omp", "codex"] {
+            assert_profile_startup_interleaving(foreground, Some(kind), true, StartupObserver::Ticker);
+        }
+    }
+}
+
+#[test]
+fn unqualified_focus_preserves_pending_tab_and_foreground_profile_launches() {
+    for foreground in [false, true] {
+        for observer in [StartupObserver::Focus, StartupObserver::TickerThenFocus] {
+            assert_profile_startup_interleaving(foreground, None, true, observer);
+        }
+    }
+}
+
+#[test]
+fn unqualified_focus_invalidates_a_different_session_during_startup() {
+    for foreground in [false, true] {
+        for kind in ["omp", "codex"] {
+            assert_profile_startup_interleaving(foreground, Some(kind), true, StartupObserver::Focus);
+        }
+    }
+}
+
+#[test]
+fn shared_session_poll_cannot_replace_a_launch_completed_between_projects() {
+    for recorded in [true, false] {
+        let world = Rc::new(World { runner: crate::runner::fake::FakeRunner::new(), ..World::new() });
+        let a = world.project("a", "a.sock");
+        let b = if recorded {
+            let b = world.project("b", "a.sock");
+            b.update_coordinator(|c| {
+                c.workspace_id = "w2".into();
+                c.tab_id = "w2:t1".into();
+                c.pane_id = "w2:p1".into();
+                c.agent = "omp".into();
+                c.agent_session = "old-session".into();
+                c.launch_verified = true;
+            }).unwrap();
+            b
+        } else {
+            project::create(&world.root, "b", "", vec![], ("omp".into(), "omp".into())).unwrap()
+        };
+        let a_cwd = a.canonical_dir().to_string_lossy().into_owned();
+        let b_cwd = b.canonical_dir().to_string_lossy().into_owned();
+        let a_live: serde_json::Value = serde_json::from_str(&agent_json("w1", "w1:t1", "w1:p1", &a_cwd, "hpc-a", "idle")).unwrap();
+        let old = serde_json::json!({
+            "workspace_id":"w2", "tab_id":"w2:t1", "pane_id":"w2:p1", "cwd":b_cwd,
+            "agent":"omp", "name":"old-b", "agent_status":"idle", "agent_session":{"value":"old-session"}
+        });
+        *world.agents.borrow_mut() = serde_json::json!([a_live, old]).to_string();
+        *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&a), pane_json("w2", "w2:t1", "w2:p1", &b_cwd));
+        std::fs::create_dir_all(world.ctx().config_dir).unwrap();
+        std::fs::write(world.ctx().config_dir.join("config.toml"), r#"
+[profiles.luna]
+agent = "omp"
+args = ["--config", "/admin/luna.yml"]
+[defaults.safety]
+coordinator_profiles = ["luna"]
+"#).unwrap();
+        let agents = world.agents.clone();
+        world.runner.on_fn(
+            |cmd| cmd.args.starts_with(&strings(&["agent", "list"])),
+            move |_| Ok(ok(&format!(r#"{{"result":{{"agents":{}}}}}"#, agents.borrow()))),
+        );
+        let panes = world.panes.clone();
+        world.runner.on_fn(
+            |cmd| cmd.args.starts_with(&strings(&["pane", "list"])),
+            move |_| Ok(ok(&format!(r#"{{"result":{{"panes":{}}}}}"#, panes.borrow()))),
+        );
+        let (weak, launched, still_a) = (Rc::downgrade(&world), b.clone(), a_live.clone());
+        world.runner.on_fn(
+            |cmd| cmd.args.starts_with(&strings(&["agent", "start"])),
+            move |_| {
+                let world = weak.upgrade().unwrap();
+                let pending = launched.coordinator().unwrap();
+                let fresh = serde_json::json!({
+                    "workspace_id":pending.workspace_id, "tab_id":pending.tab_id, "pane_id":pending.pane_id,
+                    "cwd":pending.cwd, "agent":"omp", "name":pending.agent_name, "agent_status":"idle",
+                    "agent_session":{"value":"fresh-luna-session"}
+                });
+                *world.agents.borrow_mut() = serde_json::json!([still_a, fresh]).to_string();
+                Ok(ok(&serde_json::json!({"result":{"agent":fresh}}).to_string()))
+            },
+        );
+        let completed = Rc::new(std::cell::Cell::new(false));
+        let (weak, launched, still_a, fired) = (Rc::downgrade(&world), b.clone(), a_live.clone(), completed.clone());
+        world.runner.on_fn(
+            |cmd| cmd.args.starts_with(&strings(&["pane", "report-metadata", "w1:p1"])),
+            move |_| {
+                if !fired.replace(true) {
+                    let world = weak.upgrade().unwrap();
+                    // A has cached both agents. B's old session now exits, and
+                    // a real open completes before the ticker processes B.
+                    *world.agents.borrow_mut() = serde_json::json!([still_a]).to_string();
+                    coordinator::open(&world.ctx(), "b", &coordinator::OpenOptions {
+                        session: crate::paths::SessionFlags { session: None, socket: Some(world.home.path().join("a.sock")) },
+                        rebind: false, agent: None, profile: Some("luna".into()),
+                        agent_args: Vec::new(), new: false, here: false,
+                    }).unwrap();
+                    assert!(launched.coordinator().unwrap().launch_verified);
+                }
+                Ok(ok(r#"{"result":{}}"#))
+            },
+        );
+        world.runner.on("workspace get", ok(r#"{"result":{"workspace":{"label":"B"}}}"#));
+        world.runner.on("workspace create", ok(r#"{"result":{"root_pane":{"workspace_id":"w2","tab_id":"w2:t2","pane_id":"w2:p2"}}}"#));
+        world.runner.on("report-metadata", ok(r#"{"result":{}}"#));
+        world.runner.on("tab rename", ok(r#"{"result":{}}"#));
+        let ctx = world.ctx();
+        let mut memory = crate::steps::Memory::new(&ctx);
+        assert!(ticker::tick_for_test(&ctx, &mut memory));
+        assert!(completed.get());
+        let fresh = b.coordinator().unwrap();
+        assert_eq!(fresh.profile, "luna");
+        assert_eq!(fresh.agent_session, "fresh-luna-session");
+        assert!(fresh.launch_verified && fresh.pending_launch.is_none());
+        assert_eq!(fresh.pane_id, if recorded { "w2:p1" } else { "w2:p2" });
+
+        // A later poll still invalidates a genuine replacement; the cache
+        // guard must not turn into permanent protection of the old launch.
+        let mut replacement = serde_json::json!({
+            "workspace_id":fresh.workspace_id, "tab_id":fresh.tab_id, "pane_id":fresh.pane_id,
+            "cwd":b_cwd, "agent":"omp", "name":"replacement", "agent_status":"idle"
+        });
+        replacement["agent_session"] = serde_json::json!({"value":"replacement-session"});
+        *world.agents.borrow_mut() = serde_json::json!([a_live, replacement]).to_string();
+        assert!(ticker::tick_for_test(&ctx, &mut memory));
+        let replaced = b.coordinator().unwrap();
+        assert!(!replaced.launch_verified && replaced.profile.is_empty());
+        assert_eq!(replaced.agent_session, "replacement-session");
+    }
 }
 
 #[test]
@@ -1341,7 +1958,7 @@ fn a_remote_thread_blocked_at_a_poll_is_waiting_on_you_at_once() {
 fn a_remote_thread_without_a_repo_is_refused() {
     let world = World::new();
     world.project("demo", "a.sock");
-    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), agent: None, kind: None, agent_args: vec![], base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), agent: None, profile: None, kind: None, agent_args: vec![], base: None, task: "t".into() };
     assert!(threads::start(&world.ctx(), "demo", args).unwrap_err().to_string().contains("needs --repo"));
 }
 
@@ -1354,6 +1971,7 @@ fn open_alive(world: &World, project: &Project) -> anyhow::Result<()> {
         session: crate::paths::SessionFlags { session: None, socket: Some(socket) },
         rebind: false,
         agent: None,
+        profile: None,
         agent_args: Vec::new(),
         new: false,
         here: false,
@@ -1408,7 +2026,7 @@ fn the_digest_prints_the_task_list_or_none() {
 #[test]
 fn open_starts_a_coordinator_without_a_priming_prompt_then_focuses_it_and_resumes_a_known_session() {
     let world = World::new();
-    let project = project::create(&world.root, "demo", "Ship it", vec![]).unwrap();
+    let project = project::create(&world.root, "demo", "Ship it", vec![], ("claude".into(), "claude".into())).unwrap();
     let socket = world.home.path().join("a.sock");
     std::fs::write(&socket, b"").unwrap();
     let dir = project.canonical_dir().to_string_lossy().into_owned();
@@ -1416,11 +2034,13 @@ fn open_starts_a_coordinator_without_a_priming_prompt_then_focuses_it_and_resume
     world.runner.on("tab rename", ok(r#"{"result":{}}"#));
     world.runner.on("workspace get", ok(r#"{"result":{"workspace":{"label":"Demo"}}}"#));
     world.runner.on("agent focus", ok(r#"{"result":{}}"#));
-    world.runner.on("agent start", ok(r#"{"result":{"agent":{"pane_id":"w3:p1","tab_id":"w3:t1","workspace_id":"w3","name":"hpc-demo","agent":"claude","agent_status":"idle","agent_session":{"value":"sess-42"}}}}"#));
+    world.runner.on("agent start hpc-demo --kind claude", ok(r#"{"result":{"agent":{"pane_id":"w3:p1","tab_id":"w3:t1","workspace_id":"w3","name":"hpc-demo","agent":"claude","agent_status":"idle","agent_session":{"value":"sess-42"}}}}"#));
+    world.runner.on("agent start hpc-demo-1 --kind codex", ok(r#"{"result":{"agent":{"pane_id":"w3:p2","tab_id":"w3:t2","workspace_id":"w3","name":"hpc-demo-1","agent":"codex","agent_status":"idle","agent_session":{"value":"codex-session"}}}}"#));
     let options = |new: bool| crate::coordinator::OpenOptions {
         session: crate::paths::SessionFlags { session: None, socket: Some(socket.clone()) },
         rebind: false,
         agent: None,
+        profile: None,
         agent_args: Vec::new(),
         new,
         here: false,
@@ -1441,8 +2061,10 @@ fn open_starts_a_coordinator_without_a_priming_prompt_then_focuses_it_and_resume
     assert!(!start.display().contains("--resume"));
     drop(calls);
 
-    // A coordinator is running in the folder (unnamed, started by hand): open focuses it.
-    *world.agents.borrow_mut() = format!("[{}]", agent_json("w3", "w3:t1", "w3:p1", &dir, "", "idle"));
+    // The same native session is still running, even if its Herdr name changed.
+    let mut live: serde_json::Value = serde_json::from_str(&agent_json("w3", "w3:t1", "w3:p1", &dir, "", "idle")).unwrap();
+    live["agent_session"] = serde_json::json!({"value":"sess-42"});
+    *world.agents.borrow_mut() = serde_json::json!([live]).to_string();
     crate::coordinator::open(&ctx, "demo", &options(false)).unwrap();
     assert_eq!(world.runner.count("agent start"), 1);
     assert_eq!(world.runner.count("agent focus"), 1);
@@ -1473,7 +2095,7 @@ fn open_starts_a_coordinator_without_a_priming_prompt_then_focuses_it_and_resume
 #[test]
 fn open_new_starts_a_fresh_coordinator_beside_a_live_one_without_its_session() {
     let world = World::new();
-    let project = project::create(&world.root, "demo", "Ship it", vec![]).unwrap();
+    let project = project::create(&world.root, "demo", "Ship it", vec![], ("claude".into(), "claude".into())).unwrap();
     let socket = world.home.path().join("a.sock");
     std::fs::write(&socket, b"").unwrap();
     let dir = project.canonical_dir().to_string_lossy().into_owned();
@@ -1485,6 +2107,7 @@ fn open_new_starts_a_fresh_coordinator_beside_a_live_one_without_its_session() {
         session: crate::paths::SessionFlags { session: None, socket: Some(socket.clone()) },
         rebind: false,
         agent: None,
+        profile: None,
         agent_args: Vec::new(),
         new,
         here: false,
@@ -1524,7 +2147,7 @@ fn a_tab_thread_gets_a_brief_with_the_project_header_and_prompts_are_recorded() 
     world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":""}}}"#));
     world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
     let ctx = world.ctx();
-    let t = threads::start(&ctx, "demo", StartArgs { title: "Research".into(), repo: None, machine: None, agent: None, kind: Some(Kind::Tab), agent_args: vec![], base: None, task: "Look into it.".into() }).unwrap();
+    let t = threads::start(&ctx, "demo", StartArgs { title: "Research".into(), repo: None, machine: None, agent: None, profile: None, kind: Some(Kind::Tab), agent_args: vec![], base: None, task: "Look into it.".into() }).unwrap();
     assert_eq!(t.kind, Kind::Tab);
     let brief = std::fs::read_to_string(Path::new(&t.thread_dir).join("brief.md")).unwrap();
     assert!(brief.starts_with("# Project\n\n- Project: Demo (`demo`)\n- Goal: Ship it\n- Repos: (none)\n- Uploads"), "{brief}");
@@ -1589,7 +2212,7 @@ struct Here {
 impl Here {
     fn new(vars: &[(&str, &str)]) -> Here {
         let world = World::new();
-        let project = project::create(&world.root, "demo", "Ship it", vec![]).unwrap();
+        let project = project::create(&world.root, "demo", "Ship it", vec![], ("claude".into(), "claude".into())).unwrap();
         let socket = world.home.path().join("a.sock");
         std::fs::write(&socket, b"").unwrap();
         let socket_text = socket.to_string_lossy().into_owned();
@@ -1632,6 +2255,7 @@ impl Here {
             session: crate::paths::SessionFlags { session: None, socket: Some(self.socket.clone()) },
             rebind: false,
             agent: None,
+            profile: None,
             agent_args: Vec::new(),
             new,
             here,
@@ -1699,6 +2323,7 @@ fn open_in_a_pane_resumes_the_recorded_session_and_starts_fresh_when_that_fails(
             c.socket = h.socket.to_string_lossy().into_owned();
             c.agent = "claude".into();
             c.agent_session = "sess-42".into();
+            c.launch_verified = true;
             c.cwd = h.dir.clone();
         })
         .unwrap();
@@ -1753,7 +2378,7 @@ fn a_tab_thread_of_a_coordinator_running_in_another_workspace_opens_the_project_
     h.open(true, false).unwrap();
     let folder = h.project.dir().join("threads/t-0001");
     h.world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":""}}}"#));
-    let args = |title: &str| StartArgs { title: title.into(), repo: None, machine: None, agent: None, kind: Some(Kind::Tab), agent_args: vec![], base: None, task: "Look.".into() };
+    let args = |title: &str| StartArgs { title: title.into(), repo: None, machine: None, agent: None, profile: None, kind: Some(Kind::Tab), agent_args: vec![], base: None, task: "Look.".into() };
     let t = threads::start(&h.world.ctx(), "demo", args("Research")).unwrap();
     let calls = h.world.runner.calls.borrow();
     let create = calls.iter().filter(|c| c.display().contains("workspace create")).last().unwrap();
@@ -1784,8 +2409,8 @@ fn default_socket(world: &World) -> String {
 fn an_agent_started_by_hand_in_a_never_opened_project_becomes_its_coordinator() {
     let world = World::new();
     let socket = default_socket(&world);
-    let project = project::create(&world.root, "auto", "", vec![]).unwrap();
-    let other = project::create(&world.root, "other", "", vec![]).unwrap();
+    let project = project::create(&world.root, "auto", "", vec![], ("claude".into(), "claude".into())).unwrap();
+    let other = project::create(&world.root, "other", "", vec![], ("claude".into(), "claude".into())).unwrap();
     assert!(project.coordinator().is_none());
     let dir = project.canonical_dir().to_string_lossy().into_owned();
     *world.agents.borrow_mut() = format!("[{}]", agent_json("wGM", "wGM:t1", "wGM:p1", &dir, "", "idle").replace(r#""agent":"claude""#, r#""agent":"opencode""#));
@@ -1812,7 +2437,7 @@ fn an_agent_started_by_hand_in_a_never_opened_project_becomes_its_coordinator() 
 #[test]
 fn a_routine_due_with_no_coordinator_does_nothing_and_is_recorded_as_skipped() {
     let world = World::new();
-    let project = project::create(&world.root, "demo", "", vec![]).unwrap();
+    let project = project::create(&world.root, "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
     write_routine(&project, "standup", "+++\nschedule = \"every 5m\"\n+++\nSummarise.\n");
     write_routine(&project, "watch", "+++\nschedule = \"every 5m\"\ncommand = \"echo watched\"\n+++\nLook.\n");
     allow_commands(&world, &project);
@@ -1844,7 +2469,7 @@ fn a_routine_due_with_no_coordinator_does_nothing_and_is_recorded_as_skipped() {
 fn a_coordinator_that_appears_later_gets_the_next_scheduled_run_only() {
     let world = World::new();
     default_socket(&world);
-    let project = project::create(&world.root, "demo", "", vec![]).unwrap();
+    let project = project::create(&world.root, "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
     set_front_matter(&project, "nudge = true");
     write_routine(&project, "standup", "+++\nschedule = \"every 5m\"\n+++\nSummarise.\n");
     world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
@@ -1887,8 +2512,8 @@ fn a_coordinator_that_appears_later_gets_the_next_scheduled_run_only() {
 fn a_routine_in_one_project_never_reaches_another_projects_coordinator() {
     let world = World::new();
     default_socket(&world);
-    let a = project::create(&world.root, "alpha", "", vec![]).unwrap();
-    let b = project::create(&world.root, "beta", "", vec![]).unwrap();
+    let a = project::create(&world.root, "alpha", "", vec![], ("claude".into(), "claude".into())).unwrap();
+    let b = project::create(&world.root, "beta", "", vec![], ("claude".into(), "claude".into())).unwrap();
     for p in [&a, &b] {
         set_front_matter(p, "nudge = true");
     }
@@ -1938,7 +2563,7 @@ fn a_routine_in_one_project_never_reaches_another_projects_coordinator() {
 fn an_agent_in_the_threads_folder_is_not_the_coordinator() {
     let world = World::new();
     default_socket(&world);
-    let project = project::create(&world.root, "demo", "", vec![]).unwrap();
+    let project = project::create(&world.root, "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
     let thread_dir = project.canonical_dir().join("threads").join("t-0001");
     std::fs::create_dir_all(&thread_dir).unwrap();
     let cwd = thread_dir.to_string_lossy().into_owned();

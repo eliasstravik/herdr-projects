@@ -45,12 +45,12 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 
 | Command | What it does |
 | --- | --- |
-| `new <name> [--goal] [--repo PATH[@MACHINE]]...` | Create a project folder. |
-| `open <project> [--agent KIND] [--agent-arg A]... [--new] [--tab] [--session N \| --socket P] [--rebind]` | A coordinator agent in the project folder; focuses a running one. From a shell pane inside Herdr it runs in that pane and quitting it returns to the shell; `--tab`, the popup, actions and a terminal outside Herdr use a tab of the project's workspace. |
+| `new <name> [--goal] [--repo PATH[@MACHINE]]... [--coordinator-agent KIND] [--thread-agent KIND]` | Create a project folder; agent flags override global creation defaults. |
+| `open <project> [--agent KIND \| --profile NAME] [--agent-arg A]... [--new] [--tab] [--session N \| --socket P] [--rebind]` | A coordinator agent in the project folder; normally focuses a running one. A selected or default profile always starts fresh. From a shell pane inside Herdr it runs in that pane and quitting it returns to the shell; `--tab`, the popup, actions and a terminal outside Herdr use a tab of the project's workspace. |
 | `context <project> [--peek]` | The digest the coordinator reads every turn. |
 | `coordinator prompt <project> --text-file F` | A sentence to the coordinator (the popup's task keys use it). |
-| `thread start <project> --title T [--repo PATH] [--kind worktree\|tab\|checkout] [--agent KIND] [--agent-arg A]... [--machine M] [--base REF] --task-file F` | New thread; `-` reads the task from standard input. `--agent-arg` takes only a model flag (see below). |
-| `thread prompt`, `thread next [--line N \| --add TEXT]`, `thread stop`, `thread restart [--agent KIND] [--agent-arg A]...` | Steer a thread. Prompts are recorded in its task file. |
+| `thread start <project> --title T [--repo PATH] [--kind worktree\|tab\|checkout] [--agent KIND \| --profile NAME] [--agent-arg A]... [--machine M] [--base REF] --task-file F` | New thread; `-` reads the task from standard input. `--agent-arg` takes only a model flag and cannot accompany a profile. |
+| `thread prompt`, `thread next [--line N \| --add TEXT]`, `thread stop`, `thread restart [--agent KIND \| --profile NAME] [--agent-arg A]...` | Steer a thread. Prompts are recorded in its task file. |
 | `thread list/show [--json]`, `thread ack`, `thread adopt` | Look at threads. |
 | `thread resolve [--keep-worktree] [--discard-uncopied] [--skip-copy] [--reopen]` | Final copy home, then clean up. |
 | `sweep <project> [--dry-run] [--yes]` | Remove what nothing uses any more. |
@@ -80,16 +80,40 @@ Threads idle for `auto_resolve_days` are resolved (and cleaned) after a final co
 
 | Section | Keys |
 | --- | --- |
-| threads | `↵` jump to the pane · `1`-`9` send that Next line to the thread · `s` stop (Escape) · `r` restart with a kind picker · `a` ack · `x` resolve · `o` open the PR · `i` detail (report, Next list, files: `↵` opens, `y` copies the path) · `c` start or focus a coordinator of a chosen kind · `S` sweep |
+| threads | `↵` jump to the pane · `1`-`9` send that Next line to the thread · `s` stop (Escape) · `r` restart with current configuration, a trusted profile, or an explicit kind-only choice · `a` ack · `x` resolve · `o` open the PR · `i` detail (report, Next list, files: `↵` opens, `y` copies the path) · `c` select the project default, a trusted coordinator profile, or an explicit kind-only choice · `S` sweep |
 | tasks | `↵` jump to the delegated thread · `d` delegate · `m` done · `D` drop (each sends a sentence to the coordinator, which stays the only writer of TASKS.md) |
 | inbox | `↵` detail · `a` done |
 | routines | `↵` enable or disable · `i` the prompt |
 | settings | `↵` edit · `p` pause or resume · `A` archive · `X` delete (asks first) |
 | memory | `↵` read (change memory by asking the coordinator) |
 
+The launch pickers preserve configuration by default: `r` starts on **Keep current**, which retains the thread's saved profile and model arguments; `c` starts on **Project default**. With a configured coordinator profile, that choice uses unqualified `open` to honor the profile. Without one, it sends `open --agent <project coordinator kind>` so it cannot accidentally focus a differently configured live coordinator. Authorized profiles are separate choices. **Kind only: KIND (no profile)** is an explicit opt-out: for a thread it clears the saved profile; for a coordinator it bypasses the default profile. A configuration error is shown instead of silently substituting a kind-only menu.
+
+## Global agent defaults
+
+Set defaults in `~/.config/herdr-projects/config.toml`. For example, use OMP for new projects and give unprofiled coordinators a full OMP configuration:
+
+```toml
+[defaults]
+coordinator_agent = "omp"
+thread_agent = "omp"
+
+[defaults.safety]
+coordinator_agent_args = ["--config", "/home/you/.omp/agent/luna.yml"]
+thread_agent_args = []
+```
+
+Creation precedence is `new --coordinator-agent` / `--thread-agent`, then `[defaults]`, then `claude`. The chosen kinds are copied into `PROJECT.md`; changing global creation defaults does not change existing projects. The action-menu and adopt-workspace creation paths use the same defaults. Change an existing project's kinds with `set <project> coordinator_agent omp` and `set <project> thread_agent omp`.
+
+Agent-kind validation applies to the effective pair after flags override defaults. An invalid global kind for an explicitly overridden role is irrelevant; an invalid kind for a role still using its default is refused. Malformed TOML remains an error even when both roles are explicitly selected.
+
+`new` has no `--kind`. On `thread start`, `--kind` means placement (`worktree`, `tab`, `checkout`), never an agent kind.
+
+Safety defaults are different: `[defaults.safety]` is inherited at each launch. Each key in `[safety."<canonical project path>"]` overrides only that key. Arrays replace rather than append; `[]` clears inherited arguments or permissions, `""` clears an inherited default profile, and `false` overrides an inherited `true`.
+
 ## Safety settings
 
-Set per project in `~/.config/herdr-projects/config.toml`; `safety show <project>` prints the table header to use.
+Set per-project overrides in `~/.config/herdr-projects/config.toml`; `safety show <project>` prints the effective values (including global defaults) and the canonical table header to use.
 
 ```toml
 [safety."/Users/you/.herdr-projects/billing"]
@@ -99,7 +123,54 @@ thread_agent_args = []             # extra arguments for every thread's agent CL
 routine_commands = false           # true lets approved routines run shell commands
 ```
 
-`--agent-arg` on `open`, `thread start` and `thread restart` is for the model only: `--model NAME` or `--model=NAME` for every harness, plus `-m NAME` for Codex. Anything else is refused with the table above, because the coordinator sets `--agent-arg` and must never be able to widen an agent's powers (`--dangerously-skip-permissions`, `--yolo`). Other launch flags go in `thread_agent_args` and `coordinator_agent_args`, which only you set. The ticker checks a thread's stored arguments again at launch: any that are not a model flag are dropped and reported in one inbox item.
+`--agent-arg` on `open`, `thread start` and `thread restart` is for the model only: `--model NAME` or `--model=NAME` for every harness, plus `-m NAME` for Codex. Anything else is refused with the table above, because the coordinator sets `--agent-arg` and must never be able to widen an agent's powers (`--dangerously-skip-permissions`, `--yolo`). Other launch flags go in administrator-defined profiles or `thread_agent_args` and `coordinator_agent_args`, which only you set. The ticker checks an unprofiled thread's stored arguments again at launch: any that are not a model flag are dropped and reported in one inbox item. Profiled records cannot carry model overrides at all.
+
+### Trusted launch profiles
+
+Only the administrator defines profiles in the same config file, outside project and thread working directories. A profile is a Herdr agent kind plus a complete argument vector. For OMP, pass its existing `--config` file unchanged: Herdr Projects does not extract a model, rewrite YAML, or flatten its role-specific configuration.
+
+```toml
+[profiles.luna]
+agent = "omp"
+args = ["--config", "/home/you/.omp/agent/luna.yml"]
+
+[profiles.astra]
+agent = "omp"
+args = ["--config", "/home/you/.omp/agent/astra.yml"]
+
+[profiles.sol]
+agent = "omp"
+args = ["--config", "/home/you/.omp/agent/sol.yml"]
+
+[safety."/home/you/.herdr-projects/billing"]
+coordinator_profiles = ["luna"]
+thread_profiles = ["astra", "sol"]
+coordinator_profile = "luna"
+thread_profile = "astra"
+```
+
+Merge these keys into an existing table rather than declaring the table twice. The role allow-lists and default profile names can also live in `[defaults.safety]`. Profiles are denied by default: defining one does not authorize either role to use it. Names use the same lower-case slug format as projects.
+
+```bash
+herdr-projects open billing --profile luna
+herdr-projects thread start billing --title "Implementation" --profile astra --task-file implementation.txt
+herdr-projects thread start billing --title "Review" --profile sol --task-file review.txt
+herdr-projects thread restart billing t-0001 --profile sol
+```
+
+Launch precedence is explicit `--profile` or `--agent`, then the role's default profile, then its `PROJECT.md` agent kind. An explicit `--agent` opts out of the default profile. A profile's arguments **replace** `coordinator_agent_args` or `thread_agent_args`; they are not layered with legacy configuration flags. `--agent` and `--agent-arg` cannot accompany a profile, including a default profile for model overrides. Define another trusted profile to select another model without losing role behavior.
+
+Workers store the selected profile name, not trusted arguments. The ticker re-resolves that name immediately before launch. Changing a default does not switch an already-selected worker; administrator edits to the named profile's arguments apply at its next launch. A removed/disallowed profile, a changed agent kind, or model arguments injected into a profiled record fail closed with a failed thread and inbox item. Restart without selection overrides retains the stored profile; `--profile` replaces it, and `--agent` clears it. A profile switch clears old model arguments.
+
+A coordinator with an explicit **or default** profile starts a fresh conversation on each `open`, rather than focusing an arbitrary same-kind agent or resuming a differently configured session. Switching back to an unprofiled coordinator does not resume the previously profiled session. Use Herdr's pane focus to return to an already-running profiled coordinator.
+
+An explicit unprofiled `open --agent KIND` reuses a running coordinator only when the saved record verifies the same pane, agent kind and nonempty native session, with no profile. Unknown or profiled sessions cause a fresh launch instead. Unqualified `open` may still focus another live coordinator, but switching to an unverified session clears saved launch provenance: it cannot inherit the previously selected coordinator's profile or permission to resume. A changed or missing native session in the primary pane also invalidates provenance. Native resume requires a verified unprofiled launch; discovered and older records without that verification start fresh.
+
+During coordinator startup, the saved record carries a pending attempt identity and the selected profile, but is not yet verified. The ticker or a concurrent unqualified `open` may record the expected pane/kind's first native session without erasing that profile. Focusing that matching pending session preserves its attempt and intended agent name; it does not verify the launch or cancel its owner. Only the same launch owner's successful tab startup or foreground adoption can confirm it. Focusing or discovering a genuinely different session or kind invalidates the pending attempt, and a late completion cannot verify or rename that replacement. Explicit kind-only opens neither focus the profiled session nor resume it after exit.
+
+Focus updates compare the saved snapshot under the project lock so a stale focus cannot overwrite a newer launch or completion. The ticker captures coordinator snapshots before fetching any shared session lists, rather than pairing a later project's new record with an earlier project's cached agent list. Reconciliation and discovery check those snapshots under the lock; stale observations cannot replace a completed launch or a newer selection. A later fresh poll still invalidates a genuine replacement.
+
+Profile arguments are argv entries, not shell text: use absolute configuration paths; do not expect `~` or environment-variable expansion. Remote workers receive the same argv, so the configuration path must exist on the remote machine. The existing soft safety boundary still applies: this is a controlled launch interface, not an OS sandbox preventing an agent with shell access from editing administrator files.
 
 ## The allow-list for your coordinator
 

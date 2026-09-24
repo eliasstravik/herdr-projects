@@ -74,6 +74,8 @@ pub struct StartArgs {
     pub machine: Option<String>,
     /// Herdr agent kind (`--agent`), default `thread_agent` in PROJECT.md.
     pub agent: Option<String>,
+    /// Administrator-owned launch profile, mutually exclusive with `agent`.
+    pub profile: Option<String>,
     /// Placement (`--kind worktree|tab|checkout`); default worktree with a
     /// repo, tab without one.
     pub kind: Option<Kind>,
@@ -110,6 +112,12 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
         bail!("the task is empty");
     }
     let (settings, _) = project.read_project_md()?;
+    let safety = project.safety(&ctx.config_dir)?;
+    let launch = crate::launch::resolve(&ctx.config_dir, &safety, crate::launch::Role::Thread, &settings.thread_agent, args.agent.as_deref(), args.profile.as_deref())?;
+    if launch.profile.is_some() && !args.agent_args.is_empty() {
+        bail!("--agent-arg cannot be combined with a launch profile");
+    }
+    crate::settings::require_model_args(ctx, &project, &launch.agent, &args.agent_args)?;
     // Without a running ticker nothing launches.
     ticker::start(ctx)?;
     let view = require_session(ctx, &project)?;
@@ -144,18 +152,14 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
         );
     }
 
-    let agent_kind = args.agent.clone().unwrap_or_else(|| settings.thread_agent.clone());
-    if !crate::agents::is_kind(&agent_kind) {
-        bail!("`{agent_kind}` is not a Herdr agent kind; `herdr agent start --help` lists them");
-    }
-    crate::settings::require_model_args(ctx, &project, &agent_kind, &args.agent_args)?;
     let kind = placement(args.kind, !repo.is_empty(), !machine.is_empty())?;
     let record = thread::allocate(&project, |t| {
         t.title = args.title.trim().to_string();
         t.kind = kind;
         t.repo = repo.clone();
         t.machine = machine.clone();
-        t.agent = agent_kind.clone();
+        t.agent = launch.agent.clone();
+        t.profile = launch.profile.clone().unwrap_or_default();
         t.agent_args = args.agent_args.clone();
         t.base = args.base.clone().unwrap_or_default();
     })?;
@@ -421,35 +425,43 @@ fn lists_for(view: &SessionView, record: &Thread) -> Result<(Vec<Agent>, Vec<Pan
     Ok((herdr.agent_list().map_err(unreachable)?, herdr.pane_list().map_err(unreachable)?))
 }
 
+/// Revalidates the saved selection without applying changed role defaults.
+/// A removed, revoked or repurposed profile must never become a plain launch.
+pub(crate) fn stored_launch(ctx: &Ctx, project: &Project, record: &Thread) -> Result<crate::launch::Launch> {
+    let safety = project.safety(&ctx.config_dir)?;
+    let (agent, profile) = if record.profile.is_empty() {
+        (Some(record.agent.as_str()), None)
+    } else {
+        (None, Some(record.profile.as_str()))
+    };
+    let launch = crate::launch::resolve(&ctx.config_dir, &safety, crate::launch::Role::Thread, &record.agent, agent, profile)?;
+    if launch.agent != record.agent {
+        bail!("profile `{}` now selects `{}`, but thread {} was created for `{}`; explicitly select a profile to restart", record.profile, launch.agent, record.id, record.agent);
+    }
+    if launch.profile.is_some() && !record.agent_args.is_empty() {
+        bail!("thread {} combines a launch profile with model arguments", record.id);
+    }
+    Ok(launch)
+}
+
 /// `thread restart [--agent KIND]`: brings a thread back in its pane, worktree
 /// or a new tab, with the same or another harness.
-pub fn restart(ctx: &Ctx, slug: &str, id: &str, agent: Option<&str>, agent_args: Option<Vec<String>>) -> Result<Thread> {
+pub fn restart(ctx: &Ctx, slug: &str, id: &str, agent: Option<&str>, agent_args: Option<Vec<String>>, profile: Option<&str>) -> Result<Thread> {
     let project = Project::load(&ctx.root, slug)?;
-    if let Some(kind) = agent
-        && !crate::agents::is_kind(kind)
-    {
-        bail!("`{kind}` is not a Herdr agent kind; `herdr agent start --help` lists them");
+    let previous = thread::load(&project, id)?;
+    let launch = if agent.is_none() && profile.is_none() {
+        stored_launch(ctx, &project, &previous)?
+    } else {
+        let safety = project.safety(&ctx.config_dir)?;
+        crate::launch::resolve(&ctx.config_dir, &safety, crate::launch::Role::Thread, &previous.agent, agent, profile)?
+    };
+    if launch.profile.is_some() && agent_args.as_ref().is_some_and(|args| !args.is_empty()) {
+        bail!("--agent-arg cannot be combined with a launch profile");
     }
     if let Some(args) = &agent_args {
-        let kind = match agent {
-            Some(kind) => kind.to_string(),
-            None => thread::load(&project, id)?.agent,
-        };
-        crate::settings::require_model_args(ctx, &project, &kind, args)?;
+        crate::settings::require_model_args(ctx, &project, &launch.agent, args)?;
     }
-    if let Some(kind) = agent {
-        // Another harness: the old arguments (a model flag) no longer apply.
-        thread::update(&project, id, |t| {
-            if t.agent != kind {
-                t.agent_args.clear();
-            }
-            t.agent = kind.to_string();
-        })?;
-    }
-    if let Some(args) = agent_args {
-        thread::update(&project, id, |t| t.agent_args = args)?;
-    }
-    let record = thread::load(&project, id)?;
+    let record = previous;
     ticker::start(ctx)?;
     let view = require_session(ctx, &project)?;
     let (agents, panes) = lists_for(&view, &record)?;
@@ -465,7 +477,18 @@ pub fn restart(ctx: &Ctx, slug: &str, id: &str, agent: Option<&str>, agent_args:
         }
     };
 
-    match restart_plan(&record, &live, branch_exists, now)? {
+    let plan = restart_plan(&record, &live, branch_exists, now)?;
+    thread::update(&project, id, |t| {
+        if t.agent != launch.agent || launch.profile.is_some() || !t.profile.is_empty() {
+            t.agent_args.clear();
+        }
+        t.agent = launch.agent;
+        t.profile = launch.profile.unwrap_or_default();
+        if let Some(args) = agent_args {
+            t.agent_args = args;
+        }
+    })?;
+    match plan {
         RestartPlan::Create => return place_and_brief(ctx, &project, &view, id, true),
         RestartPlan::ReusePane => {}
         RestartPlan::Reopen => match record.kind {

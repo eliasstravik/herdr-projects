@@ -84,6 +84,9 @@ pub fn found(project: &Project, socket: &str, session: &str, agents: &[Agent]) -
         agent_name: agent.name.clone(),
         cwd,
         agent: agent.agent.clone(),
+        profile: String::new(),
+        launch_verified: false,
+        pending_launch: None,
         agent_session: agent.session_id().to_string(),
         updated: String::new(),
     })
@@ -153,6 +156,8 @@ pub struct OpenOptions {
     pub rebind: bool,
     /// Herdr agent kind; default `coordinator_agent` in PROJECT.md.
     pub agent: Option<String>,
+    /// Administrator-owned launch profile, mutually exclusive with `agent`.
+    pub profile: Option<String>,
     /// Extra agent CLI arguments (a model flag, for example).
     pub agent_args: Vec<String>,
     /// Start another coordinator although one is running.
@@ -173,6 +178,105 @@ fn here_pane(ctx: &Ctx, options: &OpenOptions, socket: &str, agents: &[Agent]) -
     (!agents.iter().any(|a| a.pane_id == pane)).then(|| pane.to_string())
 }
 
+/// A live session whose launch configuration belongs to this saved record.
+/// Kind and pane alone are insufficient: a different agent can occupy that pane.
+fn same_launch(record: &Coordinator, agent: &Agent) -> bool {
+    record.launch_verified
+        && record.pane_id == agent.pane_id
+        && record.tab_id == agent.tab_id
+        && record.workspace_id == agent.workspace_id
+        && agent.works_in(&record.cwd)
+        && record.agent == agent.agent
+        && !record.agent_session.is_empty()
+        && record.agent_session == agent.session_id()
+}
+
+fn same_pane_kind(record: &Coordinator, agent: &Agent) -> bool {
+    record.pane_id == agent.pane_id && record.tab_id == agent.tab_id
+        && record.workspace_id == agent.workspace_id && record.agent == agent.agent
+}
+
+fn owns_pending(current: &Coordinator, launched: &Coordinator) -> bool {
+    current.pending_launch.as_ref().zip(launched.pending_launch.as_ref())
+        .is_some_and(|(current, launched)| current.token == launched.token)
+}
+
+/// Reconcile a ticker snapshot under the lock. A stale poll must not undo a
+/// startup completion or a later selection. Expected discovery during startup
+/// records only a candidate session; verification belongs to the launch owner.
+pub fn observe_launch(project: &Project, snapshot: &Coordinator, agent: &Agent) -> Result<()> {
+    let expected = same_pane_kind(snapshot, agent) && is_coordinator(snapshot, agent);
+    let observed = snapshot.pending_launch.as_ref().map(|p| p.observed_session.as_str()).unwrap_or(&snapshot.agent_session);
+    if expected && observed == agent.session_id() {
+        return Ok(());
+    }
+    project.update_coordinator(|current| {
+        if current != snapshot {
+            return;
+        }
+        if expected
+            && let Some(pending) = &mut current.pending_launch
+            && pending.observed_session.is_empty()
+        {
+            pending.observed_session = agent.session_id().to_string();
+            return;
+        }
+        current.profile.clear();
+        current.launch_verified = false;
+        current.pending_launch = None;
+        current.agent_session = agent.session_id().to_string();
+        current.agent = agent.agent.clone();
+        current.tab_id = agent.tab_id.clone();
+        current.workspace_id = agent.workspace_id.clone();
+        current.agent_name = agent.name.clone();
+    })?;
+    Ok(())
+}
+
+/// Only the invocation that owns this pending attempt may confirm it. Restore
+/// the selected profile and native session together, never just the verified bit.
+fn complete_launch(project: &Project, launched: &Coordinator, agent: &Agent) -> Result<bool> {
+    let mut completed = false;
+    project.update_coordinator(|current| {
+        if !owns_pending(current, launched) {
+            return;
+        }
+        let observed = &current.pending_launch.as_ref().unwrap().observed_session;
+        let matches = same_pane_kind(launched, agent) && (observed.is_empty() || observed == agent.session_id());
+        current.pending_launch = None;
+        current.launch_verified = matches;
+        if matches {
+            current.profile = launched.profile.clone();
+            current.agent_session = agent.session_id().to_string();
+            completed = true;
+        } else {
+            current.profile.clear();
+            current.agent_session.clear();
+        }
+    })?;
+    Ok(completed)
+}
+
+fn reset_pending_session(project: &Project, launched: &Coordinator) -> Result<()> {
+    project.update_coordinator(|current| {
+        if owns_pending(current, launched) {
+            current.agent_session.clear();
+            current.pending_launch.as_mut().unwrap().observed_session.clear();
+        }
+    })?;
+    Ok(())
+}
+
+fn abandon_launch(project: &Project, launched: &Coordinator) -> Result<()> {
+    project.update_coordinator(|current| {
+        if owns_pending(current, launched) {
+            current.pending_launch = None;
+            current.launch_verified = false;
+        }
+    })?;
+    Ok(())
+}
+
 pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     let project = Project::load(&ctx.root, slug)?;
     if project.status() == Status::Archived {
@@ -185,13 +289,14 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
             crate::project::BODY_WARN_CHARS
         );
     }
-    let kind = options.agent.clone().unwrap_or_else(|| settings.coordinator_agent.clone());
-    if !crate::agents::is_kind(&kind) {
-        bail!("`{kind}` is not a Herdr agent kind; `herdr agent start --help` lists them");
+    let safety = project.safety(&ctx.config_dir)?;
+    let launch = crate::launch::resolve(&ctx.config_dir, &safety, crate::launch::Role::Coordinator, &settings.coordinator_agent, options.agent.as_deref(), options.profile.as_deref())?;
+    let kind = launch.agent;
+    if launch.profile.is_some() && !options.agent_args.is_empty() {
+        bail!("--agent-arg cannot be combined with a launch profile");
     }
     // An agent can run `open` too: it may pick a model, never widen powers.
     crate::settings::require_model_args(ctx, &project, &kind, &options.agent_args)?;
-    let safety = project.safety(&ctx.config_dir)?;
     let session = paths::resolve_session(&options.session, ctx.env, ctx.runner)?;
     let socket = session.socket.to_string_lossy().into_owned();
     let prefix = current_prefix(&ctx.root)?;
@@ -199,7 +304,8 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     project::write_priming(&project, &prefix)?;
 
     // A project belongs to the session it was opened in.
-    let mut previous = project.coordinator();
+    let recorded = project.coordinator();
+    let mut previous = recorded.as_ref();
     if let Some(record) = &previous
         && !record.socket.is_empty()
         && record.socket != socket
@@ -230,12 +336,17 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     let dir = project.canonical_dir();
     let cwd = dir.to_string_lossy().into_owned();
 
-    // A coordinator is running: focus the most recently active one.
-    // With an explicit kind, only a running coordinator of that kind is reused:
-    // choosing another kind in the popup starts one beside the others.
-    let running: Vec<&Agent> = agents.iter().filter(|a| a.works_in(&cwd) && options.agent.as_ref().is_none_or(|k| &a.agent == k)).collect();
+    // An unqualified open can focus any coordinator. An explicit kind opts out
+    // of profiles, so only a verified unprofiled session is eligible for reuse.
+    // Profile selections themselves always start fresh.
+    let running: Vec<&Agent> = agents.iter().filter(|a| {
+        a.works_in(&cwd) && options.agent.as_ref().is_none_or(|k| {
+            &a.agent == k && previous.as_ref().is_some_and(|r| r.profile.is_empty() && same_launch(r, a))
+        })
+    }).collect();
     if let Some(agent) = running.iter().max_by_key(|a| a.state_change_seq)
         && !options.new
+        && launch.profile.is_none()
     {
         if let Some(record) = &previous {
             sync_label(&herdr, &record.workspace_id, &label);
@@ -243,6 +354,29 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
         let _ = herdr.agent_focus(&agent.pane_id);
         let session_name = session.name.clone().unwrap_or_default();
         let record = project.update_coordinator(|c| {
+            // The agent list was fetched after this snapshot. Do not let a
+            // stale focus overwrite a launch selected/completed in the meantime.
+            if match &recorded {
+                Some(before) => c != before,
+                None => c != &Coordinator::default(),
+            } {
+                return;
+            }
+            if options.agent.is_none()
+                && c.socket == socket
+                && same_pane_kind(c, agent)
+                && agent.works_in(&c.cwd)
+                && let Some(pending) = &mut c.pending_launch
+                && (pending.observed_session.is_empty() || pending.observed_session == agent.session_id())
+            {
+                if pending.observed_session.is_empty() {
+                    pending.observed_session = agent.session_id().to_string();
+                }
+                // Focusing is not completion: keep the owner's profile, token,
+                // intended agent name, and unverified state for its eventual reply.
+                return;
+            }
+            let known = c.socket == socket && same_launch(c, agent);
             c.socket = socket.clone();
             c.session = session_name;
             c.workspace_id = agent.workspace_id.clone();
@@ -251,9 +385,12 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
             c.agent_name = agent.name.clone();
             c.cwd = cwd.clone();
             c.agent = agent.agent.clone();
-            if !agent.session_id().is_empty() {
-                c.agent_session = agent.session_id().to_string();
+            if !known {
+                c.profile.clear();
             }
+            c.launch_verified = known;
+            c.pending_launch = None;
+            c.agent_session = agent.session_id().to_string();
         })?;
         report_tokens(&herdr, slug, &label, &record.pane_id);
         ticker::start(ctx)?;
@@ -306,9 +443,14 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     // running: the new agent starts fresh and never inherits its session id.
     let resume = previous
         .as_ref()
-        .filter(|r| !options.new && r.agent == kind && !r.agent_session.is_empty())
+        .filter(|r| !options.new && launch.profile.is_none() && r.launch_verified && r.profile.is_empty() && r.agent == kind && !r.agent_session.is_empty()
+            && !agents.iter().any(|a| a.pane_id == r.pane_id || a.session_id() == r.agent_session))
         .and_then(|r| crate::agents::resume_args(&kind, &r.agent_session))
         .unwrap_or_default();
+    // Unique among overlapping launch owners, without relying on timestamps
+    // rounded to seconds in the persisted record.
+    static NEXT_LAUNCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let token = format!("{}-{}", std::process::id(), NEXT_LAUNCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
     let record = project.update_coordinator(|c| {
         *c = Coordinator {
             socket: socket.clone(),
@@ -319,20 +461,25 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
             agent_name: name.clone(),
             cwd: cwd.clone(),
             agent: kind.clone(),
+            profile: launch.profile.clone().unwrap_or_default(),
+            launch_verified: false,
+            pending_launch: Some(project::PendingCoordinatorLaunch { token, observed_session: String::new() }),
             // Kept only for the resume; the ticker records a fresh agent's own.
             agent_session: if resume.is_empty() { String::new() } else { previous.as_ref().map(|r| r.agent_session.clone()).unwrap_or_default() },
             updated: String::new(),
         }
     })?;
 
-    let mut base_args = safety.coordinator_agent_args.clone();
+    let mut base_args = launch.args;
     base_args.extend(options.agent_args.iter().cloned());
     let mut args = base_args.clone();
     args.extend(resume.iter().cloned());
     if here.is_some() {
         report_tokens(&herdr, slug, &label, &record.pane_id);
         ticker::start(ctx)?;
-        return run_here(ctx, &herdr, &project, &record, &args, &base_args, &prefix);
+        let result = run_here(ctx, &herdr, &project, &record, &args, &base_args, &prefix);
+        abandon_launch(&project, &record)?;
+        return result;
     }
     let mut started = start_when_shell_ready(&herdr, &name, &kind, &record.pane_id, &args);
     if let Err(error) = &started
@@ -341,26 +488,27 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     {
         // The recorded session may be gone: start fresh once.
         println!("resuming session {} failed ({error}); starting a fresh {kind}", record.agent_session);
+        reset_pending_session(&project, &record)?;
         started = herdr.agent_start(&name, &kind, &record.pane_id, &base_args);
     }
     match started {
         Ok(agent) => {
-            let session_id = agent.session_id().to_string();
-            project.update_coordinator(|c| {
-                if !session_id.is_empty() {
-                    c.agent_session = session_id;
-                }
-            })?;
+            if !complete_launch(&project, &record, &agent)? {
+                bail!("coordinator launch identity changed during startup; its session was not verified");
+            }
             if resume.is_empty() {
                 println!("started {kind} as {name}; it reads AGENTS.md and primes itself");
             } else {
                 println!("started {kind} as {name}, resuming session {}", record.agent_session);
             }
         }
-        Err(error) => println!(
-            "{kind} is not ready yet ({error}). If it shows a dialog, answer it in pane {}; it primes itself from AGENTS.md.",
-            record.pane_id
-        ),
+        Err(error) => {
+            abandon_launch(&project, &record)?;
+            println!(
+                "{kind} is not ready yet ({error}). If it shows a dialog, answer it in pane {}; it primes itself from AGENTS.md.",
+                record.pane_id
+            );
+        }
     }
     report_tokens(&herdr, slug, &label, &record.pane_id);
     ticker::start(ctx)?;
@@ -397,7 +545,7 @@ fn run_here(ctx: &Ctx, herdr: &Herdr, project: &Project, record: &Coordinator, a
     if resuming && !detected && code != Some(0) {
         // The recorded session may be gone: start fresh once.
         println!("resuming session {} failed; starting a fresh {kind}", record.agent_session);
-        project.update_coordinator(|c| c.agent_session.clear())?;
+        reset_pending_session(project, record)?;
         run(base_args)?;
     }
     println!("{kind} exited; this pane is back at your shell");
@@ -410,18 +558,15 @@ fn adopt_here(herdr: &Herdr, project: &Project, record: &Coordinator) -> bool {
     let Ok(agents) = herdr.agent_list() else {
         return false;
     };
-    let Some(agent) = agents.iter().find(|a| a.pane_id == record.pane_id && is_coordinator(record, a)) else {
+    let Some(agent) = agents.iter().find(|a| a.pane_id == record.pane_id && a.agent == record.agent && is_coordinator(record, a)) else {
         return false;
     };
+    if !complete_launch(project, record, agent).unwrap_or(false) {
+        return false;
+    }
     if agent.name != record.agent_name {
         let _ = herdr.agent_rename(&agent.pane_id, &record.agent_name);
     }
-    let session_id = agent.session_id().to_string();
-    let _ = project.update_coordinator(|c| {
-        if !session_id.is_empty() {
-            c.agent_session = session_id;
-        }
-    });
     true
 }
 
@@ -544,6 +689,11 @@ pub fn digest(ctx: &Ctx, project: &Project, prefix: &str) -> Result<(String, Vec
                 out,
                 "Safety: start_threads={} routine_commands={} thread_agent_args={:?} coordinator_agent_args={:?}",
                 safety.start_threads, safety.routine_commands, safety.thread_agent_args, safety.coordinator_agent_args
+            );
+            let _ = writeln!(
+                out,
+                "Profiles: coordinator_profile={:?} thread_profile={:?} coordinator_profiles={:?} thread_profiles={:?}",
+                safety.coordinator_profile, safety.thread_profile, safety.coordinator_profiles, safety.thread_profiles
             );
         }
         Err(error) => {

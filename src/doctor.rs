@@ -443,7 +443,7 @@ mod tests {
         let runner = runner_with_herdr("herdr 0.9.1\n");
         let root = home.path().join("root");
         // A project made before AGENTS.md existed: no priming files, no uploads/.
-        let project = project::create(&root, "demo", "", vec![]).unwrap();
+        let project = project::create(&root, "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         std::fs::remove_dir(project.dir().join("uploads")).unwrap();
         let flags = SessionFlags::default();
         let (text, _) = report(&env, &root, &home.path().join("cfg"), &flags, &runner, false, None);
@@ -464,7 +464,7 @@ mod tests {
         let env = Env::for_test(home.path(), &[]);
         let runner = runner_with_herdr("herdr 0.9.1\n");
         let root = home.path().join("root");
-        let project = project::create(&root, "demo", "", vec![]).unwrap();
+        let project = project::create(&root, "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         std::fs::write(project.dir().join("routines/standup.md"), "+++\nschedule = \"every 5m\"\n+++\nGo.\n").unwrap();
         let (text, _) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner, false, None);
         assert!(!text.contains("routines demo"), "{text}");
@@ -529,7 +529,7 @@ mod tests {
         let root = home.path().join("root");
         let long = "x".repeat(30);
         for suffix in ["a", "b"] {
-            let project = project::create(&root, &format!("{long}-{suffix}"), "", vec![]).unwrap();
+            let project = project::create(&root, &format!("{long}-{suffix}"), "", vec![], ("claude".into(), "claude".into())).unwrap();
             project::write_priming(&project, &crate::coordinator::current_prefix(&root).unwrap()).unwrap();
         }
         let (text, healthy) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner, false, None);

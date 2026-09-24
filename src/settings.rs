@@ -29,10 +29,14 @@ pub const KEYS: [(&str, &str); 10] = [
 pub fn safety_text(ctx: &Ctx, project: &Project) -> Result<String> {
     let safety = project.safety(&ctx.config_dir)?;
     Ok(format!(
-        "Effective safety settings for `{slug}`:\n  start_threads = {:?}\n  coordinator_agent_args = {:?}\n  thread_agent_args = {:?}\n  routine_commands = {}\n\nTo change one, edit {} by hand and add:\n\n[safety.{:?}]\n",
+        "Effective safety settings for `{slug}`:\n  start_threads = {:?}\n  coordinator_agent_args = {:?}\n  thread_agent_args = {:?}\n  coordinator_profile = {:?}\n  thread_profile = {:?}\n  coordinator_profiles = {:?}\n  thread_profiles = {:?}\n  routine_commands = {}\n\nProfile allowlists name the trusted profiles available to each role. A profile supplies the agent and replaces that role's launch arguments.\n\nTo change one, edit {} by hand. Global defaults belong in [defaults.safety]; project overrides belong in:\n\n[safety.{:?}]\n",
         safety.start_threads,
         safety.coordinator_agent_args,
         safety.thread_agent_args,
+        safety.coordinator_profile,
+        safety.thread_profile,
+        safety.coordinator_profiles,
+        safety.thread_profiles,
         safety.routine_commands,
         ctx.config_dir.join("config.toml").display(),
         project.canonical_dir().to_string_lossy(),
@@ -314,7 +318,7 @@ mod tests {
     #[test]
     fn routines_toggle_and_keep_their_prompt() {
         let root = tempfile::tempdir().unwrap();
-        let project = project::create(root.path(), "demo", "", vec![]).unwrap();
+        let project = project::create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         let path = project.dir().join("routines/nightly.md");
         std::fs::write(&path, "+++\nschedule = \"daily 02:00\"\n+++\nCheck it.\n").unwrap();
         let env = crate::paths::Env::for_test(root.path(), &[]);

@@ -327,6 +327,9 @@ type Lists = (Vec<Agent>, Vec<Pane>);
 /// and shared by every project in that session.
 pub struct Sessions {
     lists: std::collections::BTreeMap<String, Option<Lists>>,
+    /// Captured before any session fetch, not when each project consumes a
+    /// cached list. Otherwise an old list could invalidate a newer launch.
+    records: std::collections::BTreeMap<String, project::Coordinator>,
     /// The sockets a project without a live record is looked for in: the
     /// default session first, then every other project's recorded socket.
     candidates: Option<Vec<(String, String)>>,
@@ -335,15 +338,20 @@ pub struct Sessions {
 
 impl Sessions {
     pub fn new(ctx: &Ctx) -> Sessions {
-        let mut known: Vec<String> = project::list_slugs(&ctx.root)
-            .iter()
-            .filter_map(|slug| Project::load(&ctx.root, slug).ok()?.coordinator())
-            .map(|record| record.socket)
-            .filter(|socket| !socket.is_empty())
+        let records: std::collections::BTreeMap<_, _> = project::list_slugs(&ctx.root)
+            .into_iter()
+            .filter_map(|slug| {
+                let record = Project::load(&ctx.root, &slug).ok()?.coordinator()?;
+                Some((slug, record))
+            })
+            .collect();
+        let mut known: Vec<String> = records.values()
+            .filter(|record| !record.socket.is_empty())
+            .map(|record| record.socket.clone())
             .collect();
         known.sort();
         known.dedup();
-        Sessions { lists: Default::default(), candidates: None, known }
+        Sessions { lists: Default::default(), records, candidates: None, known }
     }
 
     /// `None` when the socket is gone or the session does not answer.
@@ -387,13 +395,23 @@ impl Sessions {
 /// working in the project folder, in the default session or any session
 /// another project uses, becomes its coordinator and is recorded just as
 /// `open` records one. Agents in `threads/` or a worktree are threads.
-fn discover_record(ctx: &Ctx, project: &Project, sessions: &mut Sessions) -> Result<Option<project::Coordinator>> {
+fn discover_record(ctx: &Ctx, project: &Project, sessions: &mut Sessions, snapshot: Option<&project::Coordinator>) -> Result<Option<project::Coordinator>> {
     for (socket, name) in sessions.candidates(ctx) {
         let Some((agents, _)) = sessions.get(ctx, &socket) else {
             continue;
         };
         if let Some(found) = coordinator::found(project, &socket, &name, agents) {
-            return project.update_coordinator(|c| *c = found).map(Some);
+            let mut adopted = false;
+            let record = project.update_coordinator(|current| {
+                if match snapshot {
+                    Some(before) => current == before,
+                    None => current == &project::Coordinator::default(),
+                } {
+                    *current = found;
+                    adopted = true;
+                }
+            })?;
+            return Ok(adopted.then_some(record));
         }
     }
     Ok(None)
@@ -602,13 +620,24 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
         if !*may_start {
             continue;
         }
+        let launch = match crate::threads::stored_launch(ctx, project, t) {
+            Ok(launch) => launch,
+            Err(error) => {
+                let summary = format!("{}: launch refused: {error:#}", t.id);
+                let failed = thread::update(project, &t.id, |t| {
+                    t.status = thread::Status::Failed;
+                    t.error = summary.clone();
+                });
+                errors.extend(failed.err());
+                errors.extend(inbox::write(project, "thread-state", &t.id, &summary, "").err());
+                continue;
+            }
+        };
         *may_start = false;
         let launched = (|| -> Result<()> {
             thread::update(project, &t.id, |t| t.launch_attempts += 1)?;
-            let safety = project.safety(&ctx.config_dir)?;
-            // Stored arguments pass the same model-only check as `thread
-            // start`: a record written before it, or edited by hand, cannot
-            // smuggle in a launch flag. The refused ones are dropped for good.
+            // Legacy unprofiled records remain model-only; trusted arguments
+            // come from today's admin configuration, never from the record.
             let (model, refused) = crate::agents::split_model_args(&t.agent, &t.agent_args);
             if !refused.is_empty() {
                 thread::update(project, &t.id, |t| t.agent_args = model.clone())?;
@@ -620,7 +649,7 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
                 );
                 inbox::write(project, "thread-state", &t.id, &summary, "")?;
             }
-            let mut args = safety.thread_agent_args.clone();
+            let mut args = launch.args;
             args.extend(model);
             herdr.on_machine(&t.machine).agent_start(&t.agent_name, &t.agent, &t.pane_id, &args)?;
             Ok(())
@@ -640,10 +669,9 @@ fn open_threads(project: &Project, remote: bool) -> Vec<thread::Thread> {
 /// no record and no agent works in its folder: then no state is read, so
 /// nothing is ever reported as gone.
 fn tick_cheap(ctx: &Ctx, project: &Project, sessions: &mut Sessions) -> Result<Option<Seen>> {
-    let recorded = project.coordinator().filter(|r| !r.socket.is_empty() && Path::new(&r.socket).exists());
-    let record = match recorded {
-        Some(record) => record,
-        None => match discover_record(ctx, project, sessions)? {
+    let record = match sessions.records.remove(&project.slug) {
+        Some(record) if !record.socket.is_empty() && Path::new(&record.socket).exists() => record,
+        snapshot => match discover_record(ctx, project, sessions, snapshot.as_ref())? {
             Some(record) => record,
             None => return Ok(None),
         },
@@ -663,16 +691,9 @@ fn tick_cheap(ctx: &Ctx, project: &Project, sessions: &mut Sessions) -> Result<O
     if coordinators != previous {
         coordinator::save_live(project, &coordinators)?;
     }
-    // The primary pane's native session id, for a later resume by `open`.
-    if let Some(primary) = coordinators.iter().find(|c| c.pane_id == record.pane_id)
-        && !primary.agent_session.is_empty()
-        && (primary.agent_session != record.agent_session || primary.agent != record.agent)
-    {
-        let (session_id, kind) = (primary.agent_session.clone(), primary.agent.clone());
-        project.update_coordinator(|c| {
-            c.agent_session = session_id;
-            c.agent = kind;
-        })?;
+    // Discovery and startup completion share one guarded reconciliation path.
+    if let Some(primary) = agents.iter().find(|a| a.pane_id == record.pane_id && coordinator::is_coordinator(&record, a)) {
+        coordinator::observe_launch(project, &record, primary)?;
     }
     let name = project.read_project_md().map(|(s, _)| project::display_name(&s.name, slug)).unwrap_or_else(|_| slug.clone());
     for c in &coordinators {
@@ -920,7 +941,7 @@ mod tests {
     fn fixture() -> Fixture {
         let home = tempfile::tempdir().unwrap();
         let root = home.path().join("root");
-        let project = project::create(&root, "demo", "", vec![]).unwrap();
+        let project = project::create(&root, "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         let socket = home.path().join("herdr.sock");
         std::fs::write(&socket, b"").unwrap();
         let cwd = project.dir().to_string_lossy().into_owned();

@@ -139,7 +139,7 @@ pub fn run_action(ctx: &Ctx, id: &str) -> Result<()> {
 
 fn run_on_slug(ctx: &Ctx, command: &str, slug: &str) -> Result<()> {
     match command {
-        "open" => coordinator::open(ctx, slug, &OpenOptions { session: SessionFlags { session: None, socket: Some(PathBuf::from(socket(ctx)?)) }, rebind: false, agent: None, agent_args: Vec::new(), new: false, here: false }),
+        "open" => coordinator::open(ctx, slug, &OpenOptions { session: SessionFlags { session: None, socket: Some(PathBuf::from(socket(ctx)?)) }, rebind: false, agent: None, profile: None, agent_args: Vec::new(), new: false, here: false }),
         "pause" => lifecycle::set_status(ctx, slug, Status::Paused),
         "resume" => lifecycle::set_status(ctx, slug, Status::Active),
         other => bail!("`{other}` cannot be run from the picker"),
@@ -177,7 +177,8 @@ pub fn run_pane(ctx: &Ctx, id: &str) -> Result<()> {
                 bail!("no name given");
             }
             let goal = ask("Goal (one line, optional)", "")?;
-            let project = project::create(&ctx.root, &name, &goal, Vec::new())?;
+            let agents = crate::launch::creation_agents(&ctx.config_dir, None, None)?;
+            let project = project::create(&ctx.root, &name, &goal, Vec::new(), agents)?;
             println!("created `{}` at {}", project.slug, project.dir().display());
             run_on_slug(ctx, "open", &project.slug)
         })(),

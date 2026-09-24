@@ -6,6 +6,7 @@ mod coordinator;
 mod doctor;
 mod herdr;
 mod inbox;
+mod launch;
 mod lifecycle;
 mod names;
 mod notify;

@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn lists_marks_seen_and_moves_to_done() {
         let root = tempfile::tempdir().unwrap();
-        let project = project::create(root.path(), "demo", "", vec![]).unwrap();
+        let project = project::create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         write_item(&project, "20260917T000002Z-routine-r-2", "\nbody text\n");
         write_item(&project, "20260917T000001Z-routine-r-1", "");
         let items = unhandled(&project);
@@ -198,7 +198,7 @@ mod tests {
     #[test]
     fn two_events_in_one_tick_get_two_items() {
         let root = tempfile::tempdir().unwrap();
-        let project = project::create(root.path(), "demo", "", vec![]).unwrap();
+        let project = project::create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         let a = write(&project, "thread-state", "t-0001", "first", "").unwrap();
         let b = write(&project, "thread-state", "t-0001", "second\nline", "").unwrap();
         assert_ne!(a, b);
@@ -215,7 +215,7 @@ mod tests {
     #[test]
     fn routine_items_carry_a_body_and_subjects_are_made_file_safe() {
         let root = tempfile::tempdir().unwrap();
-        let project = project::create(root.path(), "demo", "", vec![]).unwrap();
+        let project = project::create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         let id = write(&project, "outage", "Elias MacBook/../x", "down", "").unwrap();
         assert!(id.contains("-outage-elias-macbook----x-"), "{id}");
         write(&project, "routine", "nightly", "due", "Check the build.\n\n```\nout\n```").unwrap();
@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn hostile_ids_are_refused() {
         let root = tempfile::tempdir().unwrap();
-        let project = project::create(root.path(), "demo", "", vec![]).unwrap();
+        let project = project::create(root.path(), "demo", "", vec![], ("claude".into(), "claude".into())).unwrap();
         for bad in ["../PROJECT", "a/b", "", ".hidden", "x..y"] {
             assert!(done(&project, &[bad.to_string()], false).is_err(), "{bad}");
         }
