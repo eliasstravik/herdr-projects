@@ -225,9 +225,11 @@ fn place_and_brief(ctx: &Ctx, project: &Project, view: &SessionView, id: &str, r
             };
             let branch = thread::branch_name(slug, id, &record.title);
             let (created, path, cwd) = view.herdr.worktree_create(&record.repo, &branch, &base, &record.title)?;
+            let repo_workspace = repo_space(&view.herdr, &record.repo);
             // Recorded immediately, so a command killed midway still leaves a
             // record `thread restart` can act on.
             thread::update(project, id, |t| {
+                t.repo_workspace = repo_workspace;
                 t.origin = origin;
                 t.base = base;
                 t.branch = branch;
@@ -243,6 +245,12 @@ fn place_and_brief(ctx: &Ctx, project: &Project, view: &SessionView, id: &str, r
     };
     write_brief(ctx, project, &placed, restart)?;
     finish_placement(project, view, id)
+}
+
+/// The repository's primary Space herdr grouped a new worktree Space under,
+/// or "" when herdr does not list one (the ticker looks again).
+fn repo_space(herdr: &crate::herdr::Herdr, repo: &str) -> String {
+    herdr.workspace_list().ok().and_then(|all| crate::spaces::primary(&all, repo).map(|w| w.workspace_id.clone())).unwrap_or_default()
 }
 
 /// The thread directory, the git exclude and `brief.md`, on the thread's own
@@ -463,7 +471,11 @@ pub fn restart(ctx: &Ctx, slug: &str, id: &str, agent: Option<&str>, agent_args:
         RestartPlan::Reopen => match record.kind {
             Kind::Worktree => {
                 let (created, path, cwd) = view.herdr.on_machine(&record.machine).worktree_open(&record.repo, &record.worktree_path, &record.title)?;
+                let repo_workspace = if record.is_remote() { String::new() } else { repo_space(&view.herdr, &record.repo) };
                 thread::update(&project, id, |t| {
+                    if !repo_workspace.is_empty() {
+                        t.repo_workspace = repo_workspace;
+                    }
                     t.worktree_path = path;
                     t.cwd = cwd;
                     t.workspace_id = created.workspace_id;
@@ -723,6 +735,12 @@ pub fn clean(ctx: &Ctx, project: &Project, t: &Thread, options: &Clean) -> Vec<S
     }
     if let Some(view) = &view {
         clear_thread_tokens(&view.herdr, t);
+        // The repository Space herdr grouped the worktree under, once empty.
+        if t.kind == Kind::Worktree && !t.is_remote() {
+            for error in crate::spaces::close_empty(ctx, project, &view.herdr) {
+                notes.push(format!("{error:#}"));
+            }
+        }
     }
     notes
 }

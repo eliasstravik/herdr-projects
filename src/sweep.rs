@@ -2,7 +2,8 @@
 //! on `hp/<slug>/` branches with no open thread, local branches of resolved
 //! threads whose pull request merged, tabs of resolved threads, working
 //! folders of long-resolved tab threads, handled inbox items older than 30
-//! days. `--dry-run` lists; otherwise each is removed after a confirmation.
+//! days, and empty repository Spaces herdr grouped their worktrees under.
+//! `--dry-run` lists; otherwise each is removed after a confirmation.
 //! Remote machines are left to `thread resolve`.
 
 use std::path::PathBuf;
@@ -24,6 +25,7 @@ pub enum Orphan {
     Branch { repo: String, branch: String },
     Tab { id: String, tab: String },
     Folder { id: String, path: PathBuf },
+    Space(crate::spaces::Space),
     DoneItems { count: usize },
 }
 
@@ -34,6 +36,7 @@ impl Orphan {
             Orphan::Branch { branch, .. } => format!("branch {branch}: its thread is resolved and its pull request merged"),
             Orphan::Tab { id, tab } => format!("tab {tab} of resolved thread {id}"),
             Orphan::Folder { id, path } => format!("working folder {} of {id}, resolved long ago (its report is home)", path.display()),
+            Orphan::Space(space) => format!("empty Space {} ({}) its threads' worktrees were grouped under", space.label, space.id),
             Orphan::DoneItems { count } => format!("{count} handled inbox item(s) older than 30 days"),
         }
     }
@@ -127,6 +130,10 @@ pub fn find(ctx: &Ctx, project: &Project) -> Vec<Orphan> {
         }
     }
 
+    if let Some(view) = &view {
+        orphans.extend(crate::spaces::empty(ctx, project, &view.herdr, true).into_iter().map(Orphan::Space));
+    }
+
     let limit = std::time::Duration::from_secs(u64::from(crate::steps::DONE_RETENTION_DAYS as u32) * 86_400);
     let old_done = std::fs::read_dir(project.dir().join("inbox/done"))
         .map(|e| e.flatten().filter(|e| e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > limit)).count())
@@ -160,6 +167,10 @@ fn remove(ctx: &Ctx, project: &Project, orphan: &Orphan) -> Result<()> {
             view.herdr.call(&["tab", "close", tab], crate::herdr::CALL_TIMEOUT).map(|_| ()).map_err(|e| anyhow::anyhow!("{e}"))
         }
         Orphan::Folder { path, .. } => Ok(std::fs::remove_dir_all(path)?),
+        Orphan::Space(space) => {
+            let view = threads::session_view(ctx, project).ok_or_else(|| anyhow::anyhow!("the session is not reachable"))?;
+            crate::spaces::close(&view.herdr, space).map_err(|e| anyhow::anyhow!("{e}"))
+        }
         Orphan::DoneItems { .. } => {
             crate::inbox::prune_done(project, crate::steps::DONE_RETENTION_DAYS);
             Ok(())

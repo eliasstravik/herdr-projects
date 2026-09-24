@@ -35,7 +35,7 @@ fn alive_panes(project: &Project, view: &SessionView) -> Vec<(String, String, St
 }
 
 /// Closes the open workspaces of local threads, then the project's own.
-/// Never `--group`: the plugin never closes a repository's primary workspace,
+/// Never `--group`: archive never closes a repository's primary workspace,
 /// and Herdr's refusal (`workspace_group_close_required`) is reported.
 fn close_workspaces(project: &Project, view: &SessionView) -> Vec<String> {
     let mut notes = Vec::new();

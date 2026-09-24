@@ -155,6 +155,34 @@ pub struct Pane {
     /// Stable across pane moves; restarts with the server.
     #[serde(default)]
     pub terminal_id: String,
+    #[serde(default)]
+    pub focused: bool,
+}
+
+/// A Space as `workspace list` shows it.
+#[derive(Debug, Clone, Deserialize, PartialEq, Default)]
+pub struct Workspace {
+    pub workspace_id: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub focused: bool,
+    #[serde(default)]
+    pub pane_count: usize,
+    #[serde(default)]
+    pub worktree: Option<WorkspaceWorktree>,
+}
+
+/// The git checkout herdr groups a Space under. A repository's primary Space
+/// (the "parent" herdr makes or reuses for its worktrees) is not linked.
+#[derive(Debug, Clone, Deserialize, PartialEq, Default)]
+pub struct WorkspaceWorktree {
+    #[serde(default)]
+    pub repo_key: String,
+    #[serde(default)]
+    pub checkout_path: String,
+    #[serde(default)]
+    pub is_linked_worktree: bool,
 }
 
 /// The native session reference an official integration reported.
@@ -273,6 +301,24 @@ impl<'a> Herdr<'a> {
 
     pub fn agent_list(&self) -> Result<Vec<Agent>, HerdrError> {
         self.call_as(&["agent", "list"], "agents")
+    }
+
+    pub fn workspace_list(&self) -> Result<Vec<Workspace>, HerdrError> {
+        self.call_as(&["workspace", "list"], "workspaces")
+    }
+
+    /// True when the pane's shell is its foreground process: nothing runs in
+    /// it. Unknown (no shell pid, an error) counts as busy.
+    pub fn pane_idle_shell(&self, pane: &str) -> bool {
+        let Ok(result) = self.call(&["pane", "process-info", "--pane", pane], CALL_TIMEOUT) else {
+            return false;
+        };
+        let info = &result["process_info"];
+        let Some(shell) = info["shell_pid"].as_u64() else {
+            return false;
+        };
+        info["foreground_process_group_id"].as_u64() == Some(shell)
+            && info["foreground_processes"].as_array().is_some_and(|all| all.iter().all(|p| p["pid"].as_u64() == Some(shell)))
     }
 
     fn created(result: &serde_json::Value) -> Result<Created, HerdrError> {
