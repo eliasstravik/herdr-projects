@@ -41,7 +41,7 @@ jobs:
             runs: true
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ env.TAG }}
           fetch-depth: 0
@@ -79,7 +79,7 @@ jobs:
             *) echo "::error::expected herdr-projects ${TAG#v}"; exit 1 ;;
           esac
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: herdr-projects-${{ matrix.target }}
           path: dist/herdr-projects-${{ matrix.target }}
@@ -97,7 +97,7 @@ jobs:
         herdr-projects-aarch64-unknown-linux-musl
         herdr-projects-x86_64-unknown-linux-musl
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

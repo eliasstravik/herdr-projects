@@ -2,6 +2,7 @@
 
 use std::fmt::Write as _;
 use std::io::{BufRead, IsTerminal, Write as _};
+use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
 
@@ -10,28 +11,56 @@ use crate::project::{self, Project, Status};
 use crate::thread::{self, Group};
 use crate::threads::{self, Row};
 
-/// The project a herdr workspace belongs to: the coordinator's workspace or a
-/// local thread's recorded workspace, and only among projects whose recorded
-/// socket is the current one (workspace ids repeat across sessions).
+/// The project a herdr workspace belongs to, only among projects whose
+/// recorded socket is the current one (workspace ids repeat across sessions).
+/// First by where the workspace's panes work (the focused pane first): in the
+/// project folder or in an open thread's worktree. Recorded ids go stale when
+/// a coordinator is reopened or started elsewhere, so they come second: the
+/// coordinator's workspace, a live coordinator's, or an open local thread's.
 pub fn project_for_workspace(ctx: &Ctx, workspace_id: &str, socket: &str) -> Option<String> {
     if workspace_id.is_empty() || socket.is_empty() {
         return None;
     }
-    project::list_slugs(&ctx.root).into_iter().find(|slug| {
-        let Ok(project) = Project::load(&ctx.root, slug) else {
-            return false;
-        };
-        let Some(record) = project.coordinator() else {
-            return false;
-        };
-        if record.socket != socket || project.status() == Status::Archived {
-            return false;
+    let projects: Vec<(Project, crate::project::Coordinator)> = project::list_slugs(&ctx.root)
+        .into_iter()
+        .filter_map(|slug| Project::load(&ctx.root, &slug).ok())
+        .filter(|p| p.status() != Status::Archived)
+        .filter_map(|p| p.coordinator().filter(|r| r.socket == socket).map(|r| (p, r)))
+        .collect();
+    if projects.is_empty() {
+        return None;
+    }
+    let herdr = crate::herdr::Herdr::new(ctx.env.herdr_bin(), socket, ctx.runner);
+    let mut panes: Vec<crate::herdr::Pane> = herdr.pane_list().unwrap_or_default().into_iter().filter(|p| p.workspace_id == workspace_id).collect();
+    let focused = ctx.env.var("HERDR_PANE_ID").unwrap_or("");
+    panes.sort_by_key(|p| p.pane_id != focused);
+    let open_threads = |project: &Project| thread::list(project).into_iter().filter(|t| !t.is_remote() && t.status != thread::Status::Resolved).collect::<Vec<_>>();
+    for pane in &panes {
+        for dir in [&pane.foreground_cwd, &pane.cwd].into_iter().filter(|d| !d.is_empty()) {
+            let dir = Path::new(dir);
+            let found = projects.iter().find(|(project, record)| {
+                let home = if record.cwd.is_empty() { project.canonical_dir() } else { PathBuf::from(&record.cwd) };
+                dir.starts_with(&home) || open_threads(project).iter().any(|t| t.kind == thread::Kind::Worktree && !t.worktree_path.is_empty() && dir.starts_with(canonical(&t.worktree_path)))
+            });
+            if let Some((project, _)) = found {
+                return Some(project.slug.clone());
+            }
         }
-        record.workspace_id == workspace_id
-            || thread::list(&project).iter().any(|t| {
-                !t.is_remote() && t.status != thread::Status::Resolved && t.workspace_id == workspace_id
-            })
-    })
+    }
+    projects
+        .iter()
+        .find(|(project, record)| {
+            record.workspace_id == workspace_id
+                || crate::coordinator::live(project).iter().any(|c| c.workspace_id == workspace_id)
+                || open_threads(project).iter().any(|t| t.workspace_id == workspace_id)
+        })
+        .map(|(project, _)| project.slug.clone())
+}
+
+/// The path with symlinks resolved when it exists (herdr reports physical
+/// working directories).
+fn canonical(path: &str) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path))
 }
 
 /// The current workspace's project, without asking.
@@ -242,6 +271,60 @@ mod tests {
         assert_eq!(project_for_workspace(&ctx, "w7", &b_socket), None);
         assert_eq!(project_for_workspace(&ctx, "w9", &a_socket), None);
         assert_eq!(project_for_workspace(&ctx, "", &a_socket), None);
+    }
+
+    #[test]
+    fn workspace_resolves_by_where_its_panes_work_when_recorded_ids_are_stale() {
+        let world = World::new();
+        let alpha = world.project("alpha", "a.sock");
+        world.project("beta", "a.sock");
+        let worktree = world.home.path().join("wt");
+        std::fs::create_dir_all(&worktree).unwrap();
+        let worktree = worktree.canonicalize().unwrap();
+        // The thread record still says w2; its worktree workspace is now w8.
+        world.thread(&alpha, &worktree, |_| {});
+        let socket = alpha.coordinator().unwrap().socket;
+        let home = alpha.canonical_dir().to_string_lossy().into_owned();
+        let sub = alpha.canonical_dir().join("threads").to_string_lossy().into_owned();
+        // The coordinator was reopened in w5 (the record still says w1, which
+        // beta also records), a shell in w6 works elsewhere.
+        *world.panes.borrow_mut() = format!(
+            "[{},{},{},{},{}]",
+            crate::scenarios::pane_json("w5", "w5:t1", "w5:p1", "/elsewhere"),
+            crate::scenarios::pane_json("w5", "w5:t1", "w5:p2", &home),
+            crate::scenarios::pane_json("w8", "w8:t1", "w8:p1", &worktree.to_string_lossy()),
+            crate::scenarios::pane_json("w6", "w6:t1", "w6:p1", "/elsewhere"),
+            crate::scenarios::pane_json("w9", "w9:t1", "w9:p1", &sub),
+        );
+        let ctx = world.ctx();
+        assert_eq!(project_for_workspace(&ctx, "w5", &socket).as_deref(), Some("alpha"));
+        assert_eq!(project_for_workspace(&ctx, "w8", &socket).as_deref(), Some("alpha"));
+        assert_eq!(project_for_workspace(&ctx, "w9", &socket).as_deref(), Some("alpha"));
+        assert_eq!(project_for_workspace(&ctx, "w6", &socket), None);
+        // w1 has no panes listed: the recorded ids decide (alpha lists first).
+        assert_eq!(project_for_workspace(&ctx, "w1", &socket).as_deref(), Some("alpha"));
+
+        // A live coordinator the ticker saw in w4 counts too.
+        let beta = Project::load(&world.root, "beta").unwrap();
+        crate::coordinator::save_live(&beta, &[crate::coordinator::LivePane { pane_id: "w4:p1".into(), workspace_id: "w4".into(), ..Default::default() }]).unwrap();
+        assert_eq!(project_for_workspace(&ctx, "w4", &socket).as_deref(), Some("beta"));
+    }
+
+    #[test]
+    fn the_focused_pane_decides_between_two_projects_in_one_workspace() {
+        let world = World::new();
+        let alpha = world.project("alpha", "a.sock");
+        let beta = world.project("beta", "a.sock");
+        let socket = alpha.coordinator().unwrap().socket;
+        *world.panes.borrow_mut() = format!(
+            "[{},{}]",
+            crate::scenarios::pane_json("w5", "w5:t1", "w5:p1", &alpha.canonical_dir().to_string_lossy()),
+            crate::scenarios::pane_json("w5", "w5:t1", "w5:p2", &beta.canonical_dir().to_string_lossy()),
+        );
+        let env = crate::paths::Env::for_test(world.home.path(), &[("HERDR_PANE_ID", "w5:p2")]);
+        let ctx = Ctx { env: &env, ..world.ctx() };
+        assert_eq!(project_for_workspace(&ctx, "w5", &socket).as_deref(), Some("beta"));
+        assert_eq!(project_for_workspace(&world.ctx(), "w5", &socket).as_deref(), Some("alpha"));
     }
 
     #[test]

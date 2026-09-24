@@ -251,6 +251,25 @@ mod tests {
     }
 
     #[test]
+    fn the_popup_opens_scoped_to_the_focused_workspaces_project_and_on_all_projects_elsewhere() {
+        let world = World::new();
+        let project = world.project("demo", "a.sock");
+        world.runner.on("plugin pane open", ok(r#"{"result":{"type":"ok"}}"#));
+        // The coordinator was reopened in w9; the record still says w1.
+        *world.panes.borrow_mut() = format!("[{}]", crate::scenarios::pane_json("w9", "w9:t1", "w9:p1", &project.canonical_dir().to_string_lossy()));
+        let inside = plugin_env(&world, &[("HERDR_WORKSPACE_ID", "w9"), ("HERDR_PANE_ID", "w9:p1")]);
+        let ctx = Ctx { env: &inside, ..world.ctx() };
+        run_action(&ctx, "open-popup").unwrap();
+        let handoff = read_handoff(&ctx);
+        assert_eq!((handoff.slug.as_str(), handoff.workspace_id.as_str()), ("demo", "w9"));
+
+        let outside = plugin_env(&world, &[("HERDR_WORKSPACE_ID", "w3")]);
+        let ctx = Ctx { env: &outside, ..world.ctx() };
+        run_action(&ctx, "open-popup").unwrap();
+        assert_eq!(read_handoff(&ctx).slug, "");
+    }
+
+    #[test]
     fn adopt_workspace_captures_the_pane_in_the_action_and_refuses_without_an_agent() {
         let world = World::new();
         world.runner.on("plugin pane open", ok(r#"{"result":{"type":"ok"}}"#));
