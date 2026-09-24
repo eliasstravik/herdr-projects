@@ -51,7 +51,7 @@ Agents report their own progress, so a thread that asked you something shows `ne
 <table>
 <tr>
 <td align="center" valign="top" width="33%"><h3>1️⃣</h3><b>Install and configure</b><br /><sub>Run <code>herdr plugin install eliasstravik/herdr-projects</code>, then <code>herdr-projects configure</code> once for the sidebar rows, the popup key and the progress hooks.</sub></td>
-<td align="center" valign="top" width="33%"><h3>2️⃣</h3><b>Create and open a project</b><br /><sub>Run the <b>Projects: new project</b> action, or <code>herdr-projects new "Billing" --repo ~/dev/app</code> then <code>herdr-projects open billing</code>. A coordinator agent starts in the project's folder and primes itself from its <code>AGENTS.md</code>.</sub></td>
+<td align="center" valign="top" width="33%"><h3>2️⃣</h3><b>Create and open a project</b><br /><sub>Run <code>herdr plugin action invoke new --plugin herdr-projects</code>, or <code>herdr-projects new "Billing" --repo ~/dev/app</code> then <code>herdr-projects open billing</code>. A coordinator agent starts in the project's folder and primes itself from its <code>AGENTS.md</code>.</sub></td>
 <td align="center" valign="top" width="33%"><h3>3️⃣</h3><b>Tell it what you want</b><br /><sub>Describe the work in the coordinator's pane. It suggests threads, you say go ahead, and the sidebar shows each thread's state as it works.</sub></td>
 </tr>
 </table>
@@ -123,7 +123,7 @@ In `~/.herdr-projects/<name>/` by default: `PROJECT.md` for your settings and st
 
 ### Do I have to start every thread through the coordinator?
 
-No. Run `herdr-projects thread start` yourself, or take an agent pane you already started and make it a thread with `thread adopt`. The **Projects: continue this workspace as a project** action turns the workspace you're in into a project with its agent as the first thread.
+No. Run `herdr-projects thread start` yourself, or take an agent pane you already started and make it a thread with `thread adopt`. The `herdr-projects adopt-workspace` command turns the workspace you're in into a project with its agent as the first thread.
 
 ### What if the safety settings aren't enough?
 
