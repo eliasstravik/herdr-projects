@@ -415,6 +415,32 @@ fn resolving_a_merged_thread_removes_worktree_and_branch_and_an_unmerged_one_kee
 }
 
 #[test]
+fn resolving_the_last_thread_closes_its_empty_repo_space() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let repo = world.home.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    let repo = repo.to_string_lossy().into_owned();
+    let r = repo.clone();
+    world.thread(&project, world.home.path(), |t| {
+        t.repo = r;
+        t.repo_workspace = "w9".into();
+    });
+    let cwd = world.home.path().to_string_lossy().into_owned();
+    *world.panes.borrow_mut() = format!("[{},{}]", pane_json("w2", "w2:t1", "w2:p1", &cwd), pane_json("w9", "w9:t1", "w9:p1", &repo));
+    world.runner.on("worktree remove", ok(r#"{"result":{}}"#));
+    // After the removal herdr lists only the repository's primary Space.
+    world.runner.on("workspace list", ok(&format!(r#"{{"result":{{"workspaces":[{{"workspace_id":"w9","label":"repo","pane_count":1,"worktree":{{"repo_key":"{repo}/.git","checkout_path":"{repo}","is_linked_worktree":false}}}}]}}}}"#)));
+    world.runner.on("process-info", ok(r#"{"result":{"process_info":{"shell_pid":7,"foreground_process_group_id":7,"foreground_processes":[{"pid":7,"name":"zsh"}]}}}"#));
+    world.runner.on("workspace close", ok(r#"{"result":{}}"#));
+    threads::resolve(&world.ctx(), "demo", "t-0001", &ResolveArgs::default()).unwrap();
+    assert_eq!(world.runner.count("worktree remove --workspace w2"), 1);
+    assert_eq!(world.runner.count("workspace close w9"), 1);
+    let item = inbox::unhandled(&project).into_iter().find(|i| i.kind == "space").unwrap();
+    assert_eq!(item.summary, "closed empty Space repo (w9)");
+}
+
+#[test]
 fn a_merged_branch_with_a_later_local_commit_is_kept() {
     let world = World::new();
     let project = world.project("demo", "a.sock");

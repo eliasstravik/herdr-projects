@@ -71,6 +71,9 @@ pub struct Thread {
     pub worktree_path: String,
     pub thread_dir: String,
     pub workspace_id: String,
+    /// The repository's primary Space herdr grouped this worktree under
+    /// (made or reused by `worktree create`); closed once nothing uses it.
+    pub repo_workspace: String,
     pub tab_id: String,
     pub pane_id: String,
     pub agent: String,

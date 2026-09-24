@@ -23,6 +23,7 @@ mod scenarios;
 mod settings;
 mod setup;
 mod sidebar;
+mod spaces;
 mod steps;
 mod sweep;
 mod thread;
