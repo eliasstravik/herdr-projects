@@ -24,19 +24,6 @@ pub const KEYS: [(&str, &str); 10] = [
     ("repos.remove", "PATH"),
 ];
 
-/// What `safety show` prints for a project.
-pub fn safety_text(ctx: &Ctx, project: &Project) -> Result<String> {
-    let mut text = crate::safety::show_text(ctx, &crate::safety::Target::Project(project.clone()))?;
-    let safety = project.safety(&ctx.config_dir)?;
-    let config = crate::profiles::load(&ctx.config_dir)?;
-    for role in [crate::profiles::Role::Thread, crate::profiles::Role::Coordinator] {
-        let list = config.allowed(&safety, role).map(|l| if l.is_empty() { "none".to_string() } else { l.join(", ") }).unwrap_or_else(|| "every profile".into());
-        text.push_str(&format!("  {:<24} {list}\n", role.list_key()));
-    }
-    text.push_str(&format!("Profiles and their allow-lists: `herdr-projects profile list --project {}`; a person changes them in the popup's settings or with `profile add|edit|remove|allow` at a terminal.\n", project.slug));
-    Ok(text)
-}
-
 /// Splits `+++` front matter from the rest, keeping both verbatim.
 fn split(text: &str) -> Result<(&str, &str)> {
     let rest = text.strip_prefix("+++\n").context("the file must start with a `+++` line")?;

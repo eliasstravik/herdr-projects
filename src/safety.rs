@@ -293,6 +293,16 @@ pub fn show_text(ctx: &Ctx, target: &Target) -> Result<String> {
     let kinds: Vec<&str> = kinds.iter().map(String::as_str).collect();
     out.push_str(&format!("\nYolo starts threads without asking and adds each harness's flag ({}).\n", flags_text(&kinds).join("; ")));
     out.push_str("Routine commands are not part of yolo: they stay off until you turn them on and approve each one.\n");
+    if let Target::Project(project) = target {
+        let safety = project.safety(&ctx.config_dir)?;
+        let config = crate::profiles::load(&ctx.config_dir)?;
+        out.push_str("\n");
+        for role in [crate::profiles::Role::Thread, crate::profiles::Role::Coordinator] {
+            let list = config.allowed(&safety, role).map(|l| if l.is_empty() { "none".to_string() } else { l.join(", ") }).unwrap_or_else(|| "every profile".into());
+            out.push_str(&format!("  {:<24} {list}\n", role.list_key()));
+        }
+        out.push_str(&format!("Profiles and these lists: `herdr-projects profile list --project {}`; you change them in the popup's settings or with `profile add|edit|remove|allow`.\n", project.slug));
+    }
     let word = target.word();
     out.push_str(&format!(
         "\nChange them in the projects popup (settings: Y toggles yolo, ↵ edits a row) or in a terminal:\n  herdr-projects safety yolo {word} on|off|default\n  herdr-projects safety set {word} <key> <value>|default\n"

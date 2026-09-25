@@ -1768,7 +1768,7 @@ mod tests {
         }
         key(&mut popup, KeyCode::Char(' '));
         key(&mut popup, KeyCode::Enter);
-        assert_eq!(crate::profiles::load(&ctx.config_dir).unwrap().defaults.thread_profiles, Some(vec!["deep".to_string()]));
+        assert_eq!(project::load_safety(&ctx.config_dir, Path::new("")).unwrap().thread_profiles, Some(vec!["deep".to_string()]));
     }
 
     #[test]
