@@ -49,7 +49,7 @@ impl Section {
             Section::Tasks => "↵ jump  d delegate  m done  D drop",
             Section::Inbox => "↵ detail  a done",
             Section::Routines => "↵ toggle  i prompt",
-            Section::Settings => "↵ edit  p pause/resume  A archive  X delete",
+            Section::Settings => "↵ edit  Y yolo  p pause/resume  A archive  X delete",
             Section::Memory => "↵ read",
         }
     }
@@ -93,6 +93,8 @@ pub enum RowKind {
     Inbox { slug: String, id: String, body: String },
     Routine { slug: String, name: String, prompt: String },
     Setting { slug: String, key: String, value: String },
+    /// A safety setting of a project, or of all projects (`slug` None).
+    Safety { slug: Option<String>, key: String, value: String },
     Project { slug: String },
     Memory { path: PathBuf },
 }
@@ -457,6 +459,37 @@ pub fn build(root: &Path, section: Section, scope: Option<&str>) -> Vec<Row> {
     rows
 }
 
+/// The settings tab's safety block for `scope`, or the all-projects defaults.
+pub fn safety_rows(ctx: &Ctx, scope: Option<&str>) -> Vec<Row> {
+    let target = match scope {
+        None => crate::safety::Target::Global,
+        Some(slug) => match Project::load(&ctx.root, slug) {
+            Ok(project) => crate::safety::Target::Project(project),
+            Err(_) => return Vec::new(),
+        },
+    };
+    let mut rows = vec![header(match scope {
+        None => "safety · all projects (yours; no agent can change it; running agents keep theirs until restarted)",
+        Some(_) => "safety (yours; no agent can change it; running agents keep theirs until restarted)",
+    })];
+    match crate::safety::rows(&ctx.config_dir, &target) {
+        Ok(list) => {
+            for r in list {
+                let label = if r.key == "yolo" { "yolo mode (Y)" } else { r.key };
+                let yolo_on = r.key == "yolo" && r.value == "on";
+                rows.push(Row {
+                    header: false,
+                    text: format!("  {label:<22} {}  · {}", r.text(), r.source),
+                    color: yolo_on.then_some(Color::Yellow),
+                    kind: RowKind::Safety { slug: scope.map(str::to_string), key: r.key.to_string(), value: r.value },
+                });
+            }
+        }
+        Err(error) => rows.push(Row { header: false, text: format!("  config error: {error:#}"), color: Some(Color::Red), kind: RowKind::None }),
+    }
+    rows
+}
+
 trait OrDefault {
     fn unwrap_or_default_settings(self) -> (project::Settings, String);
 }
@@ -510,6 +543,9 @@ impl<'a> Popup<'a> {
 
     fn reload(&mut self) {
         self.rows = build(&self.ctx.root, SECTIONS[self.section], self.scope.as_deref());
+        if SECTIONS[self.section] == Section::Settings {
+            self.rows.extend(safety_rows(self.ctx, self.scope.as_deref()));
+        }
         if self.rows.get(self.selected).is_none_or(|r| r.header) {
             self.selected = self.rows.iter().position(|r| !r.header).unwrap_or(0).max(self.selected.min(self.rows.len().saturating_sub(1)));
             if self.rows.get(self.selected).is_some_and(|r| r.header) {
@@ -542,7 +578,17 @@ impl<'a> Popup<'a> {
 
     /// Runs this binary with `args` and keeps its last line as the message.
     fn run(&mut self, args: &[String], stdin: Option<&str>) -> bool {
-        let (ok, text) = run_hp(self.ctx, args, stdin);
+        let (ok, text) = match args {
+            // The CLI refuses safety changes without a person at a terminal;
+            // the popup is one, so it writes them here instead.
+            [safety, set, target, key, words @ ..] if safety == "safety" && set == "set" => {
+                match crate::safety::Target::parse(self.ctx, target).and_then(|t| crate::safety::apply(self.ctx, &t, key, words)) {
+                    Ok(text) => (true, text),
+                    Err(error) => (false, format!("error: {error:#}")),
+                }
+            }
+            _ => run_hp(self.ctx, args, stdin),
+        };
         self.message = text;
         self.reload();
         ok
@@ -841,8 +887,50 @@ impl<'a> Popup<'a> {
         }
     }
 
+    /// `Y`: flips yolo for the popup's scope (all projects when unscoped),
+    /// after a y/N question when it turns on.
+    fn yolo_key(&mut self) {
+        let target = self.scope.clone().unwrap_or_else(|| "--global".into());
+        let label = self.scope.clone().unwrap_or_else(|| "all projects".into());
+        let on = safety_rows(self.ctx, self.scope.as_deref()).iter().any(|r| matches!(&r.kind, RowKind::Safety { key, value, .. } if key == "yolo" && value == "on"));
+        let action: Vec<String> = ["safety", "set", &target, "yolo", if on { "off" } else { "on" }].map(String::from).to_vec();
+        if on {
+            self.run(&action, None);
+        } else {
+            self.mode = Mode::Confirm { question: format!("Yolo for {label}? Threads start without asking; agents run with no permission prompts. y/N"), action, lines: Vec::new() };
+        }
+    }
+
     fn settings_key(&mut self, key: KeyEvent) {
+        if key.code == KeyCode::Char('Y') {
+            self.yolo_key();
+            return;
+        }
         match self.current().map(|r| r.kind.clone()) {
+            Some(RowKind::Safety { slug, key: name, value }) => {
+                if key.code == KeyCode::Enter {
+                    let target = slug.clone().unwrap_or_else(|| "--global".into());
+                    let action = vec!["safety".to_string(), "set".into(), target, name.clone()];
+                    let pick = |options: &[&str]| {
+                        let mut options: Vec<String> = options.iter().map(|o| o.to_string()).collect();
+                        if slug.is_some() {
+                            options.push("default".into());
+                        }
+                        let mut action = action.clone();
+                        action.push("{}".into());
+                        Mode::Pick { label: format!("{name} (default: use the all-projects value)"), options, selected: 0, action }
+                    };
+                    self.mode = match name.as_str() {
+                        "yolo" | "routine_commands" if value == "on" => pick(&["off", "on"]),
+                        "yolo" | "routine_commands" => pick(&["on", "off"]),
+                        "start_threads" if value == "auto" => pick(&["propose", "auto"]),
+                        "start_threads" => pick(&["auto", "propose"]),
+                        _ => Mode::Edit { label: format!("{name} (space-separated; empty for none)"), buffer: if value == "(none)" { String::new() } else { value }, action },
+                    };
+                } else if let Some(slug) = slug {
+                    self.project_key(key, &slug);
+                }
+            }
             Some(RowKind::Project { slug }) => {
                 if key.code == KeyCode::Enter {
                     self.scope = Some(slug);
@@ -1379,6 +1467,51 @@ mod tests {
         popup.reload();
         key(&mut popup, KeyCode::Enter);
         assert_eq!(popup.scope.as_deref(), Some("alpha"));
+    }
+
+    #[test]
+    fn yolo_toggles_from_the_settings_tab_per_project_and_for_all_projects() {
+        let world = crate::scenarios::World::new();
+        let alpha = world.project("alpha", "a.sock");
+        let beta = world.project("beta", "a.sock");
+        let ctx = world.ctx();
+        let yolo = |p: &Project| p.safety(&ctx.config_dir).unwrap().yolo;
+        let mut popup = Popup::new(&ctx, Some("alpha".into()), String::new());
+        let key = |popup: &mut Popup, code| popup.key(KeyEvent::new(code, KeyModifiers::NONE));
+        popup.section = SECTIONS.iter().position(|s| *s == Section::Settings).unwrap();
+        popup.reload();
+        assert!(popup.rows.iter().any(|r| r.header && r.text.starts_with("safety")));
+        // Y asks before turning yolo on; n leaves it off.
+        key(&mut popup, KeyCode::Char('Y'));
+        assert!(matches!(&popup.mode, Mode::Confirm { question, .. } if question.starts_with("Yolo for alpha?")));
+        key(&mut popup, KeyCode::Char('n'));
+        assert!(!yolo(&alpha));
+        key(&mut popup, KeyCode::Char('Y'));
+        key(&mut popup, KeyCode::Char('y'));
+        assert!(yolo(&alpha) && !yolo(&beta), "only alpha");
+        assert!(popup.message.contains("restarted"), "{}", popup.message);
+        assert_eq!(alpha.safety(&ctx.config_dir).unwrap().start_threads, "auto");
+        // Turning it off needs no question.
+        key(&mut popup, KeyCode::Char('Y'));
+        assert!(matches!(popup.mode, Mode::List) && !yolo(&alpha));
+
+        // Unscoped, the rows are the all-projects defaults: ↵ on yolo picks.
+        popup.scope = None;
+        popup.reload();
+        popup.selected = popup.rows.iter().position(|r| matches!(&r.kind, RowKind::Safety { slug: None, key, .. } if key == "yolo")).unwrap();
+        key(&mut popup, KeyCode::Enter);
+        assert!(matches!(&popup.mode, Mode::Pick { options, .. } if options == &["on", "off"]));
+        key(&mut popup, KeyCode::Enter);
+        assert!(yolo(&beta), "beta inherits the default");
+        assert!(!yolo(&alpha), "alpha keeps its own off");
+        // An argument row edits as text; empty means none.
+        popup.selected = popup.rows.iter().position(|r| matches!(&r.kind, RowKind::Safety { key, .. } if key == "thread_agent_args")).unwrap();
+        key(&mut popup, KeyCode::Enter);
+        for c in "--x".chars() {
+            key(&mut popup, KeyCode::Char(c));
+        }
+        key(&mut popup, KeyCode::Enter);
+        assert_eq!(beta.safety(&ctx.config_dir).unwrap().thread_agent_args, ["--x"]);
     }
 
     #[test]

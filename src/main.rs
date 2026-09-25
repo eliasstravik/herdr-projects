@@ -18,6 +18,7 @@ mod project;
 mod remote;
 mod routine;
 mod runner;
+mod safety;
 #[cfg(test)]
 mod scenarios;
 mod settings;

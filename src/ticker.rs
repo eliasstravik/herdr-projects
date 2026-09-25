@@ -622,6 +622,7 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
             }
             let mut args = safety.thread_agent_args.clone();
             args.extend(model);
+            let args = safety.launch_args(&t.agent, &args);
             herdr.on_machine(&t.machine).agent_start(&t.agent_name, &t.agent, &t.pane_id, &args)?;
             Ok(())
         })();
