@@ -289,9 +289,76 @@ pub fn describe_change(old: Option<&Summary>, new: &Summary) -> String {
     parts.join("; ")
 }
 
+/// Pull requests a report names, per `owner/repo`: full pull request URLs,
+/// and `#N` for the `origin` repository. `except` (the thread's tracked pull
+/// request) is left out. Issue numbers come along too; the caller only counts
+/// numbers GitHub lists as open pull requests.
+pub fn report_refs(report: &str, origin: &str, except: &str) -> std::collections::BTreeMap<String, std::collections::BTreeSet<u32>> {
+    let mut refs: std::collections::BTreeMap<String, std::collections::BTreeSet<u32>> = Default::default();
+    let own = normalize_origin(origin);
+    let chars: Vec<char> = report.chars().collect();
+    for (i, c) in chars.iter().enumerate() {
+        if *c == '#' {
+            let before = i.checked_sub(1).map(|j| chars[j]);
+            if before.is_some_and(|b| b.is_alphanumeric() || matches!(b, '/' | '-' | '_' | '.' | '&')) {
+                continue; // `repo#12`, an anchor, an entity
+            }
+            let digits: String = chars[i + 1..].iter().take_while(|d| d.is_ascii_digit()).collect();
+            if let (Some(repo), Ok(n)) = (&own, digits.parse::<u32>()) {
+                refs.entry(repo.clone()).or_default().insert(n);
+            }
+        }
+    }
+    for word in report.split(|c: char| c.is_whitespace() || matches!(c, '(' | ')' | '<' | '>' | '[' | ']' | '`' | ',' | ';' | '"')) {
+        let url = word.trim_end_matches(['.', ':', '!', '?']);
+        if !valid_pr_url(url) {
+            continue;
+        }
+        let parts: Vec<&str> = url.trim_start_matches("https://github.com/").split('/').collect();
+        if let Ok(n) = parts[3].parse::<u32>() {
+            refs.entry(format!("{}/{}", parts[0], parts[1]).to_lowercase()).or_default().insert(n);
+        }
+    }
+    if valid_pr_url(except) {
+        let parts: Vec<&str> = except.trim_start_matches("https://github.com/").split('/').collect();
+        let repo = format!("{}/{}", parts[0], parts[1]).to_lowercase();
+        if let (Some(set), Ok(n)) = (refs.get_mut(&repo), parts[3].parse::<u32>()) {
+            set.remove(&n);
+        }
+    }
+    refs.retain(|_, set| !set.is_empty());
+    refs
+}
+
+/// Numbers of the open pull requests in `repo` (`owner/repo`) that the `gh`
+/// user opened. One `gh` call.
+pub fn open_own_numbers(runner: &dyn Runner, repo: &str) -> Result<std::collections::BTreeSet<u32>> {
+    #[derive(Deserialize)]
+    struct Listed {
+        number: u32,
+    }
+    let out = runner.run(&Cmd::new("gh", GH_TIMEOUT).args(["pr", "list", "--repo", repo, "--state", "open", "--author", "@me", "--limit", "100", "--json", "number"]))?;
+    if !out.success() {
+        bail!("gh pr list: {}", out.error_text());
+    }
+    let listed: Vec<Listed> = serde_json::from_str(&out.stdout)?;
+    Ok(listed.into_iter().map(|p| p.number).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn report_refs_names_other_pull_requests_only() {
+        let report = "PR: https://github.com/o/app/pull/146\n## Report\n#146 merged. #147 fixes the docs (https://github.com/o/app/pull/147).\n\
+                      Workspace PRs: https://github.com/o/ws/pull/38, and other#29.\n## Next\nMerge #148\n";
+        let refs = report_refs(report, "git@github.com:O/App.git", "https://github.com/o/app/pull/146");
+        assert_eq!(refs.get("o/app").unwrap().iter().copied().collect::<Vec<_>>(), [147, 148]);
+        assert_eq!(refs.get("o/ws").unwrap().iter().copied().collect::<Vec<_>>(), [38]);
+        assert_eq!(refs.len(), 2, "`other#29` names another repository by a short name and is skipped");
+        assert!(report_refs("PR: https://github.com/o/app/pull/1\n## Report\ndone, #1 merged\n", "https://github.com/o/app", "https://github.com/o/app/pull/1").is_empty());
+    }
 
     #[test]
     fn pr_line_validation() {
