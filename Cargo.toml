@@ -1,6 +1,6 @@
 [package]
 name = "herdr-projects"
-version = "0.2.13"
+version = "0.2.14"
 edition = "2024"
 rust-version = "1.89"
 license = "MIT"
