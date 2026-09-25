@@ -137,19 +137,20 @@ The coordinator runs the binary every turn, so allow-list it in your agent by su
   "Bash(<binary> --root <root> thread next:*)",
   "Bash(<binary> --root <root> thread read:*)",
   "Bash(<binary> --root <root> thread brief:*)",
+  "Bash(<binary> --root <root> thread keys:*)",
   "Bash(<binary> --root <root> thread ack:*)",
   "Bash(<binary> --root <root> thread restart:*)"
 ] } }
 ```
 
 - Allow `thread start` only where you've set `start_threads = "auto"`. Left off the list, every thread start meets your agent's own permission prompt.
-- Leave `thread keys` off the list if you want to confirm each answer the coordinator gives in a thread's pane (a trust dialog, a question, a permission prompt). On the list, the coordinator answers them itself by the skill's rules.
+- With `thread keys` on the list, the coordinator answers a thread's trust dialogs, questions and permission prompts itself, by the skill's rules. Remove it to confirm each answer first.
 - Never allow `thread resolve`, `sweep`, `delete`, `archive`, `routine approve`, `configure` or `unconfigure`.
 
 ## What the safety settings do and don't stop
 
 - **They are soft.** Agents have a shell. The guards are the skill text, your agent's permission prompts, keeping `config.toml` and approvals outside every agent's working directory, and `routine approve`, `safety yolo` and `safety set` refusing without a terminal and a typed confirmation. An agent's shell commands have no terminal, so it cannot flip them by running the CLI; one that fakes a terminal (`script`) or edits `config.toml` directly is stopped only by its own permission prompts, which yolo mode turns off.
-- **The coordinator answers threads' prompts.** With `thread keys` it accepts trust dialogs for the thread's own folder and approves plainly in-task permission prompts once, and it asks you about the rest. That is the skill's judgement, not a hard rule; leave `thread keys` off the allow-list to see each one first.
+- **The coordinator answers threads' prompts.** With `thread keys` it accepts trust dialogs for the thread's own folder and approves plainly in-task permission prompts once, and it asks you about the rest. That is the skill's judgement, not a hard rule; take `thread keys` off the allow-list to see each one first.
 - **A thread can impersonate you.** Any thread agent can prompt the coordinator's pane through Herdr. The skill's rule that a go-ahead must name the threads lowers the risk; it does not remove it.
 - **An approved routine command covers the command text only.** `./check.sh` keeps its hash while the script changes.
 - **Prompt injection is reduced, not removed.** No GitHub text reaches a prompt from the plugin, but threads read pull request comments themselves with `gh`, and memory is inlined into every later brief.

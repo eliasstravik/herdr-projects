@@ -107,7 +107,7 @@ The command checks the Herdr version, the tools it calls, the ticker, and each p
 
 ### What permissions does the coordinator need?
 
-It runs the `herdr-projects` binary every turn, so you'll want to allow-list it in your agent **by subcommand, never the bare binary**. Allow reading and steering (`skill`, `context`, `report`, `inbox done`, `thread list`, `thread prompt`, `thread next`, `thread read` and the like) and leave `thread resolve`, `sweep`, `delete`, `routine approve` and `configure` on your agent's normal permission prompt. Leave `thread start` off the list too unless you've set `start_threads = "auto"`: then every thread start is a real confirmation. [Operations](docs/operations.md#the-allow-list-for-your-coordinator) has the exact patterns.
+It runs the `herdr-projects` binary every turn, so you'll want to allow-list it in your agent **by subcommand, never the bare binary**. Allow reading and steering (`skill`, `context`, `report`, `inbox done`, `thread list`, `thread prompt`, `thread next`, `thread read`, `thread keys` and the like) and leave `thread resolve`, `sweep`, `delete`, `routine approve` and `configure` on your agent's normal permission prompt. Leave `thread start` off the list too unless you've set `start_threads = "auto"`: then every thread start is a real confirmation. [Operations](docs/operations.md#the-allow-list-for-your-coordinator) has the exact patterns.
 
 ### Does the plugin send my project to a hosted service?
 
