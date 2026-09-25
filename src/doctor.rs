@@ -177,6 +177,29 @@ fn report(
         }
     }
 
+    // Profiles: config.toml loads, and each project's defaults exist and are
+    // allowed, or its threads and coordinator do not start.
+    match crate::profiles::load(config_dir) {
+        Err(error) => check(&mut out, Some(false), "profiles", format!("{error:#}")),
+        Ok(config) => {
+            let detected = crate::profiles::detect(env);
+            check(&mut out, Some(true), "profiles", format!("{} of yours; built-ins (installed and signed in): {}", config.profiles.len(), if detected.is_empty() { "none".to_string() } else { detected.join(", ") }));
+            for slug in &slugs {
+                let Ok(project) = project::Project::load(root, slug) else {
+                    continue;
+                };
+                let (Ok((settings, _)), Ok(safety)) = (project.read_project_md(), project.safety(config_dir)) else {
+                    continue;
+                };
+                for role in [crate::profiles::Role::Thread, crate::profiles::Role::Coordinator] {
+                    if let Err(error) = crate::profiles::resolve(&config, &safety, &settings, role, None, slug) {
+                        check(&mut out, Some(false), &format!("profiles {slug}"), format!("{} {error:#}", role.default_key()));
+                    }
+                }
+            }
+        }
+    }
+
     // Orphans, as `sweep --dry-run` would list them.
     {
         let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };

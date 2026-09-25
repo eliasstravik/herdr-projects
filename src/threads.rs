@@ -72,13 +72,12 @@ pub struct StartArgs {
     pub title: String,
     pub repo: Option<String>,
     pub machine: Option<String>,
-    /// Herdr agent kind (`--agent`), default `thread_agent` in PROJECT.md.
-    pub agent: Option<String>,
+    /// The profile (`--profile`), default `thread_profile` in PROJECT.md;
+    /// it must be on the project's allow-list.
+    pub profile: Option<String>,
     /// Placement (`--kind worktree|tab|checkout`); default worktree with a
     /// repo, tab without one.
     pub kind: Option<Kind>,
-    /// Extra agent CLI arguments (`--agent-arg`, repeatable): a model flag only.
-    pub agent_args: Vec<String>,
     pub base: Option<String>,
     pub task: String,
 }
@@ -144,19 +143,15 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
         );
     }
 
-    let agent_kind = args.agent.clone().unwrap_or_else(|| settings.thread_agent.clone());
-    if !crate::agents::is_kind(&agent_kind) {
-        bail!("`{agent_kind}` is not a Herdr agent kind; `herdr agent start --help` lists them");
-    }
-    crate::settings::require_model_args(ctx, &project, &agent_kind, &args.agent_args)?;
+    let profile = crate::profiles::for_project(ctx, &project, crate::profiles::Role::Thread, args.profile.as_deref())?;
     let kind = placement(args.kind, !repo.is_empty(), !machine.is_empty())?;
     let record = thread::allocate(&project, |t| {
         t.title = args.title.trim().to_string();
         t.kind = kind;
         t.repo = repo.clone();
         t.machine = machine.clone();
-        t.agent = agent_kind.clone();
-        t.agent_args = args.agent_args.clone();
+        t.agent = profile.agent().to_string();
+        t.profile = profile.name.clone();
         t.base = args.base.clone().unwrap_or_default();
     })?;
     let id = record.id.clone();
@@ -424,33 +419,18 @@ fn lists_for(view: &SessionView, record: &Thread) -> Result<(Vec<Agent>, Vec<Pan
     Ok((herdr.agent_list().map_err(unreachable)?, herdr.pane_list().map_err(unreachable)?))
 }
 
-/// `thread restart [--agent KIND]`: brings a thread back in its pane, worktree
-/// or a new tab, with the same or another harness.
-pub fn restart(ctx: &Ctx, slug: &str, id: &str, agent: Option<&str>, agent_args: Option<Vec<String>>) -> Result<Thread> {
+/// `thread restart [--profile NAME]`: brings a thread back in its pane,
+/// worktree or a new tab, with the same or another profile.
+pub fn restart(ctx: &Ctx, slug: &str, id: &str, profile: Option<&str>) -> Result<Thread> {
     let project = Project::load(&ctx.root, slug)?;
-    if let Some(kind) = agent
-        && !crate::agents::is_kind(kind)
-    {
-        bail!("`{kind}` is not a Herdr agent kind; `herdr agent start --help` lists them");
-    }
-    if let Some(args) = &agent_args {
-        let kind = match agent {
-            Some(kind) => kind.to_string(),
-            None => thread::load(&project, id)?.agent,
-        };
-        crate::settings::require_model_args(ctx, &project, &kind, args)?;
-    }
-    if let Some(kind) = agent {
-        // Another harness: the old arguments (a model flag) no longer apply.
+    if let Some(name) = profile {
+        let profile = crate::profiles::for_project(ctx, &project, crate::profiles::Role::Thread, Some(name))?;
+        // The profile carries the whole setup: old model flags no longer apply.
         thread::update(&project, id, |t| {
-            if t.agent != kind {
-                t.agent_args.clear();
-            }
-            t.agent = kind.to_string();
+            t.agent = profile.agent().to_string();
+            t.profile = profile.name.clone();
+            t.agent_args.clear();
         })?;
-    }
-    if let Some(args) = agent_args {
-        thread::update(&project, id, |t| t.agent_args = args)?;
     }
     let record = thread::load(&project, id)?;
     ticker::start(ctx)?;

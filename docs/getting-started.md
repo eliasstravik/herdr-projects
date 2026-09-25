@@ -57,8 +57,8 @@ herdr-projects open billing
 
 - `open billing --tab` starts it in a new tab of the project's own workspace instead. The plugin's actions and the popup always do that, and so does `open` run outside Herdr.
 - When a coordinator is already running, `open` jumps to it. `open --new` starts another beside it, with a fresh conversation.
-- `open billing --agent codex` starts another agent kind. Any agent you start by hand in that folder is a coordinator too, with no `open` needed, and several can run side by side.
-- `open` resumes the agent's last session when Herdr recorded one for that kind.
+- `open billing --profile codex` starts another agent: every installed, signed-in harness is a profile, and your own profiles (a model, an effort, extra flags) are made in the popup's settings or with `profile add` ([operations](operations.md#agent-profiles)). Any agent you start by hand in that folder is a coordinator too, with no `open` needed, and several can run side by side.
+- `open` resumes the agent's last session when Herdr recorded one for that profile.
 - The first time, your agent may ask whether you trust the folder: answer it in the coordinator's pane.
 
 ## 5. Tell the coordinator what you want
@@ -74,7 +74,7 @@ Everything about the project can be changed in chat: goal, instructions, repos, 
 Each code thread runs in its own worktree workspace on a branch named `hp/<project>/<id>-<title>`; a task with no repository runs as a tab in the project's workspace.
 
 - **The sidebar** shows each thread as `t-0003 · <title>` with a state line under it: `needs you · ~55%` (red), `review · PR #4` (yellow), `working · ~40%`, `working · 12m quiet`, `landing · PR #4`, `idle`. The line after it is the agent's own activity. The project's Space row says `2 need you · 3 working` or `paused`, the tab bar says `projects: 2 need you`, and the agent list is sorted with what needs you first.
-- **The popup** (`prefix+a`) lists threads, tasks, inbox, routines, settings and memory. Every thread report ends with a `## Next` list; press a number to send that line back to the thread, which then does it with its own tools. Other keys jump to a thread, stop it, restart it with another agent, resolve it, open its PR, edit settings, pause or archive the project.
+- **The popup** (`prefix+a`) lists threads, tasks, inbox, routines, settings and memory. Every thread report ends with a `## Next` list; press a number to send that line back to the thread, which then does it with its own tools. Other keys jump to a thread, stop it, restart it with another profile, resolve it, open its PR, edit settings, pause or archive the project.
 - **Notifications** name the project and thread: `Billing · t-0003`, `needs you · blocked` with a sound; a new report or a merge with a softer one. `mute = true` (popup settings) silences a project.
 
 New worktrees are folders your agent hasn't trusted yet, so a code thread usually starts with your agent's trust dialog and shows `needs you` until the coordinator answers it (with `thread keys`) or you do in its pane.

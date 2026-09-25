@@ -76,9 +76,14 @@ pub struct Thread {
     pub repo_workspace: String,
     pub tab_id: String,
     pub pane_id: String,
+    /// The Herdr agent kind: the profile's harness.
     pub agent: String,
-    /// A model flag for the agent CLI at launch (checked again by the ticker),
-    /// appended after the project's `thread_agent_args` safety setting.
+    /// The profile the ticker launches the agent with, checked against the
+    /// project's allow-list again at every launch. Empty on a thread started
+    /// before profiles: it launches as the built-in `agent` plus `agent_args`.
+    pub profile: String,
+    /// Before profiles: a model flag for the agent CLI (checked again by the
+    /// ticker). New threads leave it empty.
     pub agent_args: Vec<String>,
     pub agent_name: String,
     pub cwd: String,

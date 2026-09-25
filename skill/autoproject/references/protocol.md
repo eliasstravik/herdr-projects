@@ -38,7 +38,7 @@ Repo: <absolute repo path>
 Origin: <yes | no | unknown until maker 1 starts>
 Default branch: <branch, from maker 1's record | unknown until maker 1 starts>
 Limits: iterations <max>, streak <limit>, success <criterion | none>
-Roles: maker <thread_agent | kind [model]>, reviewer <thread_agent | kind [model]>
+Roles: maker <thread_profile | profile>, reviewer <thread_profile | profile>
 
 ## Maker brief
 <the Brief: goal, scope, constraints, checks to run, repo context; no evaluation criteria>
@@ -104,7 +104,7 @@ TASK
 ```
 
 - Makers never get `--base`. Reviewers always get `--base <reviewed SHA>`.
-- Role flags are only `--agent <kind>` and `--agent-arg --model --agent-arg <name>`, from the scratch file's `Roles:` line.
+- The only role flag is `--profile <name>`, from the scratch file's `Roles:` line; it must be one `hp context` lists as a thread profile.
 - Success prints one JSON line with the new `id`. Set the step to `maker <id>` or `reviewer <id>`.
 
 A failed start is classified only by what `hp` printed:
@@ -113,7 +113,7 @@ A failed start is classified only by what `hp` printed:
 | --- | --- |
 | `` `<project>` is paused; `thread start` is refused until it is active again `` | Environment: set step `paused` and wait. |
 | `` `<project>` is archived; `thread start` is refused … `` | Environment: stop with reason `project archived`. |
-| `--agent-arg only takes a model flag …` | Environment: stop with reason `agent-arg refused`. |
+| `` profile `<name>` is not allowed … `` or `` there is no profile `<name>` … `` | Environment: stop with reason `profile refused`. |
 | Anything else, including `thread t-NNNN failed to start` | Failure rule: one NOT_BETTER iteration. Never `hp thread restart`. |
 
 ## 4. Maker task and maker-done report

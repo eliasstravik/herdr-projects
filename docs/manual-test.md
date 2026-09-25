@@ -46,7 +46,7 @@ scripts/dev-herdr pane read <pane>                   # read a pane; `pane send-k
 | 3 | `thread start` on a scratch repo: branch `hp/demo/t-0001-*`, record `open`, brief with instructions and memory, report written with no out-of-directory prompt; `git status` shows nothing from `.herdr-project/` | Builder |
 | 3 | Kill the pane, `thread restart` brings it back; forced failure before the worktree exists then `thread restart` creates it; restart of a running thread refuses | Builder, unit (cases a to e) |
 | 3 | Closing the pane of a thread with a report leaves it under Ready for review with `pane closed` | Builder, unit |
-| 3 | `thread start` returns in under a minute; the ticker launches within two ticks; a missing agent binary gives `failed` after three attempts | Builder (1 s; 15 s; `--agent kimi`, not installed), unit |
+| 3 | `thread start` returns in under a minute; the ticker launches within two ticks; a missing agent binary gives `failed` after three attempts | Builder (1 s; 15 s; `--profile kimi`, not installed), unit |
 | 3 | `thread prompt` reaches the thread; the README allow-list suppresses the prompt for the standard-input form | Builder (also a control: an off-list subcommand did prompt) |
 | 3 | `--remove-worktree` refused for a tab thread and for a dirty worktree; with the ticker stopped, a late report survives `resolve --remove-worktree`; a tab thread starts in `threads/<id>/` | Builder, unit |
 | 4 | Two tab threads in one workspace show different `thread` tokens | Builder (`api snapshot`) |

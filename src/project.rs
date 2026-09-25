@@ -125,8 +125,13 @@ pub struct Repo {
 pub struct Settings {
     pub name: String,
     pub goal: String,
-    pub coordinator_agent: String,
-    pub thread_agent: String,
+    /// The profile `open` starts a coordinator with (`coordinator_agent`
+    /// before profiles; a Herdr kind is a built-in profile).
+    #[serde(alias = "coordinator_agent")]
+    pub coordinator_profile: String,
+    /// The profile a thread starts with when none is chosen.
+    #[serde(alias = "thread_agent")]
+    pub thread_profile: String,
     pub max_parallel_threads: u32,
     pub auto_resolve_days: u32,
     pub nudge: bool,
@@ -140,8 +145,8 @@ impl Default for Settings {
         Settings {
             name: String::new(),
             goal: String::new(),
-            coordinator_agent: "claude".into(),
-            thread_agent: "claude".into(),
+            coordinator_profile: "claude".into(),
+            thread_profile: "claude".into(),
             max_parallel_threads: 10,
             auto_resolve_days: 7,
             // On by default (W15): the ticker prompts only a coordinator that
@@ -212,6 +217,9 @@ pub struct Coordinator {
     pub cwd: String,
     /// The Herdr agent kind `open` last started.
     pub agent: String,
+    /// The profile it started with (empty before profiles: the built-in of
+    /// `agent`). A resume or a reuse needs the same profile.
+    pub profile: String,
     /// The last native session id Herdr reported for that kind, for resume.
     pub agent_session: String,
     pub updated: String,
@@ -227,6 +235,9 @@ pub struct Safety {
     /// Yolo mode: threads start without asking and every agent launches with
     /// its harness's skip-permissions flag (`crate::safety::yolo_flags`).
     pub yolo: bool,
+    /// The profiles threads may use; `None`: every profile.
+    pub thread_profiles: Option<Vec<String>>,
+    pub coordinator_profiles: Option<Vec<String>>,
 }
 
 impl Default for Safety {
@@ -237,6 +248,8 @@ impl Default for Safety {
             thread_agent_args: Vec::new(),
             routine_commands: false,
             yolo: false,
+            thread_profiles: None,
+            coordinator_profiles: None,
         }
     }
 }
@@ -266,6 +279,8 @@ pub struct SafetyLayer {
     pub thread_agent_args: Option<Vec<String>>,
     pub routine_commands: Option<bool>,
     pub yolo: Option<bool>,
+    pub thread_profiles: Option<Vec<String>>,
+    pub coordinator_profiles: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -391,6 +406,8 @@ pub fn load_safety(config_dir: &Path, canonical_project_dir: &Path) -> Result<Sa
         thread_agent_args: own.thread_agent_args.or(default.thread_agent_args).unwrap_or_default(),
         routine_commands: own.routine_commands.or(default.routine_commands).unwrap_or(base.routine_commands),
         yolo,
+        thread_profiles: own.thread_profiles.or(default.thread_profiles),
+        coordinator_profiles: own.coordinator_profiles.or(default.coordinator_profiles),
     })
 }
 
@@ -724,7 +741,7 @@ mod tests {
         let (settings, body) = project.read_project_md().unwrap();
         assert_eq!(settings.name, "Demo");
         assert_eq!(settings.goal, "Ship \"it\"");
-        assert_eq!(settings.coordinator_agent, "claude");
+        assert_eq!(settings.coordinator_profile, "claude");
         assert_eq!(settings.max_parallel_threads, 10);
         assert_eq!(settings.auto_resolve_days, 7);
         assert!(settings.nudge);
@@ -787,7 +804,7 @@ mod tests {
             parse_project_md("+++\nname = \"X\"\nnudge = true\n+++\n\nBody\n+++\nmore\n").unwrap();
         assert_eq!(settings.name, "X");
         assert!(settings.nudge);
-        assert_eq!(settings.thread_agent, "claude");
+        assert_eq!(settings.thread_profile, "claude");
         assert_eq!(body, "Body\n+++\nmore\n");
         assert!(parse_project_md("no front matter").is_err());
         assert!(parse_project_md("+++\nname = \n+++\n").is_err());
