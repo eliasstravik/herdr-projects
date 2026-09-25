@@ -505,7 +505,7 @@ fn thread_start_and_open_refuse_agent_args_other_than_a_model_flag() {
         let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, kind: Some(Kind::Tab), agent_args: strings(bad), base: None, task: "t".into() };
         let error = threads::start(&world.ctx(), "demo", args).unwrap_err().to_string();
         assert!(error.contains("--agent-arg only takes a model flag"), "{error}");
-        assert!(error.contains("thread_agent_args = []") && error.contains("[safety."), "the safety table is shown: {error}");
+        assert!(error.contains("thread_agent_args") && error.contains("safety yolo demo on"), "the safety settings are shown: {error}");
         let options = coordinator::OpenOptions { session: Default::default(), rebind: false, agent: None, agent_args: strings(bad), new: true, here: false };
         let error = coordinator::open(&world.ctx(), "demo", &options).unwrap_err().to_string();
         assert!(error.contains("--agent-arg only takes a model flag"), "{error}");
@@ -538,6 +538,28 @@ fn a_stored_launch_flag_is_dropped_at_launch_with_one_item() {
     let items = items_of(&project, "thread-state");
     assert_eq!(items.len(), 1, "one item, not one per attempt");
     assert!(items[0].summary.contains("--dangerously-skip-permissions"), "{}", items[0].summary);
+}
+
+#[test]
+fn yolo_launches_each_thread_with_its_own_harness_flag() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let cwd = world.home.path().to_string_lossy().into_owned();
+    world.thread(&project, world.home.path(), |t| {
+        t.prompt_pending = true;
+        t.agent = "codex".into();
+        t.agent_args = strings(&["-m", "gpt-5.5"]);
+    });
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w2", "w2:t1", "w2:p1", &cwd));
+    world.runner.on("agent start", fail(1, r#"{"error":{"code":"timeout","message":"timed out"}}"#));
+    let ctx = world.ctx();
+    crate::safety::apply(&ctx, &crate::safety::Target::Global, "yolo", &strings(&["on"])).unwrap();
+
+    let _ = ticker::tick_project(&ctx, &project);
+    let call = world.runner.calls.borrow().iter().find(|c| c.display().contains("agent start")).cloned().unwrap();
+    assert!(call.args.ends_with(&strings(&["--", "-m", "gpt-5.5", "--dangerously-bypass-approvals-and-sandbox"])), "{}", call.display());
+    assert!(!call.display().contains("--dangerously-skip-permissions"), "never Claude's flag for Codex: {}", call.display());
+    assert_eq!(thread::load(&project, "t-0001").unwrap().agent_args, ["-m", "gpt-5.5"], "the flag is never stored");
 }
 
 #[test]

@@ -418,8 +418,32 @@ enum RoutineCommand {
 
 #[derive(Subcommand)]
 enum SafetyCommand {
-    /// Print the effective safety settings and the config.toml table to edit
-    Show { slug: String },
+    /// Print the effective safety settings, where each comes from, and how to change them
+    Show {
+        /// A project, or --global for the all-projects defaults
+        #[arg(allow_hyphen_values = true)]
+        target: String,
+    },
+    /// Turn yolo mode on or off for a project or, with --global, for all projects (a person at a terminal only)
+    Yolo {
+        /// A project, or --global for the all-projects default
+        #[arg(allow_hyphen_values = true)]
+        target: String,
+        /// on, off, or default (use the all-projects value)
+        #[arg(value_parser = ["on", "off", "default"])]
+        state: String,
+    },
+    /// Change one safety setting for a project or, with --global, for all projects (a person at a terminal only)
+    Set {
+        /// A project, or --global for the all-projects defaults
+        #[arg(allow_hyphen_values = true)]
+        target: String,
+        /// yolo, start_threads, coordinator_agent_args, thread_agent_args or routine_commands
+        key: String,
+        /// The value (arguments for *_agent_args, none for an empty list), or `default`
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+        value: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -590,11 +614,12 @@ pub fn run() -> Result<()> {
         Command::Action { id } => actions::run_action(&ctx, &id),
         Command::Pane { id } => actions::run_pane(&ctx, &id),
         Command::Safety { command } => match command {
-            SafetyCommand::Show { slug } => {
-                let project = Project::load(&ctx.root, &slug)?;
-                print!("{}", crate::settings::safety_text(&ctx, &project)?);
+            SafetyCommand::Show { target } => {
+                print!("{}", crate::safety::show_text(&ctx, &crate::safety::Target::parse(&ctx, &target)?)?);
                 Ok(())
             }
+            SafetyCommand::Yolo { target, state } => crate::safety::set_cli(&ctx, &target, "yolo", &[state]),
+            SafetyCommand::Set { target, key, value } => crate::safety::set_cli(&ctx, &target, &key, &value),
         },
         Command::Skill => {
             print!("{}", include_str!("../skill/COORDINATOR.md"));

@@ -327,6 +327,7 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
 
     let mut base_args = safety.coordinator_agent_args.clone();
     base_args.extend(options.agent_args.iter().cloned());
+    let base_args = safety.launch_args(&kind, &base_args);
     let mut args = base_args.clone();
     args.extend(resume.iter().cloned());
     if here.is_some() {
@@ -542,8 +543,8 @@ pub fn digest(ctx: &Ctx, project: &Project, prefix: &str) -> Result<(String, Vec
         Ok(safety) => {
             let _ = writeln!(
                 out,
-                "Safety: start_threads={} routine_commands={} thread_agent_args={:?} coordinator_agent_args={:?}",
-                safety.start_threads, safety.routine_commands, safety.thread_agent_args, safety.coordinator_agent_args
+                "Safety: yolo={} start_threads={} routine_commands={} thread_agent_args={:?} coordinator_agent_args={:?}",
+                if safety.yolo { "on" } else { "off" }, safety.start_threads, safety.routine_commands, safety.thread_agent_args, safety.coordinator_agent_args
             );
         }
         Err(error) => {

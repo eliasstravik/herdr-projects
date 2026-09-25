@@ -54,7 +54,7 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 | `thread list/show [--json]`, `thread ack`, `thread adopt` | Look at threads. |
 | `thread resolve [--keep-worktree] [--discard-uncopied] [--skip-copy] [--reopen]` | Final copy home, then clean up. |
 | `sweep <project> [--dry-run] [--yes]` | Remove what nothing uses any more. |
-| `set <project> <key> <value>`, `routine list/toggle/approve`, `safety show` | Settings and routines. |
+| `set <project> <key> <value>`, `routine list/toggle/approve`, `safety show/yolo/set` | Settings, routines and safety (see below). |
 | `pause`, `resume`, `archive`, `unarchive`, `delete [--force]` | Project lifecycle. |
 | `popup [project]`, `focus [project]`, `unfocus`, `overview [project]`, `needs-you --line` | Views. |
 | `configure [--key K] [--hooks-only] [--dry-run]`, `unconfigure`, `report`, `progress` | Sidebar, keys, hooks, the `autoproject` skill, self-reports. |
@@ -84,22 +84,39 @@ Threads idle for `auto_resolve_days` are resolved (and cleaned) after a final co
 | tasks | `↵` jump to the delegated thread · `d` delegate · `m` done · `D` drop (each sends a sentence to the coordinator, which stays the only writer of TASKS.md) |
 | inbox | `↵` detail · `a` done |
 | routines | `↵` enable or disable · `i` the prompt |
-| settings | `↵` edit · `p` pause or resume · `A` archive · `X` delete (asks first) |
+| settings | `↵` edit (also a safety row) · `Y` yolo mode on or off (asks before turning on) · `p` pause or resume · `A` archive · `X` delete (asks first). Unscoped, the rows are the all-projects safety defaults |
 | memory | `↵` read (change memory by asking the coordinator) |
 
 ## Safety settings
 
-Set per project in `~/.config/herdr-projects/config.toml`; `safety show <project>` prints the table header to use.
+They live in `~/.config/herdr-projects/config.toml`, per project and as an all-projects default; a project's own value wins, then the default, then the built-in value. Change them in the popup's settings section (`Y` toggles yolo mode, `↵` edits a row) or in a terminal; `safety show <project>|--global` prints them and where each comes from.
+
+```sh
+herdr-projects safety yolo billing on          # or off, or default (use the all-projects value)
+herdr-projects safety yolo --global on         # every project without its own value
+herdr-projects safety set billing routine_commands on
+herdr-projects safety set billing start_threads default
+```
+
+`safety yolo` and `safety set` refuse unless standard input and output are a terminal, and ask `y/N` before writing. What they write:
 
 ```toml
+[safety.default]                   # all projects
+yolo = true
+
 [safety."/Users/you/.herdr-projects/billing"]
+yolo = false                       # on: threads start without asking, agents skip permission prompts
 start_threads = "propose"          # or "auto": the coordinator starts threads without asking
 coordinator_agent_args = []        # extra arguments for every coordinator's agent CLI
 thread_agent_args = []             # extra arguments for every thread's agent CLI
 routine_commands = false           # true lets approved routines run shell commands
 ```
 
-`--agent-arg` on `open`, `thread start` and `thread restart` is for the model only: `--model NAME` or `--model=NAME` for every harness, plus `-m NAME` for Codex. Anything else is refused with the table above, because the coordinator sets `--agent-arg` and must never be able to widen an agent's powers (`--dangerously-skip-permissions`, `--yolo`). Other launch flags go in `thread_agent_args` and `coordinator_agent_args`, which only you set. The ticker checks a thread's stored arguments again at launch: any that are not a model flag are dropped and reported in one inbox item.
+**Yolo mode** is the one switch for "never stop to ask": `start_threads` becomes `auto` whatever it says, and every coordinator and thread launches with its own harness's skip-permissions flag, added after your `*_agent_args` and a model flag: Claude Code `--dangerously-skip-permissions`, Codex `--dangerously-bypass-approvals-and-sandbox`, Gemini CLI and Qwen Code `--yolo`, Cursor Agent `--force`, OpenCode `--auto`, Copilot CLI `--allow-all-tools`, Amp `--dangerously-allow-all`, Pi nothing (it never asks). Other kinds have no known flag: their agents still ask (`safety show` says so for the project's kinds). Routine commands are not part of yolo mode: a routine command runs with no agent in the loop, so it stays behind `routine_commands` and a per-command approval.
+
+A change reaches agents launched after it. Running agents keep the flags they started with until restarted: `r` on a thread in the popup, or quit the coordinator and `open` it again (it resumes its session). A running coordinator sees a new `start_threads` at its next `context`.
+
+`--agent-arg` on `open`, `thread start` and `thread restart` is for the model only: `--model NAME` or `--model=NAME` for every harness, plus `-m NAME` for Codex. Anything else is refused with the table above, because the coordinator sets `--agent-arg` and must never be able to widen an agent's powers (`--dangerously-skip-permissions`, `--yolo`). Other launch flags go in `thread_agent_args` and `coordinator_agent_args`, and skipping permission prompts is yolo mode; only you set them. The ticker checks a thread's stored arguments again at launch: any that are not a model flag are dropped and reported in one inbox item.
 
 ## The allow-list for your coordinator
 
@@ -127,7 +144,7 @@ The coordinator runs the binary every turn, so allow-list it in your agent by su
 
 ## What the safety settings do and don't stop
 
-- **They are soft.** Agents have a shell. The guards are the skill text, your agent's permission prompts, keeping `config.toml` and approvals outside every agent's working directory, and `routine approve` refusing without a terminal and a typed confirmation.
+- **They are soft.** Agents have a shell. The guards are the skill text, your agent's permission prompts, keeping `config.toml` and approvals outside every agent's working directory, and `routine approve`, `safety yolo` and `safety set` refusing without a terminal and a typed confirmation. An agent's shell commands have no terminal, so it cannot flip them by running the CLI; one that fakes a terminal (`script`) or edits `config.toml` directly is stopped only by its own permission prompts, which yolo mode turns off.
 - **A thread can impersonate you.** Any thread agent can prompt the coordinator's pane through Herdr. The skill's rule that a go-ahead must name the threads lowers the risk; it does not remove it.
 - **An approved routine command covers the command text only.** `./check.sh` keeps its hash while the script changes.
 - **Prompt injection is reduced, not removed.** No GitHub text reaches a prompt from the plugin, but threads read pull request comments themselves with `gh`, and memory is inlined into every later brief.

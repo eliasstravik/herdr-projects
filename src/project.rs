@@ -224,6 +224,9 @@ pub struct Safety {
     pub coordinator_agent_args: Vec<String>,
     pub thread_agent_args: Vec<String>,
     pub routine_commands: bool,
+    /// Yolo mode: threads start without asking and every agent launches with
+    /// its harness's skip-permissions flag (`crate::safety::yolo_flags`).
+    pub yolo: bool,
 }
 
 impl Default for Safety {
@@ -233,8 +236,36 @@ impl Default for Safety {
             coordinator_agent_args: Vec::new(),
             thread_agent_args: Vec::new(),
             routine_commands: false,
+            yolo: false,
         }
     }
+}
+
+impl Safety {
+    /// The launch arguments for an agent of `kind`: the user's own `args`,
+    /// plus the kind's skip-permissions flag in yolo mode (once).
+    pub fn launch_args(&self, kind: &str, args: &[String]) -> Vec<String> {
+        let mut out = args.to_vec();
+        if self.yolo {
+            for flag in crate::safety::yolo_flags(kind).unwrap_or_default() {
+                if !out.iter().any(|a| a == flag) {
+                    out.push(flag.to_string());
+                }
+            }
+        }
+        out
+    }
+}
+
+/// One `[safety.*]` table as written: absent keys fall through to the
+/// all-projects `[safety.default]` table, then to the built-in defaults.
+#[derive(Debug, Clone, Deserialize, Default, PartialEq)]
+pub struct SafetyLayer {
+    pub start_threads: Option<String>,
+    pub coordinator_agent_args: Option<Vec<String>>,
+    pub thread_agent_args: Option<Vec<String>>,
+    pub routine_commands: Option<bool>,
+    pub yolo: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -348,31 +379,52 @@ pub fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
 }
 
 /// The effective safety settings: `[safety."<canonical project path>"]` in
-/// `<config_dir>/config.toml`, with defaults for an absent table or key.
+/// `<config_dir>/config.toml`, then `[safety.default]` for keys it leaves
+/// out, then the built-in defaults. Yolo mode forces `start_threads = "auto"`.
 pub fn load_safety(config_dir: &Path, canonical_project_dir: &Path) -> Result<Safety> {
+    let (default, own) = load_safety_layers(config_dir, canonical_project_dir)?;
+    let base = Safety::default();
+    let yolo = own.yolo.or(default.yolo).unwrap_or(base.yolo);
+    Ok(Safety {
+        start_threads: if yolo { "auto".into() } else { own.start_threads.or(default.start_threads).unwrap_or(base.start_threads) },
+        coordinator_agent_args: own.coordinator_agent_args.or(default.coordinator_agent_args).unwrap_or_default(),
+        thread_agent_args: own.thread_agent_args.or(default.thread_agent_args).unwrap_or_default(),
+        routine_commands: own.routine_commands.or(default.routine_commands).unwrap_or(base.routine_commands),
+        yolo,
+    })
+}
+
+/// The `[safety.default]` table and the project's own table, as written.
+/// `canonical_project_dir` empty reads only the default table.
+pub fn load_safety_layers(config_dir: &Path, canonical_project_dir: &Path) -> Result<(SafetyLayer, SafetyLayer)> {
+    let file = config_dir.join("config.toml");
+    let Ok(text) = std::fs::read_to_string(&file) else {
+        return Ok(Default::default());
+    };
+    load_safety_layers_from(&text, &file.display().to_string(), canonical_project_dir)
+}
+
+/// [`load_safety_layers`] on config.toml's `text`; `file` names it in errors.
+pub fn load_safety_layers_from(text: &str, file: &str, canonical_project_dir: &Path) -> Result<(SafetyLayer, SafetyLayer)> {
     #[derive(Deserialize, Default)]
     struct Config {
         #[serde(default)]
-        safety: std::collections::BTreeMap<String, Safety>,
+        safety: std::collections::BTreeMap<String, SafetyLayer>,
     }
-    let file = config_dir.join("config.toml");
-    let Ok(text) = std::fs::read_to_string(&file) else {
-        return Ok(Safety::default());
-    };
-    let mut config: Config =
-        toml::from_str(&text).with_context(|| format!("{} does not parse", file.display()))?;
-    let safety = config
+    let mut config: Config = toml::from_str(text).with_context(|| format!("{file} does not parse"))?;
+    let default = config.safety.remove(crate::safety::DEFAULT_TABLE).unwrap_or_default();
+    let own = config
         .safety
         .remove(&*canonical_project_dir.to_string_lossy())
         .unwrap_or_default();
-    if !matches!(safety.start_threads.as_str(), "propose" | "auto") {
-        bail!(
-            "{}: start_threads must be \"propose\" or \"auto\", not {:?}",
-            file.display(),
-            safety.start_threads
-        );
+    for layer in [&default, &own] {
+        if let Some(value) = &layer.start_threads
+            && !matches!(value.as_str(), "propose" | "auto")
+        {
+            bail!("{file}: start_threads must be \"propose\" or \"auto\", not {value:?}");
+        }
     }
-    Ok(safety)
+    Ok((default, own))
 }
 
 /// Slugs of the projects in `root`: folders that contain `PROJECT.md`. Entries
@@ -781,6 +833,30 @@ mod tests {
         )
         .unwrap();
         assert!(load_safety(config.path(), here).is_err());
+    }
+
+    #[test]
+    fn the_default_table_fills_keys_a_project_leaves_out_and_yolo_starts_threads() {
+        let config = tempfile::tempdir().unwrap();
+        let here = Path::new("/projects/demo");
+        std::fs::write(
+            config.path().join("config.toml"),
+            "[safety.default]\nyolo = true\nthread_agent_args = [\"--a\"]\n\n[safety.\"/projects/demo\"]\nthread_agent_args = []\nstart_threads = \"propose\"\n",
+        )
+        .unwrap();
+        let safety = load_safety(config.path(), here).unwrap();
+        assert!(safety.yolo, "inherited from the default table");
+        assert_eq!(safety.start_threads, "auto", "yolo wins over propose");
+        assert!(safety.thread_agent_args.is_empty(), "the project's own empty list wins");
+        let other = load_safety(config.path(), Path::new("/projects/other")).unwrap();
+        assert_eq!((other.yolo, other.thread_agent_args), (true, vec!["--a".to_string()]));
+
+        let args = safety.launch_args("claude", &["--model".into(), "opus".into()]);
+        assert_eq!(args, ["--model", "opus", "--dangerously-skip-permissions"]);
+        assert_eq!(safety.launch_args("codex", &[]), ["--dangerously-bypass-approvals-and-sandbox"]);
+        assert_eq!(safety.launch_args("claude", &["--dangerously-skip-permissions".into()]), ["--dangerously-skip-permissions"], "not twice");
+        assert!(safety.launch_args("kiro", &[]).is_empty(), "no known flag: nothing added");
+        assert!(Safety::default().launch_args("claude", &[]).is_empty(), "careful mode adds nothing");
     }
 
     #[test]
