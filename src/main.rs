@@ -16,6 +16,7 @@ mod popup;
 mod pr;
 mod profiles;
 mod progress;
+mod prompt_box;
 mod project;
 mod remote;
 mod routine;

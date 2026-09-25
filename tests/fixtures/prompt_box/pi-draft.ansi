@@ -1,0 +1,14 @@
+[0m[38;2;102;102;102mpi-interview, pi-mcp-adapter, pi-subagents, pi-web-access:dist[0m                                                                           
+
+[0m[38;2;255;255;0m[Skill conflicts][0m                                                                                                                        
+[0m[38;2;255;255;0m  "skill-creator" collision:[0m                                                                                                             
+[0m[38;2;102;102;102m    [0m[38;2;181;189;104m✓[0m auto (user) ~/.pi/agent/skills/skill-creator/SKILL.md                                                                              
+[0m[38;2;102;102;102m    [0m[38;2;255;255;0m✗[0m ~/.agents/skills/synced/example/skill-creator/SKILL.md (skipped) 
+
+
+[0m[38;2;129;162;190m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+y-draft words[0m[7m [0m                                                                                                                           
+[0m[38;2;129;162;190m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+[0m[38;2;102;102;102m/tmp/example/a-rather-long-working-directory-path-that-wraps-across-two-lines-in-the-status-area-of-the-agent-screen-p...[0m
+[0m[38;2;102;102;102m$0.000 (sub) 0.0%/272k (auto)                                                                         (openai-codex) gpt-6-astra • medium[0m
+[0m[38;2;138;190;183m🔌 MCP: 1 server enabled[0m

@@ -730,7 +730,7 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
                         t.id,
                         refused.join(" "),
                     );
-                    inbox::write(project, "thread-state", &t.id, &summary, "")?;
+                    inbox::write(project, "thread-state", &t.id, "launched without some flags", &summary, "")?;
                 }
                 let builtin = config.get(&t.agent).filter(|p| p.builtin).map(|p| crate::profiles::launch_args(&p, &safety.thread_agent_args, &legacy)).unwrap_or_default();
                 (t.agent.clone(), [builtin, model].concat())
@@ -745,7 +745,7 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
                             t.status = thread::Status::Failed;
                             t.error = message.clone();
                         })?;
-                        inbox::write(project, "thread-state", &t.id, &format!("{}: not launched: {message}", t.id), "")?;
+                        inbox::write(project, "thread-state", &t.id, "not launched", &format!("{}: not launched: {message}", t.id), "")?;
                         return Ok(());
                     }
                 };
@@ -834,13 +834,13 @@ fn tick_cheap(ctx: &Ctx, project: &Project, sessions: &mut Sessions) -> Result<O
     // Nudge (or notify) about inbox items `context` has not shown yet.
     if let Ok((settings, _)) = project.read_project_md() {
         let mut state = steps::load_state(project);
-        let before = state.nudged.clone();
-        let target = coordinator::nudge_target(&coordinators, jiff::Timestamp::now());
-        let ready_pane = target.map(|c| c.pane_id.as_str());
-        if let Err(error) = steps::nudge(project, &mut state, &settings, &herdr, ready_pane) {
+        let before = state.clone();
+        let now = jiff::Timestamp::now();
+        let target = coordinator::nudge_target(&coordinators, now);
+        if let Err(error) = steps::nudge(project, &mut state, &settings, &herdr, target, now) {
             first_error = first_error.or(Some(error.context("nudge")));
         }
-        if state.nudged != before {
+        if state != before {
             steps::save_state(project, &state)?;
         }
     }
