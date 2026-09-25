@@ -294,7 +294,7 @@ pub fn tick(ctx: &Ctx, log: &Log, memory: &mut Memory) -> bool {
             continue;
         };
         if project.status() == Status::Paused {
-            mark_paused(ctx, &project);
+            mark_paused(ctx, &project, &mut sessions);
             continue;
         }
         if project.status() != Status::Active {
@@ -304,6 +304,16 @@ pub fn tick(ctx: &Ctx, log: &Log, memory: &mut Memory) -> bool {
             Ok(Some(seen)) => reachable.push((project, seen)),
             Ok(None) => unreachable.push(project),
             Err(error) => log.line(&format!("{slug}: {error:#}")),
+        }
+    }
+    let any_reachable = !reachable.is_empty() || sessions.any_reachable();
+    // One sidebar layout per session, from every project's part.
+    for (socket, parts) in std::mem::take(&mut sessions.parts) {
+        // Only sessions this tick already listed: a paused project alone
+        // costs no call.
+        if let Some(Some((agents, _))) = sessions.lists.get(&socket).cloned() {
+            let herdr = Herdr::new(ctx.env.herdr_bin(), &socket, ctx.runner);
+            crate::grouping::apply(&herdr, &socket, &parts, &agents, &mut memory.grouping);
         }
     }
     for (project, seen) in &reachable {
@@ -317,7 +327,7 @@ pub fn tick(ctx: &Ctx, log: &Log, memory: &mut Memory) -> bool {
             log.line(&format!("{}: {error:#}", project.slug));
         }
     }
-    !reachable.is_empty() || sessions.any_reachable()
+    any_reachable
 }
 
 /// One session's agent and pane lists.
@@ -331,6 +341,8 @@ pub struct Sessions {
     /// default session first, then every other project's recorded socket.
     candidates: Option<Vec<(String, String)>>,
     known: Vec<String>,
+    /// Each session's projects, for the sidebar grouping.
+    parts: std::collections::BTreeMap<String, crate::grouping::Parts>,
 }
 
 impl Sessions {
@@ -343,7 +355,7 @@ impl Sessions {
             .collect();
         known.sort();
         known.dedup();
-        Sessions { lists: Default::default(), candidates: None, known }
+        Sessions { lists: Default::default(), candidates: None, known, parts: Default::default() }
     }
 
     /// `None` when the socket is gone or the session does not answer.
@@ -427,8 +439,9 @@ fn routine_pass(ctx: &Ctx, project: &Project, state: &mut steps::State, coordina
     }
 }
 
-/// A paused project is skipped, but its Space row still says so.
-fn mark_paused(ctx: &Ctx, project: &Project) {
+/// A paused project is skipped, but its Space row still says so, and its
+/// panes keep their place in the sidebar grouping.
+fn mark_paused(ctx: &Ctx, project: &Project, sessions: &mut Sessions) {
     let Some(record) = project.coordinator() else {
         return;
     };
@@ -437,6 +450,39 @@ fn mark_paused(ctx: &Ctx, project: &Project) {
     }
     let herdr = Herdr::new(ctx.env.herdr_bin(), &record.socket, ctx.runner);
     crate::sidebar::report_workspace(&herdr, &record.workspace_id, "paused");
+    let part = part(project, &record, &coordinator::live(project), "paused");
+    sessions.parts.entry(record.socket).or_default().insert(project.slug.clone(), part);
+}
+
+/// A project's agents and Spaces in sidebar order: coordinators, then local
+/// threads by need; the home Space, then each thread's repository Space and
+/// its own.
+fn part(project: &Project, record: &project::Coordinator, coordinators: &[coordinator::LivePane], note: &str) -> crate::grouping::ProjectPart {
+    let slug = &project.slug;
+    let name = project.read_project_md().map(|(s, _)| project::display_name(&s.name, slug)).unwrap_or_else(|_| slug.clone());
+    let threads = open_threads(project, false);
+    let recorded = (!record.pane_id.is_empty()).then(|| record.pane_id.clone());
+    let mut panes: Vec<(String, String)> = Vec::new();
+    for pane in coordinators.iter().map(|c| c.pane_id.clone()).chain(recorded) {
+        if !panes.iter().any(|(p, _)| *p == pane) {
+            panes.push((pane.clone(), crate::grouping::coordinator_key(slug, &pane)));
+        }
+    }
+    for t in &threads {
+        let rank = thread::Group::from_token(&t.last_group).map(thread::Group::rank).unwrap_or(9);
+        if !t.pane_id.is_empty() {
+            panes.push((t.pane_id.clone(), crate::grouping::thread_key(slug, rank, &t.id)));
+        }
+    }
+    let mut spaces: Vec<String> = Vec::new();
+    let home = coordinators.iter().map(|c| c.workspace_id.clone()).chain([record.workspace_id.clone()]);
+    let own = threads.iter().flat_map(|t| [t.repo_workspace.clone(), t.workspace_id.clone()]);
+    for id in home.chain(own) {
+        if !id.is_empty() && !spaces.contains(&id) {
+            spaces.push(id);
+        }
+    }
+    crate::grouping::ProjectPart { name, note: note.to_string(), panes, spaces }
 }
 
 #[cfg(test)]
@@ -704,20 +750,20 @@ fn tick_cheap(ctx: &Ctx, project: &Project, sessions: &mut Sessions) -> Result<O
             c.agent = kind;
         })?;
     }
-    let name = project.read_project_md().map(|(s, _)| project::display_name(&s.name, slug)).unwrap_or_else(|_| slug.clone());
     for c in &coordinators {
         let terminal = agents.iter().find(|a| a.pane_id == c.pane_id).map(|a| a.terminal_id.clone()).unwrap_or_default();
         let report = crate::progress::self_report(&ctx.root, &record.socket, &c.pane_id, &terminal);
         let (group, line) = coordinator::row_state(c, report.as_ref());
-        crate::sidebar::report_pane(&herdr, &c.pane_id, &crate::sidebar::coordinator_display(&name), slug, group, &line);
+        crate::sidebar::report_pane(&herdr, &c.pane_id, &crate::sidebar::coordinator_display(), slug, group, &line);
     }
 
     let pass = thread_pass(project, &herdr, &record.socket, &open_threads(project, false), &agents, &panes, None)?;
-    // The project's Space row.
+    // The project's Space row, and its part of the sidebar grouping.
+    let line = crate::sidebar::project_line(&crate::sidebar::recorded_groups(project), false);
     if coordinator::workspace_open(&record, &panes) {
-        let line = crate::sidebar::project_line(&crate::sidebar::recorded_groups(project), false);
         crate::sidebar::report_workspace(&herdr, &record.workspace_id, &line);
     }
+    sessions.parts.entry(record.socket.clone()).or_default().insert(slug.clone(), part(project, &record, &coordinators, &line));
     // Progress records of panes that are gone are dropped; a new agent in a
     // reused pane id is told apart by its terminal id.
     let live_ids: Vec<String> = panes.iter().map(|p| p.pane_id.clone()).collect();

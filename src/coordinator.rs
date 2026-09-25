@@ -270,7 +270,7 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
                 c.agent_session = agent.session_id().to_string();
             }
         })?;
-        report_tokens(&herdr, slug, &label, &record.pane_id);
+        report_tokens(&herdr, slug, &record.pane_id);
         ticker::start(ctx)?;
         println!("coordinator is running in pane {} ({} more: pass --new to start another)", record.pane_id, running.len() - 1);
         println!("Commands: {prefix}");
@@ -347,7 +347,7 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     let mut args = base_args.clone();
     args.extend(resume.iter().cloned());
     if here.is_some() {
-        report_tokens(&herdr, slug, &label, &record.pane_id);
+        report_tokens(&herdr, slug, &record.pane_id);
         ticker::start(ctx)?;
         return run_here(ctx, &herdr, &project, &record, &args, &base_args, &prefix);
     }
@@ -379,7 +379,7 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
             record.pane_id
         ),
     }
-    report_tokens(&herdr, slug, &label, &record.pane_id);
+    report_tokens(&herdr, slug, &record.pane_id);
     ticker::start(ctx)?;
     println!("opened `{slug}` in workspace {} (pane {})", record.workspace_id, record.pane_id);
     println!("Commands: {prefix}");
@@ -469,8 +469,8 @@ pub fn row_state(pane: &LivePane, report: Option<&crate::progress::Record>) -> (
     }
 }
 
-pub fn report_tokens(herdr: &Herdr, slug: &str, name: &str, pane_id: &str) {
-    crate::sidebar::report_pane(herdr, pane_id, &crate::sidebar::coordinator_display(name), slug, crate::thread::Group::Idle, "idle");
+pub fn report_tokens(herdr: &Herdr, slug: &str, pane_id: &str) {
+    crate::sidebar::report_pane(herdr, pane_id, &crate::sidebar::coordinator_display(), slug, crate::thread::Group::Idle, "idle");
 }
 
 /// Renames a recorded workspace whose label is not the project's display name,

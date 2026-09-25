@@ -106,6 +106,8 @@ pub struct Memory {
     pub outage_secs: i64,
     pub tick: u64,
     pub machines: BTreeMap<String, MachineMemory>,
+    /// The sidebar grouping tokens last sent.
+    pub grouping: crate::grouping::Sent,
 }
 
 impl Memory {
@@ -118,6 +120,7 @@ impl Memory {
             outage_secs: ctx.env.var("HERDR_PROJECTS_OUTAGE_SECS").and_then(|v| v.parse().ok()).unwrap_or(DEFAULT_OUTAGE_SECS),
             tick: 0,
             machines: BTreeMap::new(),
+            grouping: Default::default(),
         }
     }
 

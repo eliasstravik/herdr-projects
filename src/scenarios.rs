@@ -1886,7 +1886,10 @@ fn an_agent_started_by_hand_in_a_never_opened_project_becomes_its_coordinator() 
     // Its routine fired, and its pane and Space row carry tokens.
     assert_eq!(items_of(&project, "routine").len(), 1);
     assert_eq!(crate::coordinator::live(&project).len(), 1);
-    assert_eq!(world.runner.count("pane report-metadata wGM:p1"), 1);
+    // Its row once, then its place in the grouping: the project heading.
+    assert_eq!(world.runner.count("pane report-metadata wGM:p1"), 2);
+    assert_eq!(world.runner.count("hp_top=▍Auto"), 1);
+    assert_eq!(world.runner.count("hp_group=auto!0!wGM:p1"), 1);
     assert_eq!(world.runner.count("workspace report-metadata wGM"), 1);
 }
 

@@ -1,7 +1,8 @@
 //! What the Herdr sidebar shows for projects: per agent row a name
 //! (`--display-agent`), `$hp_state` and `$hp_activity`; per project Space row
-//! `$hp`; a tab-bar count; the default agent view sorted by need. Also the
-//! `config.toml` edit `configure` makes to render them.
+//! `$hp`; the project headings of `grouping`; a tab-bar count; the default
+//! agent view, grouped by project. Also the `config.toml` edit `configure`
+//! makes to render them.
 
 use std::path::Path;
 
@@ -74,8 +75,9 @@ pub fn thread_display(thread: &Thread) -> String {
     format!("{} · {}", thread.id, thread.title)
 }
 
-pub fn coordinator_display(project_name: &str) -> String {
-    format!("coordinator · {project_name}")
+/// A coordinator's row name. The project heading above it names the project.
+pub fn coordinator_display() -> String {
+    "coordinator".into()
 }
 
 /// Reports one pane's row: display name, project, rank and state, with a TTL
@@ -103,7 +105,7 @@ pub fn clear_pane(herdr: &Herdr, pane: &str) {
         return;
     }
     let mut args = vec!["pane", "report-metadata", pane, "--source", crate::herdr::SOURCE, "--clear-display-agent"];
-    for name in ["hp_project", "hp_rank", "hp_state", "hp_activity"].into_iter().chain(OLD_TOKENS) {
+    for name in ["hp_project", "hp_rank", "hp_state", "hp_activity"].into_iter().chain(crate::grouping::TOKENS).chain(OLD_TOKENS) {
         args.push("--clear-token");
         args.push(name);
     }
@@ -140,9 +142,15 @@ pub fn report_workspace(herdr: &Herdr, workspace: &str, line: &str) {
 }
 
 pub fn clear_workspace(herdr: &Herdr, workspace: &str) {
-    if !workspace.is_empty() {
-        let _ = herdr.call(&["workspace", "report-metadata", workspace, "--source", crate::herdr::SOURCE, "--clear-token", "hp"], CALL_TIMEOUT);
+    if workspace.is_empty() {
+        return;
     }
+    let mut args = vec!["workspace", "report-metadata", workspace, "--source", crate::herdr::SOURCE, "--clear-token", "hp"];
+    for name in crate::grouping::TOKENS {
+        args.push("--clear-token");
+        args.push(name);
+    }
+    let _ = herdr.call(&args, CALL_TIMEOUT);
 }
 
 /// The groups of a project's open threads, as the ticker last persisted them.
@@ -172,12 +180,13 @@ pub fn needs_you_line(root: &Path) -> Option<String> {
 
 // ---------------------------------------------------------------- agent view
 
-/// The default view: every agent sorted by `hp_rank`, agents without it last.
+/// The default view: agents in project blocks (`hp_group`, see `grouping`),
+/// each by need; agents without it last.
 pub fn default_view() -> serde_json::Value {
     serde_json::json!({
         "source": crate::herdr::SOURCE,
         "label": "projects",
-        "sort": [{ "field": { "token": "hp_rank" }, "order": "asc" }],
+        "sort": [{ "field": { "token": "hp_group" }, "order": "asc" }, { "field": { "token": "hp_rank" }, "order": "asc" }],
     })
 }
 
@@ -187,7 +196,7 @@ pub fn project_view(slug: &str) -> serde_json::Value {
         "source": crate::herdr::SOURCE,
         "label": format!("project: {slug}"),
         "filter": { "op": "eq", "field": { "token": "hp_project" }, "value": slug },
-        "sort": [{ "field": { "token": "hp_rank" }, "order": "asc" }],
+        "sort": [{ "field": { "token": "hp_group" }, "order": "asc" }, { "field": { "token": "hp_rank" }, "order": "asc" }],
     })
 }
 
@@ -230,15 +239,54 @@ fn row_single(token: &str, dim: bool) -> Value {
     row.into()
 }
 
+/// A card's first row: the project heading in Herdr's accent (lilac), the
+/// `other` heading, the project line, or a blank that keeps the card's own
+/// rows in the same column as the heading card's.
+fn row_heading(note: bool) -> Value {
+    let mut row = Array::new();
+    let mut top = InlineTable::new();
+    top.insert("token", "$hp_top".into());
+    top.insert("fg", ACCENT.into());
+    top.insert("bold", true.into());
+    row.push(top);
+    let mut other = InlineTable::new();
+    other.insert("token", "$hp_other".into());
+    other.insert("bold", true.into());
+    other.insert("dim", true.into());
+    row.push(other);
+    if note {
+        let mut line = InlineTable::new();
+        line.insert("token", "$hp_note".into());
+        line.insert("dim", true.into());
+        row.push(line);
+    }
+    row.into()
+}
+
+/// Herdr's accent colour.
+pub const ACCENT: &str = "#cba6f7";
+
 fn same(a: &Value, b: &Value) -> bool {
     a.to_string().split_whitespace().collect::<String>() == b.to_string().split_whitespace().collect::<String>()
 }
 
-fn edit_rows(item: &mut Item, wanted: &[Value], ours: &[&str], remove: bool) -> Result<()> {
+/// `first` rows go at the top, `wanted` rows at the bottom.
+fn edit_rows(item: &mut Item, first: &[Value], wanted: &[Value], ours: &[&str], remove: bool) -> Result<()> {
     let rows = item.as_array_mut().context("sidebar rows must be an array")?;
     if remove {
-        rows.retain(|v| !wanted.iter().any(|w| same(v, w)));
+        rows.retain(|v| !first.iter().chain(wanted).any(|w| same(v, w)));
         return Ok(());
+    }
+    for want in first.iter().rev() {
+        if rows.iter().any(|v| same(v, want)) {
+            continue;
+        }
+        let token = ours.iter().find(|t| want.to_string().contains(*t)).copied().unwrap_or("");
+        if !token.is_empty() && rows.iter().any(|v| v.to_string().contains(&format!("\"{token}\""))) {
+            continue;
+        }
+        ensure!(rows.len() < 16, "the sidebar already has 16 rows; remove one before configuring");
+        rows.insert(0, want.clone());
     }
     for want in wanted {
         if rows.iter().any(|v| same(v, want)) {
@@ -269,8 +317,11 @@ fn table_mut<'a>(parent: &'a mut Item, key: &str) -> Result<&'a mut Item> {
 /// rows, keys and entries of the user are never touched. Idempotent.
 pub fn config_edit(input: &str, spec: &Spec, remove: bool) -> Result<String> {
     let mut doc = input.parse::<DocumentMut>().context("config.toml does not parse")?;
-    let agent_rows = [row_state(), row_single("$hp_activity", true)];
-    let space_rows = [row_single("$hp", false)];
+    let agent_rows = [row_state(), row_single("$hp_activity", true), row_single("$hp_tail", false)];
+    let space_rows = [row_single("$hp", false), row_single("$hp_tail", false)];
+    let agent_first = [row_heading(true)];
+    let space_first = [row_heading(false)];
+    let agent_ours = ["$hp_state", "$hp_activity", "$hp_tail", "$hp_top"];
 
     // Agent rows, and every per-harness override (which replaces `rows`).
     {
@@ -290,11 +341,11 @@ pub fn config_edit(input: &str, spec: &Spec, remove: bool) -> Result<String> {
             agents["rows"] = toml_edit::value(defaults);
         }
         if let Some(rows) = agents.get_mut("rows").filter(|v| !v.is_none()) {
-            edit_rows(rows, &agent_rows, &["$hp_state", "$hp_activity"], remove)?;
+            edit_rows(rows, &agent_first, &agent_rows, &agent_ours, remove)?;
         }
         if let Some(overrides) = agents.get_mut("rows_by_agent").filter(|v| !v.is_none()) {
             for (_, rows) in overrides.as_table_like_mut().context("rows_by_agent must be a table")?.iter_mut() {
-                edit_rows(rows, &agent_rows, &["$hp_state", "$hp_activity"], remove)?;
+                edit_rows(rows, &agent_first, &agent_rows, &agent_ours, remove)?;
             }
         }
         let spaces = table_mut(sidebar, "spaces")?;
@@ -311,7 +362,7 @@ pub fn config_edit(input: &str, spec: &Spec, remove: bool) -> Result<String> {
             spaces["rows"] = toml_edit::value(defaults);
         }
         if let Some(rows) = spaces.get_mut("rows").filter(|v| !v.is_none()) {
-            edit_rows(rows, &space_rows, &["$hp"], remove)?;
+            edit_rows(rows, &space_first, &space_rows, &["$hp_tail", "$hp_top", "$hp"], remove)?;
         }
 
         // Tab bar: one command entry.
@@ -482,6 +533,22 @@ mod tests {
         assert_eq!(moved.matches(POPUP_ACTION).count(), 1);
         assert!(moved.contains("prefix+y") && !moved.contains("/bin/hp --root"));
         assert_eq!(moved.matches("needs-you --line").count(), 1);
+    }
+
+    #[test]
+    fn the_heading_row_goes_first_and_the_tail_row_last() {
+        let added = config_edit("[ui.sidebar.agents]\nrows = [[\"agent\"]]\n[ui.sidebar.spaces]\nrows = [[\"workspace\"]]\n", &spec(), false).unwrap();
+        let doc = added.parse::<DocumentMut>().unwrap();
+        for (section, note) in [("agents", true), ("spaces", false)] {
+            let rows = doc["ui"]["sidebar"][section]["rows"].as_array().unwrap();
+            let first = rows.get(0).unwrap().to_string();
+            assert!(first.contains("$hp_top") && first.contains(ACCENT) && first.contains("$hp_other"), "{first}");
+            assert_eq!(first.contains("$hp_note"), note);
+            assert!(rows.get(rows.len() - 1).unwrap().to_string().contains("$hp_tail"));
+        }
+        assert_eq!(config_edit(&added, &spec(), false).unwrap(), added);
+        let removed = config_edit(&added, &spec(), true).unwrap();
+        assert!(!removed.contains("$hp_top") && !removed.contains("$hp_tail"), "{removed}");
     }
 
     #[test]

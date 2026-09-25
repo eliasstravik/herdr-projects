@@ -4,6 +4,7 @@ mod agents;
 mod cli;
 mod coordinator;
 mod doctor;
+mod grouping;
 mod herdr;
 mod inbox;
 mod lifecycle;

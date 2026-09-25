@@ -339,7 +339,7 @@ mod tests {
         assert_eq!(request["method"], "agent.view.set");
         assert_eq!(request["params"]["source"], "herdr-projects");
         assert_eq!(request["params"]["filter"], serde_json::json!({"op":"eq","field":{"token":"hp_project"},"value":"demo"}));
-        assert_eq!(request["params"]["sort"], serde_json::json!([{"field":{"token":"hp_rank"},"order":"asc"}]));
+        assert_eq!(request["params"]["sort"], serde_json::json!([{"field":{"token":"hp_group"},"order":"asc"},{"field":{"token":"hp_rank"},"order":"asc"}]));
     }
 
     #[test]
