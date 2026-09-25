@@ -112,7 +112,7 @@ What to answer:
 
 `hp thread prompt` is refused while a thread is blocked: answer the screen first.
 
-**A new thread that sits idle without its brief.** The ticker starts the agent on one pass and sends the brief on a later one, so a brief normally arrives within a minute of `thread start`. If the agent is idle and `thread prompt` says it has not received its brief, run `hp thread brief <slug> <id>`: it sends the brief now, never twice. If it says the pane shows a prompt, answer that first.
+**A new thread that sits idle without its brief.** The ticker starts the agent on one pass and sends the brief within seconds of the agent being ready, so a brief normally arrives within a minute of `thread start`; an agent idle at an empty prompt for a few seconds is still getting it. If the agent is still idle a minute after `thread start` and `thread prompt` says it has not received its brief, run `hp thread brief <slug> <id>`: it sends the brief now, never twice. If it says the pane shows a prompt, answer that first.
 
 ## Memory and preferences
 
