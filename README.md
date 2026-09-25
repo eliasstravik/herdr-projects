@@ -107,7 +107,7 @@ The command checks the Herdr version, the tools it calls, the ticker, and each p
 
 ### What permissions does the coordinator need?
 
-It runs the `herdr-projects` binary every turn, so you'll want to allow-list it in your agent **by subcommand, never the bare binary**. Allow reading and steering (`skill`, `context`, `report`, `inbox done`, `thread list`, `thread prompt`, `thread next` and the like) and leave `thread resolve`, `sweep`, `delete`, `routine approve` and `configure` on your agent's normal permission prompt. Leave `thread start` off the list too unless you've set `start_threads = "auto"`: then every thread start is a real confirmation. [Operations](docs/operations.md#the-allow-list-for-your-coordinator) has the exact patterns.
+It runs the `herdr-projects` binary every turn, so you'll want to allow-list it in your agent **by subcommand, never the bare binary**. Allow reading and steering (`skill`, `context`, `report`, `inbox done`, `thread list`, `thread prompt`, `thread next`, `thread read` and the like) and leave `thread resolve`, `sweep`, `delete`, `routine approve` and `configure` on your agent's normal permission prompt. Leave `thread start` off the list too unless you've set `start_threads = "auto"`: then every thread start is a real confirmation. [Operations](docs/operations.md#the-allow-list-for-your-coordinator) has the exact patterns.
 
 ### Does the plugin send my project to a hosted service?
 
@@ -127,7 +127,7 @@ No. Run `herdr-projects thread start` yourself, or take an agent pane you alread
 
 ### What if the safety settings aren't enough?
 
-They are soft. By default the coordinator proposes threads and waits (until you turn on yolo mode in the popup), thread agents keep their normal permission prompts (the coordinator may choose their model, never their launch flags), and routines may not run shell commands until you enable them and approve each command in a terminal. But agents have a shell: one that runs with skip-permission arguments can edit those files, a thread can prompt the coordinator pretending to be you, an approved routine command covers its text and not the scripts it calls, and whatever reaches memory is repeated in every later brief. [Operations](docs/operations.md#what-the-safety-settings-do-and-dont-stop) says plainly what each guard stops and what it doesn't.
+They are soft. By default the coordinator proposes threads and waits (until you turn on yolo mode in the popup), thread agents keep their normal permission prompts, which the coordinator answers for plainly in-task actions and brings to you otherwise (it may choose their model, never their launch flags), and routines may not run shell commands until you enable them and approve each command in a terminal. But agents have a shell: one that runs with skip-permission arguments can edit those files, a thread can prompt the coordinator pretending to be you, an approved routine command covers its text and not the scripts it calls, and whatever reaches memory is repeated in every later brief. [Operations](docs/operations.md#what-the-safety-settings-do-and-dont-stop) says plainly what each guard stops and what it doesn't.
 
 ### What does it cost?
 

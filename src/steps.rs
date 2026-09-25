@@ -191,7 +191,15 @@ pub fn write_thread_items(project: &Project, state: &mut State, transitions: &[T
             continue;
         };
         let mut summary = format!("{} is now {} ({})", thread_label(&t), change.to.label(), change.note);
-        if change.to == Group::WaitingOnYou && !t.pane_id.is_empty() {
+        if change.to == Group::WaitingOnYou && !t.pane_id.is_empty() && change.note == "blocked" {
+            // A screen waits for a key press (trust dialog, question menu,
+            // permission prompt): the coordinator can read and answer it.
+            let machine = if t.is_remote() { format!(" on machine `{}`", t.machine) } else { String::new() };
+            summary.push_str(&format!(
+                "; its pane {}{machine} shows a prompt: `thread read {} {}` shows it, `thread keys {} {}` answers it",
+                t.pane_id, project.slug, t.id, project.slug, t.id
+            ));
+        } else if change.to == Group::WaitingOnYou && !t.pane_id.is_empty() {
             summary.push_str(&format!("; it needs the user in pane {}", t.pane_id));
             if t.is_remote() {
                 summary.push_str(&format!(" on machine `{}` (reach it with `herdr --remote <ssh target>`, or select the machine in herdr's sidebar)", t.machine));

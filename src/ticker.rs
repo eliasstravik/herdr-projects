@@ -524,7 +524,9 @@ fn thread_pass(project: &Project, herdr: &Herdr, socket: &str, threads: &[thread
         }
 
         let mut delivered = false;
-        if t.prompt_pending && live.agent_state.as_deref().is_some_and(crate::herdr::ready_state) {
+        // Re-read: `thread brief` may have delivered it since this pass began.
+        let still_pending = || thread::load(project, &t.id).map(|r| r.prompt_pending).unwrap_or(false);
+        if t.prompt_pending && live.agent_state.as_deref().is_some_and(crate::herdr::ready_state) && still_pending() {
             match herdr.agent_prompt(&t.pane_id, &thread::launch_prompt(slug, &t.id)) {
                 Ok(()) => delivered = true,
                 Err(error) => pass.error = pass.error.or(Some(anyhow::anyhow!("{}: brief prompt: {error}", t.id))),
