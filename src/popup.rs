@@ -1721,6 +1721,57 @@ mod tests {
     }
 
     #[test]
+    fn the_settings_section_makes_a_profile_and_allows_it() {
+        let world = crate::scenarios::World::new();
+        world.project("alpha", "a.sock");
+        let ctx = world.ctx();
+        let mut popup = Popup::new(&ctx, None, String::new());
+        let key = |popup: &mut Popup, code| popup.key(KeyEvent::new(code, KeyModifiers::NONE));
+        popup.section = SECTIONS.iter().position(|s| *s == Section::Settings).unwrap();
+        popup.reload();
+        // `n`: the form; name, then harness codex (cycled), model, effort, args.
+        key(&mut popup, KeyCode::Char('n'));
+        for c in "deep".chars() {
+            key(&mut popup, KeyCode::Char(c));
+        }
+        key(&mut popup, KeyCode::Down);
+        while !matches!(&popup.mode, Mode::Form { fields, .. } if fields[1].value == "codex") {
+            key(&mut popup, KeyCode::Right);
+        }
+        key(&mut popup, KeyCode::Down);
+        for c in "gpt-5.5".chars() {
+            key(&mut popup, KeyCode::Char(c));
+        }
+        key(&mut popup, KeyCode::Down);
+        while !matches!(&popup.mode, Mode::Form { fields, .. } if fields[3].value == "high") {
+            key(&mut popup, KeyCode::Right);
+        }
+        key(&mut popup, KeyCode::Down);
+        for c in "--search".chars() {
+            key(&mut popup, KeyCode::Char(c));
+        }
+        key(&mut popup, KeyCode::Enter);
+        assert!(matches!(popup.mode, Mode::List), "{}", popup.message);
+        let config = crate::profiles::load(&ctx.config_dir).unwrap();
+        let deep = config.get("deep").unwrap();
+        assert_eq!(deep.args(), ["--model", "gpt-5.5", "-c", "model_reasoning_effort=\"high\"", "--search"]);
+
+        // The all-projects thread list: check `deep` only.
+        popup.selected = popup.rows.iter().position(|r| matches!(&r.kind, RowKind::Setting { slug, key, .. } if slug.is_empty() && key == "thread_profiles")).unwrap();
+        key(&mut popup, KeyCode::Enter);
+        let at = match &popup.mode {
+            Mode::Toggle { options, .. } => options.iter().position(|o| o.0 == "deep").unwrap(),
+            _ => panic!("not a toggle"),
+        };
+        for _ in 0..at {
+            key(&mut popup, KeyCode::Down);
+        }
+        key(&mut popup, KeyCode::Char(' '));
+        key(&mut popup, KeyCode::Enter);
+        assert_eq!(crate::profiles::load(&ctx.config_dir).unwrap().defaults.thread_profiles, Some(vec!["deep".to_string()]));
+    }
+
+    #[test]
     fn slash_and_shift_p_open_the_picker_and_settings_enter_still_scopes() {
         let world = crate::scenarios::World::new();
         world.project("alpha", "a.sock");
