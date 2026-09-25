@@ -16,8 +16,8 @@ use crate::{inbox, pr, routine};
 
 pub const NUDGE_TEXT: &str = "[hp ticker] new inbox items, run context";
 pub const PR_INTERVAL_SECS: i64 = 120;
-/// A merged thread whose agent is not busy but wrote no report since the
-/// merge is resolved after this long.
+/// A merged thread whose agent is not busy, reports no progress and wrote no
+/// report since the merge is resolved after this long.
 pub const MERGE_GRACE_SECS: i64 = 600;
 pub const DONE_RETENTION_DAYS: u64 = 30;
 const DEFAULT_OUTAGE_SECS: i64 = 600;
@@ -464,9 +464,10 @@ fn fire_pr_routines(ctx: &Ctx, project: &Project, t: &Thread, url: &str, events:
 }
 
 /// Resolve-on-merge, every slow tick. A merge does not stop the agent: it may
-/// still tag, deploy or write its final report. So a merged thread is resolved
-/// only when its agent is neither working nor waiting on the user, and it has
-/// written a report since the merge or `MERGE_GRACE_SECS` have passed.
+/// still tag, deploy, land more pull requests or write its final report. So a
+/// merged thread is resolved only when its agent is neither working nor
+/// waiting on the user, it is finished (`merged_thread_may_resolve`), and no
+/// other pull request its report names is still open.
 pub fn resolve_merged(ctx: &Ctx, project: &Project, state: &mut State, now: jiff::Timestamp) -> Vec<anyhow::Error> {
     let mut errors = Vec::new();
     let threads = thread::list(project);
@@ -476,7 +477,7 @@ pub fn resolve_merged(ctx: &Ctx, project: &Project, state: &mut State, now: jiff
             continue;
         }
         let seen = state.merged_seen.entry(t.id.clone()).or_insert_with(|| now.to_string()).clone();
-        if !merged_thread_may_resolve(&t, &seen, now) {
+        if !merged_thread_may_resolve(&t, &seen, now) || other_pr_open(ctx, project, &t) {
             continue;
         }
         let head = state.prs.get(&t.id).map(|s| s.head_oid.clone()).unwrap_or_default();
@@ -497,11 +498,27 @@ fn merged_thread_may_resolve(t: &Thread, seen: &str, now: jiff::Timestamp) -> bo
     if busy {
         return false;
     }
+    // An agent that reports progress says when it is finished: only `Done`
+    // counts, and no timeout overrides a lower percentage. Waiting on CI or a
+    // rollout in background shells reads as idle.
+    if t.percent.is_some() || !t.activity.is_empty() {
+        return t.percent == Some(100);
+    }
     let Ok(seen) = seen.parse::<jiff::Timestamp>() else {
         return true;
     };
     let reported_since = t.last_report_change.parse::<jiff::Timestamp>().is_ok_and(|r| r > seen);
     reported_since || now.as_second() - seen.as_second() >= MERGE_GRACE_SECS
+}
+
+/// Whether a pull request the thread's report names, other than its tracked
+/// one, is open and was opened by the `gh` user. A `gh` failure counts as
+/// open: the next pass asks again.
+fn other_pr_open(ctx: &Ctx, project: &Project, t: &Thread) -> bool {
+    let report = std::fs::read_to_string(thread::home_report_path(project, &t.id)).unwrap_or_default();
+    pr::report_refs(&report, &t.origin, &t.pr)
+        .iter()
+        .any(|(repo, named)| pr::open_own_numbers(ctx.runner, repo).map_or(true, |open| !open.is_disjoint(named)))
 }
 
 /// Auto-resolve and resolve-on-merge: the final copy first; if it fails the

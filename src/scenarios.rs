@@ -1050,6 +1050,73 @@ fn a_merged_thread_whose_agent_stays_idle_is_resolved_after_the_grace_period() {
     assert_eq!((t.status, t.resolved_reason.as_str()), (Status::Resolved, "merged"));
 }
 
+/// The agent's own progress report, as `herdr-projects report` writes it. The
+/// thread's pane is listed too, or the ticker drops the record as stale.
+fn thread_progress(world: &World, project: &Project, percent: u8, activity: &str) {
+    let cwd = world.home.path().to_string_lossy().into_owned();
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(project), pane_json("w2", "w2:t1", "w2:p1", &cwd));
+    let record = crate::progress::Record {
+        socket: project.coordinator().unwrap().socket,
+        pane_id: "w2:p1".into(),
+        activity: activity.into(),
+        percent: Some(percent),
+        reported_at: jiff::Timestamp::now().as_second(),
+        ..Default::default()
+    };
+    crate::progress::save(&project.root, &record).unwrap();
+}
+
+/// gtm-ai t-0035: the thread merged its first pull request itself, then
+/// waited on CI for two more with background shells. Its agent read as idle
+/// and it rewrote its report ("In progress", open Next lines), which the old
+/// rule took as the final report.
+#[test]
+fn a_merged_thread_that_reports_work_in_progress_is_not_resolved() {
+    let (world, project) = merged_world("done");
+    thread_progress(&world, &project, 70, "Waiting on CI");
+    let ctx = world.ctx();
+    ticker::tick_project(&ctx, &project).unwrap();
+    merged_seen_ago(&project, 60);
+    let t = thread::load(&project, "t-0001").unwrap();
+    std::fs::create_dir_all(&t.thread_dir).unwrap();
+    std::fs::write(t.report_path(), format!("PR: {PR_URL}\n## Report\nIn progress: #7 merged, rolling out.\n## Next\nFinish rollout\n")).unwrap();
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Open);
+    // No timeout overrides the agent's own "not done".
+    merged_seen_ago(&project, crate::steps::MERGE_GRACE_SECS * 10);
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Open);
+    assert_eq!(world.runner.count("worktree remove"), 0);
+
+    // It finishes the rollout and says so: resolved on the next pass.
+    thread_progress(&world, &project, 100, "Done");
+    ticker::tick_project(&ctx, &project).unwrap();
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!((t.status, t.resolved_reason.as_str()), (Status::Resolved, "merged"));
+}
+
+/// Done, but another of its pull requests is still open: it stays until that
+/// one is merged or closed.
+#[test]
+fn a_merged_thread_with_another_open_pull_request_is_not_resolved() {
+    let (world, project) = merged_world("done");
+    thread_progress(&world, &project, 100, "Done");
+    let open = Rc::new(RefCell::new(r#"[{"number":8}]"#.to_string()));
+    let answer = open.clone();
+    world.runner.on_fn(|cmd| cmd.display().contains("gh pr list --repo owner/app --state open --author @me"), move |_| Ok(ok(&answer.borrow())));
+    std::fs::write(thread::home_report_path(&project, "t-0001"), format!("PR: {PR_URL}\n## Report\n#7 is merged; #8 waits for review, see #3.\n")).unwrap();
+    let ctx = world.ctx();
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Open);
+    merged_seen_ago(&project, crate::steps::MERGE_GRACE_SECS * 10);
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Open);
+
+    *open.borrow_mut() = "[]".into();
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(thread::load(&project, "t-0001").unwrap().status, Status::Resolved);
+}
+
 const MERGED_LIST: &str = r#"[{"url":"https://github.com/owner/app/pull/7","state":"MERGED","createdAt":"2026-01-01T00:00:00Z"}]"#;
 
 /// A thread opened and merged its pull request between two ticker passes and
