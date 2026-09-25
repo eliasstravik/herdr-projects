@@ -280,8 +280,8 @@ fn pr_event(events: &[&str], summary: &pr::Summary) -> &'static str {
     }
 }
 
-/// The nudge line: what happened, coalesced per subject, e.g. `[hp ticker]
-/// t-0040 PR merged, new report; t-0043 blocked on a prompt. Run context.`
+/// The nudge line: what happened, coalesced per subject, e.g. `[hp inbox]
+/// t-0040 PR merged, new report; t-0043 blocked on a prompt`.
 /// Built from item kinds, file-name-safe subjects and this binary's fixed
 /// event phrases only; summaries may quote reports or GitHub and are never
 /// used.
@@ -306,7 +306,7 @@ pub fn nudge_text(items: &[inbox::Item]) -> String {
     if parts.len() > NUDGE_SUBJECTS {
         named.push(format!("{} more", parts.len() - NUDGE_SUBJECTS));
     }
-    format!("[hp ticker] {}. Run context.", named.join("; "))
+    format!("[hp inbox] {}", named.join("; "))
 }
 
 fn hash_ids(ids: &BTreeSet<String>) -> String {
@@ -772,11 +772,11 @@ mod tests {
         let text = nudge_text(&items);
         assert_eq!(
             text,
-            "[hp ticker] t-0040 PR merged, new report; t-0043 blocked on a prompt; routine nightly--run--rm--rf due; gh failing; machine m1-laptop unreachable; 1 more. Run context."
+            "[hp inbox] t-0040 PR merged, new report; t-0043 blocked on a prompt; routine nightly--run--rm--rf due; gh failing; machine m1-laptop unreachable; 1 more"
         );
         assert!(!text.contains("IGNORE"));
         // Items written before events existed fall back to their kind.
-        assert_eq!(nudge_text(&[item("config-error", "PROJECT.md", "")]), "[hp ticker] project-md config error. Run context.");
+        assert_eq!(nudge_text(&[item("config-error", "PROJECT.md", "")]), "[hp inbox] project-md config error");
     }
 
     #[test]

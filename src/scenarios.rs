@@ -786,7 +786,7 @@ fn box_empty_for_a_while(project: &Project) {
 }
 
 fn nudges(world: &World) -> Vec<String> {
-    world.runner.calls.borrow().iter().filter(|c| c.display().contains("agent prompt")).filter_map(|c| c.args.last().cloned()).filter(|a| a.starts_with("[hp ticker]")).collect()
+    world.runner.calls.borrow().iter().filter(|c| c.display().contains("agent prompt")).filter_map(|c| c.args.last().cloned()).filter(|a| a.starts_with("[hp inbox]")).collect()
 }
 
 /// Makes the fixture thread already Idle, so a test about something else does
@@ -835,9 +835,9 @@ fn a_finishing_thread_gives_one_item_and_one_nudge_until_a_new_item_arrives() {
     assert!(items[0].summary.contains("threads/t-0001.md"));
     assert!(items[0].body.is_empty());
     // One nudge, to the coordinator's pane, saying what happened.
-    assert_eq!(nudges(&world), ["[hp ticker] t-0001 new report. Run context."]);
+    assert_eq!(nudges(&world), ["[hp inbox] t-0001 new report"]);
     let calls = world.runner.calls.borrow();
-    let nudge = calls.iter().find(|c| c.args.last().is_some_and(|a| a.starts_with("[hp ticker]"))).unwrap();
+    let nudge = calls.iter().find(|c| c.args.last().is_some_and(|a| a.starts_with("[hp inbox]"))).unwrap();
     assert!(nudge.args.contains(&"w1:p1".to_string()));
     drop(calls);
 
@@ -904,7 +904,7 @@ fn a_nudge_waits_while_the_coordinators_box_holds_a_draft_and_goes_out_once_afte
         ticker::tick_project_with(&ctx, &project, &mut memory).unwrap();
     }
     // One line naming what happened, from ids and fixed phrases only.
-    assert_eq!(nudges(&world), ["[hp ticker] t-0001 PR merged; t-0002 blocked on a prompt. Run context."]);
+    assert_eq!(nudges(&world), ["[hp inbox] t-0001 PR merged; t-0002 blocked on a prompt"]);
 }
 
 #[test]
