@@ -782,14 +782,20 @@ pub fn clean(ctx: &Ctx, project: &Project, t: &Thread, options: &Clean) -> Vec<S
             } else if options.keep_worktree {
                 let _ = thread::update(project, &t.id, |t| t.kept_worktree = true);
                 notes.push(format!("worktree kept at {} (asked to keep it)", t.worktree_path));
-            } else if !options.copy_complete {
+            } else if !options.copy_complete && !worktree_gone(t) {
+                // A folder that is gone has nothing left to lose.
                 notes.push(format!("worktree kept at {}: not everything in it was copied home (`--discard-uncopied` removes it anyway)", t.worktree_path));
             } else {
                 match remove_worktree(ctx, project, t, view.as_ref()) {
-                    Ok(()) => {
+                    Ok(Removal::Removed) => {
                         removed = true;
                         let _ = thread::update(project, &t.id, |t| t.worktree_path.clear());
                         notes.push(format!("worktree {} removed and its workspace closed", t.worktree_path));
+                    }
+                    Ok(Removal::AlreadyGone(closed)) => {
+                        removed = true;
+                        let _ = thread::update(project, &t.id, |t| t.worktree_path.clear());
+                        notes.push(format!("worktree {} was already gone; {closed}", t.worktree_path));
                     }
                     Err(error) => notes.push(format!("worktree kept at {}: {error:#}", t.worktree_path)),
                 }
@@ -797,7 +803,8 @@ pub fn clean(ctx: &Ctx, project: &Project, t: &Thread, options: &Clean) -> Vec<S
             if !t.branch.is_empty() {
                 if merged && removed {
                     match delete_branch(ctx, t, &merged_head) {
-                        Ok(()) => notes.push(format!("branch {} deleted (its pull request is merged)", t.branch)),
+                        Ok(true) => notes.push(format!("branch {} deleted (its pull request is merged)", t.branch)),
+                        Ok(false) => notes.push(format!("branch {} was already deleted", t.branch)),
                         Err(error) => notes.push(format!("branch {} kept: {error:#}", t.branch)),
                     }
                 } else if !merged {
@@ -862,7 +869,8 @@ fn last_pr_lookup(ctx: &Ctx, project: &Project, t: &Thread) -> Option<crate::pr:
 
 /// Deletes the local branch only when its tip is the pull request's merged
 /// head: a commit made after the merge and never pushed keeps the branch.
-fn delete_branch(ctx: &Ctx, t: &Thread, head: &str) -> Result<()> {
+/// `false`: there was no such branch left to delete.
+fn delete_branch(ctx: &Ctx, t: &Thread, head: &str) -> Result<bool> {
     if head.is_empty() {
         bail!("the merged pull request's head commit is not known");
     }
@@ -873,6 +881,9 @@ fn delete_branch(ctx: &Ctx, t: &Thread, head: &str) -> Result<()> {
     } else {
         git(ctx.runner, &t.repo, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{}", t.branch)], GIT_TIMEOUT).unwrap_or_default()
     };
+    if tip.is_empty() {
+        return Ok(false);
+    }
     if tip != head {
         bail!("it has commits that are not in the merged pull request");
     }
@@ -883,11 +894,11 @@ fn delete_branch(ctx: &Ctx, t: &Thread, head: &str) -> Result<()> {
         if !out.success() {
             bail!("{}", out.error_text());
         }
-        return Ok(());
+        return Ok(true);
     }
     // `-D`: GitHub says the pull request is merged, and a squash merge leaves
     // the branch unmerged as far as git can tell.
-    git(ctx.runner, &t.repo, &["branch", "-D", &t.branch], GIT_TIMEOUT).map(|_| ())
+    git(ctx.runner, &t.repo, &["branch", "-D", &t.branch], GIT_TIMEOUT).map(|_| true)
 }
 
 /// The final report and library copy, storing the new report hash.
@@ -911,21 +922,48 @@ pub fn final_copy(ctx: &Ctx, project: &Project, record: &Thread) -> thread::Copi
     copied
 }
 
+pub enum Removal {
+    Removed,
+    /// The folder was gone before the removal; says what became of the workspace.
+    AlreadyGone(String),
+}
+
+/// The thread's own workspace, when it is still open on its worktree. A pane
+/// elsewhere that happens to have `cd`'d into the worktree does not count.
+pub fn own_workspace(record: &Thread, panes: &[Pane]) -> Option<String> {
+    panes.iter().find(|p| p.workspace_id == record.workspace_id && Path::new(&p.cwd).starts_with(&record.worktree_path)).map(|p| p.workspace_id.clone())
+}
+
+/// A local worktree whose folder no longer exists: git and herdr would both
+/// refuse to remove it ("is not a working tree").
+pub fn worktree_gone(record: &Thread) -> bool {
+    !record.is_remote() && !record.worktree_path.is_empty() && !Path::new(&record.worktree_path).exists()
+}
+
 /// Never forces. herdr's or git's refusal (for example uncommitted changes) is
 /// reported unchanged. An open workspace goes through `herdr worktree remove
-/// --workspace`, which also closes it (checked on 0.9.1).
-pub fn remove_worktree(ctx: &Ctx, project: &Project, record: &Thread, view: Option<&SessionView>) -> Result<()> {
+/// --workspace`, which also closes it (checked on 0.9.1). A worktree whose
+/// folder is already gone is pruned from git and its workspace closed.
+pub fn remove_worktree(ctx: &Ctx, project: &Project, record: &Thread, view: Option<&SessionView>) -> Result<Removal> {
     if record.worktree_path.is_empty() {
         bail!("{} has no recorded worktree", record.id);
     }
     let _ = project;
+    if worktree_gone(record) {
+        let _ = git(ctx.runner, &record.repo, &["worktree", "prune"], GIT_TIMEOUT);
+        let closed = match view.and_then(|v| own_workspace(record, &v.panes).map(|w| (v, w))) {
+            Some((view, workspace)) => match view.herdr.call(&["workspace", "close", &workspace], crate::herdr::CALL_TIMEOUT) {
+                Ok(_) => "its workspace closed".to_string(),
+                Err(error) => format!("its workspace {workspace} could not be closed ({error})"),
+            },
+            None => "no workspace was open on it".to_string(),
+        };
+        return Ok(Removal::AlreadyGone(closed));
+    }
     if let Some(view) = view {
         let (_, panes) = lists_for(view, record)?;
-        // Only the thread's own workspace: a pane elsewhere that happens to
-        // have `cd`'d into this worktree must not get its workspace removed.
-        let open = panes.iter().find(|p| p.workspace_id == record.workspace_id && Path::new(&p.cwd).starts_with(&record.worktree_path)).map(|p| p.workspace_id.clone());
-        if let Some(workspace) = open {
-            return view.herdr.on_machine(&record.machine).worktree_remove(&workspace).map_err(|error| anyhow::anyhow!("{error}"));
+        if let Some(workspace) = own_workspace(record, &panes) {
+            return view.herdr.on_machine(&record.machine).worktree_remove(&workspace).map(|_| Removal::Removed).map_err(|error| anyhow::anyhow!("{error}"));
         }
     }
     if record.is_remote() {
@@ -935,11 +973,11 @@ pub fn remove_worktree(ctx: &Ctx, project: &Project, record: &Thread, view: Opti
         if !out.success() {
             bail!("{}", out.error_text());
         }
-        return Ok(());
+        return Ok(Removal::Removed);
     }
     git(ctx.runner, &record.repo, &["worktree", "remove", &record.worktree_path], Duration::from_secs(20))?;
     let _ = git(ctx.runner, &record.repo, &["worktree", "prune"], GIT_TIMEOUT);
-    Ok(())
+    Ok(Removal::Removed)
 }
 
 /// A thread with its live state and group, for `thread list`, `thread show`

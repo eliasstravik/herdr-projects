@@ -416,6 +416,60 @@ fn resolving_a_merged_thread_removes_worktree_and_branch_and_an_unmerged_one_kee
 }
 
 #[test]
+fn resolving_a_thread_whose_worktree_is_already_gone_closes_its_workspace() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let gone = world.home.path().join("gone");
+    world.thread(&project, &gone, |t| {
+        t.branch = "hp/demo/t-0001-task".into();
+        t.pr_state = "MERGED".into();
+    });
+    let cwd = gone.to_string_lossy().into_owned();
+    *world.panes.borrow_mut() = format!("[{}]", pane_json("w2", "w2:t1", "w2:p1", &cwd));
+    // What herdr says of a worktree git no longer knows.
+    world.runner.on("worktree remove", fail(1, "fatal: not a working tree (worktree_remove_failed)"));
+    world.runner.on("worktree prune", ok(""));
+    world.runner.on("workspace close", ok(r#"{"result":{}}"#));
+    world.runner.on("rev-parse --verify --quiet refs/heads/hp/demo/t-0001-task", fail(1, ""));
+    let mut state = crate::steps::load_state(&project);
+    state.prs.insert("t-0001".into(), crate::pr::Summary { state: "MERGED".into(), head_oid: "abc123".into(), ..Default::default() });
+    crate::steps::save_state(&project, &state).unwrap();
+
+    threads::resolve(&world.ctx(), "demo", "t-0001", &ResolveArgs::default()).unwrap();
+    assert_eq!(world.runner.count("worktree remove"), 0);
+    assert_eq!(world.runner.count("worktree prune"), 1);
+    assert_eq!(world.runner.count("workspace close w2"), 1);
+    assert!(thread::load(&project, "t-0001").unwrap().worktree_path.is_empty());
+    let item = inbox::unhandled(&project).into_iter().find(|i| i.kind == "thread-state").unwrap();
+    assert!(item.summary.contains("was already gone; its workspace closed"), "{}", item.summary);
+    assert!(item.summary.contains("branch hp/demo/t-0001-task was already deleted"), "{}", item.summary);
+    assert!(!item.summary.contains("kept"), "{}", item.summary);
+}
+
+#[test]
+fn sweep_closes_a_resolved_threads_workspace_left_on_a_gone_worktree() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let gone = world.home.path().join("gone");
+    world.thread(&project, &gone, |t| t.status = Status::Resolved);
+    let cwd = gone.to_string_lossy().into_owned();
+    *world.panes.borrow_mut() = format!("[{}]", pane_json("w2", "w2:t1", "w2:p1", &cwd));
+    world.runner.on("workspace close", ok(r#"{"result":{}}"#));
+    let orphans = crate::sweep::find(&world.ctx(), &project);
+    assert!(orphans.contains(&crate::sweep::Orphan::Workspace { id: "t-0001".into(), workspace: "w2".into() }), "{orphans:?}");
+    crate::sweep::run(&world.ctx(), "demo", false, true).unwrap();
+    assert_eq!(world.runner.count("workspace close w2"), 1);
+    assert!(thread::load(&project, "t-0001").unwrap().worktree_path.is_empty());
+
+    // A worktree that is still there is not this orphan.
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    world.thread(&project, world.home.path(), |t| t.status = Status::Resolved);
+    *world.panes.borrow_mut() = format!("[{}]", pane_json("w2", "w2:t1", "w2:p1", &world.home.path().to_string_lossy()));
+    assert!(!crate::sweep::find(&world.ctx(), &project).iter().any(|o| matches!(o, crate::sweep::Orphan::Workspace { .. })));
+}
+
+#[test]
 fn resolving_the_last_thread_closes_its_empty_repo_space() {
     let world = World::new();
     let project = world.project("demo", "a.sock");

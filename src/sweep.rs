@@ -1,6 +1,7 @@
 //! `sweep`: what a project left behind and nothing uses any more. Worktrees
 //! on `hp/<slug>/` branches with no open thread, local branches of resolved
-//! threads whose pull request merged, tabs of resolved threads, working
+//! threads whose pull request merged, tabs of resolved threads, their
+//! workspaces still open on a worktree that is gone, working
 //! folders of long-resolved tab threads, handled inbox items older than 30
 //! days, and empty repository Spaces herdr grouped their worktrees under.
 //! `--dry-run` lists; otherwise each is removed after a confirmation.
@@ -24,6 +25,8 @@ pub enum Orphan {
     Worktree { repo: String, path: String, workspace: Option<String>, branch: String, thread: Option<String> },
     Branch { repo: String, branch: String },
     Tab { id: String, tab: String },
+    /// A resolved thread's workspace, still open on a worktree folder that is gone.
+    Workspace { id: String, workspace: String },
     Folder { id: String, path: PathBuf },
     Space(crate::spaces::Space),
     DoneItems { count: usize },
@@ -35,6 +38,7 @@ impl Orphan {
             Orphan::Worktree { path, branch, workspace, .. } => format!("worktree {path} ({branch}){} with no open thread", if workspace.is_some() { ", workspace open" } else { "" }),
             Orphan::Branch { branch, .. } => format!("branch {branch}: its thread is resolved and its pull request merged"),
             Orphan::Tab { id, tab } => format!("tab {tab} of resolved thread {id}"),
+            Orphan::Workspace { id, workspace } => format!("workspace {workspace} of resolved thread {id}, its worktree already gone"),
             Orphan::Folder { id, path } => format!("working folder {} of {id}, resolved long ago (its report is home)", path.display()),
             Orphan::Space(space) => format!("empty Space {} ({}) its threads' worktrees were grouped under", space.label, space.id),
             Orphan::DoneItems { count } => format!("{count} handled inbox item(s) older than 30 days"),
@@ -124,6 +128,12 @@ pub fn find(ctx: &Ctx, project: &Project) -> Vec<Orphan> {
         {
             orphans.push(Orphan::Tab { id: t.id.clone(), tab: t.tab_id.clone() });
         }
+        if t.kind == Kind::Worktree
+            && threads::worktree_gone(t)
+            && let Some(workspace) = view.as_ref().and_then(|v| threads::own_workspace(t, &v.panes))
+        {
+            orphans.push(Orphan::Workspace { id: t.id.clone(), workspace });
+        }
         let folder = project.dir().join("threads").join(&t.id);
         if t.kind == Kind::Tab && folder.is_dir() && older_than(&t.updated, settings.auto_resolve_days.max(1), now) && thread::home_report_path(project, &t.id).is_file() {
             orphans.push(Orphan::Folder { id: t.id.clone(), path: folder });
@@ -165,6 +175,12 @@ fn remove(ctx: &Ctx, project: &Project, orphan: &Orphan) -> Result<()> {
         Orphan::Tab { tab, .. } => {
             let view = threads::session_view(ctx, project).ok_or_else(|| anyhow::anyhow!("the session is not reachable"))?;
             view.herdr.call(&["tab", "close", tab], crate::herdr::CALL_TIMEOUT).map(|_| ()).map_err(|e| anyhow::anyhow!("{e}"))
+        }
+        Orphan::Workspace { id, workspace } => {
+            let view = threads::session_view(ctx, project).ok_or_else(|| anyhow::anyhow!("the session is not reachable"))?;
+            view.herdr.call(&["workspace", "close", workspace], crate::herdr::CALL_TIMEOUT).map_err(|e| anyhow::anyhow!("{e}"))?;
+            thread::update(project, id, |t| t.worktree_path.clear())?;
+            Ok(())
         }
         Orphan::Folder { path, .. } => Ok(std::fs::remove_dir_all(path)?),
         Orphan::Space(space) => {
