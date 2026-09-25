@@ -362,7 +362,7 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
             notes.push(format!("{}: sidebar rows, popup key `{key}` and tab-bar entry already in place", file.display()));
         } else {
             crate::sidebar::check_config(&ctx.env.herdr_bin(), ctx.runner, &after, &ctx.config_dir)?;
-            notes.push(format!("{}: adding the sidebar rails, the popup key `{key}` and the tab-bar entry", file.display()));
+            notes.push(format!("{}: adding the project grouping rows, the popup key `{key}` and the tab-bar entry", file.display()));
             edits.push((file, Owned { before, after, kind: "config".into(), command: Some(command) }));
         }
     }
@@ -675,7 +675,7 @@ mod tests {
 
         configure(&ctx, &options(None)).unwrap();
         let text = std::fs::read_to_string(&config).unwrap();
-        assert!(text.contains("# my theme") && text.contains("prefix+a") && text.contains("$hp_top_w") && text.contains("needs-you --line"));
+        assert!(text.contains("# my theme") && text.contains("prefix+a") && text.contains("$hp_sub") && text.contains("needs-you --line"));
         assert_eq!(runner.count("config check"), 1);
         // A second run keeps the configured key.
         configure(&ctx, &options(None)).unwrap();

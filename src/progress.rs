@@ -145,7 +145,7 @@ pub fn current_within(env: &Env, runner: &dyn Runner, timeout: std::time::Durati
 }
 
 /// `report --percent N|--unknown --activity "..."`, run by the agent in its
-/// pane. Writes the record; the ticker shows its activity on the pane's rail
+/// pane. Writes the record; the ticker shows its activity on the pane's sub-line
 /// while it is [`fresh`].
 pub fn report(ctx: &Ctx, percent: Option<u8>, activity: &str) -> Result<()> {
     let Some(pane) = current(ctx.env, ctx.runner) else {

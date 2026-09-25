@@ -1,101 +1,48 @@
-//! Groups Herdr's sidebar by project as a rail: a corner with the project
-//! name, each card's own status icon on the rail, and an end corner, the same
-//! in the agents and the Spaces list. The rail's colour and weight say the
-//! project's state (heavy red: needs you; lilac: working; grey: idle; dashed:
-//! no project).
+//! Groups Herdr's sidebar by project with nothing but order and one head row
+//! per project, the same in the agents and the Spaces list. The head is the
+//! project's own row: its home Space and its coordinator show the project
+//! name in bold, the rows after them are Herdr's own. Every row a card shows
+//! is that item's own content, so focus and selection light only the item.
 //!
-//! Herdr 0.9.1 puts ` · ` after every token but the status icon, and draws a
-//! card's row 0 one indent left of its other rows. So the rail never shares a
-//! row with Herdr's tokens: every card gets a row 0 of ours (the corner, or a
-//! `│` connector), which puts its own row at the continuation indent, right on
-//! the rail. Sub-lines and the end corner are rows of ours too. Worktree
-//! children are drawn by Herdr with `├─`/`└─` in that same column, so they
-//! join the rail, and a block that ends in one is closed by Herdr's `└─`.
+//! The bold comes from a config rule keyed on an invisible mark in the name:
+//! [`HOME_MARK`] ends every home Space label, [`HEAD_MARK`] every coordinator
+//! display name. A mark in the name, not a list of names in the config,
+//! because a client draws another machine's rows with its own config.
 //!
 //! Agents sort by `$hp_group` in the agent view; Spaces are moved into one
-//! block per project with `workspace.move`. Anything in no project forms the
-//! `other` block, last.
+//! block per project with `workspace.move`. Anything in no project comes last.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use crate::herdr::{Agent, CALL_TIMEOUT, Herdr, Workspace};
 
-/// Herdr drops a token whose value is only whitespace; U+2800 (braille blank)
-/// is kept and draws as an empty cell.
-pub const BLANK: &str = "\u{2800}";
-/// Moves a row-0 value to the continuation column (Herdr trims leading
-/// whitespace, not U+2800).
-const PAD: &str = "\u{2800}\u{2800}";
-/// Ends every home Space label. The Space rows hide a `workspace` value that
-/// contains it and show `$hp_home` instead, so the home row says `home` under
-/// the corner that already names the project. A mark in the label, not a list
-/// of names in the config, because a client draws another machine's Spaces
-/// with its own config.
+/// Ends every home Space label; the Space rows make a label that contains it
+/// the project's bold head.
 pub const HOME_MARK: char = '\u{2800}';
+/// Ends every coordinator's display name; the agent rows make a name that
+/// contains it the project's bold head. Zero-width, so it takes no cell.
+pub const HEAD_MARK: char = '\u{200B}';
 /// The group key of whatever belongs to no project: sorts after every slug.
 const OTHER: &str = "~";
-/// The rows of a card, in the order the config lists them.
-pub const SLOTS: [&str; 4] = ["top", "con", "sub", "end"];
-
-/// A project's state, as its rail shows it.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum Rail {
-    Needs,
-    Working,
-    #[default]
-    Idle,
-    /// The `other` block: nothing of any project.
-    Other,
-}
-
-impl Rail {
-    pub const ALL: [Rail; 4] = [Rail::Needs, Rail::Working, Rail::Idle, Rail::Other];
-
-    pub fn suffix(self) -> &'static str {
-        match self {
-            Rail::Needs => "n",
-            Rail::Working => "w",
-            Rail::Idle => "i",
-            Rail::Other => "o",
-        }
-    }
-
-    /// Herdr's palette: red is what Herdr uses for blocked, the accent lilac
-    /// for active, overlay tones for quiet.
-    pub fn color(self) -> &'static str {
-        match self {
-            Rail::Needs => "#f38ba8",
-            Rail::Working => "#cba6f7",
-            Rail::Idle => "#7f849c",
-            Rail::Other => "#6c7086",
-        }
-    }
-
-    /// `(corner, rail, end)`.
-    fn glyphs(self) -> (&'static str, &'static str, &'static str) {
-        match self {
-            Rail::Needs => ("┏━", "┃", "┗━"),
-            Rail::Other => ("┌╌", "╎", "└╌"),
-            Rail::Working | Rail::Idle => ("┌─", "│", "└─"),
-        }
-    }
-}
-
-pub fn token(slot: &str, rail: Rail) -> String {
-    format!("hp_{slot}_{}", rail.suffix())
-}
 
 /// Every token this module writes.
 pub fn tokens() -> Vec<String> {
-    let mut all: Vec<String> = SLOTS.iter().flat_map(|slot| Rail::ALL.map(|rail| token(slot, rail))).collect();
-    all.extend(["hp_gap", "hp_home", "hp_group"].map(String::from));
-    all
+    ["hp_sub", "hp_group"].map(String::from).to_vec()
 }
 
-/// Tokens of the 0.2.17/0.2.18 layout: cleared with a pane's or Space's own
-/// tokens, and otherwise left to expire (they had a TTL).
-pub const LEGACY: [&str; 7] = ["hp_top", "hp_other", "hp_note", "hp_tail", "hp", "hp_state", "hp_activity"];
+/// Tokens of earlier layouts: the 0.2.17/0.2.18 headings and the 0.2.19
+/// rails. Cleared with a pane's or Space's own tokens, and otherwise left to
+/// expire (they had a TTL and have no rows any more).
+pub fn legacy() -> Vec<String> {
+    let mut all: Vec<String> = ["hp_top", "hp_other", "hp_note", "hp_tail", "hp", "hp_state", "hp_activity", "hp_gap", "hp_home"].map(String::from).to_vec();
+    for slot in ["top", "con", "sub", "end"] {
+        for rail in ["n", "w", "i", "o"] {
+            all.push(format!("hp_{slot}_{rail}"));
+        }
+    }
+    all
+}
 
 /// One agent of a project: its pane, sort key and sub-line.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -109,8 +56,6 @@ pub struct PaneRow {
 /// One project's part of a session, as its tick saw it.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ProjectPart {
-    pub name: String,
-    pub rail: Rail,
     /// The project's agents in panel order.
     pub panes: Vec<PaneRow>,
     /// The home Space.
@@ -138,92 +83,35 @@ pub type Tokens = Vec<(String, Option<String>)>;
 #[derive(Debug, Default, PartialEq)]
 pub struct Plan {
     pub agents: Vec<(String, Tokens)>,
-    pub spaces: Vec<(String, Tokens)>,
     /// The Space order Herdr should end up with.
     pub order: Vec<String>,
 }
 
-/// What a card's row 0 shows.
-enum Head<'a> {
-    /// The first card of a block: the corner with the block's name.
-    Corner(&'a str),
-    /// Any other card: a piece of rail, so its own row lands on the rail.
-    Connector,
-    /// A worktree child: Herdr draws its `├─`/`└─` on the rail itself.
-    Child,
-}
-
-/// One card's rail tokens. Every rail token of every state is listed, so a
-/// project that changes state clears the old colour.
-fn card(rail: Rail, head: Head, sub: &str, end: bool, gap: bool) -> Tokens {
-    let (corner, line, close) = rail.glyphs();
-    let mut set: HashMap<&str, String> = HashMap::new();
-    match head {
-        Head::Corner(name) => {
-            set.insert("top", format!("{PAD}{corner} {name}"));
-        }
-        Head::Connector => {
-            set.insert("con", format!("{PAD}{line}"));
-        }
-        Head::Child => {}
-    }
-    if !sub.is_empty() {
-        set.insert("sub", format!("{line} {sub}"));
-    }
-    if end {
-        set.insert("end", close.to_string());
-    }
-    let mut out: Tokens = Vec::new();
-    for slot in SLOTS {
-        for r in Rail::ALL {
-            out.push((token(slot, r), if r == rail { set.get(slot).cloned() } else { None }));
-        }
-    }
-    out.push(("hp_gap".into(), gap.then(|| BLANK.to_string())));
-    out
-}
-
-fn name_and_rail<'a>(parts: &'a Parts, group: &str) -> (&'a str, Rail) {
-    match parts.get(group) {
-        Some(part) => (part.name.as_str(), part.rail),
-        None => ("other", Rail::Other),
-    }
-}
-
 /// The whole layout of one session. Agents: projects by slug, each in its own
 /// key order, then every other agent in Herdr's order. Spaces: the same
-/// blocks; a worktree Space Herdr draws under its repository Space stays
-/// there.
+/// blocks, then every other Space in Herdr's order.
 pub fn plan(parts: &Parts, agents: &[Agent], workspaces: &[Workspace]) -> Plan {
     let mut out = Plan::default();
     if parts.is_empty() {
         return out;
     }
-
-    // Agents.
-    let mut owner: HashMap<&str, (&str, &PaneRow)> = HashMap::new();
-    for (slug, part) in parts {
+    let mut owner: HashMap<&str, &PaneRow> = HashMap::new();
+    for part in parts.values() {
         for row in &part.panes {
-            owner.entry(row.pane.as_str()).or_insert((slug.as_str(), row));
+            owner.entry(row.pane.as_str()).or_insert(row);
         }
     }
-    let mut rows: Vec<(String, String, &str, &str)> = agents
+    let mut rows: Vec<(String, &str, &str)> = agents
         .iter()
         .enumerate()
         .map(|(i, a)| match owner.get(a.pane_id.as_str()) {
-            Some((slug, row)) => ((*slug).to_string(), row.key.clone(), a.pane_id.as_str(), row.sub.as_str()),
-            None => (OTHER.to_string(), format!("{OTHER}!{i:04}"), a.pane_id.as_str(), ""),
+            Some(row) => (row.key.clone(), a.pane_id.as_str(), row.sub.as_str()),
+            None => (format!("{OTHER}!{i:04}"), a.pane_id.as_str(), ""),
         })
         .collect();
-    rows.sort_by(|a, b| a.1.cmp(&b.1));
-    for (i, (group, key, pane, sub)) in rows.iter().enumerate() {
-        let first = i == 0 || rows[i - 1].0 != *group;
-        let next = rows.get(i + 1);
-        let last = next.is_none_or(|n| n.0 != *group);
-        let (name, rail) = name_and_rail(parts, group);
-        let head = if first { Head::Corner(name) } else { Head::Connector };
-        let mut tokens = card(rail, head, sub, last, last && next.is_some());
-        tokens.push(("hp_group".into(), Some(key.clone())));
+    rows.sort_by(|a, b| a.0.cmp(&b.0));
+    for (key, pane, sub) in rows {
+        let tokens = vec![("hp_sub".to_string(), (!sub.is_empty()).then(|| sub.to_string())), ("hp_group".to_string(), Some(key))];
         out.agents.push((pane.to_string(), tokens));
     }
 
@@ -234,7 +122,6 @@ pub fn plan(parts: &Parts, agents: &[Agent], workspaces: &[Workspace]) -> Plan {
             space_owner.entry(id.as_str()).or_insert((slug.as_str(), i));
         }
     }
-    let homes: HashSet<&str> = parts.values().map(|p| p.home.as_str()).filter(|h| !h.is_empty()).collect();
     let mut ordered: Vec<(&str, usize, &Workspace)> = workspaces
         .iter()
         .enumerate()
@@ -245,60 +132,6 @@ pub fn plan(parts: &Parts, agents: &[Agent], workspaces: &[Workspace]) -> Plan {
         .collect();
     ordered.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
     out.order = ordered.iter().map(|(_, _, w)| w.workspace_id.clone()).collect();
-
-    // What Herdr draws from that order (ui::sidebar::workspace_list_entries):
-    // a repository with two or more Spaces, one of them its main checkout,
-    // is one entry at its first member, the main checkout first.
-    let key = |w: &Workspace| w.worktree.as_ref().map(|t| t.repo_key.clone()).filter(|k| !k.is_empty());
-    let mut members: HashMap<String, Vec<usize>> = HashMap::new();
-    for (i, (_, _, w)) in ordered.iter().enumerate() {
-        if let Some(k) = key(w) {
-            members.entry(k).or_default().push(i);
-        }
-    }
-    let parent_of = |k: &str| -> Option<usize> {
-        let list = members.get(k)?;
-        if list.len() < 2 {
-            return None;
-        }
-        list.iter().copied().find(|i| ordered[*i].2.worktree.as_ref().is_some_and(|t| !t.is_linked_worktree))
-    };
-    // (index into `ordered`, drawn indented, block of its top-level entry)
-    let mut drawn: Vec<(usize, bool, &str)> = Vec::new();
-    let mut emitted = HashSet::new();
-    for (i, (group, _, w)) in ordered.iter().enumerate() {
-        let Some(parent) = key(w).and_then(|k| parent_of(&k).map(|p| (k, p))) else {
-            drawn.push((i, false, group));
-            continue;
-        };
-        let (k, parent) = parent;
-        if !emitted.insert(k.clone()) {
-            continue;
-        }
-        let block = ordered[parent].0;
-        drawn.push((parent, false, block));
-        for m in &members[&k] {
-            if *m != parent {
-                drawn.push((*m, true, block));
-            }
-        }
-    }
-    for (n, (i, indented, block)) in drawn.iter().enumerate() {
-        let first = n == 0 || drawn[n - 1].2 != *block;
-        let next = drawn.get(n + 1);
-        let last = next.is_none_or(|d| d.2 != *block);
-        let (name, rail) = name_and_rail(parts, block);
-        let head = match (indented, first) {
-            (true, _) => Head::Child,
-            (false, true) => Head::Corner(name),
-            (false, false) => Head::Connector,
-        };
-        let w = ordered[*i].2;
-        let mut tokens = card(rail, head, "", last && !indented, last && next.is_some());
-        let home = homes.contains(w.workspace_id.as_str()) && w.label.ends_with(HOME_MARK);
-        tokens.push(("hp_home".into(), home.then(|| "home".to_string())));
-        out.spaces.push((w.workspace_id.clone(), tokens));
-    }
     out
 }
 
@@ -323,9 +156,10 @@ pub fn moves(current: &[String], wanted: &[String]) -> Vec<(String, usize)> {
 /// Home Spaces whose label lacks [`HOME_MARK`] (made before 0.2.19, or
 /// renamed by hand): `(id, label with the mark)`.
 pub fn unmarked_homes(parts: &Parts, workspaces: &[Workspace]) -> Vec<(String, String)> {
-    parts
-        .values()
-        .filter_map(|part| workspaces.iter().find(|w| !part.home.is_empty() && w.workspace_id == part.home))
+    let homes: HashSet<&str> = parts.values().map(|p| p.home.as_str()).filter(|h| !h.is_empty()).collect();
+    workspaces
+        .iter()
+        .filter(|w| homes.contains(w.workspace_id.as_str()))
         .filter(|w| !w.label.is_empty() && !w.label.ends_with(HOME_MARK))
         .map(|w| (w.workspace_id.clone(), format!("{}{HOME_MARK}", w.label)))
         .collect()
@@ -368,18 +202,18 @@ pub fn report(herdr: &Herdr, kind: &str, id: &str, tokens: &Tokens) {
     }
 }
 
-/// Clears every token this module and the 0.2.17/0.2.18 layout wrote.
+/// Clears every token this module and the earlier layouts wrote.
 pub fn clear(herdr: &Herdr, kind: &str, id: &str) {
     if id.is_empty() {
         return;
     }
-    let all: Tokens = tokens().into_iter().chain(LEGACY.map(String::from)).map(|t| (t, None)).collect();
+    let all: Tokens = tokens().into_iter().chain(legacy()).map(|t| (t, None)).collect();
     report(herdr, kind, id, &all);
 }
 
 /// Lays out one session: marks home Spaces, moves Spaces into blocks and
-/// writes every card's rail tokens. Nothing when no project lives in the
-/// session.
+/// writes every agent's sort key and sub-line. Nothing when no project lives
+/// in the session.
 pub fn apply(herdr: &Herdr, socket: &str, parts: &Parts, agents: &[Agent], sent: &mut Sent) {
     if parts.is_empty() {
         return;
@@ -404,11 +238,6 @@ pub fn apply(herdr: &Herdr, socket: &str, parts: &Parts, agents: &[Agent], sent:
             report(herdr, "pane", pane, tokens);
         }
     }
-    for (space, tokens) in &layout.spaces {
-        if sent.due((format!("{socket} workspace"), space.clone()), tokens) {
-            report(herdr, "workspace", space, tokens);
-        }
-    }
 }
 
 #[cfg(test)]
@@ -425,26 +254,16 @@ mod tests {
         Workspace { workspace_id: id.into(), label: id.into(), worktree, ..Workspace::default() }
     }
 
-    /// The tokens a card sets, ignoring the ones it clears.
-    fn set(tokens: &Tokens) -> BTreeMap<&str, &str> {
-        tokens.iter().filter_map(|(n, v)| v.as_deref().map(|v| (n.as_str(), v))).collect()
-    }
-
     fn row(pane: &str, key: String, sub: &str) -> PaneRow {
         PaneRow { pane: pane.into(), key, sub: sub.into() }
     }
 
     fn parts() -> Parts {
         let mut parts = Parts::new();
-        parts.insert(
-            "beta".into(),
-            ProjectPart { name: "Beta".into(), rail: Rail::Idle, panes: vec![row("b1", coordinator_key("beta", "b1"), "")], home: "wb".into(), spaces: vec!["wb".into()] },
-        );
+        parts.insert("beta".into(), ProjectPart { panes: vec![row("b1", coordinator_key("beta", "b1"), "")], home: "wb".into(), spaces: vec!["wb".into()] });
         parts.insert(
             "alpha".into(),
             ProjectPart {
-                name: "Alpha".into(),
-                rail: Rail::Needs,
                 panes: vec![
                     row("a2", thread_key("alpha", 4, "t-0002"), "~40% · Writing"),
                     row("a1", coordinator_key("alpha", "a1"), ""),
@@ -457,42 +276,32 @@ mod tests {
         parts
     }
 
+    fn get<'a>(tokens: &'a Tokens, name: &str) -> Option<&'a str> {
+        tokens.iter().find(|(n, _)| n == name).and_then(|(_, v)| v.as_deref())
+    }
+
     #[test]
-    fn agents_form_one_rail_per_project_and_others_last() {
+    fn agents_sort_into_projects_with_their_own_sub_lines_and_others_last() {
         let agents: Vec<Agent> = ["x1", "a2", "b1", "a3", "x2", "a1"].into_iter().map(agent).collect();
         let layout = plan(&parts(), &agents, &[]);
         let order: Vec<&str> = layout.agents.iter().map(|(p, _)| p.as_str()).collect();
         assert_eq!(order, ["a1", "a3", "a2", "b1", "x1", "x2"]);
-        let t: HashMap<&str, BTreeMap<&str, &str>> = layout.agents.iter().map(|(p, t)| (p.as_str(), set(t))).collect();
-        // Alpha needs you: a heavy red rail from corner to end.
-        assert_eq!(t["a1"]["hp_top_n"], "\u{2800}\u{2800}┏━ Alpha");
-        assert!(!t["a1"].contains_key("hp_con_n") && !t["a1"].contains_key("hp_end_n"));
-        assert_eq!(t["a3"]["hp_con_n"], "\u{2800}\u{2800}┃");
-        assert_eq!(t["a3"]["hp_sub_n"], "┃ review · report");
-        assert_eq!(t["a2"]["hp_end_n"], "┗━");
-        assert_eq!(t["a2"]["hp_gap"], BLANK, "a gap before the next block");
-        // Beta is idle, alone: corner and end on one card.
-        assert_eq!(t["b1"]["hp_top_i"], "\u{2800}\u{2800}┌─ Beta");
-        assert_eq!(t["b1"]["hp_end_i"], "└─");
-        assert!(!t["b1"].contains_key("hp_sub_i"), "no sub-line without text");
-        // Everything else: a dashed `other` rail, and no gap after the last.
-        assert_eq!(t["x1"]["hp_top_o"], "\u{2800}\u{2800}┌╌ other");
-        assert_eq!(t["x2"]["hp_con_o"], "\u{2800}\u{2800}╎");
-        assert_eq!(t["x2"]["hp_end_o"], "└╌");
-        assert!(!t["x2"].contains_key("hp_gap"));
-        // Every card clears the other states' tokens.
-        let a1 = &layout.agents[0].1;
-        assert!(a1.iter().any(|(n, v)| n == "hp_top_i" && v.is_none()));
+        let t: HashMap<&str, &Tokens> = layout.agents.iter().map(|(p, t)| (p.as_str(), t)).collect();
+        assert_eq!(get(t["a3"], "hp_sub"), Some("review · report"));
+        assert_eq!(get(t["a1"], "hp_sub"), None, "an empty sub-line is cleared, so no row is drawn");
+        assert!(t["a1"].iter().any(|(n, v)| n == "hp_sub" && v.is_none()));
+        // No card carries a row of ours besides its own sub-line.
+        assert!(layout.agents.iter().all(|(_, t)| t.iter().all(|(n, _)| n == "hp_sub" || n == "hp_group")));
         // The sort key the agent view uses reproduces this order.
-        let keys: Vec<&str> = layout.agents.iter().map(|(_, t)| t.iter().find(|(n, _)| n == "hp_group").unwrap().1.as_deref().unwrap()).collect();
+        let keys: Vec<&str> = layout.agents.iter().map(|(_, t)| get(t, "hp_group").unwrap()).collect();
         let mut sorted = keys.clone();
         sorted.sort();
         assert_eq!(keys, sorted);
     }
 
     #[test]
-    fn spaces_share_the_rail_and_worktrees_join_it() {
-        let mut workspaces = vec![
+    fn spaces_move_into_project_blocks_and_others_keep_their_order_last() {
+        let workspaces = vec![
             space("mine", "", false),
             space("wt3", "r", true),
             space("wb", "", false),
@@ -501,23 +310,8 @@ mod tests {
             space("wt2", "r", true),
             space("other2", "", false),
         ];
-        workspaces[4].label = format!("Alpha{HOME_MARK}");
         let layout = plan(&parts(), &[], &workspaces);
         assert_eq!(layout.order, ["wa", "repo", "wt2", "wt3", "wb", "mine", "other2"]);
-        let t: HashMap<&str, BTreeMap<&str, &str>> = layout.spaces.iter().map(|(p, t)| (p.as_str(), set(t))).collect();
-        assert_eq!(t["wa"]["hp_top_n"], "\u{2800}\u{2800}┏━ Alpha");
-        assert_eq!(t["wa"]["hp_home"], "home", "a marked home label says home");
-        assert!(!t["wb"].contains_key("hp_home"), "an unmarked label keeps its own name");
-        assert_eq!(t["repo"]["hp_con_n"], "\u{2800}\u{2800}┃");
-        assert!(t["wt2"].is_empty(), "Herdr draws a worktree child on the rail");
-        // The block ends in a worktree child: Herdr's `└─` closes it.
-        assert_eq!(t["wt3"].get("hp_end_n"), None);
-        assert_eq!(t["wt3"]["hp_gap"], BLANK);
-        assert_eq!(t["wb"]["hp_top_i"], "\u{2800}\u{2800}┌─ Beta");
-        assert_eq!(t["wb"]["hp_end_i"], "└─");
-        assert_eq!(t["mine"]["hp_top_o"], "\u{2800}\u{2800}┌╌ other");
-        assert_eq!(t["other2"]["hp_end_o"], "└╌");
-        assert!(!t["other2"].contains_key("hp_gap"));
     }
 
     #[test]
@@ -530,9 +324,13 @@ mod tests {
     }
 
     #[test]
-    fn a_card_never_passes_herdrs_token_limit_in_one_report() {
-        assert!(tokens().len() > PER_REPORT, "the chunking in report() is needed");
-        assert!(LEGACY.iter().all(|t| !tokens().iter().any(|n| n == t)));
+    fn clearing_covers_every_earlier_layout_and_fits_herdrs_token_limit_in_chunks() {
+        let all = legacy();
+        for old in ["hp_top", "hp_top_w", "hp_end_o", "hp_con_n", "hp_sub_i", "hp_gap", "hp_home", "hp_activity"] {
+            assert!(all.iter().any(|t| t == old), "{old}");
+        }
+        assert!(tokens().len() + all.len() > PER_REPORT, "the chunking in report() is needed");
+        assert!(all.iter().all(|t| !tokens().contains(t)));
     }
 
     #[test]
