@@ -16,6 +16,12 @@ const TOOL_TIMEOUT: Duration = Duration::from_secs(10);
 /// Prints the report and returns whether every required check passed. With
 /// `fix`, repairs what the binary owns: priming files, `uploads/`, the
 /// absolute binary path they carry, and the skill link for a configured harness. Never edits another plugin's entries.
+/// Herdr's config runs this binary in the tab bar and has the project
+/// heading rows (added in 0.2.17); otherwise `--fix` runs `configure`.
+fn sidebar_current(text: &str, tab_command: &str) -> bool {
+    text.contains(tab_command) && text.contains("$hp_top")
+}
+
 pub fn run(ctx: &Ctx, session: &SessionFlags, fix: bool) -> Result<bool> {
     let skill = crate::setup::skill_source();
     let (text, healthy) = report(ctx.env, &ctx.root, &ctx.config_dir, session, ctx.runner, fix, skill.as_deref());
@@ -310,7 +316,7 @@ fn report(
         let expected = crate::setup::hook_command(&binary, root, agent);
         match journal.get(&key) {
             None => check(&mut out, None, &label, "not configured; `configure` installs the progress hooks".into()),
-            Some(_) if text.contains(&expected) && text.contains("$hp_top") => check(&mut out, Some(true), &label, format!("{} runs this binary", file.display())),
+            Some(_) if text.contains(&expected) => check(&mut out, Some(true), &label, format!("{} runs this binary", file.display())),
             Some(_) if fix => {
                 let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: crate::setup::skill_source() };
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
@@ -366,7 +372,7 @@ fn report(
         let key = file.to_string_lossy().into_owned();
         match journal.get(&key) {
             None => check(&mut out, None, "sidebar", "not configured; `configure` adds the sidebar rows, the popup key and the tab-bar count".into()),
-            Some(_) if text.contains(&expected) => check(&mut out, Some(true), "sidebar", format!("{} has the rows, the popup key and the tab-bar entry", file.display())),
+            Some(_) if sidebar_current(&text, &expected) => check(&mut out, Some(true), "sidebar", format!("{} has the rows, the popup key and the tab-bar entry", file.display())),
             Some(_) if fix => {
                 let options = crate::setup::ConfigureOptions { clients: vec![], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: true, key: None, herdr_config: None, skill: crate::setup::skill_source() };
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
@@ -403,6 +409,15 @@ fn report(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_sidebar_without_the_heading_rows_is_not_current() {
+        let command = "'/b/herdr-projects' --root /r needs-you --line";
+        let old = format!("[ui]\ntab_bar_right = [{{ type = \"command\", command = \"{command}\" }}]\n");
+        assert!(!super::sidebar_current(&old, command));
+        let added = crate::sidebar::config_edit(&old, &crate::sidebar::Spec { key: "prefix+a".into(), tab_command: command.into() }, false).unwrap();
+        assert!(super::sidebar_current(&added, command));
+    }
     use super::*;
     use crate::runner::fake::{FakeRunner, fail, ok};
 
