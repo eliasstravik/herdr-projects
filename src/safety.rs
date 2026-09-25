@@ -284,8 +284,10 @@ pub fn show_text(ctx: &Ctx, target: &Target) -> Result<String> {
     let kinds: Vec<String> = match target {
         Target::Global => vec!["claude".into(), "codex".into()],
         Target::Project(p) => {
+            // The harnesses of the project's default profiles.
             let (s, _) = p.read_project_md().unwrap_or_default();
-            vec![s.coordinator_agent, s.thread_agent]
+            let config = crate::profiles::load(&ctx.config_dir).unwrap_or_default();
+            [&s.coordinator_profile, &s.thread_profile].iter().map(|n| config.get(n).map(|p| p.entry.agent).unwrap_or_else(|| n.to_string())).collect()
         }
     };
     let kinds: Vec<&str> = kinds.iter().map(String::as_str).collect();

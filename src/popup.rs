@@ -14,6 +14,7 @@ use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetFor
 use crossterm::{cursor, execute, queue, terminal};
 
 use crate::paths::Ctx;
+use crate::profiles::Role;
 use crate::project::{self, Project, Status};
 use crate::thread::{self, Group, Thread};
 
@@ -49,7 +50,7 @@ impl Section {
             Section::Tasks => "↵ jump  d delegate  m done  D drop",
             Section::Inbox => "↵ detail  a done",
             Section::Routines => "↵ toggle  i prompt",
-            Section::Settings => "↵ edit  Y yolo  p pause/resume  A archive  X delete",
+            Section::Settings => "↵ edit  n new profile  d delete profile  Y yolo  p pause/resume  A archive  X delete",
             Section::Memory => "↵ read",
         }
     }
@@ -92,9 +93,11 @@ pub enum RowKind {
     Task(TaskRow),
     Inbox { slug: String, id: String, body: String },
     Routine { slug: String, name: String, prompt: String },
+    /// A setting; `slug` is empty for a user-wide profile setting.
     Setting { slug: String, key: String, value: String },
     /// A safety setting of a project, or of all projects (`slug` None).
     Safety { slug: Option<String>, key: String, value: String },
+    Profile { name: String, builtin: bool },
     Project { slug: String },
     Memory { path: PathBuf },
 }
@@ -314,7 +317,8 @@ fn thread_line(r: &ThreadRow, with_project: bool) -> String {
 }
 
 /// The rows of a section, with headings.
-pub fn build(root: &Path, section: Section, scope: Option<&str>) -> Vec<Row> {
+pub fn build(ctx: &Ctx, section: Section, scope: Option<&str>) -> Vec<Row> {
+    let root = ctx.root.as_path();
     let mut rows = Vec::new();
     match section {
         Section::Threads => {
@@ -410,6 +414,7 @@ pub fn build(root: &Path, section: Section, scope: Option<&str>) -> Vec<Row> {
         }
         Section::Settings => match scope {
             None => {
+                profile_rows(ctx, &mut rows);
                 rows.push(header("projects (↵ opens a project's settings)"));
                 for project in projects_in_scope(root, None, true) {
                     let (settings, _) = project.read_project_md().unwrap_or_default_settings();
@@ -423,8 +428,10 @@ pub fn build(root: &Path, section: Section, scope: Option<&str>) -> Vec<Row> {
                     let values = [
                         ("name", s.name.clone()),
                         ("goal", s.goal.clone()),
-                        ("coordinator_agent", s.coordinator_agent.clone()),
-                        ("thread_agent", s.thread_agent.clone()),
+                        ("coordinator_profile", s.coordinator_profile.clone()),
+                        ("thread_profile", s.thread_profile.clone()),
+                        ("coordinator_profiles", allowed_text(ctx, Some(&project), Role::Coordinator)),
+                        ("thread_profiles", allowed_text(ctx, Some(&project), Role::Thread)),
                         ("max_parallel_threads", s.max_parallel_threads.to_string()),
                         ("auto_resolve_days", s.auto_resolve_days.to_string()),
                         ("nudge", s.nudge.to_string()),
@@ -490,6 +497,56 @@ pub fn safety_rows(ctx: &Ctx, scope: Option<&str>) -> Vec<Row> {
     rows
 }
 
+/// The user-wide profile rows: each profile, then the defaults for new
+/// projects and the allow-lists for projects without their own.
+fn profile_rows(ctx: &Ctx, rows: &mut Vec<Row>) {
+    let config = match crate::profiles::load(&ctx.config_dir) {
+        Ok(config) => config,
+        Err(error) => {
+            rows.push(Row { header: false, text: format!("config error: {error:#}"), color: Some(Color::Red), kind: RowKind::None });
+            return;
+        }
+    };
+    rows.push(header("profiles (n new · ↵ edit · d delete; a built-in is replaced by editing it)"));
+    for p in config.listed(&crate::profiles::detect(ctx.env)) {
+        let text = format!("  {:<14} {}{}", p.name, p.summary(), if p.builtin { "  (built-in)" } else { "" });
+        rows.push(Row { header: false, text, color: None, kind: RowKind::Profile { name: p.name.clone(), builtin: p.builtin } });
+    }
+    let values = [
+        ("thread_profile", config.new_project_default(Role::Thread), "thread_profile (new projects)"),
+        ("coordinator_profile", config.new_project_default(Role::Coordinator), "coordinator_profile (new projects)"),
+        ("thread_profiles", allowed_text(ctx, None, Role::Thread), "thread_profiles (all projects)"),
+        ("coordinator_profiles", allowed_text(ctx, None, Role::Coordinator), "coordinator_profiles (all projects)"),
+    ];
+    for (key, value, label) in values {
+        rows.push(Row { header: false, text: format!("  {label:<36} {value}"), color: None, kind: RowKind::Setting { slug: String::new(), key: key.into(), value } });
+    }
+}
+
+/// A role's allow-list as the settings rows show it.
+fn allowed_text(ctx: &Ctx, project: Option<&Project>, role: Role) -> String {
+    let config = crate::profiles::load(&ctx.config_dir).unwrap_or_default();
+    let safety = project.and_then(|p| p.safety(&ctx.config_dir).ok()).unwrap_or_default();
+    match config.allowed(&safety, role) {
+        None => "every profile".into(),
+        Some(list) if list.is_empty() => "none".into(),
+        Some(list) => list.join(", "),
+    }
+}
+
+/// One field of the profile form: free text, or a choice cycled with ←→.
+#[derive(Debug, Clone)]
+struct Field {
+    label: &'static str,
+    value: String,
+    options: Vec<String>,
+}
+
+/// The effort choices for a harness: its default, then its own values.
+fn effort_options(agent: &str) -> Vec<String> {
+    std::iter::once(String::new()).chain(crate::profiles::effort_values(agent).unwrap_or_default().iter().map(|v| v.to_string())).collect()
+}
+
 trait OrDefault {
     fn unwrap_or_default_settings(self) -> (project::Settings, String);
 }
@@ -516,6 +573,11 @@ enum Mode {
     Confirm { question: String, action: Vec<String>, lines: Vec<String> },
     Edit { label: String, buffer: String, action: Vec<String> },
     Pick { label: String, options: Vec<String>, selected: usize, action: Vec<String> },
+    /// Several choices at once: space toggles, ↵ runs `action` with the
+    /// checked options appended (`--all` when the first, "every profile", is).
+    Toggle { label: String, options: Vec<(String, bool)>, selected: usize, action: Vec<String> },
+    /// The profile form: name, harness, model, effort, arguments, description.
+    Form { title: String, fields: Vec<Field>, selected: usize, editing: bool },
     /// The project picker (`P`, or `/` straight into its filter).
     Projects(Picker),
 }
@@ -542,7 +604,7 @@ impl<'a> Popup<'a> {
     }
 
     fn reload(&mut self) {
-        self.rows = build(&self.ctx.root, SECTIONS[self.section], self.scope.as_deref());
+        self.rows = build(self.ctx, SECTIONS[self.section], self.scope.as_deref());
         if SECTIONS[self.section] == Section::Settings {
             self.rows.extend(safety_rows(self.ctx, self.scope.as_deref()));
         }
@@ -579,14 +641,18 @@ impl<'a> Popup<'a> {
     /// Runs this binary with `args` and keeps its last line as the message.
     fn run(&mut self, args: &[String], stdin: Option<&str>) -> bool {
         let (ok, text) = match args {
-            // The CLI refuses safety changes without a person at a terminal;
-            // the popup is one, so it writes them here instead.
+            // The CLI refuses safety and profile changes without a person at
+            // a terminal; the popup is one, so it writes them here instead.
             [safety, set, target, key, words @ ..] if safety == "safety" && set == "set" => {
                 match crate::safety::Target::parse(self.ctx, target).and_then(|t| crate::safety::apply(self.ctx, &t, key, words)) {
                     Ok(text) => (true, text),
                     Err(error) => (false, format!("error: {error:#}")),
                 }
             }
+            [profile, ..] if profile == "profile" => match crate::cli::apply_profile_args(self.ctx, args) {
+                Ok(message) => (true, message),
+                Err(error) => (false, format!("error: {error:#}")),
+            },
             _ => run_hp(self.ctx, args, stdin),
         };
         self.message = text;
@@ -693,6 +759,98 @@ impl<'a> Popup<'a> {
                 }
                 _ => Mode::Pick { label, options, selected, action },
             },
+            Mode::Toggle { label, mut options, mut selected, action } => match key.code {
+                KeyCode::Esc => {
+                    self.message = "cancelled".into();
+                    Mode::List
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    selected = selected.saturating_sub(1);
+                    Mode::Toggle { label, options, selected, action }
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    selected = (selected + 1).min(options.len().saturating_sub(1));
+                    Mode::Toggle { label, options, selected, action }
+                }
+                KeyCode::Char(' ') => {
+                    options[selected].1 = !options[selected].1;
+                    if selected == 0 && options[0].1 {
+                        options.iter_mut().skip(1).for_each(|o| o.1 = false);
+                    } else if selected > 0 && options[selected].1 {
+                        options[0].1 = false;
+                    }
+                    Mode::Toggle { label, options, selected, action }
+                }
+                KeyCode::Enter => {
+                    let mut args = action.clone();
+                    if options[0].1 {
+                        args.push("--all".into());
+                    } else {
+                        args.extend(options.iter().skip(1).filter(|o| o.1).map(|o| o.0.clone()));
+                        if args.len() == action.len() {
+                            self.message = "check at least one profile, or \"every profile\"".into();
+                            return self.mode = Mode::Toggle { label, options, selected, action };
+                        }
+                    }
+                    self.run(&args, None);
+                    Mode::List
+                }
+                _ => Mode::Toggle { label, options, selected, action },
+            },
+            Mode::Form { title, mut fields, mut selected, editing } => match key.code {
+                KeyCode::Esc => {
+                    self.message = "cancelled".into();
+                    Mode::List
+                }
+                KeyCode::Up | KeyCode::BackTab => {
+                    selected = selected.saturating_sub(1);
+                    Mode::Form { title, fields, selected, editing }
+                }
+                KeyCode::Down | KeyCode::Tab => {
+                    selected = (selected + 1).min(fields.len() - 1);
+                    Mode::Form { title, fields, selected, editing }
+                }
+                KeyCode::Left | KeyCode::Right if !fields[selected].options.is_empty() => {
+                    let field = &mut fields[selected];
+                    let n = field.options.len();
+                    let at = field.options.iter().position(|o| *o == field.value).unwrap_or(0);
+                    let next = if key.code == KeyCode::Right { (at + 1) % n } else { (at + n - 1) % n };
+                    field.value = field.options[next].clone();
+                    if field.label == "harness" {
+                        // Another harness takes other effort values.
+                        fields[3].options = effort_options(&fields[1].value);
+                        if !fields[3].options.contains(&fields[3].value) {
+                            fields[3].value = String::new();
+                        }
+                    }
+                    Mode::Form { title, fields, selected, editing }
+                }
+                KeyCode::Backspace if fields[selected].options.is_empty() && !(editing && selected == 0) => {
+                    fields[selected].value.pop();
+                    Mode::Form { title, fields, selected, editing }
+                }
+                KeyCode::Char(c) if fields[selected].options.is_empty() && !(editing && selected == 0) && !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    fields[selected].value.push(c);
+                    Mode::Form { title, fields, selected, editing }
+                }
+                KeyCode::Enter => {
+                    let value = |i: usize| fields[i].value.trim().to_string();
+                    let mut args = vec!["profile".to_string(), if editing { "edit" } else { "add" }.into(), value(0), "--agent".into(), value(1), "--model".into(), value(2), "--effort".into(), value(3), "--description".into(), value(5)];
+                    let extra: Vec<String> = fields[4].value.split_whitespace().map(str::to_string).collect();
+                    if extra.is_empty() && editing {
+                        args.push("--clear-args".into());
+                    }
+                    for arg in extra {
+                        args.push(format!("--arg={arg}"));
+                    }
+                    if self.run(&args, None) {
+                        Mode::List
+                    } else {
+                        Mode::Form { title, fields, selected, editing }
+                    }
+                }
+                _ => Mode::Form { title, fields, selected, editing },
+            },
             Mode::Projects(mut picker) => match picker.key(key) {
                 PickerOutcome::Stay => Mode::Projects(picker),
                 PickerOutcome::Close => Mode::List,
@@ -706,10 +864,72 @@ impl<'a> Popup<'a> {
         };
     }
 
-    fn kind_picker(label: &str, default: &str, action: Vec<String>) -> Mode {
-        let mut options: Vec<String> = vec![default.to_string()];
-        options.extend(crate::agents::KINDS.iter().filter(|k| **k != default).map(|k| k.to_string()));
-        Mode::Pick { label: label.into(), options, selected: 0, action }
+    /// A pick of the profiles `role` may use (in `slug`, or anywhere when
+    /// empty), `current` first.
+    fn profile_picker(&self, label: &str, slug: &str, role: Role, current: &str, action: Vec<String>) -> Mode {
+        let config = crate::profiles::load(&self.ctx.config_dir).unwrap_or_default();
+        let project = Project::load(&self.ctx.root, slug).ok();
+        let safety = project.as_ref().and_then(|p| p.safety(&self.ctx.config_dir).ok()).unwrap_or_default();
+        let detected = crate::profiles::detect(self.ctx.env);
+        let profiles = if slug.is_empty() { config.listed(&detected) } else { crate::profiles::usable(&config, &safety, role, &detected, current) };
+        let mut names: Vec<String> = profiles.into_iter().map(|p| p.name).collect();
+        if let Some(at) = names.iter().position(|n| n == current) {
+            let first = names.remove(at);
+            names.insert(0, first);
+        }
+        if names.is_empty() {
+            return Mode::Detail { title: label.into(), lines: vec!["No profile is allowed here. Allow one in the settings section.".into()], files: Vec::new(), selected: 0, scroll: 0 };
+        }
+        Mode::Pick { label: label.into(), options: names, selected: 0, action }
+    }
+
+    /// The allow-list toggle for `role`, in `slug` or for all projects.
+    fn allow_toggle(&self, slug: &str, role: Role) -> Mode {
+        let config = crate::profiles::load(&self.ctx.config_dir).unwrap_or_default();
+        let project = Project::load(&self.ctx.root, slug).ok();
+        let safety = project.as_ref().and_then(|p| p.safety(&self.ctx.config_dir).ok()).unwrap_or_default();
+        let allowed = config.allowed(&safety, role);
+        let mut names: Vec<String> = config.listed(&crate::profiles::detect(self.ctx.env)).into_iter().map(|p| p.name).collect();
+        for name in allowed.iter().flatten() {
+            if !names.contains(name) {
+                names.push(name.clone());
+            }
+        }
+        let mut options = vec![("every profile, now and later".to_string(), allowed.is_none())];
+        options.extend(names.into_iter().map(|n| {
+            let on = allowed.as_ref().is_some_and(|l| l.contains(&n));
+            (n, on)
+        }));
+        let mut action = vec!["profile".to_string(), "allow".into(), if role == Role::Thread { "threads" } else { "coordinator" }.into()];
+        if !slug.is_empty() {
+            action.extend(["--project".into(), slug.to_string()]);
+        }
+        let scope = if slug.is_empty() { "every project without its own list".to_string() } else { slug.to_string() };
+        Mode::Toggle { label: format!("{} may use, in {scope}", if role == Role::Thread { "Threads" } else { "Coordinators" }), options, selected: 0, action }
+    }
+
+    /// The profile form, empty for `n` or filled from profile `name`.
+    fn profile_form(&self, name: Option<&str>) -> Mode {
+        let config = crate::profiles::load(&self.ctx.config_dir).unwrap_or_default();
+        let existing = name.and_then(|n| config.get(n));
+        let editing = existing.as_ref().is_some_and(|p| !p.builtin);
+        let entry = existing.as_ref().map(|p| p.entry.clone()).unwrap_or_else(|| crate::profiles::Entry { agent: "claude".into(), ..Default::default() });
+        let mut kinds = crate::profiles::detect(self.ctx.env);
+        kinds.extend(crate::agents::KINDS.iter().map(|k| k.to_string()).filter(|k| !kinds.contains(k)).collect::<Vec<_>>());
+        let fields = vec![
+            Field { label: "name", value: name.unwrap_or_default().to_string(), options: Vec::new() },
+            Field { label: "harness", value: entry.agent.clone(), options: kinds },
+            Field { label: "model", value: entry.model.clone(), options: Vec::new() },
+            Field { label: "effort", value: entry.effort.clone(), options: effort_options(&entry.agent) },
+            Field { label: "args", value: entry.args.join(" "), options: Vec::new() },
+            Field { label: "description", value: entry.description.clone(), options: Vec::new() },
+        ];
+        let title = match (name, editing) {
+            (Some(n), true) => format!("Edit profile `{n}`"),
+            (Some(n), false) => format!("Replace the built-in `{n}` with your own profile"),
+            (None, _) => "New profile".into(),
+        };
+        Mode::Form { title, fields, selected: if name.is_some() { 1 } else { 0 }, editing }
     }
 
     fn list_key(&mut self, key: KeyEvent) {
@@ -759,13 +979,13 @@ impl<'a> Popup<'a> {
                 self.message = "select a thread of the project, or press P to pick one".into();
                 return;
             };
-            let default = Project::load(&self.ctx.root, &slug).and_then(|p| p.read_project_md()).map(|(s, _)| s.coordinator_agent).unwrap_or_else(|_| "claude".into());
+            let default = Project::load(&self.ctx.root, &slug).and_then(|p| p.read_project_md()).map(|(s, _)| s.coordinator_profile).unwrap_or_else(|_| "claude".into());
             let socket = self.ctx.env.var("HERDR_SOCKET_PATH").unwrap_or("").to_string();
-            let mut action = vec!["open".to_string(), slug, "--agent".into(), "{}".into()];
+            let mut action = vec!["open".to_string(), slug.clone(), "--profile".into(), "{}".into()];
             if !socket.is_empty() {
                 action.extend(["--socket".into(), socket]);
             }
-            self.mode = Self::kind_picker("Start or focus a coordinator with", &default, action);
+            self.mode = self.profile_picker("Start or focus a coordinator with", &slug, Role::Coordinator, &default, action);
             return;
         }
         if key.code == KeyCode::Char('S') {
@@ -814,8 +1034,9 @@ impl<'a> Popup<'a> {
             }
             KeyCode::Char('r') => {
                 let mut action = Self::thread_args(&row, "restart");
-                action.extend(["--agent".into(), "{}".into()]);
-                self.mode = Self::kind_picker(&format!("Restart {} with", t.id), &t.agent, action);
+                action.extend(["--profile".into(), "{}".into()]);
+                let current = if t.profile.is_empty() { &t.agent } else { &t.profile };
+                self.mode = self.profile_picker(&format!("Restart {} with", t.id), &row.slug, Role::Thread, current, action);
             }
             KeyCode::Char('x') => {
                 self.mode = Mode::Confirm { question: format!("Resolve {} \"{}\" and clean up its worktree, panes and merged branch? y/N", t.id, t.title), action: Self::thread_args(&row, "resolve"), lines: Vec::new() };
@@ -902,11 +1123,34 @@ impl<'a> Popup<'a> {
     }
 
     fn settings_key(&mut self, key: KeyEvent) {
+        if self.scope.is_none() && key.code == KeyCode::Char('n') {
+            self.mode = self.profile_form(None);
+            return;
+        }
         if key.code == KeyCode::Char('Y') {
             self.yolo_key();
             return;
         }
         match self.current().map(|r| r.kind.clone()) {
+            Some(RowKind::Profile { name, builtin }) => match key.code {
+                KeyCode::Enter => self.mode = self.profile_form(Some(&name)),
+                KeyCode::Char('d') if builtin => self.message = format!("`{name}` is built in: it shows while its CLI is installed and signed in"),
+                KeyCode::Char('d') => {
+                    self.mode = Mode::Confirm { question: format!("Delete profile `{name}`? Threads that use it will not launch again. y/N"), action: vec!["profile".into(), "remove".into(), name], lines: Vec::new() };
+                }
+                _ => {}
+            },
+            Some(RowKind::Setting { slug, key: name, value }) if slug.is_empty() => {
+                if key.code == KeyCode::Enter {
+                    let role = if name.starts_with("thread") { Role::Thread } else { Role::Coordinator };
+                    let word = if role == Role::Thread { "threads" } else { "coordinator" };
+                    self.mode = if name.ends_with("_profiles") {
+                        self.allow_toggle("", role)
+                    } else {
+                        self.profile_picker(&format!("{name} for new projects"), "", role, &value, vec!["profile".into(), "default".into(), word.into(), "{}".into()])
+                    };
+                }
+            }
             Some(RowKind::Safety { slug, key: name, value }) => {
                 if key.code == KeyCode::Enter {
                     let target = slug.clone().unwrap_or_else(|| "--global".into());
@@ -942,11 +1186,14 @@ impl<'a> Popup<'a> {
                 KeyCode::Enter => {
                     let action = vec!["set".to_string(), slug.clone(), name.clone()];
                     self.mode = match name.as_str() {
-                        "coordinator_agent" | "thread_agent" => {
+                        "coordinator_profile" | "thread_profile" => {
                             let mut action = action;
                             action.push("{}".into());
-                            Self::kind_picker(&name, &value, action)
+                            let role = if name == "thread_profile" { Role::Thread } else { Role::Coordinator };
+                            self.profile_picker(&name, &slug, role, &value, action)
                         }
+                        "thread_profiles" => self.allow_toggle(&slug, Role::Thread),
+                        "coordinator_profiles" => self.allow_toggle(&slug, Role::Coordinator),
                         "nudge" | "mute" => {
                             let mut action = action;
                             action.push("{}".into());
@@ -1066,6 +1313,46 @@ impl<'a> Popup<'a> {
                     }
                 }
             }
+            Mode::Toggle { label, options, selected, .. } => {
+                queue!(out, cursor::MoveTo(0, body_top as u16), SetAttribute(Attribute::Bold), Print(fit(&format!(" {label}"), width)), SetAttribute(Attribute::Reset))?;
+                let start = selected.saturating_sub(body_height.saturating_sub(2));
+                for (i, (option, on)) in options.iter().enumerate().skip(start).take(body_height.saturating_sub(1)) {
+                    queue!(out, cursor::MoveTo(0, (body_top + 1 + i - start) as u16))?;
+                    let text = fit(&format!("  [{}] {option}", if *on { "x" } else { " " }), width);
+                    if i == *selected {
+                        queue!(out, SetAttribute(Attribute::Reverse), Print(text), SetAttribute(Attribute::Reset))?;
+                    } else {
+                        queue!(out, Print(text))?;
+                    }
+                }
+            }
+            Mode::Form { title, fields, selected, editing } => {
+                queue!(out, cursor::MoveTo(0, body_top as u16), SetAttribute(Attribute::Bold), Print(fit(&format!(" {title}"), width)), SetAttribute(Attribute::Reset))?;
+                for (i, field) in fields.iter().enumerate() {
+                    queue!(out, cursor::MoveTo(0, (body_top + 2 + i) as u16))?;
+                    let value = if field.options.is_empty() {
+                        let cursor = if i == *selected && !(*editing && i == 0) { "▏" } else { "" };
+                        format!("{}{cursor}", field.value)
+                    } else {
+                        format!("‹ {} ›", if field.value.is_empty() { "(default)" } else { &field.value })
+                    };
+                    let text = fit(&format!("  {:<12} {value}", field.label), width);
+                    if i == *selected {
+                        queue!(out, SetAttribute(Attribute::Reverse), Print(text), SetAttribute(Attribute::Reset))?;
+                    } else {
+                        queue!(out, Print(text))?;
+                    }
+                }
+                let help = [
+                    "",
+                    "  args: extra CLI arguments, separated by spaces (e.g. --config ~/.omp/agent/luna.yml).",
+                    "  Effort maps to each harness's own flag; harnesses without one show only (default).",
+                    "  Profiles live in ~/.config/herdr-projects/config.toml, which agents cannot change.",
+                ];
+                for (i, line) in help.iter().enumerate() {
+                    queue!(out, cursor::MoveTo(0, (body_top + 2 + fields.len() + i) as u16), SetAttribute(Attribute::Dim), Print(fit(line, width)), SetAttribute(Attribute::Reset))?;
+                }
+            }
             Mode::Projects(picker) => {
                 let title = match &picker.filter {
                     Some(filter) => format!(" Switch to project  / {filter}▏"),
@@ -1128,6 +1415,8 @@ impl<'a> Popup<'a> {
             Mode::Confirm { question, .. } => question.clone(),
             Mode::Edit { label, buffer, .. } => format!("{label}: {buffer}▏  ↵ save  esc cancel"),
             Mode::Pick { .. } => "↑↓ choose  ↵ ok  esc cancel".into(),
+            Mode::Toggle { .. } => "↑↓ choose  space check  ↵ save  esc cancel".into(),
+            Mode::Form { .. } => "↑↓/tab field  type to edit  ←→ choose  ↵ save  esc cancel".into(),
         };
         let line = if self.message.is_empty() || matches!(self.mode, Mode::Confirm { .. } | Mode::Edit { .. }) { hint } else { format!("{}  │  {hint}", self.message) };
         queue!(out, SetAttribute(Attribute::Dim), Print(fit(&format!(" {line}"), width)), SetAttribute(Attribute::Reset))?;
@@ -1324,18 +1613,18 @@ mod tests {
         })
         .unwrap();
         std::fs::write(thread::home_report_path(&project, &second.id), "## Report\nok\n## Next\n- Merge the PR\n").unwrap();
-        let rows = build(&world.root, Section::Threads, Some("demo"));
+        let rows = build(&world.ctx(), Section::Threads, Some("demo"));
         let texts: Vec<&str> = rows.iter().map(|r| r.text.as_str()).collect();
         assert_eq!(texts[0], "Waiting on you (1)");
         assert!(texts[1].contains("t-0002  Second") && texts[1].contains("next: 1"), "{texts:?}");
         assert_eq!(texts[2], "Working (1)");
         assert!(texts[3].contains("working · ~40%"));
-        let all = build(&world.root, Section::Threads, None);
+        let all = build(&world.ctx(), Section::Threads, None);
         assert!(all[0].text.starts_with("demo · 1 need you · 1 working"), "{:?}", all[0].text);
-        let settings = build(&world.root, Section::Settings, Some("demo"));
+        let settings = build(&world.ctx(), Section::Settings, Some("demo"));
         assert!(settings.iter().any(|r| r.text.contains("max_parallel_threads")));
-        assert!(!build(&world.root, Section::Tasks, Some("demo")).is_empty());
-        assert!(!build(&world.root, Section::Memory, Some("demo")).is_empty());
+        assert!(!build(&world.ctx(), Section::Tasks, Some("demo")).is_empty());
+        assert!(!build(&world.ctx(), Section::Memory, Some("demo")).is_empty());
         assert_eq!(summary(&world.root), "1 project · 1 need you");
     }
 
@@ -1465,6 +1754,8 @@ mod tests {
         // The settings rows of all projects: ↵ on a project still scopes to it.
         popup.section = SECTIONS.iter().position(|s| *s == Section::Settings).unwrap();
         popup.reload();
+        // Profile rows come first; the projects follow.
+        popup.selected = popup.rows.iter().position(|r| matches!(r.kind, RowKind::Project { .. })).unwrap();
         key(&mut popup, KeyCode::Enter);
         assert_eq!(popup.scope.as_deref(), Some("alpha"));
     }

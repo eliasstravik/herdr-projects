@@ -146,6 +146,8 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
     world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
 
     let ctx = world.ctx();
+    std::fs::create_dir_all(&ctx.config_dir).unwrap();
+    std::fs::write(ctx.config_dir.join("config.toml"), "[profiles.opus]\nagent = \"claude\"\nmodel = \"opus\"\n").unwrap();
     let started = threads::start(
         &ctx,
         "demo",
@@ -153,9 +155,8 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
             title: "Fix $(it)".into(),
             repo: Some(repo.to_string_lossy().into_owned()),
             machine: None,
-            agent: None,
+            profile: Some("opus".into()),
             kind: None,
-            agent_args: vec!["--model".into(), "opus".into()],
             base: None,
             task: "Do the thing.".into(),
         },
@@ -336,10 +337,10 @@ fn restart_defers_to_the_ticker_and_resets_launch_attempts() {
     *world.panes.borrow_mut() = format!("[{}]", pane_json("w2", "w2:t1", "w2:p1", &cwd));
     world.runner.on("rev-parse --git-path", fail(1, "not a repo"));
 
-    let t = threads::restart(&world.ctx(), "demo", "t-0001", Some("codex"), None).unwrap();
+    let t = threads::restart(&world.ctx(), "demo", "t-0001", Some("codex")).unwrap();
     assert_eq!((t.status, t.prompt_pending, t.launch_attempts), (Status::Open, true, 0));
-    assert_eq!(t.agent, "codex");
-    assert!(threads::restart(&world.ctx(), "demo", "t-0001", Some("chatgpt"), None).is_err());
+    assert_eq!((t.agent.as_str(), t.profile.as_str()), ("codex", "codex"));
+    assert!(threads::restart(&world.ctx(), "demo", "t-0001", Some("chatgpt")).is_err());
     assert!(t.error.is_empty());
     assert_eq!(world.runner.count("agent start"), 0);
     assert_eq!(world.runner.count("agent prompt"), 0);
@@ -487,7 +488,7 @@ fn thread_start_is_refused_when_paused() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
     project.set_status(project::Status::Paused).unwrap();
-    let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, kind: None, agent_args: vec![], base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: None, profile: None, kind: None, base: None, task: "t".into() };
     let error = threads::start(&world.ctx(), "demo", args).unwrap_err().to_string();
     assert!(error.contains("paused"), "{error}");
     assert!(thread::list(&project).is_empty());
@@ -497,21 +498,86 @@ fn strings(args: &[&str]) -> Vec<String> {
     args.iter().map(|a| a.to_string()).collect()
 }
 
+const PROFILES: &str = "[profiles.luna]\nagent = \"omp\"\nargs = [\"--config\", \"~/.omp/agent/luna.yml\"]\ndescription = \"Cheap tier\"\n\n[profiles.deep]\nagent = \"codex\"\nmodel = \"gpt-5.5\"\neffort = \"high\"\n\n[safety.default]\nthread_profiles = [\"claude\", \"luna\"]\ncoordinator_profiles = [\"claude\"]\n";
+
+fn write_profiles(world: &World, text: &str) {
+    let dir = world.ctx().config_dir;
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("config.toml"), text).unwrap();
+}
+
 #[test]
-fn thread_start_and_open_refuse_agent_args_other_than_a_model_flag() {
+fn thread_start_and_open_refuse_profiles_off_the_allow_list() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
-    for bad in [&["--dangerously-skip-permissions"][..], &["--yolo"], &["--model"], &["--model", "--foo"], &["--model", "x", "--extra"]] {
-        let args = StartArgs { title: "x".into(), repo: None, machine: None, agent: None, kind: Some(Kind::Tab), agent_args: strings(bad), base: None, task: "t".into() };
+    write_profiles(&world, PROFILES);
+    for bad in ["deep", "codex", "nope"] {
+        let args = StartArgs { title: "x".into(), repo: None, machine: None, profile: Some(bad.into()), kind: Some(Kind::Tab), base: None, task: "t".into() };
         let error = threads::start(&world.ctx(), "demo", args).unwrap_err().to_string();
-        assert!(error.contains("--agent-arg only takes a model flag"), "{error}");
-        assert!(error.contains("thread_agent_args") && error.contains("safety yolo demo on"), "the safety settings are shown: {error}");
-        let options = coordinator::OpenOptions { session: Default::default(), rebind: false, agent: None, agent_args: strings(bad), new: true, here: false };
+        assert!(error.contains("not allowed for threads") || error.contains("no profile `nope`"), "{error}");
+        let options = coordinator::OpenOptions { session: Default::default(), rebind: false, profile: Some(bad.into()), new: true, here: false };
         let error = coordinator::open(&world.ctx(), "demo", &options).unwrap_err().to_string();
-        assert!(error.contains("--agent-arg only takes a model flag"), "{error}");
+        assert!(error.contains("not allowed for the coordinator") || error.contains("no profile `nope`"), "{error}");
     }
+    // `luna` is allowed for threads, not for the coordinator.
+    let options = coordinator::OpenOptions { session: Default::default(), rebind: false, profile: Some("luna".into()), new: true, here: false };
+    assert!(coordinator::open(&world.ctx(), "demo", &options).unwrap_err().to_string().contains("allowed: claude"));
+    assert!(threads::restart(&world.ctx(), "demo", "t-0001", Some("deep")).is_err());
     assert!(thread::list(&project).is_empty());
     assert_eq!(world.runner.count("agent start") + world.runner.count("create"), 0, "nothing was created or launched");
+}
+
+#[test]
+fn a_thread_launches_with_its_profile_and_fails_closed_once_disallowed() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    write_profiles(&world, &format!("{PROFILES}\n[safety.\"{}\"]\nthread_agent_args = [\"--dangerously-skip-permissions\"]\n", project.canonical_dir().display()));
+    let cwd = world.home.path().to_string_lossy().into_owned();
+    world.thread(&project, world.home.path(), |t| {
+        t.prompt_pending = true;
+        t.agent = "omp".into();
+        t.profile = "luna".into();
+    });
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w2", "w2:t1", "w2:p1", &cwd));
+    world.runner.on("agent start", fail(1, r#"{"error":{"code":"timeout","message":"timed out"}}"#));
+    let ctx = world.ctx();
+    let _ = ticker::tick_project(&ctx, &project);
+    let call = world.runner.calls.borrow().iter().find(|c| c.display().contains("agent start")).cloned().unwrap();
+    let home = world.home.path().to_string_lossy();
+    // The profile's own arguments, `~` expanded; the old Claude flag stays with Claude.
+    assert!(call.args.ends_with(&strings(&["omp", "--pane", "w2:p1", "--", "--config", &format!("{home}/.omp/agent/luna.yml")])) || call.display().ends_with(&format!("-- --config {home}/.omp/agent/luna.yml")), "{}", call.display());
+    assert!(!call.display().contains("dangerously"), "{}", call.display());
+
+    // The user takes `luna` off the list: the next launch is refused.
+    write_profiles(&world, &PROFILES.replace("thread_profiles = [\"claude\", \"luna\"]", "thread_profiles = [\"claude\"]"));
+    let _ = ticker::tick_project(&ctx, &project);
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!(t.status, Status::Failed);
+    assert!(t.error.contains("not allowed for threads"), "{}", t.error);
+    assert_eq!(world.runner.count("agent start"), 1);
+    assert!(items_of(&project, "thread-state").iter().any(|i| i.summary.contains("not launched")));
+}
+
+#[test]
+fn a_legacy_thread_keeps_claude_flags_to_claude() {
+    // Threads from before profiles, in a project whose default is Claude.
+    for (kind, flagged) in [("claude", true), ("codex", false)] {
+        let world = World::new();
+        let project = world.project("demo", "a.sock");
+        write_profiles(&world, &format!("[safety.\"{}\"]\nthread_agent_args = [\"--dangerously-skip-permissions\"]\n", project.canonical_dir().display()));
+        let cwd = world.home.path().to_string_lossy().into_owned();
+        world.thread(&project, world.home.path(), |t| {
+            t.prompt_pending = true;
+            t.agent = kind.into();
+        });
+        *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w2", "w2:t1", "w2:p1", &cwd));
+        world.runner.on("agent start", fail(1, r#"{"error":{"code":"timeout","message":"timed out"}}"#));
+        let _ = ticker::tick_project(&world.ctx(), &project);
+        let call = world.runner.calls.borrow().iter().find(|c| c.display().contains("agent start")).map(|c| c.display()).unwrap();
+        assert!(call.contains(&format!("--kind {kind}")), "{call}");
+        // Issue #45: the Claude flag no longer reaches a Codex thread.
+        assert_eq!(call.contains("--dangerously-skip-permissions"), flagged, "{call}");
+    }
 }
 
 #[test]
@@ -563,7 +629,7 @@ fn yolo_launches_each_thread_with_its_own_harness_flag() {
 }
 
 #[test]
-fn restart_keeps_the_model_and_refuses_other_flags() {
+fn restart_keeps_an_old_model_flag_until_a_profile_replaces_it() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
     let cwd = world.home.path().to_string_lossy().into_owned();
@@ -577,17 +643,11 @@ fn restart_keeps_the_model_and_refuses_other_flags() {
     world.runner.on("rev-parse --git-path", fail(1, "not a repo"));
     let ctx = world.ctx();
 
-    let t = threads::restart(&ctx, "demo", "t-0001", None, None).unwrap();
-    assert_eq!(t.agent_args, ["-m", "gpt-5.5"]);
-    let error = threads::restart(&ctx, "demo", "t-0001", None, Some(strings(&["--yolo"]))).unwrap_err().to_string();
-    assert!(error.contains("only takes a model flag"), "{error}");
-    // `-m` is Codex's alone: refused when the restart switches to Claude, and nothing changed.
-    assert!(threads::restart(&ctx, "demo", "t-0001", Some("claude"), Some(strings(&["-m", "opus"]))).is_err());
-    let t = thread::load(&project, "t-0001").unwrap();
-    assert_eq!((t.agent.as_str(), t.agent_args.clone()), ("codex", strings(&["-m", "gpt-5.5"])));
+    let t = threads::restart(&ctx, "demo", "t-0001", None).unwrap();
+    assert_eq!((t.profile.as_str(), t.agent_args.clone()), ("", strings(&["-m", "gpt-5.5"])));
     thread::update(&project, "t-0001", |t| t.status = Status::Failed).unwrap();
-    let t = threads::restart(&ctx, "demo", "t-0001", Some("claude"), Some(strings(&["--model=opus"]))).unwrap();
-    assert_eq!((t.agent.as_str(), t.agent_args), ("claude", strings(&["--model=opus"])));
+    let t = threads::restart(&ctx, "demo", "t-0001", Some("claude")).unwrap();
+    assert_eq!((t.agent.as_str(), t.profile.as_str(), t.agent_args.len()), ("claude", "claude", 0));
 }
 
 #[test]
@@ -1366,7 +1426,7 @@ fn a_remote_thread_blocked_at_a_poll_is_waiting_on_you_at_once() {
 fn a_remote_thread_without_a_repo_is_refused() {
     let world = World::new();
     world.project("demo", "a.sock");
-    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), agent: None, kind: None, agent_args: vec![], base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), profile: None, kind: None, base: None, task: "t".into() };
     assert!(threads::start(&world.ctx(), "demo", args).unwrap_err().to_string().contains("needs --repo"));
 }
 
@@ -1378,8 +1438,7 @@ fn open_alive(world: &World, project: &Project) -> anyhow::Result<()> {
     let options = crate::coordinator::OpenOptions {
         session: crate::paths::SessionFlags { session: None, socket: Some(socket) },
         rebind: false,
-        agent: None,
-        agent_args: Vec::new(),
+        profile: None,
         new: false,
         here: false,
     };
@@ -1445,8 +1504,7 @@ fn open_starts_a_coordinator_without_a_priming_prompt_then_focuses_it_and_resume
     let options = |new: bool| crate::coordinator::OpenOptions {
         session: crate::paths::SessionFlags { session: None, socket: Some(socket.clone()) },
         rebind: false,
-        agent: None,
-        agent_args: Vec::new(),
+        profile: None,
         new,
         here: false,
     };
@@ -1485,14 +1543,14 @@ fn open_starts_a_coordinator_without_a_priming_prompt_then_focuses_it_and_resume
     *world.agents.borrow_mut() = format!("[{}]", agent_json("w3", "w3:t1", "w3:p1", &dir, "hpc-demo", "idle"));
     world.runner.on("tab create", ok(r#"{"result":{"root_pane":{"workspace_id":"w3","tab_id":"w3:t2","pane_id":"w3:p2"}}}"#));
     *world.panes.borrow_mut() = format!("[{}]", pane_json("w3", "w3:t1", "w3:p1", &dir));
-    let another = crate::coordinator::OpenOptions { agent: Some("codex".into()), ..options(true) };
+    let another = crate::coordinator::OpenOptions { profile: Some("codex".into()), ..options(true) };
     crate::coordinator::open(&ctx, "demo", &another).unwrap();
     let calls = world.runner.calls.borrow();
     let start = calls.iter().filter(|c| c.display().contains("agent start")).last().unwrap();
     assert!(start.display().starts_with("herdr agent start hpc-demo-1 --kind codex --pane w3:p2"), "{}", start.display());
     assert!(!start.display().contains("sess-42"));
     drop(calls);
-    assert!(crate::coordinator::open(&ctx, "demo", &crate::coordinator::OpenOptions { agent: Some("chatgpt".into()), ..options(false) }).is_err());
+    assert!(crate::coordinator::open(&ctx, "demo", &crate::coordinator::OpenOptions { profile: Some("chatgpt".into()), ..options(false) }).is_err());
 }
 
 #[test]
@@ -1509,8 +1567,7 @@ fn open_new_starts_a_fresh_coordinator_beside_a_live_one_without_its_session() {
     let options = |new: bool| crate::coordinator::OpenOptions {
         session: crate::paths::SessionFlags { session: None, socket: Some(socket.clone()) },
         rebind: false,
-        agent: None,
-        agent_args: Vec::new(),
+        profile: None,
         new,
         here: false,
     };
@@ -1549,7 +1606,7 @@ fn a_tab_thread_gets_a_brief_with_the_project_header_and_prompts_are_recorded() 
     world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":""}}}"#));
     world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
     let ctx = world.ctx();
-    let t = threads::start(&ctx, "demo", StartArgs { title: "Research".into(), repo: None, machine: None, agent: None, kind: Some(Kind::Tab), agent_args: vec![], base: None, task: "Look into it.".into() }).unwrap();
+    let t = threads::start(&ctx, "demo", StartArgs { title: "Research".into(), repo: None, machine: None, profile: None, kind: Some(Kind::Tab), base: None, task: "Look into it.".into() }).unwrap();
     assert_eq!(t.kind, Kind::Tab);
     let brief = std::fs::read_to_string(Path::new(&t.thread_dir).join("brief.md")).unwrap();
     assert!(brief.starts_with("# Project\n\n- Project: Demo (`demo`)\n- Goal: Ship it\n- Repos: (none)\n- Uploads"), "{brief}");
@@ -1656,8 +1713,7 @@ impl Here {
         let options = crate::coordinator::OpenOptions {
             session: crate::paths::SessionFlags { session: None, socket: Some(self.socket.clone()) },
             rebind: false,
-            agent: None,
-            agent_args: Vec::new(),
+            profile: None,
             new,
             here,
         };
@@ -1778,7 +1834,7 @@ fn a_tab_thread_of_a_coordinator_running_in_another_workspace_opens_the_project_
     h.open(true, false).unwrap();
     let folder = h.project.dir().join("threads/t-0001");
     h.world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":""}}}"#));
-    let args = |title: &str| StartArgs { title: title.into(), repo: None, machine: None, agent: None, kind: Some(Kind::Tab), agent_args: vec![], base: None, task: "Look.".into() };
+    let args = |title: &str| StartArgs { title: title.into(), repo: None, machine: None, profile: None, kind: Some(Kind::Tab), base: None, task: "Look.".into() };
     let t = threads::start(&h.world.ctx(), "demo", args("Research")).unwrap();
     let calls = h.world.runner.calls.borrow();
     let create = calls.iter().filter(|c| c.display().contains("workspace create")).last().unwrap();

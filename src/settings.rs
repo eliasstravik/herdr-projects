@@ -14,8 +14,8 @@ use crate::project::{self, Project, Settings};
 pub const KEYS: [(&str, &str); 10] = [
     ("name", "text"),
     ("goal", "text"),
-    ("coordinator_agent", "agent kind"),
-    ("thread_agent", "agent kind"),
+    ("coordinator_profile", "profile name"),
+    ("thread_profile", "profile name"),
     ("max_parallel_threads", "number"),
     ("auto_resolve_days", "number (0 = never)"),
     ("nudge", "true/false"),
@@ -26,23 +26,15 @@ pub const KEYS: [(&str, &str); 10] = [
 
 /// What `safety show` prints for a project.
 pub fn safety_text(ctx: &Ctx, project: &Project) -> Result<String> {
-    crate::safety::show_text(ctx, &crate::safety::Target::Project(project.clone()))
-}
-
-/// Refuses `--agent-arg` values other than a model flag for `kind`.
-pub fn require_model_args(ctx: &Ctx, project: &Project, kind: &str, args: &[String]) -> Result<()> {
-    let (_, refused) = crate::agents::split_model_args(kind, args);
-    if refused.is_empty() {
-        return Ok(());
+    let mut text = crate::safety::show_text(ctx, &crate::safety::Target::Project(project.clone()))?;
+    let safety = project.safety(&ctx.config_dir)?;
+    let config = crate::profiles::load(&ctx.config_dir)?;
+    for role in [crate::profiles::Role::Thread, crate::profiles::Role::Coordinator] {
+        let list = config.allowed(&safety, role).map(|l| if l.is_empty() { "none".to_string() } else { l.join(", ") }).unwrap_or_else(|| "every profile".into());
+        text.push_str(&format!("  {:<24} {list}\n", role.list_key()));
     }
-    let table = safety_text(ctx, project).unwrap_or_else(|e| format!("(`herdr-projects safety show {}` failed: {e:#})\n", project.slug));
-    bail!(
-        "--agent-arg only takes a model flag (--model <name>{}); refused: {}. Other launch flags belong in thread_agent_args or coordinator_agent_args, and skipping permission prompts is yolo mode: only the user sets them, in the projects popup or with `herdr-projects safety yolo {} on` in a terminal.\n\n{}",
-        if kind == "codex" { ", or -m <name>" } else { "" },
-        refused.join(" "),
-        project.slug,
-        table.trim_end(),
-    )
+    text.push_str(&format!("Profiles and their allow-lists: `herdr-projects profile list --project {}`; a person changes them in the popup's settings or with `profile add|edit|remove|allow` at a terminal.\n", project.slug));
+    Ok(text)
 }
 
 /// Splits `+++` front matter from the rest, keeping both verbatim.
@@ -103,11 +95,12 @@ pub fn set_in(text: &str, key: &str, value: &str) -> Result<String> {
             }
             doc[key] = toml_edit::value(value);
         }
-        "coordinator_agent" | "thread_agent" => {
-            if !crate::agents::is_kind(value) {
-                bail!("`{value}` is not a Herdr agent kind");
-            }
-            doc[key] = toml_edit::value(value);
+        "coordinator_profile" | "thread_profile" | "coordinator_agent" | "thread_agent" => {
+            crate::profiles::validate_name(value)?;
+            // The old key names the same setting: keep one of them.
+            let role = key.split('_').next().unwrap_or_default();
+            doc.remove(&format!("{role}_agent"));
+            doc[&format!("{role}_profile")] = toml_edit::value(value);
         }
         "max_parallel_threads" | "auto_resolve_days" => {
             let n: i64 = value.parse().ok().filter(|n: &i64| *n >= 0 && *n <= 1000).with_context(|| format!("`{value}` is not a number from 0 to 1000"))?;
@@ -162,6 +155,13 @@ pub fn set_in(text: &str, key: &str, value: &str) -> Result<String> {
 /// `set <slug> <key> <value>`.
 pub fn set(ctx: &Ctx, slug: &str, key: &str, value: &str) -> Result<()> {
     let project = Project::load(&ctx.root, slug)?;
+    if let Some(role) = key.strip_suffix("_profile").or(key.strip_suffix("_agent")) {
+        // A default must be a profile this project may use.
+        let role = crate::profiles::Role::parse(role)?;
+        let config = crate::profiles::load(&ctx.config_dir)?;
+        config.get(value.trim()).with_context(|| format!("there is no profile `{}`; `profile list` shows them", value.trim()))?;
+        crate::profiles::check_allowed(&config, &project.safety(&ctx.config_dir)?, role, value.trim(), slug)?;
+    }
     let text = std::fs::read_to_string(project.project_md())?;
     let edited = set_in(&text, key, value)?;
     {
@@ -270,7 +270,11 @@ mod tests {
 
         assert!(set_in(MD, "max_parallel_threads", "0").is_err());
         assert!(set_in(MD, "max_parallel_threads", "many").is_err());
-        assert!(set_in(MD, "thread_agent", "chatgpt").is_err());
+        assert!(set_in(MD, "thread_profile", "not a name").is_err());
+        // The old key is replaced by the new one, never duplicated.
+        let old = set_in("+++\nthread_agent = \"claude\"\n+++\n", "thread_agent", "luna").unwrap();
+        assert_eq!(old, "+++\nthread_profile = \"luna\"\n+++\n");
+        assert_eq!(project::parse_project_md(&set_in(&old, "coordinator_profile", "sol").unwrap()).unwrap().0.coordinator_profile, "sol");
         assert!(set_in(MD, "whatever", "x").is_err());
         let muted = set_in(MD, "mute", "on").unwrap();
         assert!(project::parse_project_md(&muted).unwrap().0.mute);

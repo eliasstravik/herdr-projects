@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::herdr::{Agent, Herdr, Pane};
 use crate::paths::{self, Ctx, SessionFlags};
+use crate::profiles::Role;
 use crate::project::{self, Coordinator, Project, Status};
 use crate::remote::quote;
 use crate::{inbox, names, ticker};
@@ -84,6 +85,7 @@ pub fn found(project: &Project, socket: &str, session: &str, agents: &[Agent]) -
         agent_name: agent.name.clone(),
         cwd,
         agent: agent.agent.clone(),
+        profile: String::new(),
         agent_session: agent.session_id().to_string(),
         updated: String::new(),
     })
@@ -148,13 +150,18 @@ pub fn nudge_target(panes: &[LivePane], now: jiff::Timestamp) -> Option<&LivePan
         .max_by_key(|p| p.state_change_seq)
 }
 
+/// The profile a coordinator record ran: before profiles, the built-in of
+/// its kind.
+fn recorded_profile(record: &Coordinator) -> &str {
+    if record.profile.is_empty() { &record.agent } else { &record.profile }
+}
+
 pub struct OpenOptions {
     pub session: SessionFlags,
     pub rebind: bool,
-    /// Herdr agent kind; default `coordinator_agent` in PROJECT.md.
-    pub agent: Option<String>,
-    /// Extra agent CLI arguments (a model flag, for example).
-    pub agent_args: Vec<String>,
+    /// The profile; default `coordinator_profile` in PROJECT.md. It must be
+    /// on the project's coordinator allow-list.
+    pub profile: Option<String>,
     /// Start another coordinator although one is running.
     pub new: bool,
     /// Start the agent in the pane this command runs in, when that is a shell
@@ -185,13 +192,12 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
             crate::project::BODY_WARN_CHARS
         );
     }
-    let kind = options.agent.clone().unwrap_or_else(|| settings.coordinator_agent.clone());
-    if !crate::agents::is_kind(&kind) {
-        bail!("`{kind}` is not a Herdr agent kind; `herdr agent start --help` lists them");
-    }
-    // An agent can run `open` too: it may pick a model, never widen powers.
-    crate::settings::require_model_args(ctx, &project, &kind, &options.agent_args)?;
+    // An agent can run `open` too: it may pick an allowed profile, never
+    // widen powers.
+    let config = crate::profiles::load(&ctx.config_dir)?;
     let safety = project.safety(&ctx.config_dir)?;
+    let profile = crate::profiles::resolve(&config, &safety, &settings, Role::Coordinator, options.profile.as_deref(), slug)?;
+    let kind = profile.agent().to_string();
     let session = paths::resolve_session(&options.session, ctx.env, ctx.runner)?;
     let socket = session.socket.to_string_lossy().into_owned();
     let prefix = current_prefix(&ctx.root)?;
@@ -231,9 +237,14 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     let cwd = dir.to_string_lossy().into_owned();
 
     // A coordinator is running: focus the most recently active one.
-    // With an explicit kind, only a running coordinator of that kind is reused:
-    // choosing another kind in the popup starts one beside the others.
-    let running: Vec<&Agent> = agents.iter().filter(|a| a.works_in(&cwd) && options.agent.as_ref().is_none_or(|k| &a.agent == k)).collect();
+    // With an explicit profile, only the recorded coordinator is reused, and
+    // only when it runs that profile: choosing another profile in the popup
+    // starts one beside the others.
+    let running: Vec<&Agent> = agents
+        .iter()
+        .filter(|a| a.works_in(&cwd))
+        .filter(|a| options.profile.is_none() || previous.as_ref().is_some_and(|r| r.pane_id == a.pane_id && recorded_profile(r) == profile.name))
+        .collect();
     if let Some(agent) = running.iter().max_by_key(|a| a.state_change_seq)
         && !options.new
     {
@@ -243,6 +254,10 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
         let _ = herdr.agent_focus(&agent.pane_id);
         let session_name = session.name.clone().unwrap_or_default();
         let record = project.update_coordinator(|c| {
+            // Another pane's profile is not known: the built-in of its kind.
+            if c.pane_id != agent.pane_id {
+                c.profile = agent.agent.clone();
+            }
             c.socket = socket.clone();
             c.session = session_name;
             c.workspace_id = agent.workspace_id.clone();
@@ -306,7 +321,7 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     // running: the new agent starts fresh and never inherits its session id.
     let resume = previous
         .as_ref()
-        .filter(|r| !options.new && r.agent == kind && !r.agent_session.is_empty())
+        .filter(|r| !options.new && r.agent == kind && recorded_profile(r) == profile.name && !r.agent_session.is_empty())
         .and_then(|r| crate::agents::resume_args(&kind, &r.agent_session))
         .unwrap_or_default();
     let record = project.update_coordinator(|c| {
@@ -319,14 +334,15 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
             agent_name: name.clone(),
             cwd: cwd.clone(),
             agent: kind.clone(),
+            profile: profile.name.clone(),
             // Kept only for the resume; the ticker records a fresh agent's own.
             agent_session: if resume.is_empty() { String::new() } else { previous.as_ref().map(|r| r.agent_session.clone()).unwrap_or_default() },
             updated: String::new(),
         }
     })?;
 
-    let mut base_args = safety.coordinator_agent_args.clone();
-    base_args.extend(options.agent_args.iter().cloned());
+    let legacy = crate::profiles::legacy_agent(&config, &settings, Role::Coordinator);
+    let base_args = crate::profiles::expand_home(&crate::profiles::launch_args(&profile, &safety.coordinator_agent_args, &legacy), &ctx.env.home);
     let base_args = safety.launch_args(&kind, &base_args);
     let mut args = base_args.clone();
     args.extend(resume.iter().cloned());
@@ -384,8 +400,7 @@ fn run_here(ctx: &Ctx, herdr: &Herdr, project: &Project, record: &Coordinator, a
     }
     println!("Commands: {prefix}");
     let run = |args: &[String]| -> Result<(Option<i32>, bool)> {
-        // A Herdr agent kind is also its executable's name.
-        let cmd = crate::runner::Cmd::new(kind, Duration::ZERO).args(args.iter().cloned()).cwd(&record.cwd).env("PWD", &record.cwd);
+        let cmd = crate::runner::Cmd::new(crate::profiles::executable(kind), Duration::ZERO).args(args.iter().cloned()).cwd(&record.cwd).env("PWD", &record.cwd);
         let deadline = std::time::Instant::now() + Duration::from_secs(60);
         let mut detected = false;
         let code = ctx.runner.run_foreground(&cmd, &mut || {
@@ -522,9 +537,10 @@ pub fn digest(ctx: &Ctx, project: &Project, prefix: &str) -> Result<(String, Vec
             let _ = writeln!(out, "Goal: {}", if settings.goal.is_empty() { "(none set)" } else { &settings.goal });
             let _ = writeln!(
                 out,
-                "Settings: coordinator_agent={} thread_agent={} max_parallel_threads={} auto_resolve_days={} nudge={} mute={}",
-                settings.coordinator_agent, settings.thread_agent, settings.max_parallel_threads, settings.auto_resolve_days, settings.nudge, settings.mute
+                "Settings: coordinator_profile={} thread_profile={} max_parallel_threads={} auto_resolve_days={} nudge={} mute={}",
+                settings.coordinator_profile, settings.thread_profile, settings.max_parallel_threads, settings.auto_resolve_days, settings.nudge, settings.mute
             );
+            out.push_str(&crate::profiles::context_text(ctx, project, &settings));
             if settings.repos.is_empty() {
                 let _ = writeln!(out, "Repos: (none)");
             }
@@ -572,7 +588,7 @@ pub fn digest(ctx: &Ctx, project: &Project, prefix: &str) -> Result<(String, Vec
     for row in open {
         let t = &row.thread;
         let place = if t.repo.is_empty() { "no repo".to_string() } else { t.repo.clone() };
-        let _ = writeln!(out, "- {} [{}] ({}) {} — {} — {}", t.id, row.group.label(), row.note, t.title, place, t.agent);
+        let _ = writeln!(out, "- {} [{}] ({}) {} — {} — {}", t.id, row.group.label(), row.note, t.title, place, if t.profile.is_empty() { &t.agent } else { &t.profile });
         for line in crate::thread::all_next(project, &t.id) {
             let _ = writeln!(out, "  next: {line}");
         }

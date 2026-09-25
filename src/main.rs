@@ -13,6 +13,7 @@ mod overview;
 mod paths;
 mod popup;
 mod pr;
+mod profiles;
 mod progress;
 mod project;
 mod remote;

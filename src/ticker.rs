@@ -608,24 +608,51 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
         let launched = (|| -> Result<()> {
             thread::update(project, &t.id, |t| t.launch_attempts += 1)?;
             let safety = project.safety(&ctx.config_dir)?;
-            // Stored arguments pass the same model-only check as `thread
-            // start`: a record written before it, or edited by hand, cannot
-            // smuggle in a launch flag. The refused ones are dropped for good.
-            let (model, refused) = crate::agents::split_model_args(&t.agent, &t.agent_args);
-            if !refused.is_empty() {
-                thread::update(project, &t.id, |t| t.agent_args = model.clone())?;
-                let summary = format!(
-                    "{}: launched without agent arguments that are not a model flag: {}. Only the user sets launch flags, in thread_agent_args (`herdr-projects safety show {}`)",
-                    t.id,
-                    refused.join(" "),
-                    project.slug
-                );
-                inbox::write(project, "thread-state", &t.id, &summary, "")?;
+            let config = crate::profiles::load(&ctx.config_dir)?;
+            let (settings, _) = project.read_project_md()?;
+            let legacy = crate::profiles::legacy_agent(&config, &settings, crate::profiles::Role::Thread);
+            let (kind, mut args) = if t.profile.is_empty() {
+                // A thread started before profiles: the built-in of its kind
+                // plus its stored model flag, which passes the same model-only
+                // check as before. The refused ones are dropped for good.
+                let (model, refused) = crate::agents::split_model_args(&t.agent, &t.agent_args);
+                if !refused.is_empty() {
+                    thread::update(project, &t.id, |t| t.agent_args = model.clone())?;
+                    let summary = format!(
+                        "{}: launched without agent arguments that are not a model flag: {}. Launch flags belong in a profile, which only the user sets (`herdr-projects profile list`)",
+                        t.id,
+                        refused.join(" "),
+                    );
+                    inbox::write(project, "thread-state", &t.id, &summary, "")?;
+                }
+                let builtin = config.get(&t.agent).filter(|p| p.builtin).map(|p| crate::profiles::launch_args(&p, &safety.thread_agent_args, &legacy)).unwrap_or_default();
+                (t.agent.clone(), [builtin, model].concat())
+            } else {
+                // The profile is looked up and checked against the allow-list
+                // again: one the user removed or disallowed since does not launch.
+                let profile = match crate::profiles::resolve(&config, &safety, &settings, crate::profiles::Role::Thread, Some(&t.profile), &project.slug) {
+                    Ok(profile) => profile,
+                    Err(error) => {
+                        let message = format!("{error:#}");
+                        thread::update(project, &t.id, |t| {
+                            t.status = thread::Status::Failed;
+                            t.error = message.clone();
+                        })?;
+                        inbox::write(project, "thread-state", &t.id, &format!("{}: not launched: {message}", t.id), "")?;
+                        return Ok(());
+                    }
+                };
+                if profile.agent() != t.agent {
+                    let agent = profile.agent().to_string();
+                    thread::update(project, &t.id, |t| t.agent = agent)?;
+                }
+                (profile.agent().to_string(), crate::profiles::launch_args(&profile, &safety.thread_agent_args, &legacy))
+            };
+            if !t.is_remote() {
+                args = crate::profiles::expand_home(&args, &ctx.env.home);
             }
-            let mut args = safety.thread_agent_args.clone();
-            args.extend(model);
-            let args = safety.launch_args(&t.agent, &args);
-            herdr.on_machine(&t.machine).agent_start(&t.agent_name, &t.agent, &t.pane_id, &args)?;
+            let args = safety.launch_args(&kind, &args);
+            herdr.on_machine(&t.machine).agent_start(&t.agent_name, &kind, &t.pane_id, &args)?;
             Ok(())
         })();
         errors.extend(launched.err().map(|e| e.context(format!("{}: launch", t.id))));

@@ -51,6 +51,12 @@ enum Command {
         /// A repository, as PATH or PATH@MACHINE; repeatable
         #[arg(long = "repo", value_name = "PATH[@MACHINE]")]
         repos: Vec<String>,
+        /// The project's default thread profile (default: thread_profile in [defaults] of config.toml, else claude)
+        #[arg(long, value_name = "NAME")]
+        thread_profile: Option<String>,
+        /// The project's default coordinator profile (default: coordinator_profile in [defaults], else claude)
+        #[arg(long, value_name = "NAME")]
+        coordinator_profile: Option<String>,
     },
     /// List projects
     List {
@@ -62,12 +68,9 @@ enum Command {
     /// run from a shell pane inside Herdr, else in the project's workspace
     Open {
         slug: String,
-        /// Herdr agent kind for the coordinator (default: coordinator_agent in PROJECT.md)
-        #[arg(long, value_name = "KIND")]
-        agent: Option<String>,
-        /// A model flag for the agent CLI, repeatable (--agent-arg --model --agent-arg NAME); nothing else is accepted
-        #[arg(long = "agent-arg", value_name = "ARG", allow_hyphen_values = true)]
-        agent_args: Vec<String>,
+        /// The coordinator's profile, one the project allows (default: coordinator_profile in PROJECT.md); `profile list` shows them
+        #[arg(long, alias = "agent", value_name = "NAME")]
+        profile: Option<String>,
         /// Start another coordinator even though one is running
         #[arg(long)]
         new: bool,
@@ -159,6 +162,11 @@ enum Command {
     /// Run inside a plugin popup pane
     #[command(hide = true)]
     Pane { id: String },
+    /// Agent profiles: named launch setups (harness, model, effort, flags) and which ones threads and coordinators may use
+    Profile {
+        #[command(subcommand)]
+        command: ProfileCommand,
+    },
     /// Safety settings
     Safety {
         #[command(subcommand)]
@@ -184,7 +192,7 @@ enum Command {
         #[arg(long)]
         yes: bool,
     },
-    /// Change one setting in PROJECT.md (name, goal, coordinator_agent, thread_agent, max_parallel_threads, auto_resolve_days, nudge, mute, repos.add, repos.remove)
+    /// Change one setting in PROJECT.md (name, goal, coordinator_profile, thread_profile, max_parallel_threads, auto_resolve_days, nudge, mute, repos.add, repos.remove)
     Set { slug: String, key: String, value: String },
     /// Open a file: text in a new Herdr tab running $EDITOR, anything else with the system opener
     OpenFile {
@@ -296,15 +304,12 @@ enum ThreadCommand {
         repo: Option<String>,
         #[arg(long, value_name = "LABEL")]
         machine: Option<String>,
-        /// Herdr agent kind (default: thread_agent in PROJECT.md)
-        #[arg(long, value_name = "KIND")]
-        agent: Option<String>,
-        /// Placement: worktree (default with --repo), tab (default without), or checkout (a tab on the repo's main checkout)
+        /// The agent's profile (harness, model, effort, flags), one the project allows (default: thread_profile in PROJECT.md); `context` lists them
+        #[arg(long, alias = "agent", value_name = "NAME")]
+        profile: Option<String>,
+        /// Placement, not the agent: worktree (default with --repo), tab (default without), or checkout (a tab on the repo's main checkout)
         #[arg(long, value_name = "worktree|tab|checkout")]
         kind: Option<String>,
-        /// A model flag for the agent CLI, repeatable (--agent-arg --model --agent-arg opus); nothing else is accepted
-        #[arg(long = "agent-arg", value_name = "ARG", allow_hyphen_values = true)]
-        agent_args: Vec<String>,
         #[arg(long, value_name = "REF")]
         base: Option<String>,
         /// The task; `-` reads standard input
@@ -315,12 +320,9 @@ enum ThreadCommand {
     Restart {
         slug: String,
         id: String,
-        /// Restart with another Herdr agent kind
-        #[arg(long, value_name = "KIND")]
-        agent: Option<String>,
-        /// Replace the model flag (repeatable, model flags only; none given keeps the old ones, unless the kind changes)
-        #[arg(long = "agent-arg", value_name = "ARG", allow_hyphen_values = true)]
-        agent_args: Vec<String>,
+        /// Restart with another profile the project allows (default: the thread's own)
+        #[arg(long, alias = "agent", value_name = "NAME")]
+        profile: Option<String>,
     },
     /// Send a follow-up to a thread's agent (recorded in its task file)
     Prompt {
@@ -436,6 +438,73 @@ enum RoutineCommand {
     List { slug: String },
 }
 
+/// The typed fields of a profile, for `add` and `edit`.
+#[derive(Args)]
+struct ProfileFields {
+    /// Model name, passed as --model (empty: the harness's default)
+    #[arg(long, value_name = "NAME")]
+    model: Option<String>,
+    /// Reasoning effort: claude low..max, codex none..ultra, copilot none..max, pi/omp off..max (others: put it in --arg or the model id)
+    #[arg(long, value_name = "LEVEL")]
+    effort: Option<String>,
+    /// One line on when to use it; the coordinator reads it when choosing
+    #[arg(long, value_name = "TEXT")]
+    description: Option<String>,
+    /// An extra argument for the agent CLI, repeatable (--arg --config --arg ~/.omp/agent/luna.yml)
+    #[arg(long = "arg", value_name = "ARG", allow_hyphen_values = true)]
+    args: Vec<String>,
+}
+
+#[derive(Subcommand)]
+enum ProfileCommand {
+    /// List the profiles (yours and the installed, signed-in harnesses), and with --project what it allows
+    List {
+        #[arg(long, value_name = "SLUG")]
+        project: Option<String>,
+    },
+    /// Add a profile (a person at a terminal only)
+    Add {
+        name: String,
+        /// The harness: a Herdr agent kind (claude, codex, cursor, gemini, opencode, copilot, omp, pi, ...)
+        #[arg(long, value_name = "KIND")]
+        agent: String,
+        #[command(flatten)]
+        fields: ProfileFields,
+    },
+    /// Change a profile's fields; --arg replaces its arguments (a person at a terminal only)
+    Edit {
+        name: String,
+        #[arg(long, value_name = "KIND")]
+        agent: Option<String>,
+        #[command(flatten)]
+        fields: ProfileFields,
+        /// Remove all its extra arguments
+        #[arg(long, conflicts_with = "args")]
+        clear_args: bool,
+    },
+    /// Remove a profile (a person at a terminal only)
+    Remove { name: String },
+    /// Set which profiles threads or coordinators may use, for one project or as the default for all (a person at a terminal only)
+    Allow {
+        #[arg(value_parser = ["threads", "coordinator"])]
+        role: String,
+        #[arg(required_unless_present = "all")]
+        names: Vec<String>,
+        /// Only this project (default: every project without its own list)
+        #[arg(long, value_name = "SLUG")]
+        project: Option<String>,
+        /// Allow every profile (removes the list)
+        #[arg(long, conflicts_with = "names")]
+        all: bool,
+    },
+    /// The profile new projects start with for threads or coordinators; one project's own is `set <slug> thread_profile NAME` (a person at a terminal only)
+    Default {
+        #[arg(value_parser = ["threads", "coordinator"])]
+        role: String,
+        name: String,
+    },
+}
+
 #[derive(Subcommand)]
 enum SafetyCommand {
     /// Print the effective safety settings, where each comes from, and how to change them
@@ -478,6 +547,46 @@ enum TickerCommand {
     Status,
 }
 
+fn profile_change(ctx: &Ctx, command: ProfileCommand) -> Result<crate::profiles::Change> {
+    use crate::profiles::{Change, Entry, Role};
+    Ok(match command {
+        ProfileCommand::List { .. } => bail!("`profile list` changes nothing"),
+        ProfileCommand::Add { name, agent, fields } => Change::Add {
+            name,
+            entry: Entry { agent, model: fields.model.unwrap_or_default(), effort: fields.effort.unwrap_or_default(), args: fields.args, description: fields.description.unwrap_or_default() },
+        },
+        ProfileCommand::Edit { name, agent, fields, clear_args } => Change::Edit {
+            name,
+            agent,
+            model: fields.model,
+            effort: fields.effort,
+            description: fields.description,
+            args: if clear_args { Some(Vec::new()) } else { (!fields.args.is_empty()).then_some(fields.args) },
+        },
+        ProfileCommand::Remove { name } => Change::Remove { name },
+        ProfileCommand::Allow { role, names, project, all } => Change::Allow {
+            role: Role::parse(&role)?,
+            project: project.map(|slug| Project::load(&ctx.root, &slug).map(|p| p.canonical_dir())).transpose()?,
+            names: (!all).then_some(names),
+        },
+        ProfileCommand::Default { role, name } => Change::Default { role: Role::parse(&role)?, name },
+    })
+}
+
+/// A `profile ...` command line the popup builds, applied in this process:
+/// the popup is a person's own screen, so it needs no terminal check.
+pub fn apply_profile_args(ctx: &Ctx, args: &[String]) -> Result<String> {
+    #[derive(Parser)]
+    #[command(name = "profile")]
+    struct ProfileCli {
+        #[command(subcommand)]
+        command: ProfileCommand,
+    }
+    let parsed = ProfileCli::try_parse_from(args).map_err(|e| anyhow::anyhow!("{}", e.to_string().lines().next().unwrap_or("bad arguments")))?;
+    let change = profile_change(ctx, parsed.command)?;
+    crate::profiles::apply(&ctx.config_dir, &change)
+}
+
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     let env = Env::from_process()?;
@@ -493,9 +602,18 @@ pub fn run() -> Result<()> {
     };
 
     match cli.command {
-        Command::New { name, goal, repos } => {
+        Command::New { name, goal, repos, thread_profile, coordinator_profile } => {
             let repos = repos.iter().map(|arg| project::parse_repo_arg(arg)).collect();
+            let config = crate::profiles::load(&ctx.config_dir)?;
+            let thread = thread_profile.unwrap_or_else(|| config.new_project_default(crate::profiles::Role::Thread));
+            let coordinator = coordinator_profile.unwrap_or_else(|| config.new_project_default(crate::profiles::Role::Coordinator));
+            for name in [&thread, &coordinator] {
+                if config.get(name).is_none() {
+                    bail!("there is no profile `{name}`; `profile list` shows them");
+                }
+            }
             let project = project::create(&ctx.root, &name, &goal, repos)?;
+            crate::profiles::write_project_defaults(&project, &thread, &coordinator)?;
             let prefix = coordinator::current_prefix(&ctx.root)?;
             project::write_priming(&project, &prefix)?;
             println!("created `{}` at {}", project.slug, project.dir().display());
@@ -518,14 +636,13 @@ pub fn run() -> Result<()> {
             }
             Ok(())
         }
-        Command::Open { slug, agent, agent_args, new, tab, rebind, session } => coordinator::open(
+        Command::Open { slug, profile, new, tab, rebind, session } => coordinator::open(
             &ctx,
             &slug,
             &OpenOptions {
                 session: session.into(),
                 rebind,
-                agent,
-                agent_args,
+                profile,
                 new,
                 // Only a person at a terminal gets the agent in place; the
                 // popup and agents' shell tools run `open` without one.
@@ -551,17 +668,16 @@ pub fn run() -> Result<()> {
             }
         },
         Command::Thread { command } => match command {
-            ThreadCommand::Start { slug, title, repo, machine, agent, kind, agent_args, base, task_file } => {
+            ThreadCommand::Start { slug, title, repo, machine, profile, kind, base, task_file } => {
                 let task = read_text(&task_file)?;
                 let kind = kind.as_deref().map(crate::thread::Kind::parse).transpose()?;
-                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, agent, kind, agent_args, base, task })?;
-                println!("{}", serde_json::json!({ "id": thread.id, "kind": thread.kind, "agent": thread.agent, "branch": thread.branch, "pane_id": thread.pane_id }));
+                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, profile, kind, base, task })?;
+                println!("{}", serde_json::json!({ "id": thread.id, "kind": thread.kind, "profile": thread.profile, "agent": thread.agent, "branch": thread.branch, "pane_id": thread.pane_id }));
                 Ok(())
             }
-            ThreadCommand::Restart { slug, id, agent, agent_args } => {
-                let args = (!agent_args.is_empty()).then_some(agent_args);
-                let thread = threads::restart(&ctx, &slug, &id, agent.as_deref(), args)?;
-                println!("{} is back in pane {}; the ticker launches its {} agent", thread.id, thread.pane_id, thread.agent);
+            ThreadCommand::Restart { slug, id, profile } => {
+                let thread = threads::restart(&ctx, &slug, &id, profile.as_deref())?;
+                println!("{} is back in pane {}; the ticker launches its {} agent", thread.id, thread.pane_id, if thread.profile.is_empty() { &thread.agent } else { &thread.profile });
                 Ok(())
             }
             ThreadCommand::Next { slug, id, line, add } => threads::next(&ctx, &slug, &id, line, add.as_deref()),
@@ -636,6 +752,17 @@ pub fn run() -> Result<()> {
         }
         Command::Action { id } => actions::run_action(&ctx, &id),
         Command::Pane { id } => actions::run_pane(&ctx, &id),
+        Command::Profile { command } => {
+            if let ProfileCommand::List { project } = command {
+                let project = project.map(|slug| Project::load(&ctx.root, &slug)).transpose()?;
+                print!("{}", crate::profiles::list_text(&ctx, project.as_ref())?);
+                return Ok(());
+            }
+            let change = profile_change(&ctx, command)?;
+            crate::profiles::require_person()?;
+            println!("{}", crate::profiles::apply(&ctx.config_dir, &change)?);
+            Ok(())
+        }
         Command::Safety { command } => match command {
             SafetyCommand::Show { target } => {
                 print!("{}", crate::safety::show_text(&ctx, &crate::safety::Target::parse(&ctx, &target)?)?);
