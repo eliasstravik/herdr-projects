@@ -57,6 +57,12 @@ pub fn now() -> i64 {
     jiff::Timestamp::now().as_second()
 }
 
+/// A report recent enough for its activity to show in the sidebar: silence
+/// clears it after `ACTIVITY_TTL_MS`.
+pub fn fresh(record: &Record) -> bool {
+    record.reported() && now() - record.reported_at < (ACTIVITY_TTL_MS / 1000) as i64
+}
+
 pub fn dir(root: &Path) -> PathBuf {
     root.join(".progress")
 }
@@ -139,8 +145,8 @@ pub fn current_within(env: &Env, runner: &dyn Runner, timeout: std::time::Durati
 }
 
 /// `report --percent N|--unknown --activity "..."`, run by the agent in its
-/// pane. Writes the record and one `hp_activity` token with a TTL, so silence
-/// clears the activity after five minutes with no daemon.
+/// pane. Writes the record; the ticker shows its activity on the pane's rail
+/// while it is [`fresh`].
 pub fn report(ctx: &Ctx, percent: Option<u8>, activity: &str) -> Result<()> {
     let Some(pane) = current(ctx.env, ctx.runner) else {
         println!("not inside a Herdr pane; nothing reported");
@@ -162,14 +168,7 @@ pub fn report(ctx: &Ctx, percent: Option<u8>, activity: &str) -> Result<()> {
     record.percent = percent;
     record.reported_at = now();
     save(&ctx.root, &record)?;
-    let herdr = Herdr::new(ctx.env.herdr_bin(), &pane.socket, ctx.runner);
-    let token = format!("hp_activity={activity}");
-    let ttl = ACTIVITY_TTL_MS.to_string();
-    if let Err(error) = herdr.call(&["pane", "report-metadata", &pane.pane_id, "--source", crate::herdr::SOURCE, "--token", &token, "--ttl-ms", &ttl], CALL_TIMEOUT) {
-        println!("recorded; the sidebar token was not set ({error})");
-    } else {
-        println!("recorded: {}{activity}", percent.map(|p| format!("{p}% · ")).unwrap_or_default());
-    }
+    println!("recorded: {}{activity}", percent.map(|p| format!("{p}% · ")).unwrap_or_default());
     Ok(())
 }
 

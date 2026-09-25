@@ -230,7 +230,7 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
     let agents = herdr
         .agent_list()
         .with_context(|| format!("the herdr session at {socket} is not reachable"))?;
-    let label = crate::project::display_name(&settings.name, slug);
+    let label = crate::project::home_label(&settings.name, slug);
     // Canonical, because herdr reports a pane's physical working directory and
     // the identity check compares against it.
     let dir = project.canonical_dir();
@@ -470,7 +470,7 @@ pub fn row_state(pane: &LivePane, report: Option<&crate::progress::Record>) -> (
 }
 
 pub fn report_tokens(herdr: &Herdr, slug: &str, pane_id: &str) {
-    crate::sidebar::report_pane(herdr, pane_id, &crate::sidebar::coordinator_display(), slug, crate::thread::Group::Idle, "idle");
+    crate::sidebar::report_pane(herdr, pane_id, &crate::sidebar::coordinator_display(), slug, crate::thread::Group::Idle);
 }
 
 /// Renames a recorded workspace whose label is not the project's display name,

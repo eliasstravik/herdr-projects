@@ -36,7 +36,7 @@ Keep your attention on decisions. Herdr Projects starts and tracks the threads, 
 
 ### 📈 See every thread at a glance
 
-Each thread's sidebar row shows its id and title, a state line (`needs you · ~55%` in red, `review · PR #4` in yellow, `working · ~40%`) and the agent's own activity. Agents and spaces are grouped by project under a heading (`▍Herdr Projects · 2 need you`), the coordinator first and then its threads with what needs you first; everything else sits under `other`. Each project's row says `2 need you · 3 working` and the tab bar says `projects: 2 need you`. `prefix+a` opens one popup with threads, tasks, inbox, routines and settings, where every thread's own list of next steps is a number key away.
+Each thread's sidebar row shows its id and title, and a line under it with what Herdr's own state word does not say (`review · PR #4`, `~40%`) and the agent's own activity. Agents and spaces are grouped by project on a rail (`┌─ Herdr Projects` … `└─`) whose colour is the project's state: heavy red when something needs you, lilac when something works, grey when idle; the coordinator comes first and then its threads with what needs you first; everything else sits on a dashed `other` rail. The tab bar says `projects: 2 need you`. `prefix+a` opens one popup with threads, tasks, inbox, routines and settings, where every thread's own list of next steps is a number key away.
 
 ### ⚡ Stop briefing every agent yourself
 
