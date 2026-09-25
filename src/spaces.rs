@@ -122,7 +122,7 @@ pub fn close_empty(ctx: &Ctx, project: &Project, herdr: &Herdr) -> Vec<anyhow::E
         match close(herdr, &space) {
             Ok(()) => {
                 forget(project, &space.id);
-                errors.extend(crate::inbox::write(project, "space", &space.id, &format!("closed empty Space {} ({})", space.label, space.id), "").err());
+                errors.extend(crate::inbox::write(project, "space", &space.id, "closed empty Space", &format!("closed empty Space {} ({})", space.label, space.id), "").err());
             }
             Err(error) if error.code == "workspace_group_close_required" => {}
             Err(error) => errors.push(anyhow::anyhow!("could not close empty Space {}: {error}", space.id)),

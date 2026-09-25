@@ -493,10 +493,16 @@ pub fn prompt(ctx: &Ctx, slug: &str, id: &str, text: &str) -> Result<String> {
     let view = require_session(ctx, &project)?;
     let (agents, _) = lists_for(&view, &record)?;
     let state = prompt_state(&record, &agents)?;
-    view.herdr
-        .on_machine(&record.machine)
-        .agent_prompt(&record.pane_id, text.trim())
-        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let herdr = view.herdr.on_machine(&record.machine);
+    // Someone typing in the thread's pane would have the prompt merged into
+    // their text and submitted. A box this binary cannot read (another kind, a
+    // layout it does not know) is sent to as before.
+    let kind = agents.iter().find(|a| thread::agent_matches(&record, a)).map(|a| a.agent.as_str()).unwrap_or(&record.agent);
+    let screen = herdr.agent_screen(&record.pane_id).map_err(|error| anyhow::anyhow!("{error}"))?;
+    if crate::prompt_box::check(kind, &screen) == crate::prompt_box::Draft::Typed {
+        bail!("draft_in_box: {id}'s input box holds text someone typed ({}); not sending, so it is not merged into their prompt. Try again once it is empty; `thread read` shows it", record.pane_id);
+    }
+    herdr.agent_prompt(&record.pane_id, text.trim()).map_err(|error| anyhow::anyhow!("{error}"))?;
     // Written after the send, so the task file never claims a prompt that was
     // refused; a restarted thread re-reads it with its task.
     thread::append_follow_up(&project, id, text)?;
@@ -754,7 +760,7 @@ pub fn resolve(ctx: &Ctx, slug: &str, id: &str, args: &ResolveArgs) -> Result<()
     for note in &notes {
         println!("  - {note}");
     }
-    crate::inbox::write(&project, "thread-state", id, &format!("{id} \"{}\" was resolved: {}", resolved.title, notes.join("; ")), "")?;
+    crate::inbox::write(&project, "thread-state", id, "resolved", &format!("{id} \"{}\" was resolved: {}", resolved.title, notes.join("; ")), "")?;
     Ok(())
 }
 
@@ -871,7 +877,7 @@ fn last_pr_lookup(ctx: &Ctx, project: &Project, t: &Thread) -> Option<crate::pr:
             r.pr_state = state;
             r.pr_review = review;
         });
-        let _ = crate::inbox::write(project, "pr", &t.id, &format!("{}: pull request {} (found at resolve)", crate::steps::thread_label(t), pr::describe_change(None, &summary)), "");
+        let _ = crate::inbox::write(project, "pr", &t.id, "PR found at resolve", &format!("{}: pull request {} (found at resolve)", crate::steps::thread_label(t), pr::describe_change(None, &summary)), "");
     }
     Some(summary)
 }

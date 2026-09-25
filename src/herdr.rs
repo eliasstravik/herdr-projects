@@ -445,8 +445,12 @@ impl<'a> Herdr<'a> {
     /// `lines` lines of scrollback. `agent read` prints the text itself, not a
     /// JSON reply; only a failure is JSON (checked on 0.9.1).
     pub fn agent_read(&self, target: &str, lines: Option<usize>) -> Result<String, HerdrError> {
+        self.agent_read_as(target, lines, "text")
+    }
+
+    fn agent_read_as(&self, target: &str, lines: Option<usize>, format: &str) -> Result<String, HerdrError> {
         let lines = lines.map(|n| n.to_string());
-        let mut args = vec!["agent", "read", target, "--format", "text"];
+        let mut args = vec!["agent", "read", target, "--format", format];
         match &lines {
             Some(n) => args.extend(["--source", "recent", "--lines", n.as_str()]),
             None => args.extend(["--source", "visible"]),
@@ -469,6 +473,12 @@ impl<'a> Herdr<'a> {
             },
             None => HerdrError { code: "failed".into(), message: format!("`herdr {}`: {}", args.join(" "), out.error_text()) },
         })
+    }
+
+    /// The visible screen with its styling (SGR escapes), for telling typed
+    /// text from a dim placeholder (`prompt_box`).
+    pub fn agent_screen(&self, target: &str) -> Result<String, HerdrError> {
+        self.agent_read_as(target, None, "ansi")
     }
 
     /// Key presses in herdr's key syntax (`enter`, `esc`, `up`, `tab`,

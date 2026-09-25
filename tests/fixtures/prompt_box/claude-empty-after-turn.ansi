@@ -1,0 +1,14 @@
+  [0m[1mWhat happens next: [0mThat project is set to suggest threads before starting them, so its coordinator will propose a plan and wait for
+  your review in its pane.
+
+  Until then, nothing else needs you.
+
+[0m[38;2;153;153;153m✻ Cogitated for 27s · done 10:30 PM[0m
+
+[0m[38;2;153;153;153m※[0m [0m[1m[38;2;153;153;153mrecap: [0m[3m[38;2;153;153;153mYou asked for the flaky test to be fixed, and I've handed that fix to a thread of the example project [0m
+  [0m[3m[38;2;153;153;153mcoordinator. Next, review its report when it is ready. (disable recaps in /config)[0m
+
+[0m[38;2;136;136;136m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+❯ 
+[0m[38;2;136;136;136m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+  [0m[38;2;255;107;128m⏵⏵ bypass permissions on[0m[38;2;153;153;153m (shift+tab to cycle) · ← 1 agent[0m
