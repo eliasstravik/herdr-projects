@@ -528,6 +528,12 @@ impl<'a> Herdr<'a> {
         self.request("agent.view.set", params).map(|_| ())
     }
 
+    /// Moves a Space to `insert_index` (a gap in the list before the move;
+    /// socket only in 0.9.1).
+    pub fn workspace_move(&self, workspace_id: &str, insert_index: usize) -> Result<(), HerdrError> {
+        self.request("workspace.move", serde_json::json!({ "workspace_id": workspace_id, "insert_index": insert_index })).map(|_| ())
+    }
+
 }
 
 #[cfg(test)]
