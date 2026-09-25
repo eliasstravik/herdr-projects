@@ -1646,6 +1646,59 @@ fn open_new_starts_a_fresh_coordinator_beside_a_live_one_without_its_session() {
 }
 
 #[test]
+fn a_tab_thread_with_a_repo_gets_its_brief_seconds_after_its_agent_is_ready() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let repo = world.home.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    let cwd = project.canonical_dir().join("threads/t-0001").to_string_lossy().into_owned();
+    let created = cwd.clone();
+    world.runner.on_fn(
+        |cmd| cmd.display().contains("tab create"),
+        move |_| Ok(ok(&format!(r#"{{"result":{{"root_pane":{{"workspace_id":"w1","tab_id":"w1:t2","pane_id":"w1:p2","cwd":"{created}"}}}}}}"#))),
+    );
+    world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":""}}}"#));
+    world.runner.on("agent start", ok(r#"{"result":{"agent":{"pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1"}}}"#));
+    world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    let ctx = world.ctx();
+    let args = StartArgs { title: "Clean up".into(), repo: Some(repo.to_string_lossy().into_owned()), machine: None, profile: None, kind: Some(Kind::Tab), base: None, task: "Tidy.".into() };
+    let t = threads::start(&ctx, "demo", args).unwrap();
+    assert_eq!((t.kind, t.cwd.as_str(), t.prompt_pending), (Kind::Tab, cwd.as_str(), true));
+
+    // Tick 1: the tab is at a shell prompt: the agent is started and the
+    // loop is told to look for its brief before the next tick.
+    let pane = pane_json("w1", "w1:t2", "w1:p2", &cwd);
+    *world.panes.borrow_mut() = format!("[{},{pane}]", world.coordinator_pane(&project));
+    let mut memory = crate::steps::Memory::new(&ctx);
+    assert!(ticker::tick_for_test(&ctx, &mut memory));
+    assert_eq!((world.runner.count("agent start"), world.runner.count("agent prompt")), (1, 0));
+    assert!(memory.launched);
+
+    // Between ticks: still starting up, so the brief waits and the checks go on.
+    *world.agents.borrow_mut() = format!("[{}]", agent_json("w1", "w1:t2", "w1:p2", &cwd, "hp-demo-t-0001", "working"));
+    assert!(ticker::brief_pass_for_test(&ctx));
+    assert_eq!(world.runner.count("agent prompt"), 0);
+
+    // Ready at an empty prompt: the brief goes now, once, not a tick later.
+    *world.agents.borrow_mut() = format!("[{}]", agent_json("w1", "w1:t2", "w1:p2", &cwd, "hp-demo-t-0001", "idle"));
+    assert!(!ticker::brief_pass_for_test(&ctx));
+    assert_eq!(world.runner.count("agent prompt"), 1);
+    let calls = world.runner.calls.borrow();
+    let prompt = calls.iter().find(|c| c.display().contains("agent prompt")).unwrap();
+    assert_eq!(prompt.args.last().unwrap(), "Read .herdr-project/demo-t-0001/brief.md and do what it says.");
+    drop(calls);
+    assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
+
+    // Neither the next check nor the next tick sends it again.
+    assert!(!ticker::brief_pass_for_test(&ctx));
+    let mut memory = crate::steps::Memory::new(&ctx);
+    assert!(ticker::tick_for_test(&ctx, &mut memory));
+    assert_eq!((world.runner.count("agent start"), world.runner.count("agent prompt")), (1, 1));
+    assert!(!memory.launched);
+}
+
+#[test]
 fn a_tab_thread_gets_a_brief_with_the_project_header_and_prompts_are_recorded() {
     let world = World::new();
     let project = world.project("demo", "a.sock");

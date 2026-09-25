@@ -622,7 +622,7 @@ pub fn keys(ctx: &Ctx, slug: &str, id: &str, keys: &[String], text: Option<&str>
 }
 
 /// `thread brief`: delivers a thread's brief now instead of on the ticker's
-/// next pass (it only prompts an agent a tick after starting it). The record
+/// next check (it prompts an agent seconds after it is ready). The record
 /// is claimed under the project lock first, so the ticker does not send it too.
 pub fn brief(ctx: &Ctx, slug: &str, id: &str) -> Result<()> {
     let project = Project::load(&ctx.root, slug)?;
@@ -640,21 +640,30 @@ pub fn brief(ctx: &Ctx, slug: &str, id: &str) -> Result<()> {
         state if !crate::herdr::ready_state(state) => bail!("{id}'s agent is {state}, not ready for its brief yet; try again shortly"),
         _ => {}
     }
+    if !send_brief(&project, &pane.herdr, &pane.record)? {
+        println!("{id} got its brief from the ticker just now");
+        return Ok(());
+    }
+    println!("sent {id} its brief (agent was {})", pane.state);
+    Ok(())
+}
+
+/// Claims a pending brief under the project lock, then sends it. `Ok(false)`
+/// when someone else claimed it first; a failed send puts the claim back.
+pub fn send_brief(project: &Project, herdr: &Herdr, record: &Thread) -> Result<bool> {
     let mut claimed = false;
-    thread::update(&project, id, |t| {
+    thread::update(project, &record.id, |t| {
         claimed = t.prompt_pending;
         t.prompt_pending = false;
     })?;
     if !claimed {
-        println!("{id} got its brief from the ticker just now");
-        return Ok(());
+        return Ok(false);
     }
-    if let Err(error) = pane.herdr.agent_prompt(&pane.record.pane_id, &thread::launch_prompt(slug, id)) {
-        thread::update(&project, id, |t| t.prompt_pending = true)?;
+    if let Err(error) = herdr.agent_prompt(&record.pane_id, &thread::launch_prompt(&project.slug, &record.id)) {
+        thread::update(project, &record.id, |t| t.prompt_pending = true)?;
         bail!("{error}");
     }
-    println!("sent {id} its brief (agent was {})", pane.state);
-    Ok(())
+    Ok(true)
 }
 
 /// The state a follow-up may be sent in, or the refusal.
