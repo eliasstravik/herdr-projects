@@ -343,6 +343,26 @@ enum ThreadCommand {
     },
     /// Send Escape to a thread's pane (the harness's own interrupt)
     Stop { slug: String, id: String },
+    /// Deliver a thread's brief now, when its agent is ready but the ticker has not sent it yet
+    Brief { slug: String, id: String },
+    /// Print what a thread's pane shows now (a trust dialog, a question menu, a permission prompt)
+    Read {
+        slug: String,
+        id: String,
+        /// Read the last N lines of scrollback instead of the visible screen
+        #[arg(long, value_name = "N")]
+        lines: Option<usize>,
+    },
+    /// Answer what a thread's pane shows: type --text (no Enter), then press the keys (enter, esc, up, down, tab, 1, y, ctrl+c)
+    Keys {
+        slug: String,
+        id: String,
+        #[arg(value_name = "KEY")]
+        keys: Vec<String>,
+        /// Literal text typed before the keys
+        #[arg(long, value_name = "TEXT", allow_hyphen_values = true)]
+        text: Option<String>,
+    },
     /// List threads with live state and group
     List {
         slug: String,
@@ -546,6 +566,9 @@ pub fn run() -> Result<()> {
             }
             ThreadCommand::Next { slug, id, line, add } => threads::next(&ctx, &slug, &id, line, add.as_deref()),
             ThreadCommand::Stop { slug, id } => threads::stop(&ctx, &slug, &id),
+            ThreadCommand::Brief { slug, id } => threads::brief(&ctx, &slug, &id),
+            ThreadCommand::Read { slug, id, lines } => threads::read(&ctx, &slug, &id, lines),
+            ThreadCommand::Keys { slug, id, keys, text } => threads::keys(&ctx, &slug, &id, &keys, text.as_deref()),
             ThreadCommand::Prompt { slug, id, text_file } => {
                 let text = read_text(&text_file)?;
                 let state = threads::prompt(&ctx, &slug, &id, &text)?;

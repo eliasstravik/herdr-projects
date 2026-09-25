@@ -738,6 +738,9 @@ fn a_thread_that_needs_you_gives_one_specific_notification_with_sound_unless_mut
         }
         assert_eq!(shown.len(), 1, "{:?}", shown.iter().map(|c| c.display()).collect::<Vec<_>>());
         assert_eq!(&shown[0].args[2..], ["Demo · t-0001", "--body", "needs you · blocked", "--sound", "request"]);
+        // The coordinator's item says how to answer the screen itself.
+        let items = items_of(&project, "thread-state");
+        assert!(items[0].summary.contains("`thread read demo t-0001` shows it, `thread keys demo t-0001` answers it"), "{}", items[0].summary);
         // The batched "N new inbox items" notification is gone.
         assert!(!calls.iter().any(|c| c.display().contains("new inbox item")));
     }
@@ -1356,7 +1359,7 @@ fn a_remote_thread_blocked_at_a_poll_is_waiting_on_you_at_once() {
     assert_eq!(thread::load(&project, "t-0001").unwrap().last_group, "waiting-on-you");
     let items = items_of(&project, "thread-state");
     assert_eq!(items.len(), 1);
-    assert!(items[0].summary.contains("on machine `box`"), "{}", items[0].summary);
+    assert!(items[0].summary.contains("on machine `box` shows a prompt: `thread read demo t-0001`"), "{}", items[0].summary);
 }
 
 #[test]
@@ -1970,4 +1973,90 @@ fn an_agent_in_the_threads_folder_is_not_the_coordinator() {
     ticker::tick_for_test(&ctx, &mut crate::steps::Memory::new(&ctx));
     assert!(project.coordinator().is_none());
     assert_eq!(world.runner.count("report-metadata"), 0);
+}
+
+#[test]
+fn thread_read_and_keys_reach_the_threads_pane_on_its_session_and_refuse_a_bare_shell() {
+    let (world, project, t) = finished_world("blocked");
+    world.runner.on("agent read", ok("Do you trust the files in this folder?\n> 1. Yes, proceed\n  2. No, exit\n"));
+    world.runner.on("pane send-text", ok(""));
+    world.runner.on("agent send-keys", ok(""));
+    let ctx = world.ctx();
+
+    threads::read(&ctx, "demo", "t-0001", None).unwrap();
+    threads::read(&ctx, "demo", "t-0001", Some(40)).unwrap();
+    threads::keys(&ctx, "demo", "t-0001", &["down".into(), "enter".into()], Some("-- not a flag")).unwrap();
+    {
+        let calls = world.runner.calls.borrow();
+        let reads: Vec<&Cmd> = calls.iter().filter(|c| c.display().contains("agent read")).collect();
+        assert_eq!(reads[0].args, ["agent", "read", "w2:p1", "--format", "text", "--source", "visible"]);
+        assert_eq!(reads[1].args[5..], ["--source", "recent", "--lines", "40"]);
+        assert!(socket_of(reads[0]).ends_with("a.sock"));
+        // Text goes first, then the keys, both to the thread's pane.
+        let sent: Vec<&Cmd> = calls.iter().filter(|c| c.display().contains("send-")).collect();
+        assert_eq!(sent[0].args, ["pane", "send-text", "w2:p1", "-- not a flag"]);
+        assert_eq!(sent[1].args, ["agent", "send-keys", "w2:p1", "down", "enter"]);
+    }
+
+    // Nothing to send, an empty key name, no agent in the pane, a resolved thread.
+    assert!(threads::keys(&ctx, "demo", "t-0001", &[], None).is_err());
+    assert!(threads::keys(&ctx, "demo", "t-0001", &[" ".into()], None).is_err());
+    *world.agents.borrow_mut() = "[]".into();
+    let bare = threads::keys(&ctx, "demo", "t-0001", &["enter".into()], None).unwrap_err().to_string();
+    assert!(bare.contains("no agent is detected"), "{bare}");
+    assert!(threads::read(&ctx, "demo", "t-0001", None).is_err());
+    thread::update(&project, &t.id, |t| t.status = Status::Resolved).unwrap();
+    assert!(threads::read(&ctx, "demo", "t-0001", None).unwrap_err().to_string().contains("has no pane"));
+    assert_eq!(world.runner.count("send-"), 2);
+}
+
+#[test]
+fn thread_keys_reach_a_remote_thread_through_its_machine() {
+    let (world, _project) = remote_world();
+    let world = World { runner: FakeRunner::new(), ..world };
+    world.runner.on("machine list --json", ok(r#"[{"id":"1","label":"box","target":"me@box"}]"#));
+    let cwd = "/home/me/wt";
+    world.runner.on_fn(
+        |cmd| is_machine_call(cmd) && cmd.display().contains("agent list"),
+        move |_| Ok(ok(&format!(r#"{{"result":{{"agents":[{}]}}}}"#, agent_json("w2", "w2:t1", "w2:p1", cwd, "hp-demo-t-0001", "blocked")))),
+    );
+    world.runner.on_fn(|cmd| is_machine_call(cmd) && cmd.display().contains("pane list"), |_| Ok(ok(r#"{"result":{"panes":[]}}"#)));
+    world.runner.on_fn(|cmd| is_machine_call(cmd) && cmd.display().contains("agent read"), |_| Ok(ok("Allow this command?\n")));
+    world.runner.on_fn(|cmd| is_machine_call(cmd) && cmd.display().contains("agent send-keys"), |_| Ok(ok("")));
+    world.runner.on("agent list", ok(r#"{"result":{"agents":[]}}"#));
+    world.runner.on("pane list", ok(r#"{"result":{"panes":[]}}"#));
+    let ctx = world.ctx();
+    threads::read(&ctx, "demo", "t-0001", None).unwrap();
+    threads::keys(&ctx, "demo", "t-0001", &["enter".into()], None).unwrap();
+    let calls = world.runner.calls.borrow();
+    let sent = calls.iter().find(|c| c.display().contains("agent send-keys")).unwrap();
+    assert_eq!(sent.args, ["--machine", "box", "agent", "send-keys", "w2:p1", "enter"]);
+    assert!(calls.iter().any(|c| is_machine_call(c) && c.display().contains("agent read")));
+}
+
+#[test]
+fn thread_brief_delivers_a_pending_brief_once_and_only_to_a_ready_agent() {
+    let (world, project, t) = finished_world("blocked");
+    thread::update(&project, &t.id, |t| t.prompt_pending = true).unwrap();
+    let ctx = world.ctx();
+    let blocked = threads::brief(&ctx, "demo", "t-0001").unwrap_err().to_string();
+    assert!(blocked.contains("`thread keys` answers it"), "{blocked}");
+    set_agents(&world, &project, "working");
+    assert!(threads::brief(&ctx, "demo", "t-0001").unwrap_err().to_string().contains("not ready"));
+    // The prompt refusal and the restart refusal both point at it.
+    assert!(threads::prompt(&ctx, "demo", "t-0001", "hi").unwrap_err().to_string().contains("`thread brief`"));
+    assert_eq!(world.runner.count("agent prompt"), 0);
+
+    set_agents(&world, &project, "idle");
+    threads::brief(&ctx, "demo", "t-0001").unwrap();
+    assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
+    {
+        let calls = world.runner.calls.borrow();
+        let sent = calls.iter().find(|c| c.display().contains("agent prompt")).unwrap();
+        assert_eq!(sent.args[2..], ["w2:p1".to_string(), thread::launch_prompt("demo", "t-0001")]);
+    }
+    // Again, or on the ticker's next pass: nothing more is sent.
+    threads::brief(&ctx, "demo", "t-0001").unwrap();
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(world.runner.count("agent prompt"), 1);
 }

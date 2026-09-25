@@ -441,6 +441,51 @@ impl<'a> Herdr<'a> {
         self.call(&["agent", "prompt", target, text], CALL_TIMEOUT).map(|_| ())
     }
 
+    /// The agent's screen as plain text: what is visible now, or the last
+    /// `lines` lines of scrollback. `agent read` prints the text itself, not a
+    /// JSON reply; only a failure is JSON (checked on 0.9.1).
+    pub fn agent_read(&self, target: &str, lines: Option<usize>) -> Result<String, HerdrError> {
+        let lines = lines.map(|n| n.to_string());
+        let mut args = vec!["agent", "read", target, "--format", "text"];
+        match &lines {
+            Some(n) => args.extend(["--source", "recent", "--lines", n.as_str()]),
+            None => args.extend(["--source", "visible"]),
+        }
+        let cmd = self.cmd(CALL_TIMEOUT).args(args.iter().copied());
+        let out = self.runner.run(&cmd).map_err(|e| HerdrError { code: "unreachable".into(), message: format!("{e:#}") })?;
+        if out.timed_out {
+            return Err(HerdrError { code: "timeout".into(), message: format!("`herdr {}` timed out", args.join(" ")) });
+        }
+        if out.success() {
+            return Ok(out.stdout);
+        }
+        let reply = [&out.stderr, &out.stdout]
+            .into_iter()
+            .find_map(|text| serde_json::from_str::<serde_json::Value>(text.trim()).ok());
+        Err(match reply.as_ref().and_then(|r| r.get("error")) {
+            Some(error) => HerdrError {
+                code: error["code"].as_str().unwrap_or("failed").to_string(),
+                message: error["message"].as_str().unwrap_or("").to_string(),
+            },
+            None => HerdrError { code: "failed".into(), message: format!("`herdr {}`: {}", args.join(" "), out.error_text()) },
+        })
+    }
+
+    /// Key presses in herdr's key syntax (`enter`, `esc`, `up`, `tab`,
+    /// `ctrl+c`, a single character). herdr checks every key before it sends
+    /// any, and refuses a pane that no longer hosts the agent.
+    pub fn agent_send_keys(&self, target: &str, keys: &[String]) -> Result<(), HerdrError> {
+        let mut args = vec!["agent", "send-keys", target];
+        args.extend(keys.iter().map(String::as_str));
+        self.call(&args, CALL_TIMEOUT).map(|_| ())
+    }
+
+    /// Literal text typed into a pane, with no Enter (herdr has no agent-level
+    /// form of this in 0.9.1).
+    pub fn pane_send_text(&self, pane: &str, text: &str) -> Result<(), HerdrError> {
+        self.call(&["pane", "send-text", pane, text], CALL_TIMEOUT).map(|_| ())
+    }
+
     pub fn agent_focus(&self, target: &str) -> Result<(), HerdrError> {
         self.call(&["agent", "focus", target], CALL_TIMEOUT).map(|_| ())
     }
