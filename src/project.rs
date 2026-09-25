@@ -81,6 +81,13 @@ pub fn display_name(name: &str, slug: &str) -> String {
     if slug_like { humanize(base) } else { base.to_string() }
 }
 
+/// The label of a project's home Space: its display name plus
+/// [`crate::grouping::HOME_MARK`], an invisible cell by which the sidebar
+/// tells the home Space apart on every machine.
+pub fn home_label(name: &str, slug: &str) -> String {
+    format!("{}{}", display_name(name, slug), crate::grouping::HOME_MARK)
+}
+
 /// Writes through a temporary file in the same directory plus a rename. It never
 /// creates parent directories: only `new` creates a project's directories.
 pub fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {

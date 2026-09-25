@@ -16,10 +16,12 @@ const TOOL_TIMEOUT: Duration = Duration::from_secs(10);
 /// Prints the report and returns whether every required check passed. With
 /// `fix`, repairs what the binary owns: priming files, `uploads/`, the
 /// absolute binary path they carry, and the skill link for a configured harness. Never edits another plugin's entries.
-/// Herdr's config runs this binary in the tab bar and has the project
-/// heading rows (added in 0.2.17); otherwise `--fix` runs `configure`.
+/// Herdr's config runs this binary in the tab bar and has the rail rows
+/// (0.2.19) and none of the 0.2.17/0.2.18 heading rows; otherwise `--fix`
+/// runs `configure`, which swaps them.
 fn sidebar_current(text: &str, tab_command: &str) -> bool {
-    text.contains(tab_command) && text.contains("$hp_top")
+    let legacy = ["\"$hp_top\"", "\"$hp_tail\"", "\"$hp_note\"", "\"$hp_state\"", "\"$hp_activity\""];
+    text.contains(tab_command) && text.contains("\"$hp_top_w\"") && !legacy.iter().any(|t| text.contains(t))
 }
 
 pub fn run(ctx: &Ctx, session: &SessionFlags, fix: bool) -> Result<bool> {
@@ -378,11 +380,11 @@ fn report(
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
                 let options = crate::setup::ConfigureOptions { clients: vec!["none".into()], ..options };
                 match crate::setup::configure(&ctx, &options) {
-                    Ok(_) => check(&mut out, Some(true), "sidebar", format!("fixed: {} has the project headings and runs this binary in the tab bar", file.display())),
+                    Ok(_) => check(&mut out, Some(true), "sidebar", format!("fixed: {} has the project rails and runs this binary in the tab bar", file.display())),
                     Err(error) => check(&mut out, Some(false), "sidebar", format!("could not fix: {error:#}")),
                 }
             }
-            Some(_) => check(&mut out, None, "sidebar", format!("{} lacks the project headings, or its tab-bar entry runs another binary or root; `doctor --fix` rewrites it", file.display())),
+            Some(_) => check(&mut out, None, "sidebar", format!("{} lacks the project rails (or still has the 0.2.18 headings), or its tab-bar entry runs another binary or root; `doctor --fix` rewrites it", file.display())),
         }
     }
 
@@ -411,12 +413,14 @@ fn report(
 mod tests {
 
     #[test]
-    fn a_sidebar_without_the_heading_rows_is_not_current() {
+    fn a_sidebar_without_the_rails_or_with_the_old_headings_is_not_current() {
         let command = "'/b/herdr-projects' --root /r needs-you --line";
         let old = format!("[ui]\ntab_bar_right = [{{ type = \"command\", command = \"{command}\" }}]\n");
         assert!(!super::sidebar_current(&old, command));
         let added = crate::sidebar::config_edit(&old, &crate::sidebar::Spec { key: "prefix+a".into(), tab_command: command.into() }, false).unwrap();
         assert!(super::sidebar_current(&added, command));
+        let with_heading = added.replacen("rows = [", "rows = [[{ token = \"$hp_top\" }], ", 1);
+        assert!(!super::sidebar_current(&with_heading, command));
     }
     use super::*;
     use crate::runner::fake::{FakeRunner, fail, ok};

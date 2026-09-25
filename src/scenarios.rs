@@ -1295,10 +1295,10 @@ fn a_paused_project_is_skipped_by_the_ticker() {
     let _ = log_dir;
     let mut memory = Memory::new(&ctx);
     assert!(!ticker::tick_for_test(&ctx, &mut memory));
-    // Only the Space row is told it is paused; nothing else is read or sent.
+    // Nothing is read or sent: its rail turns grey with the next layout of a
+    // session another project lists.
     let calls = world.runner.calls.borrow();
-    assert_eq!(calls.len(), 1, "{:?}", calls.iter().map(|c| c.display()).collect::<Vec<_>>());
-    assert!(calls[0].display().contains("workspace report-metadata w1 --source herdr-projects --token hp=paused"));
+    assert!(calls.is_empty(), "{:?}", calls.iter().map(|c| c.display()).collect::<Vec<_>>());
 }
 
 // ------------------------------------------------------------------ stage 6
@@ -1454,14 +1454,14 @@ fn open_renames_a_workspace_whose_label_is_not_the_display_name() {
     open_alive(&world, &project).unwrap();
     let calls = world.runner.calls.borrow();
     let rename = calls.iter().find(|c| c.display().contains("workspace rename")).unwrap();
-    assert!(rename.args.ends_with(&["w1".to_string(), "Herdr Projects".to_string()]), "{}", rename.display());
+    assert!(rename.args.ends_with(&["w1".to_string(), "Herdr Projects\u{2800}".to_string()]), "{}", rename.display());
 }
 
 #[test]
 fn open_leaves_a_matching_label_alone_and_a_failed_rename_does_not_block_it() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
-    world.runner.on("workspace get w1", ok(r#"{"result":{"workspace":{"workspace_id":"w1","label":"Demo"}}}"#));
+    world.runner.on("workspace get w1", ok("{\"result\":{\"workspace\":{\"workspace_id\":\"w1\",\"label\":\"Demo\u{2800}\"}}}"));
     open_alive(&world, &project).unwrap();
     assert_eq!(world.runner.count("workspace rename"), 0);
 
@@ -1838,7 +1838,7 @@ fn a_tab_thread_of_a_coordinator_running_in_another_workspace_opens_the_project_
     let t = threads::start(&h.world.ctx(), "demo", args("Research")).unwrap();
     let calls = h.world.runner.calls.borrow();
     let create = calls.iter().filter(|c| c.display().contains("workspace create")).last().unwrap();
-    assert!(create.display().contains("threads/t-0001") && create.args.contains(&"Demo".to_string()), "{}", create.display());
+    assert!(create.display().contains("threads/t-0001") && create.args.contains(&"Demo\u{2800}".to_string()), "{}", create.display());
     drop(calls);
     // (`Here` scripts every new workspace as w3.)
     assert_eq!(h.world.runner.count("tab rename w3:t1 Research"), 1);
@@ -1886,11 +1886,13 @@ fn an_agent_started_by_hand_in_a_never_opened_project_becomes_its_coordinator() 
     // Its routine fired, and its pane and Space row carry tokens.
     assert_eq!(items_of(&project, "routine").len(), 1);
     assert_eq!(crate::coordinator::live(&project).len(), 1);
-    // Its row once, then its place in the grouping: the project heading.
-    assert_eq!(world.runner.count("pane report-metadata wGM:p1"), 2);
-    assert_eq!(world.runner.count("hp_top=▍Auto"), 1);
+    // Its row once, then its place in the grouping (two reports: Herdr takes
+    // 16 tokens at a time): the corner of an idle rail.
+    assert_eq!(world.runner.count("pane report-metadata wGM:p1"), 3);
+    assert_eq!(world.runner.count("hp_top_i=\u{2800}\u{2800}┌─ Auto"), 1);
     assert_eq!(world.runner.count("hp_group=auto!0!wGM:p1"), 1);
-    assert_eq!(world.runner.count("workspace report-metadata wGM"), 1);
+    // Space rails come from the workspace list, which lists none here.
+    assert_eq!(world.runner.count("workspace report-metadata wGM"), 0);
 }
 
 #[test]

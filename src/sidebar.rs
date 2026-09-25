@@ -1,8 +1,7 @@
 //! What the Herdr sidebar shows for projects: per agent row a name
-//! (`--display-agent`), `$hp_state` and `$hp_activity`; per project Space row
-//! `$hp`; the project headings of `grouping`; a tab-bar count; the default
-//! agent view, grouped by project. Also the `config.toml` edit `configure`
-//! makes to render them.
+//! (`--display-agent`); the project rails of `grouping` in the agents and the
+//! Spaces list; a tab-bar count; the default agent view, grouped by project.
+//! Also the `config.toml` edit `configure` makes to render them.
 
 use std::path::Path;
 
@@ -75,18 +74,18 @@ pub fn thread_display(thread: &Thread) -> String {
     format!("{} · {}", thread.id, thread.title)
 }
 
-/// A coordinator's row name. The project heading above it names the project.
+/// A coordinator's row name. The rail's corner above it names the project.
 pub fn coordinator_display() -> String {
     "coordinator".into()
 }
 
-/// Reports one pane's row: display name, project, rank and state, with a TTL
-/// so the row falls back to Herdr's own when the ticker stops. Never `--seq`:
-/// token patches are per key and `hp_activity` comes from `report`.
-pub fn report_pane(herdr: &Herdr, pane: &str, display: &str, slug: &str, group: Group, state: &str) {
+/// Reports one pane's row: display name, project and rank, with a TTL so the
+/// row falls back to Herdr's own when the ticker stops. Never `--seq`: token
+/// patches are per key and the rail tokens come from `grouping`.
+pub fn report_pane(herdr: &Herdr, pane: &str, display: &str, slug: &str, group: Group) {
     let ttl = TOKEN_TTL_MS.to_string();
     let rank = group.rank().to_string();
-    let tokens = [format!("hp_project={slug}"), format!("hp_rank={rank}"), format!("hp_state={state}")];
+    let tokens = [format!("hp_project={slug}"), format!("hp_rank={rank}")];
     let mut args = vec!["pane", "report-metadata", pane, "--source", crate::herdr::SOURCE, "--display-agent", display, "--ttl-ms", &ttl];
     for token in &tokens {
         args.push("--token");
@@ -105,11 +104,12 @@ pub fn clear_pane(herdr: &Herdr, pane: &str) {
         return;
     }
     let mut args = vec!["pane", "report-metadata", pane, "--source", crate::herdr::SOURCE, "--clear-display-agent"];
-    for name in ["hp_project", "hp_rank", "hp_state", "hp_activity"].into_iter().chain(crate::grouping::TOKENS).chain(OLD_TOKENS) {
+    for name in ["hp_project", "hp_rank"].into_iter().chain(OLD_TOKENS) {
         args.push("--clear-token");
         args.push(name);
     }
     let _ = herdr.call(&args, CALL_TIMEOUT);
+    crate::grouping::clear(herdr, "pane", pane);
 }
 
 /// `2 need you · 3 working`, `paused`, or `idle`.
@@ -132,25 +132,34 @@ pub fn project_line(groups: &[Group], paused: bool) -> String {
     if parts.is_empty() { "idle".into() } else { parts.join(" · ") }
 }
 
-pub fn report_workspace(herdr: &Herdr, workspace: &str, line: &str) {
-    if workspace.is_empty() {
-        return;
-    }
-    let ttl = TOKEN_TTL_MS.to_string();
-    let token = format!("hp={line}");
-    let _ = herdr.call(&["workspace", "report-metadata", workspace, "--source", crate::herdr::SOURCE, "--token", &token, "--ttl-ms", &ttl], CALL_TIMEOUT);
+/// Clears the rail tokens of a Space.
+pub fn clear_workspace(herdr: &Herdr, workspace: &str) {
+    crate::grouping::clear(herdr, "workspace", workspace);
 }
 
-pub fn clear_workspace(herdr: &Herdr, workspace: &str) {
-    if workspace.is_empty() {
-        return;
+/// A card's sub-line: what the state line adds to Herdr's own state word,
+/// then the agent's last activity. `working · ~40%` and `Writing tests` give
+/// `~40% · Writing tests`; a bare `idle` or `working` gives nothing.
+pub fn sub_line(state_line: &str, activity: &str) -> String {
+    let fact = match state_line {
+        "idle" | "working" | "resolved" => "",
+        line => line.strip_prefix("working · ").unwrap_or(line),
+    };
+    [fact, activity.trim()].iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join(" · ")
+}
+
+/// A project's rail: needs you over working over idle.
+pub fn rail(groups: &[Group], paused: bool) -> crate::grouping::Rail {
+    use crate::grouping::Rail;
+    if paused {
+        Rail::Idle
+    } else if groups.iter().any(|g| needs_you(*g)) {
+        Rail::Needs
+    } else if groups.iter().any(|g| matches!(g, Group::Working | Group::Landing)) {
+        Rail::Working
+    } else {
+        Rail::Idle
     }
-    let mut args = vec!["workspace", "report-metadata", workspace, "--source", crate::herdr::SOURCE, "--clear-token", "hp"];
-    for name in crate::grouping::TOKENS {
-        args.push("--clear-token");
-        args.push(name);
-    }
-    let _ = herdr.call(&args, CALL_TIMEOUT);
 }
 
 /// The groups of a project's open threads, as the ticker last persisted them.
@@ -209,96 +218,157 @@ pub struct Spec {
     pub tab_command: String,
 }
 
-fn row_state() -> Value {
+/// A row of every state's rail token for `slots` (row 0 holds the corner
+/// and the connector, never both on one card).
+fn rail_row(slots: &[&str]) -> Value {
+    use crate::grouping::{Rail, token};
+    let mut row = Array::new();
+    for slot in slots {
+        for rail in Rail::ALL {
+            let mut t = InlineTable::new();
+            t.insert("token", format!("${}", token(slot, rail)).into());
+            t.insert("fg", rail.color().into());
+            if *slot == "top" {
+                t.insert("bold", true.into());
+            }
+            if rail == Rail::Other {
+                t.insert("dim", true.into());
+            }
+            row.push(t);
+        }
+    }
+    row.into()
+}
+
+fn row_gap() -> Value {
+    let mut t = InlineTable::new();
+    t.insert("token", "$hp_gap".into());
+    let mut row = Array::new();
+    row.push(t);
+    row.into()
+}
+
+fn row_of(tokens: &[&str]) -> Value {
+    let mut row = Array::new();
+    for t in tokens {
+        row.push(*t);
+    }
+    row.into()
+}
+
+/// Herdr's built-in rows (0.9.1), which `configure` wrote into a config that
+/// had none.
+fn herdr_agent_rows() -> [Value; 2] {
+    [row_of(&["state_icon", "machine", "workspace", "tab"]), row_of(&["agent"])]
+}
+
+fn herdr_space_rows() -> [Value; 2] {
+    [row_of(&["state_icon", "workspace"]), row_of(&["branch", "git_status"])]
+}
+
+/// The agent card that replaces Herdr's built-in rows: one line, status icon
+/// on the rail, then the name and Herdr's state word.
+fn agent_card() -> Value {
+    let mut row = Array::new();
+    row.push("state_icon");
+    let mut agent = InlineTable::new();
+    agent.insert("token", "agent".into());
+    agent.insert("bold", true.into());
+    agent.insert("dim", false.into());
+    row.push(agent);
+    row.push("state_text");
+    row.into()
+}
+
+/// The Space card that replaces Herdr's built-in rows: one line, with the
+/// branch after the name so no row of Herdr's sits on the rail, and `home`
+/// in place of a home Space's name (see `grouping::HOME_MARK`).
+fn space_card() -> Value {
+    let mut row = Array::new();
+    row.push("state_icon");
+    let mut rule = InlineTable::new();
+    rule.insert("contains", crate::grouping::HOME_MARK.to_string().into());
+    rule.insert("hide", true.into());
     let mut rules = Array::new();
-    let mut red = InlineTable::new();
-    red.insert("starts_with", "needs you".into());
-    red.insert("fg", "#f38ba8".into());
-    red.insert("bold", true.into());
-    rules.push(red);
-    let mut yellow = InlineTable::new();
-    yellow.insert("starts_with", "review".into());
-    yellow.insert("fg", "#f9e2af".into());
-    rules.push(yellow);
-    let mut style = InlineTable::new();
-    style.insert("token", "$hp_state".into());
-    style.insert("rules", rules.into());
-    let mut row = Array::new();
-    row.push(style);
+    rules.push(rule);
+    let mut workspace = InlineTable::new();
+    workspace.insert("token", "workspace".into());
+    workspace.insert("rules", rules.into());
+    row.push(workspace);
+    let mut home = InlineTable::new();
+    home.insert("token", "$hp_home".into());
+    row.push(home);
+    let mut branch = InlineTable::new();
+    branch.insert("token", "branch".into());
+    branch.insert("dim", true.into());
+    row.push(branch);
+    row.push("git_status");
     row.into()
 }
 
-fn row_single(token: &str, dim: bool) -> Value {
-    let mut style = InlineTable::new();
-    style.insert("token", token.into());
-    if dim {
-        style.insert("dim", true.into());
-    }
-    let mut row = Array::new();
-    row.push(style);
-    row.into()
+/// The 0.2.17/0.2.18 row tokens: a row made only of these is removed.
+const LEGACY_ROW_TOKENS: [&str; 7] = ["$hp_top", "$hp_other", "$hp_note", "$hp_state", "$hp_activity", "$hp_tail", "$hp"];
+
+/// The tokens a row names, in order.
+fn row_tokens(row: &Value) -> Vec<String> {
+    row.as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| match v {
+                    Value::String(s) => Some(s.value().clone()),
+                    Value::InlineTable(t) => t.get("token").and_then(Value::as_str).map(str::to_string),
+                    _ => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
-/// A card's first row: the project heading in Herdr's accent (lilac), the
-/// `other` heading, the project line, or a blank that keeps the card's own
-/// rows in the same column as the heading card's.
-fn row_heading(note: bool) -> Value {
-    let mut row = Array::new();
-    let mut top = InlineTable::new();
-    top.insert("token", "$hp_top".into());
-    top.insert("fg", ACCENT.into());
-    top.insert("bold", true.into());
-    row.push(top);
-    let mut other = InlineTable::new();
-    other.insert("token", "$hp_other".into());
-    other.insert("bold", true.into());
-    other.insert("dim", true.into());
-    row.push(other);
-    if note {
-        let mut line = InlineTable::new();
-        line.insert("token", "$hp_note".into());
-        line.insert("dim", true.into());
-        row.push(line);
-    }
-    row.into()
+/// A row this plugin owns: every token is one of ours (now or before 0.2.19).
+fn ours(row: &Value) -> bool {
+    let current: Vec<String> = crate::grouping::tokens().iter().map(|t| format!("${t}")).collect();
+    let tokens = row_tokens(row);
+    !tokens.is_empty() && tokens.iter().all(|t| LEGACY_ROW_TOKENS.contains(&t.as_str()) || current.contains(t))
 }
-
-/// Herdr's accent colour.
-pub const ACCENT: &str = "#cba6f7";
 
 fn same(a: &Value, b: &Value) -> bool {
     a.to_string().split_whitespace().collect::<String>() == b.to_string().split_whitespace().collect::<String>()
 }
 
-/// `first` rows go at the top, `wanted` rows at the bottom.
-fn edit_rows(item: &mut Item, first: &[Value], wanted: &[Value], ours: &[&str], remove: bool) -> Result<()> {
+/// Rebuilds one `rows` array: drops every row of ours (today's and the
+/// 0.2.17/0.2.18 ones), swaps Herdr's built-in rows for `card` when they are
+/// exactly Herdr's (never rows the user wrote), then puts `first` at the top
+/// and `last` at the bottom. With `remove`, only drops ours and puts Herdr's
+/// built-in rows back in place of `card`.
+fn edit_rows(item: &mut Item, first: &[Value], last: &[Value], builtin: &[Value], card: Option<&Value>, remove: bool) -> Result<()> {
     let rows = item.as_array_mut().context("sidebar rows must be an array")?;
+    rows.retain(|v| !ours(v));
+    let current: Vec<Value> = rows.iter().cloned().collect();
+    if let Some(card) = card {
+        let replace = |rows: &mut Array, with: &[Value]| {
+            rows.clear();
+            for row in with {
+                rows.push(row.clone());
+            }
+        };
+        let is_builtin = current.len() == builtin.len() && current.iter().zip(builtin).all(|(a, b)| same(a, b));
+        let is_card = current.len() == 1 && same(&current[0], card);
+        if !remove && is_builtin {
+            replace(rows, std::slice::from_ref(card));
+        } else if remove && is_card && row_tokens(card).iter().any(|t| t.starts_with("$hp")) {
+            // Only a card that names a token of ours is ours to take back.
+            replace(rows, builtin);
+        }
+    }
     if remove {
-        rows.retain(|v| !first.iter().chain(wanted).any(|w| same(v, w)));
         return Ok(());
     }
-    for want in first.iter().rev() {
-        if rows.iter().any(|v| same(v, want)) {
-            continue;
-        }
-        let token = ours.iter().find(|t| want.to_string().contains(*t)).copied().unwrap_or("");
-        if !token.is_empty() && rows.iter().any(|v| v.to_string().contains(&format!("\"{token}\""))) {
-            continue;
-        }
-        ensure!(rows.len() < 16, "the sidebar already has 16 rows; remove one before configuring");
-        rows.insert(0, want.clone());
+    ensure!(rows.len() + first.len() + last.len() <= 16, "the sidebar already has {} rows; remove one before configuring", rows.len());
+    for row in first.iter().rev() {
+        rows.insert(0, row.clone());
     }
-    for want in wanted {
-        if rows.iter().any(|v| same(v, want)) {
-            continue;
-        }
-        // A row the user edited that still carries our token stays theirs.
-        let token = ours.iter().find(|t| want.to_string().contains(*t)).copied().unwrap_or("");
-        if !token.is_empty() && rows.iter().any(|v| v.to_string().contains(&format!("\"{token}\""))) {
-            continue;
-        }
-        ensure!(rows.len() < 16, "the sidebar already has 16 rows; remove one before configuring");
-        rows.push(want.clone());
+    for row in last {
+        rows.push(row.clone());
     }
     Ok(())
 }
@@ -317,11 +387,11 @@ fn table_mut<'a>(parent: &'a mut Item, key: &str) -> Result<&'a mut Item> {
 /// rows, keys and entries of the user are never touched. Idempotent.
 pub fn config_edit(input: &str, spec: &Spec, remove: bool) -> Result<String> {
     let mut doc = input.parse::<DocumentMut>().context("config.toml does not parse")?;
-    let agent_rows = [row_state(), row_single("$hp_activity", true), row_single("$hp_tail", false)];
-    let space_rows = [row_single("$hp", false), row_single("$hp_tail", false)];
-    let agent_first = [row_heading(true)];
-    let space_first = [row_heading(false)];
-    let agent_ours = ["$hp_state", "$hp_activity", "$hp_tail", "$hp_top"];
+    let agent_first = [rail_row(&["top", "con"])];
+    let agent_last = [rail_row(&["sub"]), rail_row(&["end"]), row_gap()];
+    let space_first = [rail_row(&["top", "con"])];
+    let space_last = [rail_row(&["end"]), row_gap()];
+    let (agent_card, space_card) = (agent_card(), space_card());
 
     // Agent rows, and every per-harness override (which replaces `rows`).
     {
@@ -329,40 +399,22 @@ pub fn config_edit(input: &str, spec: &Spec, remove: bool) -> Result<String> {
         let sidebar = table_mut(ui, "sidebar")?;
         let agents = table_mut(sidebar, "agents")?;
         if agents.get("rows").is_none() && !remove {
-            let mut defaults = Array::new();
-            let mut first = Array::new();
-            for t in ["state_icon", "machine", "workspace", "tab"] {
-                first.push(t);
-            }
-            defaults.push(first);
-            let mut second = Array::new();
-            second.push("agent");
-            defaults.push(second);
-            agents["rows"] = toml_edit::value(defaults);
+            agents["rows"] = toml_edit::value(Array::from_iter(herdr_agent_rows()));
         }
         if let Some(rows) = agents.get_mut("rows").filter(|v| !v.is_none()) {
-            edit_rows(rows, &agent_first, &agent_rows, &agent_ours, remove)?;
+            edit_rows(rows, &agent_first, &agent_last, &herdr_agent_rows(), Some(&agent_card), remove)?;
         }
         if let Some(overrides) = agents.get_mut("rows_by_agent").filter(|v| !v.is_none()) {
             for (_, rows) in overrides.as_table_like_mut().context("rows_by_agent must be a table")?.iter_mut() {
-                edit_rows(rows, &agent_first, &agent_rows, &agent_ours, remove)?;
+                edit_rows(rows, &agent_first, &agent_last, &herdr_agent_rows(), None, remove)?;
             }
         }
         let spaces = table_mut(sidebar, "spaces")?;
         if spaces.get("rows").is_none() && !remove {
-            let mut defaults = Array::new();
-            let mut first = Array::new();
-            first.push("state_icon");
-            first.push("workspace");
-            defaults.push(first);
-            let mut second = Array::new();
-            second.push("branch");
-            second.push("git_status");
-            defaults.push(second);
-            spaces["rows"] = toml_edit::value(defaults);
+            spaces["rows"] = toml_edit::value(Array::from_iter(herdr_space_rows()));
         }
         if let Some(rows) = spaces.get_mut("rows").filter(|v| !v.is_none()) {
-            edit_rows(rows, &space_first, &space_rows, &["$hp_tail", "$hp_top", "$hp"], remove)?;
+            edit_rows(rows, &space_first, &space_last, &herdr_space_rows(), Some(&space_card), remove)?;
         }
 
         // Tab bar: one command entry.
@@ -508,25 +560,36 @@ mod tests {
         Spec { key: "prefix+a".into(), tab_command: "/bin/hp --root /r needs-you --line".into() }
     }
 
+    fn rows(text: &str, section: &str) -> Vec<String> {
+        let doc = text.parse::<DocumentMut>().unwrap();
+        doc["ui"]["sidebar"][section]["rows"].as_array().unwrap().iter().map(|r| r.to_string()).collect()
+    }
+
     #[test]
     fn config_edit_adds_once_keeps_user_rows_and_removes_exactly_its_own() {
         let original = "# mine\n[ui.sidebar.agents]\nrows = [[\"agent\"], [{ token = \"$github\" }]]\n[ui.sidebar.agents.rows_by_agent]\nclaude = [[\"agent\"]]\n\n[[keys.command]]\nkey = \"prefix+e\"\ntype = \"plugin_action\"\ncommand = \"other.toggle\"\n";
         let added = config_edit(original, &spec(), false).unwrap();
         assert!(added.contains("# mine") && added.contains("$github") && added.contains("other.toggle"));
-        assert_eq!(added.matches("$hp_state").count(), 2, "{added}");
-        assert_eq!(added.matches("$hp_activity").count(), 2);
-        assert_eq!(added.matches("\"$hp\"").count(), 1);
+        assert_eq!(added.matches("\"$hp_top_n\"").count(), 3, "agents, the override and spaces: {added}");
+        assert_eq!(added.matches("\"$hp_sub_w\"").count(), 2);
         assert_eq!(added.matches(POPUP_ACTION).count(), 1);
         assert_eq!(added.matches("needs-you --line").count(), 1);
         assert_eq!(config_edit(&added, &spec(), false).unwrap(), added);
         // Herdr's parser sees the result as valid TOML.
         assert!(added.parse::<DocumentMut>().is_ok());
+        // The user's own rows stay theirs, between the corner and the sub-line.
+        let agents = rows(&added, "agents");
+        assert!(agents[0].contains("$hp_top_w") && agents[0].contains("$hp_con_w"));
+        assert_eq!(agents[1].replace(' ', ""), "[\"agent\"]");
+        assert!(agents[2].contains("$github"));
+        assert!(agents[3].contains("$hp_sub_n") && agents[4].contains("$hp_end_i") && agents[5].contains("$hp_gap"));
 
         let removed = config_edit(&added, &spec(), true).unwrap();
-        for ours in ["$hp_state", "$hp_activity", "\"$hp\"", POPUP_ACTION, "needs-you"] {
+        for ours in ["$hp_", POPUP_ACTION, "needs-you"] {
             assert!(!removed.contains(ours), "{ours} left in\n{removed}");
         }
         assert!(removed.contains("$github") && removed.contains("other.toggle") && removed.contains("# mine"));
+        assert_eq!(rows(&removed, "spaces").len(), 2, "Herdr's own Space rows come back: {removed}");
 
         // Another key, and a moved binary, replace ours rather than adding.
         let moved = config_edit(&added, &Spec { key: "prefix+y".into(), tab_command: "/new/hp --root /r needs-you --line".into() }, false).unwrap();
@@ -536,28 +599,67 @@ mod tests {
     }
 
     #[test]
-    fn the_heading_row_goes_first_and_the_tail_row_last() {
-        let added = config_edit("[ui.sidebar.agents]\nrows = [[\"agent\"]]\n[ui.sidebar.spaces]\nrows = [[\"workspace\"]]\n", &spec(), false).unwrap();
-        let doc = added.parse::<DocumentMut>().unwrap();
-        for (section, note) in [("agents", true), ("spaces", false)] {
-            let rows = doc["ui"]["sidebar"][section]["rows"].as_array().unwrap();
-            let first = rows.get(0).unwrap().to_string();
-            assert!(first.contains("$hp_top") && first.contains(ACCENT) && first.contains("$hp_other"), "{first}");
-            assert_eq!(first.contains("$hp_note"), note);
-            assert!(rows.get(rows.len() - 1).unwrap().to_string().contains("$hp_tail"));
-        }
-        assert_eq!(config_edit(&added, &spec(), false).unwrap(), added);
-        let removed = config_edit(&added, &spec(), true).unwrap();
-        assert!(!removed.contains("$hp_top") && !removed.contains("$hp_tail"), "{removed}");
+    fn herdrs_built_in_rows_become_one_line_cards_and_user_rows_stay() {
+        let added = config_edit("", &spec(), false).unwrap();
+        let agents = rows(&added, "agents");
+        assert_eq!(agents.len(), 5, "{added}");
+        assert!(agents[1].contains("\"state_icon\"") && agents[1].contains("\"agent\"") && agents[1].contains("\"state_text\"") && !agents[1].contains("machine"));
+        let spaces = rows(&added, "spaces");
+        assert_eq!(spaces.len(), 4, "{added}");
+        assert!(spaces[1].contains("$hp_home") && spaces[1].contains("hide = true") && spaces[1].contains("\"branch\""));
+        assert!(spaces[1].contains(crate::grouping::HOME_MARK));
+        // Rows the user wrote are never swapped.
+        let mine = "[ui.sidebar.spaces]\nrows = [[\"workspace\"], [\"branch\"]]\n";
+        let kept = rows(&config_edit(mine, &spec(), false).unwrap(), "spaces");
+        assert_eq!(kept[1].replace(' ', ""), "[\"workspace\"]");
+        let full = format!("[ui.sidebar.agents]\nrows = [{}]\n", vec!["[\"agent\"]"; 14].join(","));
+        assert!(config_edit(&full, &spec(), false).is_err());
     }
 
     #[test]
-    fn an_empty_config_gets_herdrs_default_rows_plus_ours() {
-        let added = config_edit("", &spec(), false).unwrap();
-        assert!(added.contains("\"state_icon\", \"machine\", \"workspace\", \"tab\""), "{added}");
-        assert!(added.contains("\"branch\", \"git_status\""));
-        let full = format!("[ui.sidebar.agents]\nrows = [{}]\n", vec!["[\"agent\"]"; 16].join(","));
-        assert!(config_edit(&full, &spec(), false).is_err());
+    fn the_0_2_18_rows_are_migrated_with_nothing_left_over() {
+        // The M1's config as 0.2.18 left it: Herdr's rows plus the headings.
+        let old = r##"[ui]
+sidebar = { agents = { rows = [[{ token = "$hp_top", fg = "#cba6f7", bold = true }, { token = "$hp_other", bold = true, dim = true }, { token = "$hp_note", dim = true }],["state_icon", "machine", "workspace", "tab"], ["agent"], [{ token = "$hp_state", rules = [{ starts_with = "needs you", fg = "#f38ba8", bold = true }, { starts_with = "review", fg = "#f9e2af" }] }], [{ token = "$hp_activity", dim = true }], [{ token = "$hp_tail" }]] } , spaces = { rows = [[{ token = "$hp_top", fg = "#cba6f7", bold = true }, { token = "$hp_other", bold = true, dim = true }],["state_icon", "workspace"], ["branch", "git_status"], [{ token = "$hp" }], [{ token = "$hp_tail" }]] } }
+"##;
+        let migrated = config_edit(old, &spec(), false).unwrap();
+        for legacy in ["\"$hp_top\"", "\"$hp_other\"", "\"$hp_note\"", "\"$hp_state\"", "\"$hp_activity\"", "\"$hp_tail\"", "\"$hp\""] {
+            assert!(!migrated.contains(legacy), "{legacy} left in\n{migrated}");
+        }
+        assert_eq!(rows(&migrated, "agents").len(), 5, "{migrated}");
+        assert!(!rows(&migrated, "agents")[1].contains("machine"), "Herdr's rows became the card");
+        assert_eq!(rows(&migrated, "spaces").len(), 4);
+        assert_eq!(config_edit(&migrated, &spec(), false).unwrap(), migrated);
+        // The Mac mini's own card and $github row survive untouched.
+        let mine = r##"[ui.sidebar.agents]
+rows = [[{ token = "$hp_top", fg = "#cba6f7", bold = true }, { token = "$hp_other", bold = true, dim = true }, { token = "$hp_note", dim = true }],
+  ["state_icon", { token = "agent", bold = true, dim = false }, "state_text"],
+  [{ token = "$github", dim = false }], [{ token = "$hp_state" }], [{ token = "$hp_activity", dim = true }], [{ token = "$hp_tail" }],
+]
+"##;
+        let agents = rows(&config_edit(mine, &spec(), false).unwrap(), "agents");
+        assert_eq!(agents.len(), 6);
+        assert!(agents[1].contains("state_text") && agents[2].contains("$github"));
+    }
+
+    #[test]
+    fn sub_lines_keep_what_herdrs_state_word_does_not_say() {
+        assert_eq!(sub_line("working · ~40%", "Writing tests"), "~40% · Writing tests");
+        assert_eq!(sub_line("working", ""), "");
+        assert_eq!(sub_line("idle", "Done"), "Done");
+        assert_eq!(sub_line("review · report", ""), "review · report");
+        assert_eq!(sub_line("needs you · blocked", " Waiting for you "), "needs you · blocked · Waiting for you");
+        assert_eq!(sub_line("", "Reading code"), "Reading code");
+    }
+
+    #[test]
+    fn a_rail_says_needs_you_over_working_over_idle() {
+        use crate::grouping::Rail;
+        use Group::*;
+        assert_eq!(rail(&[Idle, Working, ReadyForReview], false), Rail::Needs);
+        assert_eq!(rail(&[Idle, Landing], false), Rail::Working);
+        assert_eq!(rail(&[Idle], false), Rail::Idle);
+        assert_eq!(rail(&[WaitingOnYou], true), Rail::Idle);
     }
 
     #[test]
