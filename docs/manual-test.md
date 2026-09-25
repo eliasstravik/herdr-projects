@@ -10,10 +10,10 @@ Checked on 2026-09-23 in a scratch `hp-dev` session (herdr 0.9.1, macOS, Claude 
 | 1 | A `--kind tab` thread's first turn does not run them and does not call itself the coordinator | Builder |
 | 1 | A brief starts with the project header and has no operational settings; `thread prompt` lands under `## Follow-ups`; `thread show --json` has the Next list | Builder, unit |
 | 1 | `doctor --fix` adds the priming files and `routines/pr-followup.md` to an older project | Builder, unit |
-| 2 | After `configure`, a thread's rail shows its activity within one tick; a thread that asks a question is `needs you` within one tick | Builder (hooks from a scratch settings file via `--settings`) |
+| 2 | After `configure`, a thread's sub-line shows its activity within one tick; a thread that asks a question is `needs you` within one tick | Builder (hooks from a scratch settings file via `--settings`) |
 | 2 | `unconfigure` leaves the hook files byte-identical, keeping later user edits | Unit, builder |
 | 2 | A thread survives a server restart with native resume and keeps its group and name; a cleared name is re-applied | Builder (client attached through `script`) |
-| 3 | Tokens `hp_project`, `hp_rank`, `hp_group`, the display name and the rail tokens (`hp_top_*`, `hp_con_*`, `hp_sub_*`, `hp_end_*`, `hp_gap`, `hp_home`) are set; old tokens cleared | Builder (`herdr api snapshot`) |
+| 3 | Tokens `hp_project`, `hp_rank`, `hp_group`, the display name and `hp_sub` are set, a coordinator's display name is its project's name; old tokens cleared | Builder (`herdr api snapshot`) |
 | 3 | Four-line rows, colours, the project count and `projects: N need you` render; `focus <slug>` narrows and `unfocus` restores the by-need order | Client-witnessed |
 | 4 | `prefix+a` opens the popup scoped to the current project (also in a thread's workspace), and on all projects elsewhere; `P` opens the project picker on the current scope, `/` filters it, `esc` clears then closes, from any section; `↵` focuses the thread and the popup is gone | Client-witnessed (the same TUI was driven in a pane by the builder) |
 | 4 | A Next number key reaches the thread and its task file; `s` stops a working thread; a settings edit reaches PROJECT.md; `X` asks first | Builder |

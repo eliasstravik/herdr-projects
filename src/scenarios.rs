@@ -1416,8 +1416,8 @@ fn a_paused_project_is_skipped_by_the_ticker() {
     let _ = log_dir;
     let mut memory = Memory::new(&ctx);
     assert!(!ticker::tick_for_test(&ctx, &mut memory));
-    // Nothing is read or sent: its rail turns grey with the next layout of a
-    // session another project lists.
+    // Nothing is read or sent: its rows keep their place with the next layout
+    // of a session another project lists.
     let calls = world.runner.calls.borrow();
     assert!(calls.is_empty(), "{:?}", calls.iter().map(|c| c.display()).collect::<Vec<_>>());
 }
@@ -2060,12 +2060,12 @@ fn an_agent_started_by_hand_in_a_never_opened_project_becomes_its_coordinator() 
     // Its routine fired, and its pane and Space row carry tokens.
     assert_eq!(items_of(&project, "routine").len(), 1);
     assert_eq!(crate::coordinator::live(&project).len(), 1);
-    // Its row once, then its place in the grouping (two reports: Herdr takes
-    // 16 tokens at a time): the corner of an idle rail.
-    assert_eq!(world.runner.count("pane report-metadata wGM:p1"), 3);
-    assert_eq!(world.runner.count("hp_top_i=\u{2800}\u{2800}┌─ Auto"), 1);
+    // Its row once, named for its project and marked as the group's head,
+    // then its place in the grouping.
+    assert_eq!(world.runner.count("pane report-metadata wGM:p1"), 2);
+    assert_eq!(world.runner.count("--display-agent Auto\u{200B}"), 1);
     assert_eq!(world.runner.count("hp_group=auto!0!wGM:p1"), 1);
-    // Space rails come from the workspace list, which lists none here.
+    // Spaces carry no tokens of ours.
     assert_eq!(world.runner.count("workspace report-metadata wGM"), 0);
 }
 

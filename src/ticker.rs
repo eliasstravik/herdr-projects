@@ -486,7 +486,7 @@ fn routine_pass(ctx: &Ctx, project: &Project, state: &mut steps::State, coordina
 }
 
 /// A paused project is skipped, but its panes and Spaces keep their place in
-/// the sidebar grouping, on a grey rail.
+/// the sidebar grouping.
 fn mark_paused(ctx: &Ctx, project: &Project, sessions: &mut Sessions) {
     let Some(record) = project.coordinator() else {
         return;
@@ -501,10 +501,9 @@ fn mark_paused(ctx: &Ctx, project: &Project, sessions: &mut Sessions) {
 /// A project's agents and Spaces in sidebar order: coordinators, then local
 /// threads by need; the home Space, then each thread's repository Space and
 /// its own. Each agent carries its sub-line (the state line's fact and its
-/// fresh self-reported activity), and the rail its colour.
+/// fresh self-reported activity).
 fn part(ctx: &Ctx, project: &Project, record: &project::Coordinator, coordinators: &[coordinator::LivePane], agents: &[Agent], paused: bool) -> crate::grouping::ProjectPart {
     let slug = &project.slug;
-    let name = project.read_project_md().map(|(s, _)| project::display_name(&s.name, slug)).unwrap_or_else(|_| slug.clone());
     let threads = open_threads(project, false);
     let activity = |pane: &str| -> (Option<crate::progress::Record>, String) {
         let terminal = agents.iter().find(|a| a.pane_id == pane).map(|a| a.terminal_id.clone()).unwrap_or_default();
@@ -512,7 +511,6 @@ fn part(ctx: &Ctx, project: &Project, record: &project::Coordinator, coordinator
         let text = report.as_ref().filter(|r| crate::progress::fresh(r)).map(|r| r.activity.clone()).unwrap_or_default();
         (report, text)
     };
-    let mut groups: Vec<thread::Group> = crate::sidebar::recorded_groups(project);
     let mut panes: Vec<crate::grouping::PaneRow> = Vec::new();
     let recorded = (!record.pane_id.is_empty()).then(|| record.pane_id.clone());
     for pane in coordinators.iter().map(|c| c.pane_id.clone()).chain(recorded) {
@@ -520,14 +518,7 @@ fn part(ctx: &Ctx, project: &Project, record: &project::Coordinator, coordinator
             continue;
         }
         let (report, text) = activity(&pane);
-        let line = match coordinators.iter().find(|c| c.pane_id == pane) {
-            Some(c) => {
-                let (group, line) = coordinator::row_state(c, report.as_ref());
-                groups.push(group);
-                line
-            }
-            None => String::new(),
-        };
+        let line = coordinators.iter().find(|c| c.pane_id == pane).map(|c| coordinator::row_state(c, report.as_ref()).1).unwrap_or_default();
         let sub = if paused { String::new() } else { crate::sidebar::sub_line(&line, &text) };
         panes.push(crate::grouping::PaneRow { key: crate::grouping::coordinator_key(slug, &pane), pane, sub });
     }
@@ -546,8 +537,7 @@ fn part(ctx: &Ctx, project: &Project, record: &project::Coordinator, coordinator
             spaces.push(id);
         }
     }
-    let rail = crate::sidebar::rail(&groups, paused);
-    crate::grouping::ProjectPart { name, rail, panes, home: record.workspace_id.clone(), spaces }
+    crate::grouping::ProjectPart { panes, home: record.workspace_id.clone(), spaces }
 }
 
 #[cfg(test)]
@@ -825,7 +815,7 @@ fn tick_cheap(ctx: &Ctx, project: &Project, sessions: &mut Sessions) -> Result<O
         let terminal = agents.iter().find(|a| a.pane_id == c.pane_id).map(|a| a.terminal_id.clone()).unwrap_or_default();
         let report = crate::progress::self_report(&ctx.root, &record.socket, &c.pane_id, &terminal);
         let (group, _) = coordinator::row_state(c, report.as_ref());
-        crate::sidebar::report_pane(&herdr, &c.pane_id, &crate::sidebar::coordinator_display(), slug, group);
+        crate::sidebar::report_pane(&herdr, &c.pane_id, &crate::sidebar::coordinator_display(project), slug, group);
     }
 
     let pass = thread_pass(project, &herdr, &record.socket, &open_threads(project, false), &agents, &panes, None)?;
