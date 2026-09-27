@@ -104,10 +104,23 @@ fn action(kind: &str, screen: &str, policy: Policy) -> Option<Action> {
     if starts("Hooks need review") || has("Managed settings require approval") {
         return None;
     }
+    // Native notices wrap at pane width. Anchor at the question's line,
+    // then normalize whitespace across its continuation lines, not the menu.
+    let codex_notice = lines
+        .iter()
+        .position(|line| line.trim().starts_with("Trust this folder?"))
+        .map(|start| {
+            lines[start..]
+                .join(" ")
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .unwrap_or_default();
     if kind == "codex"
         && policy.folder_trust
         && has("Folder access")
-        && starts("Trust this folder? Codex can read, edit, and run files here,")
+        && codex_notice.starts_with("Trust this folder? Codex can read, edit, and run files here,")
     {
         return choose(&lines, &["Trust and continue", "Quit"], 0, "folder_trust");
     }
@@ -400,6 +413,24 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn codex_narrow_pane_wrapped_folder_notice_keeps_exact_menu_guard() {
+        // Live worker report: the first line ends at "files", the next at "Folder".
+        let screen = "  Folder access\n  /srv/typefree\n\n  Trust this folder? Codex can read, edit, and run files\n  here, subject to your permission settings. Folder\n  settings can run code automatically, even without a\n  model request. Continue only if you trust these files.\n  Your trust decision will be saved.\n\n› 1. Trust and continue\n  2. Quit\n\n  enter continue · esc quit";
+        assert_eq!(action("codex", screen, ON).unwrap().key, "enter");
+        let quit_selected = screen.replace("› 1.", "  1.").replace("  2.", "› 2.");
+        assert_eq!(action("codex", &quit_selected, ON).unwrap().key, "up");
+        for changed in [
+            screen.replace("Folder access", "Tool approval"),
+            screen.replace("Trust and continue", "Allow command"),
+            screen.replace("  Trust this folder?", "  Quoted: Trust this folder?"),
+            screen.replace("  here, subject", "  elsewhere, subject"),
+        ] {
+            assert!(action("codex", &changed, ON).is_none());
+        }
+        assert!(action("codex", screen, Policy::default()).is_none());
     }
 
     #[test]

@@ -182,7 +182,7 @@ esac
         c
     };
     let screen = home.path().join("screen");
-    std::fs::write(&screen, "Folder access\n/srv/demo\nTrust this folder? Codex can read, edit, and run files here,\n› 1. Trust and continue\n  2. Quit\n").unwrap();
+    std::fs::write(&screen, "Folder access\n/srv/demo\nTrust this folder? Codex can read, edit, and run files\nhere, subject to your permission settings. Folder\nsettings can run code automatically.\n› 1. Trust and continue\n  2. Quit\nenter continue · esc quit\n").unwrap();
     let first = command().output().unwrap();
     assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
     assert!(String::from_utf8_lossy(&first.stdout).contains("waiting"));
