@@ -107,17 +107,19 @@ pub fn adopt(ctx: &Ctx, slug: &str, pane: &str, title: &str, task: Option<String
         return Err(error);
     }
 
-    // Prompt now when the agent is ready for one; otherwise the ticker's one
-    // delivery path sends the line later (also when the agent ends in `done`).
-    let sent = agent.ready()
-        && matches!(crate::trust_screen::showing(&herdr, pane, &agent.agent), Ok(None))
-        && herdr.agent_prompt(pane, &thread::launch_prompt(slug, &id)).is_ok();
-    let adopted = thread::update(&project, &id, |t| {
+    let open = thread::update(&project, &id, |t| {
         t.status = Status::Open;
-        t.prompt_pending = !sent;
+        t.prompt_pending = true;
         t.last_state = agent.agent_status.clone();
         t.last_state_change = project::now();
     })?;
+    // Prompt now when the agent is ready for one and its box is empty (a
+    // draft is never merged into the brief); otherwise the ticker's delivery
+    // path sends the line later (also when the agent ends in `done`).
+    if agent.ready() {
+        crate::brief::deliver(&project, &herdr, &open, &agent, crate::brief::Sender::Manual)?;
+    }
+    let adopted = thread::load(&project, &id)?;
     threads::report_thread_tokens(&herdr, &adopted, slug, thread::Group::Working);
     Ok(adopted)
 }
@@ -214,6 +216,8 @@ mod tests {
         assert_eq!(world.runner.count("agent prompt"), 0);
 
         *world.agents.borrow_mut() = format!("[{}]", agent_json("w5", "w5:t1", "w5:p1", &cwd, "my-agent", "done"));
+        crate::ticker::tick_project(&world.ctx(), &project).unwrap();
+        crate::scenarios::settled(&project);
         crate::ticker::tick_project(&world.ctx(), &project).unwrap();
         assert_eq!(world.runner.count("agent prompt"), 1);
         assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);

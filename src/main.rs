@@ -1,6 +1,7 @@
 mod actions;
 mod adopt;
 mod agents;
+mod brief;
 mod cli;
 mod coordinator;
 mod doctor;

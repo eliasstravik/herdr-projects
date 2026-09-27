@@ -218,16 +218,33 @@ fn input_box(kind: &str, lines: &[Line]) -> Option<Vec<Line>> {
 /// Reads the input box of an agent of `kind` from its screen, as `agent read
 /// --source visible --format ansi` prints it.
 pub fn check(kind: &str, screen: &str) -> Draft {
+    match box_text(kind, screen) {
+        None => Draft::Unknown,
+        Some(text) if text.is_empty() => Draft::Empty,
+        Some(_) => Draft::Typed,
+    }
+}
+
+/// The text typed in the input box, its lines joined by spaces (empty for an
+/// empty box), or `None` when the box is not on the screen.
+pub fn box_text(kind: &str, screen: &str) -> Option<String> {
     let lines = parse(screen);
-    let Some(rows) = input_box(kind, &lines) else {
-        return Draft::Unknown;
-    };
+    let rows = input_box(kind, &lines)?;
     let typed: Vec<String> = rows.iter().map(|row| typed(row).trim().to_string()).filter(|t| !t.is_empty()).collect();
     match typed.as_slice() {
-        [] => Draft::Empty,
-        [only] if placeholders(kind).iter().any(|p| only.starts_with(p)) => Draft::Empty,
-        _ => Draft::Typed,
+        [only] if placeholders(kind).iter().any(|p| only.starts_with(p)) => Some(String::new()),
+        _ => Some(typed.join(" ")),
     }
+}
+
+/// True for the kinds whose input box this module can find.
+pub fn knows(kind: &str) -> bool {
+    matches!(kind, "claude" | "codex" | "cursor" | "gemini" | "opencode" | "pi")
+}
+
+/// The screen's plain text, styling dropped.
+pub fn plain(screen: &str) -> String {
+    parse(screen).iter().map(|line| text(line)).collect::<Vec<_>>().join("\n")
 }
 
 #[cfg(test)]

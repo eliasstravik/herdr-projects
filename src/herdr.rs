@@ -140,6 +140,13 @@ impl std::fmt::Display for HerdrError {
 impl std::error::Error for HerdrError {}
 
 pub const AGENT_START_TIMEOUT: Duration = Duration::from_secs(20);
+/// How long `agent_prompt_confirmed` lets herdr wait for the agent to start.
+pub const PROMPT_WAIT: Duration = Duration::from_secs(8);
+
+/// herdr refused the prompt before typing anything.
+pub fn refused_before_typing(error: &HerdrError) -> bool {
+    matches!(error.code.as_str(), "agent_blocked" | "pane_not_found" | "unreachable")
+}
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Default)]
 pub struct Pane {
@@ -439,6 +446,20 @@ impl<'a> Herdr<'a> {
     /// position is accepted even when it starts with a dash (checked on 0.9.1).
     pub fn agent_prompt(&self, target: &str, text: &str) -> Result<(), HerdrError> {
         self.call(&["agent", "prompt", target, text], CALL_TIMEOUT).map(|_| ())
+    }
+
+    /// Submits a prompt and waits until the agent is seen `working` (or
+    /// `blocked`, a question it asked): herdr's own proof that the text was
+    /// taken, not only typed. `agent_prompt_stalled` (herdr saw neither within
+    /// its 5 s), a timeout or a reply without a result mean the text may or may
+    /// not sit in the input box: callers never type it again blindly.
+    pub fn agent_prompt_confirmed(&self, target: &str, text: &str) -> Result<(), HerdrError> {
+        let timeout_ms = PROMPT_WAIT.as_millis().to_string();
+        let args = ["agent", "prompt", target, text, "--wait", "--until", "working", "--until", "blocked", "--timeout", &timeout_ms];
+        match self.call(&args, PROMPT_WAIT + Duration::from_secs(5))? {
+            serde_json::Value::Null => Err(HerdrError { code: "no_reply".into(), message: "`herdr agent prompt --wait` answered without a result".into() }),
+            _ => Ok(()),
+        }
     }
 
     /// The agent's screen as plain text: what is visible now, or the last

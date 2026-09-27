@@ -134,6 +134,18 @@ pub fn agent_json(workspace: &str, tab: &str, pane: &str, cwd: &str, name: &str,
     )
 }
 
+/// The text of an `agent prompt` call (options follow it).
+pub fn prompt_text(cmd: &Cmd) -> &str {
+    let at = cmd.args.iter().position(|a| a == "prompt").unwrap();
+    &cmd.args[at + 2]
+}
+
+/// Backdates when t-0001's agent was first seen ready, as if it had stayed
+/// the same for the settle period.
+pub fn settled(project: &Project) {
+    thread::update(project, "t-0001", |t| t.brief_seen_at = "2026-01-01T00:00:00Z".into()).unwrap();
+}
+
 fn socket_of(cmd: &Cmd) -> String {
     cmd.env.iter().find(|(k, _)| k == "HERDR_SOCKET_PATH").map(|(_, v)| v.clone()).unwrap_or_default()
 }
@@ -210,14 +222,18 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
     assert!(start.args.ends_with(&["--".to_string(), "--model".to_string(), "opus".to_string()]), "{}", start.display());
     drop(calls);
 
-    // Tick 2: the agent is ready: prompt once, no second start.
+    // Tick 2: the agent is ready: seen, not prompted until it stays so.
     *world.agents.borrow_mut() = format!("[{}]", agent_json("w2", "w2:t1", "w2:p1", &wt, "hp-demo-t-0001", "idle"));
+    assert!(ticker::tick_project(&ctx, &project).unwrap());
+    assert_eq!(world.runner.count("agent prompt"), 0);
+    // Tick 3: still the same: prompt once, no second start.
+    settled(&project);
     assert!(ticker::tick_project(&ctx, &project).unwrap());
     assert_eq!(world.runner.count("agent start"), 1);
     assert_eq!(world.runner.count("agent prompt"), 1);
     let calls = world.runner.calls.borrow();
     let prompt = calls.iter().find(|c| c.display().contains("agent prompt")).unwrap();
-    assert_eq!(prompt.args.last().unwrap(), "Read .herdr-project/demo-t-0001/brief.md and do what it says.");
+    assert_eq!(prompt_text(prompt), "Read .herdr-project/demo-t-0001/brief.md and do what it says.");
     drop(calls);
     assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
 
@@ -296,11 +312,16 @@ fn two_projects_in_two_sockets_sharing_a_pane_id_do_not_mix() {
     world2.runner.on("agent read", ok(&claude_screen(None)));
     world2.runner.on("pane list", ok(r#"{"result":{"panes":[]}}"#));
     world2.runner.on("agent prompt", ok(r#"{"result":{}}"#));
+    world2.runner.on("agent read", ok(&claude_screen(None)));
     world2.runner.on("report-metadata", ok(r#"{"result":{}}"#));
 
     let ctx = world2.ctx();
-    ticker::tick_project(&ctx, &a).unwrap();
-    ticker::tick_project(&ctx, &b).unwrap();
+    for _ in 0..2 {
+        ticker::tick_project(&ctx, &a).unwrap();
+        ticker::tick_project(&ctx, &b).unwrap();
+        settled(&a);
+        settled(&b);
+    }
     let calls = world2.runner.calls.borrow();
     let prompts: Vec<_> = calls.iter().filter(|c| c.display().contains("agent prompt")).collect();
     assert_eq!(prompts.len(), 1);
@@ -1039,7 +1060,7 @@ fn a_comment_gives_an_item_with_no_body_and_an_unchanged_summary_gives_nothing()
     let calls = world.runner.calls.borrow();
     let prompts: Vec<&Cmd> = calls.iter().filter(|c| c.display().contains("agent prompt")).collect();
     assert_eq!(prompts.len(), 1);
-    let text = prompts[0].args.last().unwrap();
+    let text = prompt_text(prompts[0]);
     assert!(text.starts_with("[hp routine pr-followup] Your pull request https://github.com/owner/app/pull/7 changed: 1 comment(s)"), "{text}");
     assert!(!text.contains("mallory") && !text.contains("SECRET"));
     drop(calls);
@@ -1590,7 +1611,6 @@ fn local_threads_and_each_due_machine_get_one_agent_start_per_tick() {
     let attempts = |id: &str| thread::load(&project, id).unwrap().launch_attempts;
     assert_eq!((attempts(&locals[0].id), attempts(&locals[1].id)), (1, 0));
     assert_eq!(attempts(&cube.id), 1);
-    assert!(memory.launched, "a local start still polls for the brief");
 }
 
 #[test]
@@ -1891,20 +1911,23 @@ fn a_tab_thread_with_a_repo_gets_its_brief_seconds_after_its_agent_is_ready() {
     let mut memory = crate::steps::Memory::new(&ctx);
     assert!(ticker::tick_for_test(&ctx, &mut memory));
     assert_eq!((world.runner.count("agent start"), world.runner.count("agent prompt")), (1, 0));
-    assert!(memory.launched);
 
     // Between ticks: still starting up, so the brief waits and the checks go on.
     *world.agents.borrow_mut() = format!("[{}]", agent_json("w1", "w1:t2", "w1:p2", &cwd, "hp-demo-t-0001", "working"));
     assert!(ticker::brief_pass_for_test(&ctx));
     assert_eq!(world.runner.count("agent prompt"), 0);
 
-    // Ready at an empty prompt: the brief goes now, once, not a tick later.
+    // Ready at an empty prompt: seen first, then, once it stayed that way
+    // for a moment, the brief goes at once, not a tick later.
     *world.agents.borrow_mut() = format!("[{}]", agent_json("w1", "w1:t2", "w1:p2", &cwd, "hp-demo-t-0001", "idle"));
+    assert!(ticker::brief_pass_for_test(&ctx));
+    assert_eq!(world.runner.count("agent prompt"), 0);
+    settled(&project);
     assert!(!ticker::brief_pass_for_test(&ctx));
     assert_eq!(world.runner.count("agent prompt"), 1);
     let calls = world.runner.calls.borrow();
     let prompt = calls.iter().find(|c| c.display().contains("agent prompt")).unwrap();
-    assert_eq!(prompt.args.last().unwrap(), "Read .herdr-project/demo-t-0001/brief.md and do what it says.");
+    assert_eq!(prompt_text(prompt), "Read .herdr-project/demo-t-0001/brief.md and do what it says.");
     drop(calls);
     assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
 
@@ -1913,7 +1936,6 @@ fn a_tab_thread_with_a_repo_gets_its_brief_seconds_after_its_agent_is_ready() {
     let mut memory = crate::steps::Memory::new(&ctx);
     assert!(ticker::tick_for_test(&ctx, &mut memory));
     assert_eq!((world.runner.count("agent start"), world.runner.count("agent prompt")), (1, 1));
-    assert!(!memory.launched);
 }
 
 #[test]
@@ -1956,7 +1978,7 @@ fn a_tab_thread_gets_a_brief_with_the_project_header_and_prompts_are_recorded() 
     threads::next(&ctx, "demo", "t-0001", Some(1), None).unwrap();
     let calls = world.runner.calls.borrow();
     let last = calls.iter().filter(|c| c.display().contains("agent prompt")).last().unwrap();
-    assert_eq!(last.args.last().unwrap(), "Open the PR");
+    assert_eq!(prompt_text(last), "Open the PR");
     drop(calls);
     assert!(threads::next(&ctx, "demo", "t-0001", Some(3), None).is_err());
     threads::next(&ctx, "demo", "t-0001", None, Some("Clean up the branch")).unwrap();
@@ -2449,7 +2471,7 @@ fn thread_brief_delivers_a_pending_brief_once_and_only_to_a_ready_agent() {
     {
         let calls = world.runner.calls.borrow();
         let sent = calls.iter().find(|c| c.display().contains("agent prompt")).unwrap();
-        assert_eq!(sent.args[2..], ["w2:p1".to_string(), thread::launch_prompt("demo", "t-0001")]);
+        assert_eq!(sent.args[2..5], ["w2:p1".to_string(), thread::launch_prompt("demo", "t-0001"), "--wait".to_string()]);
     }
     // Again, or on the ticker's next pass: nothing more is sent.
     threads::brief(&ctx, "demo", "t-0001").unwrap();
@@ -2475,8 +2497,10 @@ fn a_brief_waits_while_a_trust_screen_shows_even_when_herdr_reads_idle() {
     assert!(err.contains("trust_screen") && err.contains("only the user"), "{err}");
     assert_eq!(world.runner.count("agent prompt"), 0);
 
-    // Answered: the next tick delivers the brief.
+    // Answered: the brief follows once the box stayed empty for a moment.
     *world.screen.borrow_mut() = claude_screen(None);
+    ticker::tick_project(&ctx, &project).unwrap();
+    settled(&project);
     ticker::tick_project(&ctx, &project).unwrap();
     assert_eq!(world.runner.count("agent prompt"), 1);
     assert!(!thread::load(&project, &t.id).unwrap().prompt_pending);

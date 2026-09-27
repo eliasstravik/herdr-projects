@@ -117,9 +117,6 @@ pub struct Memory {
     pub machines: BTreeMap<String, MachineMemory>,
     /// The sidebar grouping tokens last sent.
     pub grouping: crate::grouping::Sent,
-    /// This tick started a local agent: its brief is checked for every few
-    /// seconds until the next tick instead of waiting for it.
-    pub launched: bool,
 }
 
 impl Memory {
@@ -133,7 +130,6 @@ impl Memory {
             tick: 0,
             machines: BTreeMap::new(),
             grouping: Default::default(),
-            launched: false,
         }
     }
 

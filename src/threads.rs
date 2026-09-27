@@ -348,6 +348,12 @@ fn finish_placement(project: &Project, view: &SessionView, id: &str) -> Result<T
         t.agent_name = thread::agent_name(&project.slug, &t.id);
         t.prompt_pending = true;
         t.launch_attempts = 0;
+        t.launched_at.clear();
+        t.brief_attempts = 0;
+        t.brief_claimed.clear();
+        t.brief_seen.clear();
+        t.brief_seen_at.clear();
+        t.brief_stuck = false;
         t.status = Status::Open;
         t.error.clear();
         t.last_state.clear();
@@ -507,10 +513,23 @@ pub fn prompt(ctx: &Ctx, slug: &str, id: &str, text: &str) -> Result<String> {
     if crate::prompt_box::check(kind, &screen) == crate::prompt_box::Draft::Typed {
         bail!("draft_in_box: {id}'s input box holds text someone typed ({}); not sending, so it is not merged into their prompt. Try again once it is empty; `thread read` shows it", record.pane_id);
     }
-    herdr.agent_prompt(&record.pane_id, text.trim()).map_err(|error| anyhow::anyhow!("{error}"))?;
+    // Confirmed only once herdr sees the agent start on it. A try that was
+    // typed but not confirmed is never typed again: it may sit in the box.
+    let sent = herdr.agent_prompt_confirmed(&record.pane_id, text.trim());
+    if let Err(error) = &sent
+        && crate::herdr::refused_before_typing(error)
+    {
+        bail!("{error}");
+    }
     // Written after the send, so the task file never claims a prompt that was
     // refused; a restarted thread re-reads it with its task.
     thread::append_follow_up(&project, id, text)?;
+    if let Err(error) = sent {
+        bail!(
+            "prompt_unconfirmed: the text was typed into {id}'s pane ({}) but the agent was not seen starting on it ({error}). Do not send it again: `thread read` shows whether it sits in the input box, and `thread keys {slug} {id} enter` submits it",
+            record.pane_id
+        );
+    }
     Ok(state)
 }
 
@@ -575,6 +594,7 @@ struct PaneAgent<'a> {
     record: Thread,
     herdr: Herdr<'a>,
     state: String,
+    agent: Agent,
 }
 
 fn pane_agent<'a>(ctx: &'a Ctx, slug: &str, id: &str) -> Result<PaneAgent<'a>> {
@@ -585,13 +605,13 @@ fn pane_agent<'a>(ctx: &'a Ctx, slug: &str, id: &str) -> Result<PaneAgent<'a>> {
     }
     let view = require_session(ctx, &project)?;
     let (agents, _) = lists_for(&view, &record)?;
-    let state = agents
+    let agent = agents
         .iter()
         .find(|a| thread::agent_matches(&record, a))
-        .map(|a| a.agent_status.clone())
+        .cloned()
         .with_context(|| format!("no agent is detected in {id}'s pane; nothing is read from or typed at a bare shell (try `thread restart`)"))?;
     let herdr = view.herdr.on_machine(&record.machine);
-    Ok(PaneAgent { record, herdr, state })
+    Ok(PaneAgent { record, herdr, state: agent.agent_status.clone(), agent })
 }
 
 /// `thread read`: what the thread's pane shows now (a trust dialog, a question
@@ -654,55 +674,20 @@ pub fn brief(ctx: &Ctx, slug: &str, id: &str) -> Result<()> {
     let pane = pane_agent(ctx, slug, id).map_err(|e| anyhow::anyhow!("{e:#}; the ticker launches the agent on its next pass"))?;
     match pane.state.as_str() {
         "blocked" => bail!("{id}'s pane shows a prompt: `thread read` shows it, `thread keys` answers it; then run `thread brief` again"),
-        state if !crate::herdr::ready_state(state) => bail!("{id}'s agent is {state}, not ready for its brief yet; try again shortly"),
+        state if !crate::herdr::ready_state(state) && record.brief_attempts == 0 => bail!("{id}'s agent is {state}, not ready for its brief yet; try again shortly"),
         _ => {}
     }
-    match send_brief(&project, &pane.herdr, &pane.record)? {
-        Brief::Sent => {}
-        Brief::Taken => {
-            println!("{id} got its brief from the ticker just now");
-            return Ok(());
-        }
-        Brief::TrustScreen(phrase) => {
+    match crate::brief::deliver(&project, &pane.herdr, &pane.record, &pane.agent, crate::brief::Sender::Manual)? {
+        crate::brief::Outcome::Delivered => println!("{id} has its brief (agent was {})", pane.state),
+        crate::brief::Outcome::Taken => println!("{id}'s brief is being sent by the ticker, or it just got it"),
+        crate::brief::Outcome::Waiting(why) => bail!("{id}'s brief is not delivered yet: {why}; `thread read` shows the pane, then run `thread brief` again"),
+        crate::brief::Outcome::Stuck => bail!("{id}'s brief did not get through; `thread read` shows the pane"),
+        crate::brief::Outcome::TrustScreen(phrase) => {
             let by_user = project.safety(&ctx.config_dir).map(|s| s.trust_screens == crate::trust_screen::USER).unwrap_or(true);
             bail!("{}; the brief follows once it is answered", crate::trust_screen::refusal(id, &pane.record.pane_id, phrase, by_user));
         }
     }
-    println!("sent {id} its brief (agent was {})", pane.state);
     Ok(())
-}
-
-/// What became of a pending brief.
-#[derive(Debug, PartialEq)]
-pub enum Brief {
-    Sent,
-    /// Someone else claimed it first.
-    Taken,
-    /// The pane shows a trust screen (this line of it): the brief waits, as
-    /// its Enter would accept the screen.
-    TrustScreen(&'static str),
-}
-
-/// Claims a pending brief under the project lock, then sends it, unless the
-/// pane shows a trust screen (or cannot be read). A failed send puts the
-/// claim back.
-pub fn send_brief(project: &Project, herdr: &Herdr, record: &Thread) -> Result<Brief> {
-    if let Some(phrase) = crate::trust_screen::showing(herdr, &record.pane_id, &record.agent).map_err(|error| anyhow::anyhow!("{error}"))? {
-        return Ok(Brief::TrustScreen(phrase));
-    }
-    let mut claimed = false;
-    thread::update(project, &record.id, |t| {
-        claimed = t.prompt_pending;
-        t.prompt_pending = false;
-    })?;
-    if !claimed {
-        return Ok(Brief::Taken);
-    }
-    if let Err(error) = herdr.agent_prompt(&record.pane_id, &thread::launch_prompt(&project.slug, &record.id)) {
-        thread::update(project, &record.id, |t| t.prompt_pending = true)?;
-        bail!("{error}");
-    }
-    Ok(Brief::Sent)
 }
 
 /// The state a follow-up may be sent in, or the refusal.

@@ -62,6 +62,21 @@ pub struct Thread {
     pub error: String,
     pub prompt_pending: bool,
     pub launch_attempts: u32,
+    /// When the ticker last ran `agent start` for this thread.
+    pub launched_at: String,
+    /// Times the brief was typed or its line submitted with Enter. Above zero,
+    /// a copy may sit in the input box, so the screen is read before any retry.
+    pub brief_attempts: u32,
+    /// A sender is at work on the brief since this time (a lease: a sender
+    /// that died leaves it to expire).
+    pub brief_claimed: String,
+    /// The agent's state sequence and screen when first seen ready, and when:
+    /// the brief waits until both stayed the same for a moment.
+    pub brief_seen: String,
+    pub brief_seen_at: String,
+    /// The brief did not get through after its tries: the ticker stopped and
+    /// an inbox item says so; `thread brief` still sends it.
+    pub brief_stuck: bool,
     pub kind: Kind,
     pub repo: String,
     pub origin: String,
@@ -557,8 +572,7 @@ pub fn group(thread: &Thread, live: &Live, now: jiff::Timestamp) -> Group {
     }
     // 3: a failed start, a dead pane, or a launch stuck on a dialog.
     let stuck_launch = thread.prompt_pending
-        && state.is_some_and(|s| !ready_state(s))
-        && live.state_secs >= NOT_READY_SECS;
+        && (thread.brief_stuck || (state.is_some_and(|s| !ready_state(s)) && live.state_secs >= NOT_READY_SECS));
     // A pane closed after the thread wrote its report is finished work, not
     // a thread that needs the user.
     if thread.status == Status::Failed || (!live.pane_exists && !has_report) || stuck_launch {

@@ -22,6 +22,9 @@ use crate::{inbox, thread};
 pub const TICK: Duration = Duration::from_secs(15);
 /// How often a brief is checked for between ticks after an agent start.
 const BRIEF_POLL: Duration = Duration::from_secs(2);
+/// How long after its start a thread on another machine is looked at between
+/// that machine's polls.
+const REMOTE_BRIEF_WINDOW_SECS: i64 = 300;
 const STOP_WAIT: Duration = Duration::from_secs(60);
 const IDLE_EXIT: Duration = Duration::from_secs(300);
 const LOG_CAP: u64 = 1_000_000;
@@ -272,7 +275,8 @@ pub fn run(ctx: &Ctx) -> Result<()> {
         }
         // Sleep in short slices so a stop request is honoured promptly.
         let wake = Instant::now() + TICK;
-        let mut briefs = std::mem::take(&mut memory.launched);
+        // Cheap when no brief waits: it reads the thread records only.
+        let mut briefs = true;
         let mut next_brief = Instant::now() + BRIEF_POLL;
         while Instant::now() < wake {
             if stop_path(root).exists() {
@@ -338,11 +342,11 @@ pub fn tick(ctx: &Ctx, log: &Log, memory: &mut Memory) -> bool {
     any_reachable
 }
 
-/// Between ticks, after an agent start: sends each local thread whose agent
-/// the ticker started its brief as soon as the agent is ready, instead of a
-/// whole tick later. An agent sitting idle for that tick looks stalled, and
-/// coordinators stepped in with `thread brief`. Returns whether a started
-/// thread still waits for its brief.
+/// Between ticks: sends each thread whose agent the ticker started its brief
+/// as soon as the agent is ready and settled, instead of a whole tick (or,
+/// on another machine, a whole machine poll) later. An agent sitting idle
+/// that long looks stalled, and coordinators stepped in with `thread brief`.
+/// Returns whether a started thread still waits for its brief.
 pub fn brief_pass(ctx: &Ctx, log: &Log) -> bool {
     let mut waiting = false;
     let mut lists: std::collections::BTreeMap<String, Option<Vec<Agent>>> = Default::default();
@@ -353,26 +357,30 @@ pub fn brief_pass(ctx: &Ctx, log: &Log) -> bool {
         if project.status() != Status::Active {
             continue;
         }
-        let pending: Vec<thread::Thread> =
-            open_threads(&project, false).into_iter().filter(|t| t.status == thread::Status::Open && t.prompt_pending && t.launch_attempts > 0).collect();
+        let now = jiff::Timestamp::now();
+        // Another machine costs an ssh call per look: only while its agent is new.
+        let pending: Vec<thread::Thread> = thread::list(&project)
+            .into_iter()
+            .filter(|t| t.status == thread::Status::Open && t.prompt_pending && !t.brief_stuck && t.launch_attempts > 0)
+            .filter(|t| !t.is_remote() || !t.launched_at.is_empty() && thread::seconds_since(&t.launched_at, now) < REMOTE_BRIEF_WINDOW_SECS)
+            .collect();
         let Some(record) = project.coordinator().filter(|r| !pending.is_empty() && !r.socket.is_empty()) else {
             continue;
         };
         let herdr = Herdr::new(ctx.env.herdr_bin(), &record.socket, ctx.runner);
-        let Some(agents) = lists.entry(record.socket.clone()).or_insert_with(|| herdr.agent_list().ok()) else {
-            continue;
-        };
         for t in &pending {
-            let ready = agents.iter().any(|a| thread::agent_matches(t, a) && crate::herdr::ready_state(&a.agent_status));
-            if !ready {
+            let on = herdr.on_machine(&t.machine);
+            let Some(agents) = lists.entry(format!("{}\n{}", record.socket, t.machine)).or_insert_with(|| on.agent_list().ok()) else {
+                continue;
+            };
+            let Some(agent) = agents.iter().find(|a| thread::agent_matches(t, a)) else {
                 waiting = true;
                 continue;
-            }
-            match crate::threads::send_brief(&project, &herdr, t) {
-                // The tick marks it blocked; this pass just keeps waiting.
-                Ok(crate::threads::Brief::TrustScreen(_)) => waiting = true,
-                Ok(_) => {}
-                Err(error) => log.line(&format!("{slug}: {}: brief prompt: {error:#}", t.id)),
+            };
+            match crate::brief::deliver(&project, &on, t, agent, crate::brief::Sender::Ticker) {
+                Ok(crate::brief::Outcome::Delivered | crate::brief::Outcome::Stuck) => {}
+                Ok(_) => waiting = true,
+                Err(error) => log.line(&format!("{slug}: {}: brief: {error:#}", t.id)),
             }
         }
     }
@@ -644,12 +652,14 @@ fn thread_pass(project: &Project, herdr: &Herdr, socket: &str, threads: &[thread
         }
 
         let mut delivered = false;
-        // Re-read: `thread brief` may have delivered it since this pass began.
-        let still_pending = || thread::load(project, &t.id).map(|r| r.prompt_pending).unwrap_or(false);
-        if brief_due && !hold_brief && still_pending() {
-            match herdr.agent_prompt(&t.pane_id, &thread::launch_prompt(slug, &t.id)) {
-                Ok(()) => delivered = true,
-                Err(error) => pass.error = pass.error.or(Some(anyhow::anyhow!("{}: brief prompt: {error}", t.id))),
+        if t.prompt_pending
+            && !t.brief_stuck
+            && !hold_brief
+            && let Some(agent) = agents.iter().find(|a| thread::agent_matches(t, a))
+        {
+            match crate::brief::deliver(project, herdr, t, agent, crate::brief::Sender::Ticker) {
+                Ok(outcome) => delivered = outcome == crate::brief::Outcome::Delivered,
+                Err(error) => pass.error = pass.error.or(Some(anyhow::anyhow!("{}: brief: {error:#}", t.id))),
             }
         }
 
@@ -726,7 +736,10 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
         }
         *may_start = false;
         let launched = (|| -> Result<()> {
-            thread::update(project, &t.id, |t| t.launch_attempts += 1)?;
+            thread::update(project, &t.id, |t| {
+                t.launch_attempts += 1;
+                t.launched_at = project::now();
+            })?;
             let safety = project.safety(&ctx.config_dir)?;
             let config = crate::profiles::load(&ctx.config_dir)?;
             let (settings, _) = project.read_project_md()?;
@@ -943,8 +956,6 @@ fn tick_slow(ctx: &Ctx, project: &Project, seen: &Seen, memory: &mut Memory) -> 
         }
     }
     launch_pass(ctx, project, &herdr, &local, &seen.agents, &seen.panes, &mut may_start, &mut errors);
-    // Brief polling covers local threads only.
-    memory.launched |= !may_start;
 
     // Remote threads, one machine at a time, every fourth tick.
     let mut state = steps::load_state(project);

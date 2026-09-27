@@ -112,7 +112,9 @@ What to answer:
 
 `hp thread prompt` is refused while a thread is blocked or shows a trust screen: answer the screen first (or leave it to the user).
 
-**A new thread that sits idle without its brief.** The ticker starts the agent on one pass and sends the brief within seconds of the agent being ready, so a brief normally arrives within a minute of `thread start`; an agent idle at an empty prompt for a few seconds is still getting it. If the agent is still idle a minute after `thread start` and `thread prompt` says it has not received its brief, run `hp thread brief <slug> <id>`: it sends the brief now, never twice. If it says the pane shows a prompt, answer that first.
+**A new thread that sits idle without its brief.** The ticker starts the agent on one pass and sends the brief once the agent has sat ready at an empty input box for a few seconds, and counts it sent only when the agent starts working on it, so a brief normally arrives within a minute of `thread start`; an agent idle at an empty prompt for a few seconds is still getting it. If the agent is still idle a minute after `thread start` and `thread prompt` says it has not received its brief, run `hp thread brief <slug> <id>`: it sends the brief now, never twice. If it says the pane shows a prompt, answer that first. After three tries that were not confirmed, the ticker stops and an inbox item says so: `thread read` shows the pane, then `thread brief`.
+
+**`thread prompt` says `prompt_unconfirmed`.** The text was typed but the agent was not seen starting on it. Do not send it again: `thread read` shows whether it sits in the input box, and `thread keys <slug> <id> enter` submits it.
 
 ## Memory and preferences
 
