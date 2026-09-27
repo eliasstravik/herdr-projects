@@ -687,7 +687,7 @@ fn thread_pass(project: &Project, herdr: &Herdr, socket: &str, threads: &[thread
 }
 
 /// Launches pending threads whose pane is at a shell prompt. At most one
-/// `agent start` per project per tick (`may_start`), and never a start and a
+/// `agent start` per machine per tick (`may_start`), and never a start and a
 /// prompt for the same pane in one tick: prompts only go to agents that were
 /// already listed before any start.
 fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::Thread], agents: &[Agent], panes: &[Pane], may_start: &mut bool, errors: &mut Vec<anyhow::Error>) {
@@ -860,9 +860,10 @@ fn tick_cheap(ctx: &Ctx, project: &Project, sessions: &mut Sessions) -> Result<O
 
 /// One remote machine: one `agent list` (and `pane list`) through
 /// `herdr --machine`, one ssh call for every report hash, then the same thread
-/// pass, copies and launches as for local threads. If the machine cannot be
+/// pass, copies and launches as for local threads, with its own allowance of
+/// one start per tick. If the machine cannot be
 /// reached nothing is read: no state, no group change, no copy, no inbox item.
-fn remote_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, machine: &str, threads: &[thread::Thread], may_start: &mut bool, copy_notes: &mut std::collections::BTreeMap<String, Vec<String>>, errors: &mut Vec<anyhow::Error>) -> Result<Vec<Transition>, String> {
+fn remote_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, machine: &str, threads: &[thread::Thread], copy_notes: &mut std::collections::BTreeMap<String, Vec<String>>, errors: &mut Vec<anyhow::Error>) -> Result<Vec<Transition>, String> {
     let remote = herdr.on_machine(machine);
     let agents = remote.agent_list().map_err(|e| e.to_string())?;
     let panes = remote.pane_list().map_err(|e| e.to_string())?;
@@ -892,7 +893,7 @@ fn remote_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, machine: &str, threa
             }
         }
     }
-    launch_pass(ctx, project, herdr, threads, &agents, &panes, may_start, errors);
+    launch_pass(ctx, project, herdr, threads, &agents, &panes, &mut true, errors);
     Ok(pass.transitions)
 }
 
@@ -929,6 +930,7 @@ fn tick_slow(ctx: &Ctx, project: &Project, seen: &Seen, memory: &mut Memory) -> 
         }
     }
     launch_pass(ctx, project, &herdr, &local, &seen.agents, &seen.panes, &mut may_start, &mut errors);
+    // Brief polling covers local threads only.
     memory.launched |= !may_start;
 
     // Remote threads, one machine at a time, every fourth tick.
@@ -943,7 +945,7 @@ fn tick_slow(ctx: &Ctx, project: &Project, seen: &Seen, memory: &mut Memory) -> 
             continue;
         }
         let threads: Vec<thread::Thread> = remote_threads.iter().filter(|t| t.machine == machine).cloned().collect();
-        let outcome = remote_pass(ctx, project, &herdr, &machine, &threads, &mut may_start, &mut copy_notes, &mut errors);
+        let outcome = remote_pass(ctx, project, &herdr, &machine, &threads, &mut copy_notes, &mut errors);
         let event = memory.record_machine(&machine, outcome.as_ref().err().map(String::as_str), now);
         match outcome {
             Ok(found) => transitions.extend(found),

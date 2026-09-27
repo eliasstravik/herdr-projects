@@ -1522,6 +1522,77 @@ fn is_machine_call(cmd: &Cmd) -> bool {
 }
 
 #[test]
+fn local_threads_and_each_due_machine_get_one_agent_start_per_tick() {
+    let (world, project) = remote_world();
+    let world = World { runner: FakeRunner::new(), ..world };
+    let home = world.home.path().to_string_lossy().into_owned();
+    thread::update(&project, "t-0001", |t| t.prompt_pending = true).unwrap();
+    let pending = |machine: &str, workspace: &str| {
+        thread::allocate(&project, |t| {
+            t.status = Status::Open;
+            t.kind = Kind::Tab;
+            t.prompt_pending = true;
+            t.machine = machine.into();
+            t.agent = "claude".into();
+            t.agent_name = thread::agent_name(&project.slug, &t.id);
+            t.workspace_id = workspace.into();
+            t.tab_id = format!("{workspace}:t2");
+            t.pane_id = format!("{workspace}:p2");
+            t.cwd = home.clone();
+        })
+        .unwrap()
+    };
+    // Two local threads, a second on "box" and one on "cube".
+    let locals = [pending("", "w1"), pending("", "w1")];
+    pending("box", "w2");
+    let cube = pending("cube", "w3");
+    let local_panes = format!(r#"{{"result":{{"panes":[{},{}]}}}}"#, world.coordinator_pane(&project), pane_json("w1", "w1:t2", "w1:p2", &home));
+    let remote_panes = format!(
+        r#"{{"result":{{"panes":[{},{},{}]}}}}"#,
+        pane_json("w2", "w2:t1", "w2:p1", "/home/me/wt"),
+        pane_json("w2", "w2:t2", "w2:p2", &home),
+        pane_json("w3", "w3:t2", "w3:p2", &home)
+    );
+    world.runner.on("machine list --json", ok(r#"[{"id":"1","label":"box","target":"me@box"},{"id":"2","label":"cube","target":"me@cube"}]"#));
+    world.runner.on_fn(|c| is_machine_call(c) && c.display().contains("agent list"), |_| Ok(ok(r#"{"result":{"agents":[]}}"#)));
+    world.runner.on_fn(|c| is_machine_call(c) && c.display().contains("pane list"), move |_| Ok(ok(&remote_panes)));
+    world.runner.on("agent list", ok(r#"{"result":{"agents":[]}}"#));
+    world.runner.on("pane list", ok(&local_panes));
+    world.runner.on("ssh", ok(""));
+    world.runner.on("report-metadata", ok(r#"{"result":{}}"#));
+    world.runner.on_fn(
+        |c| c.display().contains("agent start"),
+        |c| {
+            let pane = c.args.iter().skip_while(|a| *a != "--pane").nth(1).cloned().unwrap_or_default();
+            let (workspace, _) = pane.split_once(':').unwrap_or_default();
+            let tab = pane.replace(":p", ":t");
+            Ok(ok(&format!(r#"{{"result":{{"agent":{{"pane_id":"{pane}","tab_id":"{tab}","workspace_id":"{workspace}"}}}}}}"#)))
+        },
+    );
+
+    let ctx = world.ctx();
+    let mut memory = Memory::new(&ctx);
+    memory.tick = 1;
+    ticker::tick_project_with(&ctx, &project, &mut memory).unwrap();
+
+    // One start each for local, "box" and "cube"; the second local and
+    // second "box" thread wait for the next tick.
+    let starts: Vec<String> = world
+        .runner
+        .calls
+        .borrow()
+        .iter()
+        .filter(|c| c.display().contains("agent start"))
+        .map(|c| if is_machine_call(c) { c.args[1].clone() } else { "local".into() })
+        .collect();
+    assert_eq!(starts, ["local", "box", "cube"]);
+    let attempts = |id: &str| thread::load(&project, id).unwrap().launch_attempts;
+    assert_eq!((attempts(&locals[0].id), attempts(&locals[1].id)), (1, 0));
+    assert_eq!(attempts(&cube.id), 1);
+    assert!(memory.launched, "a local start still polls for the brief");
+}
+
+#[test]
 fn a_failed_machine_call_changes_nothing_and_the_machine_is_skipped_for_eight_ticks() {
     let (world, project) = remote_world();
     let failing = World { runner: FakeRunner::new(), ..world };
