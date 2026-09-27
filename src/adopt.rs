@@ -109,13 +109,18 @@ pub fn adopt(ctx: &Ctx, slug: &str, pane: &str, title: &str, task: Option<String
 
     // Prompt now when the agent is ready for one; otherwise the ticker's one
     // delivery path sends the line later (also when the agent ends in `done`).
-    let sent = agent.ready() && herdr.agent_prompt(pane, &thread::launch_prompt(slug, &id)).is_ok();
+    // It stays pending until the agent is seen to take it: an idle-looking
+    // screen can swallow it, and the ticker then tries again.
     let adopted = thread::update(&project, &id, |t| {
         t.status = Status::Open;
-        t.prompt_pending = !sent;
+        t.prompt_pending = true;
         t.last_state = agent.agent_status.clone();
         t.last_state_change = project::now();
     })?;
+    if agent.ready() {
+        let _ = threads::send_brief(&project, &herdr, &adopted);
+    }
+    let adopted = thread::load(&project, &id)?;
     threads::report_thread_tokens(&herdr, &adopted, slug, thread::Group::Working);
     Ok(adopted)
 }
@@ -201,6 +206,23 @@ mod tests {
         assert_eq!(second.thread_dir, format!("{cwd}/.herdr-project/demo-t-0002"));
         assert!(second.agent_name.is_empty());
         assert_ne!(t.thread_dir, second.thread_dir);
+        let _ = project;
+    }
+
+    #[test]
+    fn an_adopted_agent_that_swallows_its_brief_keeps_it_pending() {
+        let world = World::new();
+        let project = world.project("demo", "a.sock");
+        let cwd = world.home.path().join("work");
+        std::fs::create_dir(&cwd).unwrap();
+        let cwd = cwd.to_string_lossy().into_owned();
+        *world.agents.borrow_mut() = format!("[{}]", agent_json("w5", "w5:t1", "w5:p1", &cwd, "my-agent", "idle"));
+        world.runner.on("git -C", fail(128, "not a git repository"));
+        world.runner.on("agent prompt", fail(1, r#"{"error":{"code":"agent_prompt_stalled","message":"no working state within 5000ms"}}"#));
+        let t = adopt(&world.ctx(), "demo", "w5:p1", "Adopted work", None).unwrap();
+        assert_eq!(world.runner.count("agent prompt"), 1);
+        assert!(t.prompt_pending, "not taken, so not delivered");
+        assert_eq!((t.brief_attempts, t.brief_claimed.as_str()), (1, ""));
         let _ = project;
     }
 
