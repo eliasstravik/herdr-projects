@@ -2527,3 +2527,114 @@ fn startup_failed_screen_read_retains_brief_and_clears_readiness() {
     assert!(saved.prompt_pending && saved.brief_ready_key.is_empty());
     assert_eq!(world.runner.count("agent prompt"), 0);
 }
+
+fn policy_enabled(world: &World) {
+    std::fs::create_dir_all(&world.ctx().config_dir).unwrap();
+    std::fs::write(world.ctx().config_dir.join("config.toml"), "[startup]\nfolder_trust = true\nmcp_enablement = true\n").unwrap();
+    world.runner.on("agent send-keys", ok(r#"{"result":{}}"#));
+}
+
+const NATIVE_TRUST: &str = "Folder access\n/srv/demo\nTrust this folder? Codex can read, edit, and run files here,\n› 1. Trust and continue\n  2. Quit";
+
+fn policy_poll(world: &World, project: &Project, pane: &str, seconds: i64) -> anyhow::Result<&'static str> {
+    let socket = project.coordinator().unwrap().socket;
+    let herdr = crate::herdr::Herdr::new("herdr", &socket, &world.runner);
+    crate::startup::advance_at(&world.ctx().config_dir, project, &herdr, pane, jiff::Timestamp::from_second(1_800_000_000 + seconds).unwrap())
+}
+
+#[test]
+fn native_startup_policy_worker_and_coordinator_settle_and_persist_claims() {
+    let (world, project, record) = startup_world();
+    *world.screen.borrow_mut() = NATIVE_TRUST.into();
+    assert_eq!(policy_poll(&world, &project, &record.pane_id, 0).unwrap(), "disabled");
+    assert_eq!(world.runner.count("agent send-keys"), 0);
+    policy_enabled(&world);
+    for pane in [&record.pane_id, "w1:p1"] {
+        assert_eq!(policy_poll(&world, &project, pane, 0).unwrap(), "waiting");
+        assert_eq!(policy_poll(&world, &project, pane, 2).unwrap(), "waiting");
+        assert_eq!(policy_poll(&world, &project, pane, 3).unwrap(), "accepted");
+        // New calls deserialize the journal, as a restarted process would.
+        assert_eq!(policy_poll(&world, &project, pane, 4).unwrap(), "held");
+    }
+    assert_eq!(world.runner.count("agent send-keys"), 2);
+    assert_eq!(world.runner.count("agent prompt"), 0);
+    assert!(thread::load(&project, &record.id).unwrap().prompt_pending);
+    let text = std::fs::read_to_string(project.state_dir().join("startup.json")).unwrap();
+    assert!(!text.contains("Trust this folder"), "screen contents are never persisted");
+}
+
+#[test]
+fn native_startup_policy_stops_after_ready_or_work_and_isolates_projects() {
+    let (world, project, record) = startup_world();
+    policy_enabled(&world);
+    *world.screen.borrow_mut() = "› \n".into();
+    assert_eq!(policy_poll(&world, &project, &record.pane_id, 0).unwrap(), "waiting");
+    assert_eq!(policy_poll(&world, &project, &record.pane_id, 3).unwrap(), "complete");
+    *world.screen.borrow_mut() = NATIVE_TRUST.into();
+    assert_eq!(policy_poll(&world, &project, &record.pane_id, 4).unwrap(), "complete");
+    assert_eq!(world.runner.count("agent send-keys"), 0);
+    let other = world.project("other", "a.sock");
+    assert!(policy_poll(&world, &other, &record.pane_id, 10).is_err());
+    let agents = world.agents.borrow().replace("terminal-", "replacement-");
+    *world.agents.borrow_mut() = agents;
+    assert_eq!(policy_poll(&world, &project, &record.pane_id, 10).unwrap(), "waiting");
+    assert_eq!(policy_poll(&world, &project, &record.pane_id, 13).unwrap(), "accepted");
+    thread::update(&project, &record.id, |t| t.prompt_pending = false).unwrap();
+    assert!(policy_poll(&world, &project, &record.pane_id, 14).is_err());
+}
+
+#[test]
+fn native_startup_policy_final_screen_change_and_failed_reads_never_send_keys() {
+    let (mut world, project, record) = startup_world();
+    policy_enabled(&world);
+    *world.screen.borrow_mut() = NATIVE_TRUST.into();
+    assert_eq!(policy_poll(&world, &project, &record.pane_id, 0).unwrap(), "waiting");
+    let runner = FakeRunner::new();
+    runner.on("agent list", ok(&format!(r#"{{"result":{{"agents":{}}}}}"#, world.agents.borrow())));
+    let reads = Rc::new(std::cell::Cell::new(0));
+    runner.on_fn(|c| c.display().contains("agent read"), move |_| {
+        let n = reads.get() + 1; reads.set(n);
+        if n > 2 { return Ok(fail(1, "screen unavailable")); }
+        Ok(ok(if n == 1 { NATIVE_TRUST } else { "Hooks need review\n› Trust all and continue" }))
+    });
+    world.runner = runner;
+    assert_eq!(policy_poll(&world, &project, &record.pane_id, 3).unwrap(), "waiting");
+    assert!(policy_poll(&world, &project, &record.pane_id, 4).is_err());
+    assert_eq!(world.runner.count("agent send-keys"), 0);
+}
+
+#[test]
+fn native_startup_policy_failed_key_transport_is_not_replayed_and_work_seals_session() {
+    let (world, project, record) = startup_world();
+    std::fs::create_dir_all(&world.ctx().config_dir).unwrap();
+    std::fs::write(world.ctx().config_dir.join("config.toml"), "[startup]\nfolder_trust = true\n").unwrap();
+    world.runner.on("agent send-keys", fail(1, "transport failed after possible acceptance"));
+    *world.screen.borrow_mut() = NATIVE_TRUST.into();
+    assert_eq!(policy_poll(&world, &project, &record.pane_id, 0).unwrap(), "waiting");
+    assert!(policy_poll(&world, &project, &record.pane_id, 3).is_err());
+    assert_eq!(policy_poll(&world, &project, &record.pane_id, 4).unwrap(), "held");
+    assert_eq!(world.runner.count("agent send-keys"), 1);
+    let original = world.agents.borrow().clone();
+    *world.agents.borrow_mut() = original.replace("\"idle\"", "\"working\"");
+    assert_eq!(policy_poll(&world, &project, &record.pane_id, 10).unwrap(), "complete");
+    *world.agents.borrow_mut() = original;
+    assert_eq!(policy_poll(&world, &project, &record.pane_id, 12).unwrap(), "complete");
+    assert_eq!(world.runner.count("agent send-keys"), 1);
+}
+
+#[test]
+fn native_startup_policy_ticker_polls_coordinator_and_fast_worker_paths() {
+    let (world, project, record) = startup_world();
+    policy_enabled(&world);
+    *world.screen.borrow_mut() = NATIVE_TRUST.into();
+    ticker::brief_pass_for_test(&world.ctx());
+    let path = project.state_dir().join("startup.json");
+    let state: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(state.as_object().unwrap().len(), 1, "fast pass observes the worker");
+    ticker::tick_project(&world.ctx(), &project).unwrap();
+    let state: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(state.as_object().unwrap().len(), 2, "normal pass also observes the coordinator");
+    assert!(thread::load(&project, &record.id).unwrap().prompt_pending);
+    assert_eq!(world.runner.count("agent prompt"), 0);
+    assert_eq!(world.runner.count("agent send-keys"), 0, "settling is not bypassed");
+}

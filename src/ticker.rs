@@ -359,6 +359,11 @@ pub fn brief_pass(ctx: &Ctx, log: &Log) -> bool {
         };
         let herdr = Herdr::new(ctx.env.herdr_bin(), &record.socket, ctx.runner);
         for t in &pending {
+            if let Err(error) = crate::startup::advance(&ctx.config_dir, &project, &herdr, &t.pane_id) {
+                waiting = true;
+                log.line(&format!("{slug}: {}: startup: {error:#}", t.id));
+                continue;
+            }
             match crate::threads::send_brief(&project, &herdr, t) {
                 Ok(true) => {}
                 Ok(false) => waiting |= thread::load(&project, &t.id).is_ok_and(|t| t.prompt_pending),
@@ -787,6 +792,16 @@ fn tick_cheap(ctx: &Ctx, project: &Project, sessions: &mut Sessions) -> Result<O
     let slug = &project.slug;
     let mut first_error = None;
 
+    // One startup poll for local managed agents. Readiness and brief delivery
+    // remain separate; onboarding never submits a task or answers tool prompts.
+    let pending = open_threads(project, false);
+    for agent in &agents {
+        if (coordinator::is_coordinator(&record, agent) || pending.iter().any(|t| t.prompt_pending && thread::agent_matches(t, agent)))
+            && let Err(error) = crate::startup::advance(&ctx.config_dir, project, &herdr, &agent.pane_id) {
+            first_error = first_error.or(Some(error.context("startup")));
+        }
+    }
+
     // The coordinators: every agent in the project folder. Nothing is
     // launched or primed here; `open` starts them and AGENTS.md primes them.
     let previous = coordinator::live(project);
@@ -865,6 +880,11 @@ fn remote_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, machine: &str, threa
     let dirs: Vec<(String, String)> = threads.iter().filter(|t| !t.thread_dir.is_empty()).map(|t| (t.id.clone(), t.thread_dir.clone())).collect();
     let hashes = crate::remote::report_hashes(ctx.runner, &target, &dirs).map_err(|e| format!("{e:#}"))?;
 
+    for t in threads.iter().filter(|t| t.prompt_pending) {
+        if let Err(error) = crate::startup::advance(&ctx.config_dir, project, &remote, &t.pane_id) {
+            errors.push(error.context("startup"));
+        }
+    }
     let pass = thread_pass(project, &remote, "", threads, &agents, &panes, Some(&hashes)).map_err(|e| format!("{e:#}"))?;
     errors.extend(pass.error);
 

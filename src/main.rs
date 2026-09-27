@@ -29,6 +29,7 @@ mod setup;
 mod sidebar;
 mod spaces;
 mod steps;
+mod startup;
 mod sweep;
 mod thread;
 mod threads;

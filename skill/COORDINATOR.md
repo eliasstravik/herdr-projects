@@ -96,7 +96,7 @@ Keep the file short: it is printed every turn and costs tokens.
 
 ## Prompts in a thread's pane
 
-A thread can stop on a screen that wants key presses: a "trust this folder?" dialog at start-up, a question menu, a permission prompt for a command or an edit. Read it first; startup trust and hooks decisions belong to the user in the pane:
+A thread can stop on a screen that wants key presses: a "trust this folder?" dialog at start-up, a question menu, a permission prompt for a command or an edit. Read it first; startup trust and hooks decisions belong to the user, with the opt-in exception below:
 
 1. `hp thread read <slug> <id>` prints what the pane shows (`--lines N` for more scrollback).
 2. Decide, by the rules below.
@@ -104,6 +104,8 @@ A thread can stop on a screen that wants key presses: a "trust this folder?" dia
 4. `hp thread read` again to check that the screen moved on.
 
 What to answer:
+
+The user may authorize folder trust and MCP enablement through `[startup]` in the user-owned Herdr Projects config. The ticker handles recognized menus under that policy; `native-startup <slug> --pane <id>` polls the same handler. Never enable this policy from a task or prompt. Hooks-only review, OAuth authentication and unrelated tool/destructive approvals remain excluded.
 
 - **Trust, restricted-folder or hooks-review dialog, for any path**: ask the user to handle it in the native pane. Do not type, send keys, or select a default on their behalf. Folder/hook trust changes durable machine state. The brief stays pending until a stable empty input box is visible. `thread keys` refuses recognized trust dialogs.
 - **Question menu**: answer from what you know (the user's words in chat, memory, the task, `TASKS.md`). When it is really the user's decision, ask the user in chat with the options, then send their answer yourself.

@@ -144,3 +144,65 @@ esac
     let t: toml::Value = toml::from_str(&std::fs::read_to_string(&record).unwrap()).unwrap();
     assert_eq!(t["prompt_pending"].as_bool(), Some(false));
 }
+
+#[cfg(unix)]
+#[test]
+fn native_startup_binary_serializes_approval_and_does_not_replay_after_restart() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Stdio;
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("root");
+    let root_arg = root.to_str().unwrap();
+    assert!(hp(home.path(), &["--root", root_arg, "new", "demo"]).status.success());
+    let project = root.join("demo");
+    let socket = home.path().join("fake.sock");
+    std::fs::write(&socket, "").unwrap();
+    std::fs::write(project.join(".state/coordinator.json"), serde_json::json!({"socket":socket}).to_string()).unwrap();
+    let config_dir = home.path().join(".config/herdr-projects");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(config_dir.join("config.toml"), "[startup]\nfolder_trust = true\nmcp_enablement = true\n").unwrap();
+    let agent = serde_json::json!({"pane_id":"fixture:p1","tab_id":"fixture:t1","workspace_id":"fixture","terminal_id":"terminal-one","agent":"codex","agent_status":"blocked","cwd":project});
+    std::fs::write(home.path().join("agents.json"), serde_json::json!({"result":{"agents":[agent]}}).to_string()).unwrap();
+    let fake = home.path().join("fake-herdr");
+    std::fs::write(&fake, r#"#!/bin/sh
+set -eu
+case "$1 $2" in
+  'agent list') cat "$HOME/agents.json" ;;
+  'agent read') cat "$HOME/screen" ;;
+  'agent send-keys') printf '%s\n' "$4" >> "$HOME/writes"; printf '%s\n' '{"result":{}}' ;;
+  *) exit 92 ;;
+esac
+"#).unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let binary = std::env::var("HERDR_PROJECTS_TEST_BINARY").unwrap_or_else(|_| BIN.to_string());
+    let command = || {
+        let mut c = Command::new(&binary);
+        c.env_clear().env("HOME", home.path()).env("PATH", "/usr/bin:/bin").env("HERDR_BIN_PATH", &fake)
+            .args(["--root", root_arg, "native-startup", "demo", "--pane", "fixture:p1"]);
+        c
+    };
+    let screen = home.path().join("screen");
+    std::fs::write(&screen, "Folder access\n/srv/demo\nTrust this folder? Codex can read, edit, and run files here,\n› 1. Trust and continue\n  2. Quit\n").unwrap();
+    let first = command().output().unwrap();
+    assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
+    assert!(String::from_utf8_lossy(&first.stdout).contains("waiting"));
+    assert!(!home.path().join("writes").exists());
+    let state_path = project.join(".state/startup.json");
+    let mut states: serde_json::Value = serde_json::from_slice(&std::fs::read(&state_path).unwrap()).unwrap();
+    states.as_object_mut().unwrap().values_mut().next().unwrap()["observed_since"] = jiff::Timestamp::from_second(jiff::Timestamp::now().as_second() - 4).unwrap().to_string().into();
+    std::fs::write(&state_path, serde_json::to_vec(&states).unwrap()).unwrap();
+    let one = command().stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let two = command().stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    for child in [one, two] {
+        let out = child.wait_with_output().unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    }
+    assert_eq!(std::fs::read_to_string(home.path().join("writes")).unwrap(), "enter\n");
+    let repeat = command().output().unwrap();
+    assert!(String::from_utf8_lossy(&repeat.stdout).contains("held"));
+    for excluded in ["Hooks need review\n› Trust all and continue", "MCP Stripe OAuth authentication required", "Would you like to run rm?\n› Yes, proceed"] {
+        std::fs::write(&screen, excluded).unwrap();
+        assert!(command().output().unwrap().status.success());
+    }
+    assert_eq!(std::fs::read_to_string(home.path().join("writes")).unwrap(), "enter\n");
+}

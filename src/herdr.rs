@@ -88,6 +88,8 @@ impl<'a> Herdr<'a> {
         }
     }
 
+    pub fn scope(&self) -> String { format!("{:?}", (&self.socket, &self.machine)) }
+
     /// The same session, with calls forwarded to a saved machine.
     pub fn on_machine(&self, machine: &str) -> Herdr<'a> {
         Herdr {

@@ -43,6 +43,8 @@ impl From<SessionArgs> for SessionFlags {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Poll opt-in native folder/MCP onboarding for a managed pane (JSON result)
+    NativeStartup { slug: String, #[arg(long)] pane: String },
     /// Create a project folder with its skeleton files
     New {
         name: String,
@@ -649,6 +651,7 @@ pub fn run() -> Result<()> {
                 here: !tab && std::io::stdin().is_terminal() && std::io::stdout().is_terminal(),
             },
         ),
+        Command::NativeStartup { slug, pane } => crate::startup::command(&ctx, &slug, &pane),
         Command::Coordinator { command } => match command {
             CoordinatorCommand::Prompt { slug, text_file } => {
                 let text = read_text(&text_file)?;
