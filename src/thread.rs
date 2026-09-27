@@ -17,6 +17,8 @@ pub const NOT_READY_SECS: i64 = 60;
 pub const MEMORY_CAP_CHARS: usize = 32_000;
 pub const LIBRARY_CAP_KB: u64 = 50 * 1024;
 pub const MAX_LAUNCH_ATTEMPTS: u32 = 3;
+/// Briefs the ticker types before it leaves a swallowed one to the coordinator.
+pub const MAX_BRIEF_ATTEMPTS: u32 = 2;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
@@ -62,6 +64,9 @@ pub struct Thread {
     pub error: String,
     pub prompt_pending: bool,
     pub launch_attempts: u32,
+    /// Briefs typed that the agent was not seen to take: a startup screen
+    /// that read as idle swallowed them.
+    pub brief_attempts: u32,
     pub kind: Kind,
     pub repo: String,
     pub origin: String,
@@ -555,10 +560,10 @@ pub fn group(thread: &Thread, live: &Live, now: jiff::Timestamp) -> Group {
             Group::WaitingOnYou
         };
     }
-    // 3: a failed start, a dead pane, or a launch stuck on a dialog.
+    // 3: a failed start, a dead pane, or a launch stuck on a dialog or with
+    // a brief it did not take.
     let stuck_launch = thread.prompt_pending
-        && state.is_some_and(|s| !ready_state(s))
-        && live.state_secs >= NOT_READY_SECS;
+        && ((state.is_some_and(|s| !ready_state(s)) && live.state_secs >= NOT_READY_SECS) || thread.brief_attempts >= MAX_BRIEF_ATTEMPTS);
     // A pane closed after the thread wrote its report is finished work, not
     // a thread that needs the user.
     if thread.status == Status::Failed || (!live.pane_exists && !has_report) || stuck_launch {

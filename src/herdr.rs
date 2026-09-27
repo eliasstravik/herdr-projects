@@ -140,6 +140,8 @@ impl std::fmt::Display for HerdrError {
 impl std::error::Error for HerdrError {}
 
 pub const AGENT_START_TIMEOUT: Duration = Duration::from_secs(20);
+/// herdr's own stall check takes 5 s; this only bounds a server that hangs.
+pub const PROMPT_TAKEN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Default)]
 pub struct Pane {
@@ -439,6 +441,16 @@ impl<'a> Herdr<'a> {
     /// position is accepted even when it starts with a dash (checked on 0.9.1).
     pub fn agent_prompt(&self, target: &str, text: &str) -> Result<(), HerdrError> {
         self.call(&["agent", "prompt", target, text], CALL_TIMEOUT).map(|_| ())
+    }
+
+    /// Submits a brief and waits until the agent is seen to take it: working,
+    /// or blocked on a permission prompt. herdr answers `agent_prompt_stalled`
+    /// when the agent shows neither within 5 s, as when an update menu or a
+    /// trust dialog read as idle and swallowed the text (checked on 0.9.1).
+    pub fn agent_prompt_taken(&self, target: &str, text: &str) -> Result<(), HerdrError> {
+        let timeout_ms = PROMPT_TAKEN_TIMEOUT.as_millis().to_string();
+        let args = ["agent", "prompt", target, text, "--wait", "--until", "working", "--until", "blocked", "--timeout", &timeout_ms];
+        self.call(&args, PROMPT_TAKEN_TIMEOUT + Duration::from_secs(5)).map(|_| ())
     }
 
     /// The agent's screen as plain text: what is visible now, or the last

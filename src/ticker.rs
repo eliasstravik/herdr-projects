@@ -354,7 +354,7 @@ pub fn brief_pass(ctx: &Ctx, log: &Log) -> bool {
             continue;
         }
         let pending: Vec<thread::Thread> =
-            open_threads(&project, false).into_iter().filter(|t| t.status == thread::Status::Open && t.prompt_pending && t.launch_attempts > 0).collect();
+            open_threads(&project, false).into_iter().filter(|t| t.status == thread::Status::Open && t.prompt_pending && t.launch_attempts > 0 && t.brief_attempts < thread::MAX_BRIEF_ATTEMPTS).collect();
         let Some(record) = project.coordinator().filter(|r| !pending.is_empty() && !r.socket.is_empty()) else {
             continue;
         };
@@ -368,12 +368,31 @@ pub fn brief_pass(ctx: &Ctx, log: &Log) -> bool {
                 waiting = true;
                 continue;
             }
-            if let Err(error) = crate::threads::send_brief(&project, &herdr, t) {
+            if let Err(error) = deliver_brief(&project, &herdr, t) {
                 log.line(&format!("{slug}: {}: brief prompt: {error:#}", t.id));
             }
         }
     }
     waiting
+}
+
+/// The ticker's send of a pending brief. A brief the agent did not take is
+/// typed again once; after that the coordinator hears of it, since another
+/// try would only type into the same screen.
+fn deliver_brief(project: &Project, herdr: &Herdr, t: &thread::Thread) -> Result<bool> {
+    let error = match crate::threads::send_brief(project, herdr, t) {
+        Ok(sent) => return Ok(sent),
+        Err(error) => error,
+    };
+    if thread::load(project, &t.id).is_ok_and(|r| r.prompt_pending && r.brief_attempts >= thread::MAX_BRIEF_ATTEMPTS) {
+        let summary = format!(
+            "{}: the agent did not take its brief after {} tries; `thread read` shows the pane, `thread keys` answers a dialog, then `thread brief` sends it",
+            t.id,
+            thread::MAX_BRIEF_ATTEMPTS
+        );
+        inbox::write(project, "thread-state", &t.id, "brief not taken", &summary, "")?;
+    }
+    Err(error)
 }
 
 /// One session's agent and pane lists.
@@ -631,12 +650,12 @@ fn thread_pass(project: &Project, herdr: &Herdr, socket: &str, threads: &[thread
         }
 
         let mut delivered = false;
-        // Re-read: `thread brief` may have delivered it since this pass began.
-        let still_pending = || thread::load(project, &t.id).map(|r| r.prompt_pending).unwrap_or(false);
-        if t.prompt_pending && live.agent_state.as_deref().is_some_and(crate::herdr::ready_state) && still_pending() {
-            match herdr.agent_prompt(&t.pane_id, &thread::launch_prompt(slug, &t.id)) {
-                Ok(()) => delivered = true,
-                Err(error) => pass.error = pass.error.or(Some(anyhow::anyhow!("{}: brief prompt: {error}", t.id))),
+        // `send_brief` claims it under the lock: `thread brief` may have
+        // delivered it since this pass began.
+        if t.prompt_pending && t.brief_attempts < thread::MAX_BRIEF_ATTEMPTS && live.agent_state.as_deref().is_some_and(crate::herdr::ready_state) {
+            match deliver_brief(project, herdr, t) {
+                Ok(sent) => delivered = sent,
+                Err(error) => pass.error = pass.error.or(Some(anyhow::anyhow!("{}: brief prompt: {error:#}", t.id))),
             }
         }
 

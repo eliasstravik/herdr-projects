@@ -134,6 +134,12 @@ pub fn agent_json(workspace: &str, tab: &str, pane: &str, cwd: &str, name: &str,
     )
 }
 
+/// The text an `agent prompt` call submits: the argument after the target.
+fn prompt_text(cmd: &Cmd) -> &str {
+    let at = cmd.args.iter().position(|a| a == "prompt").unwrap();
+    &cmd.args[at + 2]
+}
+
 fn socket_of(cmd: &Cmd) -> String {
     cmd.env.iter().find(|(k, _)| k == "HERDR_SOCKET_PATH").map(|(_, v)| v.clone()).unwrap_or_default()
 }
@@ -217,7 +223,7 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
     assert_eq!(world.runner.count("agent prompt"), 1);
     let calls = world.runner.calls.borrow();
     let prompt = calls.iter().find(|c| c.display().contains("agent prompt")).unwrap();
-    assert_eq!(prompt.args.last().unwrap(), "Read .herdr-project/demo-t-0001/brief.md and do what it says.");
+    assert_eq!(prompt_text(prompt), "Read .herdr-project/demo-t-0001/brief.md and do what it says.");
     drop(calls);
     assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
 
@@ -1835,7 +1841,7 @@ fn a_tab_thread_with_a_repo_gets_its_brief_seconds_after_its_agent_is_ready() {
     assert_eq!(world.runner.count("agent prompt"), 1);
     let calls = world.runner.calls.borrow();
     let prompt = calls.iter().find(|c| c.display().contains("agent prompt")).unwrap();
-    assert_eq!(prompt.args.last().unwrap(), "Read .herdr-project/demo-t-0001/brief.md and do what it says.");
+    assert_eq!(prompt_text(prompt), "Read .herdr-project/demo-t-0001/brief.md and do what it says.");
     drop(calls);
     assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
 
@@ -2380,10 +2386,59 @@ fn thread_brief_delivers_a_pending_brief_once_and_only_to_a_ready_agent() {
     {
         let calls = world.runner.calls.borrow();
         let sent = calls.iter().find(|c| c.display().contains("agent prompt")).unwrap();
-        assert_eq!(sent.args[2..], ["w2:p1".to_string(), thread::launch_prompt("demo", "t-0001")]);
+        assert_eq!(sent.args[2..4], ["w2:p1".to_string(), thread::launch_prompt("demo", "t-0001")]);
+        // It waits until the agent is seen to take it.
+        assert_eq!(sent.args[4..9], strings(&["--wait", "--until", "working", "--until", "blocked"]));
     }
     // Again, or on the ticker's next pass: nothing more is sent.
     threads::brief(&ctx, "demo", "t-0001").unwrap();
     ticker::tick_project(&ctx, &project).unwrap();
     assert_eq!(world.runner.count("agent prompt"), 1);
+}
+
+#[test]
+fn a_brief_the_agent_does_not_take_is_typed_once_more_then_left_to_the_coordinator() {
+    // A startup screen (Codex's update menu) reads as idle and swallows the text.
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    world.thread(&project, world.home.path(), |t| {
+        t.prompt_pending = true;
+        t.launch_attempts = 1;
+        t.last_group = "working".into();
+    });
+    set_agents(&world, &project, "idle");
+    let stalled = Rc::new(std::cell::Cell::new(true));
+    let answer = stalled.clone();
+    world.runner.on_fn(
+        |cmd| cmd.display().contains("agent prompt"),
+        move |_| Ok(if answer.get() { fail(1, r#"{"error":{"code":"agent_prompt_stalled","message":"no working state within 5000ms"}}"#) } else { ok(r#"{"result":{}}"#) }),
+    );
+    world.runner.on("notification show", ok(r#"{"result":{"shown":true}}"#));
+    let ctx = world.ctx();
+
+    // Not taken: still pending and counted. The quick checks stop; the next
+    // tick types it again, after the screen has had time to change.
+    assert!(!ticker::brief_pass_for_test(&ctx));
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!((t.prompt_pending, t.brief_attempts), (true, 1));
+    assert!(items_of(&project, "thread-state").is_empty());
+    let _ = ticker::tick_project(&ctx, &project);
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert_eq!((t.prompt_pending, t.brief_attempts), (true, 2));
+    assert_eq!(world.runner.count("agent prompt"), 2);
+
+    // Twice not taken: the coordinator hears of it, and the thread needs the user.
+    let items = items_of(&project, "thread-state");
+    assert_eq!(items.len(), 1);
+    assert!(items[0].summary.contains("did not take its brief") && items[0].summary.contains("`thread brief`"), "{}", items[0].summary);
+    let _ = ticker::tick_project(&ctx, &project);
+    assert!(!ticker::brief_pass_for_test(&ctx), "no longer waited for");
+    assert_eq!(world.runner.count("agent prompt"), 2, "the ticker types no more");
+    assert_eq!(thread::load(&project, "t-0001").unwrap().last_group, crate::thread::Group::WaitingOnYou.token());
+
+    // Once the screen is answered, the coordinator's `thread brief` delivers it.
+    stalled.set(false);
+    threads::brief(&ctx, "demo", "t-0001").unwrap();
+    assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
+    assert_eq!(world.runner.count("agent prompt"), 3);
 }

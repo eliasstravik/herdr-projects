@@ -348,6 +348,7 @@ fn finish_placement(project: &Project, view: &SessionView, id: &str) -> Result<T
         t.agent_name = thread::agent_name(&project.slug, &t.id);
         t.prompt_pending = true;
         t.launch_attempts = 0;
+        t.brief_attempts = 0;
         t.status = Status::Open;
         t.error.clear();
         t.last_state.clear();
@@ -646,6 +647,7 @@ pub fn brief(ctx: &Ctx, slug: &str, id: &str) -> Result<()> {
         state if !crate::herdr::ready_state(state) => bail!("{id}'s agent is {state}, not ready for its brief yet; try again shortly"),
         _ => {}
     }
+    // The coordinator's own send is not capped: it has looked at the pane.
     if !send_brief(&project, &pane.herdr, &pane.record)? {
         println!("{id} got its brief from the ticker just now");
         return Ok(());
@@ -654,8 +656,9 @@ pub fn brief(ctx: &Ctx, slug: &str, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Claims a pending brief under the project lock, then sends it. `Ok(false)`
-/// when someone else claimed it first; a failed send puts the claim back.
+/// Claims a pending brief under the project lock, then sends it and waits for
+/// the agent to take it. `Ok(false)` when someone else claimed it first; a
+/// failed send puts the claim back, and one typed but not taken is counted.
 pub fn send_brief(project: &Project, herdr: &Herdr, record: &Thread) -> Result<bool> {
     let mut claimed = false;
     thread::update(project, &record.id, |t| {
@@ -665,8 +668,15 @@ pub fn send_brief(project: &Project, herdr: &Herdr, record: &Thread) -> Result<b
     if !claimed {
         return Ok(false);
     }
-    if let Err(error) = herdr.agent_prompt(&record.pane_id, &thread::launch_prompt(&project.slug, &record.id)) {
-        thread::update(project, &record.id, |t| t.prompt_pending = true)?;
+    if let Err(error) = herdr.agent_prompt_taken(&record.pane_id, &thread::launch_prompt(&project.slug, &record.id)) {
+        let typed = matches!(error.code.as_str(), "agent_prompt_stalled" | "timeout");
+        thread::update(project, &record.id, |t| {
+            t.prompt_pending = true;
+            t.brief_attempts += u32::from(typed);
+        })?;
+        if typed {
+            bail!("the agent did not start on its brief ({error}); a startup screen may have swallowed it: `thread read` shows the pane");
+        }
         bail!("{error}");
     }
     Ok(true)
