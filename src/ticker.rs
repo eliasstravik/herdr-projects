@@ -379,7 +379,7 @@ pub fn brief_pass(ctx: &Ctx, log: &Log) -> bool {
 /// The ticker's send of a pending brief. A brief the agent did not take is
 /// tried again once; after that, or when the pane's box cannot be trusted to
 /// take a second copy, the coordinator hears of it.
-fn deliver_brief(project: &Project, herdr: &Herdr, t: &thread::Thread) -> Result<bool> {
+pub fn deliver_brief(project: &Project, herdr: &Herdr, t: &thread::Thread) -> Result<bool> {
     let error = match crate::threads::send_brief(project, herdr, t) {
         Ok(sent) => return Ok(sent),
         Err(error) => error,

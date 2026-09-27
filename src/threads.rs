@@ -673,7 +673,8 @@ pub fn send_brief(project: &Project, herdr: &Herdr, record: &Thread) -> Result<b
         // The agent was ready when the dead send began: a state change since
         // means it took the brief.
         let reacted = !interrupted.is_empty() && t.last_state_change.parse::<jiff::Timestamp>().ok() > interrupted.parse::<jiff::Timestamp>().ok();
-        claim = Some((t.brief_attempts > 0 || !interrupted.is_empty(), reacted));
+        // An adopted pane may hold a draft of its user's even on the first send.
+        claim = Some((t.brief_attempts > 0 || !interrupted.is_empty() || t.kind == Kind::Adopted, reacted));
         t.brief_claimed = project::now();
     })?;
     let Some((again, reacted)) = claim else {
@@ -707,8 +708,8 @@ enum BriefFailure {
     NotSent(crate::herdr::HerdrError),
 }
 
-/// Types the brief, or, when an earlier send may have left something in the
-/// pane (`again`), looks at the input box first. The first copy still sitting
+/// Types the brief, or, when the box may already hold text (`again`: an
+/// earlier send, or an adopted pane), looks at the input box first. The first copy still sitting
 /// there unsent is submitted with Enter instead of typed twice; one the
 /// screen shows was sent counts as delivered; other text, or a box this
 /// binary cannot read, stops the typing.
@@ -717,10 +718,11 @@ fn deliver_brief(herdr: &Herdr, record: &Thread, prompt: &str, again: bool) -> R
         result.map_err(|error| if matches!(error.code.as_str(), "agent_prompt_stalled" | "timeout") { BriefFailure::Stalled(error) } else { BriefFailure::NotSent(error) })
     };
     if again {
-        let screen = herdr.agent_screen(&record.pane_id).map_err(BriefFailure::NotSent)?;
+        // A screen that cannot be read is not retried blindly: the coordinator looks.
+        let screen = herdr.agent_screen(&record.pane_id).map_err(|error| BriefFailure::Stop(format!("its screen could not be read ({error})")))?;
         let wanted = crate::prompt_box::compact(prompt);
         match crate::prompt_box::draft_text(&record.agent, &screen) {
-            None => return Err(BriefFailure::Stop("its input box cannot be read, so the first copy may still be in it".into())),
+            None => return Err(BriefFailure::Stop("its input box cannot be read, so text may already be in it".into())),
             Some(draft) if draft == wanted => {
                 herdr.agent_send_keys(&record.pane_id, &["enter".to_string()]).map_err(BriefFailure::NotSent)?;
                 return taken(herdr.agent_wait_taken(&record.pane_id));

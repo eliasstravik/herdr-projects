@@ -22,9 +22,12 @@ pub struct World {
     /// JSON arrays served for `agent list` and `pane list`, changeable mid-test.
     pub agents: Rc<RefCell<String>>,
     pub panes: Rc<RefCell<String>>,
-    /// The styled screen `agent read --format ansi` serves for every pane.
+    /// The styled screen `agent read --format ansi` serves for every pane;
+    /// `SCREEN_FAILS` makes the read fail.
     pub screen: Rc<RefCell<String>>,
 }
+
+pub const SCREEN_FAILS: &str = "<agent read fails>";
 
 /// A Claude input box, empty (dim placeholder) or holding `draft`.
 pub fn claude_screen(draft: Option<&str>) -> String {
@@ -53,7 +56,7 @@ impl World {
         let screen = world.screen.clone();
         world.runner.on_fn(
             |cmd| cmd.display().contains("agent read") && cmd.display().contains("--format ansi"),
-            move |_| Ok(ok(&screen.borrow())),
+            move |_| Ok(if *screen.borrow() == SCREEN_FAILS { fail(1, r#"{"error":{"code":"failed","message":"read failed"}}"#) } else { ok(&screen.borrow()) }),
         );
         let agents = world.agents.clone();
         world.runner.on_fn(
@@ -2526,4 +2529,21 @@ fn a_send_interrupted_mid_wait_is_recovered_once_its_claim_runs_out() {
         assert_eq!(world.runner.count("agent prompt"), 0, "changed {changed}, shown {shown}");
         assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
     }
+}
+
+#[test]
+fn a_retry_whose_screen_cannot_be_read_goes_to_the_coordinator() {
+    let (world, project, _) = brief_world(|t| t.brief_attempts = 1);
+    *world.screen.borrow_mut() = SCREEN_FAILS.to_string();
+    let _ = ticker::tick_project(&world.ctx(), &project);
+    assert_eq!(world.runner.count("agent prompt"), 0);
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert!(t.prompt_pending && t.brief_attempts >= thread::MAX_BRIEF_ATTEMPTS);
+    let items = items_of(&project, "thread-state");
+    assert!(items.len() == 1 && items[0].summary.contains("its screen could not be read"), "{items:?}");
+    // No more reads or typing on later ticks.
+    let reads = world.runner.count("agent read");
+    let _ = ticker::tick_project(&world.ctx(), &project);
+    assert_eq!((world.runner.count("agent read"), world.runner.count("agent prompt")), (reads, 0));
+    assert_eq!(thread::load(&project, "t-0001").unwrap().last_group, thread::Group::WaitingOnYou.token());
 }

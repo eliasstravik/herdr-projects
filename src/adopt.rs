@@ -117,8 +117,10 @@ pub fn adopt(ctx: &Ctx, slug: &str, pane: &str, title: &str, task: Option<String
         t.last_state = agent.agent_status.clone();
         t.last_state_change = project::now();
     })?;
+    // A draft already in the box is kept: nothing is typed, and the
+    // coordinator hears of it.
     if agent.ready() {
-        let _ = threads::send_brief(&project, &herdr, &adopted);
+        let _ = ticker::deliver_brief(&project, &herdr, &adopted);
     }
     let adopted = thread::load(&project, &id)?;
     threads::report_thread_tokens(&herdr, &adopted, slug, thread::Group::Working);
@@ -224,6 +226,17 @@ mod tests {
         assert!(t.prompt_pending, "not taken, so not delivered");
         assert_eq!((t.brief_attempts, t.brief_claimed.as_str()), (1, ""));
         let _ = project;
+    }
+
+    #[test]
+    fn an_adopted_agent_with_a_draft_in_its_box_is_not_typed_into() {
+        let (world, project, _) = world_with_agent("idle", "my-agent");
+        *world.screen.borrow_mut() = crate::scenarios::claude_screen(Some("my own half-written question"));
+        let t = adopt(&world.ctx(), "demo", "w5:p1", "Adopted work", None).unwrap();
+        assert_eq!((world.runner.count("agent prompt"), world.runner.count("agent send-keys")), (0, 0), "the draft is kept");
+        assert!(t.prompt_pending && t.brief_attempts >= thread::MAX_BRIEF_ATTEMPTS);
+        let items = crate::inbox::unhandled(&project);
+        assert!(items.len() == 1 && items[0].summary.contains("holds other text"), "{items:?}");
     }
 
     #[test]
