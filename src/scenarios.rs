@@ -1522,6 +1522,51 @@ fn is_machine_call(cmd: &Cmd) -> bool {
 }
 
 #[test]
+fn local_and_remote_threads_each_get_a_start_in_one_tick() {
+    let (base_world, project) = remote_world();
+    let world = World { runner: FakeRunner::new(), ..base_world };
+    let remote = thread::update(&project, "t-0001", |t| t.prompt_pending = true).unwrap();
+    let local = thread::allocate(&project, |t| {
+        t.status = Status::Open;
+        t.kind = Kind::Tab;
+        t.prompt_pending = true;
+        t.agent = "claude".into();
+        t.agent_name = thread::agent_name(&project.slug, &t.id);
+        t.workspace_id = "w1".into();
+        t.tab_id = "w1:t2".into();
+        t.pane_id = "w1:p2".into();
+        t.cwd = world.home.path().to_string_lossy().into_owned();
+    }).unwrap();
+    let local_panes = format!(r#"{{"result":{{"panes":[{},{}]}}}}"#, world.coordinator_pane(&project), pane_json("w1", "w1:t2", "w1:p2", &local.cwd));
+    let remote_panes = format!(r#"{{"result":{{"panes":[{}]}}}}"#, pane_json("w2", "w2:t1", "w2:p1", &remote.cwd));
+    world.runner.on_fn(|c| is_machine_call(c) && c.display().contains("agent list"), |_| Ok(ok(r#"{"result":{"agents":[]}}"#)));
+    world.runner.on_fn(|c| is_machine_call(c) && c.display().contains("pane list"), move |_| Ok(ok(&remote_panes)));
+    world.runner.on("agent list", ok(r#"{"result":{"agents":[]}}"#));
+    world.runner.on("pane list", ok(&local_panes));
+    world.runner.on("machine list --json", ok(r#"[{"label":"box","target":"me@box"}]"#));
+    world.runner.on("ssh", ok(""));
+    world.runner.on("report-metadata", ok(r#"{"result":{}}"#));
+    world.runner.on_fn(
+        |c| c.display().contains("agent start"),
+        |c| {
+            let (pane, tab, workspace) = if is_machine_call(c) { ("w2:p1", "w2:t1", "w2") } else { ("w1:p2", "w1:t2", "w1") };
+            Ok(ok(&format!(r#"{{"result":{{"agent":{{"pane_id":"{pane}","tab_id":"{tab}","workspace_id":"{workspace}"}}}}}}"#)))
+        },
+    );
+
+    let ctx = world.ctx();
+    let mut memory = Memory::new(&ctx);
+    memory.tick = 1;
+    ticker::tick_project_with(&ctx, &project, &mut memory).unwrap();
+    assert_eq!(world.runner.count("agent start"), 2);
+    assert_eq!(thread::load(&project, &local.id).unwrap().launch_attempts, 1);
+    assert_eq!(thread::load(&project, &remote.id).unwrap().launch_attempts, 1);
+    assert!(memory.launched, "a local start still triggers brief polling");
+    let starts: Vec<_> = world.runner.calls.borrow().iter().filter(|c| c.display().contains("agent start")).map(is_machine_call).collect();
+    assert_eq!(starts, [false, true]);
+}
+
+#[test]
 fn a_failed_machine_call_changes_nothing_and_the_machine_is_skipped_for_eight_ticks() {
     let (world, project) = remote_world();
     let failing = World { runner: FakeRunner::new(), ..world };

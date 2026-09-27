@@ -687,7 +687,7 @@ fn thread_pass(project: &Project, herdr: &Herdr, socket: &str, threads: &[thread
 }
 
 /// Launches pending threads whose pane is at a shell prompt. At most one
-/// `agent start` per project per tick (`may_start`), and never a start and a
+/// `agent start` per machine per tick (`may_start`), and never a start and a
 /// prompt for the same pane in one tick: prompts only go to agents that were
 /// already listed before any start.
 fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::Thread], agents: &[Agent], panes: &[Pane], may_start: &mut bool, errors: &mut Vec<anyhow::Error>) {
@@ -903,7 +903,7 @@ fn tick_slow(ctx: &Ctx, project: &Project, seen: &Seen, memory: &mut Memory) -> 
     let mut copy_notes: std::collections::BTreeMap<String, Vec<String>> = Default::default();
     let herdr = Herdr::new(ctx.env.herdr_bin(), &seen.socket, ctx.runner);
     let now = jiff::Timestamp::now();
-    let mut may_start = true;
+    let mut local_may_start = true;
     let mut transitions = seen.transitions.clone();
 
     // Local threads: copy home when the report changed, then launches.
@@ -928,8 +928,8 @@ fn tick_slow(ctx: &Ctx, project: &Project, seen: &Seen, memory: &mut Memory) -> 
             }
         }
     }
-    launch_pass(ctx, project, &herdr, &local, &seen.agents, &seen.panes, &mut may_start, &mut errors);
-    memory.launched |= !may_start;
+    launch_pass(ctx, project, &herdr, &local, &seen.agents, &seen.panes, &mut local_may_start, &mut errors);
+    memory.launched |= !local_may_start;
 
     // Remote threads, one machine at a time, every fourth tick.
     let mut state = steps::load_state(project);
@@ -942,8 +942,9 @@ fn tick_slow(ctx: &Ctx, project: &Project, seen: &Seen, memory: &mut Memory) -> 
         if !memory.machine_is_due(&machine) {
             continue;
         }
+        let mut remote_may_start = true;
         let threads: Vec<thread::Thread> = remote_threads.iter().filter(|t| t.machine == machine).cloned().collect();
-        let outcome = remote_pass(ctx, project, &herdr, &machine, &threads, &mut may_start, &mut copy_notes, &mut errors);
+        let outcome = remote_pass(ctx, project, &herdr, &machine, &threads, &mut remote_may_start, &mut copy_notes, &mut errors);
         let event = memory.record_machine(&machine, outcome.as_ref().err().map(String::as_str), now);
         match outcome {
             Ok(found) => transitions.extend(found),
