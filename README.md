@@ -78,7 +78,7 @@ herdr-projects doctor --fix
 herdr-projects ticker start
 ```
 
-Herdr reinstalls the plugin in the same folder, so your `~/.local/bin/herdr-projects` link keeps working. If you linked a local checkout with `herdr plugin link` instead, run `git pull` and `sh scripts/install.sh` in it in place of the `herdr plugin install` line.
+Herdr reinstalls the plugin in the same folder, and the plugin keeps your `~/.local/bin/herdr-projects` link pointing at it. If you linked a local checkout with `herdr plugin link` instead, run `git pull` and `sh scripts/install.sh` in it in place of the `herdr plugin install` line.
 
 **From then on:**
 

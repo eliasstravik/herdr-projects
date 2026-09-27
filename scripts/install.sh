@@ -5,7 +5,8 @@
 # it in a linked checkout. It downloads the prebuilt binary of the release
 # named by herdr-plugin.toml's `version` for this machine, checks it against
 # the release's SHA256SUMS, and falls back to `cargo build --release --locked`
-# when there is no such binary or it cannot be verified.
+# when there is no such binary or it cannot be verified. Then
+# scripts/link-command.sh puts `herdr-projects` on PATH.
 #
 #   HERDR_PROJECTS_BUILD=source         always build from source
 #   HERDR_PROJECTS_DOWNLOAD_URL=<url>   download from <url>/v<version>/ instead
@@ -24,7 +25,9 @@ build_from_source() {
     say "cargo is not installed. Install Rust 1.89 or newer (https://rustup.rs) and a C compiler, then install again."
     exit 1
   fi
-  exec cargo build --release --locked
+  cargo build --release --locked || exit $?
+  sh scripts/link-command.sh
+  exit 0
 }
 
 if [ "${HERDR_PROJECTS_BUILD:-}" = source ]; then
@@ -116,3 +119,4 @@ esac
 # Rename, never copy over: macOS kills a binary rewritten in place.
 mv -f "$tmp/$asset" target/release/herdr-projects || build_from_source "could not move the binary into target/release"
 say "installed the prebuilt $asset $tag"
+sh scripts/link-command.sh

@@ -14,7 +14,7 @@ use crate::runner::{Cmd, Runner};
 const TOOL_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Prints the report and returns whether every required check passed. With
-/// `fix`, repairs what the binary owns: priming files, `uploads/`, the
+/// `fix`, repairs what the binary owns: the `herdr-projects` link on `PATH`, priming files, `uploads/`, the
 /// absolute binary path they carry, and the skill link for a configured harness. Never edits another plugin's entries.
 /// Herdr's config runs this binary in the tab bar and has today's sub-line
 /// row and no row or card of an earlier layout (the 0.2.17/0.2.18 headings,
@@ -80,6 +80,13 @@ fn report(
             format!("{version} ({bin}); {} or later is required", herdr::MIN_VERSION),
         ),
         Err(error) => check(&mut out, Some(false), "herdr", format!("{error:#}")),
+    }
+
+    {
+        let binary = paths::binary().unwrap_or_default();
+        let path_var = crate::USER_PATH.get().map(String::as_str).or(env.var("PATH")).unwrap_or("");
+        let (ok, detail) = crate::command_link::check(env, &binary, path_var, fix);
+        check(&mut out, ok, "command", detail);
     }
 
     match paths::resolve_session(session, env, runner) {

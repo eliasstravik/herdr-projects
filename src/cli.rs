@@ -803,6 +803,12 @@ pub fn run() -> Result<()> {
             Ok(())
         }
         Command::Startup => {
+            // Herdr may reinstall into another folder: keep the command's link current.
+            if let Ok(binary) = crate::paths::binary()
+                && crate::command_link::installable(&binary)
+            {
+                let _ = crate::command_link::ensure(ctx.env, &binary);
+            }
             ticker::start(&ctx)?;
             crate::setup::apply_view(&ctx);
             Ok(())

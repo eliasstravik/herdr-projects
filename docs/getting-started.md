@@ -20,10 +20,10 @@ herdr plugin install eliasstravik/herdr-projects
 
 Review the install preview. Herdr clones the repository, runs `scripts/install.sh`, and registers the plugin. The script downloads the release's prebuilt binary for your machine and checks it against the release's `SHA256SUMS`. When there is no such binary, the download fails or the checksum does not match, it says so and runs the locked Cargo release build instead. Set `HERDR_PROJECTS_BUILD=source` to always build from source. A checkout with local changes, or on a commit after the release, also builds from source. Its startup command starts a background ticker only when you have at least one project.
 
-To run the binary from a terminal, link it onto your `PATH`. `herdr plugin list` prints the plugin's folder:
+The install also links the binary to `~/.local/bin/herdr-projects` (`$XDG_BIN_HOME` when set), so `herdr-projects` works from a terminal. The plugin refreshes that link every time Herdr starts, and `herdr-projects doctor --fix` does too. It never replaces a file there, or a link to somewhere outside Herdr's plugin folder. If `~/.local/bin` is not on your `PATH`, add it in your shell profile (`doctor` says so):
 
 ```bash
-ln -s <plugin root>/target/release/herdr-projects ~/.local/bin/herdr-projects
+export PATH="$HOME/.local/bin:$PATH"
 herdr-projects doctor
 ```
 
@@ -105,7 +105,7 @@ herdr-projects doctor --fix
 herdr-projects ticker start
 ```
 
-Herdr reinstalls the plugin in the same folder, so your `~/.local/bin/herdr-projects` link keeps working. If you linked a local checkout with `herdr plugin link` instead, run `git pull` and `sh scripts/install.sh` in it in place of the `herdr plugin install` line.
+Herdr reinstalls the plugin in the same folder, and the plugin keeps your `~/.local/bin/herdr-projects` link pointing at it. If you linked a local checkout with `herdr plugin link` instead, run `git pull` and `sh scripts/install.sh` in it in place of the `herdr plugin install` line.
 
 **From then on:**
 
