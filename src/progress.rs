@@ -84,27 +84,17 @@ pub fn save(root: &Path, record: &Record) -> Result<()> {
 
 /// What a sandboxed `report` is told when it may not write its record: the
 /// harness keeps the agent to its workspace, and `.progress/` is outside it.
+/// Agents are not launched with Codex's `--add-dir` for it: in a folder not
+/// yet trusted, Codex 0.157 reports "Error adding directories" and never
+/// shows its trust dialog or input box, so the launch times out; and
+/// `-c sandbox_workspace_write.writable_roots=…` would replace the user's own
+/// roots. The user adds the folder once in their Codex config.
 fn sandbox_hint(error: anyhow::Error, root: &Path) -> anyhow::Error {
     let denied = error.chain().filter_map(|e| e.downcast_ref::<std::io::Error>()).any(|e| e.kind() == std::io::ErrorKind::PermissionDenied);
     if !denied {
         return error;
     }
-    error.context(format!("sandboxed? {} must be writable to the agent (for Codex: `--add-dir {}` or `sandbox_workspace_write.writable_roots`)", dir(root).display(), dir(root).display()))
-}
-
-/// The arguments that let a sandboxed agent of `kind` write its own record.
-/// Codex's `workspace-write` sandbox only writes the workspace, so it gets
-/// `.progress/` as an extra writable root. `--add-dir` adds to the user's own
-/// `writable_roots`, where `-c sandbox_workspace_write.writable_roots=…`
-/// would replace them. Nothing for yolo (no sandbox) or other harnesses.
-/// The folder is made first: it is only created by the first report.
-pub fn sandbox_args(kind: &str, args: &[String], root: &Path) -> Vec<String> {
-    let unsandboxed = args.iter().any(|a| a == "--dangerously-bypass-approvals-and-sandbox" || a.contains("danger-full-access"));
-    if kind != "codex" || unsandboxed {
-        return Vec::new();
-    }
-    let _ = std::fs::create_dir_all(dir(root));
-    vec!["--add-dir".to_string(), dir(root).to_string_lossy().into_owned()]
+    error.context(format!("sandboxed? {} must be writable to the agent (for Codex: add it to `sandbox_workspace_write.writable_roots` in its config.toml)", dir(root).display()))
 }
 
 pub fn remove(root: &Path, socket: &str, pane_id: &str) {
@@ -432,23 +422,11 @@ mod tests {
     }
 
     #[test]
-    fn a_sandboxed_codex_may_write_its_record_and_nothing_else_changes() {
-        let root = tempfile::tempdir().unwrap();
-        let progress = dir(root.path()).to_string_lossy().into_owned();
-        assert_eq!(sandbox_args("codex", &[], root.path()), ["--add-dir".to_string(), progress]);
-        assert!(dir(root.path()).is_dir(), "made before the agent starts");
-        let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert!(sandbox_args("codex", &args(&["--dangerously-bypass-approvals-and-sandbox"]), root.path()).is_empty(), "yolo has no sandbox");
-        assert!(sandbox_args("codex", &args(&["-s", "danger-full-access"]), root.path()).is_empty());
-        assert!(sandbox_args("claude", &[], root.path()).is_empty());
-    }
-
-    #[test]
     fn a_denied_write_names_the_folder_to_allow() {
         let root = Path::new("/r");
         let denied = anyhow::Error::from(std::io::Error::from_raw_os_error(1)).context("could not write /r/.progress/w1_p1-x.json");
         let text = format!("{:#}", sandbox_hint(denied, root));
-        assert!(text.starts_with("sandboxed? /r/.progress must be writable") && text.contains("--add-dir /r/.progress") && text.contains("Operation not permitted"), "{text}");
+        assert!(text.starts_with("sandboxed? /r/.progress must be writable") && text.contains("sandbox_workspace_write.writable_roots") && text.contains("Operation not permitted"), "{text}");
         let other = anyhow::anyhow!("disk full");
         assert_eq!(format!("{:#}", sandbox_hint(other, root)), "disk full");
     }

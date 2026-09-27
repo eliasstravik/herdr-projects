@@ -658,8 +658,8 @@ fn a_legacy_thread_keeps_claude_flags_to_claude() {
         assert!(call.contains(&format!("--kind {kind}")), "{call}");
         // Issue #45: the Claude flag no longer reaches a Codex thread.
         assert_eq!(call.contains("--dangerously-skip-permissions"), flagged, "{call}");
-        // Codex's sandbox may write the agent's own progress record.
-        assert_eq!(call.contains(&format!("--add-dir {}", world.root.join(".progress").display())), !flagged, "{call}");
+        // No `--add-dir`: in a folder Codex does not trust yet it hangs the start.
+        assert!(!call.contains("--add-dir"), "{call}");
     }
 }
 
@@ -1759,7 +1759,7 @@ fn open_starts_a_coordinator_without_a_priming_prompt_then_focuses_it_and_resume
     let calls = world.runner.calls.borrow();
     let start = calls.iter().filter(|c| c.display().contains("agent start")).last().unwrap();
     assert!(start.display().starts_with("herdr agent start hpc-demo-1 --kind codex --pane w3:p2"), "{}", start.display());
-    assert!(start.display().contains(&format!("--add-dir {}", world.root.join(".progress").display())), "{}", start.display());
+    assert!(!start.display().contains("--add-dir"), "{}", start.display());
     assert!(!start.display().contains("sess-42"));
     drop(calls);
     assert!(crate::coordinator::open(&ctx, "demo", &crate::coordinator::OpenOptions { profile: Some("chatgpt".into()), ..options(false) }).is_err());
@@ -2546,4 +2546,26 @@ fn a_retry_whose_screen_cannot_be_read_goes_to_the_coordinator() {
     let _ = ticker::tick_project(&world.ctx(), &project);
     assert_eq!((world.runner.count("agent read"), world.runner.count("agent prompt")), (reads, 0));
     assert_eq!(thread::load(&project, "t-0001").unwrap().last_group, thread::Group::WaitingOnYou.token());
+}
+
+#[test]
+fn a_codex_profile_thread_launches_with_only_its_profile_arguments() {
+    // t-0009 in the live test: a Codex profile with a model and an effort,
+    // not yolo, launched into a folder Codex did not trust yet. An extra
+    // `--add-dir` there made Codex hang before its trust dialog.
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    write_profiles(&world, &PROFILES.replace("thread_profiles = [\"claude\", \"luna\"]", "thread_profiles = [\"deep\"]"));
+    let cwd = world.home.path().to_string_lossy().into_owned();
+    world.thread(&project, world.home.path(), |t| {
+        t.prompt_pending = true;
+        t.agent = "codex".into();
+        t.profile = "deep".into();
+    });
+    *world.panes.borrow_mut() = format!("[{},{}]", world.coordinator_pane(&project), pane_json("w2", "w2:t1", "w2:p1", &cwd));
+    world.runner.on("agent start", fail(1, r#"{"error":{"code":"timeout","message":"timed out"}}"#));
+    let _ = ticker::tick_project(&world.ctx(), &project);
+    let call = world.runner.calls.borrow().iter().find(|c| c.display().contains("agent start")).cloned().unwrap();
+    let dash = call.args.iter().position(|a| a == "--").unwrap();
+    assert_eq!(call.args[dash + 1..], strings(&["--model", "gpt-5.5", "-c", "model_reasoning_effort=\"high\""]), "{}", call.display());
 }
