@@ -33,6 +33,7 @@ mod sweep;
 mod thread;
 mod threads;
 mod ticker;
+mod trust_screen;
 mod update;
 
 /// Crate version plus a build identifier (short git hash and build time), so a

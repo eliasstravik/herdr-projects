@@ -368,8 +368,11 @@ pub fn brief_pass(ctx: &Ctx, log: &Log) -> bool {
                 waiting = true;
                 continue;
             }
-            if let Err(error) = crate::threads::send_brief(&project, &herdr, t) {
-                log.line(&format!("{slug}: {}: brief prompt: {error:#}", t.id));
+            match crate::threads::send_brief(&project, &herdr, t) {
+                // The tick marks it blocked; this pass just keeps waiting.
+                Ok(crate::threads::Brief::TrustScreen(_)) => waiting = true,
+                Ok(_) => {}
+                Err(error) => log.line(&format!("{slug}: {}: brief prompt: {error:#}", t.id)),
             }
         }
     }
@@ -620,6 +623,16 @@ fn thread_pass(project: &Project, herdr: &Herdr, socket: &str, threads: &[thread
             pass.recorded_panes += 1;
             pass.missing_panes += usize::from(!live.pane_exists);
         }
+        // A brief about to go to a trust screen Herdr reads as ready would
+        // answer it: hold the brief and count the thread as blocked.
+        let brief_due = t.prompt_pending && live.agent_state.as_deref().is_some_and(crate::herdr::ready_state);
+        // An unreadable screen holds the brief too, without calling it blocked.
+        let screen = brief_due.then(|| crate::trust_screen::showing(herdr, &t.pane_id, &t.agent));
+        let hold_brief = !matches!(screen, None | Some(Ok(None)));
+        if matches!(screen, Some(Ok(Some(_)))) {
+            live.agent_state = Some("blocked".into());
+            live.state_secs = if t.last_state == "blocked" { thread::seconds_since(&t.last_state_change, now) } else { 0 };
+        }
         let state = live.agent_state.clone().unwrap_or_default();
         if state != t.last_state {
             live.state_secs = 0;
@@ -633,7 +646,7 @@ fn thread_pass(project: &Project, herdr: &Herdr, socket: &str, threads: &[thread
         let mut delivered = false;
         // Re-read: `thread brief` may have delivered it since this pass began.
         let still_pending = || thread::load(project, &t.id).map(|r| r.prompt_pending).unwrap_or(false);
-        if t.prompt_pending && live.agent_state.as_deref().is_some_and(crate::herdr::ready_state) && still_pending() {
+        if brief_due && !hold_brief && still_pending() {
             match herdr.agent_prompt(&t.pane_id, &thread::launch_prompt(slug, &t.id)) {
                 Ok(()) => delivered = true,
                 Err(error) => pass.error = pass.error.or(Some(anyhow::anyhow!("{}: brief prompt: {error}", t.id))),

@@ -1169,6 +1169,8 @@ impl<'a> Popup<'a> {
                         "yolo" | "routine_commands" => pick(&["on", "off"]),
                         "start_threads" if value == "auto" => pick(&["propose", "auto"]),
                         "start_threads" => pick(&["auto", "propose"]),
+                        "trust_screens" if value == "coordinator" => pick(&["user", "coordinator"]),
+                        "trust_screens" => pick(&["coordinator", "user"]),
                         _ => Mode::Edit { label: format!("{name} (space-separated; empty for none)"), buffer: if value == "(none)" { String::new() } else { value }, action },
                     };
                 } else if let Some(slug) = slug {

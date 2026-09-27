@@ -18,9 +18,10 @@ use crate::project::{self, Project, SafetyLayer};
 pub const DEFAULT_TABLE: &str = "default";
 
 /// The keys `safety set` accepts, with what they hold.
-pub const KEYS: [(&str, &str); 5] = [
+pub const KEYS: [(&str, &str); 6] = [
     ("yolo", "on/off"),
     ("start_threads", "propose/auto"),
+    ("trust_screens", "coordinator/user"),
     ("coordinator_agent_args", "arguments"),
     ("thread_agent_args", "arguments"),
     ("routine_commands", "on/off"),
@@ -114,6 +115,10 @@ fn value_item(key: &str, words: &[String]) -> Result<Option<Item>> {
         "start_threads" => match one()? {
             value @ ("propose" | "auto") => toml_edit::value(value),
             other => bail!("start_threads is propose or auto, not `{other}`"),
+        },
+        "trust_screens" => match one()? {
+            value @ ("coordinator" | "user") => toml_edit::value(value),
+            other => bail!("trust_screens is coordinator or user, not `{other}`"),
         },
         "coordinator_agent_args" | "thread_agent_args" => {
             let mut array = toml_edit::Array::new();
@@ -240,6 +245,7 @@ pub fn rows(config_dir: &Path, target: &Target) -> Result<Vec<SafetyRow>> {
     let args = |v: Vec<String>| if v.is_empty() { "(none)".to_string() } else { v.join(" ") };
     let (yolo, yolo_source) = pick(&own.yolo, &default.yolo, own_source, false);
     let (start, start_source) = pick(&own.start_threads, &default.start_threads, own_source, "propose".to_string());
+    let (trust, trust_source) = pick(&own.trust_screens, &default.trust_screens, own_source, project::default_trust_screens(yolo).to_string());
     let (coordinator, coordinator_source) = pick(&own.coordinator_agent_args, &default.coordinator_agent_args, own_source, Vec::new());
     let (thread, thread_source) = pick(&own.thread_agent_args, &default.thread_agent_args, own_source, Vec::new());
     let (commands, commands_source) = pick(&own.routine_commands, &default.routine_commands, own_source, false);
@@ -250,6 +256,12 @@ pub fn rows(config_dir: &Path, target: &Target) -> Result<Vec<SafetyRow>> {
             value: if yolo { "auto".into() } else { start },
             source: start_source,
             note: if yolo { "yolo".into() } else { String::new() },
+        },
+        SafetyRow {
+            key: "trust_screens",
+            value: trust,
+            source: trust_source,
+            note: if trust_source == "built-in" { "follows yolo".into() } else { String::new() },
         },
         SafetyRow { key: "coordinator_agent_args", value: args(coordinator), source: coordinator_source, note: String::new() },
         SafetyRow { key: "thread_agent_args", value: args(thread), source: thread_source, note: String::new() },
@@ -292,6 +304,7 @@ pub fn show_text(ctx: &Ctx, target: &Target) -> Result<String> {
     };
     let kinds: Vec<&str> = kinds.iter().map(String::as_str).collect();
     out.push_str(&format!("\nYolo starts threads without asking and adds each harness's flag ({}).\n", flags_text(&kinds).join("; ")));
+    out.push_str("Trust screens (a folder, restricted-folder or hooks trust dialog in a thread's pane) are answered by the coordinator or left to you; unset, the coordinator answers them only in yolo mode. Nothing is ever typed into one by a brief or prompt.\n");
     out.push_str("Routine commands are not part of yolo: they stay off until you turn them on and approve each one.\n");
     if let Target::Project(project) = target {
         let safety = project.safety(&ctx.config_dir)?;
@@ -377,11 +390,20 @@ mod tests {
         let r = rows(&ctx.config_dir, &target).unwrap();
         assert_eq!((r[0].value.as_str(), r[0].source), ("on", "all projects"));
         assert_eq!(r[1].text(), "auto (yolo)");
+        assert_eq!(r[2].text(), "coordinator (follows yolo)");
         assert!(project.safety(&ctx.config_dir).unwrap().yolo);
 
         apply(&ctx, &target, "yolo", &words("off")).unwrap();
         let r = rows(&ctx.config_dir, &target).unwrap();
         assert_eq!((r[0].value.as_str(), r[0].source, r[1].value.as_str()), ("off", "project", "propose"));
+        assert_eq!(r[2].text(), "user (follows yolo)");
+        assert_eq!(project.safety(&ctx.config_dir).unwrap().trust_screens, "user");
+        apply(&ctx, &target, "trust_screens", &words("coordinator")).unwrap();
+        let r = rows(&ctx.config_dir, &target).unwrap();
+        assert_eq!((r[2].text().as_str(), r[2].source), ("coordinator", "project"));
+        assert_eq!(project.safety(&ctx.config_dir).unwrap().trust_screens, "coordinator", "set by the user, it no longer follows yolo");
+        assert!(apply(&ctx, &target, "trust_screens", &words("agent")).is_err());
+        apply(&ctx, &target, "trust_screens", &words("default")).unwrap();
         assert!(!project.safety(&ctx.config_dir).unwrap().yolo, "the project's own value wins");
         apply(&ctx, &target, "yolo", &words("default")).unwrap();
         assert!(project.safety(&ctx.config_dir).unwrap().yolo, "back to the all-projects value");

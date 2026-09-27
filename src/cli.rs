@@ -527,7 +527,7 @@ enum SafetyCommand {
         /// A project, or --global for the all-projects defaults
         #[arg(allow_hyphen_values = true)]
         target: String,
-        /// yolo, start_threads, coordinator_agent_args, thread_agent_args or routine_commands
+        /// yolo, start_threads, trust_screens, coordinator_agent_args, thread_agent_args or routine_commands
         key: String,
         /// The value (arguments for *_agent_args, none for an empty list), or `default`
         #[arg(allow_hyphen_values = true, trailing_var_arg = true)]

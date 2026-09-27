@@ -559,8 +559,8 @@ pub fn digest(ctx: &Ctx, project: &Project, prefix: &str) -> Result<(String, Vec
         Ok(safety) => {
             let _ = writeln!(
                 out,
-                "Safety: yolo={} start_threads={} routine_commands={} thread_agent_args={:?} coordinator_agent_args={:?}",
-                if safety.yolo { "on" } else { "off" }, safety.start_threads, safety.routine_commands, safety.thread_agent_args, safety.coordinator_agent_args
+                "Safety: yolo={} start_threads={} trust_screens={} routine_commands={} thread_agent_args={:?} coordinator_agent_args={:?}",
+                if safety.yolo { "on" } else { "off" }, safety.start_threads, safety.trust_screens, safety.routine_commands, safety.thread_agent_args, safety.coordinator_agent_args
             );
         }
         Err(error) => {

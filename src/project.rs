@@ -242,6 +242,9 @@ pub struct Safety {
     /// Yolo mode: threads start without asking and every agent launches with
     /// its harness's skip-permissions flag (`crate::safety::yolo_flags`).
     pub yolo: bool,
+    /// Who answers trust screens in thread panes: `coordinator` or `user`.
+    /// Unset, it follows yolo (on: the coordinator; off: the user).
+    pub trust_screens: String,
     /// The profiles threads may use; `None`: every profile.
     pub thread_profiles: Option<Vec<String>>,
     pub coordinator_profiles: Option<Vec<String>>,
@@ -255,6 +258,7 @@ impl Default for Safety {
             thread_agent_args: Vec::new(),
             routine_commands: false,
             yolo: false,
+            trust_screens: crate::trust_screen::USER.into(),
             thread_profiles: None,
             coordinator_profiles: None,
         }
@@ -286,6 +290,7 @@ pub struct SafetyLayer {
     pub thread_agent_args: Option<Vec<String>>,
     pub routine_commands: Option<bool>,
     pub yolo: Option<bool>,
+    pub trust_screens: Option<String>,
     pub thread_profiles: Option<Vec<String>>,
     pub coordinator_profiles: Option<Vec<String>>,
 }
@@ -412,10 +417,17 @@ pub fn load_safety(config_dir: &Path, canonical_project_dir: &Path) -> Result<Sa
         coordinator_agent_args: own.coordinator_agent_args.or(default.coordinator_agent_args).unwrap_or_default(),
         thread_agent_args: own.thread_agent_args.or(default.thread_agent_args).unwrap_or_default(),
         routine_commands: own.routine_commands.or(default.routine_commands).unwrap_or(base.routine_commands),
+        trust_screens: own.trust_screens.or(default.trust_screens).unwrap_or_else(|| default_trust_screens(yolo).into()),
         yolo,
         thread_profiles: own.thread_profiles.or(default.thread_profiles),
         coordinator_profiles: own.coordinator_profiles.or(default.coordinator_profiles),
     })
+}
+
+/// Who answers trust screens when `trust_screens` is not set: the
+/// coordinator in yolo mode, the user otherwise.
+pub fn default_trust_screens(yolo: bool) -> &'static str {
+    if yolo { crate::trust_screen::COORDINATOR } else { crate::trust_screen::USER }
 }
 
 /// The `[safety.default]` table and the project's own table, as written.
@@ -446,6 +458,11 @@ pub fn load_safety_layers_from(text: &str, file: &str, canonical_project_dir: &P
             && !matches!(value.as_str(), "propose" | "auto")
         {
             bail!("{file}: start_threads must be \"propose\" or \"auto\", not {value:?}");
+        }
+        if let Some(value) = &layer.trust_screens
+            && !matches!(value.as_str(), "coordinator" | "user")
+        {
+            bail!("{file}: trust_screens must be \"coordinator\" or \"user\", not {value:?}");
         }
     }
     Ok((default, own))

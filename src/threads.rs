@@ -499,6 +499,11 @@ pub fn prompt(ctx: &Ctx, slug: &str, id: &str, text: &str) -> Result<String> {
     // layout it does not know) is sent to as before.
     let kind = agents.iter().find(|a| thread::agent_matches(&record, a)).map(|a| a.agent.as_str()).unwrap_or(&record.agent);
     let screen = herdr.agent_screen(&record.pane_id).map_err(|error| anyhow::anyhow!("{error}"))?;
+    // Herdr may read a trust screen as idle; Enter there would accept it.
+    if let Some(phrase) = crate::trust_screen::detect(kind, &screen) {
+        let by_user = project.safety(&ctx.config_dir).map(|s| s.trust_screens == crate::trust_screen::USER).unwrap_or(true);
+        bail!("{}", crate::trust_screen::refusal(id, &record.pane_id, phrase, by_user));
+    }
     if crate::prompt_box::check(kind, &screen) == crate::prompt_box::Draft::Typed {
         bail!("draft_in_box: {id}'s input box holds text someone typed ({}); not sending, so it is not merged into their prompt. Try again once it is empty; `thread read` shows it", record.pane_id);
     }
@@ -614,6 +619,12 @@ pub fn keys(ctx: &Ctx, slug: &str, id: &str, keys: &[String], text: Option<&str>
     }
     let pane = pane_agent(ctx, slug, id)?;
     let fail = |error: crate::herdr::HerdrError| anyhow::anyhow!("{error}");
+    // With `trust_screens = user`, a trust answer is the user's alone.
+    if Project::load(&ctx.root, slug)?.safety(&ctx.config_dir)?.trust_screens == crate::trust_screen::USER
+        && let Some(phrase) = crate::trust_screen::showing(&pane.herdr, &pane.record.pane_id, &pane.record.agent).map_err(fail)?
+    {
+        bail!("{}", crate::trust_screen::refusal(id, &pane.record.pane_id, phrase, true));
+    }
     if let Some(text) = text {
         pane.herdr.pane_send_text(&pane.record.pane_id, text).map_err(fail)?;
     }
@@ -646,30 +657,52 @@ pub fn brief(ctx: &Ctx, slug: &str, id: &str) -> Result<()> {
         state if !crate::herdr::ready_state(state) => bail!("{id}'s agent is {state}, not ready for its brief yet; try again shortly"),
         _ => {}
     }
-    if !send_brief(&project, &pane.herdr, &pane.record)? {
-        println!("{id} got its brief from the ticker just now");
-        return Ok(());
+    match send_brief(&project, &pane.herdr, &pane.record)? {
+        Brief::Sent => {}
+        Brief::Taken => {
+            println!("{id} got its brief from the ticker just now");
+            return Ok(());
+        }
+        Brief::TrustScreen(phrase) => {
+            let by_user = project.safety(&ctx.config_dir).map(|s| s.trust_screens == crate::trust_screen::USER).unwrap_or(true);
+            bail!("{}; the brief follows once it is answered", crate::trust_screen::refusal(id, &pane.record.pane_id, phrase, by_user));
+        }
     }
     println!("sent {id} its brief (agent was {})", pane.state);
     Ok(())
 }
 
-/// Claims a pending brief under the project lock, then sends it. `Ok(false)`
-/// when someone else claimed it first; a failed send puts the claim back.
-pub fn send_brief(project: &Project, herdr: &Herdr, record: &Thread) -> Result<bool> {
+/// What became of a pending brief.
+#[derive(Debug, PartialEq)]
+pub enum Brief {
+    Sent,
+    /// Someone else claimed it first.
+    Taken,
+    /// The pane shows a trust screen (this line of it): the brief waits, as
+    /// its Enter would accept the screen.
+    TrustScreen(&'static str),
+}
+
+/// Claims a pending brief under the project lock, then sends it, unless the
+/// pane shows a trust screen (or cannot be read). A failed send puts the
+/// claim back.
+pub fn send_brief(project: &Project, herdr: &Herdr, record: &Thread) -> Result<Brief> {
+    if let Some(phrase) = crate::trust_screen::showing(herdr, &record.pane_id, &record.agent).map_err(|error| anyhow::anyhow!("{error}"))? {
+        return Ok(Brief::TrustScreen(phrase));
+    }
     let mut claimed = false;
     thread::update(project, &record.id, |t| {
         claimed = t.prompt_pending;
         t.prompt_pending = false;
     })?;
     if !claimed {
-        return Ok(false);
+        return Ok(Brief::Taken);
     }
     if let Err(error) = herdr.agent_prompt(&record.pane_id, &thread::launch_prompt(&project.slug, &record.id)) {
         thread::update(project, &record.id, |t| t.prompt_pending = true)?;
         bail!("{error}");
     }
-    Ok(true)
+    Ok(Brief::Sent)
 }
 
 /// The state a follow-up may be sent in, or the refusal.

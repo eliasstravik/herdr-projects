@@ -109,7 +109,9 @@ pub fn adopt(ctx: &Ctx, slug: &str, pane: &str, title: &str, task: Option<String
 
     // Prompt now when the agent is ready for one; otherwise the ticker's one
     // delivery path sends the line later (also when the agent ends in `done`).
-    let sent = agent.ready() && herdr.agent_prompt(pane, &thread::launch_prompt(slug, &id)).is_ok();
+    let sent = agent.ready()
+        && matches!(crate::trust_screen::showing(&herdr, pane, &agent.agent), Ok(None))
+        && herdr.agent_prompt(pane, &thread::launch_prompt(slug, &id)).is_ok();
     let adopted = thread::update(&project, &id, |t| {
         t.status = Status::Open;
         t.prompt_pending = !sent;

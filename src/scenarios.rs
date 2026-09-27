@@ -293,6 +293,7 @@ fn two_projects_in_two_sockets_sharing_a_pane_id_do_not_mix() {
         move |_| Ok(ok(&beta_agents)),
     );
     world2.runner.on("agent list", ok(r#"{"result":{"agents":[]}}"#));
+    world2.runner.on("agent read", ok(&claude_screen(None)));
     world2.runner.on("pane list", ok(r#"{"result":{"panes":[]}}"#));
     world2.runner.on("agent prompt", ok(r#"{"result":{}}"#));
     world2.runner.on("report-metadata", ok(r#"{"result":{}}"#));
@@ -2383,4 +2384,60 @@ fn thread_brief_delivers_a_pending_brief_once_and_only_to_a_ready_agent() {
     threads::brief(&ctx, "demo", "t-0001").unwrap();
     ticker::tick_project(&ctx, &project).unwrap();
     assert_eq!(world.runner.count("agent prompt"), 1);
+}
+
+const TRUST_SCREEN: &str = "Accessing workspace:\n\nQuick safety check: Is this a project you created or one you trust?\n\n\u{1b}[1m❯\u{1b}[0m 1. Yes, I trust this folder\n  2. No, exit\n";
+
+#[test]
+fn a_brief_waits_while_a_trust_screen_shows_even_when_herdr_reads_idle() {
+    let (world, project, t) = finished_world("idle");
+    thread::update(&project, &t.id, |t| t.prompt_pending = true).unwrap();
+    *world.screen.borrow_mut() = TRUST_SCREEN.into();
+    let ctx = world.ctx();
+
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(world.runner.count("agent prompt"), 0, "nothing is typed into a trust screen");
+    let held = thread::load(&project, &t.id).unwrap();
+    assert!(held.prompt_pending);
+    assert_eq!(held.last_state, "blocked", "the held thread counts as blocked, so it shows as needing someone");
+    let err = threads::brief(&ctx, "demo", &t.id).unwrap_err().to_string();
+    assert!(err.contains("trust_screen") && err.contains("only the user"), "{err}");
+    assert_eq!(world.runner.count("agent prompt"), 0);
+
+    // Answered: the next tick delivers the brief.
+    *world.screen.borrow_mut() = claude_screen(None);
+    ticker::tick_project(&ctx, &project).unwrap();
+    assert_eq!(world.runner.count("agent prompt"), 1);
+    assert!(!thread::load(&project, &t.id).unwrap().prompt_pending);
+}
+
+#[test]
+fn prompts_never_reach_a_trust_screen_and_keys_follow_the_trust_setting() {
+    let (world, project, t) = finished_world("idle");
+    world.runner.on("pane send-text", ok(""));
+    world.runner.on("agent send-keys", ok(""));
+    *world.screen.borrow_mut() = TRUST_SCREEN.into();
+    let ctx = world.ctx();
+
+    let err = threads::prompt(&ctx, "demo", &t.id, "go on").unwrap_err().to_string();
+    assert!(err.contains("trust_screen"), "{err}");
+    assert_eq!(world.runner.count("agent prompt"), 0);
+
+    // Unset and yolo off: the user answers, so keys are refused.
+    let err = threads::keys(&ctx, "demo", &t.id, &["enter".into()], None).unwrap_err().to_string();
+    assert!(err.contains("trust_screens = user"), "{err}");
+    assert_eq!(world.runner.count("send-keys"), 0);
+
+    // Yolo on: the coordinator answers them.
+    let target = crate::safety::Target::Project(project.clone());
+    crate::safety::apply(&ctx, &target, "yolo", &["on".into()]).unwrap();
+    threads::keys(&ctx, "demo", &t.id, &["enter".into()], None).unwrap();
+    assert_eq!(world.runner.count("send-keys"), 1);
+    // Set by the user, the setting wins over yolo.
+    crate::safety::apply(&ctx, &target, "trust_screens", &["user".into()]).unwrap();
+    assert!(threads::keys(&ctx, "demo", &t.id, &["enter".into()], None).is_err());
+    // An ordinary screen takes keys under either setting.
+    *world.screen.borrow_mut() = "Allow this edit?\n❯ 1. Yes\n  2. No\n".into();
+    threads::keys(&ctx, "demo", &t.id, &["enter".into()], None).unwrap();
+    assert_eq!(world.runner.count("send-keys"), 2);
 }
