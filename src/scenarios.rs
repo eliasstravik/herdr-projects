@@ -23,8 +23,14 @@ pub struct World {
     pub agents: Rc<RefCell<String>>,
     pub panes: Rc<RefCell<String>>,
     /// The styled screen `agent read --format ansi` serves for every pane;
-    /// `SCREEN_FAILS` makes the read fail.
+    /// `SCREEN_FAILS` makes the read fail. Text sent with `agent prompt`
+    /// shows above it, as an agent's conversation shows what it was given.
     pub screen: Rc<RefCell<String>>,
+    /// Prompts sent before this many `agent prompt` calls are not shown:
+    /// the agent dropped them (`drop_prompts`, `show_prompts`).
+    pub shown_from: Rc<std::cell::Cell<usize>>,
+    /// Screens served once each, in order, before `screen`.
+    pub screens: Rc<RefCell<std::collections::VecDeque<String>>>,
 }
 
 pub const SCREEN_FAILS: &str = "<agent read fails>";
@@ -40,6 +46,16 @@ pub fn claude_screen(draft: Option<&str>) -> String {
 }
 
 impl World {
+    /// Prompts sent from now on are dropped, not shown.
+    pub fn drop_prompts(&self) {
+        self.shown_from.set(usize::MAX);
+    }
+
+    /// Prompts sent from now on show again.
+    pub fn show_prompts(&self) {
+        self.shown_from.set(self.runner.count("agent prompt"));
+    }
+
     pub fn new() -> World {
         let home = tempfile::tempdir().unwrap();
         let root = home.path().join("root");
@@ -51,12 +67,21 @@ impl World {
             agents: Rc::new(RefCell::new("[]".into())),
             panes: Rc::new(RefCell::new("[]".into())),
             screen: Rc::new(RefCell::new(claude_screen(None))),
+            screens: Rc::new(RefCell::new(Default::default())),
+            shown_from: Rc::new(std::cell::Cell::new(0)),
             home,
         };
-        let screen = world.screen.clone();
+        let (screen, screens, calls, echo) = (world.screen.clone(), world.screens.clone(), world.runner.calls.clone(), world.shown_from.clone());
         world.runner.on_fn(
             |cmd| cmd.display().contains("agent read") && cmd.display().contains("--format ansi"),
-            move |_| Ok(if *screen.borrow() == SCREEN_FAILS { fail(1, r#"{"error":{"code":"failed","message":"read failed"}}"#) } else { ok(&screen.borrow()) }),
+            move |_| {
+                let current = screens.borrow_mut().pop_front().unwrap_or_else(|| screen.borrow().clone());
+                if current == SCREEN_FAILS {
+                    return Ok(fail(1, r#"{"error":{"code":"failed","message":"read failed"}}"#));
+                }
+                let sent: String = calls.borrow().iter().filter(|c| c.display().contains("agent prompt")).skip(echo.get()).map(|c| format!("> {}\n", prompt_text(c))).collect();
+                Ok(ok(&format!("{sent}{current}")))
+            },
         );
         let agents = world.agents.clone();
         world.runner.on_fn(
@@ -2427,6 +2452,7 @@ fn brief_world(change: impl FnOnce(&mut Thread)) -> (World, Project, Rc<std::cel
 fn a_brief_the_agent_does_not_take_is_typed_once_more_then_left_to_the_coordinator() {
     // A startup screen (Codex's update menu) reads as idle and swallows the text.
     let (world, project, stalled) = brief_world(|_| {});
+    world.drop_prompts();
     let ctx = world.ctx();
 
     // Not taken: still pending and counted. The quick checks stop; the next
@@ -2451,6 +2477,7 @@ fn a_brief_the_agent_does_not_take_is_typed_once_more_then_left_to_the_coordinat
 
     // Once the screen is answered, the coordinator's `thread brief` delivers it.
     stalled.set(false);
+    world.show_prompts();
     threads::brief(&ctx, "demo", "t-0001").unwrap();
     assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
     assert_eq!(world.runner.count("agent prompt"), 3);
@@ -2462,7 +2489,8 @@ fn a_retry_submits_the_first_copy_left_in_the_box_instead_of_typing_a_second() {
     // The first copy sits unsent in the box, wrapped over two lines.
     let prompt = thread::launch_prompt("demo", "t-0001");
     let (head, tail) = prompt.split_at(30);
-    *world.screen.borrow_mut() = claude_screen(Some(&format!("{head}\n{tail}")));
+    // After Enter the conversation shows it and the box is empty.
+    world.screens.borrow_mut().extend([claude_screen(Some(&format!("{head}\n{tail}"))), format!("> {prompt}\n{}", claude_screen(None))]);
     let _ = ticker::tick_project(&world.ctx(), &project);
     assert_eq!(world.runner.count("agent prompt"), 0, "no second copy is typed");
     let calls = world.runner.calls.borrow();
@@ -2568,4 +2596,31 @@ fn a_codex_profile_thread_launches_with_only_its_profile_arguments() {
     let call = world.runner.calls.borrow().iter().find(|c| c.display().contains("agent start")).cloned().unwrap();
     let dash = call.args.iter().position(|a| a == "--").unwrap();
     assert_eq!(call.args[dash + 1..], strings(&["--model", "gpt-5.5", "-c", "model_reasoning_effort=\"high\""]), "{}", call.display());
+}
+
+#[test]
+fn a_brief_the_conversation_does_not_show_is_not_delivered() {
+    // t-0009 in the live test: Codex, still starting, read as working, so
+    // `--wait` passed; the brief sat in its box ("tab to queue message") or
+    // was dropped when the session replaced its start-up screen.
+    let prompt = thread::launch_prompt("demo", "t-0001");
+    for (left_in_box, box_screen) in [(true, claude_screen(Some(&prompt))), (false, claude_screen(None))] {
+        let (world, project, stalled) = brief_world(|_| {});
+        stalled.set(false);
+        world.drop_prompts();
+        *world.screen.borrow_mut() = box_screen;
+        let _ = ticker::tick_project(&world.ctx(), &project);
+        assert_eq!(world.runner.count("agent prompt"), 1);
+        let t = thread::load(&project, "t-0001").unwrap();
+        assert_eq!((t.prompt_pending, t.brief_attempts), (true, 1), "left in box: {left_in_box}");
+
+        // The next try submits the copy in the box, or types it again.
+        world.show_prompts();
+        if left_in_box {
+            world.screens.borrow_mut().extend([claude_screen(Some(&prompt)), format!("> {prompt}\n{}", claude_screen(None))]);
+        }
+        let _ = ticker::tick_project(&world.ctx(), &project);
+        assert_eq!((world.runner.count("agent prompt"), world.runner.count("agent send-keys")), if left_in_box { (1, 1) } else { (2, 0) });
+        assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending, "left in box: {left_in_box}");
+    }
 }

@@ -249,6 +249,14 @@ pub fn draft_text(kind: &str, screen: &str) -> Option<String> {
     Some(compact(&typed.concat()))
 }
 
+/// Whether the harness is still starting up behind an input box it already
+/// draws. Codex (0.157) draws its box under a `model: loading` header, and
+/// text typed there is dropped when the real session replaces the screen.
+pub fn starting(kind: &str, screen: &str) -> bool {
+    let text = screen_text(screen);
+    kind == "codex" && (text.contains("model:loading") || text.contains("directory:loading"))
+}
+
 /// The screen's text without styling, compacted.
 pub fn screen_text(screen: &str) -> String {
     compact(&parse(screen).iter().map(|line| text(line)).collect::<String>())
@@ -260,6 +268,14 @@ mod tests {
 
     fn fixture(name: &str) -> String {
         std::fs::read_to_string(format!("{}/tests/fixtures/prompt_box/{name}.ansi", env!("CARGO_MANIFEST_DIR"))).unwrap()
+    }
+
+    #[test]
+    fn a_codex_still_loading_is_starting() {
+        let loading = "╭────╮\n│ >_ OpenAI Codex (v0.157.1) │\n│ model: loading /model to change │\n│ directory: loading │\n╰────╯\n› Ask Codex to do anything\n";
+        assert!(starting("codex", loading));
+        assert!(!starting("codex", &loading.replace("model: loading", "model: GPT-6-Luna high").replace("directory: loading", "directory: ~/x")));
+        assert!(!starting("claude", loading), "only Codex draws its box before it is ready");
     }
 
     #[test]

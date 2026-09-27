@@ -335,7 +335,7 @@ pub mod fake {
     #[derive(Default)]
     pub struct FakeRunner {
         rules: RefCell<Vec<(Matcher, Box<dyn Fn(&Cmd) -> Result<Output>>)>>,
-        pub calls: RefCell<Vec<Cmd>>,
+        pub calls: std::rc::Rc<RefCell<Vec<Cmd>>>,
         /// (socket, request line) of every socket request.
         pub socket_requests: RefCell<Vec<(PathBuf, String)>>,
     }

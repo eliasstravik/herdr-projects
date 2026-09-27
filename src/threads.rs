@@ -709,30 +709,70 @@ enum BriefFailure {
 }
 
 /// Types the brief, or, when the box may already hold text (`again`: an
-/// earlier send, or an adopted pane), looks at the input box first. The first copy still sitting
-/// there unsent is submitted with Enter instead of typed twice; one the
-/// screen shows was sent counts as delivered; other text, or a box this
-/// binary cannot read, stops the typing.
+/// earlier send, or an adopted pane), looks at the input box first. The
+/// first copy still sitting there unsent is submitted with Enter instead of
+/// typed twice; one the screen shows was sent counts as delivered; other
+/// text, or a box this binary cannot read, stops the typing. A harness still
+/// starting up behind its box is not typed into yet.
 fn deliver_brief(herdr: &Herdr, record: &Thread, prompt: &str, again: bool) -> Result<(), BriefFailure> {
     let taken = |result: Result<(), crate::herdr::HerdrError>| {
         result.map_err(|error| if matches!(error.code.as_str(), "agent_prompt_stalled" | "timeout") { BriefFailure::Stalled(error) } else { BriefFailure::NotSent(error) })
     };
+    let wanted = crate::prompt_box::compact(prompt);
+    let starting = || BriefFailure::NotSent(crate::herdr::HerdrError { code: "agent_not_ready".into(), message: "the agent is still loading".into() });
     if again {
         // A screen that cannot be read is not retried blindly: the coordinator looks.
         let screen = herdr.agent_screen(&record.pane_id).map_err(|error| BriefFailure::Stop(format!("its screen could not be read ({error})")))?;
-        let wanted = crate::prompt_box::compact(prompt);
+        if crate::prompt_box::starting(&record.agent, &screen) {
+            return Err(starting());
+        }
         match crate::prompt_box::draft_text(&record.agent, &screen) {
             None => return Err(BriefFailure::Stop("its input box cannot be read, so text may already be in it".into())),
             Some(draft) if draft == wanted => {
                 herdr.agent_send_keys(&record.pane_id, &["enter".to_string()]).map_err(BriefFailure::NotSent)?;
-                return taken(herdr.agent_wait_taken(&record.pane_id));
+                taken(herdr.agent_wait_taken(&record.pane_id))?;
+                return confirm_brief(herdr, record, &wanted);
             }
             Some(draft) if !draft.is_empty() => return Err(BriefFailure::Stop("its input box holds other text".into())),
             Some(_) if crate::prompt_box::screen_text(&screen).contains(&wanted) => return Ok(()),
             Some(_) => {}
         }
+    } else if record.agent == "codex"
+        && let Ok(screen) = herdr.agent_screen(&record.pane_id)
+        && crate::prompt_box::starting(&record.agent, &screen)
+    {
+        return Err(starting());
     }
-    taken(herdr.agent_prompt_taken(&record.pane_id, prompt))
+    taken(herdr.agent_prompt_taken(&record.pane_id, prompt))?;
+    confirm_brief(herdr, record, &wanted)
+}
+
+/// Pauses before each look at the screen after a brief was taken.
+#[cfg(not(test))]
+const CONFIRM_PAUSES_MS: [u64; 3] = [0, 500, 1500];
+#[cfg(test)]
+const CONFIRM_PAUSES_MS: [u64; 3] = [0, 0, 0];
+
+/// A state change alone does not prove the brief was taken: Codex shows
+/// itself busy while it starts up, and a brief typed then stays in its box
+/// or is dropped. It counts once the screen shows it outside the box (the
+/// box empty, or one this binary cannot read). A screen that cannot be read
+/// leaves herdr's word standing.
+fn confirm_brief(herdr: &Herdr, record: &Thread, wanted: &str) -> Result<(), BriefFailure> {
+    for pause in CONFIRM_PAUSES_MS {
+        std::thread::sleep(std::time::Duration::from_millis(pause));
+        let Ok(screen) = herdr.agent_screen(&record.pane_id) else {
+            return Ok(());
+        };
+        let shown = crate::prompt_box::screen_text(&screen).contains(wanted);
+        if shown && crate::prompt_box::draft_text(&record.agent, &screen).is_none_or(|draft| draft.is_empty()) {
+            return Ok(());
+        }
+    }
+    Err(BriefFailure::Stalled(crate::herdr::HerdrError {
+        code: "brief_not_shown".into(),
+        message: "the agent's state changed but its conversation does not show the brief".into(),
+    }))
 }
 
 /// The state a follow-up may be sent in, or the refusal.
