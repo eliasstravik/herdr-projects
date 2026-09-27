@@ -299,7 +299,7 @@ fn report(
     // Hooks: ours in place and pointing at this binary; the standalone
     // agent-progress plugin's hooks gone (never edited by this plugin).
     let journal = crate::setup::load_journal(config_dir);
-    for agent in ["claude", "codex"] {
+    for agent in crate::setup::AGENTS {
         let file = crate::setup::hook_file(env, agent, None, None);
         let Ok(Some(text)) = crate::setup::read(&file) else {
             continue;

@@ -377,7 +377,8 @@ pub fn compose_brief(input: &BriefInput) -> String {
     if input.report_prefix.is_empty() {
         brief.push_str("Report progress with `herdr-projects report --percent N --activity '...'` if that command exists on this machine (use `--activity 'Waiting for you'` before asking the user something, and `--percent 100` when done); otherwise skip it.\n");
     } else {
-        brief.push_str(&format!("Report progress in this pane with `{} report --percent N --activity '...'` (two to four words; `--unknown` while the scope is unclear): at the start, at milestones, about once a minute while working, `--activity 'Waiting for you'` before asking the user something, and `--percent 100` when the whole task is done.\n", input.report_prefix));
+        brief.push_str(&crate::progress::guidance(input.report_prefix, None));
+        brief.push('\n');
     }
     brief.push_str("\n# Task\n\n");
     brief.push_str(input.task.trim());
@@ -1168,7 +1169,7 @@ mod tests {
         assert!(pos("Always run the tests.") < pos("# Memory"));
         assert!(pos("# Memory") < pos("alpha fact"));
         assert!(pos("alpha fact") < pos("# Progress"));
-        assert!(pos("/bin/hp --root /r report --percent N") < pos("Do the thing."));
+        assert!(pos("/bin/hp --root /r report --percent 25") < pos("Do the thing."));
         assert!(pos("Do the thing.") < pos("# Paths"));
         assert!(brief.contains("gamma fact"));
         assert!(brief.contains("Not inlined because project memory is over 32000 characters: memory/b.md."));

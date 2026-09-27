@@ -208,10 +208,10 @@ enum Command {
         /// Scope it to one project (default: the current workspace's, else all)
         slug: Option<String>,
     },
-    /// Install the plugin's hooks (progress self-reports) and its `autoproject` skill into Claude Code and Codex
+    /// Install the plugin's progress hooks (Claude Code, Codex, Droid, Gemini CLI, Copilot CLI) and its `autoproject` skill (Claude Code, Codex)
     Configure {
-        /// Harnesses to configure, comma-separated: claude, codex (default: those installed)
-        #[arg(long, value_delimiter = ',', value_parser = ["claude", "codex"])]
+        /// Harnesses to configure, comma-separated: claude, codex, droid, gemini, copilot (default: those installed)
+        #[arg(long, value_delimiter = ',', value_parser = crate::setup::AGENTS)]
         clients: Vec<String>,
         #[arg(long, value_name = "DIR")]
         claude_home: Option<PathBuf>,
@@ -249,7 +249,7 @@ enum Command {
     /// Harness hook entry point (installed by `configure`)
     #[command(hide = true)]
     Hook {
-        #[arg(long, value_parser = ["claude", "codex"])]
+        #[arg(long, value_parser = crate::setup::AGENTS)]
         agent: String,
     },
     /// Print the progress record of this pane, or of --pane
@@ -773,6 +773,9 @@ pub fn run() -> Result<()> {
         },
         Command::Skill => {
             print!("{}", include_str!("../skill/COORDINATOR.md"));
+            // Every harness learns to report here; hooks only add reminders.
+            let pane = crate::progress::current(ctx.env, ctx.runner).map(|p| p.pane_id);
+            println!("\n## Progress\n\n{}", crate::progress::guidance(&crate::coordinator::current_prefix(&ctx.root)?, pane.as_deref()));
             Ok(())
         }
         Command::Doctor { fix, session } => {

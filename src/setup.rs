@@ -13,7 +13,54 @@ use serde::{Deserialize, Serialize};
 use crate::paths::{Ctx, Env};
 use crate::remote::quote;
 
-pub const HOOK_EVENTS: [&str; 3] = ["SessionStart", "PostToolUse", "UserPromptSubmit"];
+/// A harness with a native, user-level hook system that can put text in the
+/// model's context. Every other agent learns to report from its thread brief
+/// or the coordinator skill alone; adding a harness here is one entry.
+pub struct Harness {
+    /// Herdr's agent kind, which is also the `hook --agent` value.
+    pub agent: &'static str,
+    /// The variable that moves the harness's config directory, if any.
+    home_env: Option<&'static str>,
+    /// The config directory under the home directory.
+    home: &'static str,
+    /// The hook file, relative to the config directory.
+    file: &'static str,
+    /// The harness's own names for SessionStart, UserPromptSubmit and PostToolUse.
+    pub events: [&'static str; 3],
+    /// Flat `{type, command, timeoutSec}` entries in a `version: 1` file of our
+    /// own (Copilot CLI) instead of Claude Code's `{matcher, hooks: [...]}`.
+    flat: bool,
+    /// The hook timeout in the harness's unit.
+    timeout: u64,
+    /// The injected text goes in top-level `additionalContext`, not `hookSpecificOutput`.
+    pub top_level_output: bool,
+}
+
+pub const HARNESSES: [Harness; 5] = [
+    Harness { agent: "claude", home_env: Some("CLAUDE_CONFIG_DIR"), home: ".claude", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false },
+    Harness { agent: "codex", home_env: Some("CODEX_HOME"), home: ".codex", file: "hooks.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false },
+    // Factory Droid: Claude Code's format, in its settings.json.
+    Harness { agent: "droid", home_env: None, home: ".factory", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false },
+    // Gemini CLI: its own event names; timeouts in milliseconds.
+    Harness { agent: "gemini", home_env: None, home: ".gemini", file: "settings.json", events: ["SessionStart", "BeforeAgent", "AfterTool"], flat: false, timeout: 10_000, top_level_output: false },
+    // Copilot CLI reads every file in hooks/, so ours is a file of its own.
+    // PascalCase event names select its Claude-style payload (snake_case,
+    // `hook_event_name`); prompt-submit output is dropped, but the event
+    // still clears an answered question.
+    Harness { agent: "copilot", home_env: Some("COPILOT_HOME"), home: ".copilot", file: "hooks/herdr-projects.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: true, timeout: 10, top_level_output: true },
+];
+
+pub const AGENTS: [&str; 5] = ["claude", "codex", "droid", "gemini", "copilot"];
+
+pub fn harness(agent: &str) -> Option<&'static Harness> {
+    HARNESSES.iter().find(|h| h.agent == agent)
+}
+
+/// The harness a hook command was written for (`… hook --agent <name> …`).
+fn harness_of(command: &str) -> &'static Harness {
+    let agent = command.split(" hook --agent ").nth(1).and_then(|rest| rest.split_whitespace().next()).unwrap_or("claude");
+    harness(agent).unwrap_or(&HARNESSES[0])
+}
 
 /// One file the plugin edited: its text before the first edit, after the last
 /// one, what kind of edit, and the hook command (for hook files).
@@ -109,30 +156,48 @@ pub fn tab_command(binary: &Path, root: &Path) -> String {
     format!("{} --root {} needs-you --line", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
 }
 
-fn hook_entry(command: &str) -> serde_json::Value {
-    serde_json::json!({"matcher":"*","hooks":[{"type":"command","command":command,"timeout":10}]})
+fn hook_entry(harness: &Harness, command: &str) -> serde_json::Value {
+    if harness.flat {
+        serde_json::json!({"type":"command","command":command,"timeoutSec":harness.timeout})
+    } else {
+        serde_json::json!({"matcher":"*","hooks":[{"type":"command","command":command,"timeout":harness.timeout}]})
+    }
+}
+
+fn cst_value(value: &serde_json::Value) -> CstInputValue {
+    match value {
+        serde_json::Value::Object(map) => CstInputValue::Object(map.iter().map(|(k, v)| (k.clone(), cst_value(v))).collect()),
+        serde_json::Value::Array(items) => CstInputValue::Array(items.iter().map(cst_value).collect()),
+        serde_json::Value::String(text) => text.as_str().into(),
+        serde_json::Value::Number(n) => n.as_u64().unwrap_or(0).into(),
+        serde_json::Value::Bool(b) => (*b).into(),
+        serde_json::Value::Null => CstInputValue::Null,
+    }
 }
 
 /// Whether a hook entry is one of ours: it runs `herdr-projects … hook`.
 fn is_our_entry(value: &serde_json::Value) -> bool {
-    value["hooks"]
-        .as_array()
-        .is_some_and(|hooks| hooks.iter().any(|h| h["command"].as_str().is_some_and(|c| c.contains("herdr-projects") && c.contains(" hook --agent "))))
+    let ours = |h: &serde_json::Value| h["command"].as_str().is_some_and(|c| c.contains("herdr-projects") && c.contains(" hook --agent "));
+    ours(value) || value["hooks"].as_array().is_some_and(|hooks| hooks.iter().any(ours))
 }
 
 /// Adds (or removes) the plugin's hook entry under each event, keeping
 /// everything else, including comments. Any earlier entry of ours (a moved
 /// binary) is replaced on add. Idempotent.
 pub fn hooks(input: &str, command: &str, remove: bool) -> Result<String> {
+    let harness = harness_of(command);
     let root = CstRootNode::parse(input, &Default::default()).context("hook file does not parse")?;
     let obj = root.object_value().context("hook configuration must be a JSON object")?;
+    if harness.flat && !remove && obj.get("version").is_none() {
+        obj.append("version", 1u64.into());
+    }
     let hooks = match obj.get("hooks") {
         Some(p) => p.object_value().context("`hooks` must be an object")?,
         None if remove => return Ok(input.into()),
         None => obj.append("hooks", CstInputValue::Object(vec![])).object_value().unwrap(),
     };
-    let expected = hook_entry(command);
-    for event in HOOK_EVENTS {
+    let expected = hook_entry(harness, command);
+    for event in harness.events {
         let entries = match hooks.get(event) {
             Some(p) => p.array_value().with_context(|| format!("`hooks.{event}` must be an array"))?,
             None if remove => continue,
@@ -153,17 +218,7 @@ pub fn hooks(input: &str, command: &str, remove: bool) -> Result<String> {
             }
         }
         if !remove && !found {
-            entries.append(CstInputValue::Object(vec![
-                ("matcher".into(), "*".into()),
-                (
-                    "hooks".into(),
-                    CstInputValue::Array(vec![CstInputValue::Object(vec![
-                        ("type".into(), "command".into()),
-                        ("command".into(), command.into()),
-                        ("timeout".into(), 10u64.into()),
-                    ])]),
-                ),
-            ]));
+            entries.append(cst_value(&expected));
         }
     }
     Ok(root.to_string())
@@ -178,20 +233,27 @@ pub fn hook_command(binary: &Path, root: &Path, agent: &str) -> String {
     format!("{} --root {} hook --agent {agent} 2>/dev/null || true", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
 }
 
-/// Where each harness keeps its hooks.
+/// Where each harness keeps its hooks; `--claude-home`/`--codex-home`
+/// override those two.
 pub fn hook_file(env: &Env, agent: &str, claude_home: Option<&Path>, codex_home: Option<&Path>) -> PathBuf {
-    match agent {
-        "claude" => claude_home
-            .map(Path::to_path_buf)
-            .or_else(|| env.var("CLAUDE_CONFIG_DIR").map(PathBuf::from))
-            .unwrap_or_else(|| env.home.join(".claude"))
-            .join("settings.json"),
-        _ => codex_home
-            .map(Path::to_path_buf)
-            .or_else(|| env.var("CODEX_HOME").map(PathBuf::from))
-            .unwrap_or_else(|| env.home.join(".codex"))
-            .join("hooks.json"),
-    }
+    let harness = harness(agent).unwrap_or(&HARNESSES[0]);
+    let flag = match agent {
+        "claude" => claude_home,
+        "codex" => codex_home,
+        _ => None,
+    };
+    flag.map(Path::to_path_buf)
+        .or_else(|| harness.home_env.and_then(|name| env.var(name)).map(PathBuf::from))
+        .unwrap_or_else(|| env.home.join(harness.home))
+        .join(harness.file)
+}
+
+/// The harness's config directory: `configure` without `--clients` picks the
+/// harnesses whose directory exists.
+pub fn harness_installed(env: &Env, agent: &str, claude_home: Option<&Path>, codex_home: Option<&Path>) -> bool {
+    let file = hook_file(env, agent, claude_home, codex_home);
+    let depth = harness(agent).map_or(1, |h| h.file.split('/').count());
+    file.ancestors().nth(depth).is_some_and(Path::is_dir)
 }
 
 /// The skill bundled with the plugin, linked into each harness by `configure`.
@@ -247,7 +309,7 @@ pub fn skill_state(link: &Path, source: &Path) -> SkillState {
 }
 
 pub struct ConfigureOptions {
-    /// `claude`, `codex`, or both; empty means every harness whose config
+    /// Harnesses from [`AGENTS`]; empty means every one whose config
     /// directory exists.
     pub clients: Vec<String>,
     pub claude_home: Option<PathBuf>,
@@ -276,9 +338,9 @@ pub fn has_agent_progress_hooks(text: &str) -> bool {
 pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
     let binary = crate::paths::binary()?;
     let clients: Vec<String> = if options.clients.is_empty() {
-        ["claude", "codex"]
+        AGENTS
             .into_iter()
-            .filter(|c| hook_file(ctx.env, c, options.claude_home.as_deref(), options.codex_home.as_deref()).parent().is_some_and(Path::is_dir))
+            .filter(|c| harness_installed(ctx.env, c, options.claude_home.as_deref(), options.codex_home.as_deref()))
             .map(str::to_owned)
             .collect()
     } else {
@@ -287,7 +349,7 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
     let mut journal = load_journal(&ctx.config_dir);
     let mut edits: Vec<(PathBuf, Owned)> = Vec::new();
     let mut notes = Vec::new();
-    for client in clients.iter().filter(|c| options.hooks && matches!(c.as_str(), "claude" | "codex")) {
+    for client in clients.iter().filter(|c| options.hooks && harness(c).is_some()) {
         let file = hook_file(ctx.env, client, options.claude_home.as_deref(), options.codex_home.as_deref());
         let command = hook_command(&binary, &ctx.root, client);
         let before = read(&file)?;
@@ -529,6 +591,39 @@ mod tests {
         assert!(has_agent_progress_hooks(&added));
         let removed = hooks(&added, CMD, true).unwrap();
         assert!(removed.contains("herdr-progress") && !removed.contains("herdr-projects"));
+    }
+
+    #[test]
+    fn each_harness_gets_its_own_file_event_names_and_entry_shape() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[("COPILOT_HOME", "/c")]);
+        assert_eq!(hook_file(&env, "droid", None, None), home.path().join(".factory/settings.json"));
+        assert_eq!(hook_file(&env, "gemini", None, None), home.path().join(".gemini/settings.json"));
+        assert_eq!(hook_file(&env, "copilot", None, None), Path::new("/c/hooks/herdr-projects.json"));
+        // Copilot's hooks/ folder may not exist yet: its config directory counts.
+        std::fs::create_dir_all(home.path().join(".copilot")).unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        assert!(harness_installed(&env, "copilot", None, None));
+        assert!(!harness_installed(&env, "gemini", None, None));
+
+        let gemini = hooks("{\"theme\":\"x\"}", "/b/herdr-projects --root /r hook --agent gemini", false).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&gemini).unwrap();
+        for event in ["SessionStart", "BeforeAgent", "AfterTool"] {
+            assert_eq!(value["hooks"][event][0]["hooks"][0]["timeout"], 10_000, "{gemini}");
+        }
+        assert!(value["hooks"]["PostToolUse"].is_null());
+
+        let command = "/b/herdr-projects --root /r hook --agent copilot";
+        let copilot = hooks("{}", command, false).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&copilot).unwrap();
+        assert_eq!(value["version"], 1);
+        for event in ["SessionStart", "UserPromptSubmit", "PostToolUse"] {
+            assert_eq!(value["hooks"][event], serde_json::json!([{"type":"command","command":command,"timeoutSec":10}]), "{copilot}");
+        }
+        assert_eq!(hooks(&copilot, command, false).unwrap(), copilot);
+        let moved = hooks(&copilot, "/new/herdr-projects --root /r hook --agent copilot", false).unwrap();
+        assert_eq!(moved.matches("herdr-projects").count(), 3);
+        assert!(!hooks(&copilot, command, true).unwrap().contains("herdr-projects"));
     }
 
     #[test]

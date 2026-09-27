@@ -37,6 +37,9 @@ pub struct Record {
     /// Unix seconds of the last reminder the hook injected.
     pub reminded_at: i64,
     pub session_started_at: i64,
+    /// The harness's own session id from the last SessionStart: Copilot CLI
+    /// runs a subagent's hooks under another id with no other marker.
+    pub session_id: String,
 }
 
 impl Record {
@@ -192,15 +195,22 @@ pub fn print(ctx: &Ctx, pane: Option<&str>) -> Result<()> {
 
 /// The instructions the SessionStart hook injects, with the exact command.
 pub fn instructions(prefix: &str, pane_id: &str) -> String {
+    format!("# Progress (herdr-projects)\n\n{}", guidance(prefix, Some(pane_id)))
+}
+
+/// The body of the progress instructions. Hooks inject it at session start;
+/// every other agent reads it in its thread brief or the coordinator skill,
+/// so any harness that can run a shell command reports.
+pub fn guidance(prefix: &str, pane_id: Option<&str>) -> String {
+    let pane = pane_id.map(|id| format!("this pane ({id})")).unwrap_or_else(|| "this pane".into());
     format!(
-        "# Progress (herdr-projects)\n\n\
-         Report the progress of the user's whole current task through `{prefix} report`. This is your estimate, not a timer or a count of tools. Reporting failures must never stop the actual work: give one short diagnostic and continue, without retries.\n\n\
+        "Report the progress of the user's whole current task through `{prefix} report`. This is your estimate, not a timer or a count of tools. Reporting failures must never stop the actual work: give one short diagnostic and continue, without retries.\n\n\
          Report a rough percentage in five-point increments and a two-to-four-word activity, such as `Reading code`, `Testing changes` or `Waiting for you`:\n\n\
          `{prefix} report --percent 25 --activity 'Reading code'`\n\
          `{prefix} report --unknown --activity 'Assessing task'`\n\n\
          Report at the start of new work, after meaningful milestones, when the activity changes, at blockers, and before every substantive reply. Report `--activity 'Waiting for you'` whenever you stop to ask the user something. During active work aim for one report per minute at a natural tool boundary; never invent progress to satisfy a reminder. Revise the estimate downward when you discover more work; use `--unknown` while the scope is unclear.\n\n\
          Use `--percent 100` only when the entire requested outcome and its checks are finished; it displays `Done`. If more work is requested afterwards, report a fresh, lower percentage.\n\n\
-         Only the top-level agent in this pane ({pane_id}) reports; subagents and helpers do not. Await each report command; do not run it in the background."
+         Only the top-level agent in {pane} reports; subagents and helpers do not. Await each report command; do not run it in the background."
     )
 }
 
@@ -261,7 +271,33 @@ pub fn respond(record: &mut Record, kind: &str, prefix: &str, now: i64) -> Optio
     }
 }
 
-/// `hook --agent claude|codex`, the entry point the harness hooks run. Silent
+/// Whether an event belongs to another session than the one this pane
+/// started: a subagent's, where the harness gives it an id of its own.
+pub fn foreign_session(record: &Record, event: &serde_json::Value) -> bool {
+    let id = event["session_id"].as_str().unwrap_or("");
+    !record.session_id.is_empty() && !id.is_empty() && id != record.session_id
+}
+
+/// The event under its Claude Code name, which the rest of the reporter
+/// uses: `hook_event_name` rewritten from the harness's own name.
+pub fn normalize(harness: &crate::setup::Harness, mut event: serde_json::Value) -> serde_json::Value {
+    let native = event["hook_event_name"].as_str().unwrap_or("");
+    if let Some(i) = harness.events.iter().position(|e| *e == native) {
+        event["hook_event_name"] = ["SessionStart", "UserPromptSubmit", "PostToolUse"][i].into();
+    }
+    event
+}
+
+/// The hook's answer in the shape the harness reads.
+pub fn output(harness: &crate::setup::Harness, native: &str, text: &str) -> serde_json::Value {
+    if harness.top_level_output {
+        serde_json::json!({"additionalContext": text})
+    } else {
+        serde_json::json!({"hookSpecificOutput": {"hookEventName": native, "additionalContext": text}})
+    }
+}
+
+/// `hook --agent <harness>`, the entry point the harness hooks run. Silent
 /// (exit 0, no output) outside a Herdr pane, so the same hooks may sit in the
 /// user's settings for every session on the machine.
 pub fn hook(ctx: &Ctx, agent: &str) -> Result<()> {
@@ -274,6 +310,11 @@ pub fn hook(ctx: &Ctx, agent: &str) -> Result<()> {
     let Ok(event) = serde_json::from_str::<serde_json::Value>(&input) else {
         return Ok(());
     };
+    let Some(harness) = crate::setup::harness(agent) else {
+        return Ok(());
+    };
+    let native = event["hook_event_name"].as_str().unwrap_or("").to_string();
+    let event = normalize(harness, event);
     if !eligible(&event) {
         return Ok(());
     }
@@ -299,6 +340,9 @@ pub fn hook(ctx: &Ctx, agent: &str) -> Result<()> {
         return Ok(()); // another harness's hook fired in a pane that is not its own
     }
     let mut record = load(&ctx.root, &pane.socket, &pane.pane_id).unwrap_or_default();
+    if kind != "SessionStart" && foreign_session(&record, &event) {
+        return Ok(());
+    }
     record.socket = pane.socket.clone();
     record.pane_id = pane.pane_id.clone();
     record.terminal_id = pane.terminal_id.clone();
@@ -306,11 +350,14 @@ pub fn hook(ctx: &Ctx, agent: &str) -> Result<()> {
     let prefix = crate::coordinator::current_prefix(&ctx.root)?;
     let before = record.clone();
     let text = respond(&mut record, &kind, &prefix, now());
+    if kind == "SessionStart" {
+        record.session_id = event["session_id"].as_str().unwrap_or("").to_string();
+    }
     if record != before {
         save(&ctx.root, &record)?;
     }
     if let Some(text) = text {
-        println!("{}", serde_json::json!({"hookSpecificOutput": {"hookEventName": kind, "additionalContext": text}}));
+        println!("{}", output(harness, &native, &text));
     }
     Ok(())
 }
@@ -387,6 +434,34 @@ mod tests {
         respond(&mut asked, "UserPromptSubmit", "hp", 10);
         assert!(!asked.waiting(), "an answer clears the old question");
         assert!(respond(&mut record, "Stop", "hp", 9002).is_none());
+    }
+
+    #[test]
+    fn native_events_are_normalized_and_answered_in_each_harness_shape() {
+        let gemini = crate::setup::harness("gemini").unwrap();
+        let event = normalize(gemini, json!({"hook_event_name":"AfterTool","tool_input":{"command":"ls"}}));
+        assert_eq!(event["hook_event_name"], "PostToolUse");
+        assert!(eligible(&event));
+        assert_eq!(normalize(gemini, json!({"hook_event_name":"BeforeAgent"}))["hook_event_name"], "UserPromptSubmit");
+        assert_eq!(output(gemini, "AfterTool", "hi"), json!({"hookSpecificOutput":{"hookEventName":"AfterTool","additionalContext":"hi"}}));
+        let copilot = crate::setup::harness("copilot").unwrap();
+        assert_eq!(output(copilot, "SessionStart", "hi"), json!({"additionalContext":"hi"}));
+    }
+
+    #[test]
+    fn events_from_another_session_in_the_pane_are_a_subagents() {
+        let record = Record { session_id: "main".into(), ..Record::default() };
+        assert!(foreign_session(&record, &json!({"session_id":"sub"})));
+        assert!(!foreign_session(&record, &json!({"session_id":"main"})));
+        assert!(!foreign_session(&record, &json!({})));
+        assert!(!foreign_session(&Record::default(), &json!({"session_id":"sub"})), "no SessionStart seen: accept");
+    }
+
+    #[test]
+    fn guidance_names_the_command_and_the_pane_when_known() {
+        assert!(guidance("/p/hp --root /r", None).contains("top-level agent in this pane reports"));
+        assert!(guidance("/p/hp --root /r", Some("w2:p3")).contains("this pane (w2:p3)"));
+        assert!(instructions("hp", "w1:p1").starts_with("# Progress (herdr-projects)\n\nReport the progress"));
     }
 
     #[test]
