@@ -2396,15 +2396,16 @@ fn thread_brief_delivers_a_pending_brief_once_and_only_to_a_ready_agent() {
     assert_eq!(world.runner.count("agent prompt"), 1);
 }
 
-#[test]
-fn a_brief_the_agent_does_not_take_is_typed_once_more_then_left_to_the_coordinator() {
-    // A startup screen (Codex's update menu) reads as idle and swallows the text.
+/// A launched thread waiting for its brief at an idle agent, and herdr
+/// answering `agent prompt` with a stall while the returned switch is on.
+fn brief_world(change: impl FnOnce(&mut Thread)) -> (World, Project, Rc<std::cell::Cell<bool>>) {
     let world = World::new();
     let project = world.project("demo", "a.sock");
     world.thread(&project, world.home.path(), |t| {
         t.prompt_pending = true;
         t.launch_attempts = 1;
         t.last_group = "working".into();
+        change(t);
     });
     set_agents(&world, &project, "idle");
     let stalled = Rc::new(std::cell::Cell::new(true));
@@ -2413,7 +2414,16 @@ fn a_brief_the_agent_does_not_take_is_typed_once_more_then_left_to_the_coordinat
         |cmd| cmd.display().contains("agent prompt"),
         move |_| Ok(if answer.get() { fail(1, r#"{"error":{"code":"agent_prompt_stalled","message":"no working state within 5000ms"}}"#) } else { ok(r#"{"result":{}}"#) }),
     );
+    world.runner.on("agent send-keys", ok(r#"{"result":{}}"#));
+    world.runner.on("agent wait", ok(r#"{"result":{}}"#));
     world.runner.on("notification show", ok(r#"{"result":{"shown":true}}"#));
+    (world, project, stalled)
+}
+
+#[test]
+fn a_brief_the_agent_does_not_take_is_typed_once_more_then_left_to_the_coordinator() {
+    // A startup screen (Codex's update menu) reads as idle and swallows the text.
+    let (world, project, stalled) = brief_world(|_| {});
     let ctx = world.ctx();
 
     // Not taken: still pending and counted. The quick checks stop; the next
@@ -2441,4 +2451,79 @@ fn a_brief_the_agent_does_not_take_is_typed_once_more_then_left_to_the_coordinat
     threads::brief(&ctx, "demo", "t-0001").unwrap();
     assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
     assert_eq!(world.runner.count("agent prompt"), 3);
+}
+
+#[test]
+fn a_retry_submits_the_first_copy_left_in_the_box_instead_of_typing_a_second() {
+    let (world, project, _) = brief_world(|t| t.brief_attempts = 1);
+    // The first copy sits unsent in the box, wrapped over two lines.
+    let prompt = thread::launch_prompt("demo", "t-0001");
+    let (head, tail) = prompt.split_at(30);
+    *world.screen.borrow_mut() = claude_screen(Some(&format!("{head}\n{tail}")));
+    let _ = ticker::tick_project(&world.ctx(), &project);
+    assert_eq!(world.runner.count("agent prompt"), 0, "no second copy is typed");
+    let calls = world.runner.calls.borrow();
+    let keys = calls.iter().find(|c| c.display().contains("agent send-keys")).unwrap();
+    assert_eq!(keys.args.last().unwrap(), "enter");
+    let wait = calls.iter().find(|c| c.display().contains("agent wait")).unwrap();
+    assert!(wait.display().contains("--until working --until blocked"), "{}", wait.display());
+    drop(calls);
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert!(!t.prompt_pending && t.brief_claimed.is_empty());
+}
+
+#[test]
+fn a_retry_never_types_into_a_box_holding_other_text_or_one_it_cannot_read() {
+    for screen in [claude_screen(Some("half a sentence someone typed")), "Update available!\n› 1. Update now\n".to_string()] {
+        let (world, project, _) = brief_world(|t| t.brief_attempts = 1);
+        *world.screen.borrow_mut() = screen;
+        let _ = ticker::tick_project(&world.ctx(), &project);
+        assert_eq!((world.runner.count("agent prompt"), world.runner.count("agent send-keys")), (0, 0));
+        let t = thread::load(&project, "t-0001").unwrap();
+        assert!(t.prompt_pending && t.brief_attempts >= thread::MAX_BRIEF_ATTEMPTS);
+        let items = items_of(&project, "thread-state");
+        assert!(items.len() == 1 && items[0].summary.contains("not typing the brief again"), "{items:?}");
+        let _ = ticker::tick_project(&world.ctx(), &project);
+        assert_eq!(world.runner.count("agent prompt"), 0);
+        assert_eq!(thread::load(&project, "t-0001").unwrap().last_group, thread::Group::WaitingOnYou.token());
+    }
+}
+
+#[test]
+fn a_send_interrupted_mid_wait_is_recovered_once_its_claim_runs_out() {
+    // A live claim: another process is sending right now, so nothing is typed.
+    let (world, project, stalled) = brief_world(|t| t.brief_claimed = project::now());
+    stalled.set(false);
+    let _ = ticker::tick_project(&world.ctx(), &project);
+    assert!(threads::brief(&world.ctx(), "demo", "t-0001").is_ok());
+    assert_eq!(world.runner.count("agent prompt"), 0);
+    assert!(thread::load(&project, "t-0001").unwrap().prompt_pending, "still pending while claimed");
+
+    // The sender died: its claim runs out, the box is empty and the screen
+    // does not show the brief, so it is typed again and confirmed.
+    thread::update(&project, "t-0001", |t| {
+        t.brief_claimed = "2026-01-01T00:00:00Z".into();
+        t.last_state_change = "2025-12-31T00:00:00Z".into();
+    })
+    .unwrap();
+    let _ = ticker::tick_project(&world.ctx(), &project);
+    assert_eq!(world.runner.count("agent prompt"), 1);
+    let t = thread::load(&project, "t-0001").unwrap();
+    assert!(!t.prompt_pending && t.brief_claimed.is_empty());
+
+    // Died after the agent took it: its state changed since the claim, or the
+    // screen shows the submitted brief, so nothing is typed.
+    for (changed, shown) in [(true, false), (false, true)] {
+        let (world, project, _) = brief_world(|t| {
+            t.brief_claimed = "2026-01-01T00:00:00Z".into();
+            t.last_state = "idle".into();
+            t.last_state_change = if changed { "2026-01-01T00:05:00Z".into() } else { "2025-12-31T00:00:00Z".into() };
+        });
+        if shown {
+            *world.screen.borrow_mut() = format!("> {}\n\n{}", thread::launch_prompt("demo", "t-0001"), claude_screen(None));
+        }
+        let _ = ticker::tick_project(&world.ctx(), &project);
+        assert_eq!(world.runner.count("agent prompt"), 0, "changed {changed}, shown {shown}");
+        assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
+    }
 }

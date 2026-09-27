@@ -19,6 +19,9 @@ pub const LIBRARY_CAP_KB: u64 = 50 * 1024;
 pub const MAX_LAUNCH_ATTEMPTS: u32 = 3;
 /// Briefs the ticker types before it leaves a swallowed one to the coordinator.
 pub const MAX_BRIEF_ATTEMPTS: u32 = 2;
+/// How long a claim on a brief being sent holds. A send takes at most about
+/// 15 s; a claim older than this was left by a process that died mid-send.
+pub const BRIEF_LEASE_SECS: i64 = 60;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
@@ -67,6 +70,9 @@ pub struct Thread {
     /// Briefs typed that the agent was not seen to take: a startup screen
     /// that read as idle swallowed them.
     pub brief_attempts: u32,
+    /// When a send of the brief began; empty when none is under way. The
+    /// brief stays pending until the agent is seen to take it.
+    pub brief_claimed: String,
     pub kind: Kind,
     pub repo: String,
     pub origin: String,
@@ -889,6 +895,12 @@ mod tests {
 
     fn now() -> jiff::Timestamp {
         "2026-09-17T12:00:00Z".parse().unwrap()
+    }
+
+    #[test]
+    fn a_record_from_before_brief_checks_still_loads() {
+        let old: Thread = toml::from_str("id = \"t-0001\"\nstatus = \"open\"\nprompt_pending = true\nlaunch_attempts = 1\n").unwrap();
+        assert_eq!((old.prompt_pending, old.brief_attempts, old.brief_claimed.as_str()), (true, 0, ""));
     }
 
     fn ago(secs: i64) -> String {

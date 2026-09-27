@@ -230,6 +230,30 @@ pub fn check(kind: &str, screen: &str) -> Draft {
     }
 }
 
+/// Text with every whitespace character dropped, so a line the box wrapped
+/// compares equal to the one that was typed.
+pub fn compact(text: &str) -> String {
+    text.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+/// What the input box holds, compacted: empty for an empty box (or a known
+/// placeholder), `None` when no box is found on the screen.
+pub fn draft_text(kind: &str, screen: &str) -> Option<String> {
+    let rows = input_box(kind, &parse(screen))?;
+    let typed: Vec<String> = rows.iter().map(|row| typed(row).trim().to_string()).filter(|t| !t.is_empty()).collect();
+    if let [only] = typed.as_slice()
+        && placeholders(kind).iter().any(|p| only.starts_with(p))
+    {
+        return Some(String::new());
+    }
+    Some(compact(&typed.concat()))
+}
+
+/// The screen's text without styling, compacted.
+pub fn screen_text(screen: &str) -> String {
+    compact(&parse(screen).iter().map(|line| text(line)).collect::<String>())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

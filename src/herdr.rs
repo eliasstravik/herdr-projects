@@ -453,6 +453,15 @@ impl<'a> Herdr<'a> {
         self.call(&args, PROMPT_TAKEN_TIMEOUT + Duration::from_secs(5)).map(|_| ())
     }
 
+    /// Waits until the agent is seen working or blocked, after a line already
+    /// in its input box was submitted with Enter. herdr answers `timeout`
+    /// when neither shows in time.
+    pub fn agent_wait_taken(&self, target: &str) -> Result<(), HerdrError> {
+        let timeout_ms = PROMPT_TAKEN_TIMEOUT.as_millis().to_string();
+        let args = ["agent", "wait", target, "--until", "working", "--until", "blocked", "--timeout", &timeout_ms];
+        self.call(&args, PROMPT_TAKEN_TIMEOUT + Duration::from_secs(5)).map(|_| ())
+    }
+
     /// The agent's screen as plain text: what is visible now, or the last
     /// `lines` lines of scrollback. `agent read` prints the text itself, not a
     /// JSON reply; only a failure is JSON (checked on 0.9.1).

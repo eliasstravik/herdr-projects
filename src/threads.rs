@@ -349,6 +349,7 @@ fn finish_placement(project: &Project, view: &SessionView, id: &str) -> Result<T
         t.prompt_pending = true;
         t.launch_attempts = 0;
         t.brief_attempts = 0;
+        t.brief_claimed.clear();
         t.status = Status::Open;
         t.error.clear();
         t.last_state.clear();
@@ -649,7 +650,7 @@ pub fn brief(ctx: &Ctx, slug: &str, id: &str) -> Result<()> {
     }
     // The coordinator's own send is not capped: it has looked at the pane.
     if !send_brief(&project, &pane.herdr, &pane.record)? {
-        println!("{id} got its brief from the ticker just now");
+        println!("{id}'s brief was just sent, or is being sent now (by the ticker or another `thread brief`)");
         return Ok(());
     }
     println!("sent {id} its brief (agent was {})", pane.state);
@@ -657,29 +658,79 @@ pub fn brief(ctx: &Ctx, slug: &str, id: &str) -> Result<()> {
 }
 
 /// Claims a pending brief under the project lock, then sends it and waits for
-/// the agent to take it. `Ok(false)` when someone else claimed it first; a
-/// failed send puts the claim back, and one typed but not taken is counted.
+/// the agent to take it. `Ok(false)` when it is no longer pending or another
+/// send holds the claim. The brief stays pending until the agent is seen to
+/// take it, and the claim is a lease: one left by a process that died
+/// mid-send runs out, and the next send starts over from the pane.
 pub fn send_brief(project: &Project, herdr: &Herdr, record: &Thread) -> Result<bool> {
-    let mut claimed = false;
+    let now = jiff::Timestamp::now();
+    let mut claim = None;
     thread::update(project, &record.id, |t| {
-        claimed = t.prompt_pending;
-        t.prompt_pending = false;
-    })?;
-    if !claimed {
-        return Ok(false);
-    }
-    if let Err(error) = herdr.agent_prompt_taken(&record.pane_id, &thread::launch_prompt(&project.slug, &record.id)) {
-        let typed = matches!(error.code.as_str(), "agent_prompt_stalled" | "timeout");
-        thread::update(project, &record.id, |t| {
-            t.prompt_pending = true;
-            t.brief_attempts += u32::from(typed);
-        })?;
-        if typed {
-            bail!("the agent did not start on its brief ({error}); a startup screen may have swallowed it: `thread read` shows the pane");
+        if !t.prompt_pending || (!t.brief_claimed.is_empty() && thread::seconds_since(&t.brief_claimed, now) < thread::BRIEF_LEASE_SECS) {
+            return;
         }
-        bail!("{error}");
+        let interrupted = std::mem::take(&mut t.brief_claimed);
+        // The agent was ready when the dead send began: a state change since
+        // means it took the brief.
+        let reacted = !interrupted.is_empty() && t.last_state_change.parse::<jiff::Timestamp>().ok() > interrupted.parse::<jiff::Timestamp>().ok();
+        claim = Some((t.brief_attempts > 0 || !interrupted.is_empty(), reacted));
+        t.brief_claimed = project::now();
+    })?;
+    let Some((again, reacted)) = claim else {
+        return Ok(false);
+    };
+    let result = if reacted { Ok(()) } else { deliver_brief(herdr, record, &thread::launch_prompt(&project.slug, &record.id), again) };
+    thread::update(project, &record.id, |t| {
+        t.brief_claimed.clear();
+        match &result {
+            Ok(()) => t.prompt_pending = false,
+            Err(BriefFailure::Stalled(_)) => t.brief_attempts += 1,
+            Err(BriefFailure::Stop(_)) => t.brief_attempts = t.brief_attempts.max(thread::MAX_BRIEF_ATTEMPTS),
+            Err(BriefFailure::NotSent(_)) => {}
+        }
+    })?;
+    match result {
+        Ok(()) => Ok(true),
+        Err(BriefFailure::Stalled(error)) => bail!("the agent did not start on its brief ({error}); a startup screen may have swallowed it: `thread read` shows the pane"),
+        Err(BriefFailure::Stop(why)) => bail!("not typing the brief again: {why}; `thread read` shows the pane"),
+        Err(BriefFailure::NotSent(error)) => bail!("{error}"),
     }
-    Ok(true)
+}
+
+/// Why a brief was not delivered, which decides what happens next.
+enum BriefFailure {
+    /// Typed or submitted, but the agent was not seen to take it: counted.
+    Stalled(crate::herdr::HerdrError),
+    /// Another copy could land in text left in the box: the ticker stops.
+    Stop(String),
+    /// Nothing reached the pane: sent again later as before.
+    NotSent(crate::herdr::HerdrError),
+}
+
+/// Types the brief, or, when an earlier send may have left something in the
+/// pane (`again`), looks at the input box first. The first copy still sitting
+/// there unsent is submitted with Enter instead of typed twice; one the
+/// screen shows was sent counts as delivered; other text, or a box this
+/// binary cannot read, stops the typing.
+fn deliver_brief(herdr: &Herdr, record: &Thread, prompt: &str, again: bool) -> Result<(), BriefFailure> {
+    let taken = |result: Result<(), crate::herdr::HerdrError>| {
+        result.map_err(|error| if matches!(error.code.as_str(), "agent_prompt_stalled" | "timeout") { BriefFailure::Stalled(error) } else { BriefFailure::NotSent(error) })
+    };
+    if again {
+        let screen = herdr.agent_screen(&record.pane_id).map_err(BriefFailure::NotSent)?;
+        let wanted = crate::prompt_box::compact(prompt);
+        match crate::prompt_box::draft_text(&record.agent, &screen) {
+            None => return Err(BriefFailure::Stop("its input box cannot be read, so the first copy may still be in it".into())),
+            Some(draft) if draft == wanted => {
+                herdr.agent_send_keys(&record.pane_id, &["enter".to_string()]).map_err(BriefFailure::NotSent)?;
+                return taken(herdr.agent_wait_taken(&record.pane_id));
+            }
+            Some(draft) if !draft.is_empty() => return Err(BriefFailure::Stop("its input box holds other text".into())),
+            Some(_) if crate::prompt_box::screen_text(&screen).contains(&wanted) => return Ok(()),
+            Some(_) => {}
+        }
+    }
+    taken(herdr.agent_prompt_taken(&record.pane_id, prompt))
 }
 
 /// The state a follow-up may be sent in, or the refusal.

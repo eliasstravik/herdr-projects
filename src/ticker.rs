@@ -377,8 +377,8 @@ pub fn brief_pass(ctx: &Ctx, log: &Log) -> bool {
 }
 
 /// The ticker's send of a pending brief. A brief the agent did not take is
-/// typed again once; after that the coordinator hears of it, since another
-/// try would only type into the same screen.
+/// tried again once; after that, or when the pane's box cannot be trusted to
+/// take a second copy, the coordinator hears of it.
 fn deliver_brief(project: &Project, herdr: &Herdr, t: &thread::Thread) -> Result<bool> {
     let error = match crate::threads::send_brief(project, herdr, t) {
         Ok(sent) => return Ok(sent),
@@ -386,9 +386,8 @@ fn deliver_brief(project: &Project, herdr: &Herdr, t: &thread::Thread) -> Result
     };
     if thread::load(project, &t.id).is_ok_and(|r| r.prompt_pending && r.brief_attempts >= thread::MAX_BRIEF_ATTEMPTS) {
         let summary = format!(
-            "{}: the agent did not take its brief after {} tries; `thread read` shows the pane, `thread keys` answers a dialog, then `thread brief` sends it",
-            t.id,
-            thread::MAX_BRIEF_ATTEMPTS
+            "{}: the agent did not take its brief ({error:#}); `thread read` shows the pane, `thread keys` answers a dialog or clears the box, then `thread brief` sends it",
+            t.id
         );
         inbox::write(project, "thread-state", &t.id, "brief not taken", &summary, "")?;
     }
