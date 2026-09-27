@@ -463,7 +463,7 @@ pub fn pull_requests(ctx: &Ctx, project: &Project, state: &mut State, memory: &m
             continue;
         }
 
-        let json = match pr::view(ctx.runner, &url) {
+        let json = match pr::view(ctx.runner, &url, &t.origin) {
             Ok(json) => {
                 gh_worked(project, memory, now, &mut errors);
                 json
@@ -494,7 +494,7 @@ pub fn pull_requests(ctx: &Ctx, project: &Project, state: &mut State, memory: &m
                 let change = pr::describe_change(old.as_ref(), &summary);
                 let merged = summary.state == "MERGED";
                 if memory.gh_login.is_none() {
-                    memory.gh_login = pr::own_login(ctx.runner);
+                    memory.gh_login = pr::own_login(ctx.runner, &t.origin);
                 }
                 let events = pr_events(old.as_ref(), &summary, memory.gh_login.as_deref());
                 errors.extend(inbox::write(project, "pr", &t.id, pr_event(&events, &summary), &format!("{}: pull request {change}", thread_label(&t)), "").err());
@@ -610,7 +610,7 @@ fn other_pr_open(ctx: &Ctx, project: &Project, t: &Thread) -> bool {
     let report = std::fs::read_to_string(thread::home_report_path(project, &t.id)).unwrap_or_default();
     pr::report_refs(&report, &t.origin, &t.pr)
         .iter()
-        .any(|(repo, named)| pr::open_own_numbers(ctx.runner, repo).map_or(true, |open| !open.is_disjoint(named)))
+        .any(|(repo, named)| pr::open_own_numbers(ctx.runner, repo, &pr::host_of(&t.origin)).map_or(true, |open| !open.is_disjoint(named)))
 }
 
 /// Auto-resolve and resolve-on-merge: the final copy first; if it fails the

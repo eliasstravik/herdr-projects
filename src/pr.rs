@@ -50,13 +50,34 @@ pub fn valid_pr_url(url: &str) -> bool {
         && parts[3].chars().all(|c| c.is_ascii_digit())
 }
 
-/// `owner/repo`, lower-cased, from the three URL forms git uses for GitHub.
-pub fn normalize_origin(origin: &str) -> Option<String> {
+/// A GitHub repository named by a git remote URL: the host `gh` must talk to
+/// and `owner/repo`, both lower-cased.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Remote {
+    pub host: String,
+    pub repo: String,
+}
+
+/// The remote URL forms git uses for GitHub: `https://`, `http://`, `ssh://`
+/// and `git@host:`. Only hosts with a `github` label count (`github.com`,
+/// exe.dev's `github.localhost`, `github.example.com`), so a GitLab origin
+/// never sends `gh` anywhere.
+pub fn parse_remote(origin: &str) -> Option<Remote> {
     let origin = origin.trim();
-    let rest = origin
-        .strip_prefix("https://github.com/")
-        .or_else(|| origin.strip_prefix("git@github.com:"))
-        .or_else(|| origin.strip_prefix("ssh://git@github.com/"))?;
+    let (host, rest) = if let Some(rest) = origin.strip_prefix("https://").or_else(|| origin.strip_prefix("http://")) {
+        let (authority, path) = rest.split_once('/')?;
+        (authority.rsplit('@').next()?, path)
+    } else if let Some(rest) = origin.strip_prefix("ssh://") {
+        let (authority, path) = rest.split_once('/')?;
+        (authority.rsplit('@').next()?.split(':').next()?, path)
+    } else {
+        let (authority, path) = origin.split_once(':')?;
+        (authority.split_once('@')?.1, path)
+    };
+    let host = host.to_lowercase();
+    if !host.split(['.', ':']).any(|label| label == "github") {
+        return None;
+    }
     let rest = rest.trim_end_matches('/');
     let rest = rest.strip_suffix(".git").unwrap_or(rest).trim_end_matches('/');
     let mut parts = rest.split('/');
@@ -64,7 +85,25 @@ pub fn normalize_origin(origin: &str) -> Option<String> {
     if owner.is_empty() || repo.is_empty() || parts.next().is_some() {
         return None;
     }
-    Some(format!("{owner}/{repo}").to_lowercase())
+    Some(Remote { host, repo: format!("{owner}/{repo}").to_lowercase() })
+}
+
+/// `owner/repo`, lower-cased, of a GitHub remote URL.
+pub fn normalize_origin(origin: &str) -> Option<String> {
+    parse_remote(origin).map(|r| r.repo)
+}
+
+/// The GitHub host of a remote URL; `github.com` when it names none.
+pub fn host_of(origin: &str) -> String {
+    parse_remote(origin).map(|r| r.host).unwrap_or_else(|| "github.com".into())
+}
+
+/// `gh` for a repository on `host`. Off `github.com` (exe.dev VMs reach
+/// GitHub only through `github.localhost`) `GH_HOST` is set for this call
+/// alone; on `github.com` nothing is set.
+pub fn gh(host: &str) -> Cmd {
+    let cmd = Cmd::new("gh", GH_TIMEOUT);
+    if host.is_empty() || host == "github.com" { cmd } else { cmd.env("GH_HOST", host) }
 }
 
 /// Check names and logins are attacker-chosen: cut to 80 characters and
@@ -199,24 +238,30 @@ pub fn reduce(json: &str, branch: &str, origin: &str) -> Result<Checked> {
     }))
 }
 
-/// The login `gh` acts as: comments by it are the threads' own replies.
-pub fn own_login(runner: &dyn Runner) -> Option<String> {
-    let out = runner.run(&Cmd::new("gh", GH_TIMEOUT).args(["api", "user", "--jq", ".login"])).ok()?;
+/// The login `gh` acts as on `origin`'s host: comments by it are the threads'
+/// own replies.
+pub fn own_login(runner: &dyn Runner, origin: &str) -> Option<String> {
+    let out = runner.run(&gh(&host_of(origin)).args(["api", "user", "--jq", ".login"])).ok()?;
     out.success().then(|| sanitize(out.stdout.trim())).filter(|l| !l.is_empty())
 }
 
-pub fn view(runner: &dyn Runner, url: &str) -> Result<String> {
+/// `gh pr view` of a pull request URL, asked through `origin`'s host. `gh`
+/// sends a URL to the URL's own host, so off `github.com` the pull request
+/// goes by number and `--repo` instead.
+pub fn view(runner: &dyn Runner, url: &str, origin: &str) -> Result<String> {
     if !valid_pr_url(url) {
         bail!("not a pull request URL");
     }
-    let out = runner.run(&Cmd::new("gh", GH_TIMEOUT).args([
-        "pr",
-        "view",
-        "--json",
-        "state,reviewDecision,statusCheckRollup,comments,reviews,headRefName,headRefOid,headRepository,headRepositoryOwner",
-        "--",
-        url,
-    ]))?;
+    const FIELDS: &str = "state,reviewDecision,statusCheckRollup,comments,reviews,headRefName,headRefOid,headRepository,headRepositoryOwner";
+    let host = host_of(origin);
+    let cmd = if host == "github.com" {
+        gh(&host).args(["pr", "view", "--json", FIELDS, "--", url])
+    } else {
+        let parts: Vec<&str> = url.trim_start_matches("https://github.com/").split('/').collect();
+        let repo = format!("{}/{}", parts[0], parts[1]);
+        gh(&host).args(["pr", "view", "--json", FIELDS, "--repo", &repo, "--", parts[3]])
+    };
+    let out = runner.run(&cmd)?;
     if !out.success() {
         bail!("gh pr view: {}", out.error_text());
     }
@@ -238,13 +283,13 @@ struct GhListed {
 /// without asking when `origin` is not on GitHub. A fork's pull request lives
 /// upstream and is found only through the report's `PR:` line.
 pub fn find_by_branch(runner: &dyn Runner, origin: &str, branch: &str) -> Result<Option<String>> {
-    let Some(repo) = normalize_origin(origin) else {
+    let Some(Remote { host, repo }) = parse_remote(origin) else {
         return Ok(None);
     };
     if branch.is_empty() {
         return Ok(None);
     }
-    let out = runner.run(&Cmd::new("gh", GH_TIMEOUT).args([
+    let out = runner.run(&gh(&host).args([
         "pr",
         "list",
         "--repo",
@@ -331,13 +376,13 @@ pub fn report_refs(report: &str, origin: &str, except: &str) -> std::collections
 }
 
 /// Numbers of the open pull requests in `repo` (`owner/repo`) that the `gh`
-/// user opened. One `gh` call.
-pub fn open_own_numbers(runner: &dyn Runner, repo: &str) -> Result<std::collections::BTreeSet<u32>> {
+/// user opened, asked through `host`. One `gh` call.
+pub fn open_own_numbers(runner: &dyn Runner, repo: &str, host: &str) -> Result<std::collections::BTreeSet<u32>> {
     #[derive(Deserialize)]
     struct Listed {
         number: u32,
     }
-    let out = runner.run(&Cmd::new("gh", GH_TIMEOUT).args(["pr", "list", "--repo", repo, "--state", "open", "--author", "@me", "--limit", "100", "--json", "number"]))?;
+    let out = runner.run(&gh(host).args(["pr", "list", "--repo", repo, "--state", "open", "--author", "@me", "--limit", "100", "--json", "number"]))?;
     if !out.success() {
         bail!("gh pr list: {}", out.error_text());
     }
@@ -394,6 +439,41 @@ mod tests {
         for bad in ["", "https://gitlab.com/o/r", "git@github.com:o", "https://github.com/o/r/extra"] {
             assert_eq!(normalize_origin(bad), None, "{bad}");
         }
+    }
+
+    #[test]
+    fn remotes_name_their_github_host() {
+        let remote = |host: &str| Some(Remote { host: host.into(), repo: "owner/repo".into() });
+        assert_eq!(parse_remote("http://github.localhost/Owner/Repo.git"), remote("github.localhost"));
+        assert_eq!(parse_remote("https://token@GitHub.example.com/Owner/Repo"), remote("github.example.com"));
+        assert_eq!(parse_remote("ssh://git@github.example.com:2222/Owner/Repo.git"), remote("github.example.com"));
+        assert_eq!(parse_remote("git@github.example.com:Owner/Repo.git"), remote("github.example.com"));
+        assert_eq!(parse_remote("git@github.com:Owner/Repo.git"), remote("github.com"));
+        for other in ["https://gitlab.com/o/r", "git@bitbucket.org:o/r.git", "/srv/git/r.git", "../r"] {
+            assert_eq!(parse_remote(other), None, "{other}");
+        }
+        assert_eq!(host_of("git@github.com:o/r.git"), "github.com");
+        assert_eq!(host_of(""), "github.com");
+        assert!(gh("github.com").env.is_empty(), "github.com gets no GH_HOST, as before");
+        assert_eq!(gh("github.localhost").env, [("GH_HOST".to_string(), "github.localhost".to_string())]);
+    }
+
+    #[test]
+    fn off_github_com_gh_is_pointed_at_the_origin_host() {
+        use crate::runner::fake::{FakeRunner, ok};
+        let runner = FakeRunner::new();
+        runner.on("gh", ok("[]"));
+        let origin = "http://github.localhost/o/r.git";
+        view(&runner, "https://github.com/up/r/pull/7", origin).unwrap();
+        find_by_branch(&runner, origin, "b").unwrap();
+        open_own_numbers(&runner, "o/r", &host_of(origin)).unwrap();
+        own_login(&runner, origin);
+        let calls = runner.calls.borrow();
+        assert_eq!(calls.len(), 4);
+        for call in calls.iter() {
+            assert_eq!(call.env, [("GH_HOST".to_string(), "github.localhost".to_string())], "{}", call.display());
+        }
+        assert!(calls[0].display().ends_with("--repo up/r -- 7"), "the URL would send gh to github.com: {}", calls[0].display());
     }
 
     const VIEW: &str = r#"{
@@ -472,10 +552,10 @@ mod tests {
         use crate::runner::fake::{FakeRunner, ok};
         let runner = FakeRunner::new();
         runner.on("gh pr view", ok("{}"));
-        view(&runner, "https://github.com/o/r/pull/7").unwrap();
+        view(&runner, "https://github.com/o/r/pull/7", "git@github.com:o/r.git").unwrap();
         let calls = runner.calls.borrow();
         let args = &calls[0].args;
         assert_eq!(&args[args.len() - 2..], ["--", "https://github.com/o/r/pull/7"]);
-        assert!(view(&runner, "--web").is_err());
+        assert!(view(&runner, "--web", "").is_err());
     }
 }

@@ -1282,6 +1282,36 @@ fn resolving_a_thread_with_an_unlinked_merged_pull_request_deletes_its_branch() 
     }
 }
 
+/// On an exe.dev VM `origin` is `http://github.localhost/...` and plain `gh`
+/// is logged in nowhere: every `gh` call carries `GH_HOST=github.localhost`,
+/// and the pull request (a github.com URL) is asked for by number.
+#[test]
+fn off_github_com_every_gh_call_goes_to_the_origin_host() {
+    for pr_line in [true, false] {
+        let (world, project) = merged_world("done");
+        thread::update(&project, "t-0001", |t| t.origin = "http://github.localhost/Owner/App.git".into()).unwrap();
+        let report = if pr_line { format!("PR: {PR_URL}\n## Report\nmerged\n") } else { "## Report\nmerged\n".to_string() };
+        std::fs::write(thread::home_report_path(&project, "t-0001"), report).unwrap();
+        world.runner.on_fn(
+            |cmd| cmd.display().contains("gh pr list --repo owner/app --head=hp/demo/t-0001-task") && cmd.env.contains(&("GH_HOST".into(), "github.localhost".into())),
+            |_| Ok(ok(MERGED_LIST)),
+        );
+        let ctx = world.ctx();
+        threads::resolve(&ctx, "demo", "t-0001", &ResolveArgs::default()).unwrap();
+        let t = thread::load(&project, "t-0001").unwrap();
+        assert_eq!((t.status, t.pr.as_str(), t.pr_state.as_str()), (Status::Resolved, PR_URL, "MERGED"), "pr_line={pr_line}");
+        assert_eq!(world.runner.count("branch -D hp/demo/t-0001-task"), 1, "pr_line={pr_line}");
+        let calls = world.runner.calls.borrow();
+        let gh: Vec<&Cmd> = calls.iter().filter(|c| c.program == "gh").collect();
+        assert!(!gh.is_empty());
+        for call in &gh {
+            assert!(call.env.contains(&("GH_HOST".into(), "github.localhost".into())), "{}", call.display());
+        }
+        let view = gh.iter().find(|c| c.display().starts_with("gh pr view")).unwrap();
+        assert!(view.display().ends_with("--repo owner/app -- 7"), "{}", view.display());
+    }
+}
+
 #[test]
 fn a_pull_request_from_another_branch_or_repository_is_ignored_with_one_item() {
     let (world, project) = pr_world(r#"{"state":"MERGED","headRefName":"someone-elses-branch","headRepository":{"name":"app"},"headRepositoryOwner":{"login":"owner"}}"#);

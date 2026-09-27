@@ -13,6 +13,27 @@ use crate::runner::{Cmd, Runner};
 
 const TOOL_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// GitHub hosts of the `origin` remotes of this directory's repository and
+/// of each project's local repositories, with one `owner/repo` on each.
+fn github_hosts(root: &Path, runner: &dyn Runner) -> std::collections::BTreeMap<String, String> {
+    let mut dirs: Vec<String> = std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).into_iter().collect();
+    for slug in project::list_slugs(root) {
+        if let Ok((settings, _)) = project::Project::load(root, &slug).and_then(|p| p.read_project_md()) {
+            dirs.extend(settings.repos.into_iter().filter(|r| r.machine.is_none()).map(|r| r.path));
+        }
+    }
+    let mut hosts = std::collections::BTreeMap::new();
+    for dir in dirs {
+        let Ok(out) = runner.run(&Cmd::new("git", TOOL_TIMEOUT).args(["-C", &dir, "remote", "get-url", "origin"])) else {
+            continue;
+        };
+        if let Some(remote) = out.success().then(|| crate::pr::parse_remote(&out.stdout)).flatten() {
+            hosts.entry(remote.host).or_insert(remote.repo);
+        }
+    }
+    hosts
+}
+
 /// Prints the report and returns whether every required check passed. With
 /// `fix`, repairs what the binary owns: the `herdr-projects` link on `PATH`, priming files, `uploads/`, the
 /// absolute binary path they carry, and the skill link for a configured harness. Never edits another plugin's entries.
@@ -124,18 +145,41 @@ fn report(
             Err(error) => check(&mut out, required.then_some(false), tool, format!("{error:#}")),
         }
     }
-    match runner.run(&Cmd::new("gh", TOOL_TIMEOUT).args(["auth", "status"])) {
-        Ok(o) if o.success() => check(&mut out, Some(true), "gh auth", "logged in".into()),
-        Ok(o) => check(
-            &mut out,
-            None,
-            "gh auth",
-            format!(
-                "{}; pull request follow-up will not work",
-                o.error_text().lines().next().unwrap_or("not logged in")
+    // `gh` per GitHub host the repositories use: the one in this directory
+    // and each project's local ones. Off `github.com` the check runs as the
+    // pull request follow-up does, with `GH_HOST` set.
+    let hosts = github_hosts(root, runner);
+    if hosts.is_empty() || hosts.contains_key("github.com") {
+        match runner.run(&Cmd::new("gh", TOOL_TIMEOUT).args(["auth", "status"])) {
+            Ok(o) if o.success() => check(&mut out, Some(true), "gh auth", "logged in".into()),
+            Ok(o) => check(
+                &mut out,
+                None,
+                "gh auth",
+                format!(
+                    "{}; pull request follow-up will not work",
+                    o.error_text().lines().next().unwrap_or("not logged in")
+                ),
             ),
-        ),
-        Err(_) => check(&mut out, None, "gh auth", "gh is not installed".into()),
+            Err(_) => check(&mut out, None, "gh auth", "gh is not installed".into()),
+        }
+    }
+    for (host, repo) in hosts.iter().filter(|(host, _)| host.as_str() != "github.com") {
+        let label = format!("github {host}");
+        let result = runner.run(&crate::pr::gh(host).args(["api", "user", "--jq", ".login"]));
+        match result {
+            Ok(o) if o.success() => check(&mut out, Some(true), &label, format!("reachable as {} (GH_HOST={host}, used for {repo})", crate::pr::sanitize(o.stdout.trim()))),
+            Ok(o) => check(
+                &mut out,
+                None,
+                &label,
+                format!(
+                    "gh cannot reach {host} ({}); pull requests of {repo} are not followed. Try `GH_HOST={host} gh auth status`",
+                    o.error_text().lines().next().unwrap_or("failed")
+                ),
+            ),
+            Err(error) => check(&mut out, None, &label, format!("gh cannot reach {host} ({error:#}); pull requests of {repo} are not followed")),
+        }
     }
 
     if root.is_dir() {
@@ -508,6 +552,38 @@ mod tests {
         assert!(project.dir().join("uploads").is_dir());
         let (text, _) = report(&env, &root, &home.path().join("cfg"), &flags, &runner, false, None);
         assert!(text.contains("[ok  ] files demo: AGENTS.md, CLAUDE.md link and uploads/ are in place"), "{text}");
+    }
+
+    /// exe.dev VMs: `origin` is on `github.localhost` and plain `gh` is logged
+    /// in nowhere. Doctor asks that host, not `gh auth status`.
+    #[test]
+    fn a_repository_off_github_com_is_checked_on_its_own_host() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let root = home.path().join("root");
+        let repo = home.path().join("app");
+        std::fs::create_dir_all(&repo).unwrap();
+        project::create(&root, "demo", "", vec![project::Repo { path: repo.to_string_lossy().into_owned(), machine: None }]).unwrap();
+        let on_host = |cmd: &Cmd| cmd.program == "gh" && cmd.env.contains(&("GH_HOST".into(), "github.localhost".into()));
+        for reachable in [true, false] {
+            let runner = FakeRunner::new();
+            runner.on_fn(|cmd| cmd.display().ends_with("/app remote get-url origin"), |_| Ok(ok("http://github.localhost/eliasstravik/app.git\n")));
+            if reachable {
+                runner.on_fn(on_host, |_| Ok(ok("eliasstravik\n")));
+            }
+            runner.on("gh api user", fail(1, "HTTP 401: Requires authentication"));
+            for (needle, output) in [("herdr --version", "herdr 0.9.1\n"), ("git --version", "git 2\n"), ("gh --version", "gh 2\n")] {
+                runner.on(needle, ok(output));
+            }
+            let (text, _) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner, false, None);
+            if reachable {
+                assert!(text.contains("[ok  ] github github.localhost: reachable as eliasstravik (GH_HOST=github.localhost, used for eliasstravik/app)"), "{text}");
+            } else {
+                assert!(text.contains("[warn] github github.localhost: gh cannot reach github.localhost (HTTP 401: Requires authentication); pull requests of eliasstravik/app are not followed. Try `GH_HOST=github.localhost gh auth status`"), "{text}");
+            }
+            assert!(!text.contains("] gh auth:"), "github.com is not in use: {text}");
+            assert_eq!(runner.count("gh auth status"), 0);
+        }
     }
 
     #[test]

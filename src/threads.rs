@@ -884,7 +884,7 @@ fn last_pr_lookup(ctx: &Ctx, project: &Project, t: &Thread) -> Option<crate::pr:
         _ if !t.pr.is_empty() => t.pr.clone(),
         _ => pr::find_by_branch(ctx.runner, &t.origin, &t.branch).ok()??,
     };
-    let json = pr::view(ctx.runner, &url).ok()?;
+    let json = pr::view(ctx.runner, &url, &t.origin).ok()?;
     let pr::Checked::Summary(summary) = pr::reduce(&json, &t.branch, &t.origin).ok()? else {
         return None;
     };
