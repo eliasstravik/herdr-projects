@@ -215,6 +215,17 @@ fn input_box(kind: &str, lines: &[Line]) -> Option<Vec<Line>> {
     }
 }
 
+/// Trust/hook decisions belong to the user, even if a detector reports idle
+/// or a stale empty input box remains visible above the dialog.
+pub fn trust_dialog(screen: &str) -> bool {
+    let plain = parse(screen).iter().map(|line| text(line)).collect::<Vec<_>>().join("\n").to_lowercase();
+    ["do you trust", "trust this folder", "trust this directory", "trust the files", "trust the contents", "hooks need review", "trust all and continue", "trust and continue", "yes, i trust", "trust workspace"].iter().any(|marker| plain.contains(marker))
+}
+
+pub fn ready_for_brief(kind: &str, screen: &str) -> bool {
+    !trust_dialog(screen) && check(kind, screen) == Draft::Empty
+}
+
 /// Reads the input box of an agent of `kind` from its screen, as `agent read
 /// --source visible --format ansi` prints it.
 pub fn check(kind: &str, screen: &str) -> Draft {

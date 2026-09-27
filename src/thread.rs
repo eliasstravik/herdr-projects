@@ -61,6 +61,9 @@ pub struct Thread {
     pub status: Status,
     pub error: String,
     pub prompt_pending: bool,
+    /// Empty until a visible empty composer has been observed for this launch.
+    pub brief_ready_key: String,
+    pub brief_ready_since: String,
     pub launch_attempts: u32,
     pub kind: Kind,
     pub repo: String,

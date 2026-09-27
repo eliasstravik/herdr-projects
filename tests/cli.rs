@@ -76,3 +76,71 @@ fn ticker_start_without_projects_creates_nothing() {
     assert!(!home.path().join(".herdr-projects").exists());
     assert!(!home.path().join(".config").exists());
 }
+
+#[cfg(unix)]
+#[test]
+fn worker_startup_binary_holds_dialogs_and_concurrent_brief_claims_send_once() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Stdio;
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("root");
+    let root_arg = root.to_str().unwrap();
+    assert!(hp(home.path(), &["--root", root_arg, "new", "demo"]).status.success());
+    let project = root.join("demo");
+    let socket = home.path().join("fake.sock");
+    std::fs::write(&socket, "").unwrap();
+    std::fs::write(project.join(".state/coordinator.json"), serde_json::json!({"socket":socket}).to_string()).unwrap();
+    let record = project.join("threads/t-0001.toml");
+    std::fs::write(&record, format!("id = 't-0001'\nstatus = 'open'\nkind = 'tab'\nprompt_pending = true\nlaunch_attempts = 1\npane_id = 'fixture:p1'\nagent = 'codex'\nagent_name = 'hp-demo-t-0001'\ncwd = {}\n", serde_json::to_string(&project).unwrap())).unwrap();
+    let agent = serde_json::json!({"pane_id":"fixture:p1","tab_id":"fixture:t1","workspace_id":"fixture","terminal_id":"terminal-one","agent":"codex","agent_status":"idle","state_change_seq":1,"name":"hp-demo-t-0001","cwd":project});
+    std::fs::write(home.path().join("agents.json"), serde_json::json!({"result":{"agents":[agent]}}).to_string()).unwrap();
+    let fake = home.path().join("fake-herdr");
+    std::fs::write(&fake, r#"#!/bin/sh
+set -eu
+case "$1 $2" in
+  'agent list') cat "$HOME/agents.json" ;;
+  'pane list') printf '%s\n' '{"result":{"panes":[]}}' ;;
+  'agent read') cat "$HOME/screen" ;;
+  'agent prompt') printf '%s\n' prompt >> "$HOME/writes"; printf '%s\n' '{"result":{}}' ;;
+  'agent send-keys'|'pane send-text') printf '%s\n' keys >> "$HOME/writes"; printf '%s\n' '{"result":{}}' ;;
+  *) exit 92 ;;
+esac
+"#).unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let binary = std::env::var("HERDR_PROJECTS_TEST_BINARY").unwrap_or_else(|_| BIN.to_string());
+    let command = |verb: &str| {
+        let mut c = Command::new(&binary);
+        c.env_clear().env("HOME", home.path()).env("PATH", "/usr/bin:/bin").env("HERDR_BIN_PATH", &fake)
+            .args(["--root", root_arg, "thread", verb, "demo", "t-0001"]);
+        c
+    };
+    let screen = home.path().join("screen");
+    for frame in ["Installing Codex daemon...\n", "› \nDo you trust the contents of this directory?\n1. Yes, continue\n", "› \nHooks need review\n2. Trust all and continue\n"] {
+        std::fs::write(&screen, frame).unwrap();
+        let out = command("brief").output().unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        assert!(!home.path().join("writes").exists());
+        let t: toml::Value = toml::from_str(&std::fs::read_to_string(&record).unwrap()).unwrap();
+        assert_eq!(t["prompt_pending"].as_bool(), Some(true));
+    }
+    let keys = command("keys").args(["enter", "--text", "must not reach the dialog"]).output().unwrap();
+    assert!(!keys.status.success());
+    assert!(String::from_utf8_lossy(&keys.stderr).contains("requires the user"));
+    assert!(!home.path().join("writes").exists());
+    std::fs::write(&screen, "› \x1b[2mImplement a feature\x1b[0m\n").unwrap();
+    assert!(command("brief").output().unwrap().status.success());
+    assert!(!home.path().join("writes").exists());
+    let mut t: toml::Value = toml::from_str(&std::fs::read_to_string(&record).unwrap()).unwrap();
+    assert!(!t["brief_ready_key"].as_str().unwrap().is_empty());
+    t["brief_ready_since"] = toml::Value::String(jiff::Timestamp::from_second(jiff::Timestamp::now().as_second() - 4).unwrap().to_string());
+    std::fs::write(&record, toml::to_string(&t).unwrap()).unwrap();
+    let one = command("brief").stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let two = command("brief").stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    for child in [one, two] {
+        let out = child.wait_with_output().unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    }
+    assert_eq!(std::fs::read_to_string(home.path().join("writes")).unwrap(), "prompt\n");
+    let t: toml::Value = toml::from_str(&std::fs::read_to_string(&record).unwrap()).unwrap();
+    assert_eq!(t["prompt_pending"].as_bool(), Some(false));
+}

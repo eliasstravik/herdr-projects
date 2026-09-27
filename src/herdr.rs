@@ -217,7 +217,8 @@ pub struct Agent {
 }
 
 impl Agent {
-    /// The one "ready for a prompt" predicate: state `idle` or `done`.
+    /// A prompt-capable state label. Initial briefs also require a settled,
+    /// visible empty input box; a startup screen can be mislabeled idle.
     pub fn ready(&self) -> bool {
         ready_state(&self.agent_status)
     }

@@ -130,12 +130,20 @@ pub fn pane_json(workspace: &str, tab: &str, pane: &str, cwd: &str) -> String {
 
 pub fn agent_json(workspace: &str, tab: &str, pane: &str, cwd: &str, name: &str, state: &str) -> String {
     format!(
-        r#"{{"pane_id":"{pane}","tab_id":"{tab}","workspace_id":"{workspace}","cwd":"{cwd}","name":"{name}","agent":"claude","agent_status":"{state}"}}"#
+        r#"{{"pane_id":"{pane}","tab_id":"{tab}","workspace_id":"{workspace}","cwd":"{cwd}","name":"{name}","agent":"claude","agent_status":"{state}","terminal_id":"terminal-{pane}"}}"#
     )
 }
 
 fn socket_of(cmd: &Cmd) -> String {
     cmd.env.iter().find(|(k, _)| k == "HERDR_SOCKET_PATH").map(|(_, v)| v.clone()).unwrap_or_default()
+}
+
+/// Advance only the persisted settle clock; observations still use real gates.
+pub fn settle_brief(project: &Project, id: &str) {
+    thread::update(project, id, |t| {
+        assert!(!t.brief_ready_key.is_empty(), "an empty composer must first be observed");
+        t.brief_ready_since = jiff::Timestamp::from_second(jiff::Timestamp::now().as_second() - 4).unwrap().to_string();
+    }).unwrap();
 }
 
 #[test]
@@ -210,8 +218,11 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
     assert!(start.args.ends_with(&["--".to_string(), "--model".to_string(), "opus".to_string()]), "{}", start.display());
     drop(calls);
 
-    // Tick 2: the agent is ready: prompt once, no second start.
+    // Tick 2: observe readiness; send only on a later settled observation.
     *world.agents.borrow_mut() = format!("[{}]", agent_json("w2", "w2:t1", "w2:p1", &wt, "hp-demo-t-0001", "idle"));
+    assert!(ticker::tick_project(&ctx, &project).unwrap());
+    assert_eq!(world.runner.count("agent prompt"), 0);
+    settle_brief(&project, "t-0001");
     assert!(ticker::tick_project(&ctx, &project).unwrap());
     assert_eq!(world.runner.count("agent start"), 1);
     assert_eq!(world.runner.count("agent prompt"), 1);
@@ -294,11 +305,14 @@ fn two_projects_in_two_sockets_sharing_a_pane_id_do_not_mix() {
     );
     world2.runner.on("agent list", ok(r#"{"result":{"agents":[]}}"#));
     world2.runner.on("pane list", ok(r#"{"result":{"panes":[]}}"#));
+    world2.runner.on("agent read", ok(&claude_screen(None)));
     world2.runner.on("agent prompt", ok(r#"{"result":{}}"#));
     world2.runner.on("report-metadata", ok(r#"{"result":{}}"#));
 
     let ctx = world2.ctx();
     ticker::tick_project(&ctx, &a).unwrap();
+    ticker::tick_project(&ctx, &b).unwrap();
+    settle_brief(&b, "t-0001");
     ticker::tick_project(&ctx, &b).unwrap();
     let calls = world2.runner.calls.borrow();
     let prompts: Vec<_> = calls.iter().filter(|c| c.display().contains("agent prompt")).collect();
@@ -933,7 +947,7 @@ fn a_thread_that_needs_you_gives_one_specific_notification_with_sound_unless_mut
         assert_eq!(&shown[0].args[2..], ["Demo · t-0001", "--body", "needs you · blocked", "--sound", "request"]);
         // The coordinator's item says how to answer the screen itself.
         let items = items_of(&project, "thread-state");
-        assert!(items[0].summary.contains("`thread read demo t-0001` shows it, `thread keys demo t-0001` answers it"), "{}", items[0].summary);
+        assert!(items[0].summary.contains("`thread read demo t-0001` shows it, trust and hooks review require the user in the pane"), "{}", items[0].summary);
         // The batched "N new inbox items" notification is gone.
         assert!(!calls.iter().any(|c| c.display().contains("new inbox item")));
     }
@@ -1828,6 +1842,9 @@ fn a_tab_thread_with_a_repo_gets_its_brief_seconds_after_its_agent_is_ready() {
 
     // Ready at an empty prompt: the brief goes now, once, not a tick later.
     *world.agents.borrow_mut() = format!("[{}]", agent_json("w1", "w1:t2", "w1:p2", &cwd, "hp-demo-t-0001", "idle"));
+    assert!(ticker::brief_pass_for_test(&ctx));
+    assert_eq!(world.runner.count("agent prompt"), 0);
+    settle_brief(&project, "t-0001");
     assert!(!ticker::brief_pass_for_test(&ctx));
     assert_eq!(world.runner.count("agent prompt"), 1);
     let calls = world.runner.calls.borrow();
@@ -2364,7 +2381,7 @@ fn thread_brief_delivers_a_pending_brief_once_and_only_to_a_ready_agent() {
     thread::update(&project, &t.id, |t| t.prompt_pending = true).unwrap();
     let ctx = world.ctx();
     let blocked = threads::brief(&ctx, "demo", "t-0001").unwrap_err().to_string();
-    assert!(blocked.contains("`thread keys` answers it"), "{blocked}");
+    assert!(blocked.contains("the user handles trust or hooks review"), "{blocked}");
     set_agents(&world, &project, "working");
     assert!(threads::brief(&ctx, "demo", "t-0001").unwrap_err().to_string().contains("not ready"));
     // The prompt refusal and the restart refusal both point at it.
@@ -2372,6 +2389,9 @@ fn thread_brief_delivers_a_pending_brief_once_and_only_to_a_ready_agent() {
     assert_eq!(world.runner.count("agent prompt"), 0);
 
     set_agents(&world, &project, "idle");
+    threads::brief(&ctx, "demo", "t-0001").unwrap();
+    assert!(thread::load(&project, "t-0001").unwrap().prompt_pending);
+    settle_brief(&project, "t-0001");
     threads::brief(&ctx, "demo", "t-0001").unwrap();
     assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
     {
@@ -2383,4 +2403,127 @@ fn thread_brief_delivers_a_pending_brief_once_and_only_to_a_ready_agent() {
     threads::brief(&ctx, "demo", "t-0001").unwrap();
     ticker::tick_project(&ctx, &project).unwrap();
     assert_eq!(world.runner.count("agent prompt"), 1);
+}
+
+// Worker startup regression: synthetic screens and fake Herdr only, no LLM.
+fn startup_world() -> (World, Project, Thread) {
+    let (world, project, _) = finished_world("idle");
+    let record = thread::update(&project, "t-0001", |t| {
+        t.agent = "codex".into();
+        t.prompt_pending = true;
+        t.launch_attempts = 1;
+    }).unwrap();
+    let agents = world.agents.borrow().replace("\"agent\":\"claude\"", "\"agent\":\"codex\"");
+    *world.agents.borrow_mut() = agents;
+    (world, project, record)
+}
+
+fn startup_send(world: &World, project: &Project, record: &Thread, seconds: i64) -> bool {
+    let socket = project.coordinator().unwrap().socket;
+    let herdr = crate::herdr::Herdr::new("herdr", &socket, &world.runner);
+    threads::send_brief_at(project, &herdr, record, jiff::Timestamp::from_second(1_800_000_000 + seconds).unwrap()).unwrap()
+}
+
+#[test]
+fn startup_loading_then_trust_then_stable_composer_never_answers_dialogs() {
+    let (world, project, record) = startup_world();
+    *world.screen.borrow_mut() = "Installing Codex daemon...\nConnecting...".into();
+    assert!(!startup_send(&world, &project, &record, 0));
+    assert!(!startup_send(&world, &project, &record, 10));
+    assert!(thread::load(&project, &record.id).unwrap().brief_ready_key.is_empty());
+    // A stale empty composer does not make a trust chooser safe.
+    for screen in ["› \nDo you trust the contents of this directory?\n1. Yes, continue", "› \nHooks need review\n2. Trust all and continue"] {
+        *world.screen.borrow_mut() = screen.into();
+        assert!(!startup_send(&world, &project, &record, 20));
+        let result = threads::keys(&world.ctx(), "demo", &record.id, &["enter".into()], Some("task"));
+        assert!(result.unwrap_err().to_string().contains("requires the user"));
+    }
+    assert_eq!(world.runner.count("agent prompt"), 0);
+    assert_eq!(world.runner.count("send-keys"), 0);
+    assert_eq!(world.runner.count("send-text"), 0);
+    *world.screen.borrow_mut() = "› \u{1b}[2mImplement a feature\u{1b}[0m\n".into();
+    assert!(!startup_send(&world, &project, &record, 30));
+    assert!(!startup_send(&world, &project, &record, 32));
+    assert!(startup_send(&world, &project, &record, 33));
+    assert!(!startup_send(&world, &project, &record, 40));
+    assert_eq!(world.runner.count("agent prompt"), 1);
+    assert!(!thread::load(&project, &record.id).unwrap().prompt_pending);
+}
+
+#[test]
+fn startup_drafts_unknown_blocked_closed_and_replaced_terminals_reset_settling() {
+    for interrupt in ["draft", "blocked", "unknown", "working", "closed", "replacement", "state-sequence"] {
+        let (world, project, record) = startup_world();
+        *world.screen.borrow_mut() = "› \n".into();
+        assert!(!startup_send(&world, &project, &record, 0));
+        let original = world.agents.borrow().clone();
+        match interrupt {
+            "draft" => *world.screen.borrow_mut() = "› my unfinished task\n".into(),
+            "closed" => *world.agents.borrow_mut() = "[]".into(),
+            "replacement" => *world.agents.borrow_mut() = original.replace("terminal-w2:p1", "replacement"),
+            "state-sequence" => *world.agents.borrow_mut() = original.replace("\"terminal_id\":", "\"state_change_seq\":9,\"terminal_id\":"),
+            state => *world.agents.borrow_mut() = original.replace("\"idle\"", &format!("\"{state}\"")),
+        }
+        assert!(!startup_send(&world, &project, &record, 4), "{interrupt}");
+        *world.screen.borrow_mut() = "› \n".into();
+        *world.agents.borrow_mut() = original;
+        assert!(!startup_send(&world, &project, &record, 5), "{interrupt}");
+        assert!(startup_send(&world, &project, &record, 8), "{interrupt}");
+        assert_eq!(world.runner.count("agent start"), 0);
+        assert_eq!(world.runner.count("agent prompt"), 1);
+    }
+}
+
+#[test]
+fn startup_expired_observation_and_new_launch_attempt_must_settle_again() {
+    let (world, project, record) = startup_world();
+    *world.screen.borrow_mut() = "› \n".into();
+    assert!(!startup_send(&world, &project, &record, 0));
+    assert!(!startup_send(&world, &project, &record, 100));
+    let new = thread::update(&project, &record.id, |t| {
+        t.launch_attempts += 1;
+        t.brief_ready_key.clear();
+        t.brief_ready_since.clear();
+    }).unwrap();
+    assert!(!startup_send(&world, &project, &record, 104)); // stale ticker record
+    assert!(!startup_send(&world, &project, &new, 104));
+    assert!(startup_send(&world, &project, &new, 107));
+}
+
+#[test]
+fn startup_final_screen_recheck_refuses_a_late_trust_dialog() {
+    let (mut world, project, record) = startup_world();
+    let agents = world.agents.borrow().clone();
+    let runner = FakeRunner::new();
+    runner.on("agent list", ok(&format!(r#"{{"result":{{"agents":{agents}}}}}"#)));
+    let reads = std::cell::Cell::new(0);
+    runner.on_fn(|c| c.display().contains("agent read"), move |_| {
+        let n = reads.get() + 1;
+        reads.set(n);
+        Ok(ok(if n >= 3 { "› \nHooks need review\nTrust all and continue" } else { "› \n" }))
+    });
+    runner.on("agent prompt", ok(r#"{"result":{}}"#));
+    world.runner = runner;
+    assert!(!startup_send(&world, &project, &record, 0));
+    assert!(!startup_send(&world, &project, &record, 4));
+    assert_eq!(world.runner.count("agent prompt"), 0);
+    assert!(thread::load(&project, &record.id).unwrap().prompt_pending);
+    assert!(thread::load(&project, &record.id).unwrap().brief_ready_key.is_empty());
+}
+
+#[test]
+fn startup_failed_screen_read_retains_brief_and_clears_readiness() {
+    let (mut world, project, record) = startup_world();
+    *world.screen.borrow_mut() = "› \n".into();
+    assert!(!startup_send(&world, &project, &record, 0));
+    let runner = FakeRunner::new();
+    runner.on("agent list", ok(&format!(r#"{{"result":{{"agents":{}}}}}"#, world.agents.borrow())));
+    runner.on("agent read", fail(1, "unavailable"));
+    world.runner = runner;
+    let socket = project.coordinator().unwrap().socket;
+    let herdr = crate::herdr::Herdr::new("herdr", &socket, &world.runner);
+    assert!(threads::send_brief(&project, &herdr, &record).is_err());
+    let saved = thread::load(&project, &record.id).unwrap();
+    assert!(saved.prompt_pending && saved.brief_ready_key.is_empty());
+    assert_eq!(world.runner.count("agent prompt"), 0);
 }

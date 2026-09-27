@@ -345,7 +345,6 @@ pub fn tick(ctx: &Ctx, log: &Log, memory: &mut Memory) -> bool {
 /// thread still waits for its brief.
 pub fn brief_pass(ctx: &Ctx, log: &Log) -> bool {
     let mut waiting = false;
-    let mut lists: std::collections::BTreeMap<String, Option<Vec<Agent>>> = Default::default();
     for slug in project::list_slugs(&ctx.root) {
         let Ok(project) = Project::load(&ctx.root, &slug) else {
             continue;
@@ -359,17 +358,14 @@ pub fn brief_pass(ctx: &Ctx, log: &Log) -> bool {
             continue;
         };
         let herdr = Herdr::new(ctx.env.herdr_bin(), &record.socket, ctx.runner);
-        let Some(agents) = lists.entry(record.socket.clone()).or_insert_with(|| herdr.agent_list().ok()) else {
-            continue;
-        };
         for t in &pending {
-            let ready = agents.iter().any(|a| thread::agent_matches(t, a) && crate::herdr::ready_state(&a.agent_status));
-            if !ready {
-                waiting = true;
-                continue;
-            }
-            if let Err(error) = crate::threads::send_brief(&project, &herdr, t) {
-                log.line(&format!("{slug}: {}: brief prompt: {error:#}", t.id));
+            match crate::threads::send_brief(&project, &herdr, t) {
+                Ok(true) => {}
+                Ok(false) => waiting |= thread::load(&project, &t.id).is_ok_and(|t| t.prompt_pending),
+                Err(error) => {
+                    waiting = true;
+                    log.line(&format!("{slug}: {}: brief prompt: {error:#}", t.id));
+                }
             }
         }
     }
@@ -631,11 +627,9 @@ fn thread_pass(project: &Project, herdr: &Herdr, socket: &str, threads: &[thread
         }
 
         let mut delivered = false;
-        // Re-read: `thread brief` may have delivered it since this pass began.
-        let still_pending = || thread::load(project, &t.id).map(|r| r.prompt_pending).unwrap_or(false);
-        if t.prompt_pending && live.agent_state.as_deref().is_some_and(crate::herdr::ready_state) && still_pending() {
-            match herdr.agent_prompt(&t.pane_id, &thread::launch_prompt(slug, &t.id)) {
-                Ok(()) => delivered = true,
+        if t.prompt_pending {
+            match crate::threads::send_brief(project, herdr, t) {
+                Ok(sent) => delivered = sent,
                 Err(error) => pass.error = pass.error.or(Some(anyhow::anyhow!("{}: brief prompt: {error}", t.id))),
             }
         }
@@ -664,9 +658,6 @@ fn thread_pass(project: &Project, herdr: &Herdr, socket: &str, threads: &[thread
         let self_changed = !t.is_remote() && (activity != t.activity || percent != t.percent);
         if delivered || state != t.last_state || group.token() != t.last_group || line != t.state_line || self_changed {
             thread::update(project, &t.id, |t| {
-                if delivered {
-                    t.prompt_pending = false;
-                }
                 if state != t.last_state {
                     t.last_state = state.clone();
                     t.last_state_change = project::now();
@@ -713,7 +704,11 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
         }
         *may_start = false;
         let launched = (|| -> Result<()> {
-            thread::update(project, &t.id, |t| t.launch_attempts += 1)?;
+            thread::update(project, &t.id, |t| {
+                t.launch_attempts += 1;
+                t.brief_ready_key.clear();
+                t.brief_ready_since.clear();
+            })?;
             let safety = project.safety(&ctx.config_dir)?;
             let config = crate::profiles::load(&ctx.config_dir)?;
             let (settings, _) = project.read_project_md()?;

@@ -347,6 +347,8 @@ fn finish_placement(project: &Project, view: &SessionView, id: &str) -> Result<T
     let thread = thread::update(project, id, |t| {
         t.agent_name = thread::agent_name(&project.slug, &t.id);
         t.prompt_pending = true;
+        t.brief_ready_key.clear();
+        t.brief_ready_since.clear();
         t.launch_attempts = 0;
         t.status = Status::Open;
         t.error.clear();
@@ -614,6 +616,10 @@ pub fn keys(ctx: &Ctx, slug: &str, id: &str, keys: &[String], text: Option<&str>
     }
     let pane = pane_agent(ctx, slug, id)?;
     let fail = |error: crate::herdr::HerdrError| anyhow::anyhow!("{error}");
+    let screen = pane.herdr.agent_screen(&pane.record.pane_id).map_err(fail)?;
+    if crate::prompt_box::trust_dialog(&screen) {
+        bail!("trust or hooks review requires the user in pane {}; no keys or text were sent", pane.record.pane_id);
+    }
     if let Some(text) = text {
         pane.herdr.pane_send_text(&pane.record.pane_id, text).map_err(fail)?;
     }
@@ -641,32 +647,109 @@ pub fn brief(ctx: &Ctx, slug: &str, id: &str) -> Result<()> {
         bail!("{id} is {}; `thread restart` brings it back", format!("{:?}", record.status).to_lowercase());
     }
     let pane = pane_agent(ctx, slug, id).map_err(|e| anyhow::anyhow!("{e:#}; the ticker launches the agent on its next pass"))?;
+    if !crate::herdr::ready_state(&pane.state) { clear_brief_readiness(&project, &pane.record)?; }
     match pane.state.as_str() {
-        "blocked" => bail!("{id}'s pane shows a prompt: `thread read` shows it, `thread keys` answers it; then run `thread brief` again"),
+        "blocked" => bail!("{id}'s pane shows a prompt: `thread read` shows it, the user handles trust or hooks review in the pane; then run `thread brief` again"),
         state if !crate::herdr::ready_state(state) => bail!("{id}'s agent is {state}, not ready for its brief yet; try again shortly"),
         _ => {}
     }
     if !send_brief(&project, &pane.herdr, &pane.record)? {
-        println!("{id} got its brief from the ticker just now");
+        println!("{id}: brief not sent; it is already claimed or waiting for a stable empty input box. Trust and hooks review belong to the user.");
         return Ok(());
     }
     println!("sent {id} its brief (agent was {})", pane.state);
     Ok(())
 }
 
-/// Claims a pending brief under the project lock, then sends it. `Ok(false)`
-/// when someone else claimed it first; a failed send puts the claim back.
+/// A state label alone is not readiness: startup output can read as idle.
+/// All brief senders use this gate, including the normal and fast ticker paths.
+pub const BRIEF_SETTLE_SECS: i64 = 3;
+const BRIEF_OBSERVATION_MAX_AGE: i64 = 90;
+
+fn same_brief(current: &Thread, expected: &Thread) -> bool {
+    current.status == Status::Open && current.prompt_pending
+        && current.pane_id == expected.pane_id && current.cwd == expected.cwd
+        && current.agent == expected.agent && current.profile == expected.profile
+        && current.launch_attempts == expected.launch_attempts
+}
+
+/// Fresh identity, state and visible screen. Unknown layouts fail closed.
+fn brief_probe(herdr: &Herdr, record: &Thread) -> Result<Option<String>> {
+    let agents = herdr.agent_list()?;
+    let Some(agent) = agents.iter().find(|a| thread::agent_matches(record, a)) else { return Ok(None) };
+    if !agent.ready() || agent.terminal_id.is_empty() {
+        return Ok(None);
+    }
+    let screen = herdr.agent_screen(&record.pane_id)?;
+    if !crate::prompt_box::ready_for_brief(&agent.agent, &screen) {
+        return Ok(None);
+    }
+    Ok(Some(format!("{:?}", (&agent.terminal_id, &agent.agent, &agent.agent_status, agent.state_change_seq, agent.session_id()))))
+}
+
+fn clear_brief_readiness(project: &Project, record: &Thread) -> Result<()> {
+    thread::update(project, &record.id, |t| {
+        if same_brief(t, record) {
+            t.brief_ready_key.clear();
+            t.brief_ready_since.clear();
+        }
+    })?;
+    Ok(())
+}
+
 pub fn send_brief(project: &Project, herdr: &Herdr, record: &Thread) -> Result<bool> {
+    send_brief_at(project, herdr, record, jiff::Timestamp::now())
+}
+
+/// Clock injection keeps startup regression tests deterministic (no sleeps).
+pub(crate) fn send_brief_at(project: &Project, herdr: &Herdr, record: &Thread, now: jiff::Timestamp) -> Result<bool> {
+    if !same_brief(&thread::load(project, &record.id)?, record) { return Ok(false); }
+    let key = match brief_probe(herdr, record) {
+        Ok(Some(key)) => key,
+        other => {
+            clear_brief_readiness(project, record)?;
+            return other.map(|_| false);
+        }
+    };
+    let mut settled = false;
+    let mut settled_since = String::new();
+    thread::update(project, &record.id, |t| {
+        if !same_brief(t, record) { return; }
+        let age = t.brief_ready_since.parse::<jiff::Timestamp>().ok().map(|since| (now.as_millisecond() - since.as_millisecond()) / 1000);
+        if t.brief_ready_key == key && age.is_some_and(|age| (0..=BRIEF_OBSERVATION_MAX_AGE).contains(&age)) {
+            settled = age.unwrap() >= BRIEF_SETTLE_SECS;
+            settled_since = t.brief_ready_since.clone();
+        } else {
+            t.brief_ready_key = key.clone();
+            t.brief_ready_since = now.to_string();
+        }
+    })?;
+    if !settled { return Ok(false); }
+    // Re-check after settling, immediately before the claim and input. A new
+    // terminal, state transition, draft or trust dialog invalidates the sample.
+    match brief_probe(herdr, record) {
+        Ok(Some(fresh)) if fresh == key => {}
+        other => {
+            clear_brief_readiness(project, record)?;
+            return other.map(|_| false);
+        }
+    }
     let mut claimed = false;
     thread::update(project, &record.id, |t| {
-        claimed = t.prompt_pending;
-        t.prompt_pending = false;
+        if same_brief(t, record) && t.brief_ready_key == key && t.brief_ready_since == settled_since {
+            claimed = true;
+            t.prompt_pending = false;
+            t.brief_ready_key.clear();
+            t.brief_ready_since.clear();
+        }
     })?;
-    if !claimed {
-        return Ok(false);
-    }
+    if !claimed { return Ok(false); }
     if let Err(error) = herdr.agent_prompt(&record.pane_id, &thread::launch_prompt(&project.slug, &record.id)) {
-        thread::update(project, &record.id, |t| t.prompt_pending = true)?;
+        thread::update(project, &record.id, |t| {
+            if t.pane_id == record.pane_id && t.launch_attempts == record.launch_attempts && t.status == Status::Open {
+                t.prompt_pending = true;
+            }
+        })?;
         bail!("{error}");
     }
     Ok(true)

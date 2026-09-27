@@ -209,11 +209,11 @@ pub fn write_thread_items(project: &Project, state: &mut State, transitions: &[T
         let mut summary = format!("{} is now {} ({})", thread_label(&t), change.to.label(), change.note);
         if change.to == Group::WaitingOnYou && !t.pane_id.is_empty() && change.note == "blocked" {
             // A screen waits for a key press (trust dialog, question menu,
-            // permission prompt): the coordinator can read and answer it.
+            // permission prompt): inspect it; trust decisions remain with the user.
             let machine = if t.is_remote() { format!(" on machine `{}`", t.machine) } else { String::new() };
             summary.push_str(&format!(
-                "; its pane {}{machine} shows a prompt: `thread read {} {}` shows it, `thread keys {} {}` answers it",
-                t.pane_id, project.slug, t.id, project.slug, t.id
+                "; its pane {}{machine} shows a prompt: `thread read {} {}` shows it, trust and hooks review require the user in the pane",
+                t.pane_id, project.slug, t.id
             ));
         } else if change.to == Group::WaitingOnYou && !t.pane_id.is_empty() {
             summary.push_str(&format!("; it needs the user in pane {}", t.pane_id));

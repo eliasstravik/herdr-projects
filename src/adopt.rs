@@ -107,17 +107,16 @@ pub fn adopt(ctx: &Ctx, slug: &str, pane: &str, title: &str, task: Option<String
         return Err(error);
     }
 
-    // Prompt now when the agent is ready for one; otherwise the ticker's one
-    // delivery path sends the line later (also when the agent ends in `done`).
-    let sent = agent.ready() && herdr.agent_prompt(pane, &thread::launch_prompt(slug, &id)).is_ok();
+    // Adoption cannot bypass the initial-brief readiness gate either.
     let adopted = thread::update(&project, &id, |t| {
         t.status = Status::Open;
-        t.prompt_pending = !sent;
+        t.prompt_pending = true;
         t.last_state = agent.agent_status.clone();
         t.last_state_change = project::now();
     })?;
+    threads::send_brief(&project, &herdr, &adopted)?;
     threads::report_thread_tokens(&herdr, &adopted, slug, thread::Group::Working);
-    Ok(adopted)
+    thread::load(&project, &id)
 }
 
 pub struct AdoptWorkspace {
@@ -185,14 +184,17 @@ mod tests {
     }
 
     #[test]
-    fn adopting_a_ready_agent_writes_a_brief_and_prompts_it() {
+    fn adopting_a_ready_agent_writes_a_brief_and_waits_for_settled_readiness() {
         let (world, project, cwd) = world_with_agent("idle", "my-agent");
         let t = adopt(&world.ctx(), "demo", "w5:p1", "Adopted work", Some("Finish the refactor.".into())).unwrap();
-        assert_eq!((t.kind, t.status, t.prompt_pending), (Kind::Adopted, Status::Open, false));
+        assert_eq!((t.kind, t.status, t.prompt_pending), (Kind::Adopted, Status::Open, true));
         assert_eq!(t.agent_name, "my-agent");
         assert_eq!(t.thread_dir, format!("{cwd}/.herdr-project/demo-t-0001"));
         let brief = std::fs::read_to_string(format!("{}/brief.md", t.thread_dir)).unwrap();
         assert!(brief.contains("Finish the refactor."));
+        assert_eq!(world.runner.count("agent prompt"), 0);
+        crate::scenarios::settle_brief(&project, &t.id);
+        crate::ticker::tick_project(&world.ctx(), &project).unwrap();
         assert_eq!(world.runner.count("agent prompt"), 1);
         assert_eq!(world.runner.count("agent start"), 0);
 
@@ -212,6 +214,9 @@ mod tests {
         assert_eq!(world.runner.count("agent prompt"), 0);
 
         *world.agents.borrow_mut() = format!("[{}]", agent_json("w5", "w5:t1", "w5:p1", &cwd, "my-agent", "done"));
+        crate::ticker::tick_project(&world.ctx(), &project).unwrap();
+        assert_eq!(world.runner.count("agent prompt"), 0);
+        crate::scenarios::settle_brief(&project, &t.id);
         crate::ticker::tick_project(&world.ctx(), &project).unwrap();
         assert_eq!(world.runner.count("agent prompt"), 1);
         assert!(!thread::load(&project, "t-0001").unwrap().prompt_pending);
