@@ -15,6 +15,9 @@ use crate::remote::quote;
 
 pub const HOOK_EVENTS: [&str; 3] = ["SessionStart", "PostToolUse", "UserPromptSubmit"];
 
+/// The harnesses `configure` installs hooks and the skill into.
+pub const HARNESSES: [&str; 3] = ["claude", "codex", "copilot"];
+
 /// One file the plugin edited: its text before the first edit, after the last
 /// one, what kind of edit, and the hook command (for hook files).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -45,7 +48,7 @@ pub fn save_journal(config_dir: &Path, journal: &Journal) -> Result<()> {
 /// manager's link would be replaced by a plain file) rather than editing it.
 pub fn read(path: &Path) -> Result<Option<String>> {
     if let Ok(m) = std::fs::symlink_metadata(path) {
-        ensure!(!m.file_type().is_symlink(), "refusing to edit {}: it is a symbolic link; edit its target's hooks by hand or pass --claude-home/--codex-home", path.display());
+        ensure!(!m.file_type().is_symlink(), "refusing to edit {}: it is a symbolic link; edit its target's hooks by hand or pass --claude-home/--codex-home/--copilot-home", path.display());
     }
     match std::fs::read_to_string(path) {
         Ok(s) => Ok(Some(s)),
@@ -178,20 +181,41 @@ pub fn hook_command(binary: &Path, root: &Path, agent: &str) -> String {
     format!("{} --root {} hook --agent {agent} 2>/dev/null || true", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
 }
 
-/// Where each harness keeps its hooks.
-pub fn hook_file(env: &Env, agent: &str, claude_home: Option<&Path>, codex_home: Option<&Path>) -> PathBuf {
+/// Harness config directories given on the command line; `None` means the
+/// harness's own environment variable, else its default under the home.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Homes<'a> {
+    pub claude: Option<&'a Path>,
+    pub codex: Option<&'a Path>,
+    pub copilot: Option<&'a Path>,
+}
+
+/// A harness's config directory; `configure` treats the harness as installed
+/// when it exists.
+pub fn harness_home(env: &Env, agent: &str, homes: Homes) -> PathBuf {
+    let (given, var, default) = match agent {
+        "claude" => (homes.claude, "CLAUDE_CONFIG_DIR", ".claude"),
+        "copilot" => (homes.copilot, "COPILOT_HOME", ".copilot"),
+        _ => (homes.codex, "CODEX_HOME", ".codex"),
+    };
+    given.map(Path::to_path_buf).or_else(|| env.var(var).map(PathBuf::from)).unwrap_or_else(|| env.home.join(default))
+}
+
+/// Where each harness keeps its hooks. Copilot CLI reads every file in
+/// `hooks/`, so it gets a file of its own that nothing else edits.
+pub fn hook_file(env: &Env, agent: &str, homes: Homes) -> PathBuf {
+    let home = harness_home(env, agent, homes);
     match agent {
-        "claude" => claude_home
-            .map(Path::to_path_buf)
-            .or_else(|| env.var("CLAUDE_CONFIG_DIR").map(PathBuf::from))
-            .unwrap_or_else(|| env.home.join(".claude"))
-            .join("settings.json"),
-        _ => codex_home
-            .map(Path::to_path_buf)
-            .or_else(|| env.var("CODEX_HOME").map(PathBuf::from))
-            .unwrap_or_else(|| env.home.join(".codex"))
-            .join("hooks.json"),
+        "claude" => home.join("settings.json"),
+        "copilot" => home.join("hooks").join("herdr-projects.json"),
+        _ => home.join("hooks.json"),
     }
+}
+
+/// The text a hook file starts from when it does not exist yet: Copilot CLI
+/// requires a version field.
+fn empty_hook_file(agent: &str) -> &'static str {
+    if agent == "copilot" { "{\"version\": 1}" } else { "{}" }
 }
 
 /// The skill bundled with the plugin, linked into each harness by `configure`.
@@ -204,17 +228,14 @@ pub fn skill_source() -> Option<PathBuf> {
 }
 
 /// Where a harness looks for user skills: Claude Code's `<config dir>/skills`,
-/// Codex's user scope `~/.agents/skills` (not under `CODEX_HOME`). A skills
-/// directory that is itself a link is resolved, so a shared directory gets
-/// one link and one journal key; a missing one is resolved through its
-/// parent, so the key stays the same once it exists.
-pub fn skill_link(env: &Env, agent: &str, claude_home: Option<&Path>) -> PathBuf {
+/// the user scope `~/.agents/skills` that Codex and Copilot CLI share (not
+/// under `CODEX_HOME` or `COPILOT_HOME`). A skills directory that is itself
+/// a link is resolved, so a shared directory gets one link and one journal
+/// key; a missing one is resolved through its parent, so the key stays the
+/// same once it exists.
+pub fn skill_link(env: &Env, agent: &str, homes: Homes) -> PathBuf {
     let dir = match agent {
-        "claude" => claude_home
-            .map(Path::to_path_buf)
-            .or_else(|| env.var("CLAUDE_CONFIG_DIR").map(PathBuf::from))
-            .unwrap_or_else(|| env.home.join(".claude"))
-            .join("skills"),
+        "claude" => harness_home(env, agent, homes).join("skills"),
         _ => env.home.join(".agents/skills"),
     };
     let resolved = std::fs::canonicalize(&dir).or_else(|_| std::fs::canonicalize(dir.parent().unwrap_or(&dir)).map(|p| p.join("skills")));
@@ -247,11 +268,12 @@ pub fn skill_state(link: &Path, source: &Path) -> SkillState {
 }
 
 pub struct ConfigureOptions {
-    /// `claude`, `codex`, or both; empty means every harness whose config
-    /// directory exists.
+    /// Some of `HARNESSES`; empty means every harness whose config directory
+    /// exists.
     pub clients: Vec<String>,
     pub claude_home: Option<PathBuf>,
     pub codex_home: Option<PathBuf>,
+    pub copilot_home: Option<PathBuf>,
     pub dry_run: bool,
     /// Install the progress hooks; `false` links only the skill (`doctor --fix`).
     pub hooks: bool,
@@ -262,6 +284,12 @@ pub struct ConfigureOptions {
     pub herdr_config: Option<PathBuf>,
     /// The skill directory to link (`skill_source()`); `None` links nothing.
     pub skill: Option<PathBuf>,
+}
+
+impl ConfigureOptions {
+    pub fn homes(&self) -> Homes<'_> {
+        Homes { claude: self.claude_home.as_deref(), codex: self.codex_home.as_deref(), copilot: self.copilot_home.as_deref() }
+    }
 }
 
 /// Whether the standalone agent-progress plugin's hooks are installed in a
@@ -275,23 +303,20 @@ pub fn has_agent_progress_hooks(text: &str) -> bool {
 /// run never leaves hooks `unconfigure` cannot identify as its own.
 pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
     let binary = crate::paths::binary()?;
+    let homes = options.homes();
     let clients: Vec<String> = if options.clients.is_empty() {
-        ["claude", "codex"]
-            .into_iter()
-            .filter(|c| hook_file(ctx.env, c, options.claude_home.as_deref(), options.codex_home.as_deref()).parent().is_some_and(Path::is_dir))
-            .map(str::to_owned)
-            .collect()
+        HARNESSES.into_iter().filter(|c| harness_home(ctx.env, c, homes).is_dir()).map(str::to_owned).collect()
     } else {
         options.clients.clone()
     };
     let mut journal = load_journal(&ctx.config_dir);
     let mut edits: Vec<(PathBuf, Owned)> = Vec::new();
     let mut notes = Vec::new();
-    for client in clients.iter().filter(|c| options.hooks && matches!(c.as_str(), "claude" | "codex")) {
-        let file = hook_file(ctx.env, client, options.claude_home.as_deref(), options.codex_home.as_deref());
+    for client in clients.iter().filter(|c| options.hooks && HARNESSES.contains(&c.as_str())) {
+        let file = hook_file(ctx.env, client, homes);
         let command = hook_command(&binary, &ctx.root, client);
         let before = read(&file)?;
-        let after = hooks(before.as_deref().unwrap_or("{}"), &command, false)?;
+        let after = hooks(before.as_deref().unwrap_or(empty_hook_file(client)), &command, false)?;
         if before.as_deref().is_some_and(has_agent_progress_hooks) {
             notes.push(format!("{} also runs the standalone agent-progress hooks; run that plugin's `unconfigure` (see `doctor`) so only one set fires", file.display()));
         }
@@ -305,8 +330,8 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
     let mut links: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
     if let Some(source) = &options.skill {
         let mut seen = Vec::new();
-        for client in clients.iter().filter(|c| matches!(c.as_str(), "claude" | "codex")) {
-            let link = skill_link(ctx.env, client, options.claude_home.as_deref());
+        for client in clients.iter().filter(|c| HARNESSES.contains(&c.as_str())) {
+            let link = skill_link(ctx.env, client, homes);
             if seen.contains(&link) {
                 continue;
             }
@@ -554,7 +579,7 @@ mod tests {
         std::fs::write(claude.join("settings.json"), original).unwrap();
         let runner = crate::runner::fake::FakeRunner::new();
         let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
-        let options = ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(codex.clone()), dry_run: true, hooks: true, sidebar: false, key: None, herdr_config: None, skill: None };
+        let options = ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(codex.clone()), copilot_home: None, dry_run: true, hooks: true, sidebar: false, key: None, herdr_config: None, skill: None };
         let notes = configure(&ctx, &options).unwrap();
         assert_eq!(notes.len(), 2, "{notes:?}");
         assert_eq!(std::fs::read_to_string(claude.join("settings.json")).unwrap(), original, "dry run changed a file");
@@ -587,6 +612,29 @@ mod tests {
     }
 
     #[test]
+    fn copilot_gets_its_own_hook_file_that_unconfigure_removes() {
+        let home = tempfile::tempdir().unwrap();
+        let copilot = home.path().join("copilot");
+        let env = Env::for_test(home.path(), &[("COPILOT_HOME", copilot.to_str().unwrap())]);
+        std::fs::create_dir_all(&copilot).unwrap();
+        std::fs::write(copilot.join("settings.json"), "{\"model\": \"auto\"}").unwrap();
+        let runner = crate::runner::fake::FakeRunner::new();
+        let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
+        let options = ConfigureOptions { clients: vec![], claude_home: None, codex_home: None, copilot_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: None };
+        configure(&ctx, &options).unwrap();
+        let file = copilot.join("hooks/herdr-projects.json");
+        let value: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(value["version"], 1);
+        for event in HOOK_EVENTS {
+            assert!(value["hooks"][event][0]["hooks"][0]["command"].as_str().unwrap().contains("hook --agent copilot"), "{value}");
+        }
+        assert_eq!(std::fs::read_to_string(copilot.join("settings.json")).unwrap(), "{\"model\": \"auto\"}");
+        assert!(!home.path().join(".claude/settings.json").exists() && !home.path().join(".codex/hooks.json").exists());
+        unconfigure(&ctx).unwrap();
+        assert!(!file.exists());
+    }
+
+    #[test]
     fn the_skill_is_linked_once_into_a_shared_skills_dir_and_foreign_ones_are_left_alone() {
         let home = tempfile::tempdir().unwrap();
         let env = Env::for_test(home.path(), &[]);
@@ -594,6 +642,8 @@ mod tests {
         let shared = home.path().join(".agents/skills");
         std::fs::create_dir_all(&shared).unwrap();
         std::fs::create_dir_all(home.path().join("codex")).unwrap();
+        // Copilot CLI reads ~/.agents/skills too: the same link serves it.
+        std::fs::create_dir_all(home.path().join(".copilot")).unwrap();
         std::fs::create_dir_all(&claude).unwrap();
         // Like this Mac: Claude's skills dir is itself a link to ~/.agents/skills.
         std::os::unix::fs::symlink(&shared, claude.join("skills")).unwrap();
@@ -602,7 +652,7 @@ mod tests {
         std::fs::write(source.join("SKILL.md"), "---\nname: autoproject\n---\n").unwrap();
         let runner = crate::runner::fake::FakeRunner::new();
         let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
-        let options = |dry_run: bool, skill: &Path| ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(home.path().join("codex")), dry_run, hooks: true, sidebar: false, key: None, herdr_config: None, skill: Some(skill.to_path_buf()) };
+        let options = |dry_run: bool, skill: &Path| ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(home.path().join("codex")), copilot_home: None, dry_run, hooks: true, sidebar: false, key: None, herdr_config: None, skill: Some(skill.to_path_buf()) };
         let link = std::fs::canonicalize(&shared).unwrap().join(SKILL);
 
         // A plain directory already there (the old personal copy) is never touched.
@@ -666,7 +716,7 @@ mod tests {
         runner.on("--default-config", ok("[keys]\n# previous_tab = \"prefix+p\"\n"));
         runner.on("config check", ok(""));
         let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
-        let options = |key: Option<&str>| ConfigureOptions { clients: vec!["claude".into()], claude_home: Some(home.path().join("claude")), codex_home: None, dry_run: false, hooks: true, sidebar: true, key: key.map(str::to_string), herdr_config: Some(config.clone()), skill: None };
+        let options = |key: Option<&str>| ConfigureOptions { clients: vec!["claude".into()], claude_home: Some(home.path().join("claude")), codex_home: None, copilot_home: None, dry_run: false, hooks: true, sidebar: true, key: key.map(str::to_string), herdr_config: Some(config.clone()), skill: None };
         std::fs::create_dir_all(home.path().join("claude")).unwrap();
 
         // A key Herdr already uses is refused before anything is written.

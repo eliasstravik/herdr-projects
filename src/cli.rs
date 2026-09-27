@@ -208,15 +208,17 @@ enum Command {
         /// Scope it to one project (default: the current workspace's, else all)
         slug: Option<String>,
     },
-    /// Install the plugin's hooks (progress self-reports) and its `autoproject` skill into Claude Code and Codex
+    /// Install the plugin's hooks (progress self-reports) and its `autoproject` skill into Claude Code, Codex and Copilot CLI
     Configure {
-        /// Harnesses to configure, comma-separated: claude, codex (default: those installed)
-        #[arg(long, value_delimiter = ',', value_parser = ["claude", "codex"])]
+        /// Harnesses to configure, comma-separated: claude, codex, copilot (default: those installed)
+        #[arg(long, value_delimiter = ',', value_parser = crate::setup::HARNESSES)]
         clients: Vec<String>,
         #[arg(long, value_name = "DIR")]
         claude_home: Option<PathBuf>,
         #[arg(long, value_name = "DIR")]
         codex_home: Option<PathBuf>,
+        #[arg(long, value_name = "DIR")]
+        copilot_home: Option<PathBuf>,
         /// Print what would change and change nothing
         #[arg(long)]
         dry_run: bool,
@@ -249,7 +251,7 @@ enum Command {
     /// Harness hook entry point (installed by `configure`)
     #[command(hide = true)]
     Hook {
-        #[arg(long, value_parser = ["claude", "codex"])]
+        #[arg(long, value_parser = crate::setup::HARNESSES)]
         agent: String,
     },
     /// Print the progress record of this pane, or of --pane
@@ -781,8 +783,8 @@ pub fn run() -> Result<()> {
             }
             Ok(())
         }
-        Command::Configure { clients, claude_home, codex_home, dry_run, key, hooks_only } => {
-            let options = crate::setup::ConfigureOptions { clients, claude_home, codex_home, dry_run, hooks: true, sidebar: !hooks_only, key, herdr_config: None, skill: crate::setup::skill_source() };
+        Command::Configure { clients, claude_home, codex_home, copilot_home, dry_run, key, hooks_only } => {
+            let options = crate::setup::ConfigureOptions { clients, claude_home, codex_home, copilot_home, dry_run, hooks: true, sidebar: !hooks_only, key, herdr_config: None, skill: crate::setup::skill_source() };
             for note in crate::setup::configure(&ctx, &options)? {
                 println!("{note}");
             }

@@ -1,7 +1,7 @@
 //! `doctor`: what is installed, where things resolve, and whether it fits.
 
 use std::fmt::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -299,8 +299,9 @@ fn report(
     // Hooks: ours in place and pointing at this binary; the standalone
     // agent-progress plugin's hooks gone (never edited by this plugin).
     let journal = crate::setup::load_journal(config_dir);
-    for agent in ["claude", "codex"] {
-        let file = crate::setup::hook_file(env, agent, None, None);
+    let homes = crate::setup::Homes::default();
+    for agent in crate::setup::HARNESSES {
+        let file = crate::setup::hook_file(env, agent, homes);
         let Ok(Some(text)) = crate::setup::read(&file) else {
             continue;
         };
@@ -321,7 +322,7 @@ fn report(
             None => check(&mut out, None, &label, "not configured; `configure` installs the progress hooks".into()),
             Some(_) if text.contains(&expected) => check(&mut out, Some(true), &label, format!("{} runs this binary", file.display())),
             Some(_) if fix => {
-                let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: crate::setup::skill_source() };
+                let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, copilot_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: crate::setup::skill_source() };
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
                 match crate::setup::configure(&ctx, &options) {
                     Ok(_) => check(&mut out, Some(true), &label, format!("fixed: {} now runs this binary", file.display())),
@@ -337,18 +338,23 @@ fn report(
     // for (its hooks or the link are journaled), so `update` alone brings a
     // newly bundled skill to existing users without a new opt-in.
     if let Some(source) = skill.map(Path::to_path_buf).filter(|s| s.join("SKILL.md").is_file()) {
-        for agent in ["claude", "codex"] {
-            if !crate::setup::hook_file(env, agent, None, None).parent().is_some_and(Path::is_dir) {
-                continue;
+        // Codex and Copilot CLI share one link: one check names both.
+        let mut links: Vec<(PathBuf, Vec<&str>)> = Vec::new();
+        for agent in crate::setup::HARNESSES.into_iter().filter(|a| crate::setup::harness_home(env, a, homes).is_dir()) {
+            let link = crate::setup::skill_link(env, agent, homes);
+            match links.iter_mut().find(|(l, _)| *l == link) {
+                Some((_, agents)) => agents.push(agent),
+                None => links.push((link, vec![agent])),
             }
-            let link = crate::setup::skill_link(env, agent, None);
-            let label = format!("skill {agent}");
+        }
+        for (link, agents) in links {
+            let label = format!("skill {}", agents.join("/"));
             let journaled = journal.contains_key(&*link.to_string_lossy());
-            let opted_in = journaled || journal.get(&*crate::setup::hook_file(env, agent, None, None).to_string_lossy()).is_some_and(|o| o.kind == "hooks");
+            let opted_in = journaled || agents.iter().any(|a| journal.get(&*crate::setup::hook_file(env, a, homes).to_string_lossy()).is_some_and(|o| o.kind == "hooks"));
             let state = crate::setup::skill_state(&link, &source);
             let repairable = matches!(state, crate::setup::SkillState::Missing) || matches!(state, crate::setup::SkillState::Elsewhere(_) if journaled);
             if fix && opted_in && repairable {
-                let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false, hooks: false, sidebar: false, key: None, herdr_config: None, skill: Some(source.clone()) };
+                let options = crate::setup::ConfigureOptions { clients: vec![agents[0].to_string()], claude_home: None, codex_home: None, copilot_home: None, dry_run: false, hooks: false, sidebar: false, key: None, herdr_config: None, skill: Some(source.clone()) };
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
                 match crate::setup::configure(&ctx, &options) {
                     Ok(_) => check(&mut out, Some(true), &label, format!("fixed: {} now links the bundled `{}` skill", link.display(), crate::setup::SKILL)),
@@ -377,7 +383,7 @@ fn report(
             None => check(&mut out, None, "sidebar", "not configured; `configure` adds the sidebar rows, the popup key and the tab-bar count".into()),
             Some(_) if sidebar_current(&text, &expected) => check(&mut out, Some(true), "sidebar", format!("{} has the rows, the popup key and the tab-bar entry", file.display())),
             Some(_) if fix => {
-                let options = crate::setup::ConfigureOptions { clients: vec![], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: true, key: None, herdr_config: None, skill: crate::setup::skill_source() };
+                let options = crate::setup::ConfigureOptions { clients: vec![], claude_home: None, codex_home: None, copilot_home: None, dry_run: false, hooks: true, sidebar: true, key: None, herdr_config: None, skill: crate::setup::skill_source() };
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
                 let options = crate::setup::ConfigureOptions { clients: vec!["none".into()], ..options };
                 match crate::setup::configure(&ctx, &options) {

@@ -40,7 +40,7 @@ Each thread's sidebar row shows its id and title, and a line under it with what 
 
 ### ⚡ Stop briefing every agent yourself
 
-Say what you want once. The coordinator proposes threads and waits for your go-ahead, then each thread starts from a brief with the project's goal, your standing instructions, the project's memory and its task, on the agent you pick (Claude Code, Codex, OpenCode or any other kind Herdr runs). Lessons a thread reports under `## Remember` flow back into memory for the next one.
+Say what you want once. The coordinator proposes threads and waits for your go-ahead, then each thread starts from a brief with the project's goal, your standing instructions, the project's memory and its task, on the agent you pick (Claude Code, Codex, GitHub Copilot, OpenCode or any other kind Herdr runs). Lessons a thread reports under `## Remember` flow back into memory for the next one.
 
 ### 💬 Know when a thread needs an answer
 
@@ -88,6 +88,16 @@ herdr-projects update --check   # only print the installed and the newest versio
 ```
 
 `update` works for both install types and changes nothing when you're already on the newest release. Its `doctor --fix` also links the `autoproject` skill for each harness you configured, so existing users don't need to run `configure` again. A linked checkout must be on `main` with no uncommitted changes, or `update` stops and says why. When the install fails, the old version stays installed and the ticker is restarted. `doctor` says when a newer version is out.
+
+### Local checkout development
+
+Build and link this checkout as the active plugin after source changes:
+
+```bash
+./scripts/dev-link
+```
+
+The script rebuilds the release binary, links this checkout, refreshes the `herdr-projects` command symlink, repairs generated integrations, and restarts a stale ticker.
 
 ## Get your questions answered
 

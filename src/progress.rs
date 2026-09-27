@@ -37,6 +37,9 @@ pub struct Record {
     /// Unix seconds of the last reminder the hook injected.
     pub reminded_at: i64,
     pub session_started_at: i64,
+    /// The harness session this pane reports for, where the hook payload is
+    /// the only way to tell it from a subagent's (Copilot CLI).
+    pub session_id: String,
 }
 
 impl Record {
@@ -228,6 +231,24 @@ pub fn eligible(event: &serde_json::Value) -> bool {
     true
 }
 
+/// Whether a Copilot CLI event belongs to the pane's own session. Its
+/// subagents fire UserPromptSubmit and PostToolUse under their own session
+/// id, marked no other way, and never fire SessionStart. The first id seen
+/// is taken: with `-p` the first prompt arrives before SessionStart.
+pub fn copilot_owns(record: &Record, kind: &str, session_id: &str) -> bool {
+    kind == "SessionStart" || record.session_id.is_empty() || record.session_id == session_id
+}
+
+/// The hook's stdout for the text to inject. Copilot CLI ignores Claude's
+/// `hookSpecificOutput` wrapper and reads a top-level `additionalContext`.
+pub fn output(agent: &str, kind: &str, text: &str) -> serde_json::Value {
+    if agent == "copilot" {
+        serde_json::json!({"additionalContext": text})
+    } else {
+        serde_json::json!({"hookSpecificOutput": {"hookEventName": kind, "additionalContext": text}})
+    }
+}
+
 /// What the hook answers for one event: the text to inject, and whether the
 /// record changed. Pure, so it is testable without a pane.
 pub fn respond(record: &mut Record, kind: &str, prefix: &str, now: i64) -> Option<String> {
@@ -261,7 +282,7 @@ pub fn respond(record: &mut Record, kind: &str, prefix: &str, now: i64) -> Optio
     }
 }
 
-/// `hook --agent claude|codex`, the entry point the harness hooks run. Silent
+/// `hook --agent claude|codex|copilot`, the entry point the harness hooks run. Silent
 /// (exit 0, no output) outside a Herdr pane, so the same hooks may sit in the
 /// user's settings for every session on the machine.
 pub fn hook(ctx: &Ctx, agent: &str) -> Result<()> {
@@ -303,14 +324,21 @@ pub fn hook(ctx: &Ctx, agent: &str) -> Result<()> {
     record.pane_id = pane.pane_id.clone();
     record.terminal_id = pane.terminal_id.clone();
     record.agent = if pane.agent.is_empty() { agent.to_string() } else { pane.agent.clone() };
+    let session_id = event["session_id"].as_str().unwrap_or("");
+    if agent == "copilot" && !copilot_owns(&record, &kind, session_id) {
+        return Ok(());
+    }
     let prefix = crate::coordinator::current_prefix(&ctx.root)?;
     let before = record.clone();
     let text = respond(&mut record, &kind, &prefix, now());
+    if agent == "copilot" {
+        record.session_id = session_id.to_string();
+    }
     if record != before {
         save(&ctx.root, &record)?;
     }
     if let Some(text) = text {
-        println!("{}", serde_json::json!({"hookSpecificOutput": {"hookEventName": kind, "additionalContext": text}}));
+        println!("{}", output(agent, &kind, &text));
     }
     Ok(())
 }
@@ -368,6 +396,21 @@ mod tests {
         assert_eq!(record.percent, None);
         assert_eq!(record.reported_at, 0);
         assert_eq!(record.session_started_at, 1000);
+    }
+
+    #[test]
+    fn copilot_gets_a_top_level_context_and_its_subagents_are_ignored() {
+        assert_eq!(output("copilot", "SessionStart", "hi"), json!({"additionalContext": "hi"}));
+        assert_eq!(output("claude", "SessionStart", "hi")["hookSpecificOutput"]["additionalContext"], "hi");
+        let mut record = Record::default();
+        // With `-p` the first prompt comes before SessionStart: the first id is taken.
+        assert!(copilot_owns(&record, "UserPromptSubmit", "main"));
+        record.session_id = "main".into();
+        assert!(copilot_owns(&record, "PostToolUse", "main"));
+        assert!(!copilot_owns(&record, "UserPromptSubmit", "sub"));
+        assert!(!copilot_owns(&record, "PostToolUse", "sub"));
+        // A new session in the pane replaces the old one.
+        assert!(copilot_owns(&record, "SessionStart", "next"));
     }
 
     #[test]
