@@ -343,7 +343,8 @@ pub fn open(ctx: &Ctx, slug: &str, options: &OpenOptions) -> Result<()> {
 
     let legacy = crate::profiles::legacy_agent(&config, &settings, Role::Coordinator);
     let base_args = crate::profiles::expand_home(&crate::profiles::launch_args(&profile, &safety.coordinator_agent_args, &legacy), &ctx.env.home);
-    let base_args = safety.launch_args(&kind, &base_args);
+    let mut base_args = safety.launch_args(&kind, &base_args);
+    base_args.extend(crate::progress::sandbox_args(&kind, &base_args, &ctx.root));
     let mut args = base_args.clone();
     args.extend(resume.iter().cloned());
     if here.is_some() {

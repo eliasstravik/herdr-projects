@@ -758,7 +758,10 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
             if !t.is_remote() {
                 args = crate::profiles::expand_home(&args, &ctx.env.home);
             }
-            let args = safety.launch_args(&kind, &args);
+            let mut args = safety.launch_args(&kind, &args);
+            if !t.is_remote() {
+                args.extend(crate::progress::sandbox_args(&kind, &args, &ctx.root));
+            }
             herdr.on_machine(&t.machine).agent_start(&t.agent_name, &kind, &t.pane_id, &args)?;
             Ok(())
         })();

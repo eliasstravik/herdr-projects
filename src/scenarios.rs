@@ -649,6 +649,8 @@ fn a_legacy_thread_keeps_claude_flags_to_claude() {
         assert!(call.contains(&format!("--kind {kind}")), "{call}");
         // Issue #45: the Claude flag no longer reaches a Codex thread.
         assert_eq!(call.contains("--dangerously-skip-permissions"), flagged, "{call}");
+        // Codex's sandbox may write the agent's own progress record.
+        assert_eq!(call.contains(&format!("--add-dir {}", world.root.join(".progress").display())), !flagged, "{call}");
     }
 }
 
@@ -1748,6 +1750,7 @@ fn open_starts_a_coordinator_without_a_priming_prompt_then_focuses_it_and_resume
     let calls = world.runner.calls.borrow();
     let start = calls.iter().filter(|c| c.display().contains("agent start")).last().unwrap();
     assert!(start.display().starts_with("herdr agent start hpc-demo-1 --kind codex --pane w3:p2"), "{}", start.display());
+    assert!(start.display().contains(&format!("--add-dir {}", world.root.join(".progress").display())), "{}", start.display());
     assert!(!start.display().contains("sess-42"));
     drop(calls);
     assert!(crate::coordinator::open(&ctx, "demo", &crate::coordinator::OpenOptions { profile: Some("chatgpt".into()), ..options(false) }).is_err());

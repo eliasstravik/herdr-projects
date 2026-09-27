@@ -82,6 +82,31 @@ pub fn save(root: &Path, record: &Record) -> Result<()> {
     crate::project::write_json(&path(root, &record.socket, &record.pane_id), record)
 }
 
+/// What a sandboxed `report` is told when it may not write its record: the
+/// harness keeps the agent to its workspace, and `.progress/` is outside it.
+fn sandbox_hint(error: anyhow::Error, root: &Path) -> anyhow::Error {
+    let denied = error.chain().filter_map(|e| e.downcast_ref::<std::io::Error>()).any(|e| e.kind() == std::io::ErrorKind::PermissionDenied);
+    if !denied {
+        return error;
+    }
+    error.context(format!("sandboxed? {} must be writable to the agent (for Codex: `--add-dir {}` or `sandbox_workspace_write.writable_roots`)", dir(root).display(), dir(root).display()))
+}
+
+/// The arguments that let a sandboxed agent of `kind` write its own record.
+/// Codex's `workspace-write` sandbox only writes the workspace, so it gets
+/// `.progress/` as an extra writable root. `--add-dir` adds to the user's own
+/// `writable_roots`, where `-c sandbox_workspace_write.writable_roots=…`
+/// would replace them. Nothing for yolo (no sandbox) or other harnesses.
+/// The folder is made first: it is only created by the first report.
+pub fn sandbox_args(kind: &str, args: &[String], root: &Path) -> Vec<String> {
+    let unsandboxed = args.iter().any(|a| a == "--dangerously-bypass-approvals-and-sandbox" || a.contains("danger-full-access"));
+    if kind != "codex" || unsandboxed {
+        return Vec::new();
+    }
+    let _ = std::fs::create_dir_all(dir(root));
+    vec!["--add-dir".to_string(), dir(root).to_string_lossy().into_owned()]
+}
+
 pub fn remove(root: &Path, socket: &str, pane_id: &str) {
     let _ = std::fs::remove_file(path(root, socket, pane_id));
 }
@@ -167,7 +192,7 @@ pub fn report(ctx: &Ctx, percent: Option<u8>, activity: &str) -> Result<()> {
     record.activity = activity.clone();
     record.percent = percent;
     record.reported_at = now();
-    save(&ctx.root, &record)?;
+    save(&ctx.root, &record).map_err(|e| sandbox_hint(e, &ctx.root))?;
     println!("recorded: {}{activity}", percent.map(|p| format!("{p}% · ")).unwrap_or_default());
     Ok(())
 }
@@ -195,6 +220,7 @@ pub fn instructions(prefix: &str, pane_id: &str) -> String {
     format!(
         "# Progress (herdr-projects)\n\n\
          Report the progress of the user's whole current task through `{prefix} report`. This is your estimate, not a timer or a count of tools. Reporting failures must never stop the actual work: give one short diagnostic and continue, without retries.\n\n\
+         The command works from any directory: run it in your current working directory and never set a different workdir.\n\n\
          Report a rough percentage in five-point increments and a two-to-four-word activity, such as `Reading code`, `Testing changes` or `Waiting for you`:\n\n\
          `{prefix} report --percent 25 --activity 'Reading code'`\n\
          `{prefix} report --unknown --activity 'Assessing task'`\n\n\
@@ -403,5 +429,32 @@ mod tests {
         prune(root.path(), "/a.sock", &["w1:p2".into()]);
         assert!(load(root.path(), "/a.sock", "w1:p1").is_none());
         assert!(load(root.path(), "/b.sock", "w1:p1").is_some());
+    }
+
+    #[test]
+    fn a_sandboxed_codex_may_write_its_record_and_nothing_else_changes() {
+        let root = tempfile::tempdir().unwrap();
+        let progress = dir(root.path()).to_string_lossy().into_owned();
+        assert_eq!(sandbox_args("codex", &[], root.path()), ["--add-dir".to_string(), progress]);
+        assert!(dir(root.path()).is_dir(), "made before the agent starts");
+        let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert!(sandbox_args("codex", &args(&["--dangerously-bypass-approvals-and-sandbox"]), root.path()).is_empty(), "yolo has no sandbox");
+        assert!(sandbox_args("codex", &args(&["-s", "danger-full-access"]), root.path()).is_empty());
+        assert!(sandbox_args("claude", &[], root.path()).is_empty());
+    }
+
+    #[test]
+    fn a_denied_write_names_the_folder_to_allow() {
+        let root = Path::new("/r");
+        let denied = anyhow::Error::from(std::io::Error::from_raw_os_error(1)).context("could not write /r/.progress/w1_p1-x.json");
+        let text = format!("{:#}", sandbox_hint(denied, root));
+        assert!(text.starts_with("sandboxed? /r/.progress must be writable") && text.contains("--add-dir /r/.progress") && text.contains("Operation not permitted"), "{text}");
+        let other = anyhow::anyhow!("disk full");
+        assert_eq!(format!("{:#}", sandbox_hint(other, root)), "disk full");
+    }
+
+    #[test]
+    fn instructions_keep_the_agent_in_its_own_directory() {
+        assert!(instructions("hp", "w1:p1").contains("run it in your current working directory and never set a different workdir"));
     }
 }
