@@ -119,7 +119,7 @@ Only to clean up after a thread is resolved, which happens when you resolve it, 
 
 ### Where does my project live?
 
-In `~/.herdr-projects/<name>/` by default: `PROJECT.md` for your settings and standing instructions, `AGENTS.md` for priming the coordinator, `MEMORY.md` and `memory/` for what the coordinator remembers, `TASKS.md` for the task list the coordinator keeps for you (each task assigned to you, an agent profile, another machine or both: [task owners](docs/operations.md#task-owners)), `uploads/` for files you give the threads, `threads/` for thread records and reports, and `library/` for files threads produced. The safety settings live outside it, in `~/.config/herdr-projects/config.toml`, where no agent works. [Operations](docs/operations.md#where-things-live) lists every file.
+In `~/.herdr-projects/<name>/` by default: `PROJECT.md` for your settings and standing instructions, `AGENTS.md` for priming the coordinator, `MEMORY.md` and `memory/` for what the coordinator remembers, `TASKS.md` for the task list the coordinator keeps for you (each task assigned to you, a person, an agent profile, another machine or both: [task owners](docs/operations.md#task-owners)), `uploads/` for files you give the threads, `threads/` for thread records and reports, and `library/` for files threads produced. The safety settings live outside it, in `~/.config/herdr-projects/config.toml`, where no agent works. [Operations](docs/operations.md#where-things-live) lists every file.
 
 ### Do I have to start every thread through the coordinator?
 

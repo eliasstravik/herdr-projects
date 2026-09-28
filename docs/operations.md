@@ -172,20 +172,22 @@ Each task in `TASKS.md` has at most one owner, in brackets after its title. The 
 - [ ] Fix the M1 build (@elias-macbook-pro-m1)       that machine; its coordinator picks the profile
 - [ ] Profile the ticker (deep@elias-macbook-pro-m1) that profile on that machine
 - [ ] Look into Safari logouts                       unassigned
+- [ ] Review the contract (Priya)                    a person, only when you name them
 - [ ] Fix login (claude) · t-0007                    delegated: t-0007 runs it
 ```
 
-- **Valid names.** `me`; the thread profiles the project allows here; and each machine with the profiles it lists. Machines come from two places, used together: `herdr machine list` (their profiles are fetched over SSH by running `herdr-projects profile list --names` there), and config.toml, for a machine this one cannot reach, such as a sandboxed VM that only learns the names:
+- **Agent owners.** The coordinator assigns only valid names: the thread profiles the project allows here, and each machine with the profiles it lists. Machines come from two places, used together: `herdr machine list` (their profiles are fetched over SSH by running `herdr-projects profile list --names` there), and config.toml, for a machine this one cannot reach, such as a sandboxed VM that only learns the names:
 
   ```toml
   [machines.elias-macbook-pro-m1]
   profiles = ["claude", "codex-fast"]   # names only; gives no access
   ```
 
-  A machine with an `ssh` key there is fetched as well. `context` prints one `Assignable:` line (`claude, codex-fast, @m1: claude|pi`), and `assignable <project>` the full list. The SSH lookups are cached for an hour in `<root>/.machines.json`, so `context` does not reach other machines every turn; `assignable --refresh` looks again. A machine that did not answer shows as `@m1 (not reached)` and can still be assigned as `@m1`. With no machines, only `me` and local profiles are valid.
-- **Refused owners.** The coordinator checks a new owner with `assignable --check` and refuses one that is not valid.
+  A machine with an `ssh` key there is fetched as well. `context` prints one `Assignable:` line (`claude, codex-fast, @m1: claude|pi`), and `assignable <project>` the full list. The SSH lookups are cached for an hour in `<root>/.machines.json`, so `context` does not reach other machines every turn; `assignable --refresh` looks again. A machine that did not answer shows as `@m1 (not reached)` and can still be assigned as `@m1`. With no machines, only local profiles are valid.
+- **Checked owners.** The coordinator checks a profile or machine owner with `assignable --check` before writing it and refuses one that is not valid.
+- **People.** `me`, or any name or text you give (`(Elias)`, `(Priya Rao)`), is written only when you name that owner. A bare name that is no profile here is a person: shown as written and never delegated.
 - **Delegating.** `thread start --from-task "<title>"` starts the thread with the owner's profile and machine (`--profile`, `--machine`); a flag that contradicts the owner is refused. A `@machine` owner gets the project's `thread_profile` when delegated from here. The profile is launched with this machine's definition of that name, so a profile you assign on another machine should exist under the same name here too.
-- **Old lines.** `(agent)` reads as unassigned and `(agent → t-0007)` as this machine's default profile with thread t-0007. A person's name is no longer an owner.
+- **Old lines.** `(agent)` reads as unassigned and `(agent → t-0007)` as this machine's default profile with thread t-0007.
 
 ## The allow-list for your coordinator
 

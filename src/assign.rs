@@ -178,12 +178,12 @@ impl Assignable {
     pub fn check(&self, owner: &Owner) -> Result<()> {
         match owner {
             Owner::Unassigned | Owner::Me | Owner::Agent { profile: None, machine: None } => Ok(()),
-            Owner::Other(text) => bail!("`{text}` is not an owner: use me, a profile, @machine or profile@machine ({})", self.line()),
+            Owner::Person(text) => bail!("`{text}` is not a profile or machine; write a person's name only when the user names them. Assignable: {}", self.line()),
             Owner::Agent { profile: Some(profile), machine: None } => {
                 if self.local.contains(profile) {
                     return Ok(());
                 }
-                bail!("there is no profile `{profile}` for threads here; assignable: {}", self.line())
+                bail!("there is no profile `{profile}` for threads here (write it as a person only when the user names them); assignable: {}", self.line())
             }
             Owner::Agent { profile, machine: Some(name) } => {
                 let Some(machine) = self.machine(name) else {
@@ -282,7 +282,7 @@ mod tests {
         assert!(assignable.check(&agent(Some("codex-fast"), Some("m1"))).unwrap_err().to_string().contains("it has: claude, pi"));
         assert!(assignable.check(&agent(None, Some("m9"))).is_err());
         assert!(assignable.check(&agent(Some("claude"), Some("far"))).unwrap_err().to_string().contains("unknown (timed out)"));
-        assert!(assignable.check(&Owner::Other("Bob".into())).is_err());
+        assert!(assignable.check(&Owner::Person("Bob Smith".into())).is_err());
         assert_eq!(assignable.line(), "claude, codex-fast, @m1: claude|pi, @far (not reached)");
         assert_eq!(Assignable::default().line(), "(none; only me)");
     }

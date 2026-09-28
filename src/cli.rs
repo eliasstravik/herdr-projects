@@ -691,7 +691,12 @@ pub fn run() -> Result<()> {
                     // The task's owner picks the profile and machine.
                     let project = Project::load(&ctx.root, &slug)?;
                     let tasks_md = crate::tasks::read(&project.dir());
-                    (profile, machine) = crate::tasks::launch_for(&crate::tasks::find(&tasks_md, &from)?, profile, machine)?;
+                    let found = crate::tasks::find(&tasks_md, &from)?;
+                    let config = crate::profiles::load(&ctx.config_dir)?;
+                    if found.owner.is_person(|p| config.get(p).is_some()) {
+                        bail!("\"{}\" belongs to {}, a person; people's tasks are never delegated. Change its owner in TASKS.md first if the user asks", found.title, found.owner);
+                    }
+                    (profile, machine) = crate::tasks::launch_for(&found, profile, machine)?;
                     task = crate::tasks::delegated(&tasks_md, &from, &task)?;
                 }
                 let kind = kind.as_deref().map(crate::thread::Kind::parse).transpose()?;

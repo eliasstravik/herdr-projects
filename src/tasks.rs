@@ -19,8 +19,10 @@ pub enum Owner {
     /// coordinator picks, or `(codex-fast@m1)`. Neither set is an old
     /// `(agent → t-0007)`: this machine's default thread profile.
     Agent { profile: Option<String>, machine: Option<String> },
-    /// Anything else, such as a person's name: not a valid owner.
-    Other(String),
+    /// Free text that is not name-shaped, such as `Priya Rao`: a person the
+    /// user named. A name-shaped owner that is no profile here (`Priya`)
+    /// parses as `Agent` and is told apart by `is_person`.
+    Person(String),
 }
 
 impl Owner {
@@ -37,9 +39,20 @@ impl Owner {
         };
         let profile_ok = profile.is_empty() && machine.is_some() || crate::profiles::validate_name(profile).is_ok();
         if !profile_ok || machine.is_some_and(|m| !is_machine_name(m)) {
-            return Owner::Other(text.to_string());
+            return Owner::Person(text.to_string());
         }
         Owner::Agent { profile: (!profile.is_empty()).then(|| profile.to_string()), machine: machine.map(str::to_string) }
+    }
+
+    /// Whether this owner is a person: free text, or a bare name that
+    /// `is_profile` does not know. `profile@machine` and `@machine` are
+    /// always agents.
+    pub fn is_person(&self, is_profile: impl Fn(&str) -> bool) -> bool {
+        match self {
+            Owner::Person(_) => true,
+            Owner::Agent { profile: Some(profile), machine: None } => !is_profile(profile),
+            _ => false,
+        }
     }
 }
 
@@ -62,7 +75,7 @@ impl fmt::Display for Owner {
                     None => Ok(()),
                 }
             }
-            Owner::Other(text) => f.write_str(text),
+            Owner::Person(text) => f.write_str(text),
         }
     }
 }
@@ -221,7 +234,7 @@ pub fn launch_for(task: &Task, profile: Option<String>, machine: Option<String>)
     match &task.owner {
         Owner::Unassigned => Ok((profile, machine)),
         Owner::Me => bail!("\"{title}\" is the user's own task (me); change its owner in TASKS.md before delegating it"),
-        Owner::Other(text) => bail!("\"{title}\" has the owner `{text}`, which is not a profile or machine; fix its owner in TASKS.md first"),
+        Owner::Person(text) => bail!("\"{title}\" belongs to {text}, a person; people's tasks are never delegated. Change its owner in TASKS.md first if the user asks"),
         Owner::Agent { profile: owned_profile, machine: owned_machine } => {
             if let (Some(flag), Some(owned)) = (&profile, owned_profile)
                 && flag != owned
@@ -259,16 +272,16 @@ mod tests {
     fn owners_are_a_profile_a_machine_or_both_and_the_thread_stands_apart() {
         let tasks = parse("## A\n- [ ] One (codex-fast)\n- [ ] Two (@m1)\n- [ ] Three (codex-fast@m1) · t-0007\n- [ ] Four (me)\n- [ ] Five\n- [ ] Six (Priya Rao)\n- [ ] Fix (the) login (claude)\n- [ ] Unassigned but running · t-0009\n");
         let owners: Vec<&Owner> = tasks.iter().map(|t| &t.owner).collect();
-        assert_eq!(owners, [&agent(Some("codex-fast"), None), &agent(None, Some("m1")), &agent(Some("codex-fast"), Some("m1")), &Owner::Me, &Owner::Unassigned, &Owner::Other("Priya Rao".into()), &agent(Some("claude"), None), &Owner::Unassigned]);
+        assert_eq!(owners, [&agent(Some("codex-fast"), None), &agent(None, Some("m1")), &agent(Some("codex-fast"), Some("m1")), &Owner::Me, &Owner::Unassigned, &Owner::Person("Priya Rao".into()), &agent(Some("claude"), None), &Owner::Unassigned]);
         assert_eq!(tasks[2].thread.as_deref(), Some("t-0007"));
         assert_eq!(tasks[2].title, "Three");
         assert_eq!(tasks[6].title, "Fix (the) login");
         assert_eq!((tasks[7].title.as_str(), tasks[7].thread.as_deref()), ("Unassigned but running", Some("t-0009")));
         let shown: Vec<String> = tasks.iter().map(|t| t.owner.to_string()).collect();
         assert_eq!(shown, ["codex-fast", "@m1", "codex-fast@m1", "me", "", "Priya Rao", "claude", ""]);
-        assert!(matches!(Owner::parse("a@"), Owner::Other(_)));
-        assert!(matches!(Owner::parse("@"), Owner::Other(_)));
-        assert!(matches!(Owner::parse("a@b@c"), Owner::Other(_)));
+        assert!(matches!(Owner::parse("a@"), Owner::Person(_)));
+        assert!(matches!(Owner::parse("@"), Owner::Person(_)));
+        assert!(matches!(Owner::parse("a@b@c"), Owner::Person(_)));
     }
 
     #[test]
@@ -291,7 +304,21 @@ mod tests {
         assert!(launch_for(&tasks[0], None, s("m1")).unwrap_err().to_string().contains("assigned to this machine"));
         assert!(launch_for(&tasks[2], None, s("m2")).is_err());
         assert!(launch_for(&tasks[4], None, None).is_err());
-        assert!(launch_for(&tasks[5], None, None).is_err());
+        assert!(launch_for(&tasks[5], None, None).unwrap_err().to_string().contains("a person"));
+    }
+
+    #[test]
+    fn a_bare_name_that_is_no_profile_is_a_person() {
+        let known = |p: &str| p == "claude";
+        assert!(Owner::parse("Priya").is_person(known));
+        assert!(Owner::parse("Priya Rao").is_person(known));
+        assert!(!Owner::parse("claude").is_person(known));
+        assert!(!Owner::parse("Priya@m1").is_person(known));
+        assert!(!Owner::parse("@m1").is_person(known));
+        assert!(!Owner::parse("me").is_person(known));
+        assert!(!Owner::parse("").is_person(known));
+        let tasks = parse("## A\n- [ ] Call the bank (Elias)\n");
+        assert_eq!(tasks[0].owner.to_string(), "Elias");
     }
 
     #[test]
