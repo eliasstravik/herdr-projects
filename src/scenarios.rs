@@ -2571,3 +2571,97 @@ fn prompts_never_reach_a_trust_screen_and_keys_follow_the_trust_setting() {
     threads::keys(&ctx, "demo", &t.id, &["enter".into()], None).unwrap();
     assert_eq!(world.runner.count("send-keys"), 2);
 }
+
+/// A pending remote thread on "box" whose profile box resolved, and a ticker
+/// world that answers its launch.
+fn remote_profile_world(allow: Option<&str>) -> (World, Project, String) {
+    let (world, project) = remote_world();
+    let world = World { runner: FakeRunner::new(), ..world };
+    let home = world.home.path().to_string_lossy().into_owned();
+    let ctx = world.ctx();
+    std::fs::create_dir_all(&ctx.config_dir).unwrap();
+    if let Some(list) = allow {
+        std::fs::write(ctx.config_dir.join("config.toml"), format!("[safety.default]\nthread_profiles = [{list}]\n")).unwrap();
+    }
+    let t = thread::allocate(&project, |t| {
+        t.status = Status::Open;
+        t.kind = Kind::Worktree;
+        t.prompt_pending = true;
+        t.machine = "box".into();
+        t.agent = "codex".into();
+        t.profile = "fast".into();
+        t.remote_profile = true;
+        t.profile_args = vec!["--model".into(), "gpt-5.5".into(), "--config".into(), "/Users/box/x.toml".into()];
+        t.agent_name = thread::agent_name(&project.slug, &t.id);
+        t.workspace_id = "w2".into();
+        t.tab_id = "w2:t2".into();
+        t.pane_id = "w2:p2".into();
+        t.cwd = home.clone();
+    })
+    .unwrap();
+    let local_panes = format!(r#"{{"result":{{"panes":[{}]}}}}"#, world.coordinator_pane(&project));
+    let remote_panes = format!(r#"{{"result":{{"panes":[{},{}]}}}}"#, pane_json("w2", "w2:t1", "w2:p1", "/home/me/wt"), pane_json("w2", "w2:t2", "w2:p2", &home));
+    world.runner.on("machine list --json", ok(r#"[{"id":"1","label":"box","target":"me@box"}]"#));
+    world.runner.on_fn(|c| is_machine_call(c) && c.display().contains("agent list"), |_| Ok(ok(r#"{"result":{"agents":[]}}"#)));
+    world.runner.on_fn(|c| is_machine_call(c) && c.display().contains("pane list"), move |_| Ok(ok(&remote_panes)));
+    world.runner.on("agent list", ok(r#"{"result":{"agents":[]}}"#));
+    world.runner.on("pane list", ok(&local_panes));
+    world.runner.on("ssh", ok(""));
+    world.runner.on("report-metadata", ok(r#"{"result":{}}"#));
+    world.runner.on("agent start", ok(r#"{"result":{"agent":{"pane_id":"w2:p2","tab_id":"w2:t2","workspace_id":"w2"}}}"#));
+    (world, project, t.id)
+}
+
+#[test]
+fn a_remote_thread_launches_with_its_machines_own_profile() {
+    // `fast` exists only on box: nothing here defines it.
+    let (world, project, id) = remote_profile_world(None);
+    let ctx = world.ctx();
+    let mut memory = Memory::new(&ctx);
+    memory.tick = 1;
+    ticker::tick_project_with(&ctx, &project, &mut memory).unwrap();
+    let start = world.runner.calls.borrow().iter().find(|c| c.display().contains("agent start")).cloned().expect("an agent start");
+    assert!(is_machine_call(&start) && start.args[1] == "box");
+    let line = start.display();
+    assert!(line.contains("--kind codex") && line.contains("-- --model gpt-5.5 --config /Users/box/x.toml"), "{line}");
+    assert_eq!(thread::load(&project, &id).unwrap().status, Status::Open);
+}
+
+#[test]
+fn a_remote_profile_off_this_projects_allow_list_does_not_launch() {
+    let (world, project, id) = remote_profile_world(Some("\"claude\""));
+    let ctx = world.ctx();
+    let mut memory = Memory::new(&ctx);
+    memory.tick = 1;
+    ticker::tick_project_with(&ctx, &project, &mut memory).unwrap();
+    assert_eq!(world.runner.count("agent start"), 0);
+    let t = thread::load(&project, &id).unwrap();
+    assert_eq!(t.status, Status::Failed);
+    assert!(t.error.contains("profile `fast` is not allowed"), "{}", t.error);
+}
+
+#[test]
+fn a_remote_threads_profile_is_resolved_on_its_machine() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    world.runner.on("machine list --json", ok(r#"[{"id":"1","label":"box","target":"me@box"}]"#));
+    world.runner.on("resolve -- fast", ok(r#"{"name":"fast","agent":"codex","args":["--model","gpt-5.5"]}"#));
+    world.runner.on("profile resolve", ok(r#"{"name":"deep","agent":"claude","args":["--model","opus"]}"#));
+    let ctx = world.ctx();
+    let fast = crate::threads::thread_profile(&ctx, &project, "box", Some("fast")).unwrap();
+    assert_eq!((fast.name.as_str(), fast.agent.as_str(), fast.remote_args.clone().unwrap()), ("fast", "codex", vec!["--model".to_string(), "gpt-5.5".into()]));
+    // `(@box)`: box's own default thread profile.
+    let default = crate::threads::thread_profile(&ctx, &project, "box", None).unwrap();
+    assert_eq!((default.name.as_str(), default.agent.as_str()), ("deep", "claude"));
+    // A local thread never asks another machine.
+    let calls = world.runner.count("ssh");
+    let local = crate::threads::thread_profile(&ctx, &project, "", Some("claude")).unwrap();
+    assert!(local.remote_args.is_none() && world.runner.count("ssh") == calls);
+    // This project's allow-list still applies to the name.
+    std::fs::create_dir_all(&ctx.config_dir).unwrap();
+    std::fs::write(ctx.config_dir.join("config.toml"), "[safety.default]\nthread_profiles = [\"claude\"]\n").unwrap();
+    assert!(crate::threads::thread_profile(&ctx, &project, "box", Some("fast")).is_err());
+    // A machine known only from config.toml profiles has no SSH target: no start.
+    std::fs::write(ctx.config_dir.join("config.toml"), "[machines.vm]\nprofiles = [\"claude\"]\n").unwrap();
+    assert!(crate::threads::thread_profile(&ctx, &project, "vm", Some("claude")).unwrap_err().to_string().contains("no SSH target"));
+}

@@ -82,6 +82,42 @@ pub struct StartArgs {
     pub task: String,
 }
 
+/// The profile a thread starts with.
+#[derive(Debug)]
+pub struct ThreadProfile {
+    pub name: String,
+    pub agent: String,
+    /// Set for a remote thread: its machine's own arguments.
+    pub remote_args: Option<Vec<String>>,
+}
+
+impl ThreadProfile {
+    fn apply(&self, t: &mut Thread) {
+        t.agent = self.agent.clone();
+        t.profile = self.name.clone();
+        t.remote_profile = self.remote_args.is_some();
+        t.profile_args = self.remote_args.clone().unwrap_or_default();
+    }
+}
+
+/// A local thread's profile is this machine's (`requested`, else the
+/// project's `thread_profile`). A remote thread's is its machine's own
+/// definition, looked up there (`requested`, else that machine's default
+/// thread profile), so it need not exist here. Either name must be on this
+/// project's allow-list.
+pub fn thread_profile(ctx: &Ctx, project: &Project, machine: &str, requested: Option<&str>) -> Result<ThreadProfile> {
+    use crate::profiles::Role;
+    if machine.is_empty() {
+        let profile = crate::profiles::for_project(ctx, project, Role::Thread, requested)?;
+        return Ok(ThreadProfile { name: profile.name.clone(), agent: profile.agent().to_string(), remote_args: None });
+    }
+    let target = remote::ssh_target(ctx.runner, &ctx.env.herdr_bin(), &ctx.config_dir, machine)?;
+    let found = remote::resolve_profile(ctx.runner, &target, machine, requested)?;
+    let config = crate::profiles::load(&ctx.config_dir)?;
+    crate::profiles::check_allowed(&config, &project.safety(&ctx.config_dir)?, Role::Thread, &found.name, &project.slug)?;
+    Ok(ThreadProfile { name: found.name, agent: found.agent, remote_args: Some(found.args) })
+}
+
 /// The placement of a new thread from what was asked and whether it has a repo.
 pub fn placement(kind: Option<Kind>, has_repo: bool, remote: bool) -> Result<Kind> {
     match (kind, has_repo) {
@@ -143,15 +179,14 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
         );
     }
 
-    let profile = crate::profiles::for_project(ctx, &project, crate::profiles::Role::Thread, args.profile.as_deref())?;
+    let profile = thread_profile(ctx, &project, &machine, args.profile.as_deref())?;
     let kind = placement(args.kind, !repo.is_empty(), !machine.is_empty())?;
     let record = thread::allocate(&project, |t| {
         t.title = args.title.trim().to_string();
         t.kind = kind;
         t.repo = repo.clone();
         t.machine = machine.clone();
-        t.agent = profile.agent().to_string();
-        t.profile = profile.name.clone();
+        profile.apply(t);
         t.base = args.base.clone().unwrap_or_default();
     })?;
     let id = record.id.clone();
@@ -430,11 +465,11 @@ fn lists_for(view: &SessionView, record: &Thread) -> Result<(Vec<Agent>, Vec<Pan
 pub fn restart(ctx: &Ctx, slug: &str, id: &str, profile: Option<&str>) -> Result<Thread> {
     let project = Project::load(&ctx.root, slug)?;
     if let Some(name) = profile {
-        let profile = crate::profiles::for_project(ctx, &project, crate::profiles::Role::Thread, Some(name))?;
+        let machine = thread::load(&project, id)?.machine;
+        let profile = thread_profile(ctx, &project, &machine, Some(name))?;
         // The profile carries the whole setup: old model flags no longer apply.
         thread::update(&project, id, |t| {
-            t.agent = profile.agent().to_string();
-            t.profile = profile.name.clone();
+            profile.apply(t);
             t.agent_args.clear();
         })?;
     }

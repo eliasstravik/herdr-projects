@@ -106,6 +106,39 @@ pub fn ssh(runner: &dyn Runner, target: &str, script: &str, stdin: Option<&str>,
     runner.run(&cmd)
 }
 
+/// Puts the usual install folders of `herdr-projects` on `PATH` for a
+/// non-interactive ssh shell.
+pub const HP_PATH: &str = "PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\"";
+
+/// A profile as another machine defines it (`profile resolve` there).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct RemoteProfile {
+    pub name: String,
+    pub agent: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+}
+
+/// Looks up `name` (or that machine's default thread profile) with
+/// `herdr-projects profile resolve` on the machine. One ssh call.
+pub fn resolve_profile(runner: &dyn Runner, target: &str, machine: &str, name: Option<&str>) -> Result<RemoteProfile> {
+    let script = format!("{HP_PATH}\nherdr-projects profile resolve{}", name.map(|n| format!(" -- {}", quote(n))).unwrap_or_default());
+    let out = ssh(runner, target, &script, None, SSH_TIMEOUT)?;
+    if !out.success() {
+        let error = out.error_text();
+        if error.contains("unrecognized subcommand") || error.contains("not found") && error.contains("herdr-projects") {
+            bail!("herdr-projects on `{machine}` cannot resolve profiles; run `herdr-projects update` there: {}", error.trim());
+        }
+        bail!("`{machine}`: {}", error.trim());
+    }
+    let profile: RemoteProfile = serde_json::from_str(out.stdout.trim()).with_context(|| format!("`{machine}` answered `profile resolve` with something that is not a profile"))?;
+    crate::profiles::validate_name(&profile.name)?;
+    if !crate::agents::is_kind(&profile.agent) {
+        bail!("profile `{}` on `{machine}` runs `{}`, which is not a Herdr agent kind", profile.name, profile.agent);
+    }
+    Ok(profile)
+}
+
 /// Origin URL and base ref of a repository on the machine, after a fetch whose
 /// failure is not an error. One ssh call.
 pub fn repo_info(runner: &dyn Runner, target: &str, repo: &str, base: &str) -> Result<(String, String)> {
@@ -381,6 +414,24 @@ mod tests {
         let broken = FakeRunner::new();
         broken.on("machine list --json", fail(1, "no"));
         assert_eq!(ssh_target(&broken, "herdr", config.path(), "box").unwrap(), "me@box.local");
+    }
+
+    #[test]
+    fn profiles_are_resolved_on_their_machine() {
+        let runner = FakeRunner::new();
+        runner.on("resolve -- fast", ok(r#"{"name":"fast","agent":"codex","args":["--model","gpt-5.5","--config","/Users/me/x.toml"]}"#));
+        runner.on("resolve -- bad", ok(r#"{"name":"bad","agent":"rm","args":[]}"#));
+        runner.on("resolve -- gone", fail(1, "herdr-projects: there is no profile `gone` on this machine"));
+        runner.on("profile resolve", ok(r#"{"name":"claude","agent":"claude","args":[]}"#));
+        let fast = resolve_profile(&runner, "me@m1", "m1", Some("fast")).unwrap();
+        assert_eq!((fast.agent.as_str(), fast.args.len()), ("codex", 4));
+        assert!(runner.calls.borrow()[0].args.last().unwrap().contains("herdr-projects profile resolve -- fast"));
+        assert_eq!(resolve_profile(&runner, "me@m1", "m1", None).unwrap().name, "claude");
+        assert!(resolve_profile(&runner, "me@m1", "m1", Some("bad")).unwrap_err().to_string().contains("not a Herdr agent kind"));
+        assert!(resolve_profile(&runner, "me@m1", "m1", Some("gone")).unwrap_err().to_string().contains("no profile `gone`"));
+        let old = FakeRunner::new();
+        old.on("ssh", fail(2, "error: unrecognized subcommand 'resolve'"));
+        assert!(resolve_profile(&old, "me@m1", "m1", None).unwrap_err().to_string().contains("herdr-projects update"));
     }
 
     #[test]

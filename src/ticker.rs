@@ -760,6 +760,19 @@ fn launch_pass(ctx: &Ctx, project: &Project, herdr: &Herdr, threads: &[thread::T
                 }
                 let builtin = config.get(&t.agent).filter(|p| p.builtin).map(|p| crate::profiles::launch_args(&p, &safety.thread_agent_args, &legacy)).unwrap_or_default();
                 (t.agent.clone(), [builtin, model].concat())
+            } else if t.remote_profile {
+                // Its machine's own definition, stored at start; the name is
+                // checked against this project's allow-list again.
+                if let Err(error) = crate::profiles::check_allowed(&config, &safety, crate::profiles::Role::Thread, &t.profile, &project.slug) {
+                    let message = format!("{error:#}");
+                    thread::update(project, &t.id, |t| {
+                        t.status = thread::Status::Failed;
+                        t.error = message.clone();
+                    })?;
+                    inbox::write(project, "thread-state", &t.id, "not launched", &format!("{}: not launched: {message}", t.id), "")?;
+                    return Ok(());
+                }
+                (t.agent.clone(), t.profile_args.clone())
             } else {
                 // The profile is looked up and checked against the allow-list
                 // again: one the user removed or disallowed since does not launch.

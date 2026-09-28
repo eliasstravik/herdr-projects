@@ -100,6 +100,12 @@ pub struct Thread {
     /// Before profiles: a model flag for the agent CLI (checked again by the
     /// ticker). New threads leave it empty.
     pub agent_args: Vec<String>,
+    /// A remote thread's profile as its own machine defines it: looked up
+    /// there at start or restart (`profile resolve`), launched with
+    /// `agent` plus these arguments. The name is still checked against this
+    /// project's allow-list at every launch.
+    pub remote_profile: bool,
+    pub profile_args: Vec<String>,
     pub agent_name: String,
     pub cwd: String,
     pub created: String,

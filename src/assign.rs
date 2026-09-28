@@ -101,14 +101,14 @@ fn fetch(ctx: &Ctx) -> Vec<Machine> {
             targets.insert(name, target);
         }
     }
-    const SCRIPT: &str = "PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\"\nherdr-projects profile list --names 2>/dev/null || herdr-projects profile list";
+    let script = format!("{}\nherdr-projects profile list --names 2>/dev/null || herdr-projects profile list", crate::remote::HP_PATH);
     targets
         .into_iter()
         .map(|(name, target)| {
             if target.is_empty() {
                 return Machine { name, profiles: Vec::new(), error: "no SSH target".into() };
             }
-            match crate::remote::ssh(ctx.runner, &target, SCRIPT, None, crate::remote::SSH_TIMEOUT) {
+            match crate::remote::ssh(ctx.runner, &target, &script, None, crate::remote::SSH_TIMEOUT) {
                 Ok(out) if out.success() => Machine { name, profiles: parse_names(&out.stdout), error: String::new() },
                 Ok(out) => Machine { name, profiles: Vec::new(), error: first_line(&out.error_text()) },
                 Err(error) => Machine { name, profiles: Vec::new(), error: first_line(&format!("{error:#}")) },
@@ -174,7 +174,10 @@ impl Assignable {
     }
 
     /// Refuses an owner that is not `me`, one of the project's profiles here,
-    /// a known machine, or a profile that machine lists.
+    /// a known machine, or a profile that machine lists. A machine is known
+    /// only from `herdr machine list` or config.toml, and its profiles only
+    /// from the lookup there or config.toml: `profile@m1` is refused when
+    /// neither gave m1's profiles.
     pub fn check(&self, owner: &Owner) -> Result<()> {
         match owner {
             Owner::Unassigned | Owner::Me | Owner::Agent { profile: None, machine: None } => Ok(()),
@@ -194,7 +197,7 @@ impl Assignable {
                     return Ok(());
                 }
                 if machine.profiles.is_empty() && !machine.error.is_empty() {
-                    bail!("the profiles of `{name}` are unknown ({}); `assignable --refresh` looks again, or assign `@{name}` and let its coordinator pick", machine.error);
+                    bail!("the profiles of `{name}` are unknown: it was not reached ({}) and config.toml lists none for it; `assignable --refresh` looks again, or assign `@{name}` and let its coordinator pick", machine.error);
                 }
                 bail!("`{name}` has no profile `{profile}`; it has: {}", if machine.profiles.is_empty() { "none listed".to_string() } else { machine.profiles.join(", ") })
             }
@@ -208,7 +211,7 @@ impl Assignable {
             parts.push(match (m.profiles.is_empty(), m.error.is_empty()) {
                 (false, _) => format!("@{}: {}", m.name, m.profiles.join("|")),
                 (true, true) => format!("@{}", m.name),
-                (true, false) => format!("@{} (not reached)", m.name),
+                (true, false) => format!("@{} (not reached, profiles unknown)", m.name),
             });
         }
         if parts.is_empty() { "(none; only me)".into() } else { parts.join(", ") }
@@ -219,7 +222,7 @@ impl Assignable {
 /// while the cache is fresh.
 pub fn context_line(ctx: &Ctx, project: &Project) -> String {
     match load(ctx, project, false) {
-        Ok(assignable) => format!("Assignable (TASKS.md owners, besides me): {}\n", assignable.line()),
+        Ok(assignable) => format!("Assignable (agent owners; profile@machine only as listed): {}\n", assignable.line()),
         Err(error) => format!("config-error: assignable: {error:#}\n"),
     }
 }
@@ -281,9 +284,14 @@ mod tests {
         assert!(assignable.check(&agent(Some("pi"), None)).unwrap_err().to_string().contains("no profile `pi`"));
         assert!(assignable.check(&agent(Some("codex-fast"), Some("m1"))).unwrap_err().to_string().contains("it has: claude, pi"));
         assert!(assignable.check(&agent(None, Some("m9"))).is_err());
-        assert!(assignable.check(&agent(Some("claude"), Some("far"))).unwrap_err().to_string().contains("unknown (timed out)"));
+        let error = assignable.check(&agent(Some("claude"), Some("far"))).unwrap_err().to_string();
+        assert!(error.contains("not reached (timed out) and config.toml lists none"), "{error}");
+        // Reached but listing nothing: no profile@machine either.
+        let empty = Assignable { local: vec![], machines: vec![Machine { name: "bare".into(), ..Machine::default() }] };
+        empty.check(&agent(None, Some("bare"))).unwrap();
+        assert!(empty.check(&agent(Some("claude"), Some("bare"))).unwrap_err().to_string().contains("none listed"));
         assert!(assignable.check(&Owner::Person("Bob Smith".into())).is_err());
-        assert_eq!(assignable.line(), "claude, codex-fast, @m1: claude|pi, @far (not reached)");
+        assert_eq!(assignable.line(), "claude, codex-fast, @m1: claude|pi, @far (not reached, profiles unknown)");
         assert_eq!(Assignable::default().line(), "(none; only me)");
     }
 
@@ -299,7 +307,13 @@ mod tests {
         world.runner.on("me@down", fail(255, "ssh: connect to host down port 22: Connection timed out"));
         let first = load(&ctx, &project, false).unwrap();
         let line = first.line();
-        assert!(line.ends_with("@down (not reached), @m1: claude|pi|extra, @vm: claude|cheap"), "{line}");
+        assert!(line.ends_with("@down (not reached, profiles unknown), @m1: claude|pi|extra, @vm: claude|cheap"), "{line}");
+        // Not reached, but config.toml names its profiles: those are valid.
+        std::fs::write(ctx.config_dir.join("config.toml"), "[machines.down]\nprofiles = [\"claude\"]\n").unwrap();
+        let named = load(&ctx, &project, false).unwrap();
+        named.check(&Owner::parse("claude@down")).unwrap();
+        assert!(named.check(&Owner::parse("pi@down")).is_err());
+        assert!(named.check(&Owner::parse("@nowhere")).is_err());
         assert_eq!(world.runner.count("ssh"), 2);
         // Fresh cache: no ssh, and config.toml edits still show at once.
         let ctx = world.ctx();
@@ -315,6 +329,6 @@ mod tests {
         assert_eq!(world.runner.count("ssh"), 4);
         load(&ctx, &project, true).unwrap();
         assert_eq!(world.runner.count("ssh"), 6);
-        assert!(context_line(&ctx, &project).starts_with("Assignable (TASKS.md owners, besides me): "));
+        assert!(context_line(&ctx, &project).starts_with("Assignable (agent owners; profile@machine only as listed): "));
     }
 }

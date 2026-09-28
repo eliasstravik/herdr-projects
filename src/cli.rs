@@ -478,6 +478,10 @@ enum ProfileCommand {
         #[arg(long, conflicts_with = "project")]
         names: bool,
     },
+    /// Print a profile's launch setup here as JSON (default: [defaults] thread_profile); other machines read it to start threads here
+    Resolve {
+        name: Option<String>,
+    },
     /// Add a profile (a person at a terminal only)
     Add {
         name: String,
@@ -566,7 +570,7 @@ enum TickerCommand {
 fn profile_change(ctx: &Ctx, command: ProfileCommand) -> Result<crate::profiles::Change> {
     use crate::profiles::{Change, Entry, Role};
     Ok(match command {
-        ProfileCommand::List { .. } => bail!("`profile list` changes nothing"),
+        ProfileCommand::List { .. } | ProfileCommand::Resolve { .. } => bail!("`profile list` and `profile resolve` change nothing"),
         ProfileCommand::Add { name, agent, fields } => Change::Add {
             name,
             entry: Entry { agent, model: fields.model.unwrap_or_default(), effort: fields.effort.unwrap_or_default(), args: fields.args, description: fields.description.unwrap_or_default() },
@@ -782,6 +786,10 @@ pub fn run() -> Result<()> {
         Command::Action { id } => actions::run_action(&ctx, &id),
         Command::Pane { id } => actions::run_pane(&ctx, &id),
         Command::Profile { command } => {
+            if let ProfileCommand::Resolve { name } = &command {
+                println!("{}", crate::profiles::resolve_json(&ctx, name.as_deref())?);
+                return Ok(());
+            }
             if let ProfileCommand::List { project, names } = command {
                 if names {
                     let config = crate::profiles::load(&ctx.config_dir)?;

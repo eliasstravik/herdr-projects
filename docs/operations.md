@@ -57,7 +57,7 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 | `thread resolve [--keep-worktree] [--discard-uncopied] [--skip-copy] [--reopen]` | Final copy home, then clean up. |
 | `sweep <project> [--dry-run] [--yes]` | Remove what nothing uses any more. |
 | `set <project> <key> <value>`, `routine list/toggle/approve`, `safety show/yolo/set` | Settings, routines and safety (see below). |
-| `profile list [--project P \| --names]`, `profile add/edit/remove`, `profile allow threads\|coordinator NAMES... [--project P] [--all]`, `profile default threads\|coordinator NAME` | [Agent profiles](#agent-profiles). Everything but `list` needs a person at a terminal. |
+| `profile list [--project P \| --names]`, `profile resolve [NAME]`, `profile add/edit/remove`, `profile allow threads\|coordinator NAMES... [--project P] [--all]`, `profile default threads\|coordinator NAME` | [Agent profiles](#agent-profiles). Everything but `list` and `resolve` needs a person at a terminal. |
 | `pause`, `resume`, `archive`, `unarchive`, `delete [--force]` | Project lifecycle. |
 | `popup [project]`, `focus [project]`, `unfocus`, `overview [project]`, `needs-you --line` | Views. |
 | `configure [--key K] [--hooks-only] [--dry-run]`, `unconfigure`, `report`, `progress` | Sidebar, keys, hooks, the `autoproject` skill, self-reports. |
@@ -183,10 +183,10 @@ Each task in `TASKS.md` has at most one owner, in brackets after its title. The 
   profiles = ["claude", "codex-fast"]   # names only; gives no access
   ```
 
-  A machine with an `ssh` key there is fetched as well. `context` prints one `Assignable:` line (`claude, codex-fast, @m1: claude|pi`), and `assignable <project>` the full list. The SSH lookups are cached for an hour in `<root>/.machines.json`, so `context` does not reach other machines every turn; `assignable --refresh` looks again. A machine that did not answer shows as `@m1 (not reached)` and can still be assigned as `@m1`. With no machines, only local profiles are valid.
+  A machine with an `ssh` key there is fetched as well. A machine is valid only if one of these sources knows it, and `profile@machine` only if that profile is in the machine's list from the lookup or from config.toml. `context` prints one `Assignable:` line (`claude, codex-fast, @m1: claude|pi`), and `assignable <project>` the full list. The SSH lookups are cached for an hour in `<root>/.machines.json`, so `context` does not reach other machines every turn; `assignable --refresh` looks again. A machine that did not answer and has no profiles in config.toml shows as `@m1 (not reached, profiles unknown)`: `@m1` is valid, `profile@m1` is refused. With no machines, only local profiles are valid.
 - **Checked owners.** The coordinator checks a profile or machine owner with `assignable --check` before writing it and refuses one that is not valid.
 - **People.** `me`, or any name or text you give (`(Elias)`, `(Priya Rao)`), is written only when you name that owner. A bare name that is no profile here is a person: shown as written and never delegated.
-- **Delegating.** `thread start --from-task "<title>"` starts the thread with the owner's profile and machine (`--profile`, `--machine`); a flag that contradicts the owner is refused. A `@machine` owner gets the project's `thread_profile` when delegated from here. The profile is launched with this machine's definition of that name, so a profile you assign on another machine should exist under the same name here too.
+- **Delegating.** `thread start --from-task "<title>"` starts the thread with the owner's profile and machine (`--profile`, `--machine`); a flag that contradicts the owner is refused. A remote thread runs its machine's own definition of the profile (see [Threads on other machines](#threads-on-other-machines)), and a `@machine` owner gets that machine's default thread profile.
 - **Old lines.** `(agent)` reads as unassigned and `(agent → t-0007)` as this machine's default profile with thread t-0007.
 
 ## The allow-list for your coordinator
@@ -254,6 +254,7 @@ A file `routines/<name>.md` with TOML front matter; the body is the prompt.
 
 Save the machine with `herdr machine add --label <label> <ssh target>` (both machines need Herdr 0.9.1), then list a repo as `/path/on/machine@<label>` or pass `thread start --machine <label>`. The home machine owns the project; only outbound SSH from home is needed, in batch mode.
 
+- **Profiles are the machine's own.** `thread start --machine m1 [--profile NAME]` runs `herdr-projects profile resolve [NAME]` on m1 over SSH, which prints m1's definition of that profile (harness, model and effort flags, arguments, `~/` expanded to m1's home) or, without a name, m1's `[defaults] thread_profile`. The thread record keeps it, and the ticker launches with it, so the profile need not exist here. The name must still be on this project's allow-list, checked again at every launch; yolo mode adds its flags as for any thread. `thread restart --profile` looks it up again. m1 needs a herdr-projects that has `profile resolve`; an older one is refused with a hint to run `herdr-projects update` there. A machine known only from config.toml `profiles` has no SSH access, so nothing starts on it from here.
 - The worktree, the brief and the report live on the remote machine. The home ticker polls it once a minute and copies a changed report with `scp` and the thread's `library/` with `rsync -rt` (symbolic links are never followed; a library over 50 MB is not copied).
 - Remote threads get no self-reports: `report` writes on the machine where the agent runs. Their group comes from the agent state Herdr detects and from their pull request.
 - A machine that doesn't answer is left alone: no state is read, threads keep their last group, and after ten minutes you get one `outage` inbox item, and one more when it is back.

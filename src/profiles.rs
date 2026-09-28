@@ -561,6 +561,17 @@ pub fn write_project_defaults(project: &Project, thread: &str, coordinator: &str
     project::write_atomic(&project.project_md(), text.as_bytes())
 }
 
+/// `profile resolve [NAME]`: a profile's launch setup on this machine, as
+/// JSON, for another machine starting a thread here. Without a name, the
+/// `[defaults] thread_profile`. `~/` in arguments is this machine's home.
+pub fn resolve_json(ctx: &Ctx, name: Option<&str>) -> Result<String> {
+    let config = load(&ctx.config_dir)?;
+    let name = name.map(str::to_string).unwrap_or_else(|| config.new_project_default(Role::Thread));
+    let profile = config.get(&name).with_context(|| format!("there is no profile `{name}` on this machine; `profile list` shows them"))?;
+    let args = expand_home(&profile.args(), &ctx.env.home);
+    Ok(serde_json::json!({ "name": profile.name, "agent": profile.entry.agent, "args": args }).to_string())
+}
+
 /// `profile list [--project SLUG]`.
 pub fn list_text(ctx: &Ctx, project: Option<&Project>) -> Result<String> {
     use std::fmt::Write as _;
@@ -685,6 +696,23 @@ mod tests {
         assert!(typed_args("claude", "", "ultra").is_err());
         assert!(typed_args("claude", "--yolo", "").is_err());
         assert_eq!(expand_home(&strings(&["--config", "~/a.yml", "--x=~/b", "~x"]), Path::new("/h")), strings(&["--config", "/h/a.yml", "--x=/h/b", "~x"]));
+    }
+
+    #[test]
+    fn resolve_prints_this_machines_setup_for_another_machine() {
+        let home = tempfile::tempdir().unwrap();
+        let env = crate::paths::Env::for_test(home.path(), &[]);
+        let runner = crate::runner::fake::FakeRunner::new();
+        let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
+        std::fs::create_dir_all(&ctx.config_dir).unwrap();
+        std::fs::write(ctx.config_dir.join("config.toml"), format!("{CONFIG}\n[defaults]\nthread_profile = \"deep\"\n")).unwrap();
+        let luna: serde_json::Value = serde_json::from_str(&resolve_json(&ctx, Some("luna")).unwrap()).unwrap();
+        let expected = format!("{}/.omp/agent/luna.yml", home.path().display());
+        assert_eq!(luna, serde_json::json!({ "name": "luna", "agent": "omp", "args": ["--config", expected] }));
+        let default: serde_json::Value = serde_json::from_str(&resolve_json(&ctx, None).unwrap()).unwrap();
+        assert_eq!(default["name"], "deep");
+        assert_eq!(default["args"][0], "--model");
+        assert!(resolve_json(&ctx, Some("nope")).is_err());
     }
 
     #[test]
