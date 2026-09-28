@@ -9,7 +9,7 @@ use crate::threads::{self, SessionView};
 use crate::coordinator;
 
 /// (what, pane id) of every recorded pane that is alive in the project's session.
-fn alive_panes(project: &Project, view: &SessionView) -> Vec<(String, String, String)> {
+pub(crate) fn alive_panes(project: &Project, view: &SessionView) -> Vec<(String, String, String)> {
     let mut alive = Vec::new();
     if let Some(record) = project.coordinator() {
         let mut any = false;

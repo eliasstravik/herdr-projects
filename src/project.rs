@@ -205,6 +205,10 @@ impl std::fmt::Display for Status {
 #[serde(default)]
 struct ProjectState {
     status: Status,
+    /// Slugs the project had before `rename`, oldest first: its threads'
+    /// branches (`hp/<slug>/...`) keep the name they were made with.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    former_slugs: Vec<String>,
 }
 
 /// The session and workspace the project belongs to, and the coordinator pane
@@ -371,7 +375,33 @@ impl Project {
 
     pub fn set_status(&self, status: Status) -> Result<()> {
         let _lock = self.lock()?;
-        write_json(&self.state_dir().join("project.json"), &ProjectState { status })
+        let path = self.state_dir().join("project.json");
+        let state = read_json::<ProjectState>(&path).unwrap_or_default();
+        write_json(&path, &ProjectState { status, ..state })
+    }
+
+    /// The slugs this project had before, oldest first.
+    pub fn former_slugs(&self) -> Vec<String> {
+        read_json::<ProjectState>(&self.state_dir().join("project.json"))
+            .unwrap_or_default()
+            .former_slugs
+    }
+
+    /// Records `slug` as a former slug (once).
+    pub fn add_former_slug(&self, slug: &str) -> Result<()> {
+        let _lock = self.lock()?;
+        let path = self.state_dir().join("project.json");
+        let mut state = read_json::<ProjectState>(&path).unwrap_or_default();
+        if !state.former_slugs.iter().any(|s| s == slug) {
+            state.former_slugs.push(slug.to_string());
+        }
+        write_json(&path, &state)
+    }
+
+    /// The branch prefixes of this project's threads: `hp/<slug>/` for the
+    /// slug and for each former one.
+    pub fn branch_prefixes(&self) -> Vec<String> {
+        std::iter::once(self.slug.clone()).chain(self.former_slugs()).map(|s| format!("hp/{s}/")).collect()
     }
 
     pub fn coordinator(&self) -> Option<Coordinator> {

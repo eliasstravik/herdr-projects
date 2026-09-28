@@ -59,6 +59,7 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 | `set <project> <key> <value>`, `routine list/toggle/approve`, `safety show/yolo/set` | Settings, routines and safety (see below). |
 | `profile list [--project P \| --names]`, `profile resolve [NAME]`, `profile add/edit/remove`, `profile allow threads\|coordinator NAMES... [--project P] [--all]`, `profile default threads\|coordinator NAME` | [Agent profiles](#agent-profiles). Everything but `list` and `resolve` needs a person at a terminal. |
 | `pause`, `resume`, `archive`, `unarchive`, `delete [--force]` | Project lifecycle. |
+| `rename <project> <new-slug> [--name NAME] [--dry-run]` | A new slug (folder name), and with `--name` a new display name. Refused while a thread is not resolved or any agent runs in the project folder: close the coordinator and run it from a shell. The folder moves in one step; the thread records, the coordinator record, `AGENTS.md`, the project's `[safety]` table (yolo, profile lists), routine approvals and the home Space's label follow it. Branches and worktrees keep `hp/<old>/` and `sweep` still finds them; it lists what it could not update (other machines, the coordinator's conversation, which starts anew), then runs `doctor`. Run it again to finish one that stopped halfway. |
 | `popup [project]`, `focus [project]`, `unfocus`, `overview [project]`, `needs-you --line` | Views. |
 | `configure [--key K] [--hooks-only] [--dry-run]`, `unconfigure`, `report`, `progress` | Sidebar, keys, hooks, the `autoproject` skill, self-reports. |
 | `open-file <path>`, `open-url <url>` | Open a text file in a new tab with `$EDITOR`, or a PR in the browser. |
@@ -216,7 +217,7 @@ The coordinator runs the binary every turn, so allow-list it in your agent by su
 
 - Allow `thread start` only where you've set `start_threads = "auto"`. Left off the list, every thread start meets your agent's own permission prompt.
 - With `thread keys` on the list, the coordinator answers a thread's questions and permission prompts itself, by the skill's rules, and its trust screens when `trust_screens` is `coordinator`. Remove it to confirm each answer first.
-- Never allow `thread resolve`, `sweep`, `delete`, `archive`, `routine approve`, `configure` or `unconfigure`.
+- Never allow `thread resolve`, `sweep`, `delete`, `rename`, `archive`, `routine approve`, `configure` or `unconfigure`.
 
 ## What the safety settings do and don't stop
 

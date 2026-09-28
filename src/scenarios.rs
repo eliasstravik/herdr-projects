@@ -2665,3 +2665,145 @@ fn a_remote_threads_profile_is_resolved_on_its_machine() {
     std::fs::write(ctx.config_dir.join("config.toml"), "[machines.vm]\nprofiles = [\"claude\"]\n").unwrap();
     assert!(crate::threads::thread_profile(&ctx, &project, "vm", Some("claude")).unwrap_err().to_string().contains("no SSH target"));
 }
+
+// ---------------------------------------------------------------- rename
+
+fn rename_args<'a>(from: &'a str, to: &'a str, name: Option<&'a str>, dry_run: bool) -> crate::rename::Args<'a> {
+    crate::rename::Args { from, to, name, dry_run }
+}
+
+#[test]
+fn rename_moves_the_folder_and_every_reference_to_it() {
+    let world = World::new();
+    let project = world.project("scratch", "a.sock");
+    let old = project.canonical_dir();
+    let old_s = old.to_string_lossy().into_owned();
+    project.update_coordinator(|c| c.agent_session = "abc".into()).unwrap();
+    std::fs::write(project.state_dir().join("coordinators.json"), "[]").unwrap();
+    // A resolved tab thread in the folder, a resolved worktree thread outside it, a remote one.
+    let tab = world.thread(&project, &old.join("threads/t-0001"), |t| {
+        t.kind = Kind::Tab;
+        t.status = Status::Resolved;
+        t.worktree_path.clear();
+    });
+    let wt = thread::allocate(&project, |t| {
+        t.status = Status::Resolved;
+        t.branch = "hp/scratch/t-0002-x".into();
+        t.worktree_path = "/wt/x".into();
+        t.cwd = "/wt/x".into();
+        t.thread_dir = "/wt/x/.herdr-project/scratch-t-0002".into();
+        t.repo = "/repo".into();
+    })
+    .unwrap();
+    thread::allocate(&project, |t| {
+        t.status = Status::Resolved;
+        t.machine = "box".into();
+        t.branch = "hp/scratch/t-0003-y".into();
+        t.worktree_path = "/remote/wt".into();
+    })
+    .unwrap();
+    let ctx = world.ctx();
+    std::fs::create_dir_all(&ctx.config_dir).unwrap();
+    std::fs::write(ctx.config_dir.join("config.toml"), format!("# mine\n[safety.default]\nyolo = false\n\n[safety.\"{old_s}\"]\nyolo = true\nthread_profiles = [\"claude\"]\n")).unwrap();
+    let approval = crate::routine::Approval { project: old_s.clone(), routine: "watch".into(), command_sha256: "h".into(), approved: "now".into() };
+    project::write_json(&ctx.config_dir.join("approved-routines.json"), &vec![approval]).unwrap();
+    world.runner.on("workspace rename", ok(r#"{"result":{}}"#));
+
+    let out = crate::rename::run(&ctx, &rename_args("scratch", "home", Some("Home Base"), false)).unwrap();
+
+    assert!(!old.exists());
+    let home = Project::load(&world.root, "home").unwrap();
+    let new = home.canonical_dir();
+    let new_s = new.to_string_lossy().into_owned();
+    assert_eq!(home.former_slugs(), ["scratch"]);
+    assert_eq!(home.read_project_md().unwrap().0.name, "Home Base");
+    let agents = std::fs::read_to_string(home.dir().join("AGENTS.md")).unwrap();
+    assert!(agents.contains("(`home`)") && agents.contains(".herdr-project/home-<id>"), "{agents}");
+    assert!(std::fs::read_link(home.dir().join("CLAUDE.md")).is_ok());
+    // Records: paths in the folder follow it, everything else keeps its name.
+    let t1 = thread::load(&home, &tab.id).unwrap();
+    assert_eq!(t1.cwd, new.join("threads/t-0001").to_string_lossy());
+    assert!(t1.thread_dir.starts_with(&new_s) && t1.thread_dir.ends_with("scratch-t-0001"), "{}", t1.thread_dir);
+    let t2 = thread::load(&home, &wt.id).unwrap();
+    assert_eq!((t2.branch.as_str(), t2.worktree_path.as_str()), ("hp/scratch/t-0002-x", "/wt/x"));
+    let c = home.coordinator().unwrap();
+    assert_eq!(c.cwd, new_s);
+    assert!(c.pane_id.is_empty() && c.agent_session.is_empty() && c.workspace_id == "w1");
+    assert!(!home.state_dir().join("coordinators.json").exists());
+    // The user's config: the safety table and approvals follow the path.
+    let config = std::fs::read_to_string(ctx.config_dir.join("config.toml")).unwrap();
+    assert!(config.starts_with("# mine") && !config.contains(&format!("\"{old_s}\"")), "{config}");
+    let safety = home.safety(&ctx.config_dir).unwrap();
+    assert!(safety.yolo && safety.thread_profiles == Some(vec!["claude".into()]));
+    assert_eq!(crate::routine::approvals(&ctx.config_dir)[0].project, new_s);
+    // The home Space gets the new name.
+    let calls = world.runner.calls.borrow();
+    let rename = calls.iter().find(|c| c.display().contains("workspace rename")).expect("space renamed");
+    assert!(rename.display().contains("w1") && rename.display().contains("Home Base"), "{}", rename.display());
+    drop(calls);
+    // What it could not update is listed, the remote thread by machine.
+    let left = out.left.join("\n");
+    assert!(left.contains("on box branch hp/scratch/t-0003-y, worktree /remote/wt"), "{left}");
+    assert!(left.contains("hp/scratch/t-0002-x") && left.contains("conversation"), "{left}");
+    // `sweep` looks for both prefixes.
+    assert_eq!(home.branch_prefixes(), ["hp/home/", "hp/scratch/"]);
+    // A status change keeps the former slug.
+    home.set_status(project::Status::Paused).unwrap();
+    assert_eq!(home.former_slugs(), ["scratch"]);
+}
+
+#[test]
+fn rename_refuses_open_threads_live_agents_taken_and_bad_slugs() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    world.project("other", "a.sock");
+    let ctx = world.ctx();
+    let refused = |to: &str| crate::rename::run(&ctx, &rename_args("demo", to, None, false)).unwrap_err().to_string();
+    assert!(refused("other").contains("is taken"));
+    assert!(refused("Bad Slug").contains("not a valid slug"));
+    assert!(refused("demo").contains("already has that slug"));
+    assert!(crate::rename::run(&ctx, &rename_args("demo", "home", Some(""), false)).unwrap_err().to_string().contains("may not be empty"));
+
+    let t = world.thread(&project, world.home.path(), |_| {});
+    assert!(refused("home").contains(&format!("not resolved: {}", t.id)));
+    thread::update(&project, &t.id, |t| t.status = Status::Resolved).unwrap();
+
+    // Any agent in the folder, recorded or not.
+    let dir = project.canonical_dir();
+    *world.agents.borrow_mut() = format!("[{}]", agent_json("w9", "w9:t1", "w9:p3", &dir.join("scratch").to_string_lossy(), "stray", "idle"));
+    assert!(refused("home").contains("agent stray (pane w9:p3)"));
+    *world.agents.borrow_mut() = "[]".into();
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    assert!(refused("home").contains("coordinator (pane w1:p1)"));
+    *world.panes.borrow_mut() = "[]".into();
+
+    // The dry run lists the plan and changes nothing.
+    let plan = crate::rename::run(&ctx, &rename_args("demo", "home", None, true)).unwrap();
+    assert!(plan.steps[0].starts_with("move "), "{:?}", plan.steps);
+    assert!(project.dir().is_dir() && !world.root.join("home").exists());
+    assert!(project.former_slugs().is_empty());
+    crate::rename::run(&ctx, &rename_args("demo", "home", None, false)).unwrap();
+    assert!(world.root.join("home/PROJECT.md").is_file());
+}
+
+#[test]
+fn rename_run_again_after_the_move_finishes_the_rest() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let old_s = project.canonical_dir().to_string_lossy().into_owned();
+    let ctx = world.ctx();
+    std::fs::create_dir_all(&ctx.config_dir).unwrap();
+    std::fs::write(ctx.config_dir.join("config.toml"), format!("[safety.\"{old_s}\"]\nyolo = true\n")).unwrap();
+    // As if it stopped right after the folder moved.
+    std::fs::rename(project.dir(), world.root.join("demo-2")).unwrap();
+    let moved = Project::load(&world.root, "demo-2").unwrap();
+    moved.add_former_slug("demo").unwrap();
+
+    crate::rename::run(&ctx, &rename_args("demo", "demo-2", None, false)).unwrap();
+    assert!(moved.safety(&ctx.config_dir).unwrap().yolo);
+    // `demo-2` is not under `demo`: the record points at the new folder once.
+    assert_eq!(moved.coordinator().unwrap().cwd, moved.canonical_dir().to_string_lossy());
+    // Once finished, the old slug is simply gone.
+    assert!(crate::rename::run(&ctx, &rename_args("demo", "demo-2", None, false)).is_ok());
+    assert!(crate::rename::run(&ctx, &rename_args("demo", "x", None, false)).unwrap_err().to_string().contains("no project `demo`"));
+}

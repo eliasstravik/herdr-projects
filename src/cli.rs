@@ -150,6 +150,20 @@ enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// Give a project a new slug (its folder name), and with --name a new display name.
+    /// Refused while a thread is not resolved or an agent runs in the project folder
+    Rename {
+        slug: String,
+        new_slug: String,
+        /// The new display name (default: keep it)
+        #[arg(long, value_name = "NAME")]
+        name: Option<String>,
+        /// Print the plan and change nothing
+        #[arg(long)]
+        dry_run: bool,
+        #[command(flatten)]
+        session: SessionArgs,
+    },
     /// Continue the current workspace's agent pane as a new project
     AdoptWorkspace {
         /// Project name (default: the workspace label herdr passes to the action)
@@ -780,6 +794,9 @@ pub fn run() -> Result<()> {
         Command::Archive { slug } => lifecycle::set_status(&ctx, &slug, Status::Archived),
         Command::Unarchive { slug } => lifecycle::set_status(&ctx, &slug, Status::Active),
         Command::Delete { slug, force } => lifecycle::delete(&ctx, &slug, force),
+        Command::Rename { slug, new_slug, name, dry_run, session } => {
+            crate::rename::cli(&ctx, &crate::rename::Args { from: &slug, to: &new_slug, name: name.as_deref(), dry_run }, &session.into())
+        }
         Command::AdoptWorkspace { name, goal, pane, workspace_cwd, session } => {
             adopt::adopt_workspace(&ctx, &adopt::AdoptWorkspace { name, goal, pane, workspace_cwd, session: session.into() })
         }

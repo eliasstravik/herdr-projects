@@ -251,6 +251,18 @@ fn store_approval(config_dir: &Path, project: &Project, routine: &Routine) -> Re
     project::write_json(&approvals_path(config_dir), &all)
 }
 
+/// Moves every approval of the project at `old` to `new` (after `rename`),
+/// replacing approvals already stored for `new` under the same routine name.
+pub fn move_approvals(config_dir: &Path, old: &str, new: &str) -> Result<()> {
+    let mut all = approvals(config_dir);
+    let moving: Vec<String> = all.iter().filter(|a| a.project == old).map(|a| a.routine.clone()).collect();
+    all.retain(|a| !(a.project == new && moving.contains(&a.routine)));
+    for a in all.iter_mut().filter(|a| a.project == old) {
+        a.project = new.to_string();
+    }
+    project::write_json(&approvals_path(config_dir), &all)
+}
+
 /// `routine approve`: refuses unless a person is at a terminal, and asks them
 /// to type the routine's name. It does not rely on an agent's permission
 /// prompt, because users allow-list this binary for their coordinator.

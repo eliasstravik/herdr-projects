@@ -22,6 +22,7 @@ mod progress;
 mod prompt_box;
 mod project;
 mod remote;
+mod rename;
 mod routine;
 mod runner;
 mod safety;

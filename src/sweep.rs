@@ -1,5 +1,5 @@
 //! `sweep`: what a project left behind and nothing uses any more. Worktrees
-//! on `hp/<slug>/` branches with no open thread, local branches of resolved
+//! on `hp/<slug>/` branches (or a former slug's) with no open thread, local branches of resolved
 //! threads whose pull request merged, tabs of resolved threads, their
 //! workspaces still open on a worktree that is gone, working
 //! folders of long-resolved tab threads, handled inbox items older than 30
@@ -70,8 +70,7 @@ fn older_than(stamp: &str, days: u32, now: jiff::Timestamp) -> bool {
 }
 
 pub fn find(ctx: &Ctx, project: &Project) -> Vec<Orphan> {
-    let slug = &project.slug;
-    let prefix = format!("hp/{slug}/");
+    let prefixes = project.branch_prefixes();
     let threads = thread::list(project);
     let settings = project.read_project_md().map(|(s, _)| s).unwrap_or_default();
     let view = threads::session_view(ctx, project);
@@ -88,7 +87,7 @@ pub fn find(ctx: &Ctx, project: &Project) -> Vec<Orphan> {
         let listed = git(ctx, repo, &["worktree", "list", "--porcelain"]).map(|t| parse_worktrees(&t)).unwrap_or_default();
         let mut with_worktree = Vec::new();
         for (path, branch) in listed {
-            if !branch.starts_with(&prefix) {
+            if !prefixes.iter().any(|p| branch.starts_with(p)) {
                 continue;
             }
             with_worktree.push(branch.clone());
@@ -103,7 +102,9 @@ pub fn find(ctx: &Ctx, project: &Project) -> Vec<Orphan> {
             let workspace = view.as_ref().and_then(|v| v.panes.iter().find(|p| p.cwd == path).map(|p| p.workspace_id.clone()));
             orphans.push(Orphan::Worktree { repo: repo.clone(), path, workspace, branch, thread: owner.map(|t| t.id.clone()) });
         }
-        let branches = git(ctx, repo, &["for-each-ref", "--format=%(refname:short)", &format!("refs/heads/{prefix}")]).unwrap_or_default();
+        let refs: Vec<String> = prefixes.iter().map(|p| format!("refs/heads/{p}")).collect();
+        let args: Vec<&str> = ["for-each-ref", "--format=%(refname:short)"].into_iter().chain(refs.iter().map(String::as_str)).collect();
+        let branches = git(ctx, repo, &args).unwrap_or_default();
         for branch in branches.lines().map(str::trim).filter(|b| !b.is_empty()) {
             if with_worktree.iter().any(|b| b == branch) {
                 continue;

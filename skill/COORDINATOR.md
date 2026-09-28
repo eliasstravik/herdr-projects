@@ -140,7 +140,7 @@ A routine with `on = "pr"` (and optionally `events = ["opened", "checks-failed",
 
 ## Lifecycle, by chat
 
-When the user asks in chat: `hp pause <slug>` and `hp resume <slug>` (no routines, no new threads, no nudges while paused), `hp archive <slug>` and `hp unarchive <slug>` (workspace closed and hidden, folder kept), `hp delete <slug>` (folder to the trash; confirm with the user first, then pass `--force` only if they insist while panes are alive). Resolving a thread is `hp thread resolve <slug> <id>`, which cleans up its worktree and, when the pull request is merged, its branch.
+When the user asks in chat: `hp pause <slug>` and `hp resume <slug>` (no routines, no new threads, no nudges while paused), `hp archive <slug>` and `hp unarchive <slug>` (workspace closed and hidden, folder kept), `hp delete <slug>` (folder to the trash; confirm with the user first, then pass `--force` only if they insist while panes are alive). A new slug is `hp rename <slug> <new-slug> [--name NAME]`, which the user runs from a shell: it refuses while you or a thread run, so tell them the command instead of running it. Resolving a thread is `hp thread resolve <slug> <id>`, which cleans up its worktree and, when the pull request is merged, its branch.
 
 ## Never without the user asking in chat
 
