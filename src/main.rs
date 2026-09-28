@@ -32,6 +32,7 @@ mod sidebar;
 mod spaces;
 mod steps;
 mod sweep;
+mod tasks;
 mod thread;
 mod threads;
 mod ticker;

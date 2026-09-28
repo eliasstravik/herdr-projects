@@ -1799,10 +1799,11 @@ fn the_digest_prints_the_task_list_or_none() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
     let tasks = project.dir().join("TASKS.md");
-    std::fs::write(&tasks, "# Tasks\n\n## Backlog\n- [ ] Write the docs (me)\n").unwrap();
+    std::fs::write(&tasks, "# Tasks\n\n## Backlog\n- [ ] Write the docs (me)\n  Cover the popup.\n  And the skill.\n- [ ] Ship (agent)\n").unwrap();
     let digest = coordinator::digest(&world.ctx(), &project, "hp").unwrap().0;
     let heading = digest.find("## Tasks (TASKS.md)").expect("tasks heading");
-    assert!(digest[heading..].contains("- [ ] Write the docs (me)"));
+    assert!(digest[heading..].contains("- [ ] Write the docs (me)\n  notes: Cover the popup. (+1 more lines in TASKS.md)\n- [ ] Ship (agent)\n"), "{digest}");
+    assert!(!digest.contains("And the skill."));
 
     std::fs::remove_file(&tasks).unwrap();
     let digest = coordinator::digest(&world.ctx(), &project, "hp").unwrap().0;
@@ -1983,9 +1984,13 @@ fn a_tab_thread_gets_a_brief_with_the_project_header_and_prompts_are_recorded() 
     world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":""}}}"#));
     world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
     let ctx = world.ctx();
-    let t = threads::start(&ctx, "demo", StartArgs { title: "Research".into(), repo: None, machine: None, profile: None, kind: Some(Kind::Tab), base: None, task: "Look into it.".into() }).unwrap();
+    // Delegated from TASKS.md: the task's notes reach the brief.
+    std::fs::write(project.dir().join("TASKS.md"), "# Tasks\n\n## Backlog\n- [ ] Research (agent)\n  Start with the 2025 papers.\n").unwrap();
+    let task = crate::tasks::delegated(&crate::tasks::read(&project.dir()), "Research", "Look into it.").unwrap();
+    let t = threads::start(&ctx, "demo", StartArgs { title: "Research".into(), repo: None, machine: None, profile: None, kind: Some(Kind::Tab), base: None, task }).unwrap();
     assert_eq!(t.kind, Kind::Tab);
     let brief = std::fs::read_to_string(Path::new(&t.thread_dir).join("brief.md")).unwrap();
+    assert!(brief.contains("Look into it.\n\n## Notes from the task list\n\nStart with the 2025 papers."), "{brief}");
     assert!(brief.starts_with("# Project\n\n- Project: Demo (`demo`)\n- Goal: Ship it\n- Repos: (none)\n- Uploads"), "{brief}");
     assert!(!brief.contains("max_parallel_threads"));
 

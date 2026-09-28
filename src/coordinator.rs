@@ -579,7 +579,7 @@ pub fn digest(ctx: &Ctx, project: &Project, prefix: &str) -> Result<(String, Vec
     let _ = writeln!(out, "{}", memory.trim());
 
     let _ = writeln!(out, "\n## Tasks (TASKS.md)");
-    let tasks = std::fs::read_to_string(project.dir().join("TASKS.md")).unwrap_or_default();
+    let tasks = crate::tasks::compact(&crate::tasks::read(&project.dir()));
     let _ = writeln!(out, "{}", if tasks.trim().is_empty() { "(none)" } else { tasks.trim() });
 
     let rows = crate::threads::rows(ctx, project);

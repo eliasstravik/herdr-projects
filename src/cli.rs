@@ -315,6 +315,9 @@ enum ThreadCommand {
         /// The task; `-` reads standard input
         #[arg(long, value_name = "FILE")]
         task_file: String,
+        /// Delegating this TASKS.md task (its title as written there): its notes are added to the task
+        #[arg(long, value_name = "TITLE")]
+        from_task: Option<String>,
     },
     /// Bring back a thread whose pane is gone or whose start failed
     Restart {
@@ -668,8 +671,12 @@ pub fn run() -> Result<()> {
             }
         },
         Command::Thread { command } => match command {
-            ThreadCommand::Start { slug, title, repo, machine, profile, kind, base, task_file } => {
-                let task = read_text(&task_file)?;
+            ThreadCommand::Start { slug, title, repo, machine, profile, kind, base, task_file, from_task } => {
+                let mut task = read_text(&task_file)?;
+                if let Some(from) = from_task {
+                    let project = Project::load(&ctx.root, &slug)?;
+                    task = crate::tasks::delegated(&crate::tasks::read(&project.dir()), &from, &task)?;
+                }
                 let kind = kind.as_deref().map(crate::thread::Kind::parse).transpose()?;
                 let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, profile, kind, base, task })?;
                 println!("{}", serde_json::json!({ "id": thread.id, "kind": thread.kind, "profile": thread.profile, "agent": thread.agent, "branch": thread.branch, "pane_id": thread.pane_id }));
