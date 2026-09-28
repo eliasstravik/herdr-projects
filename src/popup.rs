@@ -90,8 +90,6 @@ pub struct Row {
 #[derive(Debug, Clone)]
 pub enum RowKind {
     None,
-    /// A task's description preview under its task row: not selectable.
-    Note,
     Thread(Box<ThreadRow>),
     Task(TaskRow),
     Inbox { slug: String, id: String, body: String },
@@ -276,13 +274,6 @@ fn group_color(group: Group) -> Option<Color> {
     }
 }
 
-/// The first line of a task's notes, and how many more lines there are.
-fn note_preview(description: &str) -> Option<String> {
-    let filled: Vec<&str> = description.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
-    let first = filled.first()?;
-    Some(if filled.len() > 1 { format!("{first}  (+{} lines, i)", filled.len() - 1) } else { first.to_string() })
-}
-
 /// A task's notes as a detail screen.
 fn task_detail(task: &TaskRow) -> Mode {
     let mut lines = vec![format!("{} · {}", task.list, if task.owner.is_empty() { "no owner" } else { &task.owner }), String::new()];
@@ -372,11 +363,8 @@ pub fn build(ctx: &Ctx, section: Section, scope: Option<&str>) -> Vec<Row> {
                         rows.push(header(if scope.is_none() { format!("{} · {}", project.slug, task.list) } else { task.list.clone() }));
                     }
                     let owner = if task.owner.is_empty() { String::new() } else { format!("  ({})", task.owner) };
-                    let preview = note_preview(&task.description);
-                    rows.push(Row { header: false, text: format!("  {}{owner}", task.title), color: None, kind: RowKind::Task(task) });
-                    if let Some(preview) = preview {
-                        rows.push(Row { header: true, text: format!("    {preview}"), color: None, kind: RowKind::Note });
-                    }
+                    let notes = if task.description.trim().is_empty() { "" } else { "  ≡" };
+                    rows.push(Row { header: false, text: format!("  {}{owner}{notes}", task.title), color: None, kind: RowKind::Task(task) });
                 }
             }
             if rows.is_empty() {
@@ -1399,9 +1387,7 @@ impl<'a> Popup<'a> {
                     queue!(out, cursor::MoveTo(0, (body_top + i - start) as u16))?;
                     let marker = if i == self.selected && !row.header { "▌" } else { " " };
                     let text = fit(&format!("{marker}{}", row.text), width);
-                    if matches!(row.kind, RowKind::Note) {
-                        queue!(out, SetAttribute(Attribute::Dim), Print(text), SetAttribute(Attribute::Reset))?;
-                    } else if row.header {
+                    if row.header {
                         queue!(out, SetAttribute(Attribute::Bold), Print(text), SetAttribute(Attribute::Reset))?;
                     } else {
                         if i == self.selected {
@@ -1643,7 +1629,7 @@ mod tests {
         std::fs::write(project.dir().join("TASKS.md"), "# Tasks\n\n## Backlog\n- [ ] Fix login (agent)\n  Safari drops the cookie.\n  See issue 42.\n- [ ] Docs (me)\n").unwrap();
         let tasks = build(&world.ctx(), Section::Tasks, Some("demo"));
         let texts: Vec<(&str, bool)> = tasks.iter().map(|r| (r.text.as_str(), r.header)).collect();
-        assert_eq!(texts, [("Backlog", true), ("  Fix login  (agent)", false), ("    Safari drops the cookie.  (+1 lines, i)", true), ("  Docs  (me)", false)]);
+        assert_eq!(texts, [("Backlog", true), ("  Fix login  (agent)  ≡", false), ("  Docs  (me)", false)]);
         let RowKind::Task(task) = &tasks[1].kind else { panic!() };
         let Mode::Detail { title, lines, .. } = task_detail(task) else { panic!() };
         assert_eq!((title.as_str(), lines), ("Fix login", vec!["Backlog · agent".to_string(), String::new(), "  Safari drops the cookie.".into(), "  See issue 42.".into()]));
