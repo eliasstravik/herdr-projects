@@ -44,15 +44,24 @@ struct SavedMachine {
     target: String,
 }
 
-/// The SSH target of a saved machine: from `herdr machine list --json`, else
-/// `[machines.<label>] ssh` in `config.toml`.
-pub fn ssh_target(runner: &dyn Runner, herdr_bin: &str, config_dir: &Path, machine: &str) -> Result<String> {
-    let listed = runner
+fn saved(runner: &dyn Runner, herdr_bin: &str) -> Vec<SavedMachine> {
+    runner
         .run(&Cmd::new(herdr_bin, SSH_TIMEOUT).args(["machine", "list", "--json"]))
         .ok()
         .filter(Output::success)
         .and_then(|out| serde_json::from_str::<Vec<SavedMachine>>(&out.stdout).ok())
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
+
+/// `(label, ssh target)` of every machine `herdr machine list` saves.
+pub fn saved_machines(runner: &dyn Runner, herdr_bin: &str) -> Vec<(String, String)> {
+    saved(runner, herdr_bin).into_iter().map(|m| (if m.label.is_empty() { m.id } else { m.label }, m.target)).collect()
+}
+
+/// The SSH target of a saved machine: from `herdr machine list --json`, else
+/// `[machines.<label>] ssh` in `config.toml`.
+pub fn ssh_target(runner: &dyn Runner, herdr_bin: &str, config_dir: &Path, machine: &str) -> Result<String> {
+    let listed = saved(runner, herdr_bin);
     if let Some(found) = listed.iter().find(|m| m.label == machine || m.id == machine)
         && !found.target.is_empty()
     {

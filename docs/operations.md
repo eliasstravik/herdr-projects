@@ -48,15 +48,16 @@ Every thread works from `<its working directory>/.herdr-project/<project>-<id>/`
 | `new <name> [--goal] [--repo PATH[@MACHINE]]... [--thread-profile P] [--coordinator-profile P]` | Create a project folder. The profiles default to `[defaults]` in config.toml, else `claude`. |
 | `open <project> [--profile P] [--new] [--tab] [--session N \| --socket P] [--rebind]` | A coordinator agent in the project folder; focuses a running one. From a shell pane inside Herdr it runs in that pane and quitting it returns to the shell; `--tab`, the popup, actions and a terminal outside Herdr use a tab of the project's workspace. |
 | `context <project> [--peek]` | The digest the coordinator reads every turn. |
+| `assignable <project> [--refresh] [--check OWNER]` | Who TASKS.md tasks may be assigned to (see [Task owners](#task-owners)); `--check` refuses an owner that is not valid. |
 | `coordinator prompt <project> --text-file F` | A sentence to the coordinator (the popup's task keys use it). |
-| `thread start <project> --title T [--repo PATH] [--kind worktree\|tab\|checkout] [--profile P] [--machine M] [--base REF] --task-file F` | New thread; `-` reads the task from standard input. `--kind` is the placement; `--profile` is the agent, one the project allows. |
+| `thread start <project> --title T [--repo PATH] [--kind worktree\|tab\|checkout] [--profile P] [--machine M] [--base REF] --task-file F [--from-task TITLE]` | New thread; `-` reads the task from standard input. `--kind` is the placement; `--profile` is the agent, one the project allows. `--from-task` adds a TASKS.md task's notes and takes `--profile` and `--machine` from its owner. |
 | `thread prompt`, `thread next [--line N \| --add TEXT]`, `thread stop`, `thread restart [--profile P]` | Steer a thread. Prompts are recorded in its task file. |
 | `thread read [--lines N]`, `thread keys [KEY]... [--text T]`, `thread brief` | Answer a thread's pane without going there: print what it shows (a trust dialog, a question menu, a permission prompt), then type text and press keys (`up`, `down`, `enter`, `esc`, `tab`, a digit). `thread keys` refuses a trust screen when `trust_screens` is `user`. `thread brief` sends a brief the ticker has not delivered yet (the ticker waits for a settled, empty input box, counts a brief sent only once the agent starts working, never types it twice, and after three unconfirmed tries leaves an inbox item). |
 | `thread list/show [--json]`, `thread ack`, `thread adopt` | Look at threads. |
 | `thread resolve [--keep-worktree] [--discard-uncopied] [--skip-copy] [--reopen]` | Final copy home, then clean up. |
 | `sweep <project> [--dry-run] [--yes]` | Remove what nothing uses any more. |
 | `set <project> <key> <value>`, `routine list/toggle/approve`, `safety show/yolo/set` | Settings, routines and safety (see below). |
-| `profile list [--project P]`, `profile add/edit/remove`, `profile allow threads\|coordinator NAMES... [--project P] [--all]`, `profile default threads\|coordinator NAME` | [Agent profiles](#agent-profiles). Everything but `list` needs a person at a terminal. |
+| `profile list [--project P \| --names]`, `profile add/edit/remove`, `profile allow threads\|coordinator NAMES... [--project P] [--all]`, `profile default threads\|coordinator NAME` | [Agent profiles](#agent-profiles). Everything but `list` needs a person at a terminal. |
 | `pause`, `resume`, `archive`, `unarchive`, `delete [--force]` | Project lifecycle. |
 | `popup [project]`, `focus [project]`, `unfocus`, `overview [project]`, `needs-you --line` | Views. |
 | `configure [--key K] [--hooks-only] [--dry-run]`, `unconfigure`, `report`, `progress` | Sidebar, keys, hooks, the `autoproject` skill, self-reports. |
@@ -161,6 +162,31 @@ thread_profiles = ["luna"]         # this project's own list wins
 - **Who changes what.** Profiles and lists live only in config.toml, which the coordinator never writes. `profile add/edit/remove/allow/default` refuse without a person at a terminal, as `routine approve` does; the popup's settings section writes them directly (`n` new profile, `↵` edit, `d` delete, `↵` on a list toggles profiles with space). The default profiles in PROJECT.md are ordinary settings the coordinator may change when you ask, only to an allowed profile. This is a soft boundary: an agent that fakes a terminal or edits config.toml by hand is stopped only by its own permission prompts.
 - **Old threads and coordinators.** A thread started before profiles keeps its harness and its stored model flag. `open` resumes or reuses a coordinator only when it runs the same profile; one started before profiles counts as the built-in of its kind.
 
+## Task owners
+
+Each task in `TASKS.md` has at most one owner, in brackets after its title. The thread running it comes after, as status:
+
+```
+- [ ] Write the release notes (me)
+- [ ] Rename the settings keys (codex-fast)          a profile, on this machine
+- [ ] Fix the M1 build (@elias-macbook-pro-m1)       that machine; its coordinator picks the profile
+- [ ] Profile the ticker (deep@elias-macbook-pro-m1) that profile on that machine
+- [ ] Look into Safari logouts                       unassigned
+- [ ] Fix login (claude) · t-0007                    delegated: t-0007 runs it
+```
+
+- **Valid names.** `me`; the thread profiles the project allows here; and each machine with the profiles it lists. Machines come from two places, used together: `herdr machine list` (their profiles are fetched over SSH by running `herdr-projects profile list --names` there), and config.toml, for a machine this one cannot reach, such as a sandboxed VM that only learns the names:
+
+  ```toml
+  [machines.elias-macbook-pro-m1]
+  profiles = ["claude", "codex-fast"]   # names only; gives no access
+  ```
+
+  A machine with an `ssh` key there is fetched as well. `context` prints one `Assignable:` line (`claude, codex-fast, @m1: claude|pi`), and `assignable <project>` the full list. The SSH lookups are cached for an hour in `<root>/.machines.json`, so `context` does not reach other machines every turn; `assignable --refresh` looks again. A machine that did not answer shows as `@m1 (not reached)` and can still be assigned as `@m1`. With no machines, only `me` and local profiles are valid.
+- **Refused owners.** The coordinator checks a new owner with `assignable --check` and refuses one that is not valid.
+- **Delegating.** `thread start --from-task "<title>"` starts the thread with the owner's profile and machine (`--profile`, `--machine`); a flag that contradicts the owner is refused. A `@machine` owner gets the project's `thread_profile` when delegated from here. The profile is launched with this machine's definition of that name, so a profile you assign on another machine should exist under the same name here too.
+- **Old lines.** `(agent)` reads as unassigned and `(agent → t-0007)` as this machine's default profile with thread t-0007. A person's name is no longer an owner.
+
 ## The allow-list for your coordinator
 
 The coordinator runs the binary every turn, so allow-list it in your agent by subcommand, never the bare binary. `context` prints the exact prefix (`Commands: <binary> --root <root>`); the patterns must start with it. For Claude Code, in the project folder's `.claude/settings.local.json`:
@@ -169,6 +195,7 @@ The coordinator runs the binary every turn, so allow-list it in your agent by su
 { "permissions": { "allow": [
   "Bash(<binary> --root <root> skill:*)",
   "Bash(<binary> --root <root> context:*)",
+  "Bash(<binary> --root <root> assignable:*)",
   "Bash(<binary> --root <root> report:*)",
   "Bash(<binary> --root <root> inbox done:*)",
   "Bash(<binary> --root <root> list:*)",

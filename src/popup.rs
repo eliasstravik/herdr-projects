@@ -107,7 +107,7 @@ pub enum RowKind {
 pub fn parse_tasks(slug: &str, text: &str) -> Vec<TaskRow> {
     crate::tasks::parse(text)
         .into_iter()
-        .map(|t| TaskRow { slug: slug.to_string(), list: t.list, title: t.title, owner: t.owner, thread: t.thread, description: t.description })
+        .map(|t| TaskRow { slug: slug.to_string(), list: t.list, title: t.title, owner: t.owner.to_string(), thread: t.thread, description: t.description })
         .collect()
 }
 
@@ -362,7 +362,10 @@ pub fn build(ctx: &Ctx, section: Section, scope: Option<&str>) -> Vec<Row> {
                         list = Some(task.list.clone());
                         rows.push(header(if scope.is_none() { format!("{} · {}", project.slug, task.list) } else { task.list.clone() }));
                     }
-                    let owner = if task.owner.is_empty() { String::new() } else { format!("  ({})", task.owner) };
+                    let mut owner = if task.owner.is_empty() { String::new() } else { format!("  ({})", task.owner) };
+                    if let Some(thread) = &task.thread {
+                        owner.push_str(&format!(" · {thread}"));
+                    }
                     let notes = if task.description.trim().is_empty() { "" } else { "  ≡" };
                     rows.push(Row { header: false, text: format!("  {}{owner}{notes}", task.title), color: None, kind: RowKind::Task(task) });
                 }
@@ -1581,13 +1584,13 @@ mod tests {
 
     #[test]
     fn tasks_parse_with_lists_owners_and_threads() {
-        let text = "# Tasks\n\n## Backlog\n- [ ] Write the docs (me)\n- [ ] Fix login (agent → t-0007)\n- [ ] Plain line\n\n## Later\n- [x] Old (agent)\n";
+        let text = "# Tasks\n\n## Backlog\n- [ ] Write the docs (me)\n- [ ] Fix login (codex-fast@m1) · t-0007\n- [ ] Plain line\n\n## Later\n- [x] Old (agent)\n";
         let tasks = parse_tasks("demo", text);
         assert_eq!(tasks.len(), 4);
         assert_eq!((tasks[0].list.as_str(), tasks[0].title.as_str(), tasks[0].owner.as_str()), ("Backlog", "Write the docs", "me"));
-        assert_eq!(tasks[1].thread.as_deref(), Some("t-0007"));
+        assert_eq!((tasks[1].owner.as_str(), tasks[1].thread.as_deref()), ("codex-fast@m1", Some("t-0007")));
         assert_eq!(tasks[2].owner, "");
-        assert_eq!(tasks[3].list, "Later");
+        assert_eq!((tasks[3].list.as_str(), tasks[3].owner.as_str()), ("Later", ""));
     }
 
     #[test]
@@ -1626,13 +1629,13 @@ mod tests {
         let settings = build(&world.ctx(), Section::Settings, Some("demo"));
         assert!(settings.iter().any(|r| r.text.contains("max_parallel_threads")));
         assert!(!build(&world.ctx(), Section::Tasks, Some("demo")).is_empty());
-        std::fs::write(project.dir().join("TASKS.md"), "# Tasks\n\n## Backlog\n- [ ] Fix login (agent)\n  Safari drops the cookie.\n  See issue 42.\n- [ ] Docs (me)\n").unwrap();
+        std::fs::write(project.dir().join("TASKS.md"), "# Tasks\n\n## Backlog\n- [ ] Fix login (claude) · t-0003\n  Safari drops the cookie.\n  See issue 42.\n- [ ] Docs (me)\n").unwrap();
         let tasks = build(&world.ctx(), Section::Tasks, Some("demo"));
         let texts: Vec<(&str, bool)> = tasks.iter().map(|r| (r.text.as_str(), r.header)).collect();
-        assert_eq!(texts, [("Backlog", true), ("  Fix login  (agent)  ≡", false), ("  Docs  (me)", false)]);
+        assert_eq!(texts, [("Backlog", true), ("  Fix login  (claude) · t-0003  ≡", false), ("  Docs  (me)", false)]);
         let RowKind::Task(task) = &tasks[1].kind else { panic!() };
         let Mode::Detail { title, lines, .. } = task_detail(task) else { panic!() };
-        assert_eq!((title.as_str(), lines), ("Fix login", vec!["Backlog · agent".to_string(), String::new(), "  Safari drops the cookie.".into(), "  See issue 42.".into()]));
+        assert_eq!((title.as_str(), lines), ("Fix login", vec!["Backlog · claude".to_string(), String::new(), "  Safari drops the cookie.".into(), "  See issue 42.".into()]));
         assert!(!build(&world.ctx(), Section::Memory, Some("demo")).is_empty());
         assert_eq!(summary(&world.root), "1 project · 1 need you");
     }

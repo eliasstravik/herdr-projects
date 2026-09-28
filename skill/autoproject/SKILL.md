@@ -52,7 +52,7 @@ For run threads and the run's own TASKS.md line only, and nowhere else:
 
 - The `propose` gate for starting threads: run threads start under the invocation's go-ahead, also when `start_threads = "propose"`.
 - "Never without the user asking in chat" for merging and resolving: the run merges (through the maker) and resolves its own threads.
-- The TASKS.md owner set gains `autoproject`, and only the ratchet changes that line. "Thread ends" and "Freed slot" do not fire for run threads finishing.
+- The TASKS.md owner set gains `autoproject` (not a profile; `assignable --check` does not apply to it), and only the ratchet changes that line. "Thread ends" and "Freed slot" do not fire for run threads finishing.
 - "Coordination preferences are saved unasked" and "Decisions the user makes in chat that later threads must know go to memory" do not apply to run steering.
 
 Every other coordinator rule stands, including the parallel cap: before each start, if the threads listed as `Working` (not counting this run's own maker) reach `max_parallel_threads`, wait with step `waiting for slot`.

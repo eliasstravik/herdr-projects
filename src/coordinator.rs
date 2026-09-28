@@ -541,6 +541,7 @@ pub fn digest(ctx: &Ctx, project: &Project, prefix: &str) -> Result<(String, Vec
                 settings.coordinator_profile, settings.thread_profile, settings.max_parallel_threads, settings.auto_resolve_days, settings.nudge, settings.mute
             );
             out.push_str(&crate::profiles::context_text(ctx, project, &settings));
+            out.push_str(&crate::assign::context_line(ctx, project));
             if settings.repos.is_empty() {
                 let _ = writeln!(out, "Repos: (none)");
             }
