@@ -124,11 +124,15 @@ fn trimmed_starts(line: &[Cell], prefix: &str) -> bool {
     text(line).trim_start().starts_with(prefix)
 }
 
-/// A horizontal rule: a line of box-drawing `─` only.
+/// A horizontal rule: a line that is mostly box-drawing `─`, so a short label
+/// drawn into it still counts. Claude Code writes the session's name into the
+/// top border of its input box (`───… my-session ─`); a rule that had to be
+/// pure would hide the box and silence every nudge.
 fn is_rule(line: &[Cell]) -> bool {
     let t = text(line);
     let t = t.trim();
-    t.chars().count() >= 10 && t.chars().all(|c| c == '─')
+    let dashes = t.chars().filter(|&c| c == '─').count();
+    dashes >= 10 && t.starts_with('─') && dashes * 2 >= t.chars().count()
 }
 
 /// The typed text in a box's cells: non-blank, not dim, and not a
@@ -285,6 +289,20 @@ mod tests {
         // A transcript line with `❯` that is not under a rule is not the box.
         let transcript = format!("❯ an earlier prompt\n\n{rule}\n❯ \n{rule}\n");
         assert_eq!(check("claude", &transcript), Draft::Empty);
+    }
+
+    #[test]
+    fn a_label_in_the_top_border_still_reads_as_a_rule() {
+        // Claude Code draws the session's name into the box's top border, so
+        // the rule above `❯` is not pure `─`. The box must still be found.
+        let rule = "─".repeat(40);
+        let titled = format!("{rule} my-session ─");
+        assert_eq!(check("claude", &format!("{titled}\n❯ \n{rule}\n")), Draft::Empty);
+        assert_eq!(check("claude", &format!("{titled}\n❯ hello\n{rule}\n")), Draft::Typed);
+        // Prose that happens to start with a dash is still not a rule, because
+        // the dashes have to be the majority of the line.
+        let prose = parse("─ a note about the box ─").remove(0);
+        assert!(!is_rule(&prose));
     }
 
     #[test]
