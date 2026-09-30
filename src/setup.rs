@@ -547,6 +547,8 @@ pub fn unconfigure(ctx: &Ctx) -> Result<Vec<String>> {
                 None => std::fs::remove_file(path)?,
             }
             notes.push(format!("{key}: restored"));
+        } else if owned.kind == "extension" && current.is_some() {
+            notes.push(format!("{key}: edited since configure; left alone"));
         } else if let Some(text) = &current {
             let cleaned = remove_ours(&owned.kind, text, owned.command.as_deref())?;
             if cleaned != *text {
@@ -771,6 +773,23 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&theirs).unwrap(), "export default function () {}\n");
         assert!(notes.iter().any(|n| n.contains("left alone")), "{notes:?}");
         assert!(load_journal(&ctx.config_dir).is_empty());
+    }
+
+    #[test]
+    fn unconfigure_leaves_an_extension_the_user_edited() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        std::fs::create_dir_all(home.path().join(".omp")).unwrap();
+        let runner = crate::runner::fake::FakeRunner::new();
+        let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
+        let options = ConfigureOptions { clients: vec!["omp".into()], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: None };
+        configure(&ctx, &options).unwrap();
+        let file = home.path().join(".omp/agent/extensions/herdr-projects.ts");
+        let edited = std::fs::read_to_string(&file).unwrap() + "// mine\n";
+        std::fs::write(&file, &edited).unwrap();
+        let notes = unconfigure(&ctx).unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), edited);
+        assert!(notes.iter().any(|n| n.contains("left alone")), "{notes:?}");
     }
 
     #[test]
