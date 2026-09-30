@@ -13,9 +13,10 @@ use serde::{Deserialize, Serialize};
 use crate::paths::{Ctx, Env};
 use crate::remote::quote;
 
-/// A harness with a native, user-level hook system that can put text in the
-/// model's context. Every other agent learns to report from its thread brief
-/// or the coordinator skill alone; adding a harness here is one entry.
+/// A harness with a native, user-level hook system or extension folder that
+/// can put text in the model's context. Every other agent learns to report
+/// from its thread brief or the coordinator skill alone; adding a harness
+/// here is one entry.
 pub struct Harness {
     /// Herdr's agent kind, which is also the `hook --agent` value.
     pub agent: &'static str,
@@ -27,30 +28,50 @@ pub struct Harness {
     file: &'static str,
     /// The harness's own names for SessionStart, UserPromptSubmit and PostToolUse.
     pub events: [&'static str; 3],
-    /// Flat `{type, command, timeoutSec}` entries in a `version: 1` file of our
-    /// own (Copilot CLI) instead of Claude Code's `{matcher, hooks: [...]}`.
-    flat: bool,
+    /// What the plugin writes into the hook file.
+    format: Format,
     /// The hook timeout in the harness's unit.
     timeout: u64,
     /// The injected text goes in top-level `additionalContext`, not `hookSpecificOutput`.
     pub top_level_output: bool,
 }
 
-pub const HARNESSES: [Harness; 5] = [
-    Harness { agent: "claude", home_env: Some("CLAUDE_CONFIG_DIR"), home: ".claude", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false },
-    Harness { agent: "codex", home_env: Some("CODEX_HOME"), home: ".codex", file: "hooks.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false },
+/// The shape of a harness's hook file.
+#[derive(PartialEq)]
+enum Format {
+    /// Claude Code's `{matcher, hooks: [...]}` entries in a shared JSON file.
+    Nested,
+    /// Flat `{type, command, timeoutSec}` entries in a `version: 1` file of our
+    /// own (Copilot CLI).
+    Flat,
+    /// A TypeScript extension file of our own (Pi, OMP) that runs the hook
+    /// command with Claude Code's event names and payload.
+    Extension,
+}
+
+/// The extension Pi and OMP load; they share its events and result shapes.
+const EXTENSION: &str = include_str!("../assets/extensions/herdr-projects.ts");
+/// The first line of [`EXTENSION`], which marks an extension file as ours.
+const EXTENSION_MARKER: &str = "// herdr-projects: progress extension";
+
+pub const HARNESSES: [Harness; 7] = [
+    Harness { agent: "claude", home_env: Some("CLAUDE_CONFIG_DIR"), home: ".claude", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], format: Format::Nested, timeout: 10, top_level_output: false },
+    Harness { agent: "codex", home_env: Some("CODEX_HOME"), home: ".codex", file: "hooks.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], format: Format::Nested, timeout: 10, top_level_output: false },
     // Factory Droid: Claude Code's format, in its settings.json.
-    Harness { agent: "droid", home_env: None, home: ".factory", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false },
+    Harness { agent: "droid", home_env: None, home: ".factory", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], format: Format::Nested, timeout: 10, top_level_output: false },
     // Gemini CLI: its own event names; timeouts in milliseconds.
-    Harness { agent: "gemini", home_env: None, home: ".gemini", file: "settings.json", events: ["SessionStart", "BeforeAgent", "AfterTool"], flat: false, timeout: 10_000, top_level_output: false },
+    Harness { agent: "gemini", home_env: None, home: ".gemini", file: "settings.json", events: ["SessionStart", "BeforeAgent", "AfterTool"], format: Format::Nested, timeout: 10_000, top_level_output: false },
     // Copilot CLI reads every file in hooks/, so ours is a file of its own.
     // PascalCase event names select its Claude-style payload (snake_case,
     // `hook_event_name`); prompt-submit output is dropped, but the event
     // still clears an answered question.
-    Harness { agent: "copilot", home_env: Some("COPILOT_HOME"), home: ".copilot", file: "hooks/herdr-projects.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: true, timeout: 10, top_level_output: true },
+    Harness { agent: "copilot", home_env: Some("COPILOT_HOME"), home: ".copilot", file: "hooks/herdr-projects.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], format: Format::Flat, timeout: 10, top_level_output: true },
+    // Pi and OMP load every extension in agent/extensions/, so ours is a file of its own.
+    Harness { agent: "pi", home_env: None, home: ".pi", file: "agent/extensions/herdr-projects.ts", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], format: Format::Extension, timeout: 10, top_level_output: true },
+    Harness { agent: "omp", home_env: None, home: ".omp", file: "agent/extensions/herdr-projects.ts", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], format: Format::Extension, timeout: 10, top_level_output: true },
 ];
 
-pub const AGENTS: [&str; 5] = ["claude", "codex", "droid", "gemini", "copilot"];
+pub const AGENTS: [&str; 7] = ["claude", "codex", "droid", "gemini", "copilot", "pi", "omp"];
 
 pub fn harness(agent: &str) -> Option<&'static Harness> {
     HARNESSES.iter().find(|h| h.agent == agent)
@@ -157,7 +178,7 @@ pub fn tab_command(binary: &Path, root: &Path) -> String {
 }
 
 fn hook_entry(harness: &Harness, command: &str) -> serde_json::Value {
-    if harness.flat {
+    if harness.format == Format::Flat {
         serde_json::json!({"type":"command","command":command,"timeoutSec":harness.timeout})
     } else {
         serde_json::json!({"matcher":"*","hooks":[{"type":"command","command":command,"timeout":harness.timeout}]})
@@ -188,7 +209,7 @@ pub fn hooks(input: &str, command: &str, remove: bool) -> Result<String> {
     let harness = harness_of(command);
     let root = CstRootNode::parse(input, &Default::default()).context("hook file does not parse")?;
     let obj = root.object_value().context("hook configuration must be a JSON object")?;
-    if harness.flat && !remove && obj.get("version").is_none() {
+    if harness.format == Format::Flat && !remove && obj.get("version").is_none() {
         obj.append("version", 1u64.into());
     }
     let hooks = match obj.get("hooks") {
@@ -222,6 +243,30 @@ pub fn hooks(input: &str, command: &str, remove: bool) -> Result<String> {
         }
     }
     Ok(root.to_string())
+}
+
+/// The extension file that runs `command`.
+fn extension(command: &str) -> String {
+    EXTENSION.replacen("\"__HOOK_COMMAND__\"", &serde_json::Value::from(command).to_string(), 1)
+}
+
+/// Whether an existing hook file may be written: a shared JSON file always
+/// (only our entries change), an extension file only when it is ours.
+fn writable(harness: &Harness, text: Option<&str>) -> bool {
+    harness.format != Format::Extension || text.is_none_or(|t| t.starts_with(EXTENSION_MARKER))
+}
+
+/// A hook file's text with the plugin's hooks for `command` in place.
+pub fn with_hooks(agent: &str, text: Option<&str>, command: &str) -> Result<String> {
+    match harness(agent).map(|h| &h.format) {
+        Some(Format::Extension) => Ok(extension(command)),
+        _ => hooks(text.unwrap_or("{}"), command, false),
+    }
+}
+
+/// The ownership kind a harness's hook file is journaled as.
+fn kind(harness: &Harness) -> &'static str {
+    if harness.format == Format::Extension { "extension" } else { "hooks" }
 }
 
 /// The hook command for a harness: the absolute binary path and the root,
@@ -349,11 +394,15 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
     let mut journal = load_journal(&ctx.config_dir);
     let mut edits: Vec<(PathBuf, Owned)> = Vec::new();
     let mut notes = Vec::new();
-    for client in clients.iter().filter(|c| options.hooks && harness(c).is_some()) {
+    for (client, harness) in clients.iter().filter(|_| options.hooks).filter_map(|c| Some((c, harness(c)?))) {
         let file = hook_file(ctx.env, client, options.claude_home.as_deref(), options.codex_home.as_deref());
         let command = hook_command(&binary, &ctx.root, client);
         let before = read(&file)?;
-        let after = hooks(before.as_deref().unwrap_or("{}"), &command, false)?;
+        if !writable(harness, before.as_deref()) {
+            notes.push(format!("{}: left alone, it is not this plugin's extension; move it away and run `configure` again", file.display()));
+            continue;
+        }
+        let after = with_hooks(client, before.as_deref(), &command)?;
         if before.as_deref().is_some_and(has_agent_progress_hooks) {
             notes.push(format!("{} also runs the standalone agent-progress hooks; run that plugin's `unconfigure` (see `doctor`) so only one set fires", file.display()));
         }
@@ -362,7 +411,7 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
             continue;
         }
         notes.push(format!("{}: {} hook entries for `{command}`", file.display(), if before.is_some() { "adding" } else { "creating with" }));
-        edits.push((file, Owned { before, after, kind: "hooks".into(), command: Some(command) }));
+        edits.push((file, Owned { before, after, kind: kind(harness).into(), command: Some(command) }));
     }
     let mut links: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
     if let Some(source) = &options.skill {
@@ -434,7 +483,10 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
     for (path, edit) in &edits {
         let key = path.to_string_lossy().into_owned();
         let mut owned = edit.clone();
-        if let Some(previous) = journal.get(&key) {
+        if owned.kind == "extension" {
+            // The whole file is ours: `unconfigure` removes it.
+            owned.before = None;
+        } else if let Some(previous) = journal.get(&key) {
             owned.before = removal_baseline(previous, &owned)?;
         }
         journal.insert(key, owned);
@@ -495,6 +547,8 @@ pub fn unconfigure(ctx: &Ctx) -> Result<Vec<String>> {
                 None => std::fs::remove_file(path)?,
             }
             notes.push(format!("{key}: restored"));
+        } else if owned.kind == "extension" && current.is_some() {
+            notes.push(format!("{key}: edited since configure; left alone"));
         } else if let Some(text) = &current {
             let cleaned = remove_ours(&owned.kind, text, owned.command.as_deref())?;
             if cleaned != *text {
@@ -679,6 +733,30 @@ mod tests {
         unconfigure(&ctx).unwrap();
         let after = std::fs::read_to_string(claude.join("settings.json")).unwrap();
         assert!(after.contains("\"model\": \"opus\"") && after.contains("say done") && !after.contains("herdr-projects"));
+    }
+
+    #[test]
+    fn pi_and_omp_get_an_extension_file_that_runs_the_hook_and_unconfigure_removes_it() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        std::fs::create_dir_all(home.path().join(".pi")).unwrap();
+        std::fs::create_dir_all(home.path().join(".omp")).unwrap();
+        let runner = crate::runner::fake::FakeRunner::new();
+        let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
+        let options = ConfigureOptions { clients: vec![], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: None };
+        configure(&ctx, &options).unwrap();
+        let pi = home.path().join(".pi/agent/extensions/herdr-projects.ts");
+        let omp = home.path().join(".omp/agent/extensions/herdr-projects.ts");
+        let pi_text = std::fs::read_to_string(&pi).unwrap();
+        assert!(pi_text.contains("hook --agent pi") && pi_text.contains("pi.on(\"session_start\""), "{pi_text}");
+        assert!(std::fs::read_to_string(&omp).unwrap().contains("hook --agent omp"));
+        // Idempotent.
+        configure(&ctx, &options).unwrap();
+        assert_eq!(std::fs::read_to_string(&pi).unwrap(), pi_text);
+
+        unconfigure(&ctx).unwrap();
+        assert!(!pi.exists() && !omp.exists());
+        assert!(load_journal(&ctx.config_dir).is_empty());
     }
 
     #[test]
