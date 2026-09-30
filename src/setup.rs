@@ -427,7 +427,8 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
             notes.push(format!("{}: hooks already in place", file.display()));
             continue;
         }
-        notes.push(format!("{}: {} hook entries for `{command}`", file.display(), if before.is_some() { "adding" } else { "creating with" }));
+        let what = if harness.format == Format::Extension { "the extension that runs" } else { "hook entries for" };
+        notes.push(format!("{}: {} {what} `{command}`", file.display(), if before.is_some() { "writing" } else { "creating" }));
         edits.push((file, Owned { before, after, kind: kind(harness).into(), command: Some(command) }));
     }
     let mut links: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();

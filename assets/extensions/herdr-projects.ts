@@ -56,6 +56,6 @@ export default function (pi: any) {
   pi.on("tool_result", async (event: any, ctx: any) => {
     if (event.parentToolCallId) return;
     const text = await send(ctx, "PostToolUse", { tool_name: event.toolName, tool_input: event.input });
-    if (text) return { content: [...event.content, { type: "text", text }] };
+    if (text) return { content: [...(event.content ?? []), { type: "text", text }] };
   });
 }

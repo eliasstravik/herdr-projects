@@ -88,3 +88,9 @@ test("a missing or failing hook adds nothing and never throws", async () => {
     expect(await handlers.tool_result({ toolName: "bash", input: {}, content: [] }, ctx)).toBeUndefined();
   }
 });
+
+test("a tool result without content still gets its reminder", async () => {
+  const { handlers } = await load({ PostToolUse: "check in" });
+  const result = await handlers.tool_result({ toolName: "custom", input: {} }, ctx);
+  expect(result).toEqual({ content: [{ type: "text", text: "check in" }] });
+});
