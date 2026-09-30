@@ -33,7 +33,8 @@ pub const RESTART_NOTE: &str = "agents launched from now on use it; running agen
 /// The flag that makes an agent of `kind` stop asking for permission, or
 /// `None` when no such flag is known for the kind. Each harness has its own:
 /// Claude Code's flag makes Codex refuse to start, so there is no shared list.
-/// Pi has no permission prompts, so it needs none.
+/// Pi has no permission prompts and OMP's approval mode defaults to `yolo`,
+/// so they need none.
 pub fn yolo_flags(kind: &str) -> Option<&'static [&'static str]> {
     Some(match kind {
         "claude" => &["--dangerously-skip-permissions"],
@@ -43,7 +44,7 @@ pub fn yolo_flags(kind: &str) -> Option<&'static [&'static str]> {
         "opencode" => &["--auto"],
         "copilot" => &["--allow-all-tools"],
         "amp" => &["--dangerously-allow-all"],
-        "pi" => &[],
+        "pi" | "omp" => &[],
         _ => return None,
     })
 }
@@ -344,6 +345,11 @@ mod tests {
                 assert!(crate::agents::split_model_args(kind, &[flag.to_string()]).0.is_empty(), "{kind}: a yolo flag is never a model flag");
             }
         }
+    }
+
+    #[test]
+    fn omp_needs_no_yolo_flag_because_it_never_asks_by_default() {
+        assert!(yolo_flags("omp").unwrap().is_empty());
     }
 
     #[test]
