@@ -668,8 +668,12 @@ mod tests {
         let (text, _) = report(&env, &root, &cfg, &flags, &runner, false, None);
         assert!(text.contains("[ok  ] hooks omp:"), "{text}");
 
-        // An extension from an older release still runs this binary.
-        std::fs::write(&file, current.replace("TIMEOUT_MS = 10_000", "TIMEOUT_MS = 5_000")).unwrap();
+        // An extension an older release wrote (and journaled) still runs this binary.
+        let older = current.replace("TIMEOUT_MS = 10_000", "TIMEOUT_MS = 5_000");
+        std::fs::write(&file, &older).unwrap();
+        let mut journal = crate::setup::load_journal(&cfg);
+        journal.get_mut(&*file.to_string_lossy()).unwrap().after = older;
+        crate::setup::save_journal(&cfg, &journal).unwrap();
         let (text, _) = report(&env, &root, &cfg, &flags, &runner, false, None);
         assert!(text.contains("[warn] hooks omp:") && text.contains("`doctor --fix` rewrites it"), "{text}");
         let (text, _) = report(&env, &root, &cfg, &flags, &runner, true, None);

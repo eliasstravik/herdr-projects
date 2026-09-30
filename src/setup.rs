@@ -250,10 +250,17 @@ fn extension(command: &str) -> String {
     EXTENSION.replacen("\"__HOOK_COMMAND__\"", &serde_json::Value::from(command).to_string(), 1)
 }
 
-/// Whether an existing hook file may be written: a shared JSON file always
-/// (only our entries change), an extension file only when it is ours.
-fn writable(harness: &Harness, text: Option<&str>) -> bool {
-    harness.format != Format::Extension || text.is_none_or(|t| t.starts_with(EXTENSION_MARKER))
+/// Why an existing hook file must be left alone, if it must. A shared JSON
+/// file never is (only our entries change). An extension file is ours to
+/// rewrite while it still reads as we last wrote it (`written`, from the
+/// journal), or, unjournaled, while it carries our marker.
+fn left_alone(harness: &Harness, text: Option<&str>, written: Option<&str>) -> Option<&'static str> {
+    let text = text.filter(|_| harness.format == Format::Extension)?;
+    match written {
+        Some(written) if written != text => Some("edited since configure"),
+        None if !text.starts_with(EXTENSION_MARKER) => Some("not this plugin's extension"),
+        _ => None,
+    }
 }
 
 /// A hook file's text with the plugin's hooks for `command` in place.
@@ -407,8 +414,9 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
         let file = hook_file(ctx.env, client, options.claude_home.as_deref(), options.codex_home.as_deref());
         let command = hook_command(&binary, &ctx.root, client);
         let before = read(&file)?;
-        if !writable(harness, before.as_deref()) {
-            notes.push(format!("{}: left alone, it is not this plugin's extension; move it away and run `configure` again", file.display()));
+        let written = journal.get(&*file.to_string_lossy()).filter(|o| o.kind == "extension").map(|o| o.after.as_str());
+        if let Some(reason) = left_alone(harness, before.as_deref(), written) {
+            notes.push(format!("{}: left alone, {reason}; move it away and run `configure` again", file.display()));
             continue;
         }
         let after = with_hooks(client, before.as_deref(), &command)?;
@@ -799,6 +807,35 @@ mod tests {
         let notes = unconfigure(&ctx).unwrap();
         assert_eq!(std::fs::read_to_string(&file).unwrap(), edited);
         assert!(notes.iter().any(|n| n.contains("left alone")), "{notes:?}");
+    }
+
+    #[test]
+    fn configure_rewrites_an_extension_it_wrote_but_never_one_the_user_edited() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        std::fs::create_dir_all(home.path().join(".omp")).unwrap();
+        let runner = crate::runner::fake::FakeRunner::new();
+        let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
+        let options = ConfigureOptions { clients: vec!["omp".into()], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: None };
+        configure(&ctx, &options).unwrap();
+        let file = home.path().join(".omp/agent/extensions/herdr-projects.ts");
+        let current = std::fs::read_to_string(&file).unwrap();
+
+        // What an older release wrote, still as journaled: rewritten.
+        let older = current.replace("TIMEOUT_MS = 10_000", "TIMEOUT_MS = 5_000");
+        std::fs::write(&file, &older).unwrap();
+        let mut journal = load_journal(&ctx.config_dir);
+        journal.get_mut(&*file.to_string_lossy()).unwrap().after = older;
+        save_journal(&ctx.config_dir, &journal).unwrap();
+        configure(&ctx, &options).unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), current);
+
+        // Edited by the user: left alone.
+        let edited = current.clone() + "// mine\n";
+        std::fs::write(&file, &edited).unwrap();
+        let notes = configure(&ctx, &options).unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), edited);
+        assert!(notes.iter().any(|n| n.contains("edited")), "{notes:?}");
     }
 
     #[test]
