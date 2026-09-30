@@ -297,6 +297,15 @@ pub fn output(harness: &crate::setup::Harness, native: &str, text: &str) -> serd
     }
 }
 
+/// The session's working directory: the harness reports it, and the hook runs
+/// there anyway when it does not.
+fn session_cwd(event: &serde_json::Value) -> String {
+    match event["cwd"].as_str() {
+        Some(cwd) if !cwd.is_empty() => cwd.to_string(),
+        _ => std::env::current_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),
+    }
+}
+
 /// `hook --agent <harness>`, the entry point the harness hooks run. Silent
 /// (exit 0, no output) outside a Herdr pane, so the same hooks may sit in the
 /// user's settings for every session on the machine.
@@ -349,9 +358,15 @@ pub fn hook(ctx: &Ctx, agent: &str) -> Result<()> {
     record.agent = if pane.agent.is_empty() { agent.to_string() } else { pane.agent.clone() };
     let prefix = crate::coordinator::current_prefix(&ctx.root)?;
     let before = record.clone();
-    let text = respond(&mut record, &kind, &prefix, now());
+    let mut text = respond(&mut record, &kind, &prefix, now());
     if kind == "SessionStart" {
         record.session_id = event["session_id"].as_str().unwrap_or("").to_string();
+        if let Some(note) = crate::coordinator::inbox_backlog(&ctx.root, &session_cwd(&event), &prefix) {
+            text = Some(match text {
+                Some(existing) => format!("{existing}\n\n{note}"),
+                None => note,
+            });
+        }
     }
     if record != before {
         save(&ctx.root, &record)?;
