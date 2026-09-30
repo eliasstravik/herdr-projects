@@ -338,6 +338,12 @@ enum ThreadCommand {
         kind: Option<String>,
         #[arg(long, value_name = "REF")]
         base: Option<String>,
+        /// Branch name for a worktree thread instead of hp/<slug>/<id>-<title> (repos with a branch-name check)
+        #[arg(long, value_name = "NAME")]
+        branch: Option<String>,
+        /// Folder for the worktree instead of herdr's default (for example <repo-parent>/<repo>.<branch>)
+        #[arg(long, value_name = "PATH")]
+        worktree_path: Option<String>,
         /// The task; `-` reads standard input
         #[arg(long, value_name = "FILE")]
         task_file: String,
@@ -705,7 +711,7 @@ pub fn run() -> Result<()> {
             }
         },
         Command::Thread { command } => match command {
-            ThreadCommand::Start { slug, title, repo, mut machine, mut profile, kind, base, task_file, from_task } => {
+            ThreadCommand::Start { slug, title, repo, mut machine, mut profile, kind, base, branch, worktree_path, task_file, from_task } => {
                 let mut task = read_text(&task_file)?;
                 if let Some(from) = from_task {
                     // The task's owner picks the profile and machine.
@@ -720,7 +726,7 @@ pub fn run() -> Result<()> {
                     task = crate::tasks::delegated(&tasks_md, &from, &task)?;
                 }
                 let kind = kind.as_deref().map(crate::thread::Kind::parse).transpose()?;
-                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, profile, kind, base, task })?;
+                let thread = threads::start(&ctx, &slug, StartArgs { title, repo, machine, profile, kind, base, branch, worktree_path, task })?;
                 println!("{}", serde_json::json!({ "id": thread.id, "kind": thread.kind, "profile": thread.profile, "agent": thread.agent, "branch": thread.branch, "pane_id": thread.pane_id }));
                 Ok(())
             }

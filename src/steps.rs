@@ -339,8 +339,10 @@ pub fn nudge(project: &Project, state: &mut State, settings: &Settings, herdr: &
         // `agent_blocked` and other errors are returned, logged by the caller,
         // and the nudge is retried on a later tick.
         herdr.agent_prompt(&pane.pane_id, &nudge_text(&unseen))?;
+        // Recorded only once a coordinator was told: a set that arrived while
+        // no coordinator ran must still be announced when one appears.
+        state.nudged = hash;
     }
-    state.nudged = hash;
     forget_box(state);
     Ok(())
 }
