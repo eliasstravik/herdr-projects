@@ -68,6 +68,15 @@ fn clear_thread_tokens(herdr: &Herdr, thread: &Thread) {
     crate::sidebar::clear_pane(&herdr.on_machine(&thread.machine), &thread.pane_id);
 }
 
+/// The branch a worktree thread gets: `--branch` when given, else `hp/<slug>/<id>-<title>`.
+fn chosen_branch(record: &Thread, slug: &str, id: &str) -> String {
+    if record.branch_wanted.is_empty() { thread::branch_name(slug, id, &record.title) } else { record.branch_wanted.clone() }
+}
+
+fn wanted_path(record: &Thread) -> Option<&str> {
+    (!record.worktree_path_wanted.is_empty()).then_some(record.worktree_path_wanted.as_str())
+}
+
 pub struct StartArgs {
     pub title: String,
     pub repo: Option<String>,
@@ -79,6 +88,10 @@ pub struct StartArgs {
     /// repo, tab without one.
     pub kind: Option<Kind>,
     pub base: Option<String>,
+    /// Branch and worktree folder to use instead of the plugin's own names
+    /// (`--branch`, `--worktree-path`); a repo with a branch-name check needs them.
+    pub branch: Option<String>,
+    pub worktree_path: Option<String>,
     pub task: String,
 }
 
@@ -184,6 +197,18 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
 
     let profile = thread_profile(ctx, &project, &machine, args.profile.as_deref())?;
     let kind = placement(args.kind, !repo.is_empty(), !machine.is_empty())?;
+    let branch_wanted = args.branch.clone().unwrap_or_default();
+    if !branch_wanted.is_empty() {
+        if kind != Kind::Worktree {
+            bail!("--branch applies to a worktree thread only");
+        }
+        if branch_wanted.chars().any(char::is_whitespace) || branch_wanted.starts_with('-') || branch_wanted.contains("..") || branch_wanted.ends_with('/') {
+            bail!("--branch {branch_wanted:?} is not a valid git branch name");
+        }
+    }
+    if args.worktree_path.as_deref().is_some_and(|p| !p.is_empty()) && kind != Kind::Worktree {
+        bail!("--worktree-path applies to a worktree thread only");
+    }
     let record = thread::allocate(&project, |t| {
         t.title = args.title.trim().to_string();
         t.kind = kind;
@@ -191,6 +216,8 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
         t.machine = machine.clone();
         profile.apply(t);
         t.base = args.base.clone().unwrap_or_default();
+        t.branch_wanted = branch_wanted.clone();
+        t.worktree_path_wanted = args.worktree_path.clone().unwrap_or_default();
     })?;
     let id = record.id.clone();
     {
@@ -224,8 +251,8 @@ fn place_and_brief(ctx: &Ctx, project: &Project, view: &SessionView, id: &str, r
             // through `--machine`.
             let target = remote::ssh_target(runner, &ctx.env.herdr_bin(), &ctx.config_dir, &record.machine)?;
             let (origin, base) = remote::repo_info(runner, &target, &record.repo, &record.base)?;
-            let branch = thread::branch_name(slug, id, &record.title);
-            let (created, path, cwd) = view.herdr.on_machine(&record.machine).worktree_create(&record.repo, &branch, &base, &record.title)?;
+            let branch = chosen_branch(&record, slug, id);
+            let (created, path, cwd) = view.herdr.on_machine(&record.machine).worktree_create(&record.repo, &branch, &base, &record.title, wanted_path(&record))?;
             thread::update(project, id, |t| {
                 t.origin = origin;
                 t.base = base;
@@ -256,8 +283,8 @@ fn place_and_brief(ctx: &Ctx, project: &Project, view: &SessionView, id: &str, r
             } else {
                 record.base.clone()
             };
-            let branch = thread::branch_name(slug, id, &record.title);
-            let (created, path, cwd) = view.herdr.worktree_create(&record.repo, &branch, &base, &record.title)?;
+            let branch = chosen_branch(&record, slug, id);
+            let (created, path, cwd) = view.herdr.worktree_create(&record.repo, &branch, &base, &record.title, wanted_path(&record))?;
             let repo_workspace = repo_space(&view.herdr, &record.repo);
             // Recorded immediately, so a command killed midway still leaves a
             // record `thread restart` can act on.

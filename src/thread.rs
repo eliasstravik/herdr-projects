@@ -84,6 +84,10 @@ pub struct Thread {
     pub base: String,
     pub machine: String,
     pub worktree_path: String,
+    /// `--branch` / `--worktree-path` given at start: used instead of the
+    /// `hp/<slug>/<id>-<title>` branch and herdr's default worktree folder.
+    pub branch_wanted: String,
+    pub worktree_path_wanted: String,
     pub thread_dir: String,
     pub workspace_id: String,
     /// The repository's primary Space herdr grouped this worktree under

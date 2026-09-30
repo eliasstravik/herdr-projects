@@ -151,6 +151,59 @@ fn socket_of(cmd: &Cmd) -> String {
 }
 
 #[test]
+fn a_thread_may_name_its_branch_and_worktree_folder() {
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    let worktree = world.home.path().join("app.DZB-1-fix-it");
+    std::fs::create_dir(&worktree).unwrap();
+    let repo = world.home.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    let wt = worktree.to_string_lossy().into_owned();
+    *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
+    world.runner.on("rev-parse --show-toplevel", ok("/repo\n"));
+    world.runner.on("remote get-url origin", ok("git@github.com:Owner/App.git\n"));
+    world.runner.on("fetch origin", fail(1, "offline"));
+    world.runner.on("symbolic-ref", ok("origin/main\n"));
+    world.runner.on("rev-parse --git-path", fail(1, "not a repo"));
+    world.runner.on(
+        "worktree create",
+        ok(&format!(
+            r#"{{"result":{{"root_pane":{{"workspace_id":"w2","tab_id":"w2:t1","pane_id":"w2:p1","cwd":"{wt}"}},"worktree":{{"path":"{wt}"}}}}}}"#
+        )),
+    );
+    let ctx = world.ctx();
+    std::fs::create_dir_all(&ctx.config_dir).unwrap();
+    std::fs::write(ctx.config_dir.join("config.toml"), "[profiles.opus]\nagent = \"claude\"\nmodel = \"opus\"\n").unwrap();
+    let args = |branch: &str, path: Option<&str>| StartArgs {
+        title: "DZB-1 fix it".into(),
+        repo: Some(repo.to_string_lossy().into_owned()),
+        machine: None,
+        profile: Some("opus".into()),
+        kind: None,
+        base: None,
+        branch: Some(branch.into()),
+        worktree_path: path.map(Into::into),
+        task: "Do the thing.".into(),
+    };
+    // A repo's own convention (uppercase ticket first) instead of hp/<slug>/<id>-<title>.
+    let started = threads::start(&ctx, "demo", args("DZB-1-fix-it", Some(&wt))).unwrap();
+    assert_eq!(started.branch, "DZB-1-fix-it");
+    assert_eq!(started.worktree_path, wt);
+    let calls = world.runner.calls.borrow();
+    let create = calls.iter().find(|c| c.display().contains("worktree create")).unwrap();
+    let a = &create.args;
+    let after = |flag: &str| a.iter().position(|x| x == flag).map(|i| a[i + 1].clone());
+    assert_eq!(after("--branch").as_deref(), Some("DZB-1-fix-it"));
+    assert_eq!(after("--path").as_deref(), Some(wt.as_str()));
+    drop(calls);
+    // A name git would refuse is refused before anything is created.
+    let err = threads::start(&ctx, "demo", args("bad name", None)).unwrap_err().to_string();
+    assert!(err.contains("not a valid git branch name"), "{err}");
+    let err = threads::start(&ctx, "demo", StartArgs { kind: Some(Kind::Tab), repo: None, ..args("DZB-2-x", None) }).unwrap_err().to_string();
+    assert!(err.contains("worktree thread only"), "{err}");
+}
+
+#[test]
 fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
@@ -187,7 +240,7 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
             machine: None,
             profile: Some("opus".into()),
             kind: None,
-            base: None,
+            base: None, branch: None, worktree_path: None,
             task: "Do the thing.".into(),
         },
     )
@@ -582,7 +635,7 @@ fn thread_start_is_refused_when_paused() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
     project.set_status(project::Status::Paused).unwrap();
-    let args = StartArgs { title: "x".into(), repo: None, machine: None, profile: None, kind: None, base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: None, profile: None, kind: None, base: None, branch: None, worktree_path: None, task: "t".into() };
     let error = threads::start(&world.ctx(), "demo", args).unwrap_err().to_string();
     assert!(error.contains("paused"), "{error}");
     assert!(thread::list(&project).is_empty());
@@ -606,7 +659,7 @@ fn thread_start_and_open_refuse_profiles_off_the_allow_list() {
     let project = world.project("demo", "a.sock");
     write_profiles(&world, PROFILES);
     for bad in ["deep", "codex", "nope"] {
-        let args = StartArgs { title: "x".into(), repo: None, machine: None, profile: Some(bad.into()), kind: Some(Kind::Tab), base: None, task: "t".into() };
+        let args = StartArgs { title: "x".into(), repo: None, machine: None, profile: Some(bad.into()), kind: Some(Kind::Tab), base: None, branch: None, worktree_path: None, task: "t".into() };
         let error = threads::start(&world.ctx(), "demo", args).unwrap_err().to_string();
         assert!(error.contains("not allowed for threads") || error.contains("no profile `nope`"), "{error}");
         let options = coordinator::OpenOptions { session: Default::default(), rebind: false, profile: Some(bad.into()), new: true, here: false };
@@ -1748,7 +1801,7 @@ fn a_remote_thread_blocked_at_a_poll_is_waiting_on_you_at_once() {
 fn a_remote_thread_without_a_repo_is_refused() {
     let world = World::new();
     world.project("demo", "a.sock");
-    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), profile: None, kind: None, base: None, task: "t".into() };
+    let args = StartArgs { title: "x".into(), repo: None, machine: Some("box".into()), profile: None, kind: None, base: None, branch: None, worktree_path: None, task: "t".into() };
     assert!(threads::start(&world.ctx(), "demo", args).unwrap_err().to_string().contains("needs --repo"));
 }
 
@@ -1931,7 +1984,7 @@ fn a_tab_thread_with_a_repo_gets_its_brief_seconds_after_its_agent_is_ready() {
     world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
     *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
     let ctx = world.ctx();
-    let args = StartArgs { title: "Clean up".into(), repo: Some(repo.to_string_lossy().into_owned()), machine: None, profile: None, kind: Some(Kind::Tab), base: None, task: "Tidy.".into() };
+    let args = StartArgs { title: "Clean up".into(), repo: Some(repo.to_string_lossy().into_owned()), machine: None, profile: None, kind: Some(Kind::Tab), base: None, branch: None, worktree_path: None, task: "Tidy.".into() };
     let t = threads::start(&ctx, "demo", args).unwrap();
     assert_eq!((t.kind, t.cwd.as_str(), t.prompt_pending), (Kind::Tab, cwd.as_str(), true));
 
@@ -1987,7 +2040,7 @@ fn a_tab_thread_gets_a_brief_with_the_project_header_and_prompts_are_recorded() 
     // Delegated from TASKS.md: the task's notes reach the brief.
     std::fs::write(project.dir().join("TASKS.md"), "# Tasks\n\n## Backlog\n- [ ] Research (agent)\n  Start with the 2025 papers.\n").unwrap();
     let task = crate::tasks::delegated(&crate::tasks::read(&project.dir()), "Research", "Look into it.").unwrap();
-    let t = threads::start(&ctx, "demo", StartArgs { title: "Research".into(), repo: None, machine: None, profile: None, kind: Some(Kind::Tab), base: None, task }).unwrap();
+    let t = threads::start(&ctx, "demo", StartArgs { title: "Research".into(), repo: None, machine: None, profile: None, kind: Some(Kind::Tab), base: None, branch: None, worktree_path: None, task }).unwrap();
     assert_eq!(t.kind, Kind::Tab);
     let brief = std::fs::read_to_string(Path::new(&t.thread_dir).join("brief.md")).unwrap();
     assert!(brief.contains("Look into it.\n\n## Notes from the task list\n\nStart with the 2025 papers."), "{brief}");
@@ -2222,7 +2275,7 @@ fn a_tab_thread_of_a_coordinator_running_in_another_workspace_opens_the_project_
     h.open(true, false).unwrap();
     let folder = h.project.dir().join("threads/t-0001");
     h.world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":""}}}"#));
-    let args = |title: &str| StartArgs { title: title.into(), repo: None, machine: None, profile: None, kind: Some(Kind::Tab), base: None, task: "Look.".into() };
+    let args = |title: &str| StartArgs { title: title.into(), repo: None, machine: None, profile: None, kind: Some(Kind::Tab), base: None, branch: None, worktree_path: None, task: "Look.".into() };
     let t = threads::start(&h.world.ctx(), "demo", args("Research")).unwrap();
     let calls = h.world.runner.calls.borrow();
     let create = calls.iter().filter(|c| c.display().contains("workspace create")).last().unwrap();
@@ -2849,7 +2902,7 @@ fn a_coordinator_renames_its_own_project_and_reopens_in_the_new_folder() {
     assert!(old.is_dir());
     let pending = crate::rename::pending(&world.root, "scratch").unwrap();
     assert!(pending.reopen && pending.to == "home");
-    let start = threads::start(&ctx, "scratch", StartArgs { title: "x".into(), repo: None, machine: None, profile: None, kind: None, base: None, task: "y".into() });
+    let start = threads::start(&ctx, "scratch", StartArgs { title: "x".into(), repo: None, machine: None, profile: None, kind: None, base: None, branch: None, worktree_path: None, task: "y".into() });
     assert!(start.unwrap_err().to_string().contains("being renamed"));
 
     // While it works (finishing its reply), nothing happens.
