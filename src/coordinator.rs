@@ -55,10 +55,17 @@ pub fn is_coordinator(record: &Coordinator, agent: &Agent) -> bool {
     agent.works_in(&record.cwd)
 }
 
+/// True when the pane sits in the project folder: its shell's directory, or
+/// its foreground process's while `open` runs a coordinator in it.
+fn pane_in_project(record: &Coordinator, pane: &Pane) -> bool {
+    !record.cwd.is_empty()
+        && (Path::new(&pane.cwd).starts_with(&record.cwd) || (!pane.foreground_cwd.is_empty() && Path::new(&pane.foreground_cwd).starts_with(&record.cwd)))
+}
+
 /// The project's workspace is open when a listed pane of it works in the
 /// project folder (workspace ids repeat after a server restart).
 pub fn workspace_open(record: &Coordinator, panes: &[Pane]) -> bool {
-    !record.workspace_id.is_empty() && !record.cwd.is_empty() && panes.iter().any(|p| p.workspace_id == record.workspace_id && Path::new(&p.cwd).starts_with(&record.cwd))
+    !record.workspace_id.is_empty() && panes.iter().any(|p| p.workspace_id == record.workspace_id && pane_in_project(record, p))
 }
 
 /// The workspace thread tabs go to: the recorded one while open, else any
@@ -68,7 +75,7 @@ pub fn project_workspace(record: &Coordinator, panes: &[Pane]) -> Option<String>
     if workspace_open(record, panes) {
         return Some(record.workspace_id.clone());
     }
-    panes.iter().find(|p| !record.cwd.is_empty() && Path::new(&p.cwd).starts_with(&record.cwd)).map(|p| p.workspace_id.clone())
+    panes.iter().find(|p| pane_in_project(record, p)).map(|p| p.workspace_id.clone())
 }
 
 /// The record `open` would write for the most recently active agent working
@@ -666,6 +673,26 @@ mod tests {
         // `open` ran it in a shell pane elsewhere: its own directory counts.
         let child = Agent { foreground_cwd: "/r/demo".into(), ..agent("w5:p1", "/tmp", "idle", 1) };
         assert!(is_coordinator(&record, &child));
+    }
+
+    #[test]
+    fn the_project_workspace_is_found_by_the_panes_foreground_cwd_too() {
+        let record = Coordinator { cwd: "/r/demo".into(), workspace_id: "w1".into(), ..Coordinator::default() };
+        // `open --here` in a pane whose shell sits in the repository.
+        let pane = Pane {
+            pane_id: "w1:p1".into(),
+            tab_id: "w1:t1".into(),
+            workspace_id: "w1".into(),
+            cwd: "/repo/demo".into(),
+            foreground_cwd: "/r/demo".into(),
+            ..Pane::default()
+        };
+        assert!(workspace_open(&record, std::slice::from_ref(&pane)));
+        assert_eq!(project_workspace(&record, &[pane]).as_deref(), Some("w1"));
+        // A pane in neither directory is still not the project's.
+        let other = Pane { workspace_id: "w2".into(), cwd: "/tmp".into(), ..Pane::default() };
+        assert!(!workspace_open(&record, std::slice::from_ref(&other)));
+        assert_eq!(project_workspace(&record, &[other]), None);
     }
 
     #[test]
