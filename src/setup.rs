@@ -264,6 +264,15 @@ pub fn with_hooks(agent: &str, text: Option<&str>, command: &str) -> Result<Stri
     }
 }
 
+/// Whether a hook file runs `command` as this release writes it: a JSON file
+/// that has the command, an extension file that is exactly this release's.
+pub fn hooks_current(agent: &str, text: &str, command: &str) -> bool {
+    match harness(agent).map(|h| &h.format) {
+        Some(Format::Extension) => text == extension(command),
+        _ => text.contains(command),
+    }
+}
+
 /// The ownership kind a harness's hook file is journaled as.
 fn kind(harness: &Harness) -> &'static str {
     if harness.format == Format::Extension { "extension" } else { "hooks" }
