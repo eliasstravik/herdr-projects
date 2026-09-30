@@ -31,7 +31,31 @@ function run(event: Record<string, unknown>): Promise<string> {
 }
 
 export default function (pi: any) {
+  // Text for the next turn: session start does not wait for the hook.
+  let pending: Promise<string>[] = [];
+
+  // Only the pane's own session reports: never a subagent (OMP) or a headless run.
+  const root = (ctx: any) => ctx?.mode === "tui" && ctx?.agent?.kind !== "sub";
+  const send = (ctx: any, name: string, extra: Record<string, unknown> = {}) =>
+    root(ctx) ? run({ hook_event_name: name, session_id: ctx.sessionManager?.getSessionId?.() ?? "", cwd: ctx.cwd, ...extra }) : Promise.resolve("");
+
   pi.on("session_start", (_event: any, ctx: any) => {
-    void run({ hook_event_name: "SessionStart", session_id: ctx.sessionManager?.getSessionId?.() ?? "", cwd: ctx.cwd });
+    pending = [send(ctx, "SessionStart")];
+  });
+
+  pi.on("input", async (_event: any, ctx: any) => {
+    pending.push(send(ctx, "UserPromptSubmit"));
+  });
+
+  pi.on("before_agent_start", async () => {
+    const content = (await Promise.all(pending)).filter(Boolean).join("\n\n");
+    pending = [];
+    if (content) return { message: { customType: "herdr-projects", content, display: false } };
+  });
+
+  pi.on("tool_result", async (event: any, ctx: any) => {
+    if (event.parentToolCallId) return;
+    const text = await send(ctx, "PostToolUse", { tool_name: event.toolName, tool_input: event.input });
+    if (text) return { content: [...event.content, { type: "text", text }] };
   });
 }
