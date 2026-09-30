@@ -124,11 +124,14 @@ fn trimmed_starts(line: &[Cell], prefix: &str) -> bool {
     text(line).trim_start().starts_with(prefix)
 }
 
-/// A horizontal rule: a line of box-drawing `─` only.
+/// A horizontal rule: a line of box-drawing `─`, possibly carrying one label
+/// between the dashes (Claude Code 2.1.277+ writes the session name into the
+/// top border of its input box: `──── hp-demo-t-0001 ─`).
 fn is_rule(line: &[Cell]) -> bool {
     let t = text(line);
     let t = t.trim();
-    t.chars().count() >= 10 && t.chars().all(|c| c == '─')
+    let dashes = t.chars().filter(|c| *c == '─').count();
+    dashes >= 10 && t.starts_with("──") && t.ends_with('─') && t.split('─').filter(|s| !s.trim().is_empty()).count() <= 1
 }
 
 /// The typed text in a box's cells: non-blank, not dim, and not a
@@ -263,6 +266,17 @@ mod tests {
         }
         assert_eq!(check("claude", &fixture("claude-empty-after-turn")), Draft::Empty);
         assert_eq!(check("opencode", &fixture("opencode-empty-session")), Draft::Empty);
+    }
+
+    #[test]
+    fn a_rule_may_carry_the_session_name_in_its_border() {
+        // Claude Code 2.1.277 with `-n`: the top border of the box reads `──── <name> ─`.
+        assert_eq!(check("claude", &fixture("claude-named-session")), Draft::Typed);
+        let named = format!("{} hp-demo-t-0001 ─\n❯ \n{}\n", "─".repeat(60), "─".repeat(70));
+        assert_eq!(check("claude", &named), Draft::Empty);
+        // Two labels, or text outside the dashes, is not a rule.
+        let not_rule = format!("── a ── b ──\n❯ \n{}\n", "─".repeat(70));
+        assert_eq!(check("claude", &not_rule), Draft::Unknown);
     }
 
     #[test]
