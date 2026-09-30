@@ -374,8 +374,10 @@ fn report(
             Some(_) if fix => {
                 let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: crate::setup::skill_source() };
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
-                match crate::setup::configure(&ctx, &options) {
-                    Ok(_) => check(&mut out, Some(true), &label, format!("fixed: {} now runs this binary", file.display())),
+                let fixed = crate::setup::configure(&ctx, &options).map(|notes| (crate::setup::read(&file).ok().flatten().is_some_and(|t| crate::setup::hooks_current(agent, &t, &expected)), notes));
+                match fixed {
+                    Ok((true, _)) => check(&mut out, Some(true), &label, format!("fixed: {} now runs this binary", file.display())),
+                    Ok((false, notes)) => check(&mut out, Some(false), &label, format!("could not fix: {}", notes.join("; "))),
                     Err(error) => check(&mut out, Some(false), &label, format!("could not fix: {error:#}")),
                 }
             }
@@ -673,6 +675,24 @@ mod tests {
         let (text, _) = report(&env, &root, &cfg, &flags, &runner, true, None);
         assert!(text.contains("[ok  ] hooks omp: fixed:"), "{text}");
         assert_eq!(std::fs::read_to_string(&file).unwrap(), current);
+    }
+
+    #[test]
+    fn fix_never_claims_to_have_rewritten_an_extension_that_is_no_longer_ours() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let runner = runner_with_herdr("herdr 0.9.1\n");
+        let root = home.path().join("root");
+        let cfg = home.path().join("cfg");
+        std::fs::create_dir_all(home.path().join(".pi")).unwrap();
+        let ctx = Ctx { env: &env, root: root.clone(), config_dir: cfg.clone(), runner: &runner, detached_ticker: false };
+        let options = crate::setup::ConfigureOptions { clients: vec!["pi".into()], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: None };
+        crate::setup::configure(&ctx, &options).unwrap();
+        let file = home.path().join(".pi/agent/extensions/herdr-projects.ts");
+        std::fs::write(&file, "export default function () {}\n").unwrap();
+        let (text, _) = report(&env, &root, &cfg, &SessionFlags::default(), &runner, true, None);
+        assert!(!text.contains("hooks pi: fixed:"), "{text}");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "export default function () {}\n");
     }
 
     #[test]
