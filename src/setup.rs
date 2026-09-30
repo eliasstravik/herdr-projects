@@ -30,7 +30,7 @@ pub struct Harness {
     pub events: [&'static str; 3],
     /// What the plugin writes into the hook file.
     format: Format,
-    /// The hook timeout in the harness's unit.
+    /// The hook timeout in the harness's unit (for an extension, its own `TIMEOUT_MS`).
     timeout: u64,
     /// The injected text goes in top-level `additionalContext`, not `hookSpecificOutput`.
     pub top_level_output: bool,
@@ -67,7 +67,8 @@ pub const HARNESSES: [Harness; 7] = [
     // still clears an answered question.
     Harness { agent: "copilot", home_env: Some("COPILOT_HOME"), home: ".copilot", file: "hooks/herdr-projects.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], format: Format::Flat, timeout: 10, top_level_output: true },
     // Pi and OMP load every extension in agent/extensions/, so ours is a file of its own.
-    Harness { agent: "pi", home_env: None, home: ".pi", file: "agent/extensions/herdr-projects.ts", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], format: Format::Extension, timeout: 10, top_level_output: true },
+    // `PI_CODING_AGENT_DIR` moves Pi's agent directory itself.
+    Harness { agent: "pi", home_env: Some("PI_CODING_AGENT_DIR"), home: ".pi/agent", file: "extensions/herdr-projects.ts", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], format: Format::Extension, timeout: 10, top_level_output: true },
     Harness { agent: "omp", home_env: None, home: ".omp", file: "agent/extensions/herdr-projects.ts", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], format: Format::Extension, timeout: 10, top_level_output: true },
 ];
 
@@ -757,7 +758,7 @@ mod tests {
     fn pi_and_omp_get_an_extension_file_that_runs_the_hook_and_unconfigure_removes_it() {
         let home = tempfile::tempdir().unwrap();
         let env = Env::for_test(home.path(), &[]);
-        std::fs::create_dir_all(home.path().join(".pi")).unwrap();
+        std::fs::create_dir_all(home.path().join(".pi/agent")).unwrap();
         std::fs::create_dir_all(home.path().join(".omp")).unwrap();
         let runner = crate::runner::fake::FakeRunner::new();
         let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
@@ -837,6 +838,15 @@ mod tests {
         let notes = configure(&ctx, &options).unwrap();
         assert_eq!(std::fs::read_to_string(&file).unwrap(), edited);
         assert!(notes.iter().any(|n| n.contains("edited")), "{notes:?}");
+    }
+
+    #[test]
+    fn pi_s_extension_follows_pi_coding_agent_dir() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[("PI_CODING_AGENT_DIR", "/elsewhere/agent")]);
+        assert_eq!(hook_file(&env, "pi", None, None), Path::new("/elsewhere/agent/extensions/herdr-projects.ts"));
+        let env = Env::for_test(home.path(), &[]);
+        assert_eq!(hook_file(&env, "pi", None, None), home.path().join(".pi/agent/extensions/herdr-projects.ts"));
     }
 
     #[test]
