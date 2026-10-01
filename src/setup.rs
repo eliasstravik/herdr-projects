@@ -34,20 +34,24 @@ pub struct Harness {
     timeout: u64,
     /// The injected text goes in top-level `additionalContext`, not `hookSpecificOutput`.
     pub top_level_output: bool,
+    /// Runs hook commands in PowerShell on Windows (Codex, Gemini CLI, Copilot
+    /// CLI), rather than Git Bash with PowerShell as a fallback (Claude Code)
+    /// or a shell we do not know (Droid).
+    powershell_on_windows: bool,
 }
 
 pub const HARNESSES: [Harness; 5] = [
-    Harness { agent: "claude", home_env: Some("CLAUDE_CONFIG_DIR"), home: ".claude", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false },
-    Harness { agent: "codex", home_env: Some("CODEX_HOME"), home: ".codex", file: "hooks.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false },
+    Harness { agent: "claude", home_env: Some("CLAUDE_CONFIG_DIR"), home: ".claude", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false, powershell_on_windows: false },
+    Harness { agent: "codex", home_env: Some("CODEX_HOME"), home: ".codex", file: "hooks.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false, powershell_on_windows: true },
     // Factory Droid: Claude Code's format, in its settings.json.
-    Harness { agent: "droid", home_env: None, home: ".factory", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false },
+    Harness { agent: "droid", home_env: None, home: ".factory", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false, powershell_on_windows: false },
     // Gemini CLI: its own event names; timeouts in milliseconds.
-    Harness { agent: "gemini", home_env: None, home: ".gemini", file: "settings.json", events: ["SessionStart", "BeforeAgent", "AfterTool"], flat: false, timeout: 10_000, top_level_output: false },
+    Harness { agent: "gemini", home_env: None, home: ".gemini", file: "settings.json", events: ["SessionStart", "BeforeAgent", "AfterTool"], flat: false, timeout: 10_000, top_level_output: false, powershell_on_windows: true },
     // Copilot CLI reads every file in hooks/, so ours is a file of its own.
     // PascalCase event names select its Claude-style payload (snake_case,
     // `hook_event_name`); prompt-submit output is dropped, but the event
     // still clears an answered question.
-    Harness { agent: "copilot", home_env: Some("COPILOT_HOME"), home: ".copilot", file: "hooks/herdr-projects.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: true, timeout: 10, top_level_output: true },
+    Harness { agent: "copilot", home_env: Some("COPILOT_HOME"), home: ".copilot", file: "hooks/herdr-projects.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: true, timeout: 10, top_level_output: true, powershell_on_windows: true },
 ];
 
 pub const AGENTS: [&str; 5] = ["claude", "codex", "droid", "gemini", "copilot"];
@@ -234,8 +238,19 @@ pub fn hooks(input: &str, command: &str, remove: bool) -> Result<String> {
 /// UserPromptSubmit hook (exit 2) as "block this prompt", in every session on
 /// the machine. Entries from before 0.2.35 end in `2>/dev/null || true`;
 /// [`hooks`] replaces them, and `doctor --fix` rewrites them.
+///
+/// The binary comes first in [`crate::platform::hook_program`]'s form, which
+/// every shell runs. On Windows a path with no such form (a folder name with
+/// a space and no 8.3 short name) is quoted: for harnesses that run hooks in
+/// PowerShell behind its call operator `&`, otherwise as Git Bash and cmd
+/// read it. Arguments in double quotes mean the same in all three.
 pub fn hook_command(binary: &Path, root: &Path, agent: &str) -> String {
-    format!("{} --root {} hook --agent {agent}", quote_local(&binary.to_string_lossy()), quote_local(&root.to_string_lossy()))
+    let args = format!("--root {} hook --agent {agent}", quote_local(&root.to_string_lossy()));
+    match crate::platform::hook_program(binary) {
+        Some(program) => format!("{program} {args}"),
+        None if harness(agent).is_some_and(|h| h.powershell_on_windows) => format!("& {} {args}", quote_local(&binary.to_string_lossy())),
+        None => format!("{} {args}", quote_local(&binary.to_string_lossy())),
+    }
 }
 
 /// Whether a hook file already holds exactly the entries `command` installs,
@@ -573,6 +588,22 @@ mod tests {
     fn the_hook_command_uses_no_shell_syntax() {
         let quoted = if cfg!(windows) { r#""/p q/herdr-projects""# } else { "'/p q/herdr-projects'" };
         assert_eq!(hook_command(Path::new("/p q/herdr-projects"), Path::new("/r"), "claude"), format!("{quoted} --root /r hook --agent claude"));
+        // Unix: every harness runs hooks in sh, so the form is the same.
+        let codex = if cfg!(windows) { format!("& {quoted}") } else { quoted.to_string() };
+        assert_eq!(hook_command(Path::new("/p q/herdr-projects"), Path::new("/r"), "codex"), format!("{codex} --root /r hook --agent codex"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_hook_commands_start_with_a_bare_path_and_replace_quoted_ones() {
+        let command = hook_command(Path::new(r"C:\Users\jo\herdr-projects.exe"), Path::new(r"C:\Users\jo\.herdr-projects"), "codex");
+        assert_eq!(command, r#"C:/Users/jo/herdr-projects.exe --root "C:\Users\jo\.herdr-projects" hook --agent codex"#);
+        let old = hooks("{}", r#""C:\Users\jo\herdr-projects.exe" --root "C:\Users\jo\.herdr-projects" hook --agent codex"#, false).unwrap();
+        assert!(!hooks_current(&old, &command));
+        let migrated = hooks(&old, &command, false).unwrap();
+        assert!(hooks_current(&migrated, &command));
+        assert_eq!(migrated.matches("hook --agent codex").count(), 3);
+        assert_eq!(migrated.matches("C:/Users/jo/herdr-projects.exe").count(), 3);
     }
 
     #[test]

@@ -101,6 +101,14 @@ pub use imp::is_executable;
 /// same way for a path. Plain words stay bare on both.
 pub use imp::quote_local;
 
+/// The binary as the first word of a hook command, in a form every shell a
+/// harness may run hooks in takes as a call: [`quote_local`] on Unix (`sh`).
+/// On Windows Git Bash, cmd and PowerShell all run an unquoted path with
+/// forward slashes, while PowerShell reads a quoted first word as a string
+/// and bash drops unquoted backslashes; a folder whose name would need quotes
+/// is replaced by its 8.3 short name. `None` when one has no short name.
+pub use imp::hook_program;
+
 /// A command line for Herdr to run through its shell: unchanged on Unix
 /// (`/bin/sh -lc`); on Windows wrapped in one more pair of double quotes when
 /// it has any, because `cmd.exe /d /c` strips the first and the last quote.

@@ -141,6 +141,10 @@ pub fn quote_local(value: &str) -> String {
     crate::remote::quote(value)
 }
 
+pub fn hook_program(binary: &Path) -> Option<String> {
+    Some(quote_local(&binary.to_string_lossy()))
+}
+
 pub fn herdr_shell_line(line: String) -> String {
     line
 }

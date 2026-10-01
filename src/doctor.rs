@@ -370,6 +370,11 @@ fn report(
         let expected = crate::setup::hook_command(&binary, root, agent);
         match journal.get(&key) {
             None => check(&mut out, None, &label, "not configured; `configure` installs the progress hooks".into()),
+            // Windows only: a path that needs quotes and has no 8.3 short name;
+            // PowerShell would read the quoted path as a string.
+            Some(_) if crate::setup::hooks_current(&text, &expected) && expected.starts_with('"') => {
+                check(&mut out, None, &label, format!("{} runs this binary, but its path has a space and no 8.3 short name, so the hooks run only in Git Bash, not PowerShell", file.display()))
+            }
             Some(_) if crate::setup::hooks_current(&text, &expected) => check(&mut out, Some(true), &label, format!("{} runs this binary", file.display())),
             Some(_) if fix => {
                 let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: crate::setup::skill_source() };

@@ -346,6 +346,112 @@ function Test-HooksAndReport {
     }
 }
 
+# Runs a hook command in one shell the way harnesses start it, with a
+# SessionStart event on stdin, in the thread pane's environment (the hook
+# answers only inside a herdr pane).
+function Invoke-HookIn {
+    param([string] $Shell, [string] $Command)
+    $psi = [System.Diagnostics.ProcessStartInfo]::new()
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $arguments = @()
+    switch ($Shell) {
+        "sh" { $psi.FileName = "/bin/sh"; $arguments = @("-c", $Command) }
+        # Claude Code's shell on Windows (its hooks run `bash -c`).
+        "bash" { $psi.FileName = Join-Path $env:ProgramFiles "Git" "bin" "bash.exe"; $arguments = @("-c", $Command) }
+        # cmd reads its line raw: Codex's fallback wraps the command in one
+        # more pair of quotes, which cmd strips.
+        "cmd" { $psi.FileName = "cmd.exe"; $psi.Arguments = "/d /c `"$Command`"" }
+        # pwsh and Windows PowerShell 5.1, as Codex, Gemini CLI and Claude
+        # Code without Git Bash run them.
+        default { $psi.FileName = $Shell; $arguments = @("-NoProfile", "-Command", $Command) }
+    }
+    foreach ($argument in $arguments) { $psi.ArgumentList.Add($argument) }
+    $psi.Environment["HERDR_ENV"] = "1"
+    $psi.Environment["HERDR_PANE_ID"] = $env:THREAD_PANE
+    $psi.Environment["HERDR_SOCKET_PATH"] = (Get-Content -Raw (Join-Path $env:HERDR_PROJECTS_ROOT "smoke" ".state" "coordinator.json") | ConvertFrom-Json).socket
+    $process = [System.Diagnostics.Process]::Start($psi)
+    $process.StandardInput.Write('{"hook_event_name":"SessionStart","session_id":"smoke-shells","source":"startup"}')
+    $process.StandardInput.Close()
+    $stderr = $process.StandardError.ReadToEndAsync()
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $process.WaitForExit()
+    [pscustomobject]@{ Code = $process.ExitCode; Out = $stdout; Err = $stderr.Result }
+}
+
+# The shells a hook command's form is meant for: a bare first word in every
+# one; `& "…"` in PowerShell only (harnesses that always use it); `"…"` in
+# Git Bash and cmd only (a path with a space and no 8.3 short name).
+function Test-HookCommandIn {
+    param([string] $Name, [string] $Command)
+    # The pane runs the stub claude, and the hook answers only its own
+    # harness: another harness's command is run as claude's.
+    $Command = $Command -replace ' hook --agent \w+$', ' hook --agent claude'
+    $shells = if (-not $IsWindows) { @("sh") }
+    elseif ($Command.StartsWith("& ")) { @("pwsh", "powershell") }
+    elseif ($Command.StartsWith('"')) { @("bash", "cmd") }
+    else { @("bash", "cmd", "pwsh", "powershell") }
+    foreach ($shell in $shells) {
+        $result = Invoke-HookIn $shell $Command
+        Write-Host "$Name ($shell): exit $($result.Code)`n  stdout: $($result.Out.Trim())`n  stderr: $($result.Err.Trim())"
+        if ($result.Code -ne 0 -or $result.Out -notmatch "report --percent") {
+            throw "$Name in $shell (exit $($result.Code)): $($result.Err.Trim()) $Command"
+        }
+    }
+    $shells -join ", "
+}
+
+# The hook command, written by configure, run in each shell a harness may
+# use. Windows also checks binaries in folders with a space: one with an 8.3
+# short name (a bare command) and one without (quoted, per harness).
+function Test-HookShells {
+    $settings = Get-Content -Raw (Join-Path $HOME ".claude" "settings.json") | ConvertFrom-Json
+    $configured = $settings.hooks.SessionStart.hooks.command | Where-Object { $_ -match "herdr-projects" } | Select-Object -First 1
+    Invoke-Check "configured hook in each shell" {
+        Write-Host $configured
+        if ($IsWindows -and $configured -notmatch '^[A-Za-z]:/\S+ ') { throw "not a bare command: $configured" }
+        if ($IsWindows) {
+            # The form before: a quoted path is a string in PowerShell, not a call.
+            $old = "`"$env:HP_EXE`" --root `"$env:HERDR_PROJECTS_ROOT`" hook --agent claude"
+            $result = Invoke-HookIn "pwsh" $old
+            if ($result.Code -eq 0 -and $result.Out -match "report --percent") { throw "the old quoted form ran in pwsh, so this check proves nothing" }
+        }
+        Test-HookCommandIn "configured" $configured
+    }
+    if (-not $IsWindows) { return }
+    Invoke-Check "hook paths with a space" {
+        $t = $env:RUNNER_TEMP
+        $short = Join-Path $t "hook short"
+        $long = Join-Path $t "hook long"
+        New-Item -ItemType Directory $short | Out-Null
+        Invoke-Checked fsutil @("file", "setshortname", $short, "HOOKSHRT") | Out-Null
+        # No 8.3 names for folders made from here on (the runner is thrown
+        # away after the job).
+        Invoke-Checked fsutil @("8dot3name", "set", (Split-Path -Qualifier $t), "1") | Out-Null
+        New-Item -ItemType Directory $long | Out-Null
+        # The root, with a space too, as an argument.
+        $root = Join-Path $t "hp root"
+        New-Item -ItemType Junction -Path $root -Target $env:HERDR_PROJECTS_ROOT | Out-Null
+        $forms = @()
+        foreach ($dir in @($short, $long)) {
+            $exe = Join-Path $dir "herdr-projects.exe"
+            Copy-Item $env:HP_EXE $exe
+            $notes = Invoke-Checked $exe @("--root", $root, "configure", "--dry-run", "--hooks-only", "--clients", "claude,codex", "--claude-home", (Join-Path $dir "claude"), "--codex-home", (Join-Path $dir "codex"))
+            foreach ($agent in @("claude", "codex")) {
+                $command = ($notes -split "`n" | Where-Object { $_ -match "hook entries for ``(.+ hook --agent $agent)``" } | ForEach-Object { $Matches[1] }) | Select-Object -First 1
+                if (-not $command) { throw "configure printed no $agent hook command" }
+                $expected = if ($dir -eq $short) { '^[A-Za-z]:/\S*HOOKSHRT/herdr-projects\.exe ' } elseif ($agent -eq "codex") { '^& "' } else { '^"' }
+                if ($command -notmatch $expected) { throw "$agent hook for $dir is not of the form $expected`: $command" }
+                $shells = Test-HookCommandIn "$agent in '$(Split-Path -Leaf $dir)'" $command
+                $forms += "$agent in '$(Split-Path -Leaf $dir)': $shells"
+            }
+        }
+        $forms -join "; "
+    }
+}
+
 function Test-Routines {
     $dir = Join-Path $env:HERDR_PROJECTS_ROOT "smoke" "routines"
     # No shell: the default on Windows, and opt-out-able on Unix. A bare

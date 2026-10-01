@@ -139,6 +139,10 @@ jobs:
         timeout-minutes: 2
         run: . .github/smoke/checks.ps1; Test-HooksAndReport
 
+      - name: "Check: hook command in every shell"
+        timeout-minutes: 3
+        run: . .github/smoke/checks.ps1; Test-HookShells
+
       - name: "Check: routines without a shell and with one"
         timeout-minutes: 5
         run: . .github/smoke/checks.ps1; Test-Routines

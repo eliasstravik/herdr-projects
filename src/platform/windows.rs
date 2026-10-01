@@ -96,6 +96,7 @@ unsafe extern "system" {
     fn SetConsoleCtrlHandler(handler: CtrlHandler, add: i32) -> i32;
     fn GetStdHandle(id: u32) -> *mut std::ffi::c_void;
     fn SetHandleInformation(handle: *mut std::ffi::c_void, mask: u32, flags: u32) -> i32;
+    fn GetShortPathNameW(long: *const u16, short: *mut u16, size: u32) -> u32;
 }
 
 pub struct IgnoreInterrupts;
@@ -204,6 +205,48 @@ pub fn quote_local(value: &str) -> String {
     }
 }
 
+pub fn hook_program(binary: &Path) -> Option<String> {
+    let mut long = PathBuf::new();
+    let mut words = Vec::new();
+    for component in binary.components() {
+        long.push(component);
+        match component {
+            std::path::Component::Prefix(prefix) => words.push(prefix.as_os_str().to_string_lossy().into_owned()),
+            std::path::Component::RootDir => {}
+            std::path::Component::Normal(name) => {
+                let name = name.to_string_lossy();
+                words.push(if is_bare(&name) { name.into_owned() } else { short_name(&long)? });
+            }
+            _ => return None,
+        }
+    }
+    let program = words.join("/");
+    is_bare(&program).then_some(program)
+}
+
+/// Characters none of Git Bash, cmd and PowerShell treat specially inside an
+/// unquoted word (`~` included: bash expands it only at a word's start, and
+/// a drive letter comes first). Not `,` or `@`, which PowerShell does.
+fn is_bare(word: &str) -> bool {
+    !word.is_empty() && !word.starts_with('-') && word.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | '_' | '-' | ':' | '~' | '+'))
+}
+
+/// The 8.3 short name of the last component of an existing path, when the
+/// volume made one and it is bare.
+fn short_name(path: &Path) -> Option<String> {
+    use std::os::windows::ffi::{OsStrExt as _, OsStringExt as _};
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+    let mut buffer = vec![0u16; 1024];
+    // SAFETY: both buffers are valid, the input NUL-terminated, the size the output's.
+    let len = unsafe { GetShortPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), buffer.len() as u32) } as usize;
+    if len == 0 || len >= buffer.len() {
+        return None;
+    }
+    let short = PathBuf::from(std::ffi::OsString::from_wide(&buffer[..len]));
+    let name = short.file_name()?.to_string_lossy().into_owned();
+    is_bare(&name).then_some(name)
+}
+
 pub fn herdr_shell_line(line: String) -> String {
     if line.contains('"') { format!("\"{line}\"") } else { line }
 }
@@ -255,6 +298,22 @@ mod tests {
         assert_eq!(quote_local(r"C:\Users\Jo Doe\hp.exe"), r#""C:\Users\Jo Doe\hp.exe""#);
         assert_eq!(herdr_shell_line("hp --line".into()), "hp --line");
         assert_eq!(herdr_shell_line(r#""C:\a b\hp.exe" --root "C:\r""#.into()), r#"""C:\a b\hp.exe" --root "C:\r"""#);
+    }
+
+    #[test]
+    fn hook_programs_are_bare_with_forward_slashes_or_none() {
+        assert_eq!(hook_program(Path::new(r"C:\Users\jo\hp.exe")).as_deref(), Some("C:/Users/jo/hp.exe"));
+        assert_eq!(hook_program(Path::new(r"C:\no such\hp.exe")), None);
+        assert_eq!(hook_program(Path::new(r"C:\no,such\hp.exe")), None);
+        // A real folder with a space: its short name, if the volume made one.
+        let dir = tempfile::tempdir().unwrap();
+        let binary = dir.path().join("a b").join("hp.exe");
+        std::fs::create_dir(binary.parent().unwrap()).unwrap();
+        std::fs::write(&binary, "").unwrap();
+        if let Some(program) = hook_program(&dunce::canonicalize(&binary).unwrap()) {
+            assert!(is_bare(&program) && program.ends_with("/hp.exe"), "{program}");
+            assert!(Path::new(&program).is_file(), "{program}");
+        }
     }
 
     #[test]
