@@ -124,14 +124,24 @@ fn trimmed_starts(line: &[Cell], prefix: &str) -> bool {
     text(line).trim_start().starts_with(prefix)
 }
 
-/// A horizontal rule: a line of box-drawing `─`, possibly carrying one label
-/// between the dashes (Claude Code 2.1.277+ writes the session name into the
-/// top border of its input box: `──── hp-demo-t-0001 ─`).
+/// A horizontal rule: a line of box-drawing `─` only.
 fn is_rule(line: &[Cell]) -> bool {
     let t = text(line);
     let t = t.trim();
+    t.chars().count() >= 10 && t.chars().all(|c| c == '─')
+}
+
+/// The top border of Claude Code's input box: a rule that may carry one label.
+///
+///   - The session name, an agent name or a tmux hint: `──── label ─`.
+///   - Effort and fast-mode tags, right-aligned: `──── ultracode  fast mode ─`.
+///   - The history position, left-aligned: `─── History 3/12 ────`.
+///   - The bottom border never carries a label, so only the top is read this way.
+fn is_labelled_rule(line: &[Cell]) -> bool {
+    let t = text(line);
+    let t = t.trim();
     let dashes = t.chars().filter(|c| *c == '─').count();
-    dashes >= 10 && t.starts_with("──") && t.ends_with('─') && t.split('─').filter(|s| !s.trim().is_empty()).count() <= 1
+    dashes >= 10 && t.starts_with("──") && t.split('─').filter(|s| !s.trim().is_empty()).count() <= 1
 }
 
 /// The typed text in a box's cells: non-blank, not dim, and not a
@@ -157,9 +167,9 @@ fn typed(cells: &[Cell]) -> String {
 fn input_box(kind: &str, lines: &[Line]) -> Option<Vec<Line>> {
     let last = |pred: &dyn Fn(usize, &Line) -> bool| lines.iter().enumerate().rev().find(|(i, l)| pred(*i, l)).map(|(i, _)| i);
     match kind {
-        // `❯` right under a rule, continued until the next rule.
+        // `❯` right under the top border, continued until the next rule.
         "claude" => {
-            let at = last(&|i, l| trimmed_starts(l, "❯") && i > 0 && is_rule(&lines[i - 1]))?;
+            let at = last(&|i, l| trimmed_starts(l, "❯") && i > 0 && is_labelled_rule(&lines[i - 1]))?;
             let end = (at + 1..lines.len()).find(|&i| is_rule(&lines[i]))?;
             let mut rows = vec![after(&lines[at], '❯')?];
             rows.extend(lines[at + 1..end].iter().cloned());
@@ -269,14 +279,51 @@ mod tests {
     }
 
     #[test]
-    fn a_rule_may_carry_the_session_name_in_its_border() {
-        // Claude Code 2.1.277 with `-n`: the top border of the box reads `──── <name> ─`.
+    fn the_top_border_may_carry_one_label() {
         assert_eq!(check("claude", &fixture("claude-named-session")), Draft::Typed);
-        let named = format!("{} hp-demo-t-0001 ─\n❯ \n{}\n", "─".repeat(60), "─".repeat(70));
-        assert_eq!(check("claude", &named), Draft::Empty);
-        // Two labels, or text outside the dashes, is not a rule.
-        let not_rule = format!("── a ── b ──\n❯ \n{}\n", "─".repeat(70));
-        assert_eq!(check("claude", &not_rule), Draft::Unknown);
+        let d = |n: usize| "─".repeat(n);
+        let cases = [
+            // Shapes Claude Code draws.
+            ("no label", d(70), true),
+            ("session name", format!("{} hp-demo-t-0001 ─", d(52)), true),
+            ("session name reaching the pane's edge", format!("{} polish-release-notes", d(54)), true),
+            ("agent name", format!("{} @reviewer ─", d(58)), true),
+            ("label with spaces", format!("{} View teammates: `tmux -L claude-swarm a` ─", d(27)), true),
+            ("fast-mode tag and session name", format!("{} fast mode  hp-demo-t-0001 ─", d(41)), true),
+            ("effort and fast-mode tags", format!("{} ultracode  fast mode /fast ─", d(42)), true),
+            ("history position, left-aligned", format!("─── History 3/12 {}", d(53)), true),
+            ("dim label", format!("─── \u{1b}[2mHistory\u{1b}[22m {}", d(58)), true),
+            ("coloured border", format!("\u{1b}[38;5;135m{} hp-demo-t-0001 ─\u{1b}[39m", d(52)), true),
+            ("indented", format!("  {} hp-demo-t-0001 ─", d(50)), true),
+            // Lines that only resemble a border.
+            ("two labels", format!("{} a {} b {}", d(10), d(10), d(10)), false),
+            ("text before the dashes", format!("note {}", d(60)), false),
+            ("prose between two dashes", "─ a note about the box ─".to_string(), false),
+            ("fewer than ten dashes", "───── short ─".to_string(), false),
+            ("other box-drawing characters", format!("╭{}╮", d(60)), false),
+            // Claude Code truncates a label to the pane's width less three, which can leave no dashes before it.
+            ("label filling a narrow pane", format!(" {} ─", "a-very-long-session-name-that-fills-it"), false),
+        ];
+        for (name, top, want) in cases {
+            assert_eq!(is_labelled_rule(&parse(&top).remove(0)), want, "{name}: {top}");
+            let (empty, typed) = if want { (Draft::Empty, Draft::Typed) } else { (Draft::Unknown, Draft::Unknown) };
+            assert_eq!(check("claude", &format!("{top}\n❯ \n{}\n", d(70))), empty, "{name}, empty box");
+            assert_eq!(check("claude", &format!("{top}\n❯ hello\n{}\n", d(70))), typed, "{name}, typed box");
+        }
+    }
+
+    #[test]
+    fn only_the_top_border_may_carry_a_label() {
+        let d = |n: usize| "─".repeat(n);
+        let labelled = format!("{} hp-demo-t-0001 ─", d(52));
+        // A labelled line does not close the box: it runs on to the plain rule.
+        let open = format!("{labelled}\n❯ \n{labelled}\n");
+        assert_eq!(check("claude", &open), Draft::Unknown);
+        let runs_on = format!("{labelled}\n❯ \n{labelled}\n{}\n", d(70));
+        assert_eq!(check("claude", &runs_on), Draft::Typed);
+        // Pi's editor sits between two plain rules; a labelled line is not one of them.
+        let pi = format!("{}\n{labelled}\n{}\n", d(70), d(70));
+        assert_eq!(check("pi", &pi), Draft::Typed);
     }
 
     #[test]
