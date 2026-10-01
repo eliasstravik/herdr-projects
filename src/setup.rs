@@ -11,7 +11,7 @@ use jsonc_parser::cst::{CstInputValue, CstRootNode};
 use serde::{Deserialize, Serialize};
 
 use crate::paths::{Ctx, Env};
-use crate::remote::quote;
+use crate::platform::quote_local;
 
 /// A harness with a native, user-level hook system that can put text in the
 /// model's context. Every other agent learns to report from its thread brief
@@ -34,20 +34,24 @@ pub struct Harness {
     timeout: u64,
     /// The injected text goes in top-level `additionalContext`, not `hookSpecificOutput`.
     pub top_level_output: bool,
+    /// Runs hook commands in PowerShell on Windows (Codex, Gemini CLI, Copilot
+    /// CLI), rather than Git Bash with PowerShell as a fallback (Claude Code)
+    /// or a shell we do not know (Droid).
+    powershell_on_windows: bool,
 }
 
 pub const HARNESSES: [Harness; 5] = [
-    Harness { agent: "claude", home_env: Some("CLAUDE_CONFIG_DIR"), home: ".claude", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false },
-    Harness { agent: "codex", home_env: Some("CODEX_HOME"), home: ".codex", file: "hooks.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false },
+    Harness { agent: "claude", home_env: Some("CLAUDE_CONFIG_DIR"), home: ".claude", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false, powershell_on_windows: false },
+    Harness { agent: "codex", home_env: Some("CODEX_HOME"), home: ".codex", file: "hooks.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false, powershell_on_windows: true },
     // Factory Droid: Claude Code's format, in its settings.json.
-    Harness { agent: "droid", home_env: None, home: ".factory", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false },
+    Harness { agent: "droid", home_env: None, home: ".factory", file: "settings.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: false, timeout: 10, top_level_output: false, powershell_on_windows: false },
     // Gemini CLI: its own event names; timeouts in milliseconds.
-    Harness { agent: "gemini", home_env: None, home: ".gemini", file: "settings.json", events: ["SessionStart", "BeforeAgent", "AfterTool"], flat: false, timeout: 10_000, top_level_output: false },
+    Harness { agent: "gemini", home_env: None, home: ".gemini", file: "settings.json", events: ["SessionStart", "BeforeAgent", "AfterTool"], flat: false, timeout: 10_000, top_level_output: false, powershell_on_windows: true },
     // Copilot CLI reads every file in hooks/, so ours is a file of its own.
     // PascalCase event names select its Claude-style payload (snake_case,
     // `hook_event_name`); prompt-submit output is dropped, but the event
     // still clears an answered question.
-    Harness { agent: "copilot", home_env: Some("COPILOT_HOME"), home: ".copilot", file: "hooks/herdr-projects.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: true, timeout: 10, top_level_output: true },
+    Harness { agent: "copilot", home_env: Some("COPILOT_HOME"), home: ".copilot", file: "hooks/herdr-projects.json", events: ["SessionStart", "UserPromptSubmit", "PostToolUse"], flat: true, timeout: 10, top_level_output: true, powershell_on_windows: true },
 ];
 
 pub const AGENTS: [&str; 5] = ["claude", "codex", "droid", "gemini", "copilot"];
@@ -92,7 +96,7 @@ pub fn save_journal(config_dir: &Path, journal: &Journal) -> Result<()> {
 /// manager's link would be replaced by a plain file) rather than editing it.
 pub fn read(path: &Path) -> Result<Option<String>> {
     if let Ok(m) = std::fs::symlink_metadata(path) {
-        ensure!(!m.file_type().is_symlink(), "refusing to edit {}: it is a symbolic link; edit its target's hooks by hand or pass --claude-home/--codex-home", path.display());
+        ensure!(!crate::platform::is_link(&m), "refusing to edit {}: it is a symbolic link; edit its target's hooks by hand or pass --claude-home/--codex-home", path.display());
     }
     match std::fs::read_to_string(path) {
         Ok(s) => Ok(Some(s)),
@@ -142,18 +146,21 @@ fn remove_ours(kind: &str, text: &str, command: Option<&str>) -> Result<String> 
 }
 
 /// Herdr's config file: `HERDR_CONFIG_PATH`, else `$XDG_CONFIG_HOME/herdr`,
-/// else `~/.config/herdr/config.toml`.
+/// else `~/.config/herdr/config.toml` (`%APPDATA%\herdr\config.toml` on
+/// Windows), as Herdr itself resolves it.
 pub fn herdr_config_path(env: &Env) -> PathBuf {
     if let Some(path) = env.var("HERDR_CONFIG_PATH") {
         return PathBuf::from(path);
     }
-    env.var("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| env.home.join(".config")).join("herdr/config.toml")
+    let base = env.var("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| crate::platform::config_home(&env.home, &|name| env.var(name).map(str::to_string)));
+    base.join("herdr").join("config.toml")
 }
 
-/// The tab-bar command: absolute paths, since it runs under `/bin/sh -lc` on
-/// the server with no plugin environment.
+/// The tab-bar command: absolute paths, since it runs on the server with no
+/// plugin environment (under `/bin/sh -lc`, or `cmd.exe /d /c` on Windows).
+/// It uses no shell syntax beyond quoting the two paths.
 pub fn tab_command(binary: &Path, root: &Path) -> String {
-    format!("{} --root {} needs-you --line", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
+    crate::platform::herdr_shell_line(format!("{} --root {} needs-you --line", quote_local(&binary.to_string_lossy()), quote_local(&root.to_string_lossy())))
 }
 
 fn hook_entry(harness: &Harness, command: &str) -> serde_json::Value {
@@ -226,11 +233,31 @@ pub fn hooks(input: &str, command: &str, remove: bool) -> Result<String> {
 
 /// The hook command for a harness: the absolute binary path and the root,
 /// because hooks run outside the plugin environment.
-/// It always exits 0 and never writes to standard error: harnesses treat a
-/// failing UserPromptSubmit hook (exit 2) as "block this prompt", in every
-/// session on the machine, so a missing or older binary must not do that.
+/// No shell syntax: the `hook` subcommand itself always exits 0 and never
+/// writes to standard error (see `main`), because harnesses treat a failing
+/// UserPromptSubmit hook (exit 2) as "block this prompt", in every session on
+/// the machine. Entries from before 0.2.35 end in `2>/dev/null || true`;
+/// [`hooks`] replaces them, and `doctor --fix` rewrites them.
+///
+/// The binary comes first in [`crate::platform::hook_program`]'s form, which
+/// every shell runs. On Windows a path with no such form (a folder name with
+/// a space and no 8.3 short name) is quoted: for harnesses that run hooks in
+/// PowerShell behind its call operator `&`, otherwise as Git Bash and cmd
+/// read it. Arguments in double quotes mean the same in all three.
 pub fn hook_command(binary: &Path, root: &Path, agent: &str) -> String {
-    format!("{} --root {} hook --agent {agent} 2>/dev/null || true", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
+    let args = format!("--root {} hook --agent {agent}", quote_local(&root.to_string_lossy()));
+    match crate::platform::hook_program(binary) {
+        Some(program) => format!("{program} {args}"),
+        None if harness(agent).is_some_and(|h| h.powershell_on_windows) => format!("& {} {args}", quote_local(&binary.to_string_lossy())),
+        None => format!("{} {args}", quote_local(&binary.to_string_lossy())),
+    }
+}
+
+/// Whether a hook file already holds exactly the entries `command` installs,
+/// so `configure` would change nothing (an older command that merely starts
+/// with `command` does not count).
+pub fn hooks_current(text: &str, command: &str) -> bool {
+    hooks(text, command, false).is_ok_and(|after| after == text)
 }
 
 /// Where each harness keeps its hooks; `--claude-home`/`--codex-home`
@@ -279,7 +306,7 @@ pub fn skill_link(env: &Env, agent: &str, claude_home: Option<&Path>) -> PathBuf
             .join("skills"),
         _ => env.home.join(".agents/skills"),
     };
-    let resolved = std::fs::canonicalize(&dir).or_else(|_| std::fs::canonicalize(dir.parent().unwrap_or(&dir)).map(|p| p.join("skills")));
+    let resolved = dunce::canonicalize(&dir).or_else(|_| dunce::canonicalize(dir.parent().unwrap_or(&dir)).map(|p| p.join("skills")));
     resolved.unwrap_or(dir).join(SKILL)
 }
 
@@ -298,10 +325,10 @@ pub fn skill_state(link: &Path, source: &Path) -> SkillState {
     let Ok(meta) = std::fs::symlink_metadata(link) else {
         return SkillState::Missing;
     };
-    if !meta.file_type().is_symlink() {
+    if !crate::platform::is_link(&meta) {
         return SkillState::Foreign;
     }
-    match std::fs::read_link(link) {
+    match crate::platform::read_dir_link(link) {
         Ok(target) if target == source => SkillState::Ours,
         Ok(target) => SkillState::Elsewhere(target),
         Err(_) => SkillState::Foreign,
@@ -460,10 +487,10 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
     for (link, source) in &links {
         let Some(source) = source else { continue };
         if std::fs::symlink_metadata(link).is_ok() {
-            std::fs::remove_file(link)?;
+            crate::platform::remove_link(link)?;
         }
         std::fs::create_dir_all(link.parent().context("skill link has no parent")?)?;
-        std::os::unix::fs::symlink(source, link).with_context(|| format!("could not link {}", link.display()))?;
+        crate::platform::link_dir(source, link).with_context(|| format!("could not link {}", link.display()))?;
     }
     Ok(notes)
 }
@@ -479,7 +506,7 @@ pub fn unconfigure(ctx: &Ctx) -> Result<Vec<String>> {
         if owned.kind == "skill" {
             match skill_state(path, Path::new(&owned.after)) {
                 SkillState::Ours => {
-                    std::fs::remove_file(path)?;
+                    crate::platform::remove_link(path)?;
                     notes.push(format!("{key}: skill link removed"));
                 }
                 SkillState::Missing => notes.push(format!("{key}: already gone")),
@@ -555,14 +582,39 @@ pub fn apply_view(ctx: &Ctx) {
 mod tests {
     use super::*;
 
-    const CMD: &str = "'/p/herdr-projects' --root /r hook --agent claude 2>/dev/null || true";
+    const CMD: &str = "'/p/herdr-projects' --root /r hook --agent claude";
 
     #[test]
-    fn the_hook_command_never_fails_even_with_a_missing_binary() {
-        let command = hook_command(Path::new("/no/such/herdr-projects"), Path::new("/r"), "claude");
-        let out = std::process::Command::new("/bin/sh").args(["-c", &command]).output().unwrap();
-        assert!(out.status.success());
-        assert!(out.stdout.is_empty() && out.stderr.is_empty());
+    fn the_hook_command_uses_no_shell_syntax() {
+        let quoted = if cfg!(windows) { r#""/p q/herdr-projects""# } else { "'/p q/herdr-projects'" };
+        assert_eq!(hook_command(Path::new("/p q/herdr-projects"), Path::new("/r"), "claude"), format!("{quoted} --root /r hook --agent claude"));
+        // Unix: every harness runs hooks in sh, so the form is the same.
+        let codex = if cfg!(windows) { format!("& {quoted}") } else { quoted.to_string() };
+        assert_eq!(hook_command(Path::new("/p q/herdr-projects"), Path::new("/r"), "codex"), format!("{codex} --root /r hook --agent codex"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_hook_commands_start_with_a_bare_path_and_replace_quoted_ones() {
+        let command = hook_command(Path::new(r"C:\Users\jo\herdr-projects.exe"), Path::new(r"C:\Users\jo\.herdr-projects"), "codex");
+        assert_eq!(command, r#"C:/Users/jo/herdr-projects.exe --root "C:\Users\jo\.herdr-projects" hook --agent codex"#);
+        let old = hooks("{}", r#""C:\Users\jo\herdr-projects.exe" --root "C:\Users\jo\.herdr-projects" hook --agent codex"#, false).unwrap();
+        assert!(!hooks_current(&old, &command));
+        let migrated = hooks(&old, &command, false).unwrap();
+        assert!(hooks_current(&migrated, &command));
+        assert_eq!(migrated.matches("hook --agent codex").count(), 3);
+        assert_eq!(migrated.matches("C:/Users/jo/herdr-projects.exe").count(), 3);
+    }
+
+    #[test]
+    fn a_hook_command_from_before_0_2_35_is_migrated() {
+        let old = hooks("{}", "'/p/herdr-projects' --root /r hook --agent claude 2>/dev/null || true", false).unwrap();
+        // The old command starts with the new one, yet it is not current.
+        assert!(old.contains(CMD) && !hooks_current(&old, CMD));
+        let migrated = hooks(&old, CMD, false).unwrap();
+        assert!(!migrated.contains("|| true"));
+        assert_eq!(migrated.matches(CMD).count(), 3);
+        assert!(hooks_current(&migrated, CMD));
     }
 
     #[test]
@@ -638,6 +690,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn configure_and_unconfigure_round_trip_byte_for_byte_and_keep_user_additions() {
         let home = tempfile::tempdir().unwrap();
         let env = Env::for_test(home.path(), &[]);
@@ -682,6 +735,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn the_skill_is_linked_once_into_a_shared_skills_dir_and_foreign_ones_are_left_alone() {
         let home = tempfile::tempdir().unwrap();
         let env = Env::for_test(home.path(), &[]);
@@ -698,7 +752,7 @@ mod tests {
         let runner = crate::runner::fake::FakeRunner::new();
         let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
         let options = |dry_run: bool, skill: &Path| ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(home.path().join("codex")), dry_run, hooks: true, sidebar: false, key: None, herdr_config: None, skill: Some(skill.to_path_buf()) };
-        let link = std::fs::canonicalize(&shared).unwrap().join(SKILL);
+        let link = dunce::canonicalize(&shared).unwrap().join(SKILL);
 
         // A plain directory already there (the old personal copy) is never touched.
         std::fs::create_dir_all(shared.join(SKILL)).unwrap();
@@ -739,6 +793,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    #[cfg(unix)]
     fn symlinked_config_is_refused_without_touching_the_target() {
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("real.json");

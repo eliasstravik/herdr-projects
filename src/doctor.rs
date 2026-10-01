@@ -370,7 +370,12 @@ fn report(
         let expected = crate::setup::hook_command(&binary, root, agent);
         match journal.get(&key) {
             None => check(&mut out, None, &label, "not configured; `configure` installs the progress hooks".into()),
-            Some(_) if text.contains(&expected) => check(&mut out, Some(true), &label, format!("{} runs this binary", file.display())),
+            // Windows only: a path that needs quotes and has no 8.3 short name;
+            // PowerShell would read the quoted path as a string.
+            Some(_) if crate::setup::hooks_current(&text, &expected) && expected.starts_with('"') => {
+                check(&mut out, None, &label, format!("{} runs this binary, but its path has a space and no 8.3 short name, so the hooks run only in Git Bash, not PowerShell", file.display()))
+            }
+            Some(_) if crate::setup::hooks_current(&text, &expected) => check(&mut out, Some(true), &label, format!("{} runs this binary", file.display())),
             Some(_) if fix => {
                 let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: crate::setup::skill_source() };
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
@@ -379,7 +384,7 @@ fn report(
                     Err(error) => check(&mut out, Some(false), &label, format!("could not fix: {error:#}")),
                 }
             }
-            Some(_) => check(&mut out, None, &label, format!("{} runs another binary or root; `doctor --fix` rewrites it", file.display())),
+            Some(_) => check(&mut out, None, &label, format!("{} runs another binary or root, or an older hook command; `doctor --fix` rewrites it", file.display())),
         }
     }
 
@@ -567,7 +572,7 @@ mod tests {
         let on_host = |cmd: &Cmd| cmd.program == "gh" && cmd.env.contains(&("GH_HOST".into(), "github.localhost".into()));
         for reachable in [true, false] {
             let runner = FakeRunner::new();
-            runner.on_fn(|cmd| cmd.display().ends_with("/app remote get-url origin"), |_| Ok(ok("http://github.localhost/eliasstravik/app.git\n")));
+            runner.on_fn(|cmd| cmd.display().ends_with("app remote get-url origin"), |_| Ok(ok("http://github.localhost/eliasstravik/app.git\n")));
             if reachable {
                 runner.on_fn(on_host, |_| Ok(ok("eliasstravik\n")));
             }
@@ -642,7 +647,7 @@ mod tests {
         assert_eq!(crate::setup::skill_state(&link, &moved), crate::setup::SkillState::Ours);
 
         // A directory of the same name is never touched.
-        std::fs::remove_file(&link).unwrap();
+        crate::platform::remove_link(&link).unwrap();
         std::fs::create_dir(&link).unwrap();
         let (text, _) = report(&env, &root, &cfg, &flags, &runner, true, Some(&moved));
         assert!(text.contains("is not this plugin's link"), "{text}");

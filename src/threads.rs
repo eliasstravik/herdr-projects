@@ -160,7 +160,7 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
         // A remote path is stored as it is on its own machine.
         (Some(repo), false) => repo.clone(),
         (Some(repo), true) => {
-            let path = std::fs::canonicalize(repo)
+            let path = dunce::canonicalize(repo)
                 .with_context(|| format!("repository {repo} does not exist"))?
                 .to_string_lossy()
                 .into_owned();
@@ -320,7 +320,7 @@ fn place_tab(project: &Project, view: &SessionView, record: &Thread) -> Result<T
         }
         folder
     };
-    let folder = std::fs::canonicalize(&folder)?;
+    let folder = dunce::canonicalize(&folder)?;
     let created = match workspace {
         Some(id) => view.herdr.tab_create(&id, &folder, &record.title, false)?,
         // The coordinator runs in a pane of another workspace: the thread
@@ -333,7 +333,7 @@ fn place_tab(project: &Project, view: &SessionView, record: &Thread) -> Result<T
         }
     };
     let cwd = view.herdr.pane_cwd(&created.pane_id).unwrap_or_default();
-    let cwd = if cwd.is_empty() { folder.to_string_lossy().into_owned() } else { cwd };
+    let cwd = if cwd.is_empty() { folder.to_string_lossy().into_owned() } else { crate::herdr::trim_dir(&cwd).to_string() };
     thread::update(project, &record.id, |t| {
         t.cwd = cwd;
         t.workspace_id = created.workspace_id;

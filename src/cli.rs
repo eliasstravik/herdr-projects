@@ -278,6 +278,17 @@ enum Command {
         #[arg(long, value_parser = crate::setup::AGENTS)]
         agent: String,
     },
+    /// Focus a pane after a delay (the popup's retry once it has closed)
+    #[command(hide = true)]
+    FocusPane {
+        pane: String,
+        #[arg(long, value_name = "PATH")]
+        socket: String,
+        #[arg(long, value_name = "NAME")]
+        machine: Option<String>,
+        #[arg(long, value_name = "MS", default_value_t = 0)]
+        delay_ms: u64,
+    },
     /// Print the progress record of this pane, or of --pane
     Progress {
         #[arg(long, value_name = "ID")]
@@ -623,8 +634,28 @@ pub fn apply_profile_args(ctx: &Ctx, args: &[String]) -> Result<String> {
     crate::profiles::apply(&ctx.config_dir, &change)
 }
 
+/// Whether the arguments run the `hook` subcommand: the first word after
+/// the global `--root` option.
+pub fn is_hook(args: impl IntoIterator<Item = std::ffi::OsString>) -> bool {
+    let mut args = args.into_iter().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "--root" {
+            args.next();
+        } else if !arg.to_string_lossy().starts_with('-') {
+            return arg == "hook";
+        }
+    }
+    false
+}
+
 pub fn run() -> Result<()> {
-    let cli = Cli::parse();
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        // Clap exits 2 on bad arguments, which a harness reads as "block this
+        // prompt": a hook from a newer configure must not do that.
+        Err(_) if is_hook(std::env::args_os()) => return Ok(()),
+        Err(error) => error.exit(),
+    };
     let env = Env::from_process()?;
     let config_dir = env.config_dir();
     let root = paths::resolve_root(cli.root.as_deref(), &env, &config_dir)?;
@@ -892,6 +923,7 @@ pub fn run() -> Result<()> {
             let _ = crate::progress::hook(&ctx, &agent);
             Ok(())
         }
+        Command::FocusPane { pane, socket, machine, delay_ms } => crate::popup::focus_later(&ctx, &socket, machine.as_deref(), &pane, std::time::Duration::from_millis(delay_ms)),
         Command::Progress { pane } => crate::progress::print(&ctx, pane.as_deref()),
         Command::Update { check } => crate::update::run(&ctx, check),
         Command::Ticker { command } => match command {

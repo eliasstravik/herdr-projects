@@ -15,6 +15,7 @@ mod names;
 mod notify;
 mod overview;
 mod paths;
+mod platform;
 mod popup;
 mod pr;
 mod profiles;
@@ -57,13 +58,9 @@ fn extend_path() {
     let current = std::env::var_os("PATH").unwrap_or_default();
     let _ = USER_PATH.set(current.to_string_lossy().into_owned());
     let mut dirs: Vec<std::path::PathBuf> = std::env::split_paths(&current).collect();
-    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
-    let mut extra: Vec<std::path::PathBuf> = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].iter().map(Into::into).collect();
-    if let Some(home) = home {
-        extra.push(home.join(".local/bin"));
-        extra.push(home.join(".cargo/bin"));
-    }
-    for dir in extra {
+    let var = |name: &str| std::env::var(name).ok();
+    let home = platform::home_dir(&var);
+    for dir in platform::extra_path_dirs(home.as_deref(), &var) {
         if !dirs.contains(&dir) {
             dirs.push(dir);
         }
@@ -76,6 +73,15 @@ fn extend_path() {
 
 fn main() {
     extend_path();
+    if cli::is_hook(std::env::args_os()) {
+        // A harness hook must never fail the harness or write to standard
+        // error: a failing UserPromptSubmit hook (exit 2) blocks the prompt in
+        // every session on the machine. So `hook` swallows bad arguments,
+        // errors and panics alike and always exits 0.
+        std::panic::set_hook(Box::new(|_| {}));
+        let _ = std::panic::catch_unwind(cli::run);
+        std::process::exit(0);
+    }
     if let Err(error) = cli::run() {
         eprintln!("herdr-projects: {error:#}");
         std::process::exit(1);

@@ -1475,9 +1475,11 @@ fn fit(text: &str, width: usize) -> String {
 /// Copies text to the clipboard with the platform's tool.
 fn copy(text: &str) -> String {
     use std::process::{Command, Stdio};
-    let tools: &[(&str, &[&str])] = if cfg!(target_os = "macos") { &[("pbcopy", &[])] } else { &[("wl-copy", &[]), ("xclip", &["-selection", "clipboard"]), ("xsel", &["--clipboard", "--input"])] };
-    for (tool, args) in tools {
-        if let Ok(mut child) = Command::new(tool).args(*args).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+    for (tool, args) in crate::platform::CLIPBOARD {
+        let mut command = Command::new(tool);
+        command.args(*args).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null());
+        crate::platform::background(&mut command, false);
+        if let Ok(mut child) = command.spawn() {
             if let Some(mut stdin) = child.stdin.take() {
                 let _ = stdin.write_all(text.as_bytes());
             }
@@ -1510,37 +1512,32 @@ pub fn run_hp(ctx: &Ctx, args: &[String], stdin: Option<&str>) -> (bool, String)
 }
 
 /// Focuses a pane after the popup closed. Herdr's docs do not say focus is
-/// refused while a popup is up; if it is, a detached child retries shortly
-/// after this process (and with it the popup) has exited.
+/// refused while a popup is up; if it is, a detached `focus-pane --delay-ms`
+/// of this binary retries shortly after this process (and with it the popup)
+/// has exited.
 fn focus(ctx: &Ctx, socket: &str, machine: &str, pane: &str) {
     let herdr = crate::herdr::Herdr::new(ctx.env.herdr_bin(), socket, ctx.runner).on_machine(machine);
     if herdr.agent_focus(pane).is_ok() {
         return;
     }
-    use std::os::unix::process::CommandExt;
-    let mut args = Vec::new();
+    let Ok(binary) = crate::paths::binary() else {
+        return;
+    };
+    let mut command = std::process::Command::new(binary);
+    command.args(["focus-pane", "--delay-ms", "200", "--socket", socket]);
     if !machine.is_empty() {
-        args.extend(["--machine".to_string(), machine.to_string()]);
+        command.args(["--machine", machine]);
     }
-    args.extend(["agent".to_string(), "focus".to_string(), pane.to_string()]);
-    let mut command = std::process::Command::new("/bin/sh");
-    command
-        .args(["-c", "sleep 0.2; exec \"$@\"", "sh", &ctx.env.herdr_bin()])
-        .args(&args)
-        .env("HERDR_SOCKET_PATH", socket)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    unsafe {
-        command.pre_exec(|| {
-            unsafe extern "C" {
-                fn setsid() -> i32;
-            }
-            setsid();
-            Ok(())
-        });
-    }
+    command.arg(pane).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    crate::platform::detach(&mut command);
     let _ = command.spawn();
+}
+
+/// `focus-pane`: focuses a pane after `delay`, for [`focus`]'s retry.
+pub fn focus_later(ctx: &Ctx, socket: &str, machine: Option<&str>, pane: &str, delay: Duration) -> Result<()> {
+    std::thread::sleep(delay);
+    let herdr = crate::herdr::Herdr::new(ctx.env.herdr_bin(), socket, ctx.runner).on_machine(machine.unwrap_or(""));
+    herdr.agent_focus(pane).map_err(|e| anyhow::anyhow!("{e}"))
 }
 
 /// The popup's loop, on the terminal Herdr gives the popup (or any terminal,

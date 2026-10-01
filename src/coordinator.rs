@@ -16,7 +16,7 @@ use crate::herdr::{Agent, Herdr, Pane};
 use crate::paths::{self, Ctx, SessionFlags};
 use crate::profiles::Role;
 use crate::project::{self, Coordinator, Project, Status};
-use crate::remote::quote;
+use crate::platform::quote_local;
 use crate::{inbox, names, ticker};
 
 /// A coordinator counts as idle for a nudge once its `(agent_status,
@@ -24,12 +24,13 @@ use crate::{inbox, names, ticker};
 pub const NUDGE_IDLE_SECS: i64 = 60;
 
 /// `<binary> --root <root>`: the fixed shape every printed command starts
-/// with, so allow-list patterns can match on it. Values with spaces are quoted.
+/// with, so allow-list patterns can match on it. Values with spaces are
+/// quoted for the local shell (double quotes on Windows).
 pub fn command_prefix(binary: &Path, root: &Path) -> String {
     format!(
         "{} --root {}",
-        quote(&binary.to_string_lossy()),
-        quote(&root.to_string_lossy())
+        quote_local(&binary.to_string_lossy()),
+        quote_local(&root.to_string_lossy())
     )
 }
 
@@ -637,7 +638,7 @@ mod tests {
         );
         assert_eq!(
             command_prefix(Path::new("/bin/hp"), Path::new("/my root")),
-            "/bin/hp --root '/my root'"
+            if cfg!(windows) { r#"/bin/hp --root "/my root""# } else { "/bin/hp --root '/my root'" }
         );
     }
 

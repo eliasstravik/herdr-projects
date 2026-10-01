@@ -340,7 +340,7 @@ impl Project {
     /// The canonical folder (symlinks resolved): the key of the project's
     /// `[safety]` table and of its routine approvals.
     pub fn canonical_dir(&self) -> PathBuf {
-        std::fs::canonicalize(self.dir()).unwrap_or_else(|_| self.dir())
+        dunce::canonicalize(self.dir()).unwrap_or_else(|_| self.dir())
     }
 
     /// Takes the per-project lock. The lock file is opened without creating
@@ -359,6 +359,29 @@ impl Project {
             bail!("project `{}` is gone", self.slug);
         }
         Ok(ProjectLock { _file: file })
+    }
+
+    /// Moves the project folder to `to` under its lock, so no writer lands in
+    /// between. Windows cannot move a folder while a file in it is open, and
+    /// the lock file is in it: there the lock is let go just before the move,
+    /// which is retried for a moment while a writer holds it. A writer that
+    /// takes the lock after the move finds the project gone, as on Unix.
+    pub fn move_dir(&self, to: &Path) -> Result<()> {
+        let lock = self.lock()?;
+        if !cfg!(windows) {
+            return Ok(std::fs::rename(self.dir(), to)?);
+        }
+        drop(lock);
+        let mut tries = 0;
+        loop {
+            match std::fs::rename(self.dir(), to) {
+                Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied && tries < 40 => {
+                    tries += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                result => return Ok(result?),
+            }
+        }
     }
 
     pub fn read_project_md(&self) -> Result<(Settings, String)> {
@@ -609,8 +632,7 @@ pub fn write_priming(project: &Project, prefix: &str) -> Result<()> {
     }
     write_atomic(&agents, agents_md(&name, &project.slug, prefix).as_bytes())?;
     let claude = dir.join("CLAUDE.md");
-    let link_ok = std::fs::read_link(&claude).is_ok_and(|target| target == Path::new("AGENTS.md"));
-    if !link_ok {
+    if !crate::platform::is_claude_md_link(&claude) {
         if std::fs::symlink_metadata(&claude).is_ok() {
             // A regular file or a link elsewhere: keep its text beside it, once.
             let kept = dir.join("CLAUDE.md.before-herdr-projects");
@@ -620,7 +642,7 @@ pub fn write_priming(project: &Project, prefix: &str) -> Result<()> {
                 std::fs::remove_file(&claude)?;
             }
         }
-        std::os::unix::fs::symlink("AGENTS.md", &claude).with_context(|| format!("could not link {}", claude.display()))?;
+        crate::platform::link_claude_md(&claude).with_context(|| format!("could not link {}", claude.display()))?;
     }
     if !dir.join("uploads").is_dir() {
         std::fs::create_dir(dir.join("uploads"))?;
@@ -638,7 +660,7 @@ pub fn priming_problems(project: &Project, prefix: &str) -> Vec<String> {
         Ok(text) => match prefix_in_agents_md(&text) {
             None => problems.push("AGENTS.md does not name the binary".into()),
             Some(found) => {
-                let binary = found.split(" --root ").next().unwrap_or("").trim_matches('\'');
+                let binary = found.split(" --root ").next().unwrap_or("").trim_matches(['\'', '"']);
                 if !Path::new(binary).is_file() {
                     problems.push(format!("AGENTS.md points at a binary that does not exist ({binary})"));
                 } else if found != prefix {
@@ -647,7 +669,7 @@ pub fn priming_problems(project: &Project, prefix: &str) -> Vec<String> {
             }
         },
     }
-    if !std::fs::read_link(dir.join("CLAUDE.md")).is_ok_and(|t| t == Path::new("AGENTS.md")) {
+    if !crate::platform::is_claude_md_link(&dir.join("CLAUDE.md")) {
         problems.push("CLAUDE.md is not a link to AGENTS.md".into());
     }
     if !dir.join("uploads").is_dir() {
@@ -677,7 +699,7 @@ pub fn create(root: &Path, name: &str, goal: &str, repos: Vec<Repo>) -> Result<P
             // A remote path is stored as it is on its own machine.
             Some(_) => repo,
             None => Repo {
-                path: std::fs::canonicalize(&repo.path)
+                path: dunce::canonicalize(&repo.path)
                     .or_else(|_| std::path::absolute(&repo.path))
                     .map(|p| p.to_string_lossy().into_owned())
                     .unwrap_or(repo.path),
@@ -805,7 +827,7 @@ mod tests {
             settings.repos,
             vec![
                 Repo { path: "/srv/app".into(), machine: Some("box".into()) },
-                Repo { path: "/no/such/repo".into(), machine: None },
+                Repo { path: std::path::absolute("/no/such/repo").unwrap().to_string_lossy().into_owned(), machine: None },
             ]
         );
         assert!(body.starts_with("# Instructions"));
@@ -825,7 +847,7 @@ mod tests {
         assert!(text.contains(&format!("`{prefix} context demo-project`")));
         assert!(text.contains("under `threads/`, you are a thread"));
         assert_eq!(prefix_in_agents_md(&text).as_deref(), Some(prefix.as_str()));
-        assert_eq!(std::fs::read_link(project.dir().join("CLAUDE.md")).unwrap(), Path::new("AGENTS.md"));
+        assert!(crate::platform::is_claude_md_link(&project.dir().join("CLAUDE.md")));
         assert!(project.dir().join("uploads").is_dir());
         assert!(priming_problems(&project, &prefix).is_empty());
 

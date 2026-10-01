@@ -126,12 +126,9 @@ pub fn delete(ctx: &Ctx, slug: &str, force: bool) -> Result<()> {
     std::fs::create_dir_all(&trash)?;
     let stamp = jiff::Timestamp::now().strftime("%Y%m%dT%H%M%SZ").to_string();
     let target = trash.join(format!("{slug}-{stamp}"));
-    {
-        // Held while the folder moves, so no writer lands in between; writers
-        // re-check PROJECT.md after taking the lock and drop their write.
-        let _lock = project.lock()?;
-        std::fs::rename(project.dir(), &target).with_context(|| format!("could not move {} to the trash", project.dir().display()))?;
-    }
+    // Under the lock, so no writer lands in between; writers re-check
+    // PROJECT.md after taking the lock and drop their write.
+    project.move_dir(&target).with_context(|| format!("could not move {} to the trash", project.dir().display()))?;
     println!("moved `{slug}` to {}", target.display());
 
     let left: Vec<&thread::Thread> = threads.iter().filter(|t| !t.worktree_path.is_empty() || !t.branch.is_empty()).collect();

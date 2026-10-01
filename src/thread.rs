@@ -304,7 +304,7 @@ pub fn all_next(project: &Project, id: &str) -> Vec<String> {
 
 /// `<agent working directory>/.herdr-project/<slug>-<id>`, for every kind.
 pub fn thread_dir(cwd: &str, slug: &str, id: &str) -> String {
-    format!("{}/.herdr-project/{slug}-{id}", cwd.trim_end_matches('/'))
+    format!("{}/.herdr-project/{slug}-{id}", crate::herdr::trim_dir(cwd))
 }
 
 /// The one line the agent is prompted with; the relative path is the same for
@@ -432,7 +432,7 @@ pub fn brief_for(project: &Project, thread: &Thread, task: &str, restart: bool) 
         .filter_map(|name| {
             let path = project.dir().join("memory").join(&name);
             // Regular files only: a symbolic link in memory/ is never followed.
-            let regular = std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file());
+            let regular = crate::platform::is_plain_file(&path);
             regular.then(|| std::fs::read_to_string(&path).ok()).flatten().map(|text| (name, text))
         })
         .collect();
@@ -613,7 +613,7 @@ pub fn group(thread: &Thread, live: &Live, now: jiff::Timestamp) -> Group {
 /// match the record, and — for threads the binary started — the agent name.
 /// Ids are compared only among panes listed through the project's own socket.
 pub fn pane_matches(thread: &Thread, pane: &Pane) -> bool {
-    pane.pane_id == thread.pane_id && pane.cwd == thread.cwd
+    pane.pane_id == thread.pane_id && crate::herdr::same_dir(&pane.cwd, &thread.cwd)
 }
 
 /// A thread's agent: same pane id and working directory, and (for threads the
@@ -622,7 +622,7 @@ pub fn pane_matches(thread: &Thread, pane: &Pane) -> bool {
 /// restored pane without a name; that is still ours and gets renamed. A pane
 /// with our ids holding another kind, or another name, is someone else's.
 pub fn agent_matches(thread: &Thread, agent: &Agent) -> bool {
-    let ids = agent.pane_id == thread.pane_id && agent.cwd == thread.cwd;
+    let ids = agent.pane_id == thread.pane_id && crate::herdr::same_dir(&agent.cwd, &thread.cwd);
     match thread.kind {
         // Not started by the binary: whatever herdr reported at adoption.
         Kind::Adopted => ids,
@@ -695,12 +695,15 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// A directory, not a link (on Windows not a junction either).
 fn is_real_dir(path: &Path) -> bool {
-    std::fs::symlink_metadata(path).is_ok_and(|m| m.is_dir())
+    crate::platform::is_plain_dir(path)
 }
 
+/// A link of any kind: a symbolic link, or on Windows also a junction or
+/// another reparse point.
 fn is_symlink(path: &Path) -> bool {
-    std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
+    crate::platform::is_link_path(path)
 }
 
 fn symlinks_under(dir: &Path, found: &mut Vec<String>) {
@@ -725,7 +728,7 @@ pub fn local_report_hash(thread: &Thread) -> Option<String> {
         return None;
     }
     let report = dir.join("report.md");
-    let regular = std::fs::symlink_metadata(&report).is_ok_and(|m| m.is_file());
+    let regular = crate::platform::is_plain_file(&report);
     regular.then(|| std::fs::read(&report).ok()).flatten().map(|bytes| sha256_hex(&bytes))
 }
 
@@ -756,7 +759,7 @@ pub fn copy_home_local(project: &Project, thread: &Thread, with_library: bool, r
     let mut report_hash = None;
     match std::fs::symlink_metadata(&report) {
         Err(_) => {}
-        Ok(meta) if meta.is_file() => match std::fs::read(&report) {
+        Ok(meta) if meta.is_file() && !crate::platform::is_link(&meta) => match std::fs::read(&report) {
             Ok(bytes) => {
                 let hash = sha256_hex(&bytes);
                 if hash != thread.report_hash || !home_report_path(project, &thread.id).is_file() {
@@ -901,6 +904,7 @@ fn copy_library_local(project: &Project, thread: &Thread, library: &Path, runner
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use crate::runner::RealRunner;
 
     fn now() -> jiff::Timestamp {
@@ -1240,6 +1244,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn copies_report_and_library_and_skips_symlinks() {
         let root = tempfile::tempdir().unwrap();
         let work = tempfile::tempdir().unwrap();
@@ -1262,6 +1267,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn symlinked_library_report_and_thread_dir_are_not_copied() {
         let root = tempfile::tempdir().unwrap();
         let work = tempfile::tempdir().unwrap();

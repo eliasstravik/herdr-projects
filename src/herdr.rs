@@ -223,6 +223,19 @@ pub struct Agent {
     pub agent_session: Option<AgentSession>,
 }
 
+/// A directory as herdr reports it, without a trailing separator: on Windows
+/// a new pane's cwd is `C:\x\` until its shell reports `C:\x` (seen on
+/// herdr 0.9.3). A drive or filesystem root keeps its separator.
+pub fn trim_dir(dir: &str) -> &str {
+    let trimmed = dir.trim_end_matches(['/', '\\']);
+    if trimmed.is_empty() || trimmed.ends_with(':') { dir } else { trimmed }
+}
+
+/// Whether two herdr-reported directories are the same, a trailing separator aside.
+pub fn same_dir(a: &str, b: &str) -> bool {
+    trim_dir(a) == trim_dir(b)
+}
+
 impl Agent {
     /// The one "ready for a prompt" predicate: state `idle` or `done`.
     pub fn ready(&self) -> bool {
@@ -232,7 +245,7 @@ impl Agent {
     /// True when the agent works in `dir`: its shell's directory, or its own
     /// when it runs as a child of `open` in a shell elsewhere.
     pub fn works_in(&self, dir: &str) -> bool {
-        !dir.is_empty() && (self.cwd == dir || self.foreground_cwd == dir)
+        !dir.is_empty() && (same_dir(&self.cwd, dir) || same_dir(&self.foreground_cwd, dir))
     }
 
     pub fn session_id(&self) -> &str {
@@ -570,6 +583,16 @@ impl<'a> Herdr<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_trailing_separator_does_not_make_another_directory() {
+        assert!(same_dir(r"D:\a\threads\t-0001\", r"D:\a\threads\t-0001"));
+        assert!(same_dir("/a/b/", "/a/b"));
+        assert!(!same_dir(r"D:\a\t-0001", r"D:\a\t-0002"));
+        assert_eq!(trim_dir(r"C:\"), r"C:\");
+        assert_eq!(trim_dir("/"), "/");
+        assert_eq!(crate::thread::thread_dir(r"D:\p\threads\t-0001\", "smoke", "t-0001"), r"D:\p\threads\t-0001/.herdr-project/smoke-t-0001");
+    }
 
     #[test]
     fn parses_versions() {

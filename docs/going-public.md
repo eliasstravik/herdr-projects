@@ -8,7 +8,7 @@ The repository is public and carries the `herdr-plugin` topic, so the Herdr mark
 - [ ] `cargo build --release --locked` and `cargo test` pass on macOS and on Linux.
 - [ ] Walk through `docs/manual-test.md`, including the client-witnessed checks.
 - [ ] Tag `v<version>` on `main`, push the tag, and create the GitHub release with notes in user terms.
-- [ ] The `Release binaries` workflow passes: it attaches the four binaries and `SHA256SUMS` to the release, and fails when one is missing.
+- [ ] The `Release binaries` workflow passes: it attaches the five binaries (the Windows `.exe` among them) and `SHA256SUMS` to the release, and fails when one is missing.
 - [ ] On every machine that runs the plugin from a checkout: `git pull`, `sh scripts/install.sh`, then `herdr-projects doctor` and `doctor --fix`.
 
 ## Done

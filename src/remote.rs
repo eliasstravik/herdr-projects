@@ -292,22 +292,50 @@ pub fn fetch_file(runner: &dyn Runner, target: &str, remote_path: &str, local_pa
     Ok(())
 }
 
-/// `rsync -rt` over ssh, without `-l`, so symbolic links are skipped.
+/// `rsync -rt` over ssh, without `-l`, so symbolic links are skipped. Where
+/// rsync cannot run at all (Windows ships OpenSSH but no rsync), each regular
+/// file is copied on its own instead; see [`fetch_dir_by_file`].
 pub fn fetch_dir(runner: &dyn Runner, target: &str, remote_dir: &str, local_dir: &Path) -> Result<()> {
     check_target(target)?;
     if !is_plain(remote_dir) {
         bail!("the library path on {target} has characters rsync cannot carry safely; it was not copied");
     }
-    let out = runner.run(&Cmd::new("rsync", COPY_TIMEOUT).args([
+    let Ok(out) = runner.run(&Cmd::new("rsync", COPY_TIMEOUT).args([
         "-rt".to_string(),
         "-e".to_string(),
         format!("ssh {}", SSH_OPTIONS.join(" ")),
         "--".to_string(),
         format!("{target}:{remote_dir}/"),
         format!("{}/", local_dir.to_string_lossy()),
-    ]))?;
+    ])) else {
+        return fetch_dir_by_file(runner, target, remote_dir, local_dir);
+    };
     if !out.success() {
         bail!("rsync from {target}: {}", out.error_text());
+    }
+    Ok(())
+}
+
+/// The rsync fallback: lists the regular files under `remote_dir` with
+/// `find -type f` (which neither follows nor lists symbolic links, as `rsync
+/// -rt` skips them) and copies each with [`fetch_file`]. A name that would
+/// leave `local_dir` is refused.
+fn fetch_dir_by_file(runner: &dyn Runner, target: &str, remote_dir: &str, local_dir: &Path) -> Result<()> {
+    let out = ssh(runner, target, &format!("cd {} && find . -type f", quote(remote_dir)), None, COPY_TIMEOUT)?;
+    if !out.success() {
+        bail!("ssh {target} find: {}", out.error_text());
+    }
+    for line in out.stdout.lines().filter(|l| !l.is_empty()) {
+        let relative = line.strip_prefix("./").unwrap_or(line);
+        let parts: Vec<&str> = relative.split('/').collect();
+        if parts.iter().any(|p| p.is_empty() || *p == "." || *p == ".." || p.contains(['\\', ':'])) {
+            bail!("{target} listed a library file with an unsafe name ({}); it was not copied", pr_safe(relative));
+        }
+        let local = parts.iter().fold(local_dir.to_path_buf(), |path, part| path.join(part));
+        if let Some(parent) = local.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        fetch_file(runner, target, &format!("{remote_dir}/{relative}"), &local)?;
     }
     Ok(())
 }
@@ -315,6 +343,7 @@ pub fn fetch_dir(runner: &dyn Runner, target: &str, remote_dir: &str, local_dir:
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use crate::runner::RealRunner;
     use crate::runner::fake::{FakeRunner, fail, ok};
 
@@ -327,9 +356,11 @@ mod tests {
         assert_eq!(quote("-n"), "'-n'");
     }
 
+    #[cfg(unix)]
     const HOSTILE: [&str; 10] = ["$(touch /tmp/hp-pwned)", "`id`", "a'; rm -rf ~; echo '", "x\ny", "~/x", "-n", "a\\b\"c", "*", "!!", "a b  c"];
 
     #[test]
+    #[cfg(unix)]
     fn hostile_values_survive_a_real_shell_unchanged() {
         for hostile in HOSTILE {
             let out = RealRunner.run(&Cmd::new("sh", Duration::from_secs(5)).args(["-c".to_string(), format!("printf %s {}", quote(hostile))])).unwrap();
@@ -338,6 +369,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn hostile_values_survive_the_double_shell_of_an_ssh_command() {
         // ssh hands its argument to the remote login shell, which runs our
         // `sh -c <quoted script>`: two layers of parsing. `sh -c` stands in for ssh.
@@ -350,6 +382,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn the_brief_script_works_against_a_real_repository_with_a_hostile_path() {
         // The same script, run locally through `sh -c` instead of ssh.
         let root = tempfile::tempdir().unwrap();
@@ -447,5 +480,25 @@ mod tests {
         assert_eq!(runner.count("scp"), 1);
         assert!(fetch_dir(&runner, "box", "/wt/my repo/library", dir.path()).is_err());
         assert_eq!(runner.count("rsync"), 0);
+    }
+
+    #[test]
+    fn without_rsync_each_regular_file_is_copied_and_escaping_names_are_refused() {
+        let runner = FakeRunner::new();
+        runner.on_fn(|c| c.program == "rsync", |_| Err(anyhow::anyhow!("program not found")));
+        runner.on_fn(|c| c.program == "ssh" && c.display().contains("find . -type f"), |_| Ok(ok("./a.md\n./sub/b c.txt\n")));
+        runner.on_fn(|c| c.program == "ssh" && c.display().contains("cat -- "), |_| Ok(ok("spaced")));
+        runner.on("scp", ok(""));
+        let dir = tempfile::tempdir().unwrap();
+        fetch_dir(&runner, "box", "/wt/repo/library", dir.path()).unwrap();
+        let scps: Vec<String> = runner.calls.borrow().iter().filter(|c| c.program == "scp").map(Cmd::display).collect();
+        assert_eq!(scps.len(), 1);
+        assert!(scps[0].contains("box:/wt/repo/library/a.md"), "{scps:?}");
+        assert_eq!(std::fs::read_to_string(dir.path().join("sub").join("b c.txt")).unwrap(), "spaced");
+
+        let hostile = FakeRunner::new();
+        hostile.on_fn(|c| c.program == "rsync", |_| Err(anyhow::anyhow!("program not found")));
+        hostile.on("ssh", ok("./../escape.md\n"));
+        assert!(fetch_dir(&hostile, "box", "/wt/repo/library", dir.path()).is_err());
     }
 }

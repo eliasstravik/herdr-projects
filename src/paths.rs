@@ -18,14 +18,18 @@ pub struct Env {
     pub home: PathBuf,
 }
 
+/// The map key for a variable name. Windows names are case-insensitive and
+/// usually stored as `Path`, `ComSpec` or `SystemRoot`, so they are kept in
+/// upper case there and looked up the same way.
+fn var_key(name: &str) -> String {
+    if cfg!(windows) { name.to_ascii_uppercase() } else { name.to_string() }
+}
+
 impl Env {
     pub fn from_process() -> Result<Self> {
-        let vars: BTreeMap<String, String> = std::env::vars().collect();
-        let home = vars
-            .get("HOME")
-            .filter(|h| !h.is_empty())
-            .map(PathBuf::from)
-            .context("HOME is not set")?;
+        let vars: BTreeMap<String, String> = std::env::vars().map(|(k, v)| (var_key(&k), v)).collect();
+        let home = crate::platform::home_dir(&|name| vars.get(&var_key(name)).cloned())
+            .with_context(|| format!("{} is not set", crate::platform::HOME_VARS.join(" or ")))?;
         Ok(Env { vars, home })
     }
 
@@ -34,7 +38,7 @@ impl Env {
         Env {
             vars: vars
                 .iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .map(|(k, v)| (var_key(k), v.to_string()))
                 .collect(),
             home: home.to_path_buf(),
         }
@@ -42,12 +46,13 @@ impl Env {
 
     /// A variable's value; an empty value counts as unset.
     pub fn var(&self, key: &str) -> Option<&str> {
-        self.vars.get(key).map(String::as_str).filter(|v| !v.is_empty())
+        self.vars.get(&var_key(key)).map(String::as_str).filter(|v| !v.is_empty())
     }
 
-    /// The fixed user-level config directory, `~/.config/herdr-projects`.
+    /// The fixed user-level config directory, `~/.config/herdr-projects`
+    /// (`%APPDATA%\herdr-projects` on Windows).
     pub fn config_dir(&self) -> PathBuf {
-        self.home.join(".config").join("herdr-projects")
+        crate::platform::config_home(&self.home, &|name| self.var(name).map(str::to_string)).join("herdr-projects")
     }
 
     /// `HERDR_BIN_PATH` when set, else `herdr` on `PATH`.
@@ -68,7 +73,7 @@ impl Env {
 /// hooks, AGENTS.md or the tab bar survives `~/.local/bin` links changing.
 pub fn binary() -> Result<PathBuf> {
     let exe = std::env::current_exe().context("could not find this binary's own path")?;
-    Ok(std::fs::canonicalize(&exe).unwrap_or(exe))
+    Ok(dunce::canonicalize(&exe).unwrap_or(exe))
 }
 
 /// What every subcommand works from: the environment, the resolved root and
@@ -157,7 +162,7 @@ pub fn resolve_session(flags: &SessionFlags, env: &Env, runner: &dyn Runner) -> 
         .into_iter()
         .find(|s| s.default)
         .map(|s| s.socket_path)
-        .unwrap_or_else(|| env.home.join(".config/herdr/herdr.sock"));
+        .unwrap_or_else(|| crate::platform::config_home(&env.home, &|name| env.var(name).map(str::to_string)).join("herdr").join("herdr.sock"));
     Ok(Session { socket, name: None })
 }
 
@@ -181,6 +186,16 @@ mod tests {
         {"default":true,"name":"default","running":true,"session_dir":"/h/.config/herdr","socket_path":"/h/.config/herdr/herdr.sock"},
         {"default":false,"name":"hp-dev","running":true,"session_dir":"/h/.config/herdr/sessions/hp-dev","socket_path":"/h/.config/herdr/sessions/hp-dev/herdr.sock"}]}"#;
 
+    #[cfg(windows)]
+    #[test]
+    fn variable_names_ignore_case_on_windows() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[("Path", r"C:\bin"), ("PathExt", ".EXE;.CMD")]);
+        assert_eq!(env.var("PATH"), Some(r"C:\bin"));
+        assert_eq!(env.var("PATHEXT"), Some(".EXE;.CMD"));
+        assert_eq!(env.var("path"), Some(r"C:\bin"));
+    }
+
     #[test]
     fn root_order_flag_env_config_default() {
         let home = tempfile::tempdir().unwrap();
@@ -190,10 +205,10 @@ mod tests {
 
         let env = Env::for_test(home.path(), &[("HERDR_PROJECTS_ROOT", "/from-env")]);
         let flag = PathBuf::from("/from-flag");
-        assert_eq!(resolve_root(Some(&flag), &env, &config_dir).unwrap(), flag);
+        assert_eq!(resolve_root(Some(&flag), &env, &config_dir).unwrap(), absolute(&flag).unwrap());
         assert_eq!(
             resolve_root(None, &env, &config_dir).unwrap(),
-            PathBuf::from("/from-env")
+            absolute(Path::new("/from-env")).unwrap()
         );
 
         let env = Env::for_test(home.path(), &[]);
@@ -255,7 +270,7 @@ mod tests {
             socket: Some("/flag.sock".into()),
         };
         let got = resolve_session(&by_socket, &env, &runner).unwrap();
-        assert_eq!(got, Session { socket: "/flag.sock".into(), name: None });
+        assert_eq!(got, Session { socket: absolute(Path::new("/flag.sock")).unwrap(), name: None });
 
         let none = SessionFlags::default();
         let got = resolve_session(&none, &env, &runner).unwrap();

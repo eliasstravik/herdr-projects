@@ -329,10 +329,7 @@ pub fn run(ctx: &Ctx, args: &Args) -> Result<Outcome> {
     let project = if resuming {
         project
     } else {
-        {
-            let _lock = project.lock()?;
-            std::fs::rename(&old_dir, &new_dir).with_context(|| format!("could not move {} to {}", old_dir.display(), new_dir.display()))?;
-        }
+        project.move_dir(&new_dir).with_context(|| format!("could not move {} to {}", old_dir.display(), new_dir.display()))?;
         let moved_project = Project::load(&ctx.root, to)?;
         moved_project.add_former_slug(from)?;
         moved_project

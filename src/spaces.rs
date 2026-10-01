@@ -18,7 +18,7 @@ pub struct Space {
 }
 
 fn canonical(path: &str) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path))
+    dunce::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path))
 }
 
 /// The primary Space of `repo`: herdr's unlinked worktree grouping at its
@@ -160,10 +160,12 @@ mod tests {
     }
 
     fn primary_json(id: &str, repo: &str, focused: bool) -> String {
+        let repo = crate::scenarios::js(repo);
         format!(r#"{{"workspace_id":"{id}","label":"repo","focused":{focused},"pane_count":1,"worktree":{{"repo_key":"{repo}/.git","checkout_path":"{repo}","is_linked_worktree":false}}}}"#)
     }
 
     fn child_json(id: &str, repo: &str) -> String {
+        let repo = crate::scenarios::js(repo);
         format!(r#"{{"workspace_id":"{id}","label":"x","pane_count":1,"worktree":{{"repo_key":"{repo}/.git","checkout_path":"/wt/{id}","is_linked_worktree":true}}}}"#)
     }
 

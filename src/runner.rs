@@ -18,6 +18,9 @@ pub struct Cmd {
     pub timeout: Duration,
     /// Spawn in its own process group and kill the whole group on timeout.
     pub own_group: bool,
+    /// Pass the last argument exactly as written on Windows (for `cmd /c`,
+    /// which does not read the C runtime's quoting); no effect on Unix.
+    pub verbatim_last_arg: bool,
 }
 
 impl Cmd {
@@ -31,6 +34,7 @@ impl Cmd {
             stdin: None,
             timeout,
             own_group: false,
+            verbatim_last_arg: false,
         }
     }
 
@@ -70,6 +74,11 @@ impl Cmd {
 
     pub fn own_group(mut self) -> Self {
         self.own_group = true;
+        self
+    }
+
+    pub fn verbatim_last_arg(mut self) -> Self {
+        self.verbatim_last_arg = true;
         self
     }
 
@@ -136,8 +145,8 @@ const POLL: Duration = Duration::from_millis(20);
 
 impl Runner for RealRunner {
     fn run(&self, cmd: &Cmd) -> Result<Output> {
-        let mut command = Command::new(&cmd.program);
-        command.args(&cmd.args);
+        let mut command = Command::new(crate::platform::resolve_program(&cmd.program));
+        add_args(&mut command, cmd);
         for key in &cmd.env_remove {
             command.env_remove(key);
         }
@@ -155,11 +164,7 @@ impl Runner for RealRunner {
             })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        #[cfg(unix)]
-        if cmd.own_group {
-            use std::os::unix::process::CommandExt;
-            command.process_group(0);
-        }
+        crate::platform::background(&mut command, cmd.own_group);
 
         let mut child = command
             .spawn()
@@ -183,7 +188,7 @@ impl Runner for RealRunner {
             }
             if Instant::now() >= deadline {
                 timed_out = true;
-                kill(&mut child, cmd.own_group);
+                crate::platform::kill_tree(&mut child, cmd.own_group);
                 break child.wait().ok();
             }
             std::thread::sleep(POLL);
@@ -208,12 +213,12 @@ impl Runner for RealRunner {
     }
 
     fn socket_request(&self, socket: &Path, line: &str, timeout: Duration) -> Result<String> {
-        socket_round_trip(socket, line, timeout)
+        crate::platform::socket_round_trip(socket, line, timeout)
     }
 
     fn run_foreground(&self, cmd: &Cmd, poll: &mut dyn FnMut() -> bool) -> Result<Option<i32>> {
-        let mut command = Command::new(&cmd.program);
-        command.args(&cmd.args);
+        let mut command = Command::new(crate::platform::resolve_program(&cmd.program));
+        add_args(&mut command, cmd);
         for key in &cmd.env_remove {
             command.env_remove(key);
         }
@@ -232,7 +237,7 @@ impl Runner for RealRunner {
         // Ctrl-C and Ctrl-\ reach the whole foreground group: they are the
         // agent's to handle, and this process must outlive it so the shell
         // does not take the terminal back from a running agent.
-        let _ignored = IgnoreInterrupts::new();
+        let _ignored = crate::platform::IgnoreInterrupts::new();
         let mut polling = true;
         let status = loop {
             if let Some(status) = child.try_wait()? {
@@ -247,47 +252,16 @@ impl Runner for RealRunner {
     }
 }
 
-unsafe extern "C" {
-    fn signal(signum: i32, handler: usize) -> usize;
-}
-
-const SIGINT: i32 = 2;
-const SIGQUIT: i32 = 3;
-const SIG_IGN: usize = 1;
-
-/// SIGINT and SIGQUIT ignored in this process (set after the child's exec, so
-/// the child keeps the default), restored on drop.
-struct IgnoreInterrupts(usize, usize);
-
-impl IgnoreInterrupts {
-    fn new() -> Self {
-        // SAFETY: plain signal(2) calls with the ignore disposition.
-        unsafe { IgnoreInterrupts(signal(SIGINT, SIG_IGN), signal(SIGQUIT, SIG_IGN)) }
-    }
-}
-
-impl Drop for IgnoreInterrupts {
-    fn drop(&mut self) {
-        // SAFETY: restores the dispositions `new` returned.
-        unsafe {
-            signal(SIGINT, self.0);
-            signal(SIGQUIT, self.1);
+fn add_args(command: &mut Command, cmd: &Cmd) {
+    match cmd.args.split_last() {
+        Some((last, rest)) if cmd.verbatim_last_arg => {
+            command.args(rest);
+            crate::platform::verbatim_arg(command, last);
+        }
+        _ => {
+            command.args(&cmd.args);
         }
     }
-}
-
-fn socket_round_trip(socket: &Path, line: &str, timeout: Duration) -> Result<String> {
-    use std::io::{BufRead, BufReader};
-    use std::os::unix::net::UnixStream;
-    let mut stream = UnixStream::connect(socket)
-        .with_context(|| format!("could not connect to {}", socket.display()))?;
-    stream.set_read_timeout(Some(timeout))?;
-    stream.set_write_timeout(Some(timeout))?;
-    stream.write_all(line.as_bytes())?;
-    stream.write_all(b"\n")?;
-    let mut reply = String::new();
-    BufReader::new(stream).read_line(&mut reply)?;
-    Ok(reply)
 }
 
 fn read_all<R: Read + Send + 'static>(mut pipe: R) -> std::thread::JoinHandle<Vec<u8>> {
@@ -300,27 +274,6 @@ fn read_all<R: Read + Send + 'static>(mut pipe: R) -> std::thread::JoinHandle<Ve
 
 fn join_text(thread: std::thread::JoinHandle<Vec<u8>>) -> String {
     String::from_utf8_lossy(&thread.join().unwrap_or_default()).into_owned()
-}
-
-fn kill(child: &mut std::process::Child, own_group: bool) {
-    if own_group {
-        // The child is its group's leader, so its pid is the pgid. Grandchildren
-        // hold the pipes open; killing only the child would leave readers hanging.
-        let _ = Command::new("/bin/kill")
-            .args(["-TERM", "--", &format!("-{}", child.id())])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-        std::thread::sleep(Duration::from_millis(200));
-        let _ = Command::new("/bin/kill")
-            .args(["-KILL", "--", &format!("-{}", child.id())])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-    }
-    let _ = child.kill();
 }
 
 #[cfg(test)]
@@ -437,6 +390,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(unix)]
     fn captures_output_and_exit_code() {
         let out = RealRunner
             .run(&Cmd::new("sh", Duration::from_secs(5)).args(["-c", "echo hi; echo err >&2; exit 3"]))
@@ -448,11 +402,21 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn passes_stdin() {
         let out = RealRunner
             .run(&Cmd::new("cat", Duration::from_secs(5)).stdin("hello"))
             .unwrap();
         assert_eq!(out.stdout, "hello");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn captures_output_and_exit_code_on_windows() {
+        let out = RealRunner.run(&Cmd::new("cmd", Duration::from_secs(5)).args(["/d", "/c", "exit", "3"])).unwrap();
+        assert_eq!(out.code, Some(3));
+        let out = RealRunner.run(&Cmd::new("cmd", Duration::from_secs(5)).args(["/d", "/c", "echo", "hi"])).unwrap();
+        assert_eq!(out.stdout.trim_end(), "hi");
     }
 
     #[test]
@@ -465,6 +429,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn times_out_a_chatty_child() {
         // `yes` fills the pipe far past its buffer; the reader threads keep it
         // drained so the deadline still fires.
@@ -479,6 +444,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn group_kill_reaches_grandchildren() {
         let dir = tempfile::tempdir().unwrap();
         let marker = dir.path().join("survived");

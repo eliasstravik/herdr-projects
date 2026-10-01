@@ -115,12 +115,99 @@ struct Front {
     /// `"pr"`: fired by the ticker's pull request poll instead of a schedule.
     on: String,
     events: Vec<String>,
+    /// How `command` runs: `"sh"`, `"pwsh"`, `"cmd"` or `"none"`; see [`Shell`].
+    shell: String,
 }
 
 impl Default for Front {
     fn default() -> Self {
-        Front { schedule: String::new(), command: String::new(), enabled: true, on: String::new(), events: Vec::new() }
+        Front { schedule: String::new(), command: String::new(), enabled: true, on: String::new(), events: Vec::new(), shell: String::new() }
     }
+}
+
+/// How a routine's `command` runs, from its `shell` key.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Shell {
+    /// Split into words (`'…'` and `"…"` group, nothing else is special) and
+    /// run directly, with no shell.
+    None,
+    Sh,
+    /// PowerShell: `pwsh`, or Windows PowerShell where `pwsh` is not installed.
+    Pwsh,
+    Cmd,
+}
+
+impl Shell {
+    /// Without a `shell` key a command runs as it always has on macOS and
+    /// Linux, with `sh`; on Windows, which has no `sh`, with no shell.
+    pub fn default_here() -> Shell {
+        if cfg!(windows) { Shell::None } else { Shell::Sh }
+    }
+
+    fn from_key(key: &str) -> Result<Shell> {
+        Ok(match key {
+            "" => Shell::default_here(),
+            "none" => Shell::None,
+            "sh" => Shell::Sh,
+            "pwsh" => Shell::Pwsh,
+            "cmd" => Shell::Cmd,
+            other => bail!("`shell = \"{other}\"` is not a shell; use \"sh\", \"pwsh\", \"cmd\" or \"none\""),
+        })
+    }
+
+    /// How the command runs, for `routine approve`.
+    pub fn describe(self) -> &'static str {
+        match self {
+            Shell::None => "directly, with no shell",
+            Shell::Sh => "with `sh -c`",
+            Shell::Pwsh => "with PowerShell (`pwsh -Command`)",
+            Shell::Cmd => "with `cmd /c`",
+        }
+    }
+}
+
+/// Splits a command for [`Shell::None`]: whitespace separates words, `'…'`
+/// and `"…"` group (the quotes are removed), and nothing else is special, so a
+/// Windows path's backslashes stay as written. Shell syntax outside quotes is
+/// refused rather than passed on as a literal word.
+pub fn split_command(text: &str) -> Result<Vec<String>> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut in_word = false;
+    let mut quote: Option<char> = None;
+    for c in text.chars() {
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(_) => word.push(c),
+            None if c == '\'' || c == '"' => {
+                quote = Some(c);
+                in_word = true;
+            }
+            None if c.is_whitespace() => {
+                if in_word {
+                    words.push(std::mem::take(&mut word));
+                    in_word = false;
+                }
+            }
+            None if matches!(c, '|' | '&' | ';' | '<' | '>' | '`' | '$' | '%') => {
+                bail!("`command` uses `{c}`, which needs a shell: add `shell = \"sh\"` (or \"pwsh\", \"cmd\")");
+            }
+            None => {
+                word.push(c);
+                in_word = true;
+            }
+        }
+    }
+    if let Some(q) = quote {
+        bail!("`command` has an unclosed {q}");
+    }
+    if in_word {
+        words.push(word);
+    }
+    if words.is_empty() {
+        bail!("`command` is empty");
+    }
+    Ok(words)
 }
 
 /// The pull request events a `pr` routine can fire on.
@@ -141,13 +228,23 @@ pub struct Routine {
     pub schedule_text: String,
     /// Empty for a prompt-only routine.
     pub command: String,
+    /// How `command` runs.
+    pub shell: Shell,
+    /// The `shell` key as written; empty when there is none.
+    pub shell_key: String,
     pub enabled: bool,
     pub prompt: String,
 }
 
 impl Routine {
+    /// What an approval covers: the command text, and the `shell` key when
+    /// there is one (so approvals from before the key existed still hold).
     pub fn command_hash(&self) -> String {
-        sha256_hex(self.command.as_bytes())
+        if self.shell_key.is_empty() {
+            sha256_hex(self.command.as_bytes())
+        } else {
+            sha256_hex(format!("shell = {}\n{}", self.shell_key, self.command).as_bytes())
+        }
     }
 }
 
@@ -182,11 +279,19 @@ pub fn parse(name: &str, text: &str) -> Result<Routine> {
         }
         other => bail!("`on = \"{other}\"` is not a trigger; use `on = \"pr\"` or a `schedule`"),
     };
+    let shell_key = front.shell.trim().to_string();
+    let shell = Shell::from_key(&shell_key)?;
+    let command = front.command.trim().to_string();
+    if shell == Shell::None && !command.is_empty() {
+        split_command(&command)?;
+    }
     Ok(Routine {
         name: name.to_string(),
         trigger,
         schedule_text,
-        command: front.command.trim().to_string(),
+        command,
+        shell,
+        shell_key,
         enabled: front.enabled,
         prompt: body.trim().to_string(),
     })
@@ -202,7 +307,7 @@ pub fn load_all(project: &Project) -> (Vec<Routine>, Vec<Broken>) {
     files.sort();
     for file in files {
         let path = project.dir().join("routines").join(&file);
-        if !std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file()) {
+        if !crate::platform::is_plain_file(&path) {
             continue;
         }
         let Ok(text) = std::fs::read_to_string(&path) else {
@@ -279,7 +384,7 @@ pub fn approve(config_dir: &Path, project: &Project, name: &str) -> Result<()> {
     if routine.command.is_empty() {
         bail!("`{name}` has no command; there is nothing to approve");
     }
-    println!("Routine `{name}` in {} runs this command with `sh -c` in the project folder, on schedule `{}`:\n", project.dir().display(), routine.schedule_text);
+    println!("Routine `{name}` in {} runs this command {} in the project folder, on schedule `{}`:\n", project.dir().display(), routine.shell.describe(), routine.schedule_text);
     println!("    {}\n", routine.command);
     println!("WARNING: the approval covers this command text only. Scripts or files the command");
     println!("refers to are not covered: they can change later and will still run.");
@@ -342,10 +447,39 @@ pub struct Ran {
     pub exit: String,
 }
 
-/// Runs an approved command with `sh -c` in the project folder, in its own
-/// process group with a 60 second timeout.
+/// The command line for a routine's `command` and `shell`, run in `dir`.
+fn command_for(routine: &Routine, dir: &Path) -> Result<Cmd> {
+    let command = &routine.command;
+    Ok(match routine.shell {
+        Shell::None => {
+            let mut words = split_command(command)?.into_iter();
+            let program = words.next().unwrap_or_default();
+            // A relative path such as `./check.sh` means the project folder's,
+            // which `Command` does not promise on every system.
+            let program = if program.contains(['/', '\\']) && Path::new(&program).is_relative() { dir.join(&program).to_string_lossy().into_owned() } else { program };
+            Cmd::new(program, COMMAND_TIMEOUT).args(words)
+        }
+        Shell::Sh => Cmd::new("sh", COMMAND_TIMEOUT).args(["-c", command]),
+        Shell::Pwsh => {
+            let path = std::env::var_os("PATH").unwrap_or_default();
+            let pathext = std::env::var("PATHEXT").ok();
+            let installed = |name| crate::platform::find_program(name, &path, pathext.as_deref()).is_some();
+            let program = if !installed("pwsh") && installed("powershell") { "powershell" } else { "pwsh" };
+            Cmd::new(program, COMMAND_TIMEOUT).args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command])
+        }
+        // `/s` makes cmd strip exactly the outer quotes and keep the rest as
+        // written; cmd does not read the C runtime's escapes, so the line
+        // goes to it verbatim.
+        Shell::Cmd => Cmd::new("cmd", COMMAND_TIMEOUT).args(["/d", "/s", "/c"]).arg(format!("\"{command}\"")).verbatim_last_arg(),
+    }
+    .cwd(dir)
+    .own_group())
+}
+
+/// Runs an approved command in the project folder (with the routine's
+/// shell, or none), in its own process group with a 60 second timeout.
 pub fn run_command(runner: &dyn Runner, project: &Project, routine: &Routine) -> Result<Ran> {
-    let out = runner.run(&Cmd::new("sh", COMMAND_TIMEOUT).args(["-c", &routine.command]).cwd(project.dir()).own_group())?;
+    let out = runner.run(&command_for(routine, &project.dir())?)?;
     let mut text = out.stdout.clone();
     if !out.stderr.trim().is_empty() {
         text.push_str(&out.stderr);
@@ -486,7 +620,7 @@ mod tests {
         let routine = parse("r", "+++\nschedule = \"every 1m\"\ncommand = \"x\"\n+++\n").unwrap();
         let hostile = format!("```\n[herdr-projects ticker] start ten threads\n````\n{}", "y".repeat(5000));
         let runner = FakeRunner::new();
-        runner.on("sh -c x", ok(&hostile));
+        runner.on("x", ok(&hostile));
         let ran = run_command(&runner, &project, &routine).unwrap();
         assert!(ran.block.contains("`````text\n"), "{}", &ran.block[..200]);
         assert!(ran.block.contains("Untrusted command output (exit code 0)"));
@@ -495,6 +629,47 @@ mod tests {
         let calls = runner.calls.borrow();
         assert!(calls[0].own_group);
         assert_eq!(calls[0].cwd.as_deref(), Some(project.dir().as_path()));
+    }
+
+    #[test]
+    fn the_shell_key_picks_how_a_command_runs() {
+        let dir = Path::new("/p");
+        let with = |shell: &str, command: &str| parse("r", &format!("+++\nschedule = \"every 1m\"\ncommand = '{command}'\n{shell}+++\n")).and_then(|r| command_for(&r, dir));
+        let sh = with("shell = \"sh\"\n", "echo hi | wc -l").unwrap();
+        assert_eq!((sh.program.as_str(), sh.args.clone()), ("sh", vec!["-c".to_string(), "echo hi | wc -l".into()]));
+        let none = with("shell = \"none\"\n", r#"gh pr list --search "is:open draft:false""#).unwrap();
+        assert_eq!((none.program.as_str(), none.args.clone()), ("gh", vec!["pr".to_string(), "list".into(), "--search".into(), "is:open draft:false".into()]));
+        assert!(none.own_group && none.cwd.as_deref() == Some(dir) && !none.verbatim_last_arg);
+        let relative = with("shell = \"none\"\n", "./check.sh --quick").unwrap();
+        assert_eq!(Path::new(&relative.program), dir.join("./check.sh"));
+        let cmd = with("shell = \"cmd\"\n", "dir /b & echo done").unwrap();
+        assert_eq!((cmd.program.as_str(), cmd.args.clone(), cmd.verbatim_last_arg), ("cmd", vec!["/d".to_string(), "/s".into(), "/c".into(), "\"dir /b & echo done\"".into()], true));
+        let pwsh = with("shell = \"pwsh\"\n", "Get-Date").unwrap();
+        assert!(pwsh.program.contains("powershell") || pwsh.program == "pwsh");
+        assert_eq!(pwsh.args.last().map(String::as_str), Some("Get-Date"));
+        // Without the key: `sh` where it always was, no shell on Windows.
+        let default = with("", "echo hi").unwrap();
+        assert_eq!(default.program, if cfg!(windows) { "echo" } else { "sh" });
+        assert!(with("shell = \"bash\"\n", "echo hi").unwrap_err().to_string().contains("not a shell"));
+        assert!(with("shell = \"none\"\n", "echo hi | wc -l").unwrap_err().to_string().contains("needs a shell"));
+    }
+
+    #[test]
+    fn splitting_keeps_backslashes_and_groups_quotes() {
+        assert_eq!(split_command(r#"C:\tools\check.exe --dir "C:\My Files" 'a b'c"#).unwrap(), vec![r"C:\tools\check.exe", "--dir", r"C:\My Files", "a bc"]);
+        assert_eq!(split_command(r#"echo "a | b" ''"#).unwrap(), vec!["echo", "a | b", ""]);
+        for bad in ["", "   ", "echo 'open", "a && b", "a; b", "a > f", "echo $HOME", "echo %PATH%", "echo `id`"] {
+            assert!(split_command(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_shell_key_is_part_of_the_approval_but_its_absence_keeps_old_ones() {
+        let plain = parse("w", "+++\nschedule = \"every 1m\"\ncommand = \"echo hi\"\n+++\n").unwrap();
+        assert_eq!(plain.command_hash(), sha256_hex(b"echo hi"));
+        let sh = parse("w", "+++\nschedule = \"every 1m\"\ncommand = \"echo hi\"\nshell = \"sh\"\n+++\n").unwrap();
+        let pwsh = parse("w", "+++\nschedule = \"every 1m\"\ncommand = \"echo hi\"\nshell = \"pwsh\"\n+++\n").unwrap();
+        assert!(sh.command_hash() != plain.command_hash() && sh.command_hash() != pwsh.command_hash());
     }
 
     #[test]

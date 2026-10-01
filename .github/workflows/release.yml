@@ -2,8 +2,8 @@
 #
 # Runs when a release is published (`gh release create vX.Y.Z --verify-tag`).
 # Run it by hand with a tag to (re)build the assets of an existing release.
-# scripts/install.sh downloads these; every asset below must be present, or
-# the run fails so a broken release is noticed.
+# scripts/install.sh and scripts/install.ps1 download these; every asset below
+# must be present, or the run fails so a broken release is noticed.
 name: Release binaries
 
 on:
@@ -39,14 +39,25 @@ jobs:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-24.04
             runs: true
+          # No Windows ARM64 build: herdr has none, and Windows on Arm runs this one.
+          - target: x86_64-pc-windows-msvc
+            os: windows-2025
+            runs: true
+            exe: .exe
     runs-on: ${{ matrix.os }}
     steps:
+      # Windows runners check out with CRLF, which the version check below misreads.
+      - name: Check out with LF line endings
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ env.TAG }}
           fetch-depth: 0
 
       - name: Check the tag matches the manifest and Cargo.toml
+        shell: bash
         run: |
           version="${TAG#v}"
           grep -qx "version = \"$version\"" herdr-plugin.toml || { echo "::error::herdr-plugin.toml version is not $version"; exit 1; }
@@ -57,22 +68,26 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Install Rust
+        shell: bash
         run: |
           rustup toolchain install stable --profile minimal --target ${{ matrix.target }}
           rustup default stable
 
       - name: Build
+        shell: bash
         run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Name the binary
+        shell: bash
         run: |
           mkdir dist
-          cp target/${{ matrix.target }}/release/herdr-projects dist/herdr-projects-${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/herdr-projects${{ matrix.exe }} dist/herdr-projects-${{ matrix.target }}${{ matrix.exe }}
 
       - name: Check it runs and reports the release version
         if: matrix.runs
+        shell: bash
         run: |
-          out=$(dist/herdr-projects-${{ matrix.target }} --version)
+          out=$(dist/herdr-projects-${{ matrix.target }}${{ matrix.exe }} --version)
           echo "$out"
           case "$out" in
             "herdr-projects ${TAG#v}" | "herdr-projects ${TAG#v}+"*) ;;
@@ -82,7 +97,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: herdr-projects-${{ matrix.target }}
-          path: dist/herdr-projects-${{ matrix.target }}
+          path: dist/herdr-projects-${{ matrix.target }}${{ matrix.exe }}
           if-no-files-found: error
 
   publish:
@@ -96,6 +111,7 @@ jobs:
         herdr-projects-x86_64-apple-darwin
         herdr-projects-aarch64-unknown-linux-musl
         herdr-projects-x86_64-unknown-linux-musl
+        herdr-projects-x86_64-pc-windows-msvc.exe
     steps:
       - uses: actions/download-artifact@v8
         with:

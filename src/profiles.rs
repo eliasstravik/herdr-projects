@@ -342,11 +342,10 @@ pub fn executable(kind: &str) -> &str {
     }
 }
 
+/// Whether `PATH` has a runnable `name` (on Windows through `PATHEXT`, so an
+/// npm `.cmd` shim counts).
 fn on_path(env: &Env, name: &str) -> bool {
-    use std::os::unix::fs::PermissionsExt as _;
-    env.var("PATH").unwrap_or("").split(':').filter(|d| !d.is_empty()).any(|dir| {
-        std::fs::metadata(Path::new(dir).join(name)).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
-    })
+    crate::platform::find_program(name, env.var("PATH").unwrap_or("").as_ref(), env.var("PATHEXT")).is_some()
 }
 
 /// Whether `kind` looks signed in, from files and variables only (no network,
@@ -760,6 +759,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn built_ins_are_the_installed_and_signed_in_kinds() {
         use std::os::unix::fs::PermissionsExt as _;
         let home = tempfile::tempdir().unwrap();
