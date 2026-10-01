@@ -234,9 +234,9 @@ enum Command {
         /// Scope it to one project (default: the current workspace's, else all)
         slug: Option<String>,
     },
-    /// Install the plugin's progress hooks (Claude Code, Codex, Droid, Gemini CLI, Copilot CLI) and its `autoproject` skill (Claude Code, Codex)
+    /// Install the plugin's progress hooks (Claude Code, Codex, Droid, Gemini CLI, Copilot CLI, Pi, OMP) and its `autoproject` skill (Claude Code, Codex)
     Configure {
-        /// Harnesses to configure, comma-separated: claude, codex, droid, gemini, copilot (default: those installed)
+        /// Harnesses to configure, comma-separated: claude, codex, droid, gemini, copilot, pi, omp (default: those installed)
         #[arg(long, value_delimiter = ',', value_parser = crate::setup::AGENTS)]
         clients: Vec<String>,
         #[arg(long, value_name = "DIR")]

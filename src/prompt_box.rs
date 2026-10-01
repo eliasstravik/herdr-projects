@@ -205,6 +205,30 @@ fn input_box(kind: &str, lines: &[Line]) -> Option<Vec<Line>> {
                 .collect();
             Some(rows)
         }
+        // A `╭──` header, `│ … │` rows, and the draft's last row drawn inside
+        // the `╰─ … ─╯` bottom border.
+        "omp" => {
+            let bottom = last(&|_, l| trimmed_starts(l, "╰─"))?;
+            let top = (0..bottom).rev().find(|&i| trimmed_starts(&lines[i], "╭─"))?;
+            let mut rows = Vec::new();
+            for line in &lines[top + 1..bottom] {
+                let mut row = after(line, '│')?;
+                row.truncate(row.iter().rposition(|c| c.ch == '│')?);
+                rows.push(row);
+            }
+            let mut last_row = after(&lines[bottom], '╰')?;
+            last_row.truncate(last_row.iter().rposition(|c| c.ch == '╯')?);
+            let start = last_row.iter().position(|c| c.ch != '─').unwrap_or(last_row.len());
+            let end = last_row.iter().rposition(|c| c.ch != '─').map_or(start, |i| i + 1);
+            let mut row = last_row[start..end.max(start)].to_vec();
+            // A key hint can sit right-aligned in the border after a run of
+            // blanks: `╰─      󰘶 󰌒 to change thinking effort ─╯`.
+            if let Some(gap) = row.windows(3).position(|w| w.iter().all(|c| c.ch.is_whitespace())) {
+                row.truncate(gap);
+            }
+            rows.push(row);
+            Some(rows)
+        }
         // The editor between the last two rules.
         "pi" => {
             let bottom = last(&|_, l| is_rule(l))?;
@@ -239,7 +263,7 @@ pub fn box_text(kind: &str, screen: &str) -> Option<String> {
 
 /// True for the kinds whose input box this module can find.
 pub fn knows(kind: &str) -> bool {
-    matches!(kind, "claude" | "codex" | "cursor" | "gemini" | "opencode" | "pi")
+    matches!(kind, "claude" | "codex" | "cursor" | "gemini" | "opencode" | "pi" | "omp")
 }
 
 /// The screen's plain text, styling dropped.
@@ -257,12 +281,32 @@ mod tests {
 
     #[test]
     fn every_supported_kind_tells_an_empty_box_from_a_draft() {
-        for kind in ["claude", "codex", "cursor", "gemini", "opencode", "pi"] {
+        for kind in ["claude", "codex", "cursor", "gemini", "opencode", "pi", "omp"] {
             assert_eq!(check(kind, &fixture(&format!("{kind}-empty"))), Draft::Empty, "{kind} empty");
             assert_eq!(check(kind, &fixture(&format!("{kind}-draft"))), Draft::Typed, "{kind} draft");
         }
         assert_eq!(check("claude", &fixture("claude-empty-after-turn")), Draft::Empty);
         assert_eq!(check("opencode", &fixture("opencode-empty-session")), Draft::Empty);
+    }
+
+    #[test]
+    fn omp_reads_a_hint_in_the_bottom_border_as_an_empty_box() {
+        // A fresh OMP session right-aligns a key hint in the empty box's
+        // bottom border: `╰─      … 󰘶 󰌒 to change thinking effort ─╯`.
+        assert_eq!(box_text("omp", &fixture("omp-empty-hint")).as_deref(), Some(""));
+        assert_eq!(check("omp", &fixture("omp-empty-hint")), Draft::Empty);
+    }
+
+    #[test]
+    fn omp_reads_a_draft_that_wraps_into_the_box_s_bottom_border() {
+        // OMP draws the last line of the draft inside the `╰─ … ─╯` border,
+        // and earlier lines as `│ … │` rows under the `╭──` header.
+        assert_eq!(
+            box_text("omp", &fixture("omp-draft-multiline")).as_deref(),
+            Some("a draft that is not sent yet and it carries on long enough to wrap onto a second and then a third row of the box")
+        );
+        assert_eq!(box_text("omp", &fixture("omp-draft")).as_deref(), Some("a draft that is not sent yet"));
+        assert!(knows("omp"));
     }
 
     #[test]

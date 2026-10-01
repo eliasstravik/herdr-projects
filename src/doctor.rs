@@ -370,16 +370,18 @@ fn report(
         let expected = crate::setup::hook_command(&binary, root, agent);
         match journal.get(&key) {
             None => check(&mut out, None, &label, "not configured; `configure` installs the progress hooks".into()),
-            Some(_) if text.contains(&expected) => check(&mut out, Some(true), &label, format!("{} runs this binary", file.display())),
+            Some(_) if crate::setup::hooks_current(agent, &text, &expected) => check(&mut out, Some(true), &label, format!("{} runs this binary", file.display())),
             Some(_) if fix => {
                 let options = crate::setup::ConfigureOptions { clients: vec![agent.to_string()], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: crate::setup::skill_source() };
                 let ctx = Ctx { env, root: root.to_path_buf(), config_dir: config_dir.to_path_buf(), runner, detached_ticker: false };
-                match crate::setup::configure(&ctx, &options) {
-                    Ok(_) => check(&mut out, Some(true), &label, format!("fixed: {} now runs this binary", file.display())),
+                let fixed = crate::setup::configure(&ctx, &options).map(|notes| (crate::setup::read(&file).ok().flatten().is_some_and(|t| crate::setup::hooks_current(agent, &t, &expected)), notes));
+                match fixed {
+                    Ok((true, _)) => check(&mut out, Some(true), &label, format!("fixed: {} now runs this binary", file.display())),
+                    Ok((false, notes)) => check(&mut out, Some(false), &label, format!("could not fix: {}", notes.join("; "))),
                     Err(error) => check(&mut out, Some(false), &label, format!("could not fix: {error:#}")),
                 }
             }
-            Some(_) => check(&mut out, None, &label, format!("{} runs another binary or root; `doctor --fix` rewrites it", file.display())),
+            Some(_) => check(&mut out, None, &label, format!("{} runs another binary or root, or is from an older release; `doctor --fix` rewrites it", file.display())),
         }
     }
 
@@ -647,6 +649,54 @@ mod tests {
         let (text, _) = report(&env, &root, &cfg, &flags, &runner, true, Some(&moved));
         assert!(text.contains("is not this plugin's link"), "{text}");
         assert_eq!(crate::setup::skill_state(&link, &moved), crate::setup::SkillState::Foreign);
+    }
+
+    #[test]
+    fn an_outdated_extension_is_reported_and_fix_rewrites_it() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let runner = runner_with_herdr("herdr 0.9.1\n");
+        let root = home.path().join("root");
+        let cfg = home.path().join("cfg");
+        let flags = SessionFlags::default();
+        std::fs::create_dir_all(home.path().join(".omp")).unwrap();
+        let ctx = Ctx { env: &env, root: root.clone(), config_dir: cfg.clone(), runner: &runner, detached_ticker: false };
+        let options = crate::setup::ConfigureOptions { clients: vec!["omp".into()], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: None };
+        crate::setup::configure(&ctx, &options).unwrap();
+        let file = home.path().join(".omp/agent/extensions/herdr-projects.ts");
+        let current = std::fs::read_to_string(&file).unwrap();
+        let (text, _) = report(&env, &root, &cfg, &flags, &runner, false, None);
+        assert!(text.contains("[ok  ] hooks omp:"), "{text}");
+
+        // An extension an older release wrote (and journaled) still runs this binary.
+        let older = current.replace("TIMEOUT_MS = 10_000", "TIMEOUT_MS = 5_000");
+        std::fs::write(&file, &older).unwrap();
+        let mut journal = crate::setup::load_journal(&cfg);
+        journal.get_mut(&*file.to_string_lossy()).unwrap().after = older;
+        crate::setup::save_journal(&cfg, &journal).unwrap();
+        let (text, _) = report(&env, &root, &cfg, &flags, &runner, false, None);
+        assert!(text.contains("[warn] hooks omp:") && text.contains("`doctor --fix` rewrites it"), "{text}");
+        let (text, _) = report(&env, &root, &cfg, &flags, &runner, true, None);
+        assert!(text.contains("[ok  ] hooks omp: fixed:"), "{text}");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), current);
+    }
+
+    #[test]
+    fn fix_never_claims_to_have_rewritten_an_extension_that_is_no_longer_ours() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::for_test(home.path(), &[]);
+        let runner = runner_with_herdr("herdr 0.9.1\n");
+        let root = home.path().join("root");
+        let cfg = home.path().join("cfg");
+        std::fs::create_dir_all(home.path().join(".pi")).unwrap();
+        let ctx = Ctx { env: &env, root: root.clone(), config_dir: cfg.clone(), runner: &runner, detached_ticker: false };
+        let options = crate::setup::ConfigureOptions { clients: vec!["pi".into()], claude_home: None, codex_home: None, dry_run: false, hooks: true, sidebar: false, key: None, herdr_config: None, skill: None };
+        crate::setup::configure(&ctx, &options).unwrap();
+        let file = home.path().join(".pi/agent/extensions/herdr-projects.ts");
+        std::fs::write(&file, "export default function () {}\n").unwrap();
+        let (text, _) = report(&env, &root, &cfg, &SessionFlags::default(), &runner, true, None);
+        assert!(!text.contains("hooks pi: fixed:"), "{text}");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "export default function () {}\n");
     }
 
     #[test]
