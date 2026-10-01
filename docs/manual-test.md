@@ -1,5 +1,19 @@
 # Manual test list
 
+## Issue #95: progress hook scope
+
+Checked on 2026-10-01 on macOS with Codex CLI 0.159.2 and candidate `0dc426c`, built in release mode and installed into a temporary directory. A separate headless Herdr 0.9.2 session used an isolated home and Codex hook configuration. A logging wrapper passed the unmodified Codex hook input to the candidate and returned its output to Codex.
+
+| Check | Observed result |
+| --- | --- |
+| Fresh Codex session in an ordinary pane outside the project | SessionStart, UserPromptSubmit and PostToolUse all exited successfully with empty stdout/stderr; no progress directory was created. |
+| Fresh Codex session in the canonical project folder, before a coordinator record existed | SessionStart injected the progress guidance, UserPromptSubmit injected the new-turn reminder, and one progress record carried the correct pane and native session id. PostToolUse stayed silent while the reminder was not due. Discovery did not create a coordinator record. |
+| Candidate hook invoked in an ordinary pane of the active Herdr 0.9.1 server | SessionStart returned no context and left that pane's existing progress record byte-identical. |
+
+Both fresh Codex sessions completed a real `pwd` tool call. The active binary and global Codex configuration were not replaced. These checks validate hook scope, not sidebar rendering or remote thread operation; those were not exercised live.
+
+The coordinator's `report` shell calls reproduced the separate observation in #95: they returned `not inside a Herdr pane; nothing reported`, although the hook itself could resolve its pane. Hook-created records are therefore verified here, but successful self-report writes through Codex's sandbox are not. This patch does not address that separate execution-context problem.
+
 ## 0.2.0: the Herdr-native redesign
 
 Checked on 2026-09-23 in a scratch `hp-dev` session (herdr 0.9.1, macOS, Claude Code 2.1.280). "Builder" means the builder ran it and read the result; "client-witnessed" needs a person looking at an attached Herdr client.
