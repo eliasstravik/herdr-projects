@@ -23,8 +23,11 @@ pub use imp::socket_round_trip;
 /// Configures `command` to outlive whatever started this process: a new
 /// session (`setsid`) on Unix; on Windows `CREATE_NO_WINDOW |
 /// CREATE_NEW_PROCESS_GROUP`, a console of its own that is never shown, so
-/// neither it nor anything it starts opens a console window. The caller sets
-/// stdio and spawns.
+/// neither it nor anything it starts opens a console window. On Windows it
+/// also starts in the temporary folder unless the caller chose one, because a
+/// long-lived process keeps its current folder from being renamed (Herdr
+/// starts plugin commands in the plugin's checkout, which it renames to
+/// update). The caller sets stdio and spawns.
 pub use imp::detach;
 
 /// Configures a command that runs with no terminal (its output captured or
@@ -113,6 +116,24 @@ pub use imp::hook_program;
 /// (`/bin/sh -lc`); on Windows wrapped in one more pair of double quotes when
 /// it has any, because `cmd.exe /d /c` strips the first and the last quote.
 pub use imp::herdr_shell_line;
+
+/// The processes that keep Windows from renaming `dir`: those whose current
+/// folder is inside it, and those that have any of `files` (in it) open, as
+/// the Restart Manager reports them. Always empty on Unix, where neither
+/// blocks a rename.
+pub use imp::folder_users;
+
+#[cfg(all(test, windows))]
+pub use imp::current_dir_of as current_dir_of_for_tests;
+
+/// A process found by [`folder_users`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct FolderUser {
+    pub pid: u32,
+    pub name: String,
+    /// Its current folder is inside the folder (else it has a file there open).
+    pub works_in: bool,
+}
 
 /// Adds `arg` to `command` exactly as written on Windows (`raw_arg`), for a
 /// program such as `cmd` that parses its own command line; a plain argument

@@ -50,6 +50,9 @@ fn background_flags(own_group: bool) -> u32 {
 
 pub fn detach(command: &mut Command) {
     command.creation_flags(DETACH_FLAGS);
+    if command.get_current_dir().is_none() {
+        command.current_dir(std::env::temp_dir());
+    }
     // Rust starts every child with handle inheritance on, so the detached
     // child would also inherit this process's own standard handles. When
     // herdr runs us with pipes (the startup hook), the ticker would then hold
@@ -275,9 +278,245 @@ pub fn extra_path_dirs(home: Option<&Path>, var: &dyn Fn(&str) -> Option<String>
     dirs
 }
 
+// The Restart Manager, which reports the processes using a set of files
+// (open, or loaded as a program); Windows refuses to rename a folder while any
+// of its files is in use.
+const CCH_RM_SESSION_KEY: usize = 32;
+const ERROR_MORE_DATA: u32 = 234;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct RmUniqueProcess {
+    process_id: u32,
+    start_time: [u32; 2],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct RmProcessInfo {
+    process: RmUniqueProcess,
+    app_name: [u16; 256],
+    service_short_name: [u16; 64],
+    application_type: i32,
+    app_status: u32,
+    ts_session_id: u32,
+    restartable: i32,
+}
+
+#[link(name = "rstrtmgr")]
+unsafe extern "system" {
+    fn RmStartSession(session: *mut u32, flags: u32, key: *mut u16) -> u32;
+    fn RmRegisterResources(session: u32, files: u32, file_names: *const *const u16, apps: u32, applications: *const RmUniqueProcess, services: u32, service_names: *const *const u16) -> u32;
+    fn RmGetList(session: u32, needed: *mut u32, count: *mut u32, info: *mut RmProcessInfo, reboot_reasons: *mut u32) -> u32;
+    fn RmEndSession(session: u32) -> u32;
+}
+
+/// (pid, program name) of the processes that have any of `files` open.
+fn file_users(files: &[PathBuf]) -> Vec<(u32, String)> {
+    use std::os::windows::ffi::OsStrExt as _;
+    if files.is_empty() {
+        return Vec::new();
+    }
+    let wide: Vec<Vec<u16>> = files.iter().map(|f| f.as_os_str().encode_wide().chain(std::iter::once(0)).collect()).collect();
+    let names: Vec<*const u16> = wide.iter().map(|w| w.as_ptr()).collect();
+    let mut session = 0u32;
+    let mut key = [0u16; CCH_RM_SESSION_KEY + 1];
+    // SAFETY: every pointer passed points into a live buffer of the length
+    // given, `names` holds NUL-terminated strings that outlive the session,
+    // and RmProcessInfo is plain data, so all zeroes is a valid value.
+    unsafe {
+        if RmStartSession(&mut session, 0, key.as_mut_ptr()) != 0 {
+            return Vec::new();
+        }
+        let mut found = Vec::new();
+        if RmRegisterResources(session, names.len() as u32, names.as_ptr(), 0, std::ptr::null(), 0, std::ptr::null()) == 0 {
+            let mut infos: Vec<RmProcessInfo> = vec![std::mem::zeroed(); 16];
+            for _ in 0..3 {
+                let mut needed = 0u32;
+                let mut count = infos.len() as u32;
+                let mut reasons = 0u32;
+                match RmGetList(session, &mut needed, &mut count, infos.as_mut_ptr(), &mut reasons) {
+                    0 => {
+                        found = infos[..count as usize]
+                            .iter()
+                            .map(|info| {
+                                let len = info.app_name.iter().position(|&c| c == 0).unwrap_or(info.app_name.len());
+                                (info.process.process_id, String::from_utf16_lossy(&info.app_name[..len]))
+                            })
+                            .collect();
+                        break;
+                    }
+                    ERROR_MORE_DATA => infos = vec![std::mem::zeroed(); needed as usize + 4],
+                    _ => break,
+                }
+            }
+        }
+        RmEndSession(session);
+        found
+    }
+}
+
+// Processes and their current folders. A process's current folder is only in
+// its own memory: PEB -> RTL_USER_PROCESS_PARAMETERS -> CurrentDirectory, the
+// way Process Explorer reads it. The offsets are those of 64-bit Windows,
+// the only kind Herdr runs on.
+const TH32CS_SNAPPROCESS: u32 = 0x2;
+const PROCESS_QUERY_INFORMATION: u32 = 0x0400;
+const PROCESS_VM_READ: u32 = 0x0010;
+const PEB_PROCESS_PARAMETERS: usize = 0x20;
+const PARAMETERS_CURRENT_DIRECTORY: usize = 0x38;
+
+#[repr(C)]
+struct ProcessEntry32W {
+    size: u32,
+    usage: u32,
+    process_id: u32,
+    default_heap_id: usize,
+    module_id: u32,
+    threads: u32,
+    parent_process_id: u32,
+    priority_class_base: i32,
+    flags: u32,
+    exe_file: [u16; 260],
+}
+
+#[repr(C)]
+#[derive(Default)]
+struct ProcessBasicInformation {
+    exit_status: isize,
+    peb_base_address: usize,
+    affinity_mask: usize,
+    base_priority: isize,
+    unique_process_id: usize,
+    inherited_from_unique_process_id: usize,
+}
+
+#[repr(C)]
+#[derive(Default)]
+struct UnicodeString {
+    length: u16,
+    maximum_length: u16,
+    buffer: usize,
+}
+
+type Handle = *mut std::ffi::c_void;
+
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn CreateToolhelp32Snapshot(flags: u32, process_id: u32) -> Handle;
+    fn Process32FirstW(snapshot: Handle, entry: *mut ProcessEntry32W) -> i32;
+    fn Process32NextW(snapshot: Handle, entry: *mut ProcessEntry32W) -> i32;
+    fn OpenProcess(access: u32, inherit: i32, process_id: u32) -> Handle;
+    fn ReadProcessMemory(process: Handle, address: usize, buffer: *mut std::ffi::c_void, size: usize, read: *mut usize) -> i32;
+    fn CloseHandle(handle: Handle) -> i32;
+}
+
+#[link(name = "ntdll")]
+unsafe extern "system" {
+    fn NtQueryInformationProcess(process: Handle, class: u32, info: *mut std::ffi::c_void, length: u32, returned: *mut u32) -> i32;
+}
+
+/// Every process's id and program name.
+fn all_processes() -> Vec<(u32, String)> {
+    let mut found = Vec::new();
+    // SAFETY: the entry is plain data sized as the API requires, and the
+    // snapshot handle is closed once.
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot as isize == -1 {
+            return found;
+        }
+        let mut entry: ProcessEntry32W = std::mem::zeroed();
+        entry.size = std::mem::size_of::<ProcessEntry32W>() as u32;
+        let mut more = Process32FirstW(snapshot, &mut entry) != 0;
+        while more {
+            let len = entry.exe_file.iter().position(|&c| c == 0).unwrap_or(entry.exe_file.len());
+            found.push((entry.process_id, String::from_utf16_lossy(&entry.exe_file[..len])));
+            more = Process32NextW(snapshot, &mut entry) != 0;
+        }
+        CloseHandle(snapshot);
+    }
+    found
+}
+
+/// `size_of::<T>()` bytes at `address` in `process`.
+unsafe fn read<T: Default>(process: Handle, address: usize) -> Option<T> {
+    let mut value = T::default();
+    let mut read = 0usize;
+    // SAFETY: writes at most size_of::<T>() bytes into `value`.
+    let ok = unsafe { ReadProcessMemory(process, address, (&mut value as *mut T).cast(), std::mem::size_of::<T>(), &mut read) };
+    (ok != 0 && read == std::mem::size_of::<T>()).then_some(value)
+}
+
+/// The current folder of process `pid`, when this user may read it.
+pub fn current_dir_of(pid: u32) -> Option<PathBuf> {
+    use std::os::windows::ffi::OsStringExt as _;
+    // SAFETY: plain Win32 calls; every read goes through `read` or into a
+    // buffer of the length asked for, and the process handle is closed once.
+    unsafe {
+        let process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid);
+        if process.is_null() {
+            return None;
+        }
+        let dir = (|| {
+            let mut info = ProcessBasicInformation::default();
+            let mut returned = 0u32;
+            if NtQueryInformationProcess(process, 0, (&mut info as *mut ProcessBasicInformation).cast(), std::mem::size_of::<ProcessBasicInformation>() as u32, &mut returned) != 0 || info.peb_base_address == 0 {
+                return None;
+            }
+            let parameters: usize = read(process, info.peb_base_address + PEB_PROCESS_PARAMETERS)?;
+            let text: UnicodeString = read(process, parameters + PARAMETERS_CURRENT_DIRECTORY)?;
+            if text.buffer == 0 || text.length == 0 {
+                return None;
+            }
+            let mut wide = vec![0u16; usize::from(text.length) / 2];
+            let mut got = 0usize;
+            if ReadProcessMemory(process, text.buffer, wide.as_mut_ptr().cast(), usize::from(text.length), &mut got) == 0 {
+                return None;
+            }
+            Some(PathBuf::from(std::ffi::OsString::from_wide(&wide)))
+        })();
+        CloseHandle(process);
+        dir
+    }
+}
+
+/// Whether `path` is `dir` or inside it, ignoring letter case and a trailing `\`.
+fn path_inside(path: &Path, dir: &Path) -> bool {
+    let fold = |p: &Path| p.to_string_lossy().trim_end_matches('\\').to_lowercase();
+    let (path, dir) = (fold(path), fold(dir));
+    path == dir || path.strip_prefix(&dir).is_some_and(|rest| rest.starts_with('\\'))
+}
+
+pub fn folder_users(dir: &Path, files: &[PathBuf]) -> Vec<crate::platform::FolderUser> {
+    let dir = dunce::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+    let me = std::process::id();
+    let mut users: Vec<crate::platform::FolderUser> = all_processes()
+        .into_iter()
+        .filter(|(pid, _)| *pid != 0 && *pid != me)
+        // A folder can be recorded in its short 8.3 form (C:\\Users\\RUNNER~1\\…).
+        .filter(|(pid, _)| current_dir_of(*pid).is_some_and(|cwd| path_inside(&dunce::canonicalize(&cwd).unwrap_or(cwd), &dir)))
+        .map(|(pid, name)| crate::platform::FolderUser { pid, name, works_in: true })
+        .collect();
+    for (pid, name) in file_users(files) {
+        if pid != me && !users.iter().any(|u| u.pid == pid) {
+            users.push(crate::platform::FolderUser { pid, name, works_in: false });
+        }
+    }
+    users
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn path_inside_ignores_case_and_a_trailing_backslash() {
+        assert!(path_inside(Path::new(r"C:\Plugins\HP\target\"), Path::new(r"c:\plugins\hp")));
+        assert!(path_inside(Path::new(r"C:\plugins\hp\"), Path::new(r"C:\plugins\hp")));
+        assert!(!path_inside(Path::new(r"C:\plugins\hp2"), Path::new(r"C:\plugins\hp")));
+        assert!(!path_inside(Path::new(r"C:\plugins"), Path::new(r"C:\plugins\hp")));
+    }
 
     #[test]
     fn pathext_finds_cmd_shims_and_never_the_extensionless_script() {

@@ -167,3 +167,6 @@ pub fn extra_path_dirs(home: Option<&Path>, _var: &dyn Fn(&str) -> Option<String
 pub fn verbatim_arg(command: &mut Command, arg: &str) {
     command.arg(arg);
 }
+pub fn folder_users(_dir: &Path, _files: &[PathBuf]) -> Vec<super::FolderUser> {
+    Vec::new()
+}
