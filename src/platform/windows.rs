@@ -37,6 +37,22 @@ pub fn socket_round_trip(socket: &Path, line: &str, timeout: Duration) -> Result
 
 pub fn detach(command: &mut Command) {
     command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+    // Rust starts every child with handle inheritance on, so the detached
+    // child would also inherit this process's own standard handles. When
+    // herdr runs us with pipes (the startup hook), the ticker would then hold
+    // them open for its whole life, and herdr would wait for the command's
+    // output forever. Stdio::inherit still works afterwards: Rust duplicates
+    // the handle it passes.
+    for id in [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
+        // SAFETY: plain Win32 calls on this process's own standard handles;
+        // a missing or invalid handle only makes SetHandleInformation fail.
+        unsafe {
+            let handle = GetStdHandle(id);
+            if !handle.is_null() && handle as isize != -1 {
+                SetHandleInformation(handle, HANDLE_FLAG_INHERIT, 0);
+            }
+        }
+    }
 }
 
 pub fn own_group(command: &mut Command) {
@@ -54,9 +70,16 @@ pub fn kill_tree(child: &mut Child, own_group: bool) {
 
 type CtrlHandler = Option<unsafe extern "system" fn(u32) -> i32>;
 
+const STD_INPUT_HANDLE: u32 = -10i32 as u32;
+const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
+const STD_ERROR_HANDLE: u32 = -12i32 as u32;
+const HANDLE_FLAG_INHERIT: u32 = 0x0000_0001;
+
 #[link(name = "kernel32")]
 unsafe extern "system" {
     fn SetConsoleCtrlHandler(handler: CtrlHandler, add: i32) -> i32;
+    fn GetStdHandle(id: u32) -> *mut std::ffi::c_void;
+    fn SetHandleInformation(handle: *mut std::ffi::c_void, mask: u32, flags: u32) -> i32;
 }
 
 pub struct IgnoreInterrupts;

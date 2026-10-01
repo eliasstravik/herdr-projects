@@ -333,7 +333,7 @@ fn place_tab(project: &Project, view: &SessionView, record: &Thread) -> Result<T
         }
     };
     let cwd = view.herdr.pane_cwd(&created.pane_id).unwrap_or_default();
-    let cwd = if cwd.is_empty() { folder.to_string_lossy().into_owned() } else { cwd };
+    let cwd = if cwd.is_empty() { folder.to_string_lossy().into_owned() } else { crate::herdr::trim_dir(&cwd).to_string() };
     thread::update(project, &record.id, |t| {
         t.cwd = cwd;
         t.workspace_id = created.workspace_id;

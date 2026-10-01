@@ -14,7 +14,7 @@ pub const NAME: &str = "herdr-projects";
 
 /// The folder the link goes in: `$XDG_BIN_HOME`, else `~/.local/bin`.
 pub fn bin_dir(env: &Env) -> PathBuf {
-    env.var("XDG_BIN_HOME").map(PathBuf::from).unwrap_or_else(|| env.home.join(".local/bin"))
+    env.var("XDG_BIN_HOME").map(PathBuf::from).unwrap_or_else(|| env.home.join(".local").join("bin"))
 }
 
 /// `herdr-projects` in the bin folder (`herdr-projects.cmd` on Windows).

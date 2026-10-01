@@ -304,7 +304,7 @@ pub fn all_next(project: &Project, id: &str) -> Vec<String> {
 
 /// `<agent working directory>/.herdr-project/<slug>-<id>`, for every kind.
 pub fn thread_dir(cwd: &str, slug: &str, id: &str) -> String {
-    format!("{}/.herdr-project/{slug}-{id}", cwd.trim_end_matches('/'))
+    format!("{}/.herdr-project/{slug}-{id}", crate::herdr::trim_dir(cwd))
 }
 
 /// The one line the agent is prompted with; the relative path is the same for
@@ -613,7 +613,7 @@ pub fn group(thread: &Thread, live: &Live, now: jiff::Timestamp) -> Group {
 /// match the record, and — for threads the binary started — the agent name.
 /// Ids are compared only among panes listed through the project's own socket.
 pub fn pane_matches(thread: &Thread, pane: &Pane) -> bool {
-    pane.pane_id == thread.pane_id && pane.cwd == thread.cwd
+    pane.pane_id == thread.pane_id && crate::herdr::same_dir(&pane.cwd, &thread.cwd)
 }
 
 /// A thread's agent: same pane id and working directory, and (for threads the
@@ -622,7 +622,7 @@ pub fn pane_matches(thread: &Thread, pane: &Pane) -> bool {
 /// restored pane without a name; that is still ours and gets renamed. A pane
 /// with our ids holding another kind, or another name, is someone else's.
 pub fn agent_matches(thread: &Thread, agent: &Agent) -> bool {
-    let ids = agent.pane_id == thread.pane_id && agent.cwd == thread.cwd;
+    let ids = agent.pane_id == thread.pane_id && crate::herdr::same_dir(&agent.cwd, &thread.cwd);
     match thread.kind {
         // Not started by the binary: whatever herdr reported at adoption.
         Kind::Adopted => ids,
