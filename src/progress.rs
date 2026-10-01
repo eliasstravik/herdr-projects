@@ -13,6 +13,54 @@ use crate::herdr::{CALL_TIMEOUT, Herdr};
 use crate::paths::{Ctx, Env};
 use crate::runner::Runner;
 
+/// Hook ownership is read-only and scoped to the calling server. Remote thread
+/// records describe panes on another machine, not panes with the same local id.
+fn managed(ctx: &Ctx, current: &Current) -> bool {
+    use crate::{coordinator, project, thread};
+    use crate::herdr::{Agent, Pane};
+
+    let projects: Vec<_> = project::list_slugs(&ctx.root).iter().filter_map(|slug| {
+        let project = project::Project::load(&ctx.root, slug).ok()?;
+        let record = project.coordinator();
+        (!record.as_ref().is_some_and(|r| r.socket != current.socket)).then_some((project, record))
+    }).collect();
+    if projects.is_empty() {
+        return false;
+    }
+    let herdr = Herdr::new(ctx.env.herdr_bin(), &current.socket, ctx.runner);
+    let timeout = std::time::Duration::from_secs(2);
+    let Some(panes) = herdr.call(&["pane", "list"], timeout).ok().and_then(|reply| serde_json::from_value::<Vec<Pane>>(reply["panes"].clone()).ok()) else {
+        return false;
+    };
+    let Some(pane) = panes.iter().find(|p| p.pane_id == current.pane_id && p.terminal_id == current.terminal_id) else {
+        return false;
+    };
+    if projects.iter().any(|(_, record)| record.as_ref().is_some_and(|r| coordinator::pane_matches(r, pane))) {
+        return true;
+    }
+    let Some(agents) = herdr.call(&["agent", "list"], timeout).ok().and_then(|reply| serde_json::from_value::<Vec<Agent>>(reply["agents"].clone()).ok()) else {
+        return false;
+    };
+    let undetected = current.agent.is_empty() && !agents.iter().any(|a| a.pane_id == pane.pane_id);
+    let mut agents: Vec<_> = agents.into_iter().filter(|a| a.pane_id == pane.pane_id && a.workspace_id == pane.workspace_id && a.tab_id == pane.tab_id && a.terminal_id == pane.terminal_id).collect();
+    if undetected {
+        // The hook itself establishes that an agent is starting here. Use
+        // the live pane's identity until Herdr adds it to a successful list.
+        agents.push(Agent { pane_id: pane.pane_id.clone(), workspace_id: pane.workspace_id.clone(), tab_id: pane.tab_id.clone(), cwd: pane.cwd.clone(), foreground_cwd: pane.foreground_cwd.clone(), terminal_id: pane.terminal_id.clone(), ..Agent::default() });
+    }
+    projects.iter().any(|(project, record)| {
+        // `open --new` and manually started coordinators need not have been
+        // observed by the ticker yet. Reuse its live discovery rule.
+        if coordinator::found(project, &current.socket, "", &agents).is_some_and(|r| coordinator::pane_matches(&r, pane)) {
+            return true;
+        }
+        record.is_some() && thread::list(project).iter().any(|t| {
+            !t.is_remote() && t.status != thread::Status::Resolved && thread::pane_matches(t, pane)
+                && agents.iter().any(|a| thread::agent_matches(t, a))
+        })
+    })
+}
+
 pub const ACTIVITY_COLUMNS: usize = 40;
 pub const ACTIVITY_TTL_MS: u64 = 300_000;
 /// Reminders go out at most about once a minute.
@@ -298,7 +346,7 @@ pub fn output(harness: &crate::setup::Harness, native: &str, text: &str) -> serd
 }
 
 /// `hook --agent <harness>`, the entry point the harness hooks run. Silent
-/// (exit 0, no output) outside a Herdr pane, so the same hooks may sit in the
+/// (exit 0, no output) outside a managed Herdr pane, so the same hooks may sit in the
 /// user's settings for every session on the machine.
 pub fn hook(ctx: &Ctx, agent: &str) -> Result<()> {
     if ctx.env.var("HERDR_ENV") != Some("1") || ctx.env.var("HERDR_PANE_ID").is_none() {
@@ -338,6 +386,9 @@ pub fn hook(ctx: &Ctx, agent: &str) -> Result<()> {
     };
     if !pane.agent.is_empty() && pane.agent != agent {
         return Ok(()); // another harness's hook fired in a pane that is not its own
+    }
+    if !managed(ctx, &pane) {
+        return Ok(());
     }
     let mut record = load(&ctx.root, &pane.socket, &pane.pane_id).unwrap_or_default();
     if kind != "SessionStart" && foreign_session(&record, &event) {
@@ -386,6 +437,23 @@ pub fn prune(root: &Path, socket: &str, live_pane_ids: &[String]) {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn managed_threads_are_eligible_before_agent_detection() {
+        use crate::runner::fake::{FakeRunner, ok};
+        let home = tempfile::tempdir().unwrap();
+        let project = crate::project::create(home.path(), "demo", "", vec![]).unwrap();
+        project.update_coordinator(|c| c.socket = "/managed.sock".into()).unwrap();
+        let thread = crate::thread::Thread { id: "t-0001".into(), pane_id: "w1:p1".into(), cwd: "/worktree".into(), ..Default::default() };
+        crate::project::write_atomic(&crate::thread::record_path(&project, &thread.id), toml::to_string(&thread).unwrap().as_bytes()).unwrap();
+        let runner = FakeRunner::new();
+        runner.on("pane list", ok(r#"{"result":{"panes":[{"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","cwd":"/worktree","terminal_id":"term-1"}]}}"#));
+        runner.on("agent list", ok(r#"{"result":{"agents":[]}}"#));
+        let env = Env::for_test(home.path(), &[]);
+        let ctx = Ctx { env: &env, root: home.path().into(), config_dir: home.path().join("config"), runner: &runner, detached_ticker: false };
+        let pane = Current { socket: "/managed.sock".into(), pane_id: "w1:p1".into(), terminal_id: "term-1".into(), agent: String::new() };
+        assert!(managed(&ctx, &pane));
+    }
 
     #[test]
     fn activity_is_cleaned_and_capped_at_forty_columns() {
