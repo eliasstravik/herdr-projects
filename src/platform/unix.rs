@@ -170,3 +170,5 @@ pub fn verbatim_arg(command: &mut Command, arg: &str) {
 pub fn folder_users(_dir: &Path, _files: &[PathBuf]) -> Vec<super::FolderUser> {
     Vec::new()
 }
+
+pub fn wait_for_exit(_pid: u32, _timeout: Duration) {}

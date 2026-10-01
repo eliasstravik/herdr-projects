@@ -488,6 +488,26 @@ fn path_inside(path: &Path, dir: &Path) -> bool {
     path == dir || path.strip_prefix(&dir).is_some_and(|rest| rest.starts_with('\\'))
 }
 
+const SYNCHRONIZE: u32 = 0x0010_0000;
+
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn WaitForSingleObject(handle: Handle, milliseconds: u32) -> u32;
+}
+
+pub fn wait_for_exit(pid: u32, timeout: Duration) {
+    // SAFETY: plain Win32 calls on a handle that is closed once; a process
+    // that has already ended gives no handle, and there is nothing to wait for.
+    unsafe {
+        let process = OpenProcess(SYNCHRONIZE, 0, pid);
+        if process.is_null() {
+            return;
+        }
+        WaitForSingleObject(process, u32::try_from(timeout.as_millis()).unwrap_or(u32::MAX));
+        CloseHandle(process);
+    }
+}
+
 pub fn folder_users(dir: &Path, files: &[PathBuf]) -> Vec<crate::platform::FolderUser> {
     let dir = dunce::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
     let me = std::process::id();

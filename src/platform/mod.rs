@@ -123,6 +123,10 @@ pub use imp::herdr_shell_line;
 /// blocks a rename.
 pub use imp::folder_users;
 
+/// Waits until process `pid` has ended, or `timeout`, on Windows; returns at
+/// once on Unix, where `update` never hands over to a copy.
+pub use imp::wait_for_exit;
+
 #[cfg(all(test, windows))]
 pub use imp::current_dir_of as current_dir_of_for_tests;
 

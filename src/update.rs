@@ -14,11 +14,14 @@
 //! `cargo build --release --locked`.
 //!
 //! Herdr replaces a managed checkout by renaming its folder, which Windows
-//! refuses while any process has its current folder inside it, or has a
-//! file there open without sharing delete access. (A program running from
-//! it does not block it.) So on Windows `update` refuses to run from inside
-//! the checkout, and when Herdr still cannot replace it, names the processes
-//! in the way. A linked checkout is never renamed.
+//! refuses while a process works in it (its current folder is inside) or
+//! runs from it: on Windows 11 that includes `update` itself, started as
+//! `<checkout>\target\release\herdr-projects.exe`. So on Windows `update`
+//! copies itself to the temporary folder, starts the copy in the same console
+//! and exits; the copy waits for it to end and does the update. It refuses to
+//! run from a terminal working inside the checkout, and when Herdr still
+//! cannot replace it, names the processes in the way. A linked checkout is
+//! never renamed.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -43,6 +46,13 @@ const IN_USE: &str = "failed to replace managed plugin checkout";
 const IN_USE_RETRY_PAUSE: Duration = Duration::from_secs(2);
 /// At most this many of the checkout's files are checked for processes using them.
 const MAX_CHECKED_FILES: usize = 10_000;
+/// Set on the copy `update` starts on Windows: the pid of the process that
+/// started it, which the copy waits for before it updates.
+const AFTER_ENV: &str = "HERDR_PROJECTS_UPDATE_AFTER";
+/// The copies live in `<temp>/herdr-projects-update/`, named `update-<pid>.exe`.
+const COPY_DIR: &str = "herdr-projects-update";
+/// How long the copy waits for the process that started it to end.
+const PARENT_WAIT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Install {
@@ -313,6 +323,50 @@ fn inside(path: &Path, dir: &Path) -> bool {
     fold(path).starts_with(fold(dir))
 }
 
+/// Where the copy of `update` goes in `dir` for process `pid`.
+fn copy_path(dir: &Path, pid: u32) -> PathBuf {
+    dir.join(format!("update-{pid}{}", std::env::consts::EXE_SUFFIX))
+}
+
+/// Removes the copies earlier updates left in `dir`; one still running stays.
+fn remove_old_copies(dir: &Path) {
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        if entry.file_name().to_string_lossy().starts_with("update-") {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
+/// `copy --root <root> update`, told to wait for `parent`.
+fn copy_command(copy: &Path, root: &Path, parent: u32) -> std::process::Command {
+    let mut command = std::process::Command::new(copy);
+    command.arg("--root").arg(root).arg("update").env(AFTER_ENV, parent.to_string());
+    if let Some(dir) = copy.parent() {
+        command.current_dir(dir);
+    }
+    command
+}
+
+/// On Windows, when this binary runs from the checkout Herdr is about to
+/// replace: copies it to the temporary folder and starts the copy in this
+/// console to do the update. Returns `true` when the copy took over and this
+/// process must exit now, without touching anything.
+fn hand_over_to_copy(ctx: &Ctx, root: &Path) -> Result<bool> {
+    let binary = paths::binary()?;
+    if !inside(&binary, root) {
+        return Ok(false);
+    }
+    let dir = std::env::temp_dir().join(COPY_DIR);
+    std::fs::create_dir_all(&dir).with_context(|| format!("could not create {}", dir.display()))?;
+    remove_old_copies(&dir);
+    let copy = copy_path(&dir, std::process::id());
+    std::fs::copy(&binary, &copy).with_context(|| format!("could not copy {} to {}", binary.display(), copy.display()))?;
+    println!("Windows cannot replace the plugin folder while this program runs from it, so the update continues from a copy, {}.", copy.display());
+    println!("The prompt may come back first: wait for the copy's last line (`updated …` or `update failed …`).");
+    copy_command(&copy, &ctx.root, std::process::id()).spawn().with_context(|| format!("could not start {}", copy.display()))?;
+    Ok(true)
+}
+
 /// Runs `binary --root <root> <args>` and prints what it said.
 fn run_binary(ctx: &Ctx, binary: &Path, args: &[&str]) -> Result<bool> {
     let out = ctx.runner.run(
@@ -327,6 +381,11 @@ fn run_binary(ctx: &Ctx, binary: &Path, args: &[&str]) -> Result<bool> {
 }
 
 pub fn run(ctx: &Ctx, check_only: bool) -> Result<()> {
+    // The copy started by `hand_over_to_copy`: the binary in the checkout
+    // must have ended before Herdr can replace the folder.
+    if let Some(parent) = ctx.env.var(AFTER_ENV).and_then(|pid| pid.parse::<u32>().ok()) {
+        crate::platform::wait_for_exit(parent, PARENT_WAIT);
+    }
     let bin = ctx.env.herdr_bin();
     let session = paths::resolve_session(&SessionFlags::default(), ctx.env, ctx.runner)?;
     let herdr = Herdr::new(&bin, &session.socket, ctx.runner);
@@ -366,6 +425,9 @@ pub fn run(ctx: &Ctx, check_only: bool) -> Result<()> {
             "not updating: this terminal's current folder is inside {}, and Windows does not let Herdr replace a folder a program works in. `cd ~` and run update again. Nothing was changed.",
             root.display()
         );
+    }
+    if cfg!(windows) && matches!(install, Install::Github { .. }) && hand_over_to_copy(ctx, &root)? {
+        return Ok(());
     }
 
     // An old ticker misreads files a newer `doctor --fix` writes: stop it first.
@@ -531,6 +593,34 @@ mod tests {
         let error = fetch_and_build(&runner, &herdr, &github(), Version(9, 0, 0), &Vec::<String>::new, Duration::ZERO).unwrap_err().to_string();
         assert_eq!(runner.count("plugin install"), 1);
         assert!(error.contains("build failed") && !error.contains("by hand"), "{error}");
+    }
+
+    #[test]
+    fn the_copy_runs_update_for_the_same_root_and_waits_for_its_starter() {
+        let dir = tempfile::tempdir().unwrap();
+        let copy = copy_path(dir.path(), 42);
+        assert!(copy.file_name().unwrap().to_string_lossy().starts_with("update-42"));
+        let command = copy_command(&copy, Path::new("/r"), 42);
+        let args: Vec<_> = command.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert_eq!(args, ["--root", "/r", "update"]);
+        assert!(command.get_envs().any(|(k, v)| k == AFTER_ENV && v.is_some_and(|v| v == "42")));
+        assert_eq!(command.get_current_dir(), Some(dir.path()));
+
+        std::fs::write(&copy, "").unwrap();
+        std::fs::write(dir.path().join("keep.txt"), "").unwrap();
+        remove_old_copies(dir.path());
+        assert!(!copy.exists() && dir.path().join("keep.txt").exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn waiting_for_a_process_that_has_ended_returns_at_once() {
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap()).arg("--list").stdout(std::process::Stdio::null()).spawn().unwrap();
+        let pid = child.id();
+        child.wait().unwrap();
+        let start = std::time::Instant::now();
+        crate::platform::wait_for_exit(pid, Duration::from_secs(5));
+        assert!(start.elapsed() < Duration::from_secs(3));
     }
 
     #[test]
