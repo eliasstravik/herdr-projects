@@ -164,6 +164,12 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
                 .with_context(|| format!("repository {repo} does not exist"))?
                 .to_string_lossy()
                 .into_owned();
+            // A thread whose cwd is the project folder is indistinguishable from
+            // the coordinator: the ticker counts it as one, and it reads the
+            // coordinator's AGENTS.md as its own instructions.
+            if Path::new(&path).starts_with(project.canonical_dir()) {
+                bail!("--repo {repo} is the project folder or inside it: a thread there looks like the coordinator; use a repository, or omit --repo");
+            }
             if !settings.repos.iter().any(|r| r.path == path || &r.path == repo) {
                 eprintln!("warning: {path} is not listed in `repos` in PROJECT.md");
             }

@@ -1752,6 +1752,21 @@ fn a_remote_thread_without_a_repo_is_refused() {
     assert!(threads::start(&world.ctx(), "demo", args).unwrap_err().to_string().contains("needs --repo"));
 }
 
+#[test]
+fn a_repo_that_is_the_project_folder_is_refused() {
+    // A thread there works in the coordinator's own folder: the ticker would
+    // count it as a coordinator, and the thread would read AGENTS.md as one.
+    let world = World::new();
+    let project = world.project("demo", "a.sock");
+    for repo in [project.dir(), project.dir().join("notes")] {
+        std::fs::create_dir_all(&repo).unwrap();
+        let args = StartArgs { title: "x".into(), repo: Some(repo.to_string_lossy().into_owned()), machine: None, profile: None, kind: Some(crate::thread::Kind::Checkout), base: None, task: "t".into() };
+        let error = threads::start(&world.ctx(), "demo", args).unwrap_err().to_string();
+        assert!(error.contains("project folder"), "{error}");
+    }
+    assert!(thread::list(&project).is_empty());
+}
+
 fn open_alive(world: &World, project: &Project) -> anyhow::Result<()> {
     let cwd = project.canonical_dir().to_string_lossy().into_owned();
     let name = format!("hp-{}-coordinator", project.slug);
