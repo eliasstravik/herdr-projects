@@ -202,7 +202,7 @@ pub fn load_all(project: &Project) -> (Vec<Routine>, Vec<Broken>) {
     files.sort();
     for file in files {
         let path = project.dir().join("routines").join(&file);
-        if !std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file()) {
+        if !crate::platform::is_plain_file(&path) {
             continue;
         }
         let Ok(text) = std::fs::read_to_string(&path) else {

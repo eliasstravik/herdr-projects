@@ -92,7 +92,7 @@ pub fn save_journal(config_dir: &Path, journal: &Journal) -> Result<()> {
 /// manager's link would be replaced by a plain file) rather than editing it.
 pub fn read(path: &Path) -> Result<Option<String>> {
     if let Ok(m) = std::fs::symlink_metadata(path) {
-        ensure!(!m.file_type().is_symlink(), "refusing to edit {}: it is a symbolic link; edit its target's hooks by hand or pass --claude-home/--codex-home", path.display());
+        ensure!(!crate::platform::is_link(&m), "refusing to edit {}: it is a symbolic link; edit its target's hooks by hand or pass --claude-home/--codex-home", path.display());
     }
     match std::fs::read_to_string(path) {
         Ok(s) => Ok(Some(s)),
@@ -150,8 +150,9 @@ pub fn herdr_config_path(env: &Env) -> PathBuf {
     env.var("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| env.home.join(".config")).join("herdr/config.toml")
 }
 
-/// The tab-bar command: absolute paths, since it runs under `/bin/sh -lc` on
-/// the server with no plugin environment.
+/// The tab-bar command: absolute paths, since it runs on the server with no
+/// plugin environment (under `/bin/sh -lc`, or `cmd.exe /d /c` on Windows).
+/// It uses no shell syntax beyond quoting the two paths.
 pub fn tab_command(binary: &Path, root: &Path) -> String {
     format!("{} --root {} needs-you --line", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
 }
@@ -226,11 +227,20 @@ pub fn hooks(input: &str, command: &str, remove: bool) -> Result<String> {
 
 /// The hook command for a harness: the absolute binary path and the root,
 /// because hooks run outside the plugin environment.
-/// It always exits 0 and never writes to standard error: harnesses treat a
-/// failing UserPromptSubmit hook (exit 2) as "block this prompt", in every
-/// session on the machine, so a missing or older binary must not do that.
+/// No shell syntax: the `hook` subcommand itself always exits 0 and never
+/// writes to standard error (see `main`), because harnesses treat a failing
+/// UserPromptSubmit hook (exit 2) as "block this prompt", in every session on
+/// the machine. Entries from before 0.2.35 end in `2>/dev/null || true`;
+/// [`hooks`] replaces them, and `doctor --fix` rewrites them.
 pub fn hook_command(binary: &Path, root: &Path, agent: &str) -> String {
-    format!("{} --root {} hook --agent {agent} 2>/dev/null || true", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
+    format!("{} --root {} hook --agent {agent}", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
+}
+
+/// Whether a hook file already holds exactly the entries `command` installs,
+/// so `configure` would change nothing (an older command that merely starts
+/// with `command` does not count).
+pub fn hooks_current(text: &str, command: &str) -> bool {
+    hooks(text, command, false).is_ok_and(|after| after == text)
 }
 
 /// Where each harness keeps its hooks; `--claude-home`/`--codex-home`
@@ -298,10 +308,10 @@ pub fn skill_state(link: &Path, source: &Path) -> SkillState {
     let Ok(meta) = std::fs::symlink_metadata(link) else {
         return SkillState::Missing;
     };
-    if !meta.file_type().is_symlink() {
+    if !crate::platform::is_link(&meta) {
         return SkillState::Foreign;
     }
-    match std::fs::read_link(link) {
+    match crate::platform::read_dir_link(link) {
         Ok(target) if target == source => SkillState::Ours,
         Ok(target) => SkillState::Elsewhere(target),
         Err(_) => SkillState::Foreign,
@@ -460,10 +470,10 @@ pub fn configure(ctx: &Ctx, options: &ConfigureOptions) -> Result<Vec<String>> {
     for (link, source) in &links {
         let Some(source) = source else { continue };
         if std::fs::symlink_metadata(link).is_ok() {
-            std::fs::remove_file(link)?;
+            crate::platform::remove_link(link)?;
         }
         std::fs::create_dir_all(link.parent().context("skill link has no parent")?)?;
-        std::os::unix::fs::symlink(source, link).with_context(|| format!("could not link {}", link.display()))?;
+        crate::platform::link_dir(source, link).with_context(|| format!("could not link {}", link.display()))?;
     }
     Ok(notes)
 }
@@ -479,7 +489,7 @@ pub fn unconfigure(ctx: &Ctx) -> Result<Vec<String>> {
         if owned.kind == "skill" {
             match skill_state(path, Path::new(&owned.after)) {
                 SkillState::Ours => {
-                    std::fs::remove_file(path)?;
+                    crate::platform::remove_link(path)?;
                     notes.push(format!("{key}: skill link removed"));
                 }
                 SkillState::Missing => notes.push(format!("{key}: already gone")),
@@ -555,14 +565,22 @@ pub fn apply_view(ctx: &Ctx) {
 mod tests {
     use super::*;
 
-    const CMD: &str = "'/p/herdr-projects' --root /r hook --agent claude 2>/dev/null || true";
+    const CMD: &str = "'/p/herdr-projects' --root /r hook --agent claude";
 
     #[test]
-    fn the_hook_command_never_fails_even_with_a_missing_binary() {
-        let command = hook_command(Path::new("/no/such/herdr-projects"), Path::new("/r"), "claude");
-        let out = std::process::Command::new("/bin/sh").args(["-c", &command]).output().unwrap();
-        assert!(out.status.success());
-        assert!(out.stdout.is_empty() && out.stderr.is_empty());
+    fn the_hook_command_uses_no_shell_syntax() {
+        assert_eq!(hook_command(Path::new("/p q/herdr-projects"), Path::new("/r"), "claude"), "'/p q/herdr-projects' --root /r hook --agent claude");
+    }
+
+    #[test]
+    fn a_hook_command_from_before_0_2_35_is_migrated() {
+        let old = hooks("{}", "'/p/herdr-projects' --root /r hook --agent claude 2>/dev/null || true", false).unwrap();
+        // The old command starts with the new one, yet it is not current.
+        assert!(old.contains(CMD) && !hooks_current(&old, CMD));
+        let migrated = hooks(&old, CMD, false).unwrap();
+        assert!(!migrated.contains("|| true"));
+        assert_eq!(migrated.matches(CMD).count(), 3);
+        assert!(hooks_current(&migrated, CMD));
     }
 
     #[test]
@@ -638,6 +656,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn configure_and_unconfigure_round_trip_byte_for_byte_and_keep_user_additions() {
         let home = tempfile::tempdir().unwrap();
         let env = Env::for_test(home.path(), &[]);
@@ -682,6 +701,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn the_skill_is_linked_once_into_a_shared_skills_dir_and_foreign_ones_are_left_alone() {
         let home = tempfile::tempdir().unwrap();
         let env = Env::for_test(home.path(), &[]);
@@ -739,6 +759,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    #[cfg(unix)]
     fn symlinked_config_is_refused_without_touching_the_target() {
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("real.json");

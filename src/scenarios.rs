@@ -390,6 +390,7 @@ fn restart_defers_to_the_ticker_and_resets_launch_attempts() {
 }
 
 #[test]
+#[cfg(unix)]
 fn a_partial_copy_keeps_the_worktree_unless_the_loss_is_accepted() {
     let world = World::new();
     let project = world.project("demo", "a.sock");

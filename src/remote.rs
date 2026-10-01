@@ -315,6 +315,7 @@ pub fn fetch_dir(runner: &dyn Runner, target: &str, remote_dir: &str, local_dir:
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use crate::runner::RealRunner;
     use crate::runner::fake::{FakeRunner, fail, ok};
 
@@ -327,9 +328,11 @@ mod tests {
         assert_eq!(quote("-n"), "'-n'");
     }
 
+    #[cfg(unix)]
     const HOSTILE: [&str; 10] = ["$(touch /tmp/hp-pwned)", "`id`", "a'; rm -rf ~; echo '", "x\ny", "~/x", "-n", "a\\b\"c", "*", "!!", "a b  c"];
 
     #[test]
+    #[cfg(unix)]
     fn hostile_values_survive_a_real_shell_unchanged() {
         for hostile in HOSTILE {
             let out = RealRunner.run(&Cmd::new("sh", Duration::from_secs(5)).args(["-c".to_string(), format!("printf %s {}", quote(hostile))])).unwrap();
@@ -338,6 +341,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn hostile_values_survive_the_double_shell_of_an_ssh_command() {
         // ssh hands its argument to the remote login shell, which runs our
         // `sh -c <quoted script>`: two layers of parsing. `sh -c` stands in for ssh.
@@ -350,6 +354,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn the_brief_script_works_against_a_real_repository_with_a_hostile_path() {
         // The same script, run locally through `sh -c` instead of ssh.
         let root = tempfile::tempdir().unwrap();

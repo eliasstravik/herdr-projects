@@ -117,14 +117,9 @@ pub fn start(ctx: &Ctx) -> Result<()> {
     }
 }
 
-unsafe extern "C" {
-    fn setsid() -> i32;
-}
-
 /// `ticker run`, detached: null stdio and a new session, so it does not die
 /// with the process group of whatever started it (an agent's shell tool).
 fn spawn(root: &Path) -> Result<()> {
-    use std::os::unix::process::CommandExt;
     let binary = crate::paths::binary()?;
     let mut command = Command::new(binary);
     command
@@ -139,13 +134,7 @@ fn spawn(root: &Path) -> Result<()> {
     for key in ["HERDR_SOCKET_PATH", "HERDR_SESSION", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID"] {
         command.env_remove(key);
     }
-    // SAFETY: setsid is async-signal-safe and touches no memory.
-    unsafe {
-        command.pre_exec(|| {
-            setsid();
-            Ok(())
-        });
-    }
+    crate::platform::detach(&mut command);
     command.spawn().context("could not start the ticker")?;
     Ok(())
 }

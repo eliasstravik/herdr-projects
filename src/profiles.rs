@@ -760,6 +760,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn built_ins_are_the_installed_and_signed_in_kinds() {
         use std::os::unix::fs::PermissionsExt as _;
         let home = tempfile::tempdir().unwrap();

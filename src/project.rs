@@ -609,8 +609,7 @@ pub fn write_priming(project: &Project, prefix: &str) -> Result<()> {
     }
     write_atomic(&agents, agents_md(&name, &project.slug, prefix).as_bytes())?;
     let claude = dir.join("CLAUDE.md");
-    let link_ok = std::fs::read_link(&claude).is_ok_and(|target| target == Path::new("AGENTS.md"));
-    if !link_ok {
+    if !crate::platform::is_claude_md_link(&claude) {
         if std::fs::symlink_metadata(&claude).is_ok() {
             // A regular file or a link elsewhere: keep its text beside it, once.
             let kept = dir.join("CLAUDE.md.before-herdr-projects");
@@ -620,7 +619,7 @@ pub fn write_priming(project: &Project, prefix: &str) -> Result<()> {
                 std::fs::remove_file(&claude)?;
             }
         }
-        std::os::unix::fs::symlink("AGENTS.md", &claude).with_context(|| format!("could not link {}", claude.display()))?;
+        crate::platform::link_claude_md(&claude).with_context(|| format!("could not link {}", claude.display()))?;
     }
     if !dir.join("uploads").is_dir() {
         std::fs::create_dir(dir.join("uploads"))?;
@@ -647,7 +646,7 @@ pub fn priming_problems(project: &Project, prefix: &str) -> Vec<String> {
             }
         },
     }
-    if !std::fs::read_link(dir.join("CLAUDE.md")).is_ok_and(|t| t == Path::new("AGENTS.md")) {
+    if !crate::platform::is_claude_md_link(&dir.join("CLAUDE.md")) {
         problems.push("CLAUDE.md is not a link to AGENTS.md".into());
     }
     if !dir.join("uploads").is_dir() {
@@ -825,7 +824,7 @@ mod tests {
         assert!(text.contains(&format!("`{prefix} context demo-project`")));
         assert!(text.contains("under `threads/`, you are a thread"));
         assert_eq!(prefix_in_agents_md(&text).as_deref(), Some(prefix.as_str()));
-        assert_eq!(std::fs::read_link(project.dir().join("CLAUDE.md")).unwrap(), Path::new("AGENTS.md"));
+        assert!(crate::platform::is_claude_md_link(&project.dir().join("CLAUDE.md")));
         assert!(project.dir().join("uploads").is_dir());
         assert!(priming_problems(&project, &prefix).is_empty());
 

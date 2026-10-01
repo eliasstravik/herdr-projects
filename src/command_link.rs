@@ -17,8 +17,9 @@ pub fn bin_dir(env: &Env) -> PathBuf {
     env.var("XDG_BIN_HOME").map(PathBuf::from).unwrap_or_else(|| env.home.join(".local/bin"))
 }
 
+/// `herdr-projects` in the bin folder (`herdr-projects.cmd` on Windows).
 pub fn link_path(env: &Env) -> PathBuf {
-    bin_dir(env).join(NAME)
+    bin_dir(env).join(crate::platform::command_link_name(NAME))
 }
 
 /// Whether `binary` is an installed build (`target/release/herdr-projects`),
@@ -41,14 +42,12 @@ pub enum State {
 
 pub fn state(env: &Env, binary: &Path) -> State {
     let link = link_path(env);
-    let Ok(meta) = std::fs::symlink_metadata(&link) else {
+    if std::fs::symlink_metadata(&link).is_err() {
         return State::Missing;
-    };
-    if !meta.file_type().is_symlink() {
-        return State::Foreign("a file, not a link".into());
     }
-    let Ok(target) = std::fs::read_link(&link) else {
-        return State::Foreign("an unreadable link".into());
+    let target = match crate::platform::read_command_link(&link) {
+        Ok(target) => target,
+        Err(what) => return State::Foreign(what),
     };
     let target = link.parent().map(|dir| dir.join(&target)).unwrap_or(target);
     let binary = std::fs::canonicalize(binary).unwrap_or_else(|_| binary.to_path_buf());
@@ -74,9 +73,9 @@ pub fn ensure(env: &Env, binary: &Path) -> Result<State> {
         let dir = bin_dir(env);
         std::fs::create_dir_all(&dir).with_context(|| format!("could not create {}", dir.display()))?;
         // Link under a temporary name, then rename over: never a moment without a command.
-        let tmp = dir.join(format!(".{NAME}.{}", std::process::id()));
+        let tmp = dir.join(format!(".{}.{}", crate::platform::command_link_name(NAME), std::process::id()));
         let _ = std::fs::remove_file(&tmp);
-        std::os::unix::fs::symlink(binary, &tmp).with_context(|| format!("could not link {}", link.display()))?;
+        crate::platform::link_command(binary, &tmp).with_context(|| format!("could not link {}", link.display()))?;
         if let Err(error) = std::fs::rename(&tmp, &link) {
             let _ = std::fs::remove_file(&tmp);
             return Err(error).with_context(|| format!("could not link {}", link.display()));
@@ -149,13 +148,14 @@ mod tests {
     fn a_missing_link_is_made_and_then_ours() {
         let (_home, env, binary) = setup();
         assert_eq!(ensure(&env, &binary).unwrap(), State::Missing);
-        assert_eq!(std::fs::read_link(link_path(&env)).unwrap(), binary);
+        assert_eq!(crate::platform::read_command_link(&link_path(&env)).unwrap(), binary);
         assert_eq!(ensure(&env, &binary).unwrap(), State::Ours);
         let (ok, detail) = check(&env, &binary, &path_with(&env), false);
         assert_eq!(ok, Some(true), "{detail}");
     }
 
     #[test]
+    #[cfg(unix)]
     fn a_dangling_link_or_one_into_another_plugin_install_is_replaced() {
         let (home, env, binary) = setup();
         std::fs::create_dir_all(bin_dir(&env)).unwrap();
@@ -175,6 +175,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn a_file_or_a_link_to_the_users_own_checkout_is_never_touched() {
         let (home, env, binary) = setup();
         std::fs::create_dir_all(bin_dir(&env)).unwrap();
@@ -195,6 +196,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn a_bin_dir_missing_from_path_is_a_warning_with_the_fix() {
         let (_home, env, binary) = setup();
         let (ok, detail) = check(&env, &binary, "/usr/bin", true);
@@ -226,6 +228,7 @@ mod tests {
     }
 
     /// Runs scripts/link-command.sh for `checkout` with `home` as HOME.
+    #[cfg(unix)]
     fn run_script(home: &Path, checkout: &Path) -> String {
         let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/link-command.sh");
         let out = std::process::Command::new("sh")
@@ -241,6 +244,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn the_install_script_links_where_herdr_will_move_the_checkout() {
         let home = tempfile::tempdir().unwrap();
         let plugins = home.path().join(".config/herdr/plugins");

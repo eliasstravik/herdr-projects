@@ -15,6 +15,7 @@ mod names;
 mod notify;
 mod overview;
 mod paths;
+mod platform;
 mod popup;
 mod pr;
 mod profiles;
@@ -76,6 +77,15 @@ fn extend_path() {
 
 fn main() {
     extend_path();
+    if cli::is_hook(std::env::args_os()) {
+        // A harness hook must never fail the harness or write to standard
+        // error: a failing UserPromptSubmit hook (exit 2) blocks the prompt in
+        // every session on the machine. So `hook` swallows bad arguments,
+        // errors and panics alike and always exits 0.
+        std::panic::set_hook(Box::new(|_| {}));
+        let _ = std::panic::catch_unwind(cli::run);
+        std::process::exit(0);
+    }
     if let Err(error) = cli::run() {
         eprintln!("herdr-projects: {error:#}");
         std::process::exit(1);

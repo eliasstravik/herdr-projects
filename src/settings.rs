@@ -220,10 +220,11 @@ pub fn open_file(ctx: &Ctx, path: &Path, workspace: Option<&str>) -> Result<()> 
     Ok(())
 }
 
-/// A URL or a non-text file with the system opener (`open` / `xdg-open`).
+/// A URL or a non-text file with the system opener (`open`, `xdg-open`, or
+/// on Windows `rundll32 url.dll,FileProtocolHandler`).
 pub fn system_open(ctx: &Ctx, target: &str) -> Result<()> {
-    let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
-    let out = ctx.runner.run(&crate::runner::Cmd::new(opener, std::time::Duration::from_secs(10)).arg(target))?;
+    let (opener, leading) = crate::platform::OPENER;
+    let out = ctx.runner.run(&crate::runner::Cmd::new(opener, std::time::Duration::from_secs(10)).args(leading.iter().copied()).arg(target))?;
     if !out.success() {
         bail!("{opener} {target}: {}", out.error_text());
     }

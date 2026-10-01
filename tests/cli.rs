@@ -15,6 +15,7 @@ fn hp(home: &Path, args: &[&str]) -> std::process::Output {
 }
 
 #[test]
+#[cfg(unix)]
 fn context_prints_a_usable_prefix_in_a_scrubbed_environment() {
     let home = tempfile::tempdir().unwrap();
     let root = home.path().join("my root");
@@ -75,4 +76,16 @@ fn ticker_start_without_projects_creates_nothing() {
     assert!(hp(home.path(), &["ticker", "start"]).status.success());
     assert!(!home.path().join(".herdr-projects").exists());
     assert!(!home.path().join(".config").exists());
+}
+
+#[test]
+fn the_hook_always_exits_0_silently_even_on_bad_arguments() {
+    let home = tempfile::tempdir().unwrap();
+    for args in [&["hook", "--agent", "no-such-harness"][..], &["--root", "/nonexistent", "hook"], &["hook", "--agent", "claude", "--bogus"]] {
+        let out = hp(home.path(), args);
+        assert!(out.status.success(), "{args:?}");
+        assert!(out.stderr.is_empty(), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    }
+    // Other commands still fail on bad arguments.
+    assert!(!hp(home.path(), &["list", "--bogus"]).status.success());
 }
