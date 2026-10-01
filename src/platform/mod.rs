@@ -21,13 +21,19 @@ use windows as imp;
 pub use imp::socket_round_trip;
 
 /// Configures `command` to outlive whatever started this process: a new
-/// session (`setsid`) on Unix, `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`
-/// on Windows. The caller sets stdio and spawns.
+/// session (`setsid`) on Unix; on Windows `CREATE_NO_WINDOW |
+/// CREATE_NEW_PROCESS_GROUP`, a console of its own that is never shown, so
+/// neither it nor anything it starts opens a console window. The caller sets
+/// stdio and spawns.
 pub use imp::detach;
 
-/// Configures `command` to start its own process group, so
-/// [`kill_tree`] reaches everything it starts.
-pub use imp::own_group;
+/// Configures a command that runs with no terminal (its output captured or
+/// discarded). On Windows it gets `CREATE_NO_WINDOW`: started from a process
+/// with no console, such as the ticker, a console program would otherwise
+/// open a console window of its own. With `own_group` it also starts its own
+/// process group, so [`kill_tree`] reaches everything it starts. Not for
+/// programs a person sees or types into.
+pub use imp::background;
 
 /// Ends `child`, and with `own_group` everything it started: the process
 /// group (TERM, then KILL) on Unix, `taskkill /T /F` on Windows.

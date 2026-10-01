@@ -164,9 +164,7 @@ impl Runner for RealRunner {
             })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        if cmd.own_group {
-            crate::platform::own_group(&mut command);
-        }
+        crate::platform::background(&mut command, cmd.own_group);
 
         let mut child = command
             .spawn()

@@ -1476,7 +1476,10 @@ fn fit(text: &str, width: usize) -> String {
 fn copy(text: &str) -> String {
     use std::process::{Command, Stdio};
     for (tool, args) in crate::platform::CLIPBOARD {
-        if let Ok(mut child) = Command::new(tool).args(*args).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+        let mut command = Command::new(tool);
+        command.args(*args).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null());
+        crate::platform::background(&mut command, false);
+        if let Ok(mut child) = command.spawn() {
             if let Some(mut stdin) = child.stdin.take() {
                 let _ = stdin.write_all(text.as_bytes());
             }

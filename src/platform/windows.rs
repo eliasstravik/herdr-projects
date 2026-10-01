@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 
-const DETACHED_PROCESS: u32 = 0x0000_0008;
 const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
 
 /// Herdr names its pipe after the socket path, through `interprocess`'s
@@ -35,8 +35,21 @@ pub fn socket_round_trip(socket: &Path, line: &str, timeout: Duration) -> Result
     receiver.recv_timeout(timeout).map_err(|_| anyhow!("{} did not answer within {} ms", socket.display(), timeout.as_millis()))?
 }
 
+/// Not DETACHED_PROCESS: a process with no console gives every console
+/// program it starts (git, gh, herdr) a new, visible console window, which
+/// flashes up on each run, and Windows ignores CREATE_NO_WINDOW next to
+/// DETACHED_PROCESS. CREATE_NO_WINDOW instead gives the process a console of
+/// its own that is never shown, which its children share; like
+/// DETACHED_PROCESS, it leaves the starting console, so closing that pane
+/// does not end it.
+const DETACH_FLAGS: u32 = CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP;
+
+fn background_flags(own_group: bool) -> u32 {
+    CREATE_NO_WINDOW | if own_group { CREATE_NEW_PROCESS_GROUP } else { 0 }
+}
+
 pub fn detach(command: &mut Command) {
-    command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+    command.creation_flags(DETACH_FLAGS);
     // Rust starts every child with handle inheritance on, so the detached
     // child would also inherit this process's own standard handles. When
     // herdr runs us with pipes (the startup hook), the ticker would then hold
@@ -55,15 +68,18 @@ pub fn detach(command: &mut Command) {
     }
 }
 
-pub fn own_group(command: &mut Command) {
-    command.creation_flags(CREATE_NEW_PROCESS_GROUP);
+pub fn background(command: &mut Command, own_group: bool) {
+    command.creation_flags(background_flags(own_group));
 }
 
 pub fn kill_tree(child: &mut Child, own_group: bool) {
     if own_group {
         // Grandchildren hold the pipes open; killing only the child would
         // leave readers hanging.
-        let _ = Command::new("taskkill").args(["/T", "/F", "/PID", &child.id().to_string()]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        let mut taskkill = Command::new("taskkill");
+        taskkill.args(["/T", "/F", "/PID", &child.id().to_string()]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        background(&mut taskkill, false);
+        let _ = taskkill.status();
     }
     let _ = child.kill();
 }
@@ -283,12 +299,76 @@ mod tests {
         // cmd starts ping, which would run for ten seconds; taskkill /T ends both.
         let mut command = Command::new("cmd");
         command.args(["/d", "/c", "ping -n 10 127.0.0.1 >NUL"]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
-        own_group(&mut command);
+        background(&mut command, true);
         let mut child = command.spawn().unwrap();
         std::thread::sleep(Duration::from_millis(300));
         let start = std::time::Instant::now();
         kill_tree(&mut child, true);
         child.wait().unwrap();
         assert!(start.elapsed() < Duration::from_secs(5));
+    }
+
+    #[test]
+    fn background_children_never_get_a_console_window() {
+        assert_eq!(background_flags(false), CREATE_NO_WINDOW);
+        assert_eq!(background_flags(true), CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
+        // Windows ignores CREATE_NO_WINDOW next to DETACHED_PROCESS (0x8).
+        assert_eq!(DETACH_FLAGS, CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
+        assert_eq!(DETACH_FLAGS & 0x0000_0008, 0);
+    }
+
+    /// A PowerShell script that writes the state of its console window
+    /// (`none`, `hidden` or `visible`) to `state.txt` in `dir`, and the
+    /// arguments that run it.
+    fn console_probe(dir: &Path) -> Vec<String> {
+        let script = dir.join("probe.ps1");
+        std::fs::write(
+            &script,
+            format!(
+                "Add-Type -Namespace Probe -Name Console -MemberDefinition '[DllImport(\"kernel32.dll\")] public static extern System.IntPtr GetConsoleWindow(); [DllImport(\"user32.dll\")] public static extern bool IsWindowVisible(System.IntPtr window);'\r\n\
+                 $window = [Probe.Console]::GetConsoleWindow()\r\n\
+                 $state = if ($window -eq [System.IntPtr]::Zero) {{ 'none' }} elseif ([Probe.Console]::IsWindowVisible($window)) {{ 'visible' }} else {{ 'hidden' }}\r\n\
+                 Set-Content -NoNewline -LiteralPath '{}' -Value $state\r\n",
+                dir.join("state.txt").display()
+            ),
+        )
+        .unwrap();
+        ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"].into_iter().map(String::from).chain([script.to_string_lossy().into_owned()]).collect()
+    }
+
+    fn probed_state(dir: &Path) -> String {
+        std::fs::read_to_string(dir.join("state.txt")).unwrap().trim().to_string()
+    }
+
+    /// Runs [`console_probe`] with the flags `configure` sets.
+    fn console_window_of(configure: impl FnOnce(&mut Command)) -> String {
+        let dir = tempfile::tempdir().unwrap();
+        let mut command = Command::new("powershell");
+        command.args(console_probe(dir.path())).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        configure(&mut command);
+        command.spawn().unwrap().wait().unwrap();
+        probed_state(dir.path())
+    }
+
+    #[test]
+    fn background_and_detached_children_have_no_visible_console_window() {
+        for own_group in [false, true] {
+            let state = console_window_of(|command| background(command, own_group));
+            assert_ne!(state, "visible", "background(own_group: {own_group})");
+        }
+        let state = console_window_of(detach);
+        assert_ne!(state, "visible", "detach");
+    }
+
+    #[test]
+    fn the_runner_starts_commands_without_a_visible_console_window() {
+        use crate::runner::{Cmd, RealRunner, Runner as _};
+        for own_group in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let mut cmd = Cmd::new("powershell", Duration::from_secs(60)).args(console_probe(dir.path()));
+            cmd.own_group = own_group;
+            assert!(RealRunner.run(&cmd).unwrap().success());
+            assert_ne!(probed_state(dir.path()), "visible", "own_group: {own_group}");
+        }
     }
 }

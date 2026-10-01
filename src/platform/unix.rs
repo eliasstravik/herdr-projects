@@ -36,8 +36,10 @@ pub fn detach(command: &mut Command) {
     }
 }
 
-pub fn own_group(command: &mut Command) {
-    command.process_group(0);
+pub fn background(command: &mut Command, own_group: bool) {
+    if own_group {
+        command.process_group(0);
+    }
 }
 
 pub fn kill_tree(child: &mut Child, own_group: bool) {

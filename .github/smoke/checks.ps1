@@ -375,6 +375,23 @@ function Test-Routines {
         '+++',
         "Smoke routine with $shellName."
     ) -join "`n" | Set-Content -NoNewline -Encoding utf8 (Join-Path $dir "smoke-shell.md")
+    $names = @("smoke-none", "smoke-shell")
+    if ($IsWindows) {
+        # Windows: the ticker runs with no console of its own to show. A
+        # console program it starts without CREATE_NO_WINDOW gets a new,
+        # visible console window, which flashes up on every run. This routine
+        # reports the console window it runs in.
+        $probe = 'Add-Type -Namespace Smoke -Name Console -MemberDefinition ''[DllImport("kernel32.dll")] public static extern System.IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr window);''; $window = [Smoke.Console]::GetConsoleWindow(); $state = if ($window -eq [System.IntPtr]::Zero) { "none" } elseif ([Smoke.Console]::IsWindowVisible($window)) { "visible" } else { "hidden" }; Write-Output "SMOKE-CONSOLE-$state"'
+        @(
+            '+++',
+            'schedule = "every 1m"',
+            'shell = "pwsh"',
+            "command = '''$probe'''",
+            '+++',
+            'Smoke routine that reports its console window.'
+        ) -join "`n" | Set-Content -NoNewline -Encoding utf8 (Join-Path $dir "smoke-console.md")
+        $names += "smoke-console"
+    }
 
     # `safety set` and `routine approve` refuse without a terminal, so they
     # are typed into a herdr pane, as a person would.
@@ -384,7 +401,7 @@ function Test-Routines {
         Wait-Until "the y/N question" 30 { (Read-Pane $term) -match "\[y/N\]" } | Out-Null
         Send-PaneLine $term "y"
         Wait-Until "routine_commands on" 30 { (Read-Pane $term) -match "routine_commands = on" } | Out-Null
-        foreach ($name in @("smoke-none", "smoke-shell")) {
+        foreach ($name in $names) {
             $before = ([regex]::Matches((Read-Pane $term), "Type the routine's name")).Count
             Send-PaneLine $term "$env:HP_EXE routine approve smoke $name"
             Wait-Until "the approve question for $name" 30 { ([regex]::Matches((Read-Pane $term), "Type the routine's name")).Count -gt $before } | Out-Null
@@ -392,8 +409,8 @@ function Test-Routines {
             Wait-Until "$name approved" 30 { (Read-Pane $term) -match "approved ``$name``" } | Out-Null
         }
         $list = Invoke-Checked $env:HP_EXE @("routine", "list", "smoke")
-        if (([regex]::Matches($list, "command: approved")).Count -lt 2) { throw "routine list: $list" }
-        "both approved"
+        if (([regex]::Matches($list, "command: approved")).Count -lt $names.Count) { throw "routine list: $list" }
+        "$($names.Count) approved"
     }
     # The ticker runs a due routine on its 15 s tick; the first run of an
     # `every 1m` routine is one minute after the ticker first sees it, so this
@@ -413,6 +430,16 @@ function Test-Routines {
         $item = Wait-Until "an inbox item with SMOKE-SHELL-42" 30 { Find-Item "SMOKE-SHELL-42" } -IntervalMs 5000
         Get-Content -Raw -LiteralPath $item.FullName | Write-Host
         $item.Name
+    }
+    if ($IsWindows) {
+        Invoke-Check "routine runs without a visible console window" {
+            $item = Wait-Until "an inbox item with SMOKE-CONSOLE-" 30 { Find-Item "SMOKE-CONSOLE-" } -IntervalMs 5000
+            $text = Get-Content -Raw -LiteralPath $item.FullName
+            Write-Host $text
+            $state = [regex]::Match($text, "SMOKE-CONSOLE-\w+").Value
+            if ($state -notin @("SMOKE-CONSOLE-none", "SMOKE-CONSOLE-hidden")) { throw "the routine ran in a visible console window: $state" }
+            $state
+        }
     }
 }
 
