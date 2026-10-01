@@ -1,0 +1,178 @@
+# End-to-end smoke test on Windows, macOS and Linux: a headless herdr server,
+# the plugin linked from this checkout, a stub `claude`, and the paths a user
+# goes through: project, coordinator, thread and brief, ticker, links, hooks,
+# routines and doctor. Unit tests stay in ci.yml; this checks that the pieces
+# work together under a real herdr. (Until 2026-10 this was windows-smoke.yml,
+# Windows only.)
+#
+# The checks live in .github/smoke/checks.ps1, one function per step, in
+# PowerShell, which every runner has; what differs by platform is marked
+# there. The stub and the helpers sit beside it. Each check is its own step
+# with a short timeout, and the first failing check stops the job: later
+# checks build on earlier ones (no thread without a coordinator). Only the
+# job summary (one table of the checks that ran), collecting logs, uploading
+# them and stopping the server always run. Run it by hand with "Run
+# workflow", and tick "tmate" to get a shell on the runner (only you can
+# connect) before the server is stopped.
+name: Smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tmate:
+        description: "Open a tmate session (only you can connect) before the server is stopped"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  smoke:
+    name: smoke (${{ matrix.os }})
+    strategy:
+      # One platform failing must not cancel the others.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    # Not required while it stabilises: a failure shows on the pull request
+    # but does not block it.
+    continue-on-error: true
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      HERDR_SESSION: ci-smoke
+      # herdr-projects counts a claude profile as signed in only when this is
+      # set; the stub never uses it.
+      CLAUDE_CODE_OAUTH_TOKEN: dummy-smoke-test-token
+      HERDR_LOG: herdr=debug
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: smoke-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: smoke-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Build herdr-projects
+        run: cargo build --release --locked
+
+      - name: Set up folders and environment
+        run: . .github/smoke/checks.ps1; Initialize-Smoke
+
+      - name: Install herdr
+        run: . .github/smoke/checks.ps1; Install-Herdr
+
+      - name: Build the stub claude
+        run: . .github/smoke/checks.ps1; Build-Stub
+
+      - name: Link the plugin
+        timeout-minutes: 2
+        run: . .github/smoke/checks.ps1; Connect-Plugin
+
+      - name: Create the project
+        timeout-minutes: 2
+        run: . .github/smoke/checks.ps1; Test-ProjectCreated
+
+      - name: Start the herdr server
+        timeout-minutes: 2
+        run: . .github/smoke/checks.ps1; Start-HerdrServer
+
+      - name: "Check: a pane finds the stub"
+        timeout-minutes: 2
+        run: . .github/smoke/checks.ps1; Test-PaneFindsStub
+
+      - name: "Check: startup hook starts the ticker"
+        timeout-minutes: 2
+        run: . .github/smoke/checks.ps1; Test-StartupHook
+
+      - name: "Check: ticker survives after the startup hook exits"
+        timeout-minutes: 2
+        run: . .github/smoke/checks.ps1; Test-TickerSurvives
+
+      - name: Configure hooks and skill
+        timeout-minutes: 2
+        run: . .github/smoke/checks.ps1; Test-Configure
+
+      - name: "Check: open the coordinator"
+        timeout-minutes: 3
+        run: . .github/smoke/checks.ps1; Test-Coordinator
+
+      - name: "Check: thread start and brief"
+        timeout-minutes: 4
+        run: . .github/smoke/checks.ps1; Test-ThreadAndBrief
+
+      - name: "Check: ticker still the same process"
+        timeout-minutes: 1
+        run: . .github/smoke/checks.ps1; Test-SameTicker
+
+      - name: "Check: command link, skill link, CLAUDE.md"
+        timeout-minutes: 2
+        run: . .github/smoke/checks.ps1; Test-Links
+
+      - name: "Check: hook command and progress report"
+        timeout-minutes: 2
+        run: . .github/smoke/checks.ps1; Test-HooksAndReport
+
+      - name: "Check: routines without a shell and with one"
+        timeout-minutes: 5
+        run: . .github/smoke/checks.ps1; Test-Routines
+
+      - name: "Check: doctor"
+        timeout-minutes: 2
+        run: . .github/smoke/checks.ps1; Test-Doctor
+
+      - name: Job summary
+        if: ${{ always() }}
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: . .github/smoke/checks.ps1; Write-Summary
+
+      - name: tmate debug session
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.tmate }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+
+      - name: Collect logs and state
+        if: ${{ always() }}
+        run: . .github/smoke/checks.ps1; Save-SmokeLogs
+
+      - name: Upload logs and state
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/smoke-artifacts
+          if-no-files-found: warn
+          # .state/ and .ticker.log are dotfiles.
+          include-hidden-files: true
+
+      - name: Stop the server and the ticker
+        if: ${{ always() }}
+        run: . .github/smoke/checks.ps1; Stop-Smoke

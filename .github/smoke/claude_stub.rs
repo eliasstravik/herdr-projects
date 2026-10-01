@@ -1,17 +1,20 @@
-//! A stand-in for Claude Code in the Windows smoke test (windows-smoke.yml).
-//! Built with plain `rustc` into a real `claude.exe`, because herdr's
-//! `agent start --kind claude` waits for a process named `claude` in the pane;
-//! a `.cmd` or `.ps1` stub would show up as `cmd` or `pwsh`.
+//! A stand-in for Claude Code in the smoke test (smoke.yml), on Windows,
+//! macOS and Linux. Built with plain `rustc` into a real `claude` (`claude.exe`
+//! on Windows), because herdr's `agent start --kind claude` waits for a
+//! process named `claude` in the pane; a script would show up as `sh`, `cmd`
+//! or `pwsh`.
 //!
 //! It does what herdr-projects needs from Claude Code and nothing else:
 //! - reports its own state with `herdr pane report-agent` (idle, working);
 //! - draws an empty Claude-style input box (`❯` between two rules), which is
 //!   how herdr-projects decides the brief can be typed;
 //! - runs the hook command `configure` wrote into `.claude/settings.json` for
-//!   SessionStart, UserPromptSubmit and PostToolUse, the way Claude Code does
-//!   on Windows: in Git Bash when it is installed, else in PowerShell;
-//! - for every prompt, runs `herdr-projects report` through the `.cmd` shim,
-//!   as an agent following the progress instructions would.
+//!   SessionStart, UserPromptSubmit and PostToolUse, the way Claude Code does:
+//!   with `/bin/sh` on Unix; on Windows in Git Bash when it is installed, else
+//!   in PowerShell;
+//! - for every prompt, runs `herdr-projects report` through the command on
+//!   `PATH` (the link on Unix, the `.cmd` shim on Windows), as an agent
+//!   following the progress instructions would.
 //!
 //! Everything it sees goes to `$STUB_LOG_DIR/<pane id>.log`, which the
 //! workflow reads for its checks.
@@ -66,19 +69,27 @@ fn main() {
             r#"{{"hook_event_name":"UserPromptSubmit","session_id":"{session}","prompt":{}}}"#,
             json_string(&text)
         ));
-        // What an agent following the SessionStart instructions does first.
-        let status = Command::new("cmd")
-            .args(["/d", "/c", "herdr-projects", "report", "--percent", "50", "--activity", "Stub working"])
-            .stdin(Stdio::null())
-            .output();
-        match status {
+        // What an agent following the SessionStart instructions does first,
+        // by name, so the command on PATH runs: on Windows `cmd` finds the
+        // `.cmd` shim through PATHEXT.
+        let report_args = ["herdr-projects", "report", "--percent", "50", "--activity", "Stub working"];
+        let mut command = if cfg!(windows) {
+            let mut command = Command::new("cmd");
+            command.args(["/d", "/c"]).args(report_args);
+            command
+        } else {
+            let mut command = Command::new(report_args[0]);
+            command.args(&report_args[1..]);
+            command
+        };
+        match command.stdin(Stdio::null()).output() {
             Ok(out) => log.line(&format!(
-                "report via shim: exit={:?} stdout={:?} stderr={:?}",
+                "report via command: exit={:?} stdout={:?} stderr={:?}",
                 out.status.code(),
                 String::from_utf8_lossy(&out.stdout).trim(),
                 String::from_utf8_lossy(&out.stderr).trim()
             )),
-            Err(error) => log.line(&format!("report via shim: could not run cmd: {error}")),
+            Err(error) => log.line(&format!("report via command: could not run it: {error}")),
         }
         run_hook(&log, hook.as_deref(), &format!(
             r#"{{"hook_event_name":"PostToolUse","session_id":"{session}","tool_name":"Bash","tool_input":{{"command":"ls"}}}}"#
@@ -134,7 +145,7 @@ fn report(log: &Log, pane: &str, state: &str) {
 fn hook_command(log: &Log) -> Option<String> {
     let dir = std::env::var("CLAUDE_CONFIG_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from(std::env::var("USERPROFILE").unwrap_or_default()).join(".claude"));
+        .unwrap_or_else(|_| PathBuf::from(std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default()).join(".claude"));
     let path = dir.join("settings.json");
     let Ok(text) = std::fs::read_to_string(&path) else {
         log.line(&format!("hook: no {}", path.display()));
@@ -155,23 +166,26 @@ fn hook_command(log: &Log) -> Option<String> {
     None
 }
 
-/// Runs the hook as Claude Code does on Windows: Git Bash when installed
-/// (CLAUDE_CODE_GIT_BASH_PATH, else Git's default folder), else PowerShell.
+/// Runs the hook as Claude Code does: `/bin/sh -c` on Unix; on Windows Git
+/// Bash when installed (CLAUDE_CODE_GIT_BASH_PATH, else Git's default
+/// folder), else PowerShell.
 fn run_hook(log: &Log, command: Option<&str>, event: &str) {
     let Some(command) = command else { return };
     let bash = std::env::var("CLAUDE_CODE_GIT_BASH_PATH")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(r"C:\Program Files\Git\bin\bash.exe"));
-    let mut cmd = if bash.is_file() {
-        let mut cmd = Command::new(&bash);
-        cmd.args(["-c", command]);
-        cmd
+    let (shell, program, flag) = if !cfg!(windows) {
+        ("sh", PathBuf::from("/bin/sh"), "-c")
+    } else if bash.is_file() {
+        ("bash", bash, "-c")
     } else {
-        let mut cmd = Command::new("powershell");
-        cmd.args(["-NoProfile", "-Command", command]);
-        cmd
+        ("powershell", PathBuf::from("powershell"), "-Command")
     };
-    let shell = if bash.is_file() { "bash" } else { "powershell" };
+    let mut cmd = Command::new(&program);
+    if shell == "powershell" {
+        cmd.arg("-NoProfile");
+    }
+    cmd.args([flag, command]);
     let child = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn();
     let mut child = match child {
         Ok(child) => child,

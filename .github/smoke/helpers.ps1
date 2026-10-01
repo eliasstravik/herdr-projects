@@ -1,6 +1,12 @@
-# Shared by the steps of windows-smoke.yml: dot-source it at the top of a step.
+# Generic helpers for smoke.yml, dot-sourced by checks.ps1. Runs under pwsh
+# on Windows, macOS and Linux.
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+
+# What differs by platform, in one place.
+$Exe = if ($IsWindows) { ".exe" } else { "" }
+# Herdr's config folder: %APPDATA%\herdr on Windows, ~/.config/herdr on Unix.
+$ConfigHome = if ($IsWindows) { $env:APPDATA } else { Join-Path $HOME ".config" }
 
 # Runs a native command, prints its output, and throws on a non-zero exit.
 function Invoke-Checked {
@@ -58,12 +64,29 @@ function Wait-Until {
     }
 }
 
-# One line in the job summary per check.
+# One row per check in $env:SMOKE_RESULTS, a file in RUNNER_TEMP. Each step
+# has its own GITHUB_STEP_SUMMARY and GitHub shows them as separate blocks,
+# so a table split across steps renders as text: Write-Summary turns the rows
+# into one table at the end of the job.
 function Add-Result {
     param([string] $Check, [bool] $Passed, [string] $Detail = "")
-    $mark = if ($Passed) { "pass" } else { "FAIL" }
-    $line = "| $Check | $mark | $($Detail -replace '\|', '\|' -replace "`r?`n", ' ') |"
-    Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $line -Encoding utf8
+    $mark = if ($Passed) { "✅ pass" } else { "❌ FAIL" }
+    $cells = @($Check, $mark, $Detail) | ForEach-Object { ($_ -replace "\s*`r?`n\s*", " " -replace '\|', '\|').Trim() }
+    Add-Content -LiteralPath $env:SMOKE_RESULTS -Value "| $($cells -join ' | ') |" -Encoding utf8
+}
+
+# The job summary: one table with every result, in one step, so it renders.
+function Write-Summary {
+    $rows = @()
+    if ($env:SMOKE_RESULTS -and (Test-Path -LiteralPath $env:SMOKE_RESULTS)) {
+        $rows = @(Get-Content -LiteralPath $env:SMOKE_RESULTS -Encoding utf8 | Where-Object { $_.Trim() })
+    }
+    $lines = @("### Smoke checks on $env:RUNNER_OS", "", "| Check | Result | Detail |", "|---|---|---|") + $rows
+    # A step outside Invoke-Check (setup, the server) failed: say so in the table.
+    if ($env:JOB_STATUS -and $env:JOB_STATUS -ne "success" -and -not ($rows -match "❌")) {
+        $lines += "| (a step that is not a check) | ❌ FAIL | job $env:JOB_STATUS; see the failed step's log |"
+    }
+    Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value ($lines -join "`n") -Encoding utf8
 }
 
 # Runs one check: the body throws to fail. Records the result in the job
