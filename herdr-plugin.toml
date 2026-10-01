@@ -3,10 +3,9 @@ name = "Projects"
 version = "0.2.34"
 min_herdr_version = "0.9.1"
 description = "A coordinator conversation, parallel worker threads, shared memory and an overview of what needs you."
-# "windows" is added here only once the Windows CI smoke test passes. Until
-# then the Windows [[build]] below runs, but herdr refuses the actions, panes
-# and startup on Windows, which inherit this list.
-platforms = ["macos", "linux"]
+# Windows support is experimental. The two [[build]] entries keep their own
+# lists: each runs its OS's install script.
+platforms = ["macos", "linux", "windows"]
 
 [[build]]
 # Downloads the release binary; falls back to `cargo build --release --locked`.

@@ -67,26 +67,6 @@ function Build-Stub {
 }
 
 function Connect-Plugin {
-    if ($IsWindows) {
-        # Windows: "windows" stays out of the manifest's top-level `platforms`
-        # until this smoke test passes reliably (decided 2026-10-01). Until
-        # then herdr skips the plugin's actions, panes and startup hook on
-        # Windows, so this job adds it in its own checkout only. Remove this
-        # patch once the manifest lists "windows".
-        $manifest = Join-Path $env:GITHUB_WORKSPACE "herdr-plugin.toml"
-        $lines = [System.IO.File]::ReadAllLines($manifest)
-        $patched = $false
-        for ($i = 0; $i -lt $lines.Length; $i++) {
-            if ($lines[$i].StartsWith("[[")) { break }  # top level only, not [[build]] entries
-            if ($lines[$i] -match '^platforms\s*=\s*\[(.*)\]\s*$') {
-                if ($Matches[1] -notmatch '"windows"') { $lines[$i] = "platforms = [$($Matches[1]), `"windows`"]" }
-                $patched = $true
-                break
-            }
-        }
-        if (-not $patched) { throw "no top-level platforms in herdr-plugin.toml" }
-        [System.IO.File]::WriteAllLines($manifest, $lines)
-    }
     Select-String -Path (Join-Path $env:GITHUB_WORKSPACE "herdr-plugin.toml") -Pattern '^platforms' | Select-Object -First 1 | ForEach-Object { Write-Host $_.Line }
     # `plugin link`, not `plugin install`: install hits herdr#4179 on
     # Windows, and link tests this checkout everywhere. Linking before the
