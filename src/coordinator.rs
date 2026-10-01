@@ -523,6 +523,12 @@ pub fn context(ctx: &Ctx, slug: &str, peek: bool) -> Result<()> {
     Ok(())
 }
 
+/// The user's local time and zone. Records, inbox ids and GitHub give times in
+/// UTC (`…Z`); without this line an agent passes them on as if local.
+fn now_line(now: &jiff::Zoned) -> String {
+    format!("Now: {} (times ending in `Z` are UTC: give the user local times)\n", now.strftime("%Y-%m-%d %H:%M %Z, UTC%:z, %Q"))
+}
+
 /// The digest and the ids of the inbox items it showed.
 pub fn digest(ctx: &Ctx, project: &Project, prefix: &str) -> Result<(String, Vec<String>)> {
     let mut out = String::new();
@@ -530,6 +536,7 @@ pub fn digest(ctx: &Ctx, project: &Project, prefix: &str) -> Result<(String, Vec
     let _ = writeln!(out, "Commands: {prefix}");
     let _ = writeln!(out, "Project: {slug} ({})", project.status());
     let _ = writeln!(out, "Folder: {}", project.dir().display());
+    out.push_str(&now_line(&jiff::Zoned::now()));
 
     match project.read_project_md() {
         Ok((settings, _)) => {
@@ -692,5 +699,13 @@ mod tests {
         ];
         assert_eq!(nudge_target(&panes, now).unwrap().pane_id, "w1:p2");
         assert!(nudge_target(&panes[2..], now).is_none());
+    }
+
+    #[test]
+    fn the_now_line_gives_local_time_with_its_zone() {
+        let now: jiff::Zoned = "2026-10-01T13:54:00Z".parse::<jiff::Timestamp>().unwrap().in_tz("Europe/Amsterdam").unwrap();
+        assert_eq!(now_line(&now), "Now: 2026-10-01 15:54 CEST, UTC+02:00, Europe/Amsterdam (times ending in `Z` are UTC: give the user local times)\n");
+        let utc: jiff::Zoned = "2026-10-01T13:54:00+00:00[UTC]".parse().unwrap();
+        assert_eq!(now_line(&utc), "Now: 2026-10-01 13:54 UTC, UTC+00:00, UTC (times ending in `Z` are UTC: give the user local times)\n");
     }
 }
