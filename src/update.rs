@@ -7,8 +7,8 @@
 //!   when that passes, at the same plugin root, so the old binary keeps working
 //!   on a failure.
 //! - `herdr plugin link` to a git checkout: `git pull --ff-only` on `main`, then
-//!   the same build step, `scripts/install.sh`. It replaces the binary only when
-//!   the download or the build succeeds.
+//!   the same build step, `scripts/install.sh` (`scripts/install.ps1` on
+//!   Windows). It replaces the binary only when the download or the build succeeds.
 //!
 //! The build step downloads the release's prebuilt binary and falls back to
 //! `cargo build --release --locked`.
@@ -145,7 +145,18 @@ pub fn newer_release(runner: &dyn Runner, root: Option<&Path>) -> Option<Version
 }
 
 fn binary_in(root: &Path) -> PathBuf {
-    root.join("target/release/herdr-projects")
+    root.join("target/release").join(format!("herdr-projects{}", std::env::consts::EXE_SUFFIX))
+}
+
+/// The manifest's build step for this OS, run in a linked checkout.
+fn install_cmd(root: &Path) -> Cmd {
+    if cfg!(windows) {
+        Cmd::new("powershell", BUILD_TIMEOUT)
+            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/install.ps1"])
+            .cwd(root)
+    } else {
+        Cmd::new("sh", BUILD_TIMEOUT).arg("scripts/install.sh").cwd(root)
+    }
 }
 
 /// The release of the binary at `binary`, from its `--version`.
@@ -204,8 +215,9 @@ fn fetch_and_build(ctx: &Ctx, herdr: &Herdr, install: &Install, latest: Version)
             if !out.success() {
                 bail!("`git pull --ff-only origin main` failed: {}", out.error_text());
             }
-            println!("installing the binary (scripts/install.sh: the prebuilt download, or a source build when there is none)…");
-            let out = ctx.runner.run(&Cmd::new("sh", BUILD_TIMEOUT).arg("scripts/install.sh").cwd(root))?;
+            let script = if cfg!(windows) { "scripts/install.ps1" } else { "scripts/install.sh" };
+            println!("installing the binary ({script}: the prebuilt download, or a source build when there is none)…");
+            let out = ctx.runner.run(&install_cmd(root))?;
             if !out.success() {
                 bail!("the install failed:\n{}", tail(&format!("{}\n{}", out.stdout, out.stderr)));
             }
@@ -313,9 +325,9 @@ mod tests {
 
     #[test]
     fn a_github_install_is_detected_with_its_repository() {
-        let json = list(r#"{"kind":"github","owner":"eliasstravik","repo":"herdr-projects","managed_path":"/p/root","resolved_commit":"abc","requested_ref":"v0.2.2"}"#);
+        let json = list(r#"{"kind":"github","owner":"theclifmeister","repo":"herdr-projects","managed_path":"/p/root","resolved_commit":"abc","requested_ref":"v0.2.2"}"#);
         let install = parse_install(&json).unwrap();
-        assert_eq!(install, Install::Github { root: "/p/root".into(), repo: "eliasstravik/herdr-projects".into() });
+        assert_eq!(install, Install::Github { root: "/p/root".into(), repo: "theclifmeister/herdr-projects".into() });
     }
 
     #[test]
@@ -323,6 +335,18 @@ mod tests {
         let empty = r#"{"id":"cli:plugin","result":{"plugins":[],"type":"plugin_list"}}"#;
         assert!(parse_install(empty).unwrap_err().to_string().contains("no plugin"));
         assert!(parse_install(&list(r#"{"kind":"archive"}"#)).is_err());
+    }
+
+    #[test]
+    fn a_linked_checkout_runs_the_install_script_for_its_os() {
+        let shown = install_cmd(Path::new("/p/root")).display();
+        if cfg!(windows) {
+            assert!(shown.starts_with("powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install.ps1"), "{shown}");
+            assert!(binary_in(Path::new("/p/root")).ends_with("release/herdr-projects.exe"));
+        } else {
+            assert!(shown.starts_with("sh scripts/install.sh"), "{shown}");
+            assert!(binary_in(Path::new("/p/root")).ends_with("release/herdr-projects"));
+        }
     }
 
     #[test]

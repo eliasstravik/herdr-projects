@@ -76,7 +76,7 @@ if [ -n "${HERDR_PROJECTS_DOWNLOAD_URL:-}" ]; then
   base="${HERDR_PROJECTS_DOWNLOAD_URL%/}/$tag"
 else
   repo=$(printf '%s\n' "$origin" | sed -n 's#^.*github\.com[:/]\([^/]*/[^/]*\)$#\1#p' | sed 's#\.git$##')
-  base="https://github.com/${repo:-eliasstravik/herdr-projects}/releases/download/$tag"
+  base="https://github.com/${repo:-theclifmeister/herdr-projects}/releases/download/$tag"
 fi
 
 if command -v curl >/dev/null 2>&1; then
