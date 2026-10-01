@@ -189,7 +189,7 @@ if ($env:HERDR_PROJECTS_DOWNLOAD_URL) {
 } else {
   $repo = $null
   if ($origin -and ($origin -match 'github\.com[:/]([^/]+/[^/]+)$')) { $repo = $Matches[1] -replace '\.git$', '' }
-  if (-not $repo) { $repo = 'theclifmeister/herdr-projects' }
+  if (-not $repo) { $repo = 'eliasstravik/herdr-projects' }
   $base = "https://github.com/$repo/releases/download/$tag"
 }
 

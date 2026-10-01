@@ -567,10 +567,9 @@ mod tests {
         let on_host = |cmd: &Cmd| cmd.program == "gh" && cmd.env.contains(&("GH_HOST".into(), "github.localhost".into()));
         for reachable in [true, false] {
             let runner = FakeRunner::new();
-            runner.on_fn(|cmd| cmd.display().ends_with("app remote get-url origin"), |_| Ok(ok("http://github.localhost/theclifmeister/app.git
-")));
+            runner.on_fn(|cmd| cmd.display().ends_with("app remote get-url origin"), |_| Ok(ok("http://github.localhost/eliasstravik/app.git\n")));
             if reachable {
-                runner.on_fn(on_host, |_| Ok(ok("theclifmeister\n")));
+                runner.on_fn(on_host, |_| Ok(ok("eliasstravik\n")));
             }
             runner.on("gh api user", fail(1, "HTTP 401: Requires authentication"));
             for (needle, output) in [("herdr --version", "herdr 0.9.1\n"), ("git --version", "git 2\n"), ("gh --version", "gh 2\n")] {
@@ -578,9 +577,9 @@ mod tests {
             }
             let (text, _) = report(&env, &root, &home.path().join("cfg"), &SessionFlags::default(), &runner, false, None);
             if reachable {
-                assert!(text.contains("[ok  ] github github.localhost: reachable as theclifmeister (GH_HOST=github.localhost, used for theclifmeister/app)"), "{text}");
+                assert!(text.contains("[ok  ] github github.localhost: reachable as eliasstravik (GH_HOST=github.localhost, used for eliasstravik/app)"), "{text}");
             } else {
-                assert!(text.contains("[warn] github github.localhost: gh cannot reach github.localhost (HTTP 401: Requires authentication); pull requests of theclifmeister/app are not followed. Try `GH_HOST=github.localhost gh auth status`"), "{text}");
+                assert!(text.contains("[warn] github github.localhost: gh cannot reach github.localhost (HTTP 401: Requires authentication); pull requests of eliasstravik/app are not followed. Try `GH_HOST=github.localhost gh auth status`"), "{text}");
             }
             assert!(!text.contains("] gh auth:"), "github.com is not in use: {text}");
             assert_eq!(runner.count("gh auth status"), 0);

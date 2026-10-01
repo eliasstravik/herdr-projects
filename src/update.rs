@@ -325,9 +325,9 @@ mod tests {
 
     #[test]
     fn a_github_install_is_detected_with_its_repository() {
-        let json = list(r#"{"kind":"github","owner":"theclifmeister","repo":"herdr-projects","managed_path":"/p/root","resolved_commit":"abc","requested_ref":"v0.2.2"}"#);
+        let json = list(r#"{"kind":"github","owner":"eliasstravik","repo":"herdr-projects","managed_path":"/p/root","resolved_commit":"abc","requested_ref":"v0.2.2"}"#);
         let install = parse_install(&json).unwrap();
-        assert_eq!(install, Install::Github { root: "/p/root".into(), repo: "theclifmeister/herdr-projects".into() });
+        assert_eq!(install, Install::Github { root: "/p/root".into(), repo: "eliasstravik/herdr-projects".into() });
     }
 
     #[test]
