@@ -4,7 +4,7 @@
 //! never need `cfg`; each function names its Unix and Windows behaviour.
 
 use std::fs::Metadata;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[cfg(unix)]
 mod unix;
@@ -77,6 +77,77 @@ pub use imp::CLIPBOARD;
 /// The program and leading arguments that open a URL or a file with the
 /// user's default application; the target is the last argument.
 pub use imp::OPENER;
+
+/// The files a command `name` may be in one `PATH` folder, in the order a
+/// shell tries them: `dir/name` on Unix; on Windows `dir/name` plus each
+/// `PATHEXT` extension (`claude.cmd`, `gh.exe`), or `dir/name` alone when
+/// `name` already ends in one. An extensionless file on Windows is never a
+/// command (npm puts an `sh` script called `claude` beside `claude.cmd`).
+pub use imp::program_candidates;
+
+/// Whether a file's metadata says it can be run: any execute bit on Unix;
+/// always on Windows, where the extension decides.
+pub use imp::is_executable;
+
+/// Quotes one word of a command line that a local shell runs (the hook
+/// command, the `AGENTS.md` command prefix): POSIX single quotes on Unix; on
+/// Windows double quotes, which `cmd`, Git Bash and the C runtime all read the
+/// same way for a path. Plain words stay bare on both.
+pub use imp::quote_local;
+
+/// A command line for Herdr to run through its shell: unchanged on Unix
+/// (`/bin/sh -lc`); on Windows wrapped in one more pair of double quotes when
+/// it has any, because `cmd.exe /d /c` strips the first and the last quote.
+pub use imp::herdr_shell_line;
+
+/// Adds `arg` to `command` exactly as written on Windows (`raw_arg`), for a
+/// program such as `cmd` that parses its own command line; a plain argument
+/// on Unix.
+pub use imp::verbatim_arg;
+
+/// The variables that name the home folder, in order: `HOME` on Unix; `HOME`
+/// then `USERPROFILE` on Windows (as `std::env::home_dir` does).
+pub use imp::HOME_VARS;
+
+/// The user's home folder from the first of [`HOME_VARS`] that is set.
+pub fn home_dir(var: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
+    HOME_VARS.iter().find_map(|name| var(name).filter(|v| !v.is_empty())).map(PathBuf::from)
+}
+
+/// Where per-user configuration lives: `~/.config` on Unix; `%APPDATA%` (else
+/// `<home>\AppData\Roaming`) on Windows, as Herdr itself decides.
+pub use imp::config_home;
+
+/// Folders where command-line tools are usually installed, appended to a
+/// minimal `PATH`: Homebrew, `/usr/local/bin`, `~/.local/bin` and
+/// `~/.cargo/bin` on Unix; npm's global folder, WinGet's links, Git,
+/// GitHub CLI and `~/.cargo/bin` on Windows.
+pub use imp::extra_path_dirs;
+
+/// The first runnable file for `name` on `path` (a `PATH` value), trying
+/// [`program_candidates`] in each folder in turn.
+pub fn find_program(name: &str, path: &std::ffi::OsStr, pathext: Option<&str>) -> Option<PathBuf> {
+    std::env::split_paths(path)
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .flat_map(|dir| program_candidates(&dir, name, pathext))
+        .find(|file| std::fs::metadata(file).is_ok_and(|m| m.is_file() && is_executable(&m)))
+}
+
+/// What to spawn for `program`: on Unix `program` itself (`Command` searches
+/// `PATH`). On Windows a bare name is looked up through `PATH` and `PATHEXT`,
+/// because `Command` only finds `.exe` files and npm installs `claude`,
+/// `codex` and `opencode` as `.cmd` shims (which `Command` runs when given
+/// their full path). A path, or a name not found, is left as it is.
+pub fn resolve_program(program: &str) -> std::ffi::OsString {
+    if cfg!(windows) && !program.contains(['/', '\\']) {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let pathext = std::env::var("PATHEXT").ok();
+        if let Some(found) = find_program(program, &path, pathext.as_deref()) {
+            return found.into_os_string();
+        }
+    }
+    program.into()
+}
 
 /// Whether `meta` (from `symlink_metadata`) is a link of any kind: a symbolic
 /// link, or on Windows also a junction or any other reparse point. Safety

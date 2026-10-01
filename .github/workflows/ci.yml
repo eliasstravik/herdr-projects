@@ -24,17 +24,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-24.04
-            experimental: false
-          - os: macos-14
-            experimental: false
-          # The crate still uses Unix-only APIs. Remove `experimental: true`
-          # (and so continue-on-error) once the native Windows port lands.
-          - os: windows-2025
-            experimental: true
+        os: [ubuntu-24.04, macos-14, windows-2025]
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.experimental }}
     steps:
       - uses: actions/checkout@v7
 

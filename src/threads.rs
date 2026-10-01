@@ -160,7 +160,7 @@ pub fn start(ctx: &Ctx, slug: &str, args: StartArgs) -> Result<Thread> {
         // A remote path is stored as it is on its own machine.
         (Some(repo), false) => repo.clone(),
         (Some(repo), true) => {
-            let path = std::fs::canonicalize(repo)
+            let path = dunce::canonicalize(repo)
                 .with_context(|| format!("repository {repo} does not exist"))?
                 .to_string_lossy()
                 .into_owned();
@@ -320,7 +320,7 @@ fn place_tab(project: &Project, view: &SessionView, record: &Thread) -> Result<T
         }
         folder
     };
-    let folder = std::fs::canonicalize(&folder)?;
+    let folder = dunce::canonicalize(&folder)?;
     let created = match workspace {
         Some(id) => view.herdr.tab_create(&id, &folder, &record.title, false)?,
         // The coordinator runs in a pane of another workspace: the thread

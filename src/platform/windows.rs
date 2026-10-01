@@ -138,9 +138,95 @@ pub fn is_link(meta: &std::fs::Metadata) -> bool {
     meta.file_type().is_symlink() || meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
 }
 
+const DEFAULT_PATHEXT: &str = ".COM;.EXE;.BAT;.CMD";
+
+pub fn program_candidates(dir: &Path, name: &str, pathext: Option<&str>) -> Vec<PathBuf> {
+    let extensions: Vec<&str> = pathext.filter(|p| !p.trim().is_empty()).unwrap_or(DEFAULT_PATHEXT).split(';').map(str::trim).filter(|e| e.starts_with('.') && e.len() > 1).collect();
+    let lower = name.to_ascii_lowercase();
+    if extensions.iter().any(|ext| lower.ends_with(&ext.to_ascii_lowercase())) {
+        return vec![dir.join(name)];
+    }
+    extensions.iter().map(|ext| dir.join(format!("{name}{}", ext.to_ascii_lowercase()))).collect()
+}
+
+pub fn verbatim_arg(command: &mut Command, arg: &str) {
+    command.raw_arg(arg);
+}
+
+pub fn is_executable(_meta: &std::fs::Metadata) -> bool {
+    true
+}
+
+pub fn quote_local(value: &str) -> String {
+    if crate::remote::is_plain(value) {
+        value.to_string()
+    } else {
+        format!("\"{}\"", value.replace('"', "\\\""))
+    }
+}
+
+pub fn herdr_shell_line(line: String) -> String {
+    if line.contains('"') { format!("\"{line}\"") } else { line }
+}
+
+pub const HOME_VARS: &[&str] = &["HOME", "USERPROFILE"];
+
+pub fn config_home(home: &Path, var: &dyn Fn(&str) -> Option<String>) -> PathBuf {
+    var("APPDATA").filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or_else(|| home.join("AppData").join("Roaming"))
+}
+
+pub fn extra_path_dirs(home: Option<&Path>, var: &dyn Fn(&str) -> Option<String>) -> Vec<PathBuf> {
+    let dir = |name: &str, rest: &[&str]| var(name).filter(|v| !v.is_empty()).map(|base| rest.iter().fold(PathBuf::from(base), |p, part| p.join(part)));
+    let mut dirs: Vec<PathBuf> = [
+        dir("APPDATA", &["npm"]),
+        dir("LOCALAPPDATA", &["Microsoft", "WinGet", "Links"]),
+        dir("ProgramFiles", &["Git", "cmd"]),
+        dir("ProgramFiles", &["GitHub CLI"]),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if let Some(home) = home {
+        dirs.push(home.join(".local").join("bin"));
+        dirs.push(home.join(".cargo").join("bin"));
+    }
+    dirs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pathext_finds_cmd_shims_and_never_the_extensionless_script() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("claude"), "#!/bin/sh\n").unwrap();
+        std::fs::write(dir.path().join("claude.cmd"), "@echo off\r\n").unwrap();
+        let path = dir.path().as_os_str();
+        assert_eq!(crate::platform::find_program("claude", path, Some(".COM;.EXE;.BAT;.CMD")), Some(dir.path().join("claude.cmd")));
+        assert_eq!(crate::platform::find_program("claude", path, None), Some(dir.path().join("claude.cmd")));
+        assert_eq!(crate::platform::find_program("claude.CMD", path, None), Some(dir.path().join("claude.CMD")));
+        assert_eq!(crate::platform::find_program("claude", path, Some(".EXE")), None);
+        assert_eq!(crate::platform::find_program("codex", path, None), None);
+    }
+
+    #[test]
+    fn local_quoting_uses_double_quotes_and_herdr_lines_survive_cmd() {
+        assert_eq!(quote_local("hook"), "hook");
+        assert_eq!(quote_local(r"C:\Users\Jo Doe\hp.exe"), r#""C:\Users\Jo Doe\hp.exe""#);
+        assert_eq!(herdr_shell_line("hp --line".into()), "hp --line");
+        assert_eq!(herdr_shell_line(r#""C:\a b\hp.exe" --root "C:\r""#.into()), r#"""C:\a b\hp.exe" --root "C:\r"""#);
+    }
+
+    #[test]
+    fn home_falls_back_to_userprofile_and_config_to_appdata() {
+        let vars = |pairs: &'static [(&'static str, &'static str)]| move |k: &str| pairs.iter().find(|(n, _)| *n == k).map(|(_, v)| v.to_string());
+        assert_eq!(crate::platform::home_dir(&vars(&[("USERPROFILE", r"C:\Users\jo")])), Some(PathBuf::from(r"C:\Users\jo")));
+        assert_eq!(crate::platform::home_dir(&vars(&[("HOME", r"D:\h"), ("USERPROFILE", r"C:\Users\jo")])), Some(PathBuf::from(r"D:\h")));
+        assert_eq!(config_home(Path::new(r"C:\Users\jo"), &vars(&[("APPDATA", r"C:\Users\jo\AppData\Roaming")])), PathBuf::from(r"C:\Users\jo\AppData\Roaming"));
+        assert_eq!(config_home(Path::new(r"C:\Users\jo"), &vars(&[])), PathBuf::from(r"C:\Users\jo\AppData\Roaming"));
+        assert!(extra_path_dirs(None, &vars(&[("APPDATA", r"C:\A")])).contains(&PathBuf::from(r"C:\A\npm")));
+    }
 
     #[test]
     fn a_junction_is_a_link_for_the_safety_checks() {

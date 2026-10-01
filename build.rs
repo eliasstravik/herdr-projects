@@ -18,4 +18,13 @@ fn main() {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     println!("cargo:rustc-env=HP_BUILD_ID={hash}.{secs}");
+
+    // Windows gives the main thread 1 MB of stack, and the command line
+    // parser overflows it; give the binary the 8 MB macOS and Linux give.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        match std::env::var("CARGO_CFG_TARGET_ENV").as_deref() {
+            Ok("msvc") => println!("cargo:rustc-link-arg-bins=/STACK:8388608"),
+            _ => println!("cargo:rustc-link-arg-bins=-Wl,--stack,8388608"),
+        }
+    }
 }

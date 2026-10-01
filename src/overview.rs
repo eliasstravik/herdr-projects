@@ -60,7 +60,7 @@ pub fn project_for_workspace(ctx: &Ctx, workspace_id: &str, socket: &str) -> Opt
 /// The path with symlinks resolved when it exists (herdr reports physical
 /// working directories).
 fn canonical(path: &str) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path))
+    dunce::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path))
 }
 
 /// The current workspace's project, without asking.
@@ -280,7 +280,7 @@ mod tests {
         world.project("beta", "a.sock");
         let worktree = world.home.path().join("wt");
         std::fs::create_dir_all(&worktree).unwrap();
-        let worktree = worktree.canonicalize().unwrap();
+        let worktree = dunce::canonicalize(&worktree).unwrap();
         // The thread record still says w2; its worktree workspace is now w8.
         world.thread(&alpha, &worktree, |_| {});
         let socket = alpha.coordinator().unwrap().socket;

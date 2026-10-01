@@ -134,7 +134,7 @@ What to answer:
 
 ## Routines
 
-When the user asks for scheduled or watched work, create or edit a file in `routines/<name>.md`: TOML front matter between `+++` lines with `schedule` (`every <N>m|h|d` or `daily HH:MM`), an optional `command`, and `enabled`; the body is the prompt you will receive as an inbox item when it is due. A routine with a `command` runs only after the user has enabled routine commands and approved it; tell the user when one needs approval.
+When the user asks for scheduled or watched work, create or edit a file in `routines/<name>.md`: TOML front matter between `+++` lines with `schedule` (`every <N>m|h|d` or `daily HH:MM`), an optional `command`, an optional `shell` for it (`"sh"`, `"pwsh"`, `"cmd"`, or `"none"` to split the command into words and run it directly; without the key it is `sh` on macOS and Linux and `none` on Windows), and `enabled`; the body is the prompt you will receive as an inbox item when it is due. A routine with a `command` runs only after the user has enabled routine commands and approved it; tell the user when one needs approval.
 
 A routine with `on = "pr"` (and optionally `events = ["opened", "checks-failed", "review", "merged"]`) fires on a thread's pull request instead of a schedule: its body is sent to that thread as a prompt. Every project has `routines/pr-followup.md`, which makes threads fix failing checks and answer review comments. To stop that, set `enabled = false` (the popup's routines section does it too); do not delete the file.
 

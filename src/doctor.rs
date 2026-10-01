@@ -567,7 +567,7 @@ mod tests {
         let on_host = |cmd: &Cmd| cmd.program == "gh" && cmd.env.contains(&("GH_HOST".into(), "github.localhost".into()));
         for reachable in [true, false] {
             let runner = FakeRunner::new();
-            runner.on_fn(|cmd| cmd.display().ends_with("/app remote get-url origin"), |_| Ok(ok("http://github.localhost/eliasstravik/app.git\n")));
+            runner.on_fn(|cmd| cmd.display().ends_with("app remote get-url origin"), |_| Ok(ok("http://github.localhost/eliasstravik/app.git\n")));
             if reachable {
                 runner.on_fn(on_host, |_| Ok(ok("eliasstravik\n")));
             }
@@ -642,7 +642,7 @@ mod tests {
         assert_eq!(crate::setup::skill_state(&link, &moved), crate::setup::SkillState::Ours);
 
         // A directory of the same name is never touched.
-        std::fs::remove_file(&link).unwrap();
+        crate::platform::remove_link(&link).unwrap();
         std::fs::create_dir(&link).unwrap();
         let (text, _) = report(&env, &root, &cfg, &flags, &runner, true, Some(&moved));
         assert!(text.contains("is not this plugin's link"), "{text}");

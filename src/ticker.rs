@@ -33,6 +33,12 @@ fn lock_path(root: &Path) -> PathBuf {
     root.join(".ticker.lock")
 }
 
+/// A copy of the holder's [`Info`] beside the lock: on Windows a locked file
+/// cannot be read through another handle, so a probe reads this instead.
+fn info_path(root: &Path) -> PathBuf {
+    root.join(".ticker.info")
+}
+
 fn stop_path(root: &Path) -> PathBuf {
     root.join(".ticker.stop")
 }
@@ -70,7 +76,9 @@ pub fn lock_state(root: &Path) -> LockState {
         Ok(()) => LockState::Free,
         Err(_) => {
             let mut text = String::new();
-            let _ = file.read_to_string(&mut text);
+            if file.read_to_string(&mut text).is_err() || text.trim().is_empty() {
+                text = std::fs::read_to_string(info_path(root)).unwrap_or_default();
+            }
             LockState::Held(serde_json::from_str(&text).unwrap_or_default())
         }
     }
@@ -180,11 +188,12 @@ pub fn status(root: &Path) -> Result<()> {
 
 /// Where a tool resolves from this process's own `PATH`.
 fn which(tool: &str, path_var: &str) -> String {
-    if tool.contains('/') {
+    if tool.contains('/') || Path::new(tool).is_absolute() {
         return tool.to_string();
     }
+    let pathext = std::env::var("PATHEXT").ok();
     std::env::split_paths(path_var)
-        .map(|dir| dir.join(tool))
+        .flat_map(|dir| crate::platform::program_candidates(&dir, tool, pathext.as_deref()))
         .find(|candidate| candidate.is_file())
         .map(|p| p.display().to_string())
         .unwrap_or_else(|| "(not found)".to_string())
@@ -243,9 +252,13 @@ pub fn run(ctx: &Ctx) -> Result<()> {
             })
             .collect(),
     };
+    let text = serde_json::to_string_pretty(&info)?;
     lock.set_len(0)?;
-    lock.write_all(serde_json::to_string_pretty(&info)?.as_bytes())?;
+    lock.write_all(text.as_bytes())?;
     lock.flush()?;
+    if cfg!(windows) {
+        project::write_atomic(&info_path(root), text.as_bytes())?;
+    }
 
     let log = Log { path: log_path(root) };
     log.line(&format!("ticker {} started (pid {})", info.version, info.pid));
@@ -1050,6 +1063,9 @@ mod tests {
         let mut file = File::options().create(true).write(true).truncate(false).open(lock_path(root.path())).unwrap();
         file.lock().unwrap();
         file.write_all(br#"{"version":"v9","pid":1}"#).unwrap();
+        if cfg!(windows) {
+            std::fs::write(info_path(root.path()), r#"{"version":"v9","pid":1}"#).unwrap();
+        }
         match lock_state(root.path()) {
             LockState::Held(info) => assert_eq!(info.version, "v9"),
             LockState::Free => panic!("lock should be held"),
@@ -1106,7 +1122,7 @@ mod tests {
     }
 
     fn with_cwd(json: &str, fixture: &Fixture) -> String {
-        json.replace("CWD", &fixture.project.dir().to_string_lossy())
+        json.replace("CWD", &crate::scenarios::js(&fixture.project.dir().to_string_lossy()))
     }
 
     #[test]

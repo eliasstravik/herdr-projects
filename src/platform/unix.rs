@@ -125,3 +125,39 @@ pub const OPENER: (&str, &[&str]) = if cfg!(target_os = "macos") { ("open", &[])
 pub fn is_link(meta: &std::fs::Metadata) -> bool {
     meta.file_type().is_symlink()
 }
+
+pub fn program_candidates(dir: &Path, name: &str, _pathext: Option<&str>) -> Vec<PathBuf> {
+    vec![dir.join(name)]
+}
+
+pub fn is_executable(meta: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt as _;
+    meta.permissions().mode() & 0o111 != 0
+}
+
+pub fn quote_local(value: &str) -> String {
+    crate::remote::quote(value)
+}
+
+pub fn herdr_shell_line(line: String) -> String {
+    line
+}
+
+pub const HOME_VARS: &[&str] = &["HOME"];
+
+pub fn config_home(home: &Path, _var: &dyn Fn(&str) -> Option<String>) -> PathBuf {
+    home.join(".config")
+}
+
+pub fn extra_path_dirs(home: Option<&Path>, _var: &dyn Fn(&str) -> Option<String>) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].iter().map(Into::into).collect();
+    if let Some(home) = home {
+        dirs.push(home.join(".local/bin"));
+        dirs.push(home.join(".cargo/bin"));
+    }
+    dirs
+}
+
+pub fn verbatim_arg(command: &mut Command, arg: &str) {
+    command.arg(arg);
+}

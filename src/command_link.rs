@@ -22,10 +22,11 @@ pub fn link_path(env: &Env) -> PathBuf {
     bin_dir(env).join(crate::platform::command_link_name(NAME))
 }
 
-/// Whether `binary` is an installed build (`target/release/herdr-projects`),
-/// not a test or debug binary that must never become the user's command.
+/// Whether `binary` is an installed build (`target/release/herdr-projects`,
+/// with `.exe` on Windows), not a test or debug binary that must never become
+/// the user's command.
 pub fn installable(binary: &Path) -> bool {
-    binary.ends_with(Path::new("release").join(NAME))
+    binary.ends_with(Path::new("release").join(format!("{NAME}{}", std::env::consts::EXE_SUFFIX)))
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -50,8 +51,8 @@ pub fn state(env: &Env, binary: &Path) -> State {
         Err(what) => return State::Foreign(what),
     };
     let target = link.parent().map(|dir| dir.join(&target)).unwrap_or(target);
-    let binary = std::fs::canonicalize(binary).unwrap_or_else(|_| binary.to_path_buf());
-    match std::fs::canonicalize(&target) {
+    let binary = dunce::canonicalize(binary).unwrap_or_else(|_| binary.to_path_buf());
+    match dunce::canonicalize(&target) {
         Ok(resolved) if resolved == binary => State::Ours,
         Err(_) => State::Stale(target),
         Ok(_) if target.starts_with(plugins_dir(env)) => State::Stale(target),
@@ -84,9 +85,13 @@ pub fn ensure(env: &Env, binary: &Path) -> Result<State> {
     Ok(found)
 }
 
-/// What a shell with `path_var` runs for `herdr-projects`, if anything.
+/// What a shell with `path_var` runs for `herdr-projects`, if anything (on
+/// Windows through `PATHEXT`, so both `herdr-projects.exe` and our `.cmd` shim count).
 pub fn resolves_to(path_var: &str) -> Option<PathBuf> {
-    std::env::split_paths(path_var).map(|dir| dir.join(NAME)).find(|candidate| candidate.is_file())
+    let pathext = std::env::var("PATHEXT").ok();
+    std::env::split_paths(path_var)
+        .flat_map(|dir| crate::platform::program_candidates(&dir, NAME, pathext.as_deref()))
+        .find(|candidate| candidate.is_file())
 }
 
 /// The `doctor` line: `(ok, detail)` where `None` is a warning.
@@ -118,8 +123,14 @@ pub fn check(env: &Env, binary: &Path, path_var: &str, fix: bool) -> (Option<boo
         detail.push_str(&format!("; but {} is not on your PATH: add `export PATH=\"{}:$PATH\"` to your shell profile", dir.display(), dir.display()));
         return (None, detail);
     }
+    // What the command found runs: through our link (on Windows a `.cmd`
+    // shim, which canonicalising does not see through) or itself.
+    let runs = |found: &Path| match crate::platform::read_command_link(found) {
+        Ok(target) => found.parent().map(|dir| dir.join(&target)).unwrap_or(target),
+        Err(_) => found.to_path_buf(),
+    };
     match resolves_to(path_var) {
-        Some(first) if std::fs::canonicalize(&first).ok() != std::fs::canonicalize(binary).ok() => {
+        Some(first) if dunce::canonicalize(runs(&first)).ok() != dunce::canonicalize(binary).ok() => {
             detail.push_str(&format!("; but your PATH finds {} first, which is another binary", first.display()));
             (None, detail)
         }
@@ -134,14 +145,18 @@ mod tests {
     fn setup() -> (tempfile::TempDir, Env, PathBuf) {
         let home = tempfile::tempdir().unwrap();
         let env = Env::for_test(home.path(), &[]);
-        let binary = home.path().join(".config/herdr/plugins/github/herdr-projects-abc/target/release/herdr-projects");
+        let binary = home.path().join(format!(".config/herdr/plugins/github/herdr-projects-abc/target/release/herdr-projects{}", std::env::consts::EXE_SUFFIX));
         std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
         std::fs::write(&binary, "#!/bin/sh\n").unwrap();
         (home, env, binary)
     }
 
     fn path_with(env: &Env) -> String {
-        bin_dir(env).display().to_string() + ":/usr/bin"
+        join_path(&[bin_dir(env), PathBuf::from("/usr/bin")])
+    }
+
+    fn join_path(dirs: &[PathBuf]) -> String {
+        std::env::join_paths(dirs).unwrap().to_string_lossy().into_owned()
     }
 
     #[test]
@@ -210,8 +225,8 @@ mod tests {
         let (home, env, binary) = setup();
         let early = home.path().join("early");
         std::fs::create_dir_all(&early).unwrap();
-        std::fs::write(early.join(NAME), "").unwrap();
-        let path = format!("{}:{}", early.display(), path_with(&env));
+        std::fs::write(early.join(format!("{NAME}{}", std::env::consts::EXE_SUFFIX)), "").unwrap();
+        let path = join_path(&[early, bin_dir(&env), PathBuf::from("/usr/bin")]);
         let (ok, detail) = check(&env, &binary, &path, true);
         assert_eq!(ok, None);
         assert!(detail.contains("finds") && detail.contains("early"), "{detail}");
@@ -221,7 +236,7 @@ mod tests {
     fn xdg_bin_home_wins_and_debug_builds_are_never_linked() {
         let home = tempfile::tempdir().unwrap();
         let env = Env::for_test(home.path(), &[("XDG_BIN_HOME", "/xdg/bin")]);
-        assert_eq!(link_path(&env), PathBuf::from("/xdg/bin/herdr-projects"));
+        assert_eq!(link_path(&env), PathBuf::from("/xdg/bin").join(crate::platform::command_link_name(NAME)));
         let (ok, _) = check(&env, Path::new("/src/target/debug/herdr-projects"), "", true);
         assert_eq!(ok, None);
         assert!(!Path::new("/xdg/bin").exists());

@@ -11,7 +11,7 @@ use jsonc_parser::cst::{CstInputValue, CstRootNode};
 use serde::{Deserialize, Serialize};
 
 use crate::paths::{Ctx, Env};
-use crate::remote::quote;
+use crate::platform::quote_local;
 
 /// A harness with a native, user-level hook system that can put text in the
 /// model's context. Every other agent learns to report from its thread brief
@@ -142,19 +142,21 @@ fn remove_ours(kind: &str, text: &str, command: Option<&str>) -> Result<String> 
 }
 
 /// Herdr's config file: `HERDR_CONFIG_PATH`, else `$XDG_CONFIG_HOME/herdr`,
-/// else `~/.config/herdr/config.toml`.
+/// else `~/.config/herdr/config.toml` (`%APPDATA%\herdr\config.toml` on
+/// Windows), as Herdr itself resolves it.
 pub fn herdr_config_path(env: &Env) -> PathBuf {
     if let Some(path) = env.var("HERDR_CONFIG_PATH") {
         return PathBuf::from(path);
     }
-    env.var("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| env.home.join(".config")).join("herdr/config.toml")
+    let base = env.var("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| crate::platform::config_home(&env.home, &|name| env.var(name).map(str::to_string)));
+    base.join("herdr").join("config.toml")
 }
 
 /// The tab-bar command: absolute paths, since it runs on the server with no
 /// plugin environment (under `/bin/sh -lc`, or `cmd.exe /d /c` on Windows).
 /// It uses no shell syntax beyond quoting the two paths.
 pub fn tab_command(binary: &Path, root: &Path) -> String {
-    format!("{} --root {} needs-you --line", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
+    crate::platform::herdr_shell_line(format!("{} --root {} needs-you --line", quote_local(&binary.to_string_lossy()), quote_local(&root.to_string_lossy())))
 }
 
 fn hook_entry(harness: &Harness, command: &str) -> serde_json::Value {
@@ -233,7 +235,7 @@ pub fn hooks(input: &str, command: &str, remove: bool) -> Result<String> {
 /// the machine. Entries from before 0.2.35 end in `2>/dev/null || true`;
 /// [`hooks`] replaces them, and `doctor --fix` rewrites them.
 pub fn hook_command(binary: &Path, root: &Path, agent: &str) -> String {
-    format!("{} --root {} hook --agent {agent}", quote(&binary.to_string_lossy()), quote(&root.to_string_lossy()))
+    format!("{} --root {} hook --agent {agent}", quote_local(&binary.to_string_lossy()), quote_local(&root.to_string_lossy()))
 }
 
 /// Whether a hook file already holds exactly the entries `command` installs,
@@ -289,7 +291,7 @@ pub fn skill_link(env: &Env, agent: &str, claude_home: Option<&Path>) -> PathBuf
             .join("skills"),
         _ => env.home.join(".agents/skills"),
     };
-    let resolved = std::fs::canonicalize(&dir).or_else(|_| std::fs::canonicalize(dir.parent().unwrap_or(&dir)).map(|p| p.join("skills")));
+    let resolved = dunce::canonicalize(&dir).or_else(|_| dunce::canonicalize(dir.parent().unwrap_or(&dir)).map(|p| p.join("skills")));
     resolved.unwrap_or(dir).join(SKILL)
 }
 
@@ -569,7 +571,8 @@ mod tests {
 
     #[test]
     fn the_hook_command_uses_no_shell_syntax() {
-        assert_eq!(hook_command(Path::new("/p q/herdr-projects"), Path::new("/r"), "claude"), "'/p q/herdr-projects' --root /r hook --agent claude");
+        let quoted = if cfg!(windows) { r#""/p q/herdr-projects""# } else { "'/p q/herdr-projects'" };
+        assert_eq!(hook_command(Path::new("/p q/herdr-projects"), Path::new("/r"), "claude"), format!("{quoted} --root /r hook --agent claude"));
     }
 
     #[test]
@@ -718,7 +721,7 @@ mod tests {
         let runner = crate::runner::fake::FakeRunner::new();
         let ctx = Ctx { env: &env, root: home.path().join("root"), config_dir: home.path().join("cfg"), runner: &runner, detached_ticker: false };
         let options = |dry_run: bool, skill: &Path| ConfigureOptions { clients: vec![], claude_home: Some(claude.clone()), codex_home: Some(home.path().join("codex")), dry_run, hooks: true, sidebar: false, key: None, herdr_config: None, skill: Some(skill.to_path_buf()) };
-        let link = std::fs::canonicalize(&shared).unwrap().join(SKILL);
+        let link = dunce::canonicalize(&shared).unwrap().join(SKILL);
 
         // A plain directory already there (the old personal copy) is never touched.
         std::fs::create_dir_all(shared.join(SKILL)).unwrap();

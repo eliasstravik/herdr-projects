@@ -21,11 +21,8 @@ pub struct Env {
 impl Env {
     pub fn from_process() -> Result<Self> {
         let vars: BTreeMap<String, String> = std::env::vars().collect();
-        let home = vars
-            .get("HOME")
-            .filter(|h| !h.is_empty())
-            .map(PathBuf::from)
-            .context("HOME is not set")?;
+        let home = crate::platform::home_dir(&|name| vars.get(name).cloned())
+            .with_context(|| format!("{} is not set", crate::platform::HOME_VARS.join(" or ")))?;
         Ok(Env { vars, home })
     }
 
@@ -45,9 +42,10 @@ impl Env {
         self.vars.get(key).map(String::as_str).filter(|v| !v.is_empty())
     }
 
-    /// The fixed user-level config directory, `~/.config/herdr-projects`.
+    /// The fixed user-level config directory, `~/.config/herdr-projects`
+    /// (`%APPDATA%\herdr-projects` on Windows).
     pub fn config_dir(&self) -> PathBuf {
-        self.home.join(".config").join("herdr-projects")
+        crate::platform::config_home(&self.home, &|name| self.var(name).map(str::to_string)).join("herdr-projects")
     }
 
     /// `HERDR_BIN_PATH` when set, else `herdr` on `PATH`.
@@ -68,7 +66,7 @@ impl Env {
 /// hooks, AGENTS.md or the tab bar survives `~/.local/bin` links changing.
 pub fn binary() -> Result<PathBuf> {
     let exe = std::env::current_exe().context("could not find this binary's own path")?;
-    Ok(std::fs::canonicalize(&exe).unwrap_or(exe))
+    Ok(dunce::canonicalize(&exe).unwrap_or(exe))
 }
 
 /// What every subcommand works from: the environment, the resolved root and
@@ -157,7 +155,7 @@ pub fn resolve_session(flags: &SessionFlags, env: &Env, runner: &dyn Runner) -> 
         .into_iter()
         .find(|s| s.default)
         .map(|s| s.socket_path)
-        .unwrap_or_else(|| env.home.join(".config/herdr/herdr.sock"));
+        .unwrap_or_else(|| crate::platform::config_home(&env.home, &|name| env.var(name).map(str::to_string)).join("herdr").join("herdr.sock"));
     Ok(Session { socket, name: None })
 }
 
@@ -190,10 +188,10 @@ mod tests {
 
         let env = Env::for_test(home.path(), &[("HERDR_PROJECTS_ROOT", "/from-env")]);
         let flag = PathBuf::from("/from-flag");
-        assert_eq!(resolve_root(Some(&flag), &env, &config_dir).unwrap(), flag);
+        assert_eq!(resolve_root(Some(&flag), &env, &config_dir).unwrap(), absolute(&flag).unwrap());
         assert_eq!(
             resolve_root(None, &env, &config_dir).unwrap(),
-            PathBuf::from("/from-env")
+            absolute(Path::new("/from-env")).unwrap()
         );
 
         let env = Env::for_test(home.path(), &[]);
@@ -255,7 +253,7 @@ mod tests {
             socket: Some("/flag.sock".into()),
         };
         let got = resolve_session(&by_socket, &env, &runner).unwrap();
-        assert_eq!(got, Session { socket: "/flag.sock".into(), name: None });
+        assert_eq!(got, Session { socket: absolute(Path::new("/flag.sock")).unwrap(), name: None });
 
         let none = SessionFlags::default();
         let got = resolve_session(&none, &env, &runner).unwrap();

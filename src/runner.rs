@@ -18,6 +18,9 @@ pub struct Cmd {
     pub timeout: Duration,
     /// Spawn in its own process group and kill the whole group on timeout.
     pub own_group: bool,
+    /// Pass the last argument exactly as written on Windows (for `cmd /c`,
+    /// which does not read the C runtime's quoting); no effect on Unix.
+    pub verbatim_last_arg: bool,
 }
 
 impl Cmd {
@@ -31,6 +34,7 @@ impl Cmd {
             stdin: None,
             timeout,
             own_group: false,
+            verbatim_last_arg: false,
         }
     }
 
@@ -70,6 +74,11 @@ impl Cmd {
 
     pub fn own_group(mut self) -> Self {
         self.own_group = true;
+        self
+    }
+
+    pub fn verbatim_last_arg(mut self) -> Self {
+        self.verbatim_last_arg = true;
         self
     }
 
@@ -136,8 +145,8 @@ const POLL: Duration = Duration::from_millis(20);
 
 impl Runner for RealRunner {
     fn run(&self, cmd: &Cmd) -> Result<Output> {
-        let mut command = Command::new(&cmd.program);
-        command.args(&cmd.args);
+        let mut command = Command::new(crate::platform::resolve_program(&cmd.program));
+        add_args(&mut command, cmd);
         for key in &cmd.env_remove {
             command.env_remove(key);
         }
@@ -210,8 +219,8 @@ impl Runner for RealRunner {
     }
 
     fn run_foreground(&self, cmd: &Cmd, poll: &mut dyn FnMut() -> bool) -> Result<Option<i32>> {
-        let mut command = Command::new(&cmd.program);
-        command.args(&cmd.args);
+        let mut command = Command::new(crate::platform::resolve_program(&cmd.program));
+        add_args(&mut command, cmd);
         for key in &cmd.env_remove {
             command.env_remove(key);
         }
@@ -242,6 +251,18 @@ impl Runner for RealRunner {
             std::thread::sleep(Duration::from_millis(500));
         };
         Ok(status.code())
+    }
+}
+
+fn add_args(command: &mut Command, cmd: &Cmd) {
+    match cmd.args.split_last() {
+        Some((last, rest)) if cmd.verbatim_last_arg => {
+            command.args(rest);
+            crate::platform::verbatim_arg(command, last);
+        }
+        _ => {
+            command.args(&cmd.args);
+        }
     }
 }
 
