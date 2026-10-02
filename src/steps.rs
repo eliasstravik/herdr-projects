@@ -134,11 +134,13 @@ impl Memory {
     }
 
     /// Remote machines are polled every fourth tick (about a minute), and not
-    /// at all for eight ticks after a failure.
+    /// at all for eight ticks after a failure. Every project is due in the
+    /// tick a machine is polled: the first one asked must not use up the
+    /// machine's turn for the others.
     pub fn machine_is_due(&mut self, machine: &str) -> bool {
         let tick = self.tick;
         let entry = self.machines.entry(machine.to_string()).or_default();
-        let due = tick >= entry.skip_until_tick && (entry.last_poll_tick == 0 || tick >= entry.last_poll_tick + REMOTE_EVERY_TICKS);
+        let due = tick >= entry.skip_until_tick && (entry.last_poll_tick == 0 || tick == entry.last_poll_tick || tick >= entry.last_poll_tick + REMOTE_EVERY_TICKS);
         if due {
             entry.last_poll_tick = tick;
         }
@@ -750,6 +752,32 @@ mod tests {
 
     fn at(text: &str) -> jiff::Timestamp {
         text.parse().unwrap()
+    }
+
+    fn memory() -> Memory {
+        Memory { started: jiff::Timestamp::now(), gh: Outage::default(), gh_login: None, outage_secs: DEFAULT_OUTAGE_SECS, tick: 0, machines: BTreeMap::new(), grouping: Default::default() }
+    }
+
+    #[test]
+    fn every_project_is_due_in_the_tick_a_machine_is_polled() {
+        let mut memory = memory();
+        memory.tick = 1;
+        // Two projects with threads on the same machine, asked in turn in one tick.
+        assert!(memory.machine_is_due("mac"));
+        assert!(memory.machine_is_due("mac"), "the second project is polled too");
+        for tick in 2..=4 {
+            memory.tick = tick;
+            assert!(!memory.machine_is_due("mac"), "not again before the fourth tick after");
+        }
+        memory.tick = 5;
+        assert!(memory.machine_is_due("mac") && memory.machine_is_due("mac"));
+        // A failure in one project spares the others of the same tick, and the ticks after.
+        memory.record_machine("mac", Some("unreachable"), jiff::Timestamp::now());
+        assert!(!memory.machine_is_due("mac"));
+        memory.tick = 5 + SKIP_TICKS_AFTER_FAILURE;
+        assert!(!memory.machine_is_due("mac"));
+        memory.tick = 5 + SKIP_TICKS_AFTER_FAILURE + 1;
+        assert!(memory.machine_is_due("mac"));
     }
 
     #[test]
