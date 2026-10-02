@@ -154,6 +154,14 @@ fn typed(cells: &[Cell]) -> String {
 fn input_box(kind: &str, lines: &[Line]) -> Option<Vec<Line>> {
     let last = |pred: &dyn Fn(usize, &Line) -> bool| lines.iter().enumerate().rev().find(|(i, l)| pred(*i, l)).map(|(i, _)| i);
     match kind {
+        // `>` right under a rule, continued until the next rule.
+        "agy" => {
+            let at = last(&|i, l| trimmed_starts(l, ">") && i > 0 && is_rule(&lines[i - 1]))?;
+            let end = (at + 1..lines.len()).find(|&i| is_rule(&lines[i]))?;
+            let mut rows = vec![after(&lines[at], '>')?];
+            rows.extend(lines[at + 1..end].iter().cloned());
+            Some(rows)
+        }
         // `❯` right under a rule, continued until the next rule.
         "claude" => {
             let at = last(&|i, l| trimmed_starts(l, "❯") && i > 0 && is_rule(&lines[i - 1]))?;
@@ -180,6 +188,28 @@ fn input_box(kind: &str, lines: &[Line]) -> Option<Vec<Line>> {
                 }
                 if n == 0 {
                     let prompt = row.iter().position(|c| matches!(c.ch, '>' | '!' | '*'))?;
+                    row.drain(..=prompt);
+                }
+                rows.push(row);
+            }
+            Some(rows)
+        }
+        // `│ ❯ ` in a bordered box.
+        "grok" => {
+            let at = last(&|_, l| {
+                let t = text(l);
+                let t = t.trim_start();
+                t.starts_with('│') && t['│'.len_utf8()..].trim_start().starts_with('❯')
+            })?;
+            let end = (at + 1..lines.len()).find(|&i| trimmed_starts(&lines[i], "╰"))?;
+            let mut rows = Vec::new();
+            for (n, line) in lines[at..end].iter().enumerate() {
+                let mut row = after(line, '│')?;
+                if let Some(close) = row.iter().rposition(|c| c.ch == '│') {
+                    row.truncate(close);
+                }
+                if n == 0 {
+                    let prompt = row.iter().position(|c| c.ch == '❯')?;
                     row.drain(..=prompt);
                 }
                 rows.push(row);
@@ -239,7 +269,7 @@ pub fn box_text(kind: &str, screen: &str) -> Option<String> {
 
 /// True for the kinds whose input box this module can find.
 pub fn knows(kind: &str) -> bool {
-    matches!(kind, "claude" | "codex" | "cursor" | "gemini" | "opencode" | "pi")
+    matches!(kind, "agy" | "claude" | "codex" | "cursor" | "gemini" | "grok" | "opencode" | "pi")
 }
 
 /// The screen's plain text, styling dropped.
@@ -257,7 +287,7 @@ mod tests {
 
     #[test]
     fn every_supported_kind_tells_an_empty_box_from_a_draft() {
-        for kind in ["claude", "codex", "cursor", "gemini", "opencode", "pi"] {
+        for kind in ["agy", "claude", "codex", "cursor", "gemini", "grok", "opencode", "pi"] {
             assert_eq!(check(kind, &fixture(&format!("{kind}-empty"))), Draft::Empty, "{kind} empty");
             assert_eq!(check(kind, &fixture(&format!("{kind}-draft"))), Draft::Typed, "{kind} draft");
         }
@@ -270,6 +300,8 @@ mod tests {
         assert_eq!(check("copilot", &fixture("claude-empty")), Draft::Unknown);
         assert_eq!(check("claude", "some output\nno box here\n"), Draft::Unknown);
         assert_eq!(check("codex", &fixture("claude-empty")), Draft::Unknown);
+        assert_eq!(check("agy", &fixture("claude-empty")), Draft::Unknown);
+        assert_eq!(check("grok", &fixture("claude-empty")), Draft::Unknown);
     }
 
     #[test]
