@@ -30,6 +30,7 @@ fn placeholders(kind: &str) -> &'static [&'static str] {
 struct Cell {
     ch: char,
     dim: bool,
+    italic: bool,
     reverse: bool,
     bg: String,
 }
@@ -41,11 +42,11 @@ fn text(line: &[Cell]) -> String {
 }
 
 /// Screen text with SGR styling into cells. Other escape sequences are
-/// skipped; only dim, reverse and the background colour are kept.
+/// skipped; only dim, italic, reverse and the background colour are kept.
 fn parse(screen: &str) -> Vec<Line> {
     let mut lines = Vec::new();
     let mut line = Line::new();
-    let (mut dim, mut reverse, mut bg) = (false, false, String::new());
+    let mut style = Style::default();
     let mut chars = screen.chars().peekable();
     while let Some(ch) = chars.next() {
         match ch {
@@ -65,13 +66,13 @@ fn parse(screen: &str) -> Vec<Line> {
                     params.push(c);
                 }
                 if last == 'm' {
-                    sgr(&params, &mut dim, &mut reverse, &mut bg);
+                    sgr(&params, &mut style);
                 }
             }
             '\n' => lines.push(std::mem::take(&mut line)),
             '\r' => {}
             c if c.is_control() => {}
-            c => line.push(Cell { ch: c, dim, reverse, bg: bg.clone() }),
+            c => line.push(Cell { ch: c, dim: style.dim, italic: style.italic, reverse: style.reverse, bg: style.bg.clone() }),
         }
     }
     if !line.is_empty() {
@@ -80,21 +81,27 @@ fn parse(screen: &str) -> Vec<Line> {
     lines
 }
 
-fn sgr(params: &str, dim: &mut bool, reverse: &mut bool, bg: &mut String) {
+#[derive(Default)]
+struct Style {
+    dim: bool,
+    italic: bool,
+    reverse: bool,
+    bg: String,
+}
+
+fn sgr(params: &str, style: &mut Style) {
     let codes: Vec<&str> = if params.is_empty() { vec!["0"] } else { params.split(';').collect() };
     let mut i = 0;
     while i < codes.len() {
         match codes[i] {
-            "0" | "" => {
-                *dim = false;
-                *reverse = false;
-                bg.clear();
-            }
-            "2" => *dim = true,
-            "22" => *dim = false,
-            "7" => *reverse = true,
-            "27" => *reverse = false,
-            "49" => bg.clear(),
+            "0" | "" => *style = Style::default(),
+            "2" => style.dim = true,
+            "22" => style.dim = false,
+            "3" => style.italic = true,
+            "23" => style.italic = false,
+            "7" => style.reverse = true,
+            "27" => style.reverse = false,
+            "49" => style.bg.clear(),
             code @ ("38" | "48") => {
                 let take = match codes.get(i + 1) {
                     Some(&"5") => 2,
@@ -102,12 +109,12 @@ fn sgr(params: &str, dim: &mut bool, reverse: &mut bool, bg: &mut String) {
                     _ => 0,
                 };
                 if code == "48" {
-                    *bg = codes[i + 1..(i + 1 + take).min(codes.len())].join(";");
+                    style.bg = codes[i + 1..(i + 1 + take).min(codes.len())].join(";");
                 }
                 i += take;
             }
-            code if code.len() == 2 && code.starts_with('4') => *bg = code.to_string(),
-            code if code.len() == 3 && code.starts_with("10") => *bg = code.to_string(),
+            code if code.len() == 2 && code.starts_with('4') => style.bg = code.to_string(),
+            code if code.len() == 3 && code.starts_with("10") => style.bg = code.to_string(),
             _ => {}
         }
         i += 1;
@@ -129,6 +136,18 @@ fn is_rule(line: &[Cell]) -> bool {
     let t = text(line);
     let t = t.trim();
     t.chars().count() >= 10 && t.chars().all(|c| c == '─')
+}
+
+/// Drops a hint drawn at the end of a row as a key then an italic label
+/// (`⇧⇥ to change thinking effort`): what omp shows in an empty editor.
+fn drop_hint(row: &mut Line) {
+    let Some(end) = row.iter().rposition(|c| !c.ch.is_whitespace()) else { return };
+    if !row[end].italic {
+        return;
+    }
+    let Some(key) = row[..end].iter().rposition(|c| !c.italic && !c.ch.is_whitespace()) else { return };
+    let start = row[..key].iter().rposition(|c| c.ch.is_whitespace()).map_or(0, |i| i + 1);
+    row.truncate(start);
 }
 
 /// The typed text in a box's cells: non-blank, not dim, and not a
@@ -211,6 +230,20 @@ fn input_box(kind: &str, lines: &[Line]) -> Option<Vec<Line>> {
             let top = (0..bottom).rev().find(|&i| is_rule(&lines[i]))?;
             Some(lines[top + 1..bottom].to_vec())
         }
+        // `╰─ ` under the status line, then the editor's continuation lines
+        // and any menu it opened, down to the bottom of the screen.
+        "omp" => {
+            let at = last(&|_, l| {
+                let t = text(l);
+                let t = t.trim_end();
+                t == "╰─" || t.starts_with("╰─ ")
+            })?;
+            let mut first = after(&lines[at], '─')?;
+            drop_hint(&mut first);
+            let mut rows = vec![first];
+            rows.extend(lines[at + 1..].iter().cloned());
+            Some(rows)
+        }
         _ => None,
     }
 }
@@ -239,7 +272,7 @@ pub fn box_text(kind: &str, screen: &str) -> Option<String> {
 
 /// True for the kinds whose input box this module can find.
 pub fn knows(kind: &str) -> bool {
-    matches!(kind, "claude" | "codex" | "cursor" | "gemini" | "opencode" | "pi")
+    matches!(kind, "claude" | "codex" | "cursor" | "gemini" | "omp" | "opencode" | "pi")
 }
 
 /// The screen's plain text, styling dropped.
@@ -257,12 +290,30 @@ mod tests {
 
     #[test]
     fn every_supported_kind_tells_an_empty_box_from_a_draft() {
-        for kind in ["claude", "codex", "cursor", "gemini", "opencode", "pi"] {
+        for kind in ["claude", "codex", "cursor", "gemini", "omp", "opencode", "pi"] {
             assert_eq!(check(kind, &fixture(&format!("{kind}-empty"))), Draft::Empty, "{kind} empty");
             assert_eq!(check(kind, &fixture(&format!("{kind}-draft"))), Draft::Typed, "{kind} draft");
         }
         assert_eq!(check("claude", &fixture("claude-empty-after-turn")), Draft::Empty);
         assert_eq!(check("opencode", &fixture("opencode-empty-session")), Draft::Empty);
+        assert_eq!(check("omp", &fixture("omp-empty-after-turn")), Draft::Empty);
+    }
+
+    #[test]
+    fn omp_drops_its_hint_and_reads_drafts_working_screens_and_menus() {
+        assert_eq!(box_text("omp", &fixture("omp-empty")).as_deref(), Some(""));
+        assert_eq!(box_text("omp", &fixture("omp-draft")).as_deref(), Some("hello draft"));
+        assert_eq!(box_text("omp", &fixture("omp-draft-multiline")).as_deref(), Some("hello draft second line"));
+        // While it works the editor stays empty; idleness is checked elsewhere.
+        assert_eq!(check("omp", &fixture("omp-working")), Draft::Empty);
+        // The slash-command menu opens under the editor.
+        assert_eq!(check("omp", &fixture("omp-menu")), Draft::Typed);
+        // The welcome box's `╰───` bottom is not the editor.
+        let welcome = "╭── omp ──╮\n│ tips    │\n╰─────────╯\n";
+        assert_eq!(check("omp", welcome), Draft::Unknown);
+        // A hint with another key or label is dropped too.
+        let hint = "╰─ \u{1b}[38;2;0;180;255m←\u{1b}[0m \u{1b}[3mto see 2 running agents\u{1b}[0m\n";
+        assert_eq!(check("omp", hint), Draft::Empty);
     }
 
     #[test]
