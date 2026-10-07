@@ -8,7 +8,7 @@ use crate::coordinator::{self, OpenOptions};
 use crate::paths::{self, Ctx, Env, SessionFlags};
 use crate::project::{self, Project, Status};
 use crate::runner::RealRunner;
-use crate::threads::{self, ResolveArgs, StartArgs};
+use crate::threads::{self, RebindArgs, ResolveArgs, StartArgs};
 use crate::{actions, adopt, doctor, inbox, lifecycle, overview, routine, ticker};
 
 #[derive(Parser)]
@@ -352,6 +352,26 @@ enum ThreadCommand {
         /// Restart with another profile the project allows (default: the thread's own)
         #[arg(long, alias = "agent", value_name = "NAME")]
         profile: Option<String>,
+    },
+    /// Repair a thread's recorded placement after its worktree or branch moved; verified first, no change on a failed check
+    Rebind {
+        slug: String,
+        id: String,
+        /// The repository's path
+        #[arg(long, value_name = "PATH")]
+        repo: Option<String>,
+        /// The relocated worktree's path (the thread's branch must be checked out there); also becomes the working directory unless --cwd is given
+        #[arg(long, value_name = "PATH")]
+        worktree_path: Option<String>,
+        /// The branch the thread's work continues on
+        #[arg(long, value_name = "NAME")]
+        branch: Option<String>,
+        /// The agent's working directory
+        #[arg(long, value_name = "PATH")]
+        cwd: Option<String>,
+        /// Skip only the check that the recorded pull request head is reachable from the branch
+        #[arg(long)]
+        force: bool,
     },
     /// Send a follow-up to a thread's agent (recorded in its task file)
     Prompt {
@@ -727,6 +747,21 @@ pub fn run() -> Result<()> {
             ThreadCommand::Restart { slug, id, profile } => {
                 let thread = threads::restart(&ctx, &slug, &id, profile.as_deref())?;
                 println!("{} is back in pane {}; the ticker launches its {} agent", thread.id, thread.pane_id, if thread.profile.is_empty() { &thread.agent } else { &thread.profile });
+                Ok(())
+            }
+            ThreadCommand::Rebind { slug, id, repo, worktree_path, branch, cwd, force } => {
+                let (before, after) = threads::rebind(&ctx, &slug, &id, &RebindArgs { repo, worktree_path, branch, cwd, force })?;
+                println!("{id} rebound:");
+                let mut healed = 0;
+                for (field, old, new) in [("repo", before.repo, after.repo), ("worktree_path", before.worktree_path, after.worktree_path), ("branch", before.branch, after.branch), ("cwd", before.cwd, after.cwd)] {
+                    if old != new {
+                        healed += 1;
+                        println!("  {field}: {} -> {new}", if old.is_empty() { "(none)".to_string() } else { old });
+                    }
+                }
+                if healed == 0 {
+                    println!("  the record already matched; nothing changed");
+                }
                 Ok(())
             }
             ThreadCommand::Next { slug, id, line, add } => threads::next(&ctx, &slug, &id, line, add.as_deref()),

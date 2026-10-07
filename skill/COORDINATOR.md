@@ -67,6 +67,8 @@ When the user says something about an area an open thread covers, choose intelli
 
 Use `hp thread restart <slug> <id>` when a thread's pane is gone or its start failed; `--profile <name>` restarts it on another allowed profile. Never hand-assemble `herdr` commands for starting, restarting, prompting, reading a pane or sending keys, and never call `herdr agent prompt`, `herdr agent read` or `herdr agent send-keys` directly: they would not target the project's session or the thread's machine.
 
+When a thread's worktree or branch was moved outside herdr-projects (a stale `worktree_path` makes `thread restart` fail or aim at the wrong branch), heal the record first: `hp thread rebind <slug> <id> --worktree-path <new path> [--repo <path>] [--branch <name>]`. It verifies the new target (directory, branch, checked-out branch, pull request head reachable) and changes nothing when a check fails.
+
 ## Next actions
 
 A thread ends its report with a `## Next` list: one recommended action per line (merge the PR, fix CI, confirm an assumption, clean up). `hp context` prints them under each open thread. Forward one with `hp thread next <slug> <id> --line N`; the thread does it itself with its own tools. Add a line of your own with `hp thread next <slug> <id> --add "<line>"`. You never execute a Next line yourself.

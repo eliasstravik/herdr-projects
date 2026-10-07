@@ -520,6 +520,105 @@ pub fn restart(ctx: &Ctx, slug: &str, id: &str, profile: Option<&str>) -> Result
     finish_placement(&project, &view, id)
 }
 
+/// Fields of a thread's placement `thread rebind` may move. Each `None`
+/// keeps the recorded value.
+#[derive(Default)]
+pub struct RebindArgs {
+    pub repo: Option<String>,
+    pub worktree_path: Option<String>,
+    pub branch: Option<String>,
+    pub cwd: Option<String>,
+    /// Skips only the pull-request-head reachability check, never the
+    /// existence checks.
+    pub force: bool,
+}
+
+/// `thread rebind`: heals a thread's recorded placement after its worktree or
+/// branch moved outside herdr-projects. Every target is verified before the
+/// record is touched; any failure leaves it unchanged. Returns the record
+/// before and after.
+pub fn rebind(ctx: &Ctx, slug: &str, id: &str, args: &RebindArgs) -> Result<(Thread, Thread)> {
+    let project = Project::load(&ctx.root, slug)?;
+    let before = thread::load(&project, id)?;
+    if before.status == Status::Resolved {
+        bail!("{id} is resolved");
+    }
+    if before.kind == Kind::Adopted {
+        bail!("an adopted thread cannot be rebound; adopt the new pane instead");
+    }
+    if before.is_remote() {
+        bail!("{id} runs on machine `{}`; its paths exist only there, so rebind refuses to guess", before.machine);
+    }
+    if args.repo.is_none() && args.worktree_path.is_none() && args.branch.is_none() && args.cwd.is_none() {
+        bail!("nothing to rebind: pass --repo, --worktree-path, --branch or --cwd");
+    }
+    if args.worktree_path.is_some() && before.kind != Kind::Worktree {
+        bail!("{id} is not a worktree thread; --worktree-path does not apply");
+    }
+
+    let existing = |path: &str, what: &str| -> Result<String> {
+        Ok(std::fs::canonicalize(path).with_context(|| format!("{what} {path} does not exist"))?.to_string_lossy().into_owned())
+    };
+    let repo = match &args.repo {
+        Some(path) => existing(path, "repository")?,
+        None => before.repo.clone(),
+    };
+    let worktree = match &args.worktree_path {
+        Some(path) => existing(path, "worktree")?,
+        None => before.worktree_path.clone(),
+    };
+    let branch = args.branch.clone().unwrap_or_else(|| before.branch.clone());
+    let cwd = match (&args.cwd, &args.worktree_path) {
+        (Some(path), _) => existing(path, "working directory")?,
+        // A relocated worktree is the agent's working directory again.
+        (None, Some(_)) => worktree.clone(),
+        (None, None) => before.cwd.clone(),
+    };
+
+    if !branch.is_empty() {
+        if repo.is_empty() {
+            bail!("--branch needs a repository: the record has none and --repo was not given");
+        }
+        let out = ctx.runner.run(&Cmd::new("git", GIT_TIMEOUT).args(["-C", &repo, "rev-parse", "--verify", "--quiet", &format!("refs/heads/{branch}")]))?;
+        if !out.success() {
+            bail!("branch `{branch}` does not exist in {repo}");
+        }
+        if args.worktree_path.is_some() {
+            let checked = git(ctx.runner, &worktree, &["symbolic-ref", "--quiet", "--short", "HEAD"], GIT_TIMEOUT)
+                .with_context(|| format!("worktree {worktree} is not on a branch"))?;
+            if checked != branch {
+                bail!("worktree {worktree} has `{checked}` checked out, not `{branch}`");
+            }
+        }
+        // The live pull request's head must be on the new branch; otherwise a
+        // restart would work against a branch that lost the reviewed commits.
+        let head = crate::steps::load_state(&project).prs.get(id).map(|s| s.head_oid.clone()).unwrap_or_default();
+        if !head.is_empty() && !args.force {
+            let out = ctx.runner.run(&Cmd::new("git", GIT_TIMEOUT).args(["-C", &repo, "merge-base", "--is-ancestor", &head, &format!("refs/heads/{branch}")]))?;
+            if !out.success() {
+                bail!("the recorded pull request head {head} is not reachable from `{branch}`; refusing to rebind (`--force` skips only this check)");
+            }
+        }
+    }
+
+    let after = thread::update(&project, id, |t| {
+        if args.repo.is_some() {
+            t.repo = repo.clone();
+        }
+        if args.branch.is_some() {
+            t.branch = branch.clone();
+        }
+        if args.worktree_path.is_some() {
+            t.worktree_path = worktree.clone();
+        }
+        if args.cwd.is_some() || args.worktree_path.is_some() {
+            t.cwd = cwd.clone();
+            t.thread_dir = thread::thread_dir(&cwd, slug, id);
+        }
+    })?;
+    Ok((before, after))
+}
+
 /// Sends a follow-up. The one sender that does not use the ready-for-a-prompt
 /// predicate: agents queue a message that arrives while they work.
 pub fn prompt(ctx: &Ctx, slug: &str, id: &str, text: &str) -> Result<String> {
@@ -1271,5 +1370,111 @@ mod tests {
         std::fs::create_dir_all(repo.path().join(".herdr-project/x")).unwrap();
         std::fs::write(repo.path().join(".herdr-project/x/report.md"), "r").unwrap();
         assert!(String::from_utf8_lossy(&run(&["status", "--porcelain"]).stdout).is_empty());
+    }
+
+    struct RebindFixture {
+        _home: tempfile::TempDir,
+        env: crate::paths::Env,
+        root: std::path::PathBuf,
+        project: Project,
+        runner: crate::runner::fake::FakeRunner,
+        branch: String,
+    }
+
+    impl RebindFixture {
+        fn ctx(&self) -> Ctx<'_> {
+            Ctx { env: &self.env, root: self.root.clone(), config_dir: self.root.join("cfg"), runner: &self.runner, detached_ticker: false }
+        }
+    }
+
+    /// A project with one open worktree thread whose recorded worktree moved
+    /// away, plus a real directory standing in for the relocated sibling.
+    fn rebind_fixture() -> (RebindFixture, tempfile::TempDir) {
+        use crate::runner::fake::FakeRunner;
+        let home = tempfile::tempdir().unwrap();
+        let env = crate::paths::Env::for_test(home.path(), &[]);
+        let root = home.path().join("root");
+        let project = project::create(&root, "demo", "", vec![]).unwrap();
+        let branch = thread::branch_name("demo", "t-0001", "task");
+        thread::allocate(&project, |t| {
+            t.title = "task".into();
+            t.kind = Kind::Worktree;
+            t.status = Status::Open;
+            t.repo = "/repo".into();
+            t.branch = branch.clone();
+            t.worktree_path = "/old/nested".into();
+            t.cwd = "/old/nested".into();
+            t.thread_dir = thread::thread_dir("/old/nested", "demo", "t-0001");
+        })
+        .unwrap();
+        (RebindFixture { _home: home, env, root, project, runner: FakeRunner::new(), branch }, tempfile::tempdir().unwrap())
+    }
+
+    #[test]
+    fn rebind_heals_a_relocated_worktree() {
+        use crate::runner::fake::ok;
+        let (f, work) = rebind_fixture();
+        let work = std::fs::canonicalize(work.path()).unwrap().to_string_lossy().into_owned();
+        f.runner.on("rev-parse --verify --quiet", ok("abc123\n"));
+        f.runner.on("symbolic-ref", ok(&format!("{}\n", f.branch)));
+        let args = RebindArgs { worktree_path: Some(work.clone()), ..RebindArgs::default() };
+        let (before, after) = rebind(&f.ctx(), "demo", "t-0001", &args).unwrap();
+        assert_eq!(before.worktree_path, "/old/nested");
+        assert_eq!((after.worktree_path.as_str(), after.cwd.as_str()), (work.as_str(), work.as_str()));
+        assert_eq!(after.thread_dir, thread::thread_dir(&work, "demo", "t-0001"));
+        assert_eq!(thread::load(&f.project, "t-0001").unwrap().worktree_path, work);
+    }
+
+    #[test]
+    fn rebind_refuses_a_missing_worktree_dir_and_a_missing_branch() {
+        use crate::runner::fake::fail;
+        let (f, _work) = rebind_fixture();
+        let missing = format!("{}/gone", std::env::temp_dir().display());
+        let args = RebindArgs { worktree_path: Some(missing.clone()), ..RebindArgs::default() };
+        let error = rebind(&f.ctx(), "demo", "t-0001", &args).unwrap_err().to_string();
+        assert!(error.contains(&format!("worktree {missing} does not exist")), "{error}");
+
+        f.runner.on("rev-parse --verify --quiet", fail(128, ""));
+        let args = RebindArgs { branch: Some("ghost".into()), ..RebindArgs::default() };
+        let error = rebind(&f.ctx(), "demo", "t-0001", &args).unwrap_err().to_string();
+        assert!(error.contains("branch `ghost` does not exist in /repo"), "{error}");
+
+        let record = thread::load(&f.project, "t-0001").unwrap();
+        assert_eq!((record.worktree_path.as_str(), record.branch.as_str()), ("/old/nested", f.branch.as_str()));
+    }
+
+    #[test]
+    fn rebind_refuses_an_unreachable_pr_head_until_forced() {
+        use crate::runner::fake::{fail, ok};
+        let (f, work) = rebind_fixture();
+        let work = work.path().to_string_lossy().into_owned();
+        let mut state = crate::steps::load_state(&f.project);
+        state.prs.insert("t-0001".into(), crate::pr::Summary { head_oid: "deadbeef".into(), ..Default::default() });
+        crate::steps::save_state(&f.project, &state).unwrap();
+        f.runner.on("rev-parse --verify --quiet", ok("abc123\n"));
+        f.runner.on("symbolic-ref", ok(&format!("{}\n", f.branch)));
+        f.runner.on("merge-base --is-ancestor", fail(1, ""));
+        let args = || RebindArgs { worktree_path: Some(work.clone()), ..RebindArgs::default() };
+        let error = rebind(&f.ctx(), "demo", "t-0001", &args()).unwrap_err().to_string();
+        assert!(error.contains("pull request head deadbeef is not reachable"), "{error}");
+        assert!(error.contains("--force"), "{error}");
+        assert_eq!(thread::load(&f.project, "t-0001").unwrap().worktree_path, "/old/nested");
+
+        let forced = RebindArgs { force: true, ..args() };
+        let (_, after) = rebind(&f.ctx(), "demo", "t-0001", &forced).unwrap();
+        assert_eq!(f.runner.count("merge-base"), 1, "--force must not re-run the reachability check");
+        assert_ne!(after.worktree_path, "/old/nested");
+    }
+
+    #[test]
+    fn rebind_refuses_a_resolved_thread() {
+        let (f, work) = rebind_fixture();
+        thread::update(&f.project, "t-0001", |t| t.status = Status::Resolved).unwrap();
+        let before = thread::load(&f.project, "t-0001").unwrap();
+        let args = RebindArgs { worktree_path: Some(work.path().to_string_lossy().into_owned()), ..RebindArgs::default() };
+        let error = rebind(&f.ctx(), "demo", "t-0001", &args).unwrap_err().to_string();
+        assert!(error.contains("t-0001 is resolved"), "{error}");
+        assert!(f.runner.calls.borrow().is_empty(), "a refused rebind runs no checks");
+        assert_eq!(thread::load(&f.project, "t-0001").unwrap(), before);
     }
 }
