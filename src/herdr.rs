@@ -221,12 +221,28 @@ pub struct Agent {
     pub state_change_seq: u64,
     #[serde(default)]
     pub agent_session: Option<AgentSession>,
+    /// Herdr's own "input box is readable and empty" signal. Some
+    /// integrations (Codex at start-up) sit at `agent_status: "unknown"`
+    /// while this is already true: no turn has been classified yet, but the
+    /// pane is really at a bare, empty prompt.
+    #[serde(default)]
+    pub interactive_ready: bool,
 }
 
 impl Agent {
     /// The one "ready for a prompt" predicate: state `idle` or `done`.
     pub fn ready(&self) -> bool {
         ready_state(&self.agent_status)
+    }
+
+    /// Like `ready`, plus an otherwise-unclassified agent herdr already
+    /// reports as interactively ready (a freshly started Codex thread,
+    /// before its first status). `blocked` never qualifies: it is excluded
+    /// by name before this is reached, not by this predicate. Used only on
+    /// the first-brief-delivery seam (`brief::step`, `threads::brief`); other
+    /// callers keep `ready()` unchanged.
+    pub fn interactively_ready(&self) -> bool {
+        self.ready() || (self.agent_status == "unknown" && self.interactive_ready)
     }
 
     /// True when the agent works in `dir`: its shell's directory, or its own

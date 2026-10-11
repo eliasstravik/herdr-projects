@@ -134,6 +134,20 @@ pub fn agent_json(workspace: &str, tab: &str, pane: &str, cwd: &str, name: &str,
     )
 }
 
+/// Like `agent_json`, naming the agent `kind` and herdr's own
+/// `interactive_ready` flag (set on a Codex pane at an empty, bare prompt
+/// before its first classified status).
+pub fn agent_json_ex(workspace: &str, tab: &str, pane: &str, cwd: &str, name: &str, kind: &str, state: &str, interactive_ready: bool) -> String {
+    format!(
+        r#"{{"pane_id":"{pane}","tab_id":"{tab}","workspace_id":"{workspace}","cwd":"{cwd}","name":"{name}","agent":"{kind}","agent_status":"{state}","interactive_ready":{interactive_ready}}}"#
+    )
+}
+
+/// A Codex input box at a bare, empty prompt, as captured right after launch.
+pub fn codex_screen() -> String {
+    std::fs::read_to_string(format!("{}/tests/fixtures/prompt_box/codex-empty.ansi", env!("CARGO_MANIFEST_DIR"))).unwrap()
+}
+
 /// The text of an `agent prompt` call (options follow it).
 pub fn prompt_text(cmd: &Cmd) -> &str {
     let at = cmd.args.iter().position(|a| a == "prompt").unwrap();

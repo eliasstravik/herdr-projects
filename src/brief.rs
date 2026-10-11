@@ -97,13 +97,15 @@ pub fn deliver(project: &Project, herdr: &Herdr, record: &Thread, agent: &Agent,
 
 fn step(project: &Project, herdr: &Herdr, t: &mut Thread, agent: &Agent, sender: Sender, now: jiff::Timestamp) -> Result<Outcome> {
     let state = agent.agent_status.as_str();
-    if matches!(state, "blocked" | "unknown" | "") {
+    if matches!(state, "blocked" | "") {
         t.brief_seen.clear();
         return Ok(Outcome::Waiting(format!("the agent is {}", if state.is_empty() { "not detected" } else { state })));
     }
-    let ready = agent.ready();
-    // Nothing typed yet and not ready: nothing to look at.
-    if t.brief_attempts == 0 && !ready {
+    let ready = agent.interactively_ready();
+    // `unknown` with no screen to back it up, or nothing typed yet and not
+    // ready: nothing to look at. `interactively_ready()` already lets an
+    // interactively-ready `unknown` (Codex just after launch) through.
+    if (state == "unknown" || t.brief_attempts == 0) && !ready {
         t.brief_seen.clear();
         return Ok(Outcome::Waiting(format!("the agent is {state}")));
     }
@@ -227,7 +229,7 @@ mod tests {
 
     use super::*;
     use crate::runner::fake::{fail, ok};
-    use crate::scenarios::{World, agent_json, claude_screen, pane_json, prompt_text, settled};
+    use crate::scenarios::{World, agent_json, agent_json_ex, claude_screen, codex_screen, pane_json, prompt_text, settled};
     use crate::thread::Group;
     use crate::ticker::brief_pass_for_test as pass;
 
@@ -262,6 +264,18 @@ mod tests {
     fn set_state(world: &World, state: &str) {
         let cwd = world.home.path().to_string_lossy().into_owned();
         *world.agents.borrow_mut() = format!("[{}]", agent_json("w2", "w2:t1", "w2:p1", &cwd, "hp-demo-t-0001", state));
+    }
+
+    /// Like `world`, for a Codex thread just after launch: herdr reports
+    /// `state`, with its own `interactive_ready` flag, and the screen shows
+    /// Codex's real empty-box fixture.
+    fn codex_world(state: &str, interactive_ready: bool) -> (World, Project, Rc<RefCell<std::result::Result<String, String>>>) {
+        let (world, project, reply) = world(state);
+        thread::update(&project, "t-0001", |t| t.agent = "codex".into()).unwrap();
+        let cwd = world.home.path().to_string_lossy().into_owned();
+        *world.agents.borrow_mut() = format!("[{}]", agent_json_ex("w2", "w2:t1", "w2:p1", &cwd, "hp-demo-t-0001", "codex", state, interactive_ready));
+        *world.screen.borrow_mut() = codex_screen();
+        (world, project, reply)
     }
 
     fn line() -> String {
@@ -493,5 +507,65 @@ mod tests {
         *reply.borrow_mut() = Err(r#"{"error":{"code":"agent_blocked","message":"blocked"}}"#.into());
         assert!(crate::threads::prompt(&ctx, "demo", "t-0001", "Second.").is_err());
         assert!(!std::fs::read_to_string(thread::task_path(&project, "t-0001")).unwrap().contains("Second."));
+    }
+
+    // Reproduces the Codex bootstrap bug: a freshly started agent sits at an
+    // empty, bare prompt (`interactive_ready: true`) before herdr has
+    // classified a first status, so `agent_status` still reads "unknown".
+
+    #[test]
+    fn a_codex_thread_reporting_unknown_but_interactively_ready_gets_its_brief_once() {
+        let (world, project, _) = codex_world("unknown", true);
+        let ctx = world.ctx();
+        // First pass only sees it settle; nothing is typed until it has
+        // stayed the same for SETTLE_SECS.
+        assert!(pass(&ctx));
+        assert_eq!(prompts(&world), 0);
+        settled(&project);
+        assert!(!pass(&ctx));
+        assert_eq!(prompts(&world), 1);
+        let t = record(&project);
+        assert!(!t.prompt_pending && t.brief_claimed.is_empty());
+        // `prompt_pending` is now false, so a later tick never looks again,
+        // let alone types a second copy.
+        crate::ticker::tick_project(&ctx, &project).unwrap();
+        assert_eq!(prompts(&world), 1);
+    }
+
+    #[test]
+    fn a_codex_thread_reporting_unknown_without_interactive_ready_still_waits() {
+        let (world, project, _) = codex_world("unknown", false);
+        let ctx = world.ctx();
+        for _ in 0..3 {
+            settled(&project);
+            assert!(pass(&ctx));
+        }
+        assert_eq!(prompts(&world), 0);
+        assert!(record(&project).prompt_pending);
+    }
+
+    #[test]
+    fn a_blocked_codex_thread_is_never_delivered_even_when_interactively_ready() {
+        let (world, project, _) = codex_world("blocked", true);
+        let ctx = world.ctx();
+        for _ in 0..3 {
+            settled(&project);
+            assert!(pass(&ctx));
+        }
+        assert_eq!(prompts(&world), 0);
+        assert!(record(&project).prompt_pending);
+    }
+
+    #[test]
+    fn the_manual_thread_brief_command_delivers_a_codex_startup_thread_at_once_and_only_once() {
+        let (world, project, _) = codex_world("unknown", true);
+        let ctx = world.ctx();
+        crate::threads::brief(&ctx, "demo", "t-0001").unwrap();
+        assert_eq!(prompts(&world), 1);
+        let t = record(&project);
+        assert!(!t.prompt_pending);
+        // Already delivered: a second call is a no-op, not a second type.
+        crate::threads::brief(&ctx, "demo", "t-0001").unwrap();
+        assert_eq!(prompts(&world), 1);
     }
 }
