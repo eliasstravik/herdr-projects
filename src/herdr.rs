@@ -221,10 +221,12 @@ pub struct Agent {
     pub state_change_seq: u64,
     #[serde(default)]
     pub agent_session: Option<AgentSession>,
-    /// Herdr's own "input box is readable and empty" signal. Some
-    /// integrations (Codex at start-up) sit at `agent_status: "unknown"`
-    /// while this is already true: no turn has been classified yet, but the
-    /// pane is really at a bare, empty prompt.
+    /// Herdr's "can accept a prompt" signal: the composer was observed open
+    /// for input. It does not mean the box is on screen right now, that it
+    /// is empty, or that the agent is only `unknown` at start-up — Codex
+    /// reports `agent_status: "unknown"` with this true whenever it is not
+    /// mid-turn, including long after its first brief. The screen-level
+    /// empty-box and trust-screen checks are what actually gate typing.
     #[serde(default)]
     pub interactive_ready: bool,
 }
@@ -236,11 +238,13 @@ impl Agent {
     }
 
     /// Like `ready`, plus an otherwise-unclassified agent herdr already
-    /// reports as interactively ready (a freshly started Codex thread,
-    /// before its first status). `blocked` never qualifies: it is excluded
-    /// by name before this is reached, not by this predicate. Used only on
-    /// the first-brief-delivery seam (`brief::step`, `threads::brief`); other
-    /// callers keep `ready()` unchanged.
+    /// reports as able to accept a prompt (a Codex thread resting at
+    /// `unknown`, not only right after launch). `blocked` never qualifies:
+    /// it is excluded by name before this is reached, not by this
+    /// predicate. Does not by itself prove an empty or safe screen — callers
+    /// still run the trust-screen and empty-box checks before typing. Used
+    /// only on the first-brief-delivery seam (`brief::step`,
+    /// `threads::brief`); other callers keep `ready()` unchanged.
     pub fn interactively_ready(&self) -> bool {
         self.ready() || (self.agent_status == "unknown" && self.interactive_ready)
     }

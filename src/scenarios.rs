@@ -135,8 +135,9 @@ pub fn agent_json(workspace: &str, tab: &str, pane: &str, cwd: &str, name: &str,
 }
 
 /// Like `agent_json`, naming the agent `kind` and herdr's own
-/// `interactive_ready` flag (set on a Codex pane at an empty, bare prompt
-/// before its first classified status).
+/// `interactive_ready` flag (herdr's "composer can accept a prompt" signal;
+/// true on a resting Codex pane generally, not only right after launch, and
+/// not proof the box is on screen or empty).
 pub fn agent_json_ex(workspace: &str, tab: &str, pane: &str, cwd: &str, name: &str, kind: &str, state: &str, interactive_ready: bool) -> String {
     format!(
         r#"{{"pane_id":"{pane}","tab_id":"{tab}","workspace_id":"{workspace}","cwd":"{cwd}","name":"{name}","agent":"{kind}","agent_status":"{state}","interactive_ready":{interactive_ready}}}"#

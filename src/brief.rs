@@ -568,4 +568,24 @@ mod tests {
         crate::threads::brief(&ctx, "demo", "t-0001").unwrap();
         assert_eq!(prompts(&world), 1);
     }
+
+    #[test]
+    fn a_codex_trust_screen_at_unknown_and_interactively_ready_is_never_typed() {
+        // `interactive_ready: true` only means the composer can accept a
+        // prompt; it is not an empty-box or safe-screen proof. A pane that
+        // reads `unknown` with that flag set, but is actually showing
+        // Codex's trust menu, must still be refused by the screen check.
+        let (world, project, _) = codex_world("unknown", true);
+        *world.screen.borrow_mut() = "  Do you trust the contents of this directory?\n\u{1b}[1m\u{203a}\u{1b}[0m 1. Yes, continue\n  2. No, quit\n".into();
+        let ctx = world.ctx();
+        for _ in 0..3 {
+            settled(&project);
+            assert!(pass(&ctx));
+        }
+        assert_eq!(prompts(&world), 0);
+        assert!(record(&project).prompt_pending);
+        let err = crate::threads::brief(&ctx, "demo", "t-0001").unwrap_err();
+        assert!(err.to_string().contains("Do you trust the contents of this directory?"), "{err}");
+        assert_eq!(prompts(&world), 0);
+    }
 }
