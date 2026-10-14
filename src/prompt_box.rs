@@ -213,8 +213,9 @@ fn input_box(kind: &str, lines: &[Line]) -> Option<Vec<Line>> {
         }
         // omp's default `band` composer: a status band on a background
         // colour, then the prompt behind a `╰─` cue, continued lines under it.
+        // The band may open with a foreground-only cap glyph, so any cell counts.
         "omp" => {
-            let at = last(&|i, l| trimmed_starts(l, "╰─") && i > 0 && lines[i - 1].first().is_some_and(|c| !c.bg.is_empty()))?;
+            let at = last(&|i, l| trimmed_starts(l, "╰─") && i > 0 && lines[i - 1].iter().any(|c| !c.bg.is_empty()))?;
             let mut rows = vec![after(&lines[at], '─')?];
             rows.extend(lines[at + 1..].iter().cloned());
             Some(rows)
