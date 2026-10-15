@@ -60,7 +60,7 @@ pub fn read_turn_of(k: &str, file: Option<&Path>, session: &str, cwd: &Path, who
 pub fn said_to(k: &str, file: Option<&Path>, session: &str, cwd: &Path, text: &str, since: i64) -> Option<bool> {
     if !kind(k).map(|a| a.reads_turn).unwrap_or(false) { return None; }
     let f = file_for(k, file, session, cwd)?;
-    holds(&f, text, since).ok()
+    holds(&f, &super::hand_limits::as_typed(text), since).ok() // a long one went in as a line naming its file
 }
 /// A program that cannot ask has full access whatever was asked for.
 pub fn full_access(k: &str, access: &str) -> bool { access != "ask" || kind(k).map(|a| a.access_ask.is_none()).unwrap_or(true) }

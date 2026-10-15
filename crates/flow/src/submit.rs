@@ -3,6 +3,7 @@
 //! Seen on herdr 0.9.3 with claude 2.1.296: `agent start` answers "ready" as soon as the program is the pane's
 //! foreground process, which on a loaded machine is seconds before it has drawn anything; `agent prompt` pastes the
 //! text and presses enter 300 ms later, and a program still starting keeps the text and drops the enter.
+use crate::agents::hand_limits::hand_over;
 use crate::agents::installed::said_to;
 use crate::board::keys::key_name;
 use crate::clock::now;
@@ -79,9 +80,11 @@ pub fn pending_sent(t: &Task, a: Option<&Value>) -> bool {
 }
 /// Type a prompt into an agent. Returns the mark to look again with (None when herdr said nothing of the agent before).
 /// Fails with what herdr answers when nothing was typed (agent_blocked, agent_not_ready, anything unexpected).
+/// A text too long to hand over in one go is written to a file, and a line naming it is typed instead (hand_limits.rs).
 pub fn hand(api: &Herdr, pane: &str, text: &str) -> Result<Option<Value>, HerdrError> {
+    let typed = hand_over(text).map_err(|e| HerdrError { code: "failed".into(), message: e.msg })?;
     let a = api.agent_get(pane).ok().flatten();
-    if let Err(e) = api.agent_prompt(pane, text) { if !["agent_prompt_stalled", "timeout"].contains(&e.code.as_str()) { return Err(e); } } // these do not prove nothing was sent; never send twice
+    if let Err(e) = api.agent_prompt(pane, &typed) { if !["agent_prompt_stalled", "timeout"].contains(&e.code.as_str()) { return Err(e); } } // these do not prove nothing was sent; never send twice
     Ok(mark_of(a.as_ref()))
 }
 /// Some(true): it started on the text. Some(false): it sits at its prompt exactly as before. None: herdr cannot say.

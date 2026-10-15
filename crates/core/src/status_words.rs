@@ -39,9 +39,12 @@ pub fn step(stage: &str) -> &'static str { match stage { "starting" => "starting
 pub const QUEUED: &str = "queued";
 pub const STOPPED: &str = "Stopped";
 pub const COORDINATOR: &str = "Coordinator";
-/// Where the Coordinator stands, for the line above the board's box and for herdr's sidebar.
-pub fn coordinator_stands(state: &str, error: bool) -> String {
-    if error { return "could not be started".into(); }
+/// The Coordinator's error when it is running but never took your words: no start that failed.
+pub const COORDINATOR_UNSENT: &str = "your message sits unsent in its box. Go into it and press enter.";
+/// Where the Coordinator stands, for the line above the board's box and for herdr's sidebar. `error`: its error, if any.
+pub fn coordinator_stands(state: &str, error: &str) -> String {
+    if error == COORDINATOR_UNSENT { return "message not sent".into(); }
+    if !error.is_empty() { return "could not be started".into(); }
     match state { "none" => "not started: your first message starts it", "starting" => "starting", "working" => words::WORKING, "blocked" => "asks you", "idle" => "idle", "exited" => "stopped: your next message starts it again", s => return s.to_string() }.to_string()
 }
 /// The same with what waits to go in: "idle · 1 message waits to be sent".

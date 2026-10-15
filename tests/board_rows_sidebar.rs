@@ -100,7 +100,7 @@ fn herdrs_sidebar_every_stage_the_entrys_three_rows_are_the_board_rows_number_an
     assert_eq!((queued.line.as_str(), queued.progress.as_str()), ("", "Q#2"));
     // The Coordinator, no task: its name, where it stands in the words of the line above the board's box, its last message.
     // (The Rust entry takes the state's words as the Coordinator's sidebar has them: coordinator_stands.)
-    let stands = |state: &str| sw::status_words::coordinator_stands(state, false);
+    let stands = |state: &str| sw::status_words::coordinator_stands(state, "");
     let c = coordinator_entry(&stands("idle"), 0, "Done.\nBoth tasks are added.");
     assert_eq!(c, Entry { name: "Coordinator".into(), place: "Coordinator · idle".into(), stands: "Coordinator · idle".into(), age: String::new(), line: "Done. Both tasks are added.".into(), progress: String::new() });
     assert_eq!(coordinator_entry(&stands("working"), 2, "").stands, "Coordinator · working · 2 messages wait to be sent");

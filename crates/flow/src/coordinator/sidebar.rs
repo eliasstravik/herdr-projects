@@ -16,6 +16,6 @@ pub fn tell_sidebar(socket: &str) {
     let v = look(socket);
     if !v.pane.is_empty() && v.status.is_some() {
         let said = if v.error.is_empty() { v.said.clone() } else { v.error.clone() };
-        tell_pane(socket, &v.pane, &coordinator_entry(&coordinator_stands(&v.state, !v.error.is_empty()), v.queue, &said), &v.agent);
+        tell_pane(socket, &v.pane, &coordinator_entry(&coordinator_stands(&v.state, &v.error), v.queue, &said), &v.agent);
     }
 }

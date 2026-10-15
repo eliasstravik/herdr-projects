@@ -3,6 +3,8 @@
 use super::launch::{again_prompt, agent_now, exists, resumable, start_agent, unsent_prompt};
 use super::rules::{first_prompt, turned_words};
 use super::worktree::{base_ref, copy_includes, exclude_rule_dir, free_branch};
+use crate::agents::start_failed as sf;
+use crate::board::keys::key_name;
 use crate::clock::now;
 use crate::err::Res;
 use crate::flow;
@@ -12,7 +14,7 @@ use crate::plan;
 use crate::research as r;
 use crate::runner::{claim, is_aborted, release, sh, Guard};
 use crate::store::failures::failure_patch;
-use crate::store::files::{board_env, marker_alive};
+use crate::store::files::{board_env, dir_of, marker_alive};
 use crate::store::inbox::{take_text, untake_text};
 use crate::store::repos::{can_worktree, cwd_of, folder_of, git_out, is_repo};
 use crate::store::settings::lookup::{setting, setting_text};
@@ -21,11 +23,23 @@ use crate::store::settings::values::{command_of, list_of};
 use crate::store::tasks::{find, get, update_wait, Change, Task};
 use std::path::Path;
 
-fn fail_start(id: &str, msg: &str, title: &str, detail: &str, next: &str) {
+/// A start that failed: the reason in plain words on the row, the whole account (what herdr said, the terminal's last
+/// lines, where to look) in its failure, and the same at the end of the task's log (agents/start_failed.rs).
+fn fail_start(id: &str, title: &str, said: &str, again: &str) {
+    let Some(t) = get(id) else { return };
+    let (kind, pane, api) = (t.t("agent"), t.at("link").t("pane"), flow::task::h(&t));
+    let screen = sf::screen_of(&api, &pane);
+    let w = sf::explain(&sf::Start { kind: &kind, setting: if plan::planner(&t) { "plan.agent" } else { "worker.agent" }, again }, said, &screen);
+    sf::tidy(&api, &pane, &screen);
+    let log = dir_of(id).join("runner.log");
+    let look = if screen.is_empty() { String::new() } else { format!("Its terminal is still open: go into the task ({}) to see all of it. ", key_name("enter")) };
+    let detail = sf::detail(&w, said, &screen, &look, &log);
+    sf::log(&log, &kind, &detail);
     let _ = update_wait(id, 10000, |t| {
         if t.at("runner").i("pid") != std::process::id() as i64 { return Ok(Change::Keep); }
-        t.put("stage", "failed"); t.put("msg", msg);
-        for (k, v) in failure_patch(&obj(json!({ "stage": "start", "title": title, "detail": detail, "agentCanFix": false, "next": next }))) { t.insert(k, v); }
+        t.put("stage", "failed"); t.put("msg", format!("{}: {}", title.trim_end_matches(" the agent"), w.short));
+        for (k, v) in failure_patch(&obj(json!({ "stage": "start", "title": title, "detail": detail, "agentCanFix": false, "auth": w.auth, "next": w.next }))) { t.insert(k, v); }
+        t.obj_mut("failure").put("next", w.next.clone()); // a login too: its own next step, not "tell the agent to continue"
         Ok(Change::Write)
     });
 }
@@ -46,7 +60,7 @@ pub fn delegate_job(id: &str) {
     let mut g = Guard::new(id);
     g.expect(&t, &[]);
     if let Err(e) = delegate_steps(id, &mut g, t) {
-        if !is_aborted(&e) { fail_start(id, "Could not start", "Could not start the agent", &e.msg, "Fix what herdr reports, then delegate again."); }
+        if !is_aborted(&e) { fail_start(id, "Could not start the agent", &e.msg, &format!("delegate again ({})", key_name("delegate"))); }
     }
     release(id, false);
 }
@@ -153,14 +167,7 @@ pub fn restart_job(id: &str) {
     let mut g = Guard::new(id);
     g.expect(&t, &[]);
     if let Err(e) = restart_steps(id, &mut g, t) {
-        if !is_aborted(&e) {
-            let _ = update_wait(id, 10000, |t| {
-                if t.at("runner").i("pid") != std::process::id() as i64 { return Ok(Change::Keep); }
-                t.put("stage", "failed"); t.put("msg", "Could not restart the agent");
-                for (k, v) in failure_patch(&obj(json!({ "stage": "start", "title": "Could not restart the agent", "detail": e.msg, "agentCanFix": false, "next": "Fix what herdr reports, then reply or delegate again." }))) { t.insert(k, v); }
-                Ok(Change::Write)
-            });
-        }
+        if !is_aborted(&e) { fail_start(id, "Could not restart the agent", &e.msg, &format!("reply, or delegate again ({})", key_name("delegate"))); }
     }
     release(id, false);
 }

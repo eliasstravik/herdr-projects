@@ -1,7 +1,7 @@
 //! Starting the agent's program: its name, the launch arguments that are the board's own (the turn-end hook with a
 //! new secret token, the standing rules, a conversation id), waiting for it to be up, and the first text.
 use super::rules::{first_prompt, rules};
-use crate::agents::{adapter, installed, start};
+use crate::agents::{adapter, installed, start, start_failed};
 use crate::clock::now;
 use crate::err::Res;
 use crate::flow;
@@ -75,7 +75,11 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
             Err(e) => Err(e.into()),
         }
     };
-    if let Err(e) = start_with(hooked) { if !hooked { return Err(e); } hooked = false; start_with(false)?; } // once more without the hook arguments
+    if let Err(e) = start_with(hooked) { // once more without the hook arguments, from a clean shell prompt
+        if !hooked { return Err(e); }
+        start_failed::tidy(&api, &pane, &start_failed::screen_of(&api, &pane));
+        hooked = false; start_with(false)?;
+    }
     // herdr calls the program ready before it has drawn anything; text typed that early loses its enter (submit.rs).
     if !prompt.is_empty() && !blocked { let launch = std::iter::once(kind.clone()).chain(args(hooked)?).collect::<Vec<_>>().join(" "); crate::submit::settle(&api, &pane, &launch); }
     // The send time arms the pipeline: nothing older than this counts as the turn's end.

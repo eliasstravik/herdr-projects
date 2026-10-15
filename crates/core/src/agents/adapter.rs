@@ -78,11 +78,17 @@ pub fn new_session(kind: &str) -> Option<String> {
 }
 pub fn session_args(kind: &str, id: &str) -> Vec<String> { match kind { "claude" | "pi" => vec!["--session-id".into(), id.into()], _ => vec![] } }
 /// Launch arguments that keep the rules in force for the whole session. (herdr refuses launch arguments that hold line
-/// breaks, so Claude Code and pi read them from a file.)
+/// breaks, so Claude Code and pi read them from a file, and Codex is pointed at one when they are long.)
 pub fn standing(kind: &str, text: &str, dir: &Path) -> Res<Vec<String>> {
     match kind {
         "claude" => { let f = dir.join("rules.md"); fs::write(&f, text)?; Ok(vec!["--append-system-prompt-file".into(), f.display().to_string()]) }
-        "codex" => Ok(vec!["-c".into(), format!("developer_instructions={}", serde_json::to_string(text)?)]),
+        // Inline when short; else a file it is told to read: a long start command is cut off by the terminal (hand_limits.rs).
+        "codex" => {
+            let inline = serde_json::to_string(text)?;
+            if inline.len() <= super::hand_limits::ARG_MAX { return Ok(vec!["-c".into(), format!("developer_instructions={inline}")]); }
+            let f = dir.join("rules.md"); fs::write(&f, text)?;
+            Ok(vec!["-c".into(), format!("developer_instructions={}", serde_json::to_string(&super::hand_limits::rules_pointer(&f))?)])
+        }
         "pi" => { let f = dir.join("rules.md"); fs::write(&f, text)?; Ok(vec!["--append-system-prompt".into(), f.display().to_string()]) }
         _ => Ok(vec![]),
     }

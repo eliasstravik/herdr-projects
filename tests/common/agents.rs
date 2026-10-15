@@ -26,6 +26,19 @@ pub fn agent(f: &F, verb: &str, arg2: &str, argv: &[String], flag: &dyn Fn(&str)
                 st["panes"][pi]["screen"] = json!(format!("user@host:{cwd}$ {cmd}\nerror: unexpected argument '{bad}' found\n\nUsage: {kind} [OPTIONS] [PROMPT]\nuser@host:{cwd}$ \n"));
                 return fail("timeout", "timed out waiting for agent startup");
             }
+            // `slowShell`: the pane's shell is still starting, and its terminal takes at most 4096 bytes on one line. A
+            // longer start command arrives cut off, the shell waits at its continuation prompt and herdr times out.
+            // `missing`: the kinds that are not installed: the shell says so, and herdr times out too.
+            let typed = sw::agents::hand_limits::typed_command(&kind, &rest.iter().map(text).collect::<Vec<_>>());
+            let cwd = st["panes"][pi].t("cwd");
+            if st.b("slowShell") && typed.len() > 4096 {
+                st["panes"][pi]["screen"] = json!(format!("user@host:{cwd}$ {}\n>", typed.chars().scan(0, |n, c| { *n += c.len_utf8(); (*n <= 4096).then_some(c) }).collect::<String>()));
+                return fail("timeout", "timed out waiting for agent startup");
+            }
+            if st.at("missing").as_array().map(|m| m.iter().any(|k| text(k) == kind)).unwrap_or(false) {
+                st["panes"][pi]["screen"] = json!(format!("user@host:{cwd}$ {typed}\nbash: {kind}: command not found\nuser@host:{cwd}$ "));
+                return fail("timeout", "timed out waiting for agent startup");
+            }
             let seq = st.i("seq") + 1; st["seq"] = json!(seq);
             let mut a = json!({ "kind": kind, "name": arg2, "status": "idle", "seq": seq, "args": rest, "pid": 5000000 + seq });
             if st.i("slowStart") > 0 { a["boot"] = json!(st.i("slowStart")); }
@@ -47,7 +60,7 @@ pub fn agent(f: &F, verb: &str, arg2: &str, argv: &[String], flag: &dyn Fn(&str)
         }
         "prompt" => {
             if st["panes"][pi]["agent"].s("status") == "blocked" { return fail("agent_blocked", "agent is blocked"); }
-            let typed = argv.get(3).cloned().unwrap_or_default();
+            let typed = read_named(&argv.get(3).cloned().unwrap_or_default());
             let box_ = st["panes"][pi]["agent"].at("box").clone();
             let text = if box_.is_string() { format!("{}\n{typed}", text_of(&box_)) } else { typed };
             if st["panes"][pi]["agent"].i("boot") > 0 || st.i("swallow") > 0 {
@@ -81,6 +94,11 @@ pub fn agent(f: &F, verb: &str, arg2: &str, argv: &[String], flag: &dyn Fn(&str)
         "read" => out(st["panes"][pi]["agent"].s("screen")),
         _ => fail("unknown_command", "agent"),
     }
+}
+/// A message handed over in a file (too long to type in): the agent reads that file, and takes it as the message.
+fn read_named(typed: &str) -> String {
+    let re = regex::Regex::new(r"^\[This message is too long to be typed in, so it is in the file (\S+)\. ").unwrap();
+    re.captures(typed).and_then(|c| std::fs::read_to_string(&c[1]).ok()).unwrap_or_else(|| typed.to_string())
 }
 fn text_of(v: &Value) -> String { v.as_str().unwrap_or("").to_string() }
 fn data() -> PathBuf { sw::store::files::data_dir() }
