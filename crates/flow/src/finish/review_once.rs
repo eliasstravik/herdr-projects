@@ -85,7 +85,7 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
         let start_with = |hook: Vec<String>| -> Res<()> {
             let args = start::start_args(&rkind, &opts(hook))?;
             let r = if plan.is_some() { crate::plan::sandbox::start_program(&api, &get(id).unwrap_or(t.clone()), &name, &rkind, &pane, &args) } else { api.agent_start(&name, &rkind, &pane, &args, 60000).map(|_| ()) };
-            match r { Ok(()) => { crate::submit::settle(&api, &pane, &std::iter::once(rkind.clone()).chain(args).collect::<Vec<_>>().join(" ")); Ok(()) } Err(e) if e.code == "agent_not_ready" => Ok(()), Err(e) => Err(e.into()) }
+            match r { Ok(()) => { crate::submit::settle(&api, &pane, &std::iter::once(crate::agents::kinds::program(&rkind).to_string()).chain(args).collect::<Vec<_>>().join(" ")); Ok(()) } Err(e) if e.code == "agent_not_ready" => Ok(()), Err(e) => Err(e.into()) }
         };
         if let Err(e) = start_with(x.hook.clone()) { if x.hook.is_empty() { return Err(e); } start_with(vec![])?; } // once more without the hook arguments
         let tl = task_line_as(&t, "reviewer", round);

@@ -48,9 +48,10 @@ pub fn world_with(o: Opts) -> World {
     let data = sw::store::files::data_dir();
     let config = sw::store::files::config_dir();
     std::fs::create_dir_all(&data).unwrap(); std::fs::create_dir_all(&config).unwrap();
-    // The agent programs count as installed, without being run for their version.
+    // Every agent program counts as installed, without being run for its version.
     let now = sw::clock::now();
-    std::fs::write(data.join("versions.json"), json!({ "claude": { "v": "9.9.9", "at": now, "found": true }, "codex": { "v": "9.9.9", "at": now, "found": true }, "pi": { "v": "9.9.9", "at": now, "found": true } }).to_string()).unwrap();
+    let versions: serde_json::Map<String, Value> = sw::agents::kinds::all().map(|k| (k.name.to_string(), json!({ "v": "9.9.9", "at": now, "found": true }))).collect();
+    std::fs::write(data.join("versions.json"), Value::Object(versions).to_string()).unwrap();
     let mut settings = json!({ "watcher.agent": "none", "coordinator.agent": "none" });
     for (k, v) in o.settings.as_object().cloned().unwrap_or_default() { settings[k] = v; }
     std::fs::write(config.join("config.json"), settings.to_string()).unwrap();

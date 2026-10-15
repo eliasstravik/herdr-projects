@@ -146,6 +146,7 @@ impl FakeHerdr {
                 return ok(json!({ "type": "plugin_pane_opened", "plugin_pane": { "entrypoint": "board", "plugin_id": "herdr-projects", "pane": Self::pane_out(&q) } }));
             }
             ("plugin", "list") => return ok(json!({ "type": "plugin_list", "plugins": [] })),
+            ("integration", "status") => return out(&st.s("integrations").to_string()), // what a test says of herdr's integrations
             ("machine", _) => return out(&format!("{}\n", std::fs::read_to_string(self.dir.join("machines.json")).unwrap_or_else(|_| "[]".into()).trim())),
             _ => {}
         }

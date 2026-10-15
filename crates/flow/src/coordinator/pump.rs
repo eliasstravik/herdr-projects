@@ -96,7 +96,7 @@ fn ensure(api: &Herdr, socket: &str) -> Res<(Obj, bool)> {
     let args = start::start_args(&k, &start::StartOpts { model: run.t("model"), effort: run.t("effort"), access: if run.b("access") { run.t("access") } else { "full".into() }, fast: run.b("fast").then_some(true), resume: resume.clone().unwrap_or_default(), session: session.clone().unwrap_or_default(), ..Default::default() })?;
     let mut blocked = false;
     match api.agent_start(&name, &k, pane.s("pane_id"), &args, 60000) {
-        Ok(_) => { settle(api, pane.s("pane_id"), &std::iter::once(k.clone()).chain(args).collect::<Vec<_>>().join(" ")); }
+        Ok(_) => { settle(api, pane.s("pane_id"), &std::iter::once(crate::agents::kinds::program(&k).to_string()).chain(args).collect::<Vec<_>>().join(" ")); }
         Err(e) if e.code == "agent_not_ready" => blocked = true, // a dialog is in the way: what you said waits
         Err(e) => { if let Some(c) = get(socket) { close_place(api, &c); } let _ = change(socket, |c| { nowhere(c); c.put("starting", 0); true }); return Err(e.into()); }
     }

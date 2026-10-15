@@ -111,7 +111,7 @@ fn compare(id: &str, g: &mut Guard, t: &Task) -> Res<Obj> {
     g.set(|t| { t.obj_mut("link").put("reviewer", json!({ "pane": pane, "tab": tab, "agent": name, "kind": k })); t.put("reviewSession", x.session.clone().map(Value::String).unwrap_or(Value::Null)); })?;
     let start_with = |hook: Vec<String>| -> Res<()> {
         let args = start::start_args(&k, &start::StartOpts { model: model.clone(), effort: effort.clone(), fast: Some(who.fast), access: who.access.clone(), session: x.session.clone().unwrap_or_default(), extra: hook, ..Default::default() })?;
-        match api.agent_start(&name, &k, &pane, &args, 60000) { Ok(_) => { crate::submit::settle(&api, &pane, &std::iter::once(k.clone()).chain(args).collect::<Vec<_>>().join(" ")); Ok(()) } Err(e) if e.code == "agent_not_ready" => Ok(()), Err(e) => Err(e.into()) }
+        match api.agent_start(&name, &k, &pane, &args, 60000) { Ok(_) => { crate::submit::settle(&api, &pane, &std::iter::once(crate::agents::kinds::program(&k).to_string()).chain(args).collect::<Vec<_>>().join(" ")); Ok(()) } Err(e) if e.code == "agent_not_ready" => Ok(()), Err(e) => Err(e.into()) }
     };
     if let Err(e) = start_with(x.hook.clone()) { if x.hook.is_empty() { return Err(e); } start_with(vec![])?; }
     let until = now() + ms("HERDR_PROJECTS_REVIEW_MS", 20 * 60000);

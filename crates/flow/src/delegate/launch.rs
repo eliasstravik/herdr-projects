@@ -77,7 +77,7 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
     };
     if let Err(e) = start_with(hooked) { if !hooked { return Err(e); } hooked = false; start_with(false)?; } // once more without the hook arguments
     // herdr calls the program ready before it has drawn anything; text typed that early loses its enter (submit.rs).
-    if !prompt.is_empty() && !blocked { let launch = std::iter::once(kind.clone()).chain(args(hooked)?).collect::<Vec<_>>().join(" "); crate::submit::settle(&api, &pane, &launch); }
+    if !prompt.is_empty() && !blocked { let launch = std::iter::once(crate::agents::kinds::program(&kind).to_string()).chain(args(hooked)?).collect::<Vec<_>>().join(" "); crate::submit::settle(&api, &pane, &launch); }
     // The send time arms the pipeline: nothing older than this counts as the turn's end.
     let (session, version, plan_mode) = (resume.map(String::from).or(x.session.clone()), x.version.clone(), plan::plan_args(&t, &kind).is_some() || plan::sandbox::boxed(&t));
     let t = g.set(|t| {
