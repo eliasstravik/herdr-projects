@@ -19,6 +19,13 @@ pub fn agent(f: &F, verb: &str, arg2: &str, argv: &[String], flag: &dyn Fn(&str)
             if st["panes"][pi].at("agent").is_object() { return fail("pane_busy", "the pane is not at its shell prompt"); }
             let kind = flag("--kind").unwrap_or_default();
             let rest: Vec<Value> = argv.iter().position(|a| a == "--").map(|i| argv[i + 1..].iter().map(|x| json!(x)).collect()).unwrap_or_default();
+            // `refuses`: per kind, the arguments its installed version does not know. It quits at once, as real
+            // herdr shows it: the pane back at its shell and `timed out waiting for agent startup` at the timeout.
+            if let Some(bad) = rest.iter().map(text).find(|x| st.at("refuses").arr(&kind).iter().any(|r| text(r) == *x)) {
+                let (cwd, cmd) = (st["panes"][pi].t("cwd"), std::iter::once(kind.clone()).chain(rest.iter().map(text)).collect::<Vec<_>>().join(" "));
+                st["panes"][pi]["screen"] = json!(format!("user@host:{cwd}$ {cmd}\nerror: unexpected argument '{bad}' found\n\nUsage: {kind} [OPTIONS] [PROMPT]\nuser@host:{cwd}$ \n"));
+                return fail("timeout", "timed out waiting for agent startup");
+            }
             let seq = st.i("seq") + 1; st["seq"] = json!(seq);
             let mut a = json!({ "kind": kind, "name": arg2, "status": "idle", "seq": seq, "args": rest, "pid": 5000000 + seq });
             if st.i("slowStart") > 0 { a["boot"] = json!(st.i("slowStart")); }

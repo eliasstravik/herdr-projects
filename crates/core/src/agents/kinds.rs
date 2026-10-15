@@ -10,6 +10,7 @@
 //!   interrupt    the key that stops a turn                                      esc
 //!   min_version  the oldest version its turn-end hook was verified on           older: runs without the hook
 //!   rules_file   the file in its start folder it reads at every conversation    none
+//!   since        an argument and the first version that takes it               older: started without it
 pub struct Kind {
     pub name: &'static str,
     pub min_version: &'static str,
@@ -20,6 +21,9 @@ pub struct Kind {
     pub tokens: bool,
     pub interrupt: &'static str,
     pub rules_file: Option<&'static str>,
+    /// The board's own arguments that only a newer version takes: (argument, first version that takes it). An older
+    /// one quits at once on an argument it does not know, and herdr then waits in vain for it to come up.
+    pub since: &'static [(&'static str, &'static str)],
     /// It can read its own conversation back (a reader in read_turn.rs).
     pub reads_turn: bool,
     /// It has a plan mode of its own, where nothing is changed (plan/).
@@ -29,14 +33,15 @@ pub struct Kind {
 }
 pub static KINDS: &[Kind] = &[
     Kind { name: "claude", min_version: "2.1.296", efforts: &["low", "medium", "high", "xhigh", "max"], access_full: &["--dangerously-skip-permissions"], access_ask: Some(&[]),
-        fast: false, tokens: true, interrupt: "esc", rules_file: Some("CLAUDE.md"), reads_turn: true, plan_mode: true, one_shot: true },
+        fast: false, tokens: true, interrupt: "esc", rules_file: Some("CLAUDE.md"), since: &[], reads_turn: true, plan_mode: true, one_shot: true },
     // --no-daemon: a shared Codex background server of another version shows a restart dialog that herdr reads as
-    // idle, so a prompt would be typed into it. Each agent runs on its own instead.
+    // idle, so a prompt would be typed into it. Each agent runs on its own instead. Codex before 0.156.0 has no shared
+    // server and no such flag (HP-11).
     Kind { name: "codex", min_version: "0.160.0", efforts: &["minimal", "low", "medium", "high", "xhigh"], access_full: &["--dangerously-bypass-approvals-and-sandbox", "--no-daemon"], access_ask: Some(&["--no-daemon"]),
-        fast: true, tokens: true, interrupt: "esc", rules_file: Some("AGENTS.md"), reads_turn: true, plan_mode: false, one_shot: true },
+        fast: true, tokens: true, interrupt: "esc", rules_file: Some("AGENTS.md"), since: &[("--no-daemon", "0.156.0")], reads_turn: true, plan_mode: false, one_shot: true },
     // pi never asks before running something: it has no `ask`.
     Kind { name: "pi", min_version: "1.1.0", efforts: &["off", "minimal", "low", "medium", "high", "xhigh"], access_full: &[], access_ask: None,
-        fast: false, tokens: true, interrupt: "esc", rules_file: Some("AGENTS.md"), reads_turn: true, plan_mode: false, one_shot: true },
+        fast: false, tokens: true, interrupt: "esc", rules_file: Some("AGENTS.md"), since: &[], reads_turn: true, plan_mode: false, one_shot: true },
 ];
 pub const KIND_NAMES: &[&str] = &["claude", "codex", "pi"];
 pub fn kind(name: &str) -> Option<&'static Kind> { KINDS.iter().find(|k| k.name == name) }

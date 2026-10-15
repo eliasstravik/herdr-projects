@@ -144,7 +144,22 @@ impl Herdr {
     pub fn agent_start(&self, name: &str, kind: &str, pane: &str, extra: &[String], timeout_ms: u64) -> HRes<Value> {
         let mut a = args(&["agent", "start", name, "--kind", kind, "--pane", pane, "--timeout", &timeout_ms.to_string()]);
         if !extra.is_empty() { a.push("--".into()); a.extend(extra.iter().cloned()); }
-        Ok(self.call_t(a, timeout_ms + 15000)?.at("agent").clone())
+        match self.call_t(a, timeout_ms + 15000) {
+            Ok(r) => Ok(r.at("agent").clone()),
+            // A program that quits as it starts (on an argument it does not know) leaves herdr waiting for it until the
+            // timeout. What it printed says why.
+            Err(e) if e.code == "timeout" && self.agent_get(pane).ok().flatten().is_none() => Err(match self.quit_with(pane, kind) { Some(why) => HerdrError { code: e.code, message: format!("{kind} quit as it started: {why}") }, None => e }),
+            Err(e) => Err(e),
+        }
+    }
+    /// The error a program printed in the pane as it quit: its first line saying "error" after the shell prompt it
+    /// was started from (the prompt the shell shows again, last), or None.
+    fn quit_with(&self, pane: &str, kind: &str) -> Option<String> {
+        let text = self.pane_read(pane, "recent", Some(40)).ok()?;
+        let lines: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+        let (prompt, before) = lines.split_last()?;
+        let from = before.iter().rposition(|l| l.starts_with(prompt) && l.contains(kind)).map(|i| i + 1).unwrap_or(0);
+        before[from..].iter().find(|l| l.to_lowercase().contains("error")).map(|l| l.chars().take(300).collect())
     }
     pub fn agent_prompt(&self, target: &str, text: &str) -> HRes<Value> { self.call_t(args(&["agent", "prompt", target, text]), 60000) }
     pub fn agent_keys(&self, target: &str, keys: &[&str]) -> HRes<Value> { let mut a = args(&["agent", "send-keys", target]); a.extend(args(keys)); self.call(a) }

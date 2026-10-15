@@ -204,7 +204,8 @@ with the repo's last task space, unless it was open before or you use it (a seco
 command, or you are looking at it). `workspace.cleanup false` keeps everything.
 
 **Agents run with full access by default**, as pi-work's did: `claude --dangerously-skip-permissions`,
-`codex --dangerously-bypass-approvals-and-sandbox --no-daemon`. They can run anything as you without asking; the
+`codex --dangerously-bypass-approvals-and-sandbox --no-daemon` (`--no-daemon` only from Codex 0.156.0, the first that
+has it: an older one quits on it). They can run anything as you without asking; the
 rules and the review brief are guidance, not a sandbox. `worker.access ask` (and `reviewer.access`,
 `coordinator.access`) starts a program without those flags, so it asks before it acts; pi cannot ask, and the value
 is refused for it. So that a new

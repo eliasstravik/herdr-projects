@@ -11,6 +11,7 @@ mod after;
 mod after_far;
 mod after_more;
 mod after_queued;
+mod agent_versions;
 mod attempts;
 mod attempts_more;
 mod attempts_rest;

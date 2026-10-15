@@ -31,6 +31,7 @@
 | Claude and Codex in a brand-new worktree with full access | both show a trust dialog, once per repository; pre-trusting removes it |
 | Codex after a reply | reported `done` here; the closing note also covers `unknown` |
 | `herdr machine list --json` with a saved machine (seen 2026-10-13) | each entry has `id`, `label`, `target` (`ssh://user@host:port` as given to `herdr machine add`), `session` (`default`), `enabled` and `selected`. The list is kept in `$XDG_STATE_HOME/herdr/client/endpoints.json`, not in the config folder. `herdr machine add` refuses a remote server that was started as `herdr server` in the foreground ("not ready for saved machines") and takes one started the normal way |
+| Codex before 0.156.0 under `herdr agent start` (seen 2026-10-15, herdr 0.9.3, codex 0.153.4 to 0.156.0 from npm) | 0.155.1 and older have no `--no-daemon` (0.156.0 is the first): codex prints `error: unexpected argument '--no-daemon' found` and quits, the pane is back at its shell, and `agent start` waits out its `--timeout` and answers `timeout`, "timed out waiting for agent startup". Started without the flag, 0.153.4 comes up in the pane and shows its update dialog (`agent_not_ready`, blocked) |
 
 Checked on 2026-10-09 for the turn-end hook and the keeper (herdr 0.9.3, Claude Code 2.1.296, Codex 0.160.0, pi 1.1.0),
 in a separate scratch herdr:

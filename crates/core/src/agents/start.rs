@@ -35,7 +35,15 @@ pub fn start_args(k: &str, o: &StartOpts) -> Res<Vec<String>> {
     if !level.is_empty() { out.extend(effort_args(k, &level)); }
     if let Some(f) = o.fast { out.extend(fast_args(k, f)); }
     out.extend(o.extra.iter().cloned());
-    Ok(out)
+    let left_out = too_new(k);
+    Ok(out.into_iter().filter(|a| !left_out.contains(&a.as_str())).collect())
+}
+/// The board's arguments the installed version of this program does not take yet (kinds.rs `since`). A version that
+/// cannot be read is taken to be new.
+pub fn too_new(k: &str) -> Vec<&'static str> {
+    let Some(a) = kind(k).filter(|a| !a.since.is_empty()) else { return vec![] };
+    let v = super::installed::version_of(k);
+    a.since.iter().filter(|(_, first)| !v.is_empty() && !super::installed::at_least(&v, first)).map(|(arg, _)| *arg).collect()
 }
 /// What a role is started as, from its five settings.
 #[derive(Clone, Debug, Default)]
