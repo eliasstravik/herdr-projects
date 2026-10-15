@@ -1,18 +1,33 @@
 //! Everything agent-specific lives in this one table: what each program accepts, how it is started, where it saves
 //! its conversation and how that is read. Every entry is optional and has a stated fallback, so a new program is one
-//! more entry here (and its readers in read_turn.rs, read_tokens.rs and talk.rs). Verified on claude 2.1.296, codex
-//! 0.160.0, pi 1.1.0 (docs/checked-on-herdr.md).
+//! more entry in kinds/ (and, for one whose conversation the board reads, its readers in read_turn.rs, read_tokens.rs
+//! and talk.rs). The programs are herdr's own (`herdr agent start --kind`); what was tried on which version is each
+//! entry's `checked` (docs/agents.md, docs/checked-on-herdr.md).
 //!
+//!   program      the executable                                                 the name
+//!   aliases      other names a setting may give it (herdr's integration name)   none
 //!   access_full / access_ask  the arguments for each `<role>.access` value     no `ask`: the value is refused for it
 //!   efforts      the effort levels it accepts                                   none: any word is passed on
+//!   effort       the arguments that give it an effort, `{}` the level           none: an effort is refused
+//!   model        the arguments that give it a model, `{}` the model             none: a model is refused
+//!   resume       the arguments that reopen a conversation, `{}` its id          none: it starts afresh
+//!   session      the arguments that name a new conversation, `{}` a new uuid    none: herdr's integration tells it
+//!   fresh        the arguments that start a new conversation, not its last one  none
+//!   standing     the arguments that add a rules file to its instructions        none: the rules go in its first prompt
+//!   lead         arguments that come first, before everything else              none
+//!   headless     its one-shot command, for the Watcher                          none: it cannot be the Watcher
 //!   fast         it has a faster service tier (`<role>.fast`)                   none: the setting does nothing
 //!   tokens       its saved conversation's tokens can be counted                 none: `limit.tokens` does nothing
 //!   interrupt    the key that stops a turn                                      esc
 //!   min_version  the oldest version its turn-end hook was verified on           older: runs without the hook
-//!   rules_file   the file in its start folder it reads at every conversation    none
+//!   rules_file   the file in its start folder it reads at every conversation    none: it is told to read the rules
 //!   since        an argument and the first version that takes it               older: started without it
+//!   integration  herdr's own integration for it, and whether herdr sees its state only through it
+//!   cannot       roles it cannot do, and why                                    none
 pub struct Kind {
     pub name: &'static str,
+    pub program: &'static str,
+    pub aliases: &'static [&'static str],
     pub min_version: &'static str,
     pub efforts: &'static [&'static str],
     pub access_full: &'static [&'static str],
@@ -28,20 +43,51 @@ pub struct Kind {
     pub reads_turn: bool,
     /// It has a plan mode of its own, where nothing is changed (plan/).
     pub plan_mode: bool,
-    /// It can be the Watcher (a headless one-shot command).
-    pub one_shot: bool,
+    pub lead: &'static [&'static str],
+    pub model: &'static [&'static str],
+    pub effort: &'static [&'static str],
+    /// Why an effort is refused, where the program takes it some other way.
+    pub effort_note: &'static str,
+    pub resume: &'static [&'static str],
+    pub session: &'static [&'static str],
+    pub fresh: &'static [&'static str],
+    pub standing: &'static [&'static str],
+    pub headless: Option<Headless>,
+    /// herdr's integration for it (`herdr integration install <name>`): "" for none.
+    pub integration: &'static str,
+    /// herdr sees whether it works only through that integration: without it, it is never started.
+    pub needs_integration: bool,
+    /// (role, why): a role it cannot do well. The role is a setting's first part (worker, reviewer, coordinator,
+    /// plan, watcher); `worker` also stands for the fallbacks and the attempts.
+    pub cannot: &'static [(&'static str, &'static str)],
+    /// What was tried, on which version (docs/agents.md).
+    pub checked: &'static str,
 }
-pub static KINDS: &[Kind] = &[
-    Kind { name: "claude", min_version: "2.1.296", efforts: &["low", "medium", "high", "xhigh", "max"], access_full: &["--dangerously-skip-permissions"], access_ask: Some(&[]),
-        fast: false, tokens: true, interrupt: "esc", rules_file: Some("CLAUDE.md"), since: &[], reads_turn: true, plan_mode: true, one_shot: true },
-    // --no-daemon: a shared Codex background server of another version shows a restart dialog that herdr reads as
-    // idle, so a prompt would be typed into it. Each agent runs on its own instead. Codex before 0.156.0 has no shared
-    // server and no such flag (HP-11).
-    Kind { name: "codex", min_version: "0.160.0", efforts: &["minimal", "low", "medium", "high", "xhigh"], access_full: &["--dangerously-bypass-approvals-and-sandbox", "--no-daemon"], access_ask: Some(&["--no-daemon"]),
-        fast: true, tokens: true, interrupt: "esc", rules_file: Some("AGENTS.md"), since: &[("--no-daemon", "0.156.0")], reads_turn: true, plan_mode: false, one_shot: true },
-    // pi never asks before running something: it has no `ask`.
-    Kind { name: "pi", min_version: "1.1.0", efforts: &["off", "minimal", "low", "medium", "high", "xhigh"], access_full: &[], access_ask: None,
-        fast: false, tokens: true, interrupt: "esc", rules_file: Some("AGENTS.md"), since: &[], reads_turn: true, plan_mode: false, one_shot: true },
-];
-pub const KIND_NAMES: &[&str] = &["claude", "codex", "pi"];
-pub fn kind(name: &str) -> Option<&'static Kind> { KINDS.iter().find(|k| k.name == name) }
+/// A headless one-shot: `args`, then the model, then the instructions (`system`, else written above the prompt),
+/// then `prompt` (`{}` the prompt; none: it goes in on stdin).
+pub struct Headless {
+    pub args: &'static [&'static str],
+    pub model: &'static [&'static str],
+    pub system: &'static [&'static str],
+    pub prompt: &'static [&'static str],
+}
+/// What an entry has that it does not name.
+pub const BASE: Kind = Kind {
+    name: "", program: "", aliases: &[], min_version: "0", efforts: &[], access_full: &[], access_ask: Some(&[]), fast: false, tokens: false,
+    interrupt: "esc", rules_file: None, since: &[], reads_turn: false, plan_mode: false, lead: &[], model: &[], effort: &[], effort_note: "",
+    resume: &[], session: &[], fresh: &[], standing: &[], headless: None, integration: "", needs_integration: false, cannot: &[], checked: "",
+};
+mod herdr;
+mod own;
+
+/// Every program, in the order they are named: the board's three first, then herdr's others.
+pub fn all() -> impl Iterator<Item = &'static Kind> { own::KINDS.iter().chain(herdr::KINDS.iter()) }
+/// The programs' names, as a setting gives them.
+pub static KIND_NAMES: std::sync::LazyLock<Vec<&'static str>> = std::sync::LazyLock::new(|| all().map(|k| k.name).collect());
+pub fn kind(name: &str) -> Option<&'static Kind> { all().find(|k| k.name == name) }
+/// A program by its name or one of its other names.
+pub fn kind_named(name: &str) -> Option<&'static Kind> { let n = name.to_lowercase(); all().find(|k| k.name == n || k.aliases.contains(&n.as_str())) }
+/// The executable a kind is started as.
+pub fn program(name: &str) -> &str { kind(name).map(|k| if k.program.is_empty() { k.name } else { k.program }).unwrap_or(name) }
+/// The arguments of a template, `{}` given its value.
+pub fn fill(tpl: &[&str], v: &str) -> Vec<String> { tpl.iter().map(|a| a.replace("{}", v)).collect() }

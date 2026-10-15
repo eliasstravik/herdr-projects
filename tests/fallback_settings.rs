@@ -49,7 +49,7 @@ fn a_real_setting_set_and_unset_in_every_place_refused_values_never_the_repos_fi
     assert_eq!(ok(&["unset", "worker.fallback", "--repo", "proj"]), "worker.fallback for proj: codex, claude/claude-opus-5-5  (you)\n");
     assert!(has(&ok(&["show"]), r"\n\* worker\.fallback +codex, claude/claude-opus-5-5 +you\n"));
     // a refused value changes nothing and names the nearest right one
-    assert!(has(&fails(&["set", "worker.fallback", "codx"]), r#"worker\.fallback: no agent program "codx"\. It must be claude, codex, pi\. Did you mean codex\?"#), "{}", fails(&["set", "worker.fallback", "codx"]));
+    assert!(has(&fails(&["set", "worker.fallback", "codx"]), r#"worker\.fallback: no agent program "codx"\. It must be claude, codex, pi, agy, .*, qwen\. Did you mean codex\?"#), "{}", fails(&["set", "worker.fallback", "codx"]));
     assert!(fails(&["set", "worker.fallback", "codex, none"]).contains("none stands alone"));
     assert!(has(&fails(&["set", "worker.fallbak", "codex"]), r#"Unknown setting "worker\.fallbak"\. Did you mean worker\.fallback\?"#));
     assert!(fails(&["set", "reviewer.fallback", "claude/bad model"]).contains("reviewer.fallback"));
@@ -85,7 +85,7 @@ fn the_settings_page_and_the_coordinators_rules_say_it_and_the_words_for_why_an_
     assert!(at > 0 && names(&b).iter().any(|n| n == "reviewer.fallback"));
     for _ in 0..at { b.press(&["down"]); }
     let page = b.screen(140).join("\n");
-    assert!(has(&regex::Regex::new(r"\n *").unwrap().replace_all(&page, " "), r"Agent's fallback: programs \(claude, codex or pi\), each with a model after a slash if you like, in the order they are tried, with commas between them; none for none"), "{page}");
+    assert!(has(&regex::Regex::new(r"\n *").unwrap().replace_all(&page, " "), r"Agent's fallback: programs \(claude, codex, pi, agy, …\), each with a model after a slash if you like, in the order they are tried, with commas between them; none for none"), "{page}");
     assert!(has(&page, r"› {3}Agent's fallback +none +worker\.fallback *\n"), "{page}");
     assert!(has(&page, r"Reviewer's fallback +none +reviewer\.fallback *\n"), "{page}");
     b.press(&["enter"]); b.typed("codex, pi"); b.press(&["enter"]);

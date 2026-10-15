@@ -39,6 +39,9 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
   herdr-projects unset <name> [--repo NAME | --task ID]
                                       back to what it would be without that answer
   herdr-projects show [<id>] [--repo NAME]     every setting and the place it came from; without an id, your own
+                                      (a program setting, such as worker.agent, takes claude, codex, pi or another
+                                       program herdr can start, as agy/gemini-3-pro; one that cannot do that role is
+                                       refused with the reason)
   herdr-projects automations [add|show|change|on|off|run|firings|remove] …
                                       tasks made on a schedule or when something happens on the board; each firing adds
                                       a task and puts an agent on it. `herdr-projects automations help` says how

@@ -2,6 +2,7 @@
 //! rules, where it saves a conversation and which one is its newest, a headless call for the Watcher, and marking a
 //! repo as trusted in its own settings. One match per question, one arm per program (kinds.rs has the plain facts).
 use super::homes::*;
+use super::kinds::fill;
 use super::read_turn::{find_file, head_of, when};
 use crate::err::Res;
 use crate::json::*;
@@ -72,22 +73,23 @@ export default function (pi: any) {{
     }
 }
 pub fn has_hook(kind: &str) -> bool { matches!(kind, "claude" | "codex" | "pi") }
-/// A conversation id of the board's own choosing, where the program takes one.
+/// A conversation id of the board's own choosing, where the program takes one (kinds.rs `session`).
 pub fn new_session(kind: &str) -> Option<String> {
-    match kind { "claude" => Some(uuid()), "pi" => Some(format!("sw-{}", &uuid()[..13])), _ => None }
+    match kind { "pi" => Some(format!("sw-{}", &uuid()[..13])), k => super::kinds::kind(k).filter(|a| !a.session.is_empty()).map(|_| uuid()) }
 }
-pub fn session_args(kind: &str, id: &str) -> Vec<String> { match kind { "claude" | "pi" => vec!["--session-id".into(), id.into()], _ => vec![] } }
-/// Launch arguments that keep the rules in force for the whole session. (herdr refuses launch arguments that hold line
-/// breaks, so Claude Code and pi read them from a file.)
+/// The arguments that start a new conversation: the id the board chose for it, and the program's own "a new one".
+pub fn session_args(kind: &str, id: &str) -> Vec<String> { super::kinds::kind(kind).map(|a| if id.is_empty() { vec![] } else { fill(a.session, id) }).unwrap_or_default() }
+pub fn fresh_args(kind: &str) -> Vec<String> { super::kinds::kind(kind).map(|a| fill(a.fresh, "")).unwrap_or_default() }
+/// Launch arguments that keep the rules in force for the whole session. herdr refuses launch arguments that hold line
+/// breaks, so a program reads them from a file (kinds.rs `standing`); Codex takes them as a setting.
 pub fn standing(kind: &str, text: &str, dir: &Path) -> Res<Vec<String>> {
-    match kind {
-        "claude" => { let f = dir.join("rules.md"); fs::write(&f, text)?; Ok(vec!["--append-system-prompt-file".into(), f.display().to_string()]) }
-        "codex" => Ok(vec!["-c".into(), format!("developer_instructions={}", serde_json::to_string(text)?)]),
-        "pi" => { let f = dir.join("rules.md"); fs::write(&f, text)?; Ok(vec!["--append-system-prompt".into(), f.display().to_string()]) }
-        _ => Ok(vec![]),
-    }
+    if kind == "codex" { return Ok(vec!["-c".into(), format!("developer_instructions={}", serde_json::to_string(text)?)]); }
+    let Some(a) = super::kinds::kind(kind).filter(|a| !a.standing.is_empty()) else { return Ok(vec![]) };
+    let f = dir.join("rules.md");
+    fs::write(&f, text)?;
+    Ok(fill(a.standing, &f.display().to_string()))
 }
-pub fn has_standing(kind: &str) -> bool { matches!(kind, "claude" | "codex" | "pi") }
+pub fn has_standing(kind: &str) -> bool { kind == "codex" || super::kinds::kind(kind).map(|a| !a.standing.is_empty()).unwrap_or(false) }
 fn real(p: &Path) -> PathBuf { fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()) }
 fn dashed(p: &Path) -> String { p.display().to_string().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect() }
 /// Where a conversation is saved.
@@ -165,18 +167,15 @@ pub fn find_session_but(kind: &str, cwd: &Path, since: i64, needle: &str, but: &
     match (hits.len(), since_launch.len()) { (1, _) => Some(hits[0].1.clone()), (_, 1) => Some(since_launch[0].1.clone()), _ => None }
 }
 pub fn can_find_session(kind: &str) -> bool { kind == "codex" }
-pub fn resume_args(kind: &str, id: &str) -> Vec<String> { match kind { "claude" => vec!["--resume".into(), id.into()], "codex" => vec!["resume".into(), id.into()], "pi" => vec!["--session-id".into(), id.into()], _ => vec![] } }
+pub fn resume_args(kind: &str, id: &str) -> Vec<String> { super::kinds::kind(kind).map(|a| fill(a.resume, id)).unwrap_or_default() }
+/// pi takes a provider apart from its model (`pi/anthropic/claude-opus-5-5`).
 pub fn model_args(kind: &str, m: &str) -> Vec<String> {
     match kind {
-        "claude" => vec!["--model".into(), m.into()],
-        "codex" => vec!["-m".into(), m.into()],
         "pi" => match m.split_once('/') { Some((p, mm)) => vec!["--provider".into(), p.into(), "--model".into(), mm.into()], None => vec!["--model".into(), m.into()] },
-        _ => vec![],
+        k => super::kinds::kind(k).map(|a| fill(a.model, m)).unwrap_or_default(),
     }
 }
-pub fn effort_args(kind: &str, e: &str) -> Vec<String> {
-    match kind { "claude" => vec!["--effort".into(), e.into()], "codex" => vec!["-c".into(), format!("model_reasoning_effort=\"{e}\"")], "pi" => vec!["--thinking".into(), e.into()], _ => vec![] }
-}
+pub fn effort_args(kind: &str, e: &str) -> Vec<String> { super::kinds::kind(kind).map(|a| fill(a.effort, e)).unwrap_or_default() }
 /// Codex's Fast mode (every request carries `service_tier: "priority"`); off names the default tier, last on the line.
 pub fn fast_args(kind: &str, on: bool) -> Vec<String> {
     match (kind, on) { ("codex", true) => vec!["-c".into(), "service_tier=\"fast\"".into()], ("codex", false) => vec!["-c".into(), "service_tier=\"default\"".into()], _ => vec![] }
@@ -211,9 +210,23 @@ pub fn one_shot(kind: &str, model: &str, effort: &str, prompt: &str, system: &st
             a.extend(["--".into(), prompt.into()]);
             Some(OneShot { command: "pi".into(), args: a, stdin: None })
         }
-        _ => None,
+        // herdr's others: their one-shot, from the table (kinds.rs `headless`); the instructions go above the prompt
+        // where the program has no flag for them.
+        k => {
+            let a = super::kinds::kind(k)?;
+            let h = a.headless.as_ref()?;
+            let mut args = fill(h.args, "");
+            if !model.is_empty() { args.extend(fill(h.model, model)); }
+            let prompt = if !system.is_empty() && h.system.is_empty() { format!("{system}\n\n{prompt}") } else { prompt.to_string() };
+            if !system.is_empty() { args.extend(fill(h.system, system)); }
+            if h.prompt.is_empty() { return Some(OneShot { command: super::kinds::program(k).into(), args, stdin: Some(prompt) }); }
+            args.extend(fill(h.prompt, &prompt));
+            Some(OneShot { command: super::kinds::program(k).into(), args, stdin: None })
+        }
     }
 }
+/// Can it be the Watcher: does it have a headless one-shot?
+pub fn can_one_shot(kind: &str) -> bool { one_shot(kind, "", "", "", "", false).is_some() }
 /// The program's own user-level skills folder, where it is installed.
 pub fn skill_dir(kind: &str) -> Option<PathBuf> {
     let home = match kind { "claude" => claude_home(), "codex" => codex_home(), "pi" => pi_home(), _ => return None };

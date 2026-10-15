@@ -80,7 +80,8 @@ fn ensure(api: &Herdr, socket: &str) -> Res<(Obj, bool)> {
     let run = match c.o("run").cloned().or_else(|| c.o("pick").cloned().map(|mut p| { p.put("oneOff", true); p })).or_else(choice) { Some(r) => r, None => crate::fail!("{OFF_WORDS}") };
     let k = run.t("kind");
     if !installed::installed(&k) { crate::fail!("\"{k}\" is not installed here, so it cannot be the Coordinator."); }
-    let resume = if c.b("run") && c.b("session") && !adapter::resume_args(&k, "x").is_empty() && adapter::transcript(&k, c.s("session"), &home(socket)).is_some() { Some(c.t("session")) } else { None };
+    let saved = !crate::agents::kinds::kind(&k).map(|a| a.reads_turn).unwrap_or(false) || adapter::transcript(&k, c.s("session"), &home(socket)).is_some();
+    let resume = if c.b("run") && c.b("session") && !adapter::resume_args(&k, "x").is_empty() && saved { Some(c.t("session")) } else { None };
     let session = if resume.is_none() { adapter::new_session(&k) } else { None };
     // The rules ride on no launch flag: the program reads them from its folder, so they are told once.
     let (_, reads) = write_rules(&home(socket), &k, &text)?;
@@ -151,6 +152,9 @@ fn run_pump(socket: &str, taken: &mut HashSet<String>) -> Res<()> {
             // Asked to stop (or restart, or begin anew) while an earlier message went in: that comes first.
             if get(socket).map(|c| c.b("want")).unwrap_or(false) { break; }
             let ag = api.agent_get(c.s("pane")).ok().flatten();
+            // A program whose files the board does not read: its conversation is the one herdr's integration names.
+            let told = ag.as_ref().map(|a| a.at("agent_session").t("value")).unwrap_or_default();
+            if !told.is_empty() { change(socket, |c| { if c.s("session") == told { return false; } c.put("session", told.clone()); true })?; }
             let run = get(socket).map(|c| c.i("startedAt")).unwrap_or(0);
             let seq = ag.as_ref().map(|a| a.at("completion_seq").clone()).unwrap_or(Value::Null);
             let at_rest = ag.as_ref().map(|a| ["idle", "done"].contains(&a.s("agent_status"))).unwrap_or(false);

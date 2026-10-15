@@ -8,7 +8,7 @@ pub fn has_fast(k: &str) -> bool { kind(k).map(|a| a.fast).unwrap_or(false) }
 /// The effort a program is really given: none for `default`, and none for a level it does not accept.
 pub fn effort_for(k: &str, effort: &str) -> String {
     if effort.is_empty() || effort == "default" { return String::new(); }
-    match kind(k) { Some(a) if !a.efforts.is_empty() && !a.efforts.contains(&effort) => String::new(), _ => effort.to_string() }
+    match kind(k) { Some(a) if a.effort.is_empty() || (!a.efforts.is_empty() && !a.efforts.contains(&effort)) => String::new(), _ => effort.to_string() }
 }
 /// The flags of `<role>.access` for this program. A program that cannot ask is never started as if it could.
 pub fn access_args(k: &str, access: &str) -> Res<Vec<String>> {
@@ -26,9 +26,9 @@ pub struct StartOpts { pub model: String, pub effort: String, pub fast: Option<b
 /// conversation; `session` names a new one; `extra` are the hook and standing-rule arguments; `plan` replaces the
 /// access flags with the program's own plan mode.
 pub fn start_args(k: &str, o: &StartOpts) -> Res<Vec<String>> {
-    let mut out = vec![];
+    let mut out: Vec<String> = kind(k).map(|a| super::kinds::fill(a.lead, "")).unwrap_or_default(); // `hermes chat`
     if !o.resume.is_empty() { out.extend(resume_args(k, &o.resume)); } // first: Codex's `resume` is a subcommand
-    if o.resume.is_empty() && !o.session.is_empty() { out.extend(session_args(k, &o.session)); }
+    if o.resume.is_empty() { out.extend(session_args(k, &o.session)); out.extend(fresh_args(k)); }
     match &o.plan { Some(p) => out.extend(p.iter().cloned()), None => out.extend(access_args(k, if o.access.is_empty() { "full" } else { &o.access })?) }
     if !o.model.is_empty() { out.extend(model_args(k, &o.model)); }
     let level = effort_for(k, &o.effort);

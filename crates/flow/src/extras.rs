@@ -29,7 +29,7 @@ const NAME: &str = "herdr-projects";
 /// one folder there, named for itself, and records every path it wrote.
 fn skill_targets() -> Vec<PathBuf> {
     if let Ok(dirs) = std::env::var("HERDR_PROJECTS_SKILL_DIRS") { return dirs.split(':').filter(|d| !d.is_empty()).map(|d| Path::new(d).join(NAME)).collect(); }
-    KIND_NAMES.iter().filter(|k| installed(k)).filter_map(|k| skill_dir(k)).map(|d| d.join(NAME)).collect()
+    KIND_NAMES.iter().filter_map(|k| skill_dir(k).filter(|_| installed(k))).map(|d| d.join(NAME)).collect() // only a program whose skills folder the board knows
 }
 pub fn sync_skill() -> Vec<String> { with_lock_wait("extras", 15000, || Ok(sync_skill0())).unwrap_or_default() }
 fn sync_skill0() -> Vec<String> {

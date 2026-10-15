@@ -108,10 +108,13 @@ pub fn agent_now(g: &mut Guard, t: Task) -> Res<Task> {
     if !k.is_empty() && k != t.s("agent") { return g.set(|t| { t.put("agent", k.clone()); t.put("app", k.clone()); t.put("session", Value::Null); t.put("transcript", Value::Null); }); }
     Ok(t)
 }
-/// It resumes the conversation whose id the board chose (or learned) at launch, when the program still has it.
+/// It resumes the conversation whose id the board chose (or learned) at launch, when the program still has it. A
+/// program whose files the board does not read is taken at its word: the id herdr's integration reported, or the one
+/// the board gave it, which it saved once it was prompted.
 pub fn resumable(t: &Task) -> bool {
     let k = t.s("agent");
     if !t.b("session") || adapter::resume_args(k, "x").is_empty() { return false; }
+    if !crate::agents::kinds::kind(k).map(|a| a.reads_turn).unwrap_or(false) { return t.b("sent") || t.b("said"); }
     adapter::transcript(k, t.s("session"), &cwd_of(t)).is_some()
 }
 /// The prompt for an agent that is started again on a task it worked on before: (resume, prompt).

@@ -35,7 +35,8 @@ impl Entry {
 /// The five every role has. `who` is the role as a sentence names it.
 fn role(name: &str, who: &str, agent: &str, fast: bool, kind: Kind) -> Vec<Entry> {
     let cap = if name == "worker" { "Agent's".to_string() } else { format!("{}{}'s", name[..1].to_uppercase(), &name[1..]) };
-    let mut agent_doc = format!("{who}'s program: `claude`, `codex` or `pi`, with an optional model after a slash (`codex/gpt-5.5`). The model travels with the program, so one program's model is never handed to another");
+    let names = crate::agents::kinds::KIND_NAMES.iter().map(|k| format!("`{k}`")).collect::<Vec<_>>().join(", ");
+    let mut agent_doc = format!("{who}'s program: one of {names}, with an optional model after a slash (`codex/gpt-5.5`, `agy/gemini-3-pro`). The model travels with the program, so one program's model is never handed to another. A program that cannot do this role, or take a model or an effort, is refused with the reason ([agents](agents.md))");
     if name == "coordinator" { agent_doc.push_str(". `none`: no Coordinator"); }
     if name == "reviewer" { agent_doc.push_str(". Not installed here: the worker's program reviews, on its own model, and the task says so"); }
     let mut a = e(&format!("{name}.agent"), &format!("{cap} program"), kind, Ty::Agent, json!(agent), &agent_doc);
@@ -46,7 +47,7 @@ fn role(name: &str, who: &str, agent: &str, fast: bool, kind: Kind) -> Vec<Entry
     vec![a,
         e(&format!("{name}.effort"), &format!("{cap} effort"), kind, Ty::Effort, json!("default"), &format!("{who}'s effort level: one its program accepts (checked against `{name}.agent`), or `default` for the program's own")),
         e(&format!("{name}.fast"), &format!("{cap} fast mode"), kind, Ty::Switch, json!(fast), &format!("{who} in its program's fast mode: a faster service tier that uses more of your allowance. Only Codex has one; for another program it does nothing, and `show` says so")),
-        e(&format!("{name}.access"), &format!("{cap} access"), kind, Ty::Access, json!("full"), &format!("what {who} may do without asking: `full` or `ask`. The board turns it into each program's own flags. `ask` is refused for a program that cannot ask (pi)")),
+        e(&format!("{name}.access"), &format!("{cap} access"), kind, Ty::Access, json!("full"), &format!("what {who} may do without asking: `full` or `ask`. The board turns it into each program's own flags. `ask` is refused for a program that cannot ask ({})", crate::agents::kinds::all().filter(|k| k.access_ask.is_none()).map(|k| k.name).collect::<Vec<_>>().join(", "))),
         text]
 }
 
@@ -60,7 +61,7 @@ pub static SETTINGS: LazyLock<Vec<Entry>> = LazyLock::new(|| {
     s.push(e("reviewer.fallback", "Reviewer's fallback", Work, Ty::Agents, json!("none"), "who takes over when the reviewer cannot go on: a list of agents tried in order (`codex, claude/claude-opus-5-5`; a model after a slash, as in `reviewer.agent`), or `none`. It reviews in its place when the reviewer's provider is down (after the board's own tries), the reviewer is out of allowance or logged out, or its program is not installed here; it then reviews the later rounds of that task too. With the list used up the review fails as before. Nobody extra runs until then. More: [the fallback agent](fallback.md)"));
     s.extend(role("coordinator", "the Coordinator, the agent you talk to in the chat", "claude", false, Board));
     // the Watcher
-    s.push(e("watcher.agent", "Watcher's program", Board, Ty::Agent, json!("claude/claude-haiku-5-5"), "the Watcher: a small model behind the \"doing now\" line, the progress guess and the minutes left. `none`: none of the three. More: [the Watcher](watcher.md)").none());
+    s.push(e("watcher.agent", "Watcher's program", Board, Ty::Agent, json!("claude/claude-haiku-5-5"), "the Watcher: a small model behind the \"doing now\" line, the progress guess and the minutes left. `none`: none of the three. A program with no headless one-shot is refused ([agents](agents.md)). More: [the Watcher](watcher.md)").none());
     s.push(e("watcher.every", "Watcher looks every", Board, Ty::Time, json!("60s"), "the least time between two looks of the Watcher at one working agent. One hidden model call covers every agent whose look is due, one call runs at a time on the machine, a screen that has not changed costs none, and a busy machine is looked at up to five times less often"));
     // what the work is
     s.push(e("research.only", "Research only", Work, Ty::Switch, json!(false), "research only: the task's agent changes nothing in the repo and its result is a report, with a private link. Nothing is committed, pushed, opened as a pull request or merged for it, and its row says `[research]`. Read when the agent starts: a change counts from the task's next start, and turning it on is refused once the agent has changed the repo or a pull request is open. `--research` and `--no-research` on `add` and `delegate` are short for it. More: [reports and research-only tasks](research.md)").repo().means("its agent changes nothing in the repo; the result is a report, and nothing is pushed, opened or merged"));

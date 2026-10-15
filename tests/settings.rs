@@ -129,7 +129,7 @@ fn none_is_a_real_answer_distinct_from_unset_a_task_can_cancel_its_repos_setup()
     unset_value("workspace.setup", &Scope::task(&task(&id))).unwrap(); assert_eq!(setup(), (json!("npm ci"), "the repo's file".into(), "npm ci".into())); assert_eq!(task(&id).at("settings"), &json!({}));
     set_value("workspace.include", &json!("none"), &Scope::task(&task(&id))).unwrap(); assert!(list_of(&setting("workspace.include", Some(&task(&id)))).is_empty());
     assert_eq!(set_value("coordinator.agent", &json!("none"), &you()).unwrap().value, json!("none")); assert_eq!(set_value("watcher.agent", &json!("none"), &you()).unwrap().value, json!("none"));
-    refused(set_value("worker.agent", &json!("none"), &you()), r"worker\.agent must be claude, codex, pi, with an optional model after a slash");
+    refused(set_value("worker.agent", &json!("none"), &you()), r"worker\.agent must be claude, codex, pi, agy, .*, qwen, with an optional model after a slash");
 }
 
 #[test]
@@ -147,7 +147,7 @@ fn values_a_switch_a_choice_a_time_with_its_unit_an_agent_with_its_model_and_the
     refused(set_value("gate", &json!("minor"), &you()), r#"Unknown setting "gate""#); refused(set_value("rounds", &json!("2"), &you()), r"Did you mean review\.rounds\?");
     // an agent: the model travels with the program, and effort and access are checked against it
     assert_eq!(set_value("worker.agent", &json!("Codex/gpt-5.5"), &you()).unwrap().value, json!("codex/gpt-5.5")); assert_eq!(agent_of("codex/gpt-5.5"), AgentName { kind: "codex".into(), model: "gpt-5.5".into() });
-    refused(set_value("worker.agent", &json!("gpt"), &you()), r#"no agent program "gpt"\. It must be claude, codex, pi\."#);
+    refused(set_value("worker.agent", &json!("gpt"), &you()), r#"no agent program "gpt"\. It must be claude, codex, pi, agy, .*, qwen\."#);
     refused(set_value("worker.effort", &json!("max"), &you()), r#"worker\.effort: codex has no effort "max": it takes minimal, low, medium, high, xhigh"#);
     assert_eq!(set_value("worker.effort", &json!("xhigh"), &you()).unwrap().value, json!("xhigh")); assert_eq!(set_value("worker.access", &json!("ask"), &you()).unwrap().value, json!("ask"));
     refused(set_value("worker.agent", &json!("pi"), &you()), r#"worker\.agent: pi cannot do "ask": it never asks before it acts"#);

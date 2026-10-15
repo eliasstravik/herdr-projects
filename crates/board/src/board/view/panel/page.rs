@@ -10,6 +10,9 @@ use crate::json::*;
 use crate::shown::ink::{Ink, Inked};
 use crate::store::settings_list::{entry_of, Ty};
 
+/// The programs, as the page names them: every one herdr can start is taken (docs/agents.md lists them).
+const PROGRAMS: &str = "claude, codex, pi, agy, …";
+
 /// What the selected row may be: a choice's words with the one it is now marked, or what to type.
 pub fn value_words(row: &Obj) -> String {
     let Some(e) = entry_of(row.s("name")) else { return "typed".into() };
@@ -20,12 +23,12 @@ pub fn value_words(row: &Obj) -> String {
         Ty::Time => format!("a time, such as 90s or 15m{}", if e.none { "; none for none" } else { "" }),
         Ty::Tokens => "a count of tokens, such as 500k or 2m; none for none".into(),
         Ty::Count => format!("a whole number{}", if e.min != 0 || e.name.contains("rounds") { format!(", {} or more", e.min) } else { String::new() }),
-        Ty::Agent => format!("a program (claude, codex or pi), with a model after a slash if you like{}", if e.none { "; none for none" } else { "" }),
-        Ty::Agents => "programs (claude, codex or pi), each with a model after a slash if you like, in the order they are tried, with commas between them; none for none".into(),
+        Ty::Agent => format!("a program ({PROGRAMS}), with a model after a slash if you like{}", if e.none { "; none for none" } else { "" }),
+        Ty::Agents => format!("programs ({PROGRAMS}), each with a model after a slash if you like, in the order they are tried, with commas between them; none for none"),
         Ty::Effort => "an effort level its program accepts, or default".into(),
         Ty::Text => "text; none for none".into(),
         Ty::List => "names, with commas between them; none for none".into(),
-        Ty::Attempts => "a count from 1 to 5, or programs with commas between them (claude, codex, pi), each with a model after a slash if you like".into(),
+        Ty::Attempts => format!("a count from 1 to 5, or programs with commas between them ({PROGRAMS}), each with a model after a slash if you like"),
         _ => "typed".into(),
     };
     format!("{typed}{}", if e.means.is_empty() { String::new() } else { format!(". Means: {}", e.means) })

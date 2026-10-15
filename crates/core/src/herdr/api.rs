@@ -141,7 +141,19 @@ impl Herdr {
             Err(e) => Err(e),
         }
     }
+    /// A program herdr sees at work only through its own integration is never started without it (kinds.rs
+    /// `needs_integration`): herdr would never say its turn ended. Its status unknown (an older herdr): it is started.
+    pub fn integration_ready(&self, kind: &str) -> HRes<()> {
+        let Some(k) = crate::agents::kinds::kind(kind).filter(|k| k.needs_integration) else { return Ok(()) };
+        let status = run_raw(self.socket.as_deref(), &args(&["integration", "status"]), 15000, "").unwrap_or_default();
+        let line = status.lines().find(|l| l.trim_start().starts_with(&format!("{}:", k.integration)) || l.trim_start().starts_with(&format!("{} (", k.integration)));
+        if line.map(|l| l.contains("not installed")).unwrap_or(false) {
+            return Err(HerdrError { code: "integration_missing".into(), message: format!("{kind} needs herdr's own integration, or herdr cannot see when it works: run `herdr integration install {}`, then try again.", k.integration) });
+        }
+        Ok(())
+    }
     pub fn agent_start(&self, name: &str, kind: &str, pane: &str, extra: &[String], timeout_ms: u64) -> HRes<Value> {
+        self.integration_ready(kind)?;
         let mut a = args(&["agent", "start", name, "--kind", kind, "--pane", pane, "--timeout", &timeout_ms.to_string()]);
         if !extra.is_empty() { a.push("--".into()); a.extend(extra.iter().cloned()); }
         match self.call_t(a, timeout_ms + 15000) {

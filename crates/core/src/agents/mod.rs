@@ -9,6 +9,7 @@ pub mod prompts;
 pub mod provider_error;
 pub mod read_tokens;
 pub mod read_turn;
+pub mod roles;
 pub mod screen_text;
 pub mod start;
 pub mod talk;

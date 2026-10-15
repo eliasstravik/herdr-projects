@@ -25,7 +25,7 @@ pub fn pick_of(agent: &str, effort: &str) -> Res<Option<Obj>> {
     if agent.is_empty() && effort.is_empty() { return Ok(None); }
     let base = choice().unwrap_or_else(|| obj(json!({ "kind": agent_of(&text(&entry_of("coordinator.agent").unwrap().builtin)).kind, "model": "", "effort": "" })));
     let named = if agent.is_empty() { None } else { Some(agent_of(&text(&check("coordinator.agent", &json!(agent), "")?))) };
-    if let Some(n) = &named { if n.kind.is_empty() { crate::fail!("A Coordinator for one use needs a program: claude, codex or pi."); } }
+    if let Some(n) = &named { if n.kind.is_empty() { crate::fail!("A Coordinator for one use needs a program: {}.", crate::agents::roles::able("coordinator").join(", ")); } }
     let kind = named.as_ref().map(|n| n.kind.clone()).unwrap_or_else(|| base.t("kind"));
     let same = kind == base.s("kind");
     let level = if !effort.is_empty() { text(&check("coordinator.effort", &json!(effort), &kind)?) } else if same { base.t("effort") } else { String::new() };

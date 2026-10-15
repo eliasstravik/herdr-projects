@@ -9,12 +9,13 @@ use crate::store::marks::mark;
 use std::path::{Path, PathBuf};
 
 fn versions_file() -> PathBuf { data_dir().join("versions.json") }
-/// The installed version of a program ("" when it is not installed), asked at most every ten minutes.
+/// The installed version of a program ("" when it is not installed), asked at most every ten minutes, of its own
+/// executable (cursor: cursor-agent).
 pub fn version_of(k: &str) -> String {
     if k.is_empty() || !k.chars().next().unwrap().is_ascii_lowercase() || !k.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-') { return String::new(); }
     let all = read_obj(&versions_file()).unwrap_or_default();
     if all.at(k).is_object() && now() - all.at(k).i("at") < 600000 { return all.at(k).t("v"); }
-    let r = std::process::Command::new(k).arg("--version").stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null()).output();
+    let r = std::process::Command::new(super::kinds::program(k)).arg("--version").stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null()).output();
     let (v, found) = match &r {
         Ok(o) if o.status.success() => (first_version(&String::from_utf8_lossy(&o.stdout)), true),
         Ok(_) => (String::new(), true),

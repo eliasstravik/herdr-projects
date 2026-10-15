@@ -127,7 +127,7 @@ fn what_you_say_is_never_lost_a_dialog_on_its_screen_holds_it_a_failed_start_say
     s.press(&["alt+c"]); assert!(s.text().contains("It could not be started:")); s.press(&["alt+c"]); assert!(!s.text().contains("It could not be started:")); assert!(s.s.ask.is_none());
     s.s.err_hid = String::new(); s.s.chat_open = true; assert!(s.text().contains("It could not be started:")); s.press(&["alt+c"]); assert!(!s.text().contains("It could not be started:"));
     let e = pick_of("not a kind", "").unwrap_err();
-    assert!(has(&e.msg, r#"coordinator\.agent: no agent program "not a kind"\. It must be claude, codex, pi or none\."#), "{}", e.msg);
+    assert!(has(&e.msg, r#"coordinator\.agent: no agent program "not a kind"\. It must be claude, codex, pi, agy, .*, qwen or none\."#), "{}", e.msg);
 }
 
 #[test]

@@ -116,7 +116,8 @@ fn compare(id: &str, g: &mut Guard, t: &Task) -> Res<Obj> {
     if let Err(e) = start_with(x.hook.clone()) { if x.hook.is_empty() { return Err(e); } start_with(vec![])?; }
     let until = now() + ms("HERDR_PROJECTS_REVIEW_MS", 20 * 60000);
     let every = ms("HERDR_PROJECTS_POLL_MS", 3000);
-    let mut sent = false;
+    let (mut sent, mut comp_at_send, mut quiet_since) = (false, Value::Null, 0i64);
+    let reads = crate::agents::kinds::kind(&k).map(|a| a.reads_turn).unwrap_or(false);
     let mut waited: Vec<i64> = vec![]; // its own turn-end reports while helpers it started were still at work
     let sleep = |m: i64| std::thread::sleep(std::time::Duration::from_millis(m.max(0) as u64));
     loop {
@@ -141,8 +142,15 @@ fn compare(id: &str, g: &mut Guard, t: &Task) -> Res<Obj> {
         let a = api.agent_get(&pane).ok().flatten();
         if a.is_none() && sent { return err("the reviewer exited without naming an attempt"); }
         if a.is_none() && api.pane_get(&pane).is_none() { return err("the reviewer's terminal was closed"); }
-        if !sent && a.as_ref().map(|a| a.s("agent_status") == "idle" || a.s("agent_status") == "done").unwrap_or(false) {
+        let at_rest = a.as_ref().map(|a| a.s("agent_status") == "idle" || a.s("agent_status") == "done").unwrap_or(false);
+        if !sent && at_rest {
+            comp_at_send = a.as_ref().map(|a| a.at("completion_seq").clone()).unwrap_or(Value::Null);
             match crate::submit::hand(&api, &pane, &brief) { Ok(_) => sent = true, Err(e) => if e.code != "agent_blocked" && e.code != "agent_not_ready" { sent = true; } }
+        } else if sent && !reads {
+            // A program whose conversation the board does not read: herdr saw it finish a turn since the brief, and
+            // still no answer 15 seconds later.
+            let done = at_rest && a.as_ref().map(|a| !a.at("completion_seq").is_null() && *a.at("completion_seq") != comp_at_send).unwrap_or(false);
+            if !done { quiet_since = 0; } else if quiet_since == 0 { quiet_since = now(); } else if now() - quiet_since > ms("HERDR_PROJECTS_QUIET_MS", 15000) && !file.exists() { return err("the reviewer finished without naming an attempt"); }
         }
         sleep(every);
     }

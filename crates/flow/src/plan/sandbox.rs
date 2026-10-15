@@ -38,7 +38,7 @@ pub fn boxed_command(t: &Obj, name: &str, kind: &str, args: &[String]) -> String
     let git = git_dir_of(std::path::Path::new(&tree)); // a worktree's git folder is elsewhere; a checkout's is inside it
     let mut all: Vec<String> = vec!["env".into(), format!("HERDR_PROJECTS_AGENT={name}"), "bwrap".into(), "--dev-bind".into(), "/".into(), "/".into(), "--ro-bind".into(), tree.clone(), tree];
     if let Some(g) = git { let g = g.display().to_string(); all.extend(["--ro-bind".into(), g.clone(), g]); }
-    all.extend(["--die-with-parent".into(), "--".into(), kind.into()]);
+    all.extend(["--die-with-parent".into(), "--".into(), crate::agents::kinds::program(kind).into()]);
     all.extend(args.iter().cloned());
     all.iter().map(|s| q(s)).collect::<Vec<_>>().join(" ")
 }
@@ -48,6 +48,7 @@ fn herr(code: &str, msg: String) -> HerdrError { HerdrError { code: code.into(),
 pub fn start_program(api: &Herdr, t: &Obj, name: &str, kind: &str, pane: &str, args: &[String]) -> Result<(), HerdrError> {
     if open(t) && guarded(t).is_some() && !sandbox_ok() { return Err(herr("failed", NO_MOUNT.replace("<id>", t.s("id")))); } // never a plan writer in a repo without it
     if !boxed(t) { return api.agent_start(name, kind, pane, args, 60000).map(|_| ()); }
+    api.integration_ready(kind)?;
     api.pane_run(pane, &boxed_command(t, name, kind, args))?;
     let step = std::env::var("HERDR_PROJECTS_READY_STEP_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(250u64);
     let until = crate::clock::now() + 60000;

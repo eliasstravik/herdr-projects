@@ -94,9 +94,10 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
             let s = get(id).map(|c| c.t("reviewSession")).filter(|s| !s.is_empty()).or_else(|| adapter::find_session_but(&rkind, &folder, started_at, &tl, &was))?;
             mark_cell.borrow().as_ref().and_then(|m| crate::submit::shown(&rkind, None, &s, &folder, m, &brief))
         };
+        let reads = crate::agents::kinds::kind(&rkind).map(|k| k.reads_turn).unwrap_or(false);
         let until = now() + ms("HERDR_PROJECTS_REVIEW_MS", 20 * 60000);
         let every = ms("HERDR_PROJECTS_POLL_MS", 3000);
-        let (mut sent, mut sent_at, mut quiet_since) = (false, 0i64, 0i64);
+        let (mut sent, mut sent_at, mut quiet_since, mut comp_at_send) = (false, 0i64, 0i64, Value::Null);
         let mut waited: Vec<i64> = vec![]; // its own turn-end reports while its helpers were still at work
         // Its turn ended while helpers it started are still at work (agents/helpers.rs): their answers start it again.
         let helpers_at_work = |ev: Option<&Value>| { let w = why_stopped(&get(id).unwrap_or(t.clone()), "reviewer", ev); w.turn.as_ref().map(|x| x.error.is_empty()).unwrap_or(false) && still_at_work(&w.kind, w.turn.as_ref(), started_at) };
@@ -141,7 +142,7 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
             else if !blocked && cur.s("stage") == "reviewneeds" { g.set(|t| { t.put("stage", "reviewing"); t.put("msg", "Under review"); })?; g.allow(&["reviewneeds"]); }
             let at_rest = a.as_ref().map(|a| a.s("agent_status") == "idle" || a.s("agent_status") == "done").unwrap_or(false);
             if !sent && at_rest {
-                match crate::submit::hand(&api, &pane, &brief) { Ok(m) => { crate::store::said_by::note_board(id, &brief); *mark_cell.borrow_mut() = m; sent = true; sent_at = now(); } Err(e) => { if e.code != "agent_blocked" && e.code != "agent_not_ready" { sent = true; sent_at = now(); } } }
+                match crate::submit::hand(&api, &pane, &brief) { Ok(m) => { crate::store::said_by::note_board(id, &brief); comp_at_send = a.as_ref().map(|a| a.at("completion_seq").clone()).unwrap_or(Value::Null); *mark_cell.borrow_mut() = m; sent = true; sent_at = now(); } Err(e) => { if e.code != "agent_blocked" && e.code != "agent_not_ready" { sent = true; sent_at = now(); } } }
             } else if mark_cell.borrow().is_some() && a.is_some() {
                 // The brief was typed: did the reviewer start on it? If not, enter is pressed again; never typed twice.
                 let mut m = mark_cell.borrow().clone().unwrap();
@@ -149,7 +150,13 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
                 *mark_cell.borrow_mut() = Some(m);
                 if r == "took" || r == "unknown" { *mark_cell.borrow_mut() = None; }
                 else if r == "lost" { error = "the reviewer did not start: its brief sits unsent in its box".into(); break; }
-            } else if sent && a.is_some() && crate::agents::kinds::kind(&rkind).map(|k| k.reads_turn).unwrap_or(false) && now() - sent_at > ms("HERDR_PROJECTS_ENDED_MS", 5000) {
+            } else if sent && !reads && at_rest && a.as_ref().map(|a| a.at("completion_seq") != &comp_at_send && !a.at("completion_seq").is_null()).unwrap_or(false) && now() - sent_at > ms("HERDR_PROJECTS_ENDED_MS", 5000) {
+                // A program whose conversation the board does not read: herdr saw it finish a turn since the brief, and
+                // still no verdict 15 seconds later.
+                if quiet_since == 0 { quiet_since = now(); }
+                if now() - quiet_since > ms("HERDR_PROJECTS_QUIET_MS", 15000) && !verdict_file.exists() { error = no_verdict(None, ""); ended = true; break; }
+            } else if sent && !reads && !at_rest { quiet_since = 0;
+            } else if sent && a.is_some() && reads && now() - sent_at > ms("HERDR_PROJECTS_ENDED_MS", 5000) {
                 // No hook: "idle" alone never fails a review. Only its saved conversation ending in a finished message or
                 // an error, and still no verdict 15 seconds later, does.
                 let mut session = cur.t("reviewSession");
