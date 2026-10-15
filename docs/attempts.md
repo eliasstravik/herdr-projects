@@ -17,7 +17,7 @@ herdr-projects delegate 12 --attempts.by 3
 herdr-projects delegate 12 --attempts.by "claude, codex, pi" --attempts.pick reviewer --reviewer.agent claude/claude-opus-5-5
 
 # two models for every task in one repo
-herdr-projects set attempts.by "claude, codex/gpt-5.5" --repo my-app
+herdr-projects set attempts.by "claude, codex/gpt-6.1-sol" --repo my-app
 
 # which attempt to keep, when the task waits for you
 herdr-projects pick 12 B

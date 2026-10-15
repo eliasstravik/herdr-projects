@@ -2,7 +2,7 @@
 //! their conversations: herdr's own state says when a turn ended, and the agent's closing note says what it said. Every
 //! entry is plain data, read off the program's own `--help` (the version in `checked`); docs/agents.md says what each
 //! one can do and what was tried for real.
-use super::{Headless, Kind, BASE};
+use super::{Headless, Kind, Models, Read, BASE, NO_MODELS};
 
 const ANSWER: &[&str] = &["{}"];
 pub static KINDS: &[Kind] = &[
@@ -17,6 +17,7 @@ pub static KINDS: &[Kind] = &[
         checked: "flags from copilot --help 1.0.98; started by herdr 0.9.3 on the board's flags (its folder-trust dialog)", ..BASE },
     // Started on a task through its program, cursor-agent (herdr never starts the plain `agent` it also installs).
     Kind { name: "cursor", program: "cursor-agent", aliases: &["cursor-agent"], integration: "cursor", model: &["--model", "{}"],
+        models: Models { list: &["models"], read: Read::Dashed, suffix: &["["], example: "cursor/claude-opus-4-8[effort=high]", ..NO_MODELS },
         effort_note: "cursor takes its effort in the model's name: cursor/claude-opus-4-8[effort=high]",
         access_full: &["--yolo"], resume: &["--resume", "{}"], rules_file: Some("AGENTS.md"),
         headless: Some(Headless { args: &["-p", "--output-format", "text", "--mode", "ask", "--trust"], model: &["--model", "{}"], system: &[], prompt: ANSWER }),
@@ -58,7 +59,8 @@ pub static KINDS: &[Kind] = &[
         standing: &["--append-system-prompt={}"], rules_file: Some("AGENTS.md"),
         headless: Some(Headless { args: &["-p", "--no-session", "--no-tools", "--no-skills", "--no-rules"], model: &["--model={}"], system: &["--append-system-prompt={}"], prompt: ANSWER }),
         checked: "flags from omp --help 18.11.1; started by herdr 0.9.3 on the board's flags (its first setup)", ..BASE },
-    Kind { name: "opencode", integration: "opencode", model: &["-m", "{}"], access_full: &["--auto"], resume: &["--session", "{}"], rules_file: Some("AGENTS.md"),
+    Kind { name: "opencode", integration: "opencode", model: &["-m", "{}"],
+        models: Models { list: &["models"], read: Read::Lines, example: "opencode/anthropic/claude-opus-5-5", ..NO_MODELS }, access_full: &["--auto"], resume: &["--session", "{}"], rules_file: Some("AGENTS.md"),
         headless: Some(Headless { args: &["run"], model: &["-m", "{}"], system: &[], prompt: ANSWER }),
         checked: "flags from opencode --help 1.18.34; started by herdr 0.9.3 on the board's flags", ..BASE },
     Kind { name: "qodercli", integration: "qodercli", model: &["-m", "{}"], effort: &["--reasoning-effort", "{}"], access_full: &["--dangerously-skip-permissions"],

@@ -5,7 +5,7 @@ use crate::agents::start::{effort_for, role_of};
 use crate::err::Res;
 use crate::json::*;
 use crate::store::settings::lookup::setting;
-use crate::store::settings::values::{agent_of, check};
+use crate::store::settings::values::{agent_of, check, models_fit};
 use crate::store::settings_list::entry_of;
 
 /// The default: the five `coordinator.` settings, yours only. `coordinator.agent: none`: no Coordinator.
@@ -24,7 +24,7 @@ pub const OFF_WORDS: &str = "The Coordinator is off. `herdr-projects unset coord
 pub fn pick_of(agent: &str, effort: &str) -> Res<Option<Obj>> {
     if agent.is_empty() && effort.is_empty() { return Ok(None); }
     let base = choice().unwrap_or_else(|| obj(json!({ "kind": agent_of(&text(&entry_of("coordinator.agent").unwrap().builtin)).kind, "model": "", "effort": "" })));
-    let named = if agent.is_empty() { None } else { Some(agent_of(&text(&check("coordinator.agent", &json!(agent), "")?))) };
+    let named = if agent.is_empty() { None } else { let v = check("coordinator.agent", &json!(agent), "")?; models_fit("coordinator.agent", &v)?; Some(agent_of(&text(&v))) };
     if let Some(n) = &named { if n.kind.is_empty() { crate::fail!("A Coordinator for one use needs a program: {}.", crate::agents::roles::able("coordinator").join(", ")); } }
     let kind = named.as_ref().map(|n| n.kind.clone()).unwrap_or_else(|| base.t("kind"));
     let same = kind == base.s("kind");

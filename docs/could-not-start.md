@@ -6,7 +6,7 @@ A task whose agent could not be started says why on its row, in plain words, and
 |---|---|
 | `Could not start: codex is not installed here` | Install it so that `codex` runs in a terminal here, or choose another program (`worker.agent`). |
 | `Could not start: codex is not logged in` | Run `codex` in a terminal here and log in. |
-| `Could not start: codex does not know the model it was given` | Choose a model it has (`worker.agent`, as in `codex/gpt-5.5`), or leave the model out. |
+| `Could not start: codex does not know the model it was given` | Choose a model it has (`herdr-projects models codex` lists them; [models](models.md)), or leave the model out. |
 | `Could not start: codex 0.150.0 does not take one of the board's start arguments` | Update the program. |
 | `Could not start: codex quit as it started` | Read what it printed, in the task panel, and fix that. |
 | `Could not start: codex did not come up within a minute` | Look at its terminal: whatever it shows (an update, a question, an error) is in the way. |

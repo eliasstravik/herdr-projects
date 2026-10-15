@@ -42,6 +42,8 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
                                       (a program setting, such as worker.agent, takes claude, codex, pi or another
                                        program herdr can start, as agy/gemini-3-pro; one that cannot do that role is
                                        refused with the reason)
+  herdr-projects models [PROGRAM]              the model names each program takes, written as a setting writes them
+                                      (codex/<model>); a name it does not take is refused when it is set
   herdr-projects automations [add|show|change|on|off|run|firings|remove] …
                                       tasks made on a schedule or when something happens on the board; each firing adds
                                       a task and puts an agent on it. `herdr-projects automations help` says how

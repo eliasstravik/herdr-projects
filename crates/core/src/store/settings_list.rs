@@ -36,7 +36,7 @@ impl Entry {
 fn role(name: &str, who: &str, agent: &str, fast: bool, kind: Kind) -> Vec<Entry> {
     let cap = if name == "worker" { "Agent's".to_string() } else { format!("{}{}'s", name[..1].to_uppercase(), &name[1..]) };
     let names = crate::agents::kinds::KIND_NAMES.iter().map(|k| format!("`{k}`")).collect::<Vec<_>>().join(", ");
-    let mut agent_doc = format!("{who}'s program: one of {names}, with an optional model after a slash (`codex/gpt-5.5`, `agy/gemini-3-pro`). The model travels with the program, so one program's model is never handed to another. A program that cannot do this role, or take a model or an effort, is refused with the reason ([agents](agents.md))");
+    let mut agent_doc = format!("{who}'s program: one of {names}, with an optional model after a slash (`codex/gpt-6.1-sol`, `agy/gemini-3-pro`). The model travels with the program, so one program's model is never handed to another; a name the program does not take is refused with the ones it does (`herdr-projects models` lists them, [models](models.md)). A program that cannot do this role, or take a model or an effort, is refused with the reason ([agents](agents.md))");
     if name == "coordinator" { agent_doc.push_str(". `none`: no Coordinator"); }
     if name == "reviewer" { agent_doc.push_str(". Not installed here: the worker's program reviews, on its own model, and the task says so"); }
     let mut a = e(&format!("{name}.agent"), &format!("{cap} program"), kind, Ty::Agent, json!(agent), &agent_doc);

@@ -60,6 +60,7 @@ fn takes(cmd: &str, sub: &str) -> Option<Takes> {
         "after" => f(&["clear"]),
         "approve" => f(&["anyway"]),
         "set" | "unset" | "show" => f(WHERE),
+        "models" => f(&[]),
         "automations" | "automation" => match sub { "add" | "new" => s(AUTO_ADD), "change" | "edit" => f(AUTO_CHANGE), _ => f(&[]) },
         "coordinator" => match sub { "tell" => f(&["delegate"]), "new" | "fresh" => f(&["agent", "effort"]), _ => f(&[]) },
         "machines" | "web-ui" | "remove-extras" | "reopen" | "version" | "install" | "update" | "doctor" => f(&[]),

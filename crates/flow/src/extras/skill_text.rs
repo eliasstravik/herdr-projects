@@ -33,7 +33,7 @@ Every command accepts `--json`. Below, `herdr-projects` stands for that path.
   Add a task only when the human asked for it: nothing adds tasks by itself.
 - `herdr-projects delegate <id>`: put an agent on a task. It works in its own git worktree, as an ordinary herdr
   agent in its own herdr space. Any work setting can be chosen for this one task as `--<name> <value>`:
-  `--worker.agent {agents}` (a model after a slash: `codex/gpt-5.5`; a program that cannot do a role is refused with the reason), `--worker.effort`, `--reviewer.agent`,
+  `--worker.agent {agents}` (a model after a slash: `codex/<model>`, in the program's own names: `herdr-projects models <program>` lists them, never guess one; a wrong name or a program that cannot do a role is refused with the reason), `--worker.effort`, `--reviewer.agent`,
   `--worker.fallback "codex, claude/claude-opus-5-5"` (who takes over, in order, when the agent cannot go on: out of
   allowance, logged out, its provider down, its rounds used up; `--reviewer.fallback` the same for the reviewer),
   `--review.when always|repos|never`, `--review.mustFix critical|major|minor|trivial`, `--merge.by you|itself`,

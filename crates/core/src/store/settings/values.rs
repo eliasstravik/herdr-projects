@@ -11,7 +11,7 @@ pub const NONE: &str = "none";
 fn refuse<T>(msg: String) -> Res<T> { Err(Error::refused(msg)) }
 
 /// How many edits make one word another.
-fn distance(a: &str, b: &str) -> usize {
+pub fn distance(a: &str, b: &str) -> usize {
     let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
     let mut d: Vec<Vec<usize>> = (0..=a.len()).map(|i| { let mut r = vec![0; b.len() + 1]; r[0] = i; r }).collect();
     for j in 1..=b.len() { d[0][j] = j; }
@@ -120,8 +120,8 @@ fn check_agent(e: &Entry, v: &Value) -> Res<Value> {
         return refuse(format!("{}: no agent program \"{}\". It must be {}{}.{}", e.name, n.kind, KIND_NAMES.join(", "), if e.none { " or none" } else { "" }, hint(&k, &KIND_NAMES)));
     };
     if w.contains('/') {
-        // A model with its parameters in brackets (cursor: `claude-opus-4-8[effort=high]`).
-        let ok = n.model.chars().next().map(|c| c.is_ascii_alphanumeric()).unwrap_or(false) && n.model.chars().all(|c| c.is_ascii_alphanumeric() || "._:/[]-=,".contains(c));
+        // A model with its parameters in brackets (cursor: `claude-opus-4-8[effort=high]`), or its provider after an @.
+        let ok = n.model.chars().next().map(|c| c.is_ascii_alphanumeric()).unwrap_or(false) && n.model.chars().all(|c| c.is_ascii_alphanumeric() || "._:/@[]-=,".contains(c));
         if !ok { return refuse(format!("{}: \"{}\" is not a model name.", e.name, n.model)); }
     }
     if let Some(why) = refusal(&e.name, &k, !n.model.is_empty()) { return refuse(why); }
@@ -258,6 +258,14 @@ pub fn check(name: &str, value: &Value, agent: &str) -> Res<Value> {
     let v = check_ty(e, value)?;
     if !agent.is_empty() { let why = fits(name, &text(&v), agent); if !why.is_empty() { return refuse(format!("{name}: {why}")); } }
     Ok(v)
+}
+/// A model named in a value being set is one its program takes (agents/models.rs). Only when a value is set: a value
+/// read from a file is not checked again, so reading never waits for a program's list.
+pub fn models_fit(name: &str, v: &Value) -> Res<()> {
+    let Some(e) = entry_of(name).filter(|e| matches!(e.ty, Ty::Agent | Ty::Agents | Ty::Attempts)) else { return Ok(()) };
+    let all: Vec<String> = match v { Value::Array(a) => a.iter().map(text).collect(), _ => text(v).split(", ").map(String::from).collect() };
+    for a in all.iter().map(|x| agent_of(x)) { if let Some(why) = crate::agents::models::why_not(&a.kind, &a.model) { return refuse(format!("{}: {why}", e.name)); } }
+    Ok(())
 }
 /// A value as a person reads it.
 pub fn say(v: &Value) -> String { match v { Value::Array(a) => a.iter().map(text).collect::<Vec<_>>().join(", "), _ => text(v) } }

@@ -6,6 +6,7 @@ pub mod helpers;
 pub mod homes;
 pub mod installed;
 pub mod kinds;
+pub mod models;
 pub mod prompts;
 pub mod provider_error;
 pub mod read_tokens;

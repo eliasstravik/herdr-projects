@@ -14,6 +14,13 @@ fn roles_out(k: &Kind) -> String {
     for (r, _) in roles { if let Some(w) = k.cannot.iter().find(|(x, _)| *x == r).map(|(_, w)| w.to_string()).or_else(|| why_not(k.name, r, false)) { if !why.contains(&w) { why.push(w); } } }
     format!("{} only: {}", if can.is_empty() { "none".into() } else { can.join(", ") }, why.join("; "))
 }
+/// Which model names it takes, as `models.rs` checks them.
+fn names_of(k: &Kind) -> String {
+    let m = &k.models;
+    if !m.list.is_empty() { return format!("the names {} lists", code(&std::iter::once(program(k.name).to_string()).chain(m.list.iter().map(|s| s.to_string())).collect::<Vec<_>>())); }
+    if m.aliases.is_empty() && m.prefix.is_empty() { return "not checked".into(); }
+    format!("{}{}", m.aliases.iter().map(|a| format!("`{a}`")).collect::<Vec<_>>().join(", "), if m.prefix.is_empty() { String::new() } else { format!(" or a name with `{}` in it", m.prefix) })
+}
 fn row(k: &Kind) -> Vec<String> {
     let mut name = format!("`{}`", k.name);
     if !k.aliases.is_empty() { name.push_str(&format!(" (also {})", k.aliases.iter().map(|a| format!("`{a}`")).collect::<Vec<_>>().join(", "))); }
@@ -21,7 +28,7 @@ fn row(k: &Kind) -> Vec<String> {
     started.extend(fill(k.lead, ""));
     started.extend(fill(k.fresh, ""));
     started.extend(fill(k.access_full, ""));
-    let model = if k.model.is_empty() { "none at start".into() } else { code(&fill(k.model, "<model>")) };
+    let model = if k.model.is_empty() { "none at start".into() } else { format!("{}; {}", code(&fill(k.model, "<model>")), names_of(k)) };
     let effort = if k.effort.is_empty() { if k.effort_note.is_empty() { "none".into() } else { k.effort_note.into() } } else if k.efforts.is_empty() { format!("{} (any level)", code(&fill(k.effort, "<level>"))) } else { format!("{}: {}", code(&fill(k.effort, "<level>")), k.efforts.join(", ")) };
     let ask = match k.access_ask { None => "cannot ask".into(), Some(a) if a.is_empty() => "its own default".into(), Some(a) => code(&a.iter().map(|s| s.to_string()).collect::<Vec<_>>()) };
     let rules = if k.name == "codex" { "`-c developer_instructions=…`".into() } else if k.standing.is_empty() { "in its first prompt".into() } else { code(&fill(k.standing, "<file>")) };

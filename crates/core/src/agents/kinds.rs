@@ -10,6 +10,7 @@
 //!   efforts      the effort levels it accepts                                   none: any word is passed on
 //!   effort       the arguments that give it an effort, `{}` the level           none: an effort is refused
 //!   model        the arguments that give it a model, `{}` the model             none: a model is refused
+//!   models       the model names it takes, and its own command that lists them  none: a name is not checked
 //!   resume       the arguments that reopen a conversation, `{}` its id          none: it starts afresh
 //!   session      the arguments that name a new conversation, `{}` a new uuid    none: herdr's integration tells it
 //!   fresh        the arguments that start a new conversation, not its last one  none
@@ -45,6 +46,8 @@ pub struct Kind {
     pub plan_mode: bool,
     pub lead: &'static [&'static str],
     pub model: &'static [&'static str],
+    /// The model names it takes (models.rs).
+    pub models: Models,
     pub effort: &'static [&'static str],
     /// Why an effort is refused, where the program takes it some other way.
     pub effort_note: &'static str,
@@ -71,10 +74,41 @@ pub struct Headless {
     pub system: &'static [&'static str],
     pub prompt: &'static [&'static str],
 }
+/// The model names a program takes: those its own command lists, else its aliases and the start every full name has.
+/// With neither, a name is not checked: it goes to the program as written.
+pub struct Models {
+    /// The program's own command that prints the names it takes (its arguments), and how that is read.
+    pub list: &'static [&'static str],
+    pub read: Read,
+    /// Short names it always takes (claude's `opus`).
+    pub aliases: &'static [&'static str],
+    /// The start every full name has, where it has no list (`claude-`).
+    pub prefix: &'static str,
+    /// What may follow a name and is not part of it: from this mark on, it is cut off before the name is looked up
+    /// (`[`: cursor's parameters, claude's `[1m]`; `:`: pi's thinking level).
+    pub suffix: &'static [&'static str],
+    /// How a model is written after the program, as the board's pages and refusals say it.
+    pub example: &'static str,
+}
+/// How a program's list of models is read.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Read {
+    /// No list.
+    None,
+    /// Codex's catalog: JSON, `{"models": [{"slug", "visibility"}]}`; a hidden one is taken, not shown.
+    Catalog,
+    /// pi's table: a header, then a provider and a model on each line, taken as provider/model.
+    Table,
+    /// `name - What it is`, one a line (cursor).
+    Dashed,
+    /// One name a line (opencode's provider/model).
+    Lines,
+}
+pub const NO_MODELS: Models = Models { list: &[], read: Read::None, aliases: &[], prefix: "", suffix: &[], example: "" };
 /// What an entry has that it does not name.
 pub const BASE: Kind = Kind {
     name: "", program: "", aliases: &[], min_version: "0", efforts: &[], access_full: &[], access_ask: Some(&[]), fast: false, tokens: false,
-    interrupt: "esc", rules_file: None, since: &[], reads_turn: false, plan_mode: false, lead: &[], model: &[], effort: &[], effort_note: "",
+    interrupt: "esc", rules_file: None, since: &[], reads_turn: false, plan_mode: false, lead: &[], model: &[], models: NO_MODELS, effort: &[], effort_note: "",
     resume: &[], session: &[], fresh: &[], standing: &[], headless: None, integration: "", needs_integration: false, cannot: &[], checked: "",
 };
 mod herdr;
