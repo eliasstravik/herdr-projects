@@ -124,11 +124,18 @@ fn trimmed_starts(line: &[Cell], prefix: &str) -> bool {
     text(line).trim_start().starts_with(prefix)
 }
 
-/// A horizontal rule: a line of box-drawing `─` only.
+/// A horizontal rule: a line of box-drawing `─`, at least ten of them. Claude
+/// Code may set a title in the line (the session name, as in `──── Name ──`):
+/// then the line still starts and ends with `─` and the title sits between
+/// two runs of them, set off by spaces.
 fn is_rule(line: &[Cell]) -> bool {
     let t = text(line);
     let t = t.trim();
-    t.chars().count() >= 10 && t.chars().all(|c| c == '─')
+    if t.chars().filter(|&c| c == '─').count() < 10 {
+        return false;
+    }
+    let inner = t.trim_start_matches('─').trim_end_matches('─');
+    t.starts_with('─') && (inner.is_empty() || (t.ends_with('─') && inner.starts_with(' ') && inner.ends_with(' ')))
 }
 
 /// The typed text in a box's cells: non-blank, not dim, and not a
@@ -285,6 +292,47 @@ mod tests {
         // A transcript line with `❯` that is not under a rule is not the box.
         let transcript = format!("❯ an earlier prompt\n\n{rule}\n❯ \n{rule}\n");
         assert_eq!(check("claude", &transcript), Draft::Empty);
+    }
+
+    #[test]
+    fn a_rule_with_the_session_name_in_it_still_frames_the_box() {
+        // Claude Code writes the session name into the rule above the box.
+        let plain = "─".repeat(40);
+        let titled = format!("{} Архитектура трёхслойной системы ──", "─".repeat(120));
+        let left = format!("── Session name {}", "─".repeat(30));
+        for top in [&titled, &left] {
+            // NBSP after `❯`, as Claude Code draws it.
+            assert_eq!(check("claude", &format!("{top}\n❯\u{a0}\n{plain}\n")), Draft::Empty, "{top}");
+            assert_eq!(check("claude", &format!("{top}\n❯\u{a0}\u{1b}[7m \u{1b}[0m\n{plain}\n")), Draft::Empty, "{top}");
+            assert_eq!(check("claude", &format!("{top}\n❯ \u{1b}[2mTry \"fix lint\"\u{1b}[0m\n{plain}\n")), Draft::Empty, "{top}");
+            assert_eq!(check("claude", &format!("{top}\n❯\u{a0}привет, проверь тесты\n{plain}\n")), Draft::Typed, "{top}");
+            let multi = format!("{top}\n❯\u{a0}\n  вторая строка\n{plain}\n");
+            assert_eq!(check("claude", &multi), Draft::Typed, "{top}");
+            // The name may be in the bottom rule as well.
+            assert_eq!(check("claude", &format!("{top}\n❯\u{a0}\n{titled}\n")), Draft::Empty, "{top}");
+            assert_eq!(check("claude", &format!("{top}\n❯\u{a0}x\n{titled}\n")), Draft::Typed, "{top}");
+            // A transcript `❯` above the box is still not the box.
+            let transcript = format!("❯ an earlier prompt\n\n{top}\n❯\u{a0}\n{plain}\n");
+            assert_eq!(check("claude", &transcript), Draft::Empty, "{top}");
+            assert_eq!(check("claude", &format!("❯ an earlier prompt\n{top}\n")), Draft::Unknown, "{top}");
+        }
+    }
+
+    #[test]
+    fn only_dashes_with_an_optional_spaced_title_are_a_rule() {
+        let rule = |t: &str| is_rule(&parse(t)[0]);
+        assert!(rule(&"─".repeat(10)));
+        assert!(rule(&format!("  {}  ", "─".repeat(40))));
+        assert!(rule(&format!("{} Name ──", "─".repeat(40))));
+        assert!(rule(&format!("── Name {}", "─".repeat(40))));
+        assert!(rule(&format!("── Name ─── other {}", "─".repeat(40))));
+        assert!(!rule(&"─".repeat(9)));
+        assert!(!rule("── Name ──"));
+        assert!(!rule(&format!("{} Name", "─".repeat(40))));
+        assert!(!rule(&format!("Name {}", "─".repeat(40))));
+        assert!(!rule(&format!("{}Name{}", "─".repeat(20), "─".repeat(20))));
+        assert!(!rule(&format!("┌{}┐", "─".repeat(40))));
+        assert!(!rule(&format!("├{}┼{}┤", "─".repeat(20), "─".repeat(20))));
     }
 
     #[test]
