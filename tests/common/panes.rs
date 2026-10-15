@@ -79,6 +79,12 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
             if a.i("boot") > 0 { st["panes"][pi]["agent"]["boot"] = json!(a.i("boot") - 1); let mut cmd = vec![a.t("kind")]; cmd.extend(a.arr("args").iter().map(text)); return out(&format!("user@host:{}$ {}\n", p.s("cwd"), cmd.join(" "))); }
             out(if a.b("screen") { a.s("screen") } else { p.s("screen") })
         }
+        // The interrupt character clears a command its shell waits to see the end of.
+        "send-text" => {
+            if argv.get(3).map(|t| t == "\u{3}").unwrap_or(false) && p.s("screen").trim_end().ends_with('>') { st["panes"][pi]["screen"] = json!(format!("{}^C\nuser@host:{}$ ", p.s("screen"), p.s("cwd"))); }
+            arr(st, "typed").push(json!({ "pane": arg2, "text": argv.get(3) }));
+            ok(json!({ "type": "ok" }))
+        }
         "report-metadata" => {
             arr(st, "metadata").push(json!({ "pane": arg2, "args": argv[3..] }));
             if let Some(d) = flag("--display-agent") { st["panes"][pi]["display_agent"] = json!(d); }

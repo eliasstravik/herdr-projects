@@ -9,7 +9,8 @@ root pane and gets the task and its rules. Outside git the agent works in place 
 **Finished = the agent says its turn ended.** The plugin starts every agent itself, and at launch it passes a
 turn-end hook on the command line (Claude Code: `--settings <a file in the task's own folder>`; Codex:
 `-c notify=[…]`; pi: `-e <a one-file extension>`), a session id of its own choosing where the program takes one, and
-the task's rules as a standing system prompt. Nothing is written to your own agent settings, and your own hooks keep
+the task's rules as a standing system prompt (a file, or for Codex inline when short: [long rules and long
+messages](could-not-start.md#long-rules-and-long-messages)). Nothing is written to your own agent settings, and your own hooks keep
 running. At each turn end the hook runs `herdr-projects turn-ended` (silent, at most two seconds, protected by a
 per-launch secret), and the finish line reads the end of that agent's saved conversation: its last message, an API or
 login error, token use. With the board open or closed it then:

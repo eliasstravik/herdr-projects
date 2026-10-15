@@ -81,9 +81,16 @@ pub fn new_session(kind: &str) -> Option<String> {
 pub fn session_args(kind: &str, id: &str) -> Vec<String> { super::kinds::kind(kind).map(|a| if id.is_empty() { vec![] } else { fill(a.session, id) }).unwrap_or_default() }
 pub fn fresh_args(kind: &str) -> Vec<String> { super::kinds::kind(kind).map(|a| fill(a.fresh, "")).unwrap_or_default() }
 /// Launch arguments that keep the rules in force for the whole session. herdr refuses launch arguments that hold line
-/// breaks, so a program reads them from a file (kinds.rs `standing`); Codex takes them as a setting.
+/// breaks, so a program reads them from a file (kinds.rs `standing`); Codex takes them as a setting, and is pointed at
+/// a file when they are long.
 pub fn standing(kind: &str, text: &str, dir: &Path) -> Res<Vec<String>> {
-    if kind == "codex" { return Ok(vec!["-c".into(), format!("developer_instructions={}", serde_json::to_string(text)?)]); }
+    // Inline when short; else a file it is told to read: a long start command is cut off by the terminal (hand_limits.rs).
+    if kind == "codex" {
+        let inline = serde_json::to_string(text)?;
+        if inline.len() <= super::hand_limits::ARG_MAX { return Ok(vec!["-c".into(), format!("developer_instructions={inline}")]); }
+        let f = dir.join("rules.md"); fs::write(&f, text)?;
+        return Ok(vec!["-c".into(), format!("developer_instructions={}", serde_json::to_string(&super::hand_limits::rules_pointer(&f))?)]);
+    }
     let Some(a) = super::kinds::kind(kind).filter(|a| !a.standing.is_empty()) else { return Ok(vec![]) };
     let f = dir.join("rules.md");
     fs::write(&f, text)?;

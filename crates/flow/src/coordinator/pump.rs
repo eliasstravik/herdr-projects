@@ -7,7 +7,7 @@ use super::requests::{kick, rest_ms, trimmed};
 use super::rules::{intro_line, rules, write_rules};
 use super::state::{change, dir_of, get, home, pumping};
 use super::who::{choice, OFF_WORDS};
-use crate::agents::{adapter, installed, start};
+use crate::agents::{adapter, installed, start, start_failed};
 use crate::clock::now;
 use crate::err::Res;
 use crate::herdr::cli::{session_name, socket_exists};
@@ -21,7 +21,7 @@ use crate::submit::{confirm, hand, look, settle, shown};
 use std::collections::HashSet;
 use std::path::Path;
 
-const UNSENT: &str = "your message sits unsent in its box. Go into it and press enter.";
+use crate::status_words::COORDINATOR_UNSENT as UNSENT;
 fn up(socket: &str) -> bool { crate::herdr::cli::fake().is_some() || socket_exists(socket) }
 fn mine(c: &Obj) -> bool { c.at("pump").i("pid") == std::process::id() as i64 }
 fn said_in(socket: &str, mark: &Value, text: &str) -> Option<bool> {
@@ -98,7 +98,13 @@ fn ensure(api: &Herdr, socket: &str) -> Res<(Obj, bool)> {
     match api.agent_start(&name, &k, pane.s("pane_id"), &args, 60000) {
         Ok(_) => { settle(api, pane.s("pane_id"), &std::iter::once(crate::agents::kinds::program(&k).to_string()).chain(args).collect::<Vec<_>>().join(" ")); }
         Err(e) if e.code == "agent_not_ready" => blocked = true, // a dialog is in the way: what you said waits
-        Err(e) => { if let Some(c) = get(socket) { close_place(api, &c); } let _ = change(socket, |c| { nowhere(c); c.put("starting", 0); true }); return Err(e.into()); }
+        Err(e) => {
+            // Why, in plain words, read from its terminal before its tab is closed; the whole account goes in its log.
+            let why = start_failed::say(api, &start_failed::Start { kind: &k, setting: "coordinator.agent", again: "send your message again" }, pane.s("pane_id"), &e.message, &dir_of(socket).join("start.log"));
+            if let Some(c) = get(socket) { close_place(api, &c); }
+            let _ = change(socket, |c| { nowhere(c); c.put("starting", 0); true });
+            crate::fail!("{why}");
+        }
     }
     let version = installed::version_of(&k);
     c = change(socket, |c| {

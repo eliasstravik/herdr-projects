@@ -44,6 +44,8 @@ pub fn socket_exists(socket: &str) -> bool { use std::os::unix::fs::FileTypeExt;
 
 /// Runs the program: what it gave, or why it could not be run. `timeout_ms` ends a program that takes longer.
 pub fn launch(socket: Option<&str>, args: &[String], input: &str, timeout_ms: u64) -> HRes<Ran> {
+    // Linux refuses to start a program with a longer argument (E2BIG): said in words, also to a test's stand-in.
+    if let Some(a) = args.iter().find(|a| a.len() > crate::agents::hand_limits::PROGRAM_ARG_MAX) { return Err(herr("too_long", format!("A text of {} bytes is too long to hand to herdr in one go: Linux takes at most {} bytes in one argument.", a.len(), crate::agents::hand_limits::PROGRAM_ARG_MAX))); }
     if let Some(f) = fake() { return Ok(f.run(args, input)); }
     let mut c = Command::new(bin());
     c.args(args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
