@@ -13,6 +13,8 @@ use sw::json::*;
 /// checks list, GraphQL's `statusCheckRollup` and the check-runs API, as it does a token with no Checks permission),
 /// `jobs` (each run's jobs), `statuses` (the commit's statuses), `actionsFail` (it may not read Actions either).
 /// `noLogin`: gh is not logged in where it runs (a keeper started without the login shell's GH_TOKEN): every call fails.
+/// `prs`: the pull requests GitHub has for a head branch (`pr list --head`), each { number, url, state }; none by
+/// default. `archived`: the repo is archived on GitHub (`repo view`).
 #[derive(Default)]
 pub struct FakeGh { pub cfg: RefCell<Value>, pub log: RefCell<Vec<String>>, pub merged: Cell<bool>, late: Cell<i64> }
 fn ok(out: &str) -> GhOut { GhOut { status: 0, stdout: if out.is_empty() { String::new() } else { format!("{out}\n") }, stderr: String::new() } }
@@ -74,7 +76,9 @@ impl FakeGh {
             ("api", p) if p.contains("/branches/") => ok(&strings(c.at("required")).join("\n")),
             ("api", p) if p.starts_with("repos/") => if c.b("baseFail") { fail("HTTP 403") } else { let k = p.rsplit('/').next().unwrap_or(""); ok(&c.at("base").i(k).to_string()) },
             // How many of the repo's last pull requests had checks: `others`.
+            ("pr", "list") if has("--head") => ok(&if c.at("prs").is_array() { c.at("prs").to_string() } else { "[]".into() }),
             ("pr", "list") => ok(&c.i("others").to_string()),
+            ("repo", "view") => ok(if c.b("archived") { "true" } else { "false" }),
             ("run", "view") => if c.b("log") { ok(c.s("log")) } else { fail("log not found") },
             _ => fail(&format!("fake gh: unknown {}", a.join(" "))),
         }

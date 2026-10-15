@@ -110,6 +110,8 @@ fn run(f: &F, pi: usize, prompt: &str, step: Value) {
         if step.b("merge") { let _ = git(dir, &["merge", "-q", "--no-edit", step.s("merge")]); }
         for (rel, body) in step.at("files").as_object().cloned().unwrap_or_default() { write(&dir.join(&rel), &text(&body)); }
         if step.b("commit") { let _ = git(dir, &["add", "-A"]); let _ = git(dir, &["-c", "user.email=agent@test", "-c", "user.name=agent", "commit", "-qm", step.s("commit")]); }
+        // What the agent does with git itself after that (pushes to main, merges its own pull request): each a git call.
+        for c in step.arr("git") { let a: Vec<String> = c.as_array().map(|a| a.iter().map(text).collect()).unwrap_or_default(); let a: Vec<&str> = a.iter().map(|s| s.as_str()).collect(); if let Err(e) = git(dir, &a) { panic!("git {a:?}: {e}"); } }
         let mine = told(&first).filter(|id| task_dir(id).join("task.json").exists()).map(|id| task_dir(&id));
         // The note is written once its turn has really ended: between the board's jobs, after the one that armed the turn
         // (herdr.rs: notes), as a real agent writes it well after the prompt went in.

@@ -51,10 +51,8 @@ fn a_helper_whose_own_conversation_ends_in_its_reply_is_back() {
     assert_eq!(sw::agents::helpers::running("claude", &file, started), 0);
 }
 
-#[test]
-fn finish_takes_a_task_stuck_at_finishing_to_the_check_and_the_review() {
-    let w = cut_world("30", json!({ "worker.agent": "claude" }));
-    // A helper the board never sees come back: the turn's end, and the reply's after a tell, are waited past.
+/// A helper the board never sees come back: the turn's end, and the reply's after a tell, are waited past. Its pane.
+fn stuck(w: &World) -> (String, String) {
     w.script(json!({ "worker": [work("claude-helper-running-made"), { "ends": "claude-finished-made", "hook": true }] }));
     let id = w.add("Stuck at finishing");
     delegate(&id);
@@ -62,7 +60,14 @@ fn finish_takes_a_task_stuck_at_finishing_to_the_check_and_the_review() {
     assert_eq!(t.s("stage"), "working");
     sw::actions::talk::reply(&id, "Reply with your closing summary.", "you").unwrap();
     let pane = task(&id).at("link").t("pane");
-    set_status(&w, &pane, "working"); set_status(&w, &pane, "idle"); // as herdr saw it: at work, then at rest
+    set_status(w, &pane, "working"); set_status(w, &pane, "idle"); // as herdr saw it: at work, then at rest
+    (id, pane)
+}
+
+#[test]
+fn finish_takes_a_task_stuck_at_finishing_to_the_check_and_the_review() {
+    let w = cut_world("30", json!({ "worker.agent": "claude" }));
+    let (id, pane) = stuck(&w);
     let t = settle(&id);
     // HSW-218's task as it was found: at work for the board, the reply's turn open, herdr's count handled, the agent idle
     assert_eq!((t.s("stage"), t.b("turnOpen"), t.s("turnBy"), t.at("last").s("status")), ("working", true, "reply", "idle"), "{}", t.s("msg"));
@@ -79,4 +84,19 @@ fn finish_takes_a_task_stuck_at_finishing_to_the_check_and_the_review() {
     assert_eq!(reviewer_starts(&w), 1);
     assert!(!t.b("turnOpen") && !t.b("turnBy"));
     assert!(sw::actions::finish_line::finish_anyway(&id).unwrap_err().msg.contains("did not stop without a summary"));
+}
+
+#[test]
+fn the_finish_key_is_offered_on_a_task_stuck_at_finishing_and_finishes_it() {
+    let w = cut_world("30", json!({ "worker.agent": "claude" }));
+    let (id, _) = stuck(&w);
+    settle(&id);
+    let mut s = common::board::open(&w.root, 34);
+    s.s.sel = id.clone(); s.load();
+    let text = s.screen(140).join("\n");
+    assert!(text.contains("Finishing") && text.contains(&format!("{} finish with what its agent said last", sw::board::keys::key_name("yes"))), "{text}");
+    s.press(&["ctrl+l"]);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "approval", "{} {}", t.s("msg"), t.at("failure"));
+    assert_eq!(reviewer_starts(&w), 1);
 }

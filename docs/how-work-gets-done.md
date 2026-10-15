@@ -16,7 +16,12 @@ login error, token use. With the board open or closed it then:
 
 1. commits anything left over, brings the branch up to date with main in the task's own worktree (see "Staying
    current with main"), and runs the repo's `check` (a failure goes straight back to the agent, three tries);
-2. pushes the branch and opens a draft pull request, when there is an `origin` remote and `gh`;
+2. pushes the branch and opens a draft pull request, when there is an `origin` remote and `gh`. A pull request the
+   agent already opened for the task's branch is taken on instead, and goes through the review and the merge as usual.
+   A branch that brings main nothing gets none: no change was needed, or the work is on main already (the agent merged
+   its own pull request, or pushed to main itself). The task is done, and its row says why: "No change needed", "Already
+   on main" or "Already merged in #133". Nothing is pushed then, so a repo the task archived on GitHub is never pushed
+   to; work that is not on main is never done, and with the repo archived the task stops, saying so;
 3. has a second agent review it adversarially, in a tab of its own in the same herdr space (see [A task's
    tabs](tabs.md)); it says what it found and brings evidence; whatever it changed is put back. When the repo has a
    `check`, the reviewer is told the command and that it passed on this commit, and to run tests only through it. A
@@ -43,7 +48,7 @@ message or an error, or a closing note was written to the task's own folder (`cl
 is](home-folder.md#nothing-of-the-boards-goes-into-the-folder-an-agent-works-in); the rules still ask for one as the
 fallback). Otherwise the task is held as "Stopped without a summary": `Ctrl+R` tells the agent to continue, `Ctrl+L`
 takes the work as it is. A task whose finish the board missed (its agent at rest, the row still "Finishing") is
-finished with `herdr-projects finish <id>`: what the agent said last is the summary. Typing in the agent's own terminal, or replying from the board, re-arms all of this: an
+finished with `Ctrl+L` or `herdr-projects finish <id>`: what the agent said last is the summary. Typing in the agent's own terminal, or replying from the board, re-arms all of this: an
 approval is revoked, a pending auto-merge cancelled (a cancellation that fails is saved as a visible failure), the old
 review marked stale. A chat with reviewed work is the exception below: what it re-arms only counts once the code
 changed.

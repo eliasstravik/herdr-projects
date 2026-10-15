@@ -156,6 +156,7 @@ mod plan_steps;
 mod plan_untouched;
 mod pull_requests;
 mod pull_requests_actions_only;
+mod pull_requests_already;
 mod pull_requests_checks;
 mod pull_requests_expected;
 mod pull_requests_merge;

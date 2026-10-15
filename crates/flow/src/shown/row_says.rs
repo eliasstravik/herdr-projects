@@ -55,7 +55,8 @@ pub fn sentence(r: &Obj) -> Inked {
     if r.s("stage") == "plan" && r.s("state") == "blocked" { let m = words(r.s("msg")); return plainly("Plan ready".into()).add(quiet(if m.is_empty() { m } else { format!(" · {m}") })); }
     let raw = words(&if r.at("review").b("stale") { review_note(r) } else { r.t("msg") });
     let msg = if r.b("plain") || ["working", "needs you", "under review", "idle"].contains(&raw.as_str()) { String::new() } else { raw };
-    if r.s("state") == "done" { return Inked::new(); }
+    // Done says nothing more, except why it is done without a pull request (finish/already.rs).
+    if r.s("state") == "done" { return if r.s("stage") == "done" && r.b("doneWhy") { quiet(words(r.s("doneWhy"))) } else { Inked::new() }; }
     // Queued after other tasks: in the queue's colour. Only to wait for them, never started: nothing (after.rs).
     if super::queue::waits_after(r) { return Inked::of(super::queue::words(r), Ink::Queue); }
     // Near a limit: how much is used, before what it is doing, so it is never the part cut off.

@@ -33,6 +33,7 @@ const FRESH: &[&str] = &[
     "prSeen",
     "prFeedbackSeen",
     "prFailure",
+    "doneWhy",
     "review",
     "reviewedHead",
     "syncedTo",

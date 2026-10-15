@@ -8,7 +8,7 @@ use crate::board::keys::{hint, name, pair, K};
 use crate::board::state::{Mode, State};
 use crate::board::update::actions::{attempt_now, choosing};
 use crate::json::*;
-use crate::shown::states::{can_send_error, failed_review, failure_for, in_review, is_agent};
+use crate::shown::states::{can_send_error, failed_review, failure_for, in_review, is_agent, stuck_finishing};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Hint { pub key: String, pub words: String, pub stays: bool, pub short: String, pub shortest: String }
@@ -89,6 +89,7 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
         else if st("plan") && r.s("state") == "blocked" { vec![Some(Hint { short: "approve the plan".into(), ..hk(K::Yes, "approve this task's plan") }), Some(hk(K::Talk, "send the plan back with your words")), Some(hk(K::Panel, "read the whole plan"))] }
         else if agent_on && r.s("state") == "blocked" && r.s("kind") == "permission" { vec![Some(hk(K::Yes, "say yes to this task's agent")), Some(reply.clone()), Some(open.clone())] }
         else if agent_on && r.s("state") == "blocked" { vec![Some(if r.s("kind") == "question" { hk(K::Talk, "answer this task's agent") } else { reply.clone() }), Some(open.clone())] }
+        else if stuck_finishing(r) { vec![Some(hk(K::Yes, "finish with what its agent said last")), Some(open.clone()), Some(reply.clone())] }
         else if agent_on && r.s("state") == "working" { vec![Some(open.clone()), Some(reply.clone()), Some(stop.clone())] }
         else if agent_on { vec![Some(open.clone()), Some(reply.clone())] }
         else if r.s("state") == "working" { vec![Some(agent.clone()), Some(hk(K::Stop, "put it back in to do"))] }

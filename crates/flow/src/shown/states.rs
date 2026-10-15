@@ -13,6 +13,9 @@ pub const GROUPS: [&str; 5] = ["needs you", "ready to approve", "working", "to d
 /// yes is green, and a task nobody has started is the dim grey of "to do".
 pub fn group_ink(g: &str) -> Ink { match g { "needs you" => Ink::Red, "ready to approve" => Ink::Green, "working" => Ink::Yellow, "done" => Ink::Teal, _ => Ink::Todo } }
 pub fn is_agent(r: &Obj) -> bool { r.b("agent") && !["todo", "progress"].contains(&r.s("stage")) }
+/// Its agent is at rest and the board missed the end of its turn: the row says "Finishing" and stays so. The finish key
+/// takes it on with what the agent said last (actions/finish_stuck.rs).
+pub fn stuck_finishing(r: &Obj) -> bool { is_agent(r) && !r.b("archivedAt") && r.s("stage") == "working" && r.s("state") == "working" && r.s("note") == "Finishing" }
 pub fn failure_for(r: &Obj) -> Option<Obj> { if r.s("stage") == "nosummary" { None } else { crate::actions::finish_line::failure_of(r) } }
 pub fn can_send_error(r: &Obj) -> bool {
     if !r.b("host") { return crate::actions::finish_line::can_send_error(r); }

@@ -12,7 +12,7 @@ use crate::board::state::{State, Valid};
 use crate::board::tags::{name_say, number_tag};
 use crate::json::*;
 use crate::shown::ink::Ink;
-use crate::shown::states::{failed_review, failure_for, is_agent};
+use crate::shown::states::{failed_review, failure_for, is_agent, stuck_finishing};
 use crate::shown::words::{clean, pr_number};
 
 pub fn name(s: &State, r: &Obj) -> String { name_say(r, &s.data.keys, &s.scope, 40) }
@@ -140,8 +140,9 @@ pub fn yes(s: &mut State, r: &Obj, fx: &mut Vec<Effect>) {
     }
     let simple = |s: &mut State, action: &str, local: Job, fx: &mut Vec<Effect>| act(s, r, action, json!({}), local, fx);
     if is_agent(r) && r.s("state") == "blocked" && r.s("kind") == "permission" { return simple(s, "approve", Job::Approve { id, seen: None, anyway: false }, fx); }
-    // Stopped at a limit, or without a summary: yes takes the work as it is, through the check and the review.
-    if (st("stopped") && r.b("limitStop")) || st("nosummary") { return simple(s, "finish", Job::FinishAnyway { id }, fx); }
+    // Stopped at a limit, without a summary, or with the board stuck at "Finishing": yes takes the work as it is,
+    // through the check and the review.
+    if (st("stopped") && r.b("limitStop")) || st("nosummary") || stuck_finishing(r) { return simple(s, "finish", Job::FinishAnyway { id }, fx); }
     // Something went wrong: yes tries the same step again, as it stands.
     if st("failed") || (st("asks") && r.s("kind") == "auth") { return simple(s, "again", Job::Retry { id }, fx); }
     // A plan that waits for your yes: the build starts.

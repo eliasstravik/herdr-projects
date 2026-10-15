@@ -1,5 +1,6 @@
 //! The pipeline: commit, bring main in, set up, check, push, pull request, review, then wait for approval. The second
 //! half (the review and what follows from it) is pipeline_end.rs.
+use super::already;
 use super::check_again::{choose, passed_patch, CHECKED_ENV};
 use super::check_run::run_check;
 use super::hand_over::hand_over;
@@ -40,6 +41,7 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
     if crate::plan::pending(&g.check()?) { return crate::plan::written::plan_written(id, g, text); }
     let mut t = g.set(|t| { t.del("chat"); t.del("chatKept"); t.put("stage", "checking"); t.put("syncBlocked", Value::Null); t.put("msg", if synced.is_some() { "Checking the branch updated with main" } else { "Checking the result" }); t.put("watch", Value::Null); t.put("check", Value::Null); t.put("summary", text.trim()); })?;
     let (folder, root) = (cwd_of(&t), folder_of(t.s("id")));
+    let prev_main = t.t("syncedTo"); // main as it was brought in before this turn's sync
     let tree = if flow::task::is_agent_task(&t) && t.b("worktree") && Path::new(t.s("worktree")).exists() { t.t("worktree") } else { String::new() };
     let env = vec![("HERDR_PROJECTS_ID".to_string(), t.t("id")), ("HERDR_PROJECTS_WORKTREE".into(), folder.display().to_string()), ("HERDR_PROJECTS_REPO".into(), root.display().to_string())];
     // The settings of this step, read now: where it is checked. The review reads its own when it starts.
@@ -153,7 +155,17 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
     }
     // Push and open a draft pull request, when an origin remote exists.
     let mut note = if research && !t.b("report") { " No report was found.".to_string() } else { String::new() };
-    if !tree.is_empty() && ch.b("merge.pr") && !research {
+    // A branch that brings main nothing is done without one: no change was needed, or the work is on main already (the
+    // agent merged its own pull request, or pushed to main itself). Main was brought in just now, so that is where it is.
+    let ask = ch.b("merge.pr") && flow::git::has_origin(&root);
+    let why = if tree.is_empty() || research { None } else {
+        let before = sync_r.map(|r| if r.status == "merged" { r.before.clone() } else { r.head.clone() }).filter(|h| !h.is_empty()).unwrap_or_else(|| flow::git::head_of(Path::new(&tree)));
+        let base = [t.s("baseSha"), t.s("from")].into_iter().find(|s| !s.is_empty()).unwrap_or("HEAD").to_string();
+        already::nothing_to_land(&t, Path::new(&tree), already::made_commits(Path::new(&tree), &base, &before, &prev_main), ask)
+    };
+    t = g.set(|t| t.put("doneWhy", why.clone().map(Value::from).unwrap_or(Value::Null)))?;
+    if let Some(w) = &why { note = format!("{note} {w}."); }
+    if !tree.is_empty() && ch.b("merge.pr") && !research && why.is_none() {
         let tp = Path::new(&tree);
         let base = [t.s("baseSha"), t.s("from")].into_iter().find(|s| !s.is_empty()).unwrap_or("HEAD").to_string();
         let pushed = (|| -> Res<Option<String>> {
@@ -170,6 +182,8 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
                 let body = format!("{}\n\nTask: {}", if text.is_empty() { t.t("title") } else { text.to_string() }, task_ref(id, &repo_keys()));
                 let r = flow::git::gh(&["pr", "create", "--draft", "--head", t.s("branch"), "--title", if t.b("title") { t.s("title") } else { id }, "--body", &body], tp, 120000);
                 url = r.stdout.split_whitespace().find(|w| w.starts_with("http://") || w.starts_with("https://")).unwrap_or("").to_string();
+                // The agent opened one itself for this branch: the board goes on with that one.
+                if url.is_empty() { url = already::open_pr(t.s("branch"), tp).unwrap_or_default(); }
                 if url.is_empty() { return Err(crate::err::Error::new(format!("pr:{}", [r.stdout.trim(), r.stderr.trim()].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n")))); }
                 g.set(|t| { t.put("pr", url.clone()); t.put("prSeen", ""); t.put("prState", "waiting"); })?;
             }
@@ -179,6 +193,7 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
             Ok(Some(url)) => note = format!(" Pull request: {url}"),
             Ok(None) => {}
             Err(e) if is_aborted(&e) => return Err(e),
+            Err(_) if already::archived(Path::new(&tree)) => { fail(g, already::archived_failure(t.s("branch"), &tree), FailHow::default())?; return Ok(()); }
             Err(e) if e.msg.starts_with("pr:") => { fail(g, failure("pr", "Could not open the pull request", &format!("Branch: {}\nFolder: {tree}\n\ngh pr create:\n{}", t.s("branch"), &e.msg[3..]), "Inspect the GitHub error, fix what you safely can, then finish again. The board retries opening the pull request; do not push or ship manually."), FailHow::default())?; return Ok(()); }
             Err(e) => { fail(g, failure("push", "Could not push the branch", &format!("Branch: {}\nFolder: {tree}\n\n{}", t.s("branch"), e.msg), "Inspect the Git error and fix what you safely can without altering the human's checkout. Finish again so the board retries the push."), FailHow::default())?; return Ok(()); }
         }
