@@ -82,7 +82,8 @@ fn plan_agent_a_planner_in_a_tab_of_its_own_and_after_the_yes_the_worker_builds_
     let planner = w.pane_of(&t);
     assert_eq!(planner.at("agent").s("kind"), "codex");
     let pargs = args_of(&w, &t).join(" ");
-    assert!(pargs.contains("-m gpt-5.5") && pargs.contains("You are the planner of this task"), "{pargs}");
+    let rules = sw::store::files::dir_of(&id).join("rules.md"); // long rules: Codex is pointed at them (hand_limits.rs)
+    assert!(pargs.contains("-m gpt-5.5") && pargs.contains(&rules.display().to_string()) && read(&rules).contains("You are the planner of this task"), "{pargs}");
     assert_eq!(t.s("agent"), "codex");
     assert_eq!(t.at("plan").at("writer"), &json!({ "kind": "codex", "model": "gpt-5.5" }));
     assert!(prompts(&w, t.at("link").s("pane"))[0].starts_with("Work board task proj/1, role: planner."));
