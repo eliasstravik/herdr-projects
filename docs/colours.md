@@ -1,45 +1,62 @@
-# Colours: herdr's theme, and the box that says who you type to
+# Colours
 
-## The board is in herdr's theme
+**The board uses Herdr's own theme, and a task's colour says where it stands.** The text box's frame takes the colour of
+whoever you type to. Colour is never the only clue: every state has its own mark and words too, and with `NO_COLOR` the
+board still reads.
 
-Everything the board draws is in the theme herdr itself shows, so the board and herdr never look like two programs
-side by side. herdr does not hand its theme to a plugin, so the board reads what herdr reads: the `[theme]` and
-`[ui]` tables of this machine's `~/.config/herdr/config.toml`, resolved as herdr resolves them (the theme's name
-and its other names, `auto_switch` with `dark_name` and `light_name`, `[theme.custom]`, the older `ui.accent`).
+| Colour | Means |
+|---|---|
+| amber (Herdr's `yellow`) | an agent works |
+| red | it needs you (blocked or failed) |
+| green | ready to approve |
+| blue | under review |
+| teal | done |
+| pink | queued: waits for a free slot, or for other tasks |
+| dim grey | to do |
+| light grey | the board runs its own check |
+| purple | an automation |
+| plain text colour (the box only) | you type to the Coordinator |
 
-- **No theme set there is herdr's default**, Catppuccin, exactly as herdr shows it then: the board never falls back
-  to the terminal's own colours while herdr beside it shows its default.
-- **`auto_switch`**: the board asks its terminal whether it is light or dark, as herdr does, and takes the theme's
-  light or dark one.
-- **The `terminal` theme** paints with the terminal's own sixteen colours, in herdr and on the board alike. Its
-  greys are the exception ([below](#the-greys-are-quiet-but-always-readable)).
-- A theme changed in herdr shows the next time the board opens. The popup, the task panel, the reply view and the
-  review page take the same theme; another machine's tasks are drawn by this board, in this theme.
+## The board is in Herdr's theme
 
-The [`board.theme` setting](settings.md) says otherwise by hand: `herdr` (the default, all of the above), `dark` or
-`light` (that theme's dark or light one), or one of herdr's themes by its name: `catppuccin`, `catppuccin-latte`,
-`terminal`, `tokyo-night`, `tokyo-night-day`, `dracula`, `nord`, `gruvbox`, `gruvbox-light`, `one-dark`,
-`one-light`, `solarized`, `solarized-light`, `kanagawa`, `kanagawa-lotus`, `rose-pine`, `rose-pine-dawn`, `vesper`.
+Everything the board draws is in the theme Herdr shows, so the two never look like different programs. Herdr does not
+hand its theme to a plugin, so the board reads what Herdr reads: the `[theme]` and `[ui]` tables of this machine's
+`~/.config/herdr/config.toml`, resolved as Herdr resolves them (the theme's name and its other names, `auto_switch` with
+`dark_name` and `light_name`, `[theme.custom]`, the older `ui.accent`).
 
-### What cannot be known
+- **No theme set means Herdr's default**, Catppuccin, exactly as Herdr shows it. The board never falls back to the
+  terminal's own colours while Herdr beside it shows its default.
+- **`auto_switch`**: the board asks its terminal whether it is light or dark, as Herdr does, and takes the theme's light
+  or dark one.
+- **The `terminal` theme** paints with the terminal's own sixteen colours, in Herdr and on the board alike. Its greys are
+  the exception ([below](#the-greys-are-quiet-but-always-readable)).
+- **A theme changed in Herdr** shows the next time the board opens. The popup, the task panel, the reply view and the
+  review page take the same theme. Another machine's tasks are drawn by this board, in this theme.
 
-- **herdr opened from another machine (`herdr --remote`)**: herdr's screen is painted by its client, with the
-  config of the machine the client runs on, and herdr passes neither that config nor its theme on to the server the
-  board runs on. When that machine's config names another theme than this one's, herdr shows that theme around a
-  board in this machine's. The board cannot see it. Set `board.theme` to that theme's name
-  (`herdr-projects set board.theme nord`), or give both machines the same `[theme]`. A plain `ssh` to this machine
-  with herdr started here is not this case: client and server are then on one machine, and the board matches.
-- **The web Board**: the herdr web UI does not read herdr's theme; it has colours of its own (its CSS variables,
-  light and dark and its palettes). The Board there is drawn with those, so it matches what herdr looks like on the
-  web, not what it looks like in a terminal ([the board in the web UI](web-ui.md)).
+To choose by hand, set [`board.theme`](settings.md): `herdr` (the default, all of the above), `dark` or `light` (that
+theme's dark or light one), or one of Herdr's themes by name: `catppuccin`, `catppuccin-latte`, `terminal`,
+`tokyo-night`, `tokyo-night-day`, `dracula`, `nord`, `gruvbox`, `gruvbox-light`, `one-dark`, `one-light`, `solarized`,
+`solarized-light`, `kanagawa`, `kanagawa-lotus`, `rose-pine`, `rose-pine-dawn`, `vesper`.
 
-## A status is in herdr's own colour
+### When the board cannot know the theme
 
-A task's status is drawn in the colour herdr's sidebar and agent list use for that state, whatever else the theme
-does: working is herdr's `yellow` (amber), blocked or failed its `red`, done its `teal`. The mark, the group's
-heading, the bar, the percent and the minutes left take it.
+- **Herdr opened from another machine (`herdr --remote`).** Herdr's screen is then painted by its client, with the config
+  of the machine the client runs on, and Herdr passes neither that config nor its theme to the server the board runs on.
+  If that machine's config names another theme, Herdr shows that theme around a board in this machine's. Set
+  `board.theme` to that theme's name (`herdr-projects set board.theme nord`), or give both machines the same `[theme]`.
+  A plain `ssh` to this machine with Herdr started here is not this case: client and server are on one machine, and the
+  board matches.
+- **The web Board.** The Herdr web UI does not read Herdr's theme; it has colours of its own (its CSS variables, light and
+  dark and its palettes). The Board there uses those, so it matches what Herdr looks like on the web, not in a terminal
+  ([the board in the web UI](web-ui.md)).
 
-The board keeps a colour of its own only for what herdr has no state for:
+## A status is in Herdr's own colour
+
+A task's status is drawn in the colour Herdr's sidebar and agent list use for that state, whatever else the theme does:
+working is Herdr's `yellow` (amber), blocked or failed its `red`, done its `teal`. The mark, the group's heading, the bar,
+the percent and the minutes left take it.
+
+The board has colours of its own only for what Herdr has no state for:
 
 | State | Colour | Which one |
 |---|---|---|
@@ -48,128 +65,134 @@ The board keeps a colour of its own only for what herdr has no state for:
 | queued: waits for a free slot, or tabbed and waits for other tasks to be done | pink | one of the board's own pinks, the first told apart from every other status colour, the automations' purple, the greys, text and background ([below](#a-queued-task-is-pink)) |
 | to do | dim grey | the theme's grey for greyed-out words (`overlay0`), made readable as said below, where that is told apart from the green and the blue; else another grey. With the terminal's own colours it is a grey mixed from the terminal's own background and text colour, measured |
 
-They are told apart from each other in every built-in theme (the tests measure it). "To do" is a dim grey in
-the list (the heading, the `○` mark, the task's number) and in the box alike: dimmer than plain text, and always
-readable. While the board runs its own check the
-mark is a plain light grey, the theme's `subtext0` ([the check's progress](check-progress.md)).
+- They are told apart from each other in every built-in theme (the tests measure it).
+- "To do" is a dim grey in the list (the heading, the `○` mark, the task's number) and in the box alike: dimmer than plain
+  text, and always readable.
+- While the board runs its own check, the mark is a plain light grey, the theme's `subtext0`
+  ([the check's progress](check-progress.md)).
 
 ## A queued task is pink
 
-A task started while every slot of `board.agents` is taken has a colour no other state has: a pink, for its `◌`, its
-place in the queue (`Q#2`), the State line in the task panel and its agent's text box. A task tabbed with `--after`
-while the tasks it waits for are not all done is queued too and has the same pink: its `◌`, its State line, its box,
-and its line `queued after SKL-6` ([one task after another](after.md)). One only to wait for others, never tabbed,
-stays the dim grey of "to do", and its row says nothing of the wait. Pink is the colour furthest
-from all the others: amber works, red needs you, green is ready, teal is done, blue is under review, grey is to do
-and purple is an automation.
+A task started while every slot of `board.agents` is taken has a colour no other state has: pink. It is used for its `◌`,
+its place in the queue (`Q#2`), the State line in the task panel, and its agent's text box.
 
-herdr's themes have no pink of their own (only Dracula's `mauve` is one, and that is the automations' colour there),
-so it is one of the board's: the first of its pinks that is told apart from every colour above, from plain text,
-both greys and the background, and stands 3 to 1 or more against the background, what a mark needs. Its nearest
-neighbour is red, the colour of "needs you", so the measure keeps it well away from the theme's red.
+A task tabbed with `--after` while the tasks it waits for are not all done is queued too, in the same pink: its `◌`, its
+State line, its box, and its line `queued after SKL-6` ([one task after another](after.md)). A task that only waits for
+others, never tabbed, stays the dim grey of "to do", and its row says nothing of the wait.
+
+Pink is the colour furthest from all the others: amber works, red needs you, green is ready, teal is done, blue is under
+review, grey is to do, purple is an automation.
+
+Herdr's themes have no pink of their own (only Dracula's `mauve` is one, and that is the automations' colour there). So
+it is one of the board's: the first of its pinks that is told apart from every colour above, from plain text, both greys
+and the background, and stands at least 3 to 1 against the background, what a mark needs. Its nearest neighbour is red,
+the colour of "needs you", so the measure keeps it well away from the theme's red.
 
 | Theme | The pink |
 |---|---|
 | Nord, One Dark, Solarized, Kanagawa, Vesper | `#f472b6`, the first of the pinks for a dark background |
 | Tokyo Night, Gruvbox, Rosé Pine | `#ff6ec7`: `#f472b6` is too near one of their colours |
-| Catppuccin (herdr's default), Dracula | `#ec4899`: the two brighter ones are too near their red, a pink-ish one |
+| Catppuccin (Herdr's default), Dracula | `#ec4899`: the two brighter ones are too near their red, a pink-ish one |
 | Catppuccin Latte, Gruvbox light, One Light, Rosé Pine Dawn | `#db2777`, darker, for a light background |
 | Tokyo Night Day, Kanagawa Lotus | `#c2188b` |
 | Solarized Light | `#9d174d` |
 | `terminal` | `#ec4899`: the terminal's sixteen colours have no pink, and their magenta is the automations'. A middle pink reads on a dark terminal and a light one alike |
 
-**Colour is not the only clue**: the `◌` is a dotted ring no other state has and `Q#2`, `Waiting for a free slot` and
+**Colour is not the only clue**: the `◌` is a dotted ring no other state has, and `Q#2`, `Waiting for a free slot` and
 `queued after SKL-6` are words. With `NO_COLOR` they still say it.
 
-On the web Board it is the board's own `#ec4899`, pulled towards the page's text colour as the purple is.
+On the web Board it is the board's own `#ec4899`, pulled towards the page's text colour, as the purple is.
 
 ## An automation is purple
 
-The automations are no tasks, so nothing of theirs may be taken for a status. They have one colour of their own,
-used for the heading `automations` in the list, the mark of each of their rows (`⟳`, the same one dimmed while it is
-off), the `[auto]` tag of a task one made, and the automation's line in the `?` menu.
+Automations are not tasks, so nothing of theirs may be mistaken for a status. They have one colour of their own, used
+for the heading `automations` in the list, the mark of each of their rows (`⟳`, dimmed while it is off), the `[auto]`
+tag of a task one made, and the automation's line in the `?` menu.
 
-It is **herdr's own `mauve`**, the one colour of herdr's theme that no status uses (red needs you, green is ready,
-amber works, teal is done, blue is under review, grey is to do, pink waits for a slot), so it changes with the theme
-as everything else does. It is used where it is a purple (from violet to pink) and told apart from the first six of
-those, from plain text,
-from both greys of greyed words and from the background; the tests measure that in every built-in theme.
+It is **Herdr's own `mauve`**, the one colour of Herdr's theme no status uses, so it changes with the theme like
+everything else. It is used where it is a purple (from violet to pink) and told apart from the status colours (red,
+green, amber, teal, blue, grey), from plain text, from both greys of greyed words and from the background. The tests
+measure that in every built-in theme.
 
 | Theme | The automations' colour |
 |---|---|
-| Catppuccin (herdr's default), Latte, Tokyo Night and Day, Dracula, Gruvbox dark and light, One Dark and Light, Solarized dark and light, Rosé Pine Dawn | the theme's `mauve` |
+| Catppuccin (Herdr's default), Latte, Tokyo Night and Day, Dracula, Gruvbox dark and light, One Dark and Light, Solarized dark and light, Rosé Pine Dawn | the theme's `mauve` |
 | Nord, Kanagawa, Rosé Pine, Vesper | the board's `#a855f7`: Vesper's `mauve` is its amber, the colour of "working", and the other three's are dusty ones that sit on the theme's greys |
 | Kanagawa Lotus (light) | the board's darker `#7c3aed`: its `mauve` sits on its text colour |
 | `terminal` | the terminal's own magenta, so it follows the terminal as the rest of that theme does |
 
-A `mauve` of your own (`[theme.custom]`) is held to the same rule. **Colour is not the only clue**: the heading is
-a heading by its place and its word, the mark is an arrow going round where every task's mark is another shape, and `on` or
-`off` is a word on every row. With `NO_COLOR` all of that still stands. One that is off is quiet as a done task is:
-its mark dimmed, its words greyed.
+A `mauve` of your own (`[theme.custom]`) is held to the same rule.
 
-On the web Board it is a purple of the board's own (`#a855f7`, pulled towards the page's text colour so it reads on
-light and dark), as the web UI has no purple among its status colours.
+**Colour is not the only clue**: the heading is a heading by its place and its word, the mark is an arrow going round
+where every task's mark is another shape, and `on` or `off` is a word on every row. With `NO_COLOR` all of that still
+stands. One that is off is quiet as a done task is: its mark dimmed, its words greyed.
+
+On the web Board it is a purple of the board's own (`#a855f7`, pulled towards the page's text colour so it reads on light
+and dark), since the web UI has no purple among its status colours.
 
 ## The greys are quiet but always readable
 
-The board has three greys: the one for greyed-out words (a task's number, a time, a count in the header, "… more
-done", the words between two hints, a label), the brighter one for words that have to be read (what a row says, the
-keys on the hint line), and the dim grey of "to do". They are herdr's own (`overlay0`, `subtext0`), but herdr's
-themes do not all keep them readable: Nord's grey for greyed-out words is 1.7 to 1 against its background, and nine
-more themes are under 3 to 1. So each grey is held to a floor.
+The board has three greys:
 
-- **The measure** is the WCAG 2 contrast ratio between the grey and the background it is drawn on: 1 to 1 is the
-  same colour, 21 to 1 black on white.
-- **The floor is 4.5 to 1**, what WCAG asks of text. Where a theme's own plain text is so quiet that 4.5 would
-  leave the grey less than 1.5 times dimmer than it, the floor comes down with the text, and **never under 3 to 1**
-  (One Dark 4.4, Kanagawa Lotus 4.1, Solarized 3.7, Tokyo Night Day and Solarized Light 3.0).
-- **A grey under its floor is pulled towards the theme's plain text colour, only as far as the floor.** So it keeps
-  the theme's tint, and a grey that already reads is left as it is.
-- **"To do" is also dimmer than plain text by the same measure**: plain text stands out from the background 1.3
-  times as much, or more. In every built-in theme it is between 1.4 and 3.7 times.
-- **The background is the real one where it is known.** The board paints no background: it is drawn on the
-  terminal's own. When it opens, the board asks the terminal for its text colour and its background (herdr answers
-  for its panes with those of the terminal you sit at) and measures against that background; with no answer it
-  measures against the theme's.
-- **On the selected row**, whose background is the theme's, a grey keeps 3 to 1, or as much of it as that row's own
-  text has to give (Tokyo Night Day and Solarized Light: 2.4 and 2.3, where plain text itself has 3.5 and 3.1).
-- **A finished task's mark** (`✓`) is its colour made quieter: halfway to the background, or as near to that as
-  keeps it 3 to 1, what WCAG asks of a mark, on the selected row too. It was the faint attribute once, which fell
-  to 1.7 to 1 on a light background.
+- the one for greyed-out words: a task's number, a time, a count in the header, "… more done", the words between two
+  hints, a label;
+- a brighter one for words that must be read: what a row says, the keys on the hint line;
+- the dim grey of "to do".
+
+They are Herdr's own (`overlay0`, `subtext0`), but Herdr's themes do not all keep them readable. Nord's grey for
+greyed-out words is 1.7 to 1 against its background, and nine more themes are under 3 to 1. So each grey is held to a
+floor:
+
+- **The measure** is the WCAG 2 contrast ratio between the grey and its background: 1 to 1 is the same colour, 21 to 1
+  is black on white.
+- **The floor is 4.5 to 1**, what WCAG asks of text. Where a theme's own plain text is so quiet that 4.5 would leave the
+  grey less than 1.5 times dimmer than it, the floor comes down with the text, but **never under 3 to 1** (One Dark 4.4,
+  Kanagawa Lotus 4.1, Solarized 3.7, Tokyo Night Day and Solarized Light 3.0).
+- **A grey under its floor is pulled towards the theme's plain text colour, only as far as the floor.** So it keeps the
+  theme's tint, and a grey that already reads is left alone.
+- **"To do" is also dimmer than plain text by the same measure**: plain text stands out from the background at least 1.3
+  times as much. In every built-in theme it is between 1.4 and 3.7 times.
+- **The background is the real one where it is known.** The board paints no background: it draws on the terminal's own.
+  When it opens, it asks the terminal for its text colour and background (Herdr answers for its panes with those of the
+  terminal you sit at) and measures against that background. With no answer, it measures against the theme's.
+- **On the selected row**, whose background is the theme's, a grey keeps 3 to 1, or as much of it as that row's own text
+  has to give (Tokyo Night Day and Solarized Light: 2.4 and 2.3, where plain text itself has 3.5 and 3.1).
+- **A finished task's mark** (`✓`) is its colour made quieter: halfway to the background, or as near to that as keeps it
+  3 to 1 (what WCAG asks of a mark), on the selected row too. It used the faint attribute once, which fell to 1.7 to 1 on
+  a light background.
 
 ### In the `terminal` theme
 
-There the board does not know the colours behind the terminal's sixteen, and none of the terminal's own ways to grey
-a word can be trusted:
+There the board does not know the colours behind the terminal's sixteen, and none of the terminal's own ways to grey a
+word can be trusted:
 
-- **"bright black"** is nearly the background on many dark schemes: on a dark navy one it made "to do" unreadable
-  (1.3 to 1);
+- **"bright black"** is nearly the background on many dark schemes: on a dark navy one it made "to do" unreadable (1.3
+  to 1);
 - **"white"** is nearly the background on light ones;
-- **the faint attribute** halves the text colour, and a quiet scheme has no contrast to spare: on Solarized light
-  (text 4.1 to 1) faint text is 1.9 to 1.
+- **the faint attribute** halves the text colour, and a quiet scheme has no contrast to spare: on Solarized light (text
+  4.1 to 1) faint text is 1.9 to 1.
 
 So the board uses none of the three for words:
 
-- **The terminal told its text colour and its background** (most do, and herdr does for its panes): the greys are
-  mixed from those two and held to the same floor as any other, dimmer than the text they were mixed from. They are
-  the only true colours the board draws in this theme.
-- **It did not tell both**: greyed-out words and "to do" are the terminal's plain text colour, the one colour there
-  that is known to be readable. A grey that must be dimmer than text cannot be chosen without knowing the text: one
-  measured against the background alone came out stronger than the real text on Solarized light. Nothing is dimmer
-  than text then, and nothing is unreadable: "to do" is told from a task's own words by its heading and its `○`, as
-  with `NO_COLOR`.
+- **If the terminal told its text colour and background** (most do, and Herdr does for its panes), the greys are mixed
+  from those two and held to the same floor as any other, dimmer than the text they were mixed from. They are the only
+  true colours the board draws in this theme.
+- **If it did not tell both**, greyed-out words and "to do" are the terminal's plain text colour, the one colour there
+  known to be readable. A grey that must be dimmer than text cannot be chosen without knowing the text: one measured
+  against the background alone came out stronger than the real text on Solarized light. Nothing is dimmer than text then,
+  and nothing is unreadable: "to do" is told from a task's own words by its heading and its `○`, as with `NO_COLOR`.
 
-The selected row is the one place left to the terminal: its background in this theme is the terminal's "bright
-black", as in herdr's own sidebar, and what reads on that cannot be known.
+The selected row is the one place left to the terminal: its background in this theme is the terminal's "bright black",
+as in Herdr's own sidebar, and what reads on that cannot be known.
 
-A colour you name yourself in `[theme.custom]` from the terminal's sixteen (`overlay0 = "gray"`) is kept as it is:
-it cannot be measured.
+A colour you name yourself in `[theme.custom]` from the terminal's sixteen (`overlay0 = "gray"`) is kept as it is: it
+cannot be measured.
 
 ### On the web Board
 
-The web Board is drawn with the web UI's own colours. Its "to do" and its greyed-out words are the web UI's dim
-text (`--text-dim`), which is 4.5 to 1 or more against the page, its panels and a hovered row on every palette of
-the web UI (measured on herdr-web-ui 0.4.8: 4.5 to 9.9). The board's own teal for done is 3.6 to 1 or more there.
+The web Board uses the web UI's own colours. Its "to do" and its greyed-out words are the web UI's dim text
+(`--text-dim`), which is 4.5 to 1 or more against the page, its panels and a hovered row on every palette of the web UI
+(measured on herdr-web-ui 0.4.8: 4.5 to 9.9). The board's own teal for done is 3.6 to 1 or more there.
 
 ## The box says who you type to
 
@@ -181,21 +204,22 @@ rules of the plain one) and its prompt mark `❯` say which, at a glance:
 | the Coordinator (also: a new task, find, a task whose message goes to the Coordinator or into its description) | the theme's plain text colour |
 | a task's agent, or a task your message starts an agent on | that task's status colour, the very one its mark has in the list |
 
-So an agent's box also says how its task is doing: amber while the agent works, red when it needs you, green when
-it is ready to approve, blue under review, pink while it is queued (for a free slot, or after other tasks), teal when done, dim grey for a task nobody started (and for an archived
-one, which is read-only). It changes with the status, also while something is typed. It is the same wherever there
-is such a box: under the list, in the reply view, under the task panel and full screen, in the popup, for this
-machine's tasks and another machine's, and on the web Board, where the frame of the text field takes the colour.
+So an agent's box also says how its task is doing: amber while the agent works, red when it needs you, green when ready
+to approve, blue under review, pink while queued (for a free slot, or after other tasks), teal when done, dim grey for a
+task nobody started (and for an archived one, which is read-only).
 
-**Colour is never the only clue.** The line above the box names who you talk to, the grey words in the empty box
-say it (`Send message to Coordinator`, `Send message to Agent`, `your message starts an agent on it`), and while you
-type the hint line does (`enter send to the Coordinator`, `enter send to HSW-34's agent`). With `NO_COLOR` the
-board draws no colour at all and reads as it always did; each state has a mark of its own too.
+- It changes with the status, also while you type.
+- It is the same wherever there is such a box: under the list, in the reply view, under the task panel and full screen,
+  in the popup, for this machine's tasks and another machine's, and on the web Board, where the frame of the text field
+  takes the colour.
+- **Colour is never the only clue.** The line above the box names who you talk to; the grey words in the empty box say it
+  (`Send message to Coordinator`, `Send message to Agent`, `your message starts an agent on it`); and while you type, the
+  hint line does (`enter send to the Coordinator`, `enter send to HSW-34's agent`). With `NO_COLOR` the board draws no
+  colour at all and reads as it always did; each state has a mark of its own too.
+- **The box and the mark are never two colours.** So while the board runs its own check on a task (mark: a plain light
+  grey, [the check's progress](check-progress.md)), that task's agent's box is that grey too. That grey is near the plain
+  text colour, and the same as it on the web Board and with the terminal's own colours on a dark terminal. For that
+  while, the words are what tell it from the Coordinator's box.
 
-The box and the mark are never two colours. So while the board runs its own check on a task, whose mark is then a
-plain light grey ([the check's progress](check-progress.md)), that task's agent's box is that grey too: near the
-plain text colour, and the same as it on the web Board and with the terminal's own colours on a dark terminal. For
-that while the words are what tells it from the Coordinator's box.
-
-On the web Board, done is a teal of the board's own: the web UI has one colour for done, and that one is the green of
-"ready to approve" there, so the two would be one colour.
+On the web Board, done is a teal of the board's own: the web UI has one colour for done, and it is the green of "ready to
+approve" there, so the two would be one colour.
