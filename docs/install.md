@@ -1,7 +1,7 @@
 # Installing, the first run, and taking it out again
 
 **Install with one command, then open the board once.** The short version is [get started](get-started.md). This page
-has the details.
+has the details. Something not working: [troubleshooting](troubleshooting.md).
 
 ```sh
 herdr plugin install eliasstravik/herdr-projects
