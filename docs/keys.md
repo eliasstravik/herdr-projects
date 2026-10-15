@@ -1,119 +1,135 @@
 # Keys, questions and the ? menu
 
-**The board asks before what cannot be undone**, always the same way, in a small box. The question says what it
-does: a merge names the task, where it lands and that it cannot be undone (`Merge HSW-18 "Add an undo for clear"
-(PR#18) into main?`, then `A merge cannot be undone.`; for another machine's task, where it lands there: `into main on otherbox`); after a failed review it says what the review found, and its
-yes reads `y = merge anyway`. A remove shows the task's whole title and what is really lost: the task with its
-description and reviews, and its worktree only where it has one (work in it that is not saved or not merged is kept).
-The keys are in the box and say what they do (`y = merge · n = do not merge`, `y = remove · n = keep`): `y` says yes,
-`n` or `Esc` says no, in upper or lower case; `Enter` never confirms, and no other key answers: on any other key the
-box says `press y or n`. The box sits at the bottom of the board, in the text box's place, and its closing line is
-the window's last line, as the chat's box sits on its hints. A question longer than the window wraps, and its keys
-are never cut: in a short window its detail gives way first, then its rules. On the web Board
-neither answer to a merge or a remove is the filled button.
+**Press `?` on the board to see every key.** The tables at the end of this page list them all too. One rule makes them
+easy to guess:
 
-**Work whose review failed is never merged by a plain yes.** It is not under `ready to approve` but under `needs
-you`, as `Review failed · 1 critical, 1 major`; its hints offer sending the review back first, then `merge this task
-anyway`. The guard is in the approve action itself, not only in the question: `herdr-projects approve <id>` (and so
-the Coordinator) refuses such work and says what the review found; `herdr-projects approve <id> --anyway` merges
-it all the same.
+- **`Ctrl` does something** (approve, stop, archive, …).
+- **`Alt` only shows or hides a part of the screen**, and never changes anything.
+- **Plain keys** (`Enter`, `Tab`, `Space`, `Esc`, the arrows) move around and talk.
 
-Merging and deleting a task ask; nothing else does by itself. A result stays on screen until
-your next key press, an error until `Esc` dismisses it.
+No other chord does anything, and no key of an earlier version works as a second way to press one of these.
 
-**Closing the board takes `Ctrl+C` twice**, as leaving Claude Code does. The first one shows `Press ctrl+c
-again to close the board` on the bottom line; `Ctrl+C` again while it shows (two seconds: time enough to read it)
-closes, with a draft in the text box too. Any other key, or the wait running out, takes the hint away, and that key does what it always does.
-`Esc` with nothing left to step back from closes nothing: its line names the key that does (`ctrl+c closes the
-board`), and `Ctrl+C` while it shows closes. In the popup that last `Esc` closes the board, and the hint line says
-so (`esc close`).
+Two keys bend the rule. `Ctrl+F` (find) only changes which tasks the list shows, so by the rule it would be an `Alt` key;
+it is the key every program finds with, so it stays. `Alt+M` only shows other machines, but while one machine is shown by
+itself, what you type goes to that machine's Coordinator: the chat says so.
 
-**The settings page owns its keys.** While a task's settings are open (`Ctrl+E`), only that page's keys act: `↑` `↓`,
-`Enter`, `Ctrl+U`, `Esc` (or `Ctrl+E` again), and `Ctrl+C` to close the board. No key of the list archives, merges,
-pins or removes the task from there, and the hint line is the page's own (`↑ ↓ move · enter change · ctrl+u put back ·
-esc back to the task`; while a value is typed, `enter save this value · esc leave it as it is`).
+## Keys and the text box
 
-**One rule for the keys: `Ctrl` does something; `Alt` only shows or hides a part of the screen, and never changes
-anything.** The tables below are all the keys the board has. No other chord does anything, and no key of an earlier
-version works as a second way to press one of these.
+Apart from `Enter`, `Tab`, `Esc` and `Ctrl+C`, a key acts on the board only while the text box is empty. With a draft in
+it, the keys belong to the draft (`Ctrl+A` is "start of the line" there, not "archive").
 
-One key bends the rule: `Ctrl+F` (find) only changes which tasks the list shows, so by the rule it would be an `Alt`
-key. It is the key every program finds with, and it is left where it is. `Alt+M` only shows other machines, but
-while one machine is shown by itself, what you type goes to that machine's Coordinator: the chat says so.
+The one exception is the two keys that scroll the chat's message, `Alt+K` and `Alt+J`: they only show more of it, so they
+work while you type and leave the draft alone.
 
-The `?` menu lists the same three groups, each line with its key. A `Ctrl` or `Alt` line can also be picked there,
-which does what the key does: so a terminal that does not pass `Alt` on (a Mac terminal without "Option as Meta",
-some phone keyboards) loses nothing. In the terminal view of herdr's web UI the `Alt` keys and `Shift+Enter` arrive
-in the old byte form and are taken as such, and the Enter a phone's input line adds behind `?`, `y`, `n` or space is
-dropped ([the web UI](web-ui.md)).
+## The `?` menu
 
-Apart from `Enter`, `Tab`,
-`Esc` and `Ctrl+C`, a key acts on the board only while the text box is empty: with a draft in it, the keys are the
-draft's (`Ctrl+A` is "start of the line" there, not "archive"). The two keys that scroll the chat's message, `Alt+U`
-and `Alt+J`, are the one exception: they only show more of it, so they work while you type and leave the draft alone.
+It lists the same three groups as the tables below, each line with its key. A `Ctrl` or `Alt` line can also be picked
+there, which does what the key does. So a terminal that does not pass `Alt` on (a Mac terminal without "Option as Meta",
+some phone keyboards) loses nothing.
+
+In the terminal view of Herdr's web UI, the `Alt` keys and `Shift+Enter` arrive in the old byte form and are taken as
+such, and the Enter a phone's input line adds after `?`, `y`, `n` or space is dropped ([the web UI](web-ui.md)).
+
+## Questions: the board asks before what cannot be undone
+
+Only merging and removing a task ask. Nothing else does.
+
+```
+ Merge HSW-18 "Add an undo for clear" (PR#18) into main?
+ A merge cannot be undone.
+ y = merge · n = do not merge
+```
+
+- **`y` says yes. `n` or `Esc` says no**, in upper or lower case. `Enter` never confirms, and no other key answers: on
+  any other key the box says `press y or n`.
+- **The question says what it does.** A merge names the task, where it lands and that it cannot be undone. For another
+  machine's task, it says where it lands there: `into main on otherbox`. After a failed review, it says what the review
+  found, and its yes reads `y = merge anyway`.
+- **A remove** shows the task's whole title and what is really lost: the task with its description and reviews, and its
+  worktree only where it has one (work in it that is not saved or not merged is kept). Its keys: `y = remove · n = keep`.
+- **Where it shows:** in a small box at the bottom of the board, in the text box's place, its closing line on the
+  window's last line, as the chat's box sits on its hints. A question longer than the window wraps, and its keys are
+  never cut: in a short window its detail gives way first, then its rules. There is no hint line meanwhile: the box takes
+  its row.
+- On the web Board neither answer to a merge or a remove is the filled button.
+
+A result stays on screen until your next key press. An error stays until `Esc` dismisses it, with `(esc dismisses)` after
+it.
+
+### Work whose review failed is never merged by a plain yes
+
+It is not under `ready to approve` but under `needs you`, as `Review failed · 1 critical, 1 major`. Its hints offer
+sending the review back first, then `merge this task anyway`.
+
+The guard is in the approve action itself, not only in the question: `herdr-projects approve <id>` (and so the
+Coordinator) refuses such work and says what the review found. `herdr-projects approve <id> --anyway` merges it all the
+same.
+
+## Closing the board
+
+**`Ctrl+C` twice**, as in Claude Code. The first shows `Press ctrl+c again to close the board` on the bottom line;
+`Ctrl+C` again while it shows (two seconds) closes, even with a draft in the text box. Any other key, or the wait running
+out, takes the hint away, and that key does what it always does.
+
+`Esc` with nothing left to step back from closes nothing: its line names the key that does (`ctrl+c closes the board`),
+and `Ctrl+C` while it shows closes. In the popup, that last `Esc` closes the board, and the hint line says so
+(`esc close`).
+
+## The key that opens the board
+
+It is Herdr's, not the board's: a line in Herdr's `config.toml`, offered at the [first run](install.md) as `prefix+a`.
+The board never takes a key Herdr binds itself (`prefix+w` is Herdr's workspace picker) or one your config already binds:
+it refuses it and says what the key does today.
+
+Pressed again, the board key takes you back: from the board in its tab, to the pane you came from; with `board.open` set
+to `popup`, it closes the popup ([the board](board.md)). Herdr gives a popup every key, so there the board reads that key
+itself, from Herdr's `config.toml`: Herdr's prefix key and then the key.
+
+## The settings page owns its keys
+
+While a task's settings are open (`Ctrl+E`), only that page's keys act: `↑` `↓`, `Enter`, `Ctrl+U`, `Esc` (or `Ctrl+E`
+again), and `Ctrl+C` to close the board. No key of the list archives, merges, pins or removes the task from there. The
+hint line is the page's own: `↑ ↓ move · enter change · ctrl+u put back · esc back to the task`, and while a value is
+typed, `enter save this value · esc leave it as it is`.
 
 ## The hint line
 
-The bottom line shows only what matters right now, the main thing first, at most four hints for the selected task.
-`?` lists every key; the hint line is not a list.
+The bottom line shows only what matters right now, the main thing first, at most four hints for the selected task. `?`
+lists every key; the hint line is not a list.
 
-- **A hint says what the key does and to what.** "This task" is the selected one: `enter open this task's agent`,
-  `tab put an agent on this task`, `ctrl+l approve and merge this task`. Whose agent is said once on the line; after
-  that it is `the agent` (`space talk to the agent · ctrl+x stop the agent`). The same action has the same words
-  on the hint line and in the `?` menu.
-- **A key is named only where it does something.** `esc` is there with what it goes back from (`esc back to the
-  list`, `esc clear the filter`, `esc back to the board` in the archive) and not where it would only show how the
-  board closes. `↑↓ scroll the task` shows on the whole task only while it is longer than the window. `alt+c` shows
-  only while there is a message to show or hide. `ctrl+x` says what it would do here: `stop the agent`, `remove this
-  task`, or, on a task you marked as your own work, `put it back in to do`.
-- **What the screen already says is not said again.** The text box's own grey words say who gets your message (`Send message
-  to Agent`, `Send message to Coordinator`), so the line does not.
-- **While you type**, it says where `Enter` sends your words, and names the task by its tag, since the words are
-  locked to it while the list may show others: `enter send to the Coordinator` (`… on vm-a` for another machine's),
-  `enter send to HSW-34's agent`, `enter send, and start an agent on HSW-34`, `enter add it as a task`. The text box's
-  edge names no one.
+- **A hint says what the key does, and to what.** "This task" is the selected one: `enter open this task's agent`,
+  `tab put an agent on this task`, `ctrl+l approve and merge this task`. Whose agent is said once on the line; after that
+  it is `the agent` (`space talk to the agent · ctrl+x stop the agent`). The same action has the same words on the hint
+  line and in the `?` menu.
+- **A key is named only where it does something.** `esc` shows with what it goes back from (`esc back to the list`,
+  `esc clear the filter`, `esc back to the board` in the archive), not where it would only show how the board closes.
+  `↑↓ scroll the task` shows on the whole task only while it is longer than the window. `alt+c` shows only while there is
+  a message to show or hide. `ctrl+x` says what it would do here: `stop the agent`, `remove this task`, or, on a task you
+  marked as your own work, `put it back in to do`.
+- **What the screen already says is not said again.** The text box's own grey words say who gets your message
+  (`Send message to Agent`, `Send message to Coordinator`), so the line does not.
+- **While you type**, it says where `Enter` sends your words, and names the task by its tag, since the words are locked to
+  it while the list may show others: `enter send to the Coordinator` (`… on vm-a` for another machine's),
+  `enter send to HSW-34's agent`, `enter send, and start an agent on HSW-34`, `enter add it as a task`. The text box's edge
+  names no one.
 
-| Where | The hint line |
-|---|---|
-| A task nobody started | `tab put an agent on this task · space talk about this task · ? all keys` |
-| An agent at work | `enter open this task's agent · space talk to the agent · ctrl+x stop the agent · ? all keys` |
-| An agent asks you something | `space answer this task's agent · enter open the agent · ? all keys` |
-| Ready to approve | `ctrl+l approve and merge this task · ctrl+r send the review to the agent · space talk to the agent · ? all keys` |
-| Something went wrong | `ctrl+r tell this task's agent to fix it · ctrl+l retry as it is · space talk to the agent · ? all keys` |
-| Stopped without a summary | `ctrl+r tell this task's agent to continue · ctrl+l use its work as it is · enter open the agent · ? all keys` |
-| Talking to a task's agent | `enter open this task's agent · ctrl+x stop the agent · space back to the Coordinator` |
-| Typing to the Coordinator | `enter send to the Coordinator · tab send, and put an agent on what it adds · shift+enter new line · esc put away` |
-| The whole task | `… · ↑↓ scroll the task · esc back to the list` |
-| The archive | `ctrl+a restore this task · ctrl+x remove this task · esc back to the board · ? all keys` |
-| An automation's row | `enter open this automation · space turn this automation off · tab fire it now · ctrl+x remove it · ctrl+e its settings · ? all keys` (off: `space turn this automation on`, and no `tab`, which would fire nothing) |
-| One automation, whole | `↑↓ pick a firing · enter go to its task · space turn this automation off · tab fire it now · esc back to the list` (`enter` only on a firing that made a task) |
-| Find | `enter keep the filter · esc cancel` |
-| The `?` menu | `↑↓ pick a key · enter press it · esc close the menu` |
-| Words on their way to another machine | `ctrl+x stop sending this · enter take the words back to change · ? all keys` |
+**In a narrow window the line never runs off the screen: whole hints give way.**
 
-**In a narrow window the line never runs off the screen: whole hints give way.** The first one (the main thing) and
-the last one (`? all keys`, or the way back) stay. Between them, `alt+c hide the latest message` goes first, then
-the others from the last back; `alt+c show the latest message` outlasts those, because it is how you see a reply.
-While you type, `shift+enter new line` goes first and `esc put away` stays. With room for only one hint it is the
-main thing, except while you talk to a task's agent: there `space back to the Coordinator` stays, the one way back.
-Where the window is too narrow even for that one hint, it is said shorter, not cut: `enter send to HSW-34`, `ctrl+l merge
-this task`, `its agent` for `this task's agent`. That holds down to about 34 columns. A draft's hint keeps naming who
-gets the words for as long as that fits (`enter send to HSW-34`, `enter send to the Coordinator`, `enter send to vm-a`);
-only narrower than that is it `enter send`.
+- The first hint (the main thing) and the last one (`? all keys`, or the way back) stay.
+- Between them, `alt+c hide the latest message` goes first, then the others from the last back. `alt+c show the latest
+  message` outlasts those, because it is how you see a reply.
+- While you type, `shift+enter new line` goes first and `esc put away` stays.
+- With room for only one hint, it is the main thing, except while you talk to a task's agent: there
+  `space back to the Coordinator` stays, the one way back.
+- Too narrow even for that one hint, it is said shorter, not cut: `enter send to HSW-34`, `ctrl+l merge this task`,
+  `its agent` for `this task's agent`. That holds down to about 34 columns. A draft's hint keeps naming who gets the words
+  as long as that fits (`enter send to HSW-34`, `enter send to the Coordinator`, `enter send to vm-a`); only narrower is
+  it `enter send`.
 
-A question the board asks has its keys in its own box (`y = merge · n = do not merge`), and there is no hint line meanwhile: the box takes its row. An
-error stays on screen with `(esc dismisses)` after it.
-
-**The key that opens the board is herdr's, not the board's**: it is a line in herdr's `config.toml`, offered at the
-[first run](install.md) as `prefix+a`. The board never takes a key herdr binds itself (`prefix+w` is herdr's
-workspace picker) or one your config already binds: it refuses it and says what the key does today.
-
-Pressed again, the board key takes you back: on the board in its tab, to the pane you came from; with
-`board.open` set to `popup`, it closes the popup ([the board](board.md)). herdr gives a popup every key, so there
-the board reads that key itself, from herdr's `config.toml`: herdr's prefix key and then the key.
-
-Restarting the Coordinator, starting a new one and going into its whole chat are not on the board: see
+Restarting the Coordinator, starting a new one, and going into its whole chat are not on the board: see
 [the Coordinator](coordinator.md).
+
+## All the keys
 
 <!-- made:keys Made by `herdr-projects docs` from crates/flow/src/board/keys.rs. Do not edit between these two lines. -->
 **Plain keys**
