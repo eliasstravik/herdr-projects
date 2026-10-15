@@ -7,9 +7,10 @@ use super::{Kind, Models, Read, BASE, NO_MODELS};
 pub static KINDS: &[Kind] = &[
     Kind { name: "claude", min_version: "2.1.296", efforts: &["low", "medium", "high", "xhigh", "max"], access_full: &["--dangerously-skip-permissions"],
         tokens: true, rules_file: Some("CLAUDE.md"), reads_turn: true, plan_mode: true, model: &["--model", "{}"],
-        // Claude Code lists no models: it takes its short names and every full name (claude-opus-5-5, and a cloud's
-        // us.anthropic.claude-opus-5-5); `[1m]` after one asks for the long context.
-        models: Models { aliases: &["default", "fable", "opus", "sonnet", "haiku", "opusplan"], prefix: "claude-", suffix: &["["], example: "claude/claude-opus-5-5", ..NO_MODELS },
+        // Claude Code has no command that lists its models: its short names (each the newest of its kind) and the
+        // full names Claude Code 2.1.301 knows. `[1m]` after one asks for the long context. On a cloud or a gateway
+        // of its own (models/listed.rs `own_provider`) its names are that provider's, and not checked.
+        models: Models { aliases: &["default", "fable", "opus", "sonnet", "haiku", "opusplan"], known: CLAUDE_MODELS, suffix: &["[1m]"], example: "claude/claude-opus-5-5", ..NO_MODELS },
         effort: &["--effort", "{}"], resume: &["--resume", "{}"], session: &["--session-id", "{}"], standing: &["--append-system-prompt-file", "{}"], integration: "claude",
         checked: "everything the board does, on 2.1.296 to 2.1.300", ..BASE },
     // --no-daemon: a shared Codex background server of another version shows a restart dialog that herdr reads as
@@ -27,4 +28,11 @@ pub static KINDS: &[Kind] = &[
         models: Models { list: &["--list-models"], read: Read::Table, suffix: &[":"], example: "pi/anthropic/claude-opus-5-5", ..NO_MODELS },
         resume: &["--session-id", "{}"], session: &["--session-id", "{}"], standing: &["--append-system-prompt", "{}"], integration: "pi",
         checked: "everything the board does, on 1.1.0", ..BASE },
+];
+/// Claude Code's full model names, newest first; a new one is one more entry.
+const CLAUDE_MODELS: &[&str] = &[
+    "claude-fable-5-1", "claude-fable-5", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5", "claude-sonnet-5",
+    "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-opus-4-5", "claude-opus-4-5-20251101",
+    "claude-sonnet-4-5", "claude-sonnet-4-5-20250929", "claude-haiku-4-5", "claude-haiku-4-5-20251001", "claude-opus-4-1", "claude-opus-4-1-20250805",
+    "claude-opus-4-0", "claude-opus-4-20250514", "claude-sonnet-4-0", "claude-sonnet-4-20250514",
 ];

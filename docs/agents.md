@@ -54,8 +54,8 @@ can:
 - **A model** where the program takes none when started for work: Droid (choose its model in Droid's own settings;
   its one-shot takes one, so `watcher.agent droid/<model>` is taken).
 - **A model name** the program does not take, with the names it does: read from the program's own list where it has
-  one (`codex debug models`, `pi --list-models`, `cursor-agent models`, `opencode models`), else from its own rule
-  (Claude Code). `herdr-projects models` lists them ([models and effort](models.md)).
+  one (`codex debug models`, `pi --list-models`, `cursor-agent models`, `opencode models`), else from its names
+  written in the table (Claude Code). `herdr-projects models` lists them ([models and effort](models.md)).
 - **An effort** the program does not have: a level not on its list, or any level where it takes none at start (most
   of herdr's others). Cursor takes its effort in the model's name: `cursor/claude-opus-4-8[effort=high]`.
 - **`access ask`** for a program that never asks before it acts (pi).
@@ -88,7 +88,7 @@ tested): they are not taken. Each is one more entry in the table.
 <!-- made:agents Made by `herdr-projects docs` from crates/core/src/agents/kinds/. Do not edit between these two lines. -->
 | Program | Started for work as | Model | Effort | Asking first | Standing rules | Reopened by | Watcher's one-shot | Turn's end read from | herdr's integration | Can do | Checked |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| `claude` | `claude --dangerously-skip-permissions` | `--model <model>`; `default`, `fable`, `opus`, `sonnet`, `haiku`, `opusplan` or a name with `claude-` in it | `--effort <level>`: low, medium, high, xhigh, max | its own default | `--append-system-prompt-file <file>` | `--resume <id>` | `claude -p --no-session-persistence --tools ""`, the prompt on its input | its conversation file | `claude` | every role | everything the board does, on 2.1.296 to 2.1.300 |
+| `claude` | `claude --dangerously-skip-permissions` | `--model <model>`; `default`, `fable`, `opus`, `sonnet`, `haiku`, `opusplan` or one of its full names in the table (`claude-fable-5-1`, `claude-fable-5`, `claude-opus-5-5`) | `--effort <level>`: low, medium, high, xhigh, max | its own default | `--append-system-prompt-file <file>` | `--resume <id>` | `claude -p --no-session-persistence --tools ""`, the prompt on its input | its conversation file | `claude` | every role | everything the board does, on 2.1.296 to 2.1.300 |
 | `codex` | `codex --dangerously-bypass-approvals-and-sandbox --no-daemon` | `-m <model>`; the names `codex debug models` lists | `-c model_reasoning_effort="<level>"`: minimal, low, medium, high, xhigh | `--no-daemon` | `-c developer_instructions=…` | `resume <id>` | `codex exec --skip-git-repo-check --ephemeral --color never <prompt>` | its conversation file | `codex` | every role | everything the board does, on 0.153.4 to 0.162.1 |
 | `pi` | `pi` | `--model <model>`; the names `pi --list-models` lists | `--thinking <level>`: off, minimal, low, medium, high, xhigh | cannot ask | `--append-system-prompt <file>` | `--session-id <id>` | `pi -p --no-session --no-tools --no-skills --no-context-files -- <prompt>` | its conversation file | `pi` | every role | everything the board does, on 1.1.0 |
 | `agy` (also `antigravity-cli`, `antigravity`) | `agy --dangerously-skip-permissions` | `--model <model>`; not checked | `--effort <level>`: low, medium, high, xhigh, max | its own default | in its first prompt | `--conversation <id>` | `agy --disable-slash-commands -p <prompt>` | herdr's state and its closing note | `antigravity-cli` | every role | flags from agy --help 1.3.6; started by herdr 0.9.3 on the board's flags (it came up at its login) |

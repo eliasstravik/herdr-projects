@@ -14,7 +14,7 @@ The name is **the program's own**, and each program names its models its own way
 
 | Program | Written as | Its names |
 |---|---|---|
-| `claude` | `claude/opus`, `claude/claude-opus-5-5`, `claude/claude-opus-5-5[1m]` | a short name (`default`, `fable`, `opus`, `sonnet`, `haiku`, `opusplan`) or a full name with `claude-` in it |
+| `claude` | `claude/opus`, `claude/claude-opus-5-5`, `claude/claude-opus-5-5[1m]` | a short name (`default`, `fable`, `opus`, `sonnet`, `haiku`, `opusplan`: each the newest of its kind) or one of its full names (`herdr-projects models claude`) |
 | `codex` | `codex/gpt-6.1-sol` | what `codex debug models` lists |
 | `pi` | `pi/anthropic/claude-opus-5-5` (its provider first), `pi/anthropic/claude-opus-5-5:high` | what `pi --list-models` lists |
 | `cursor` | `cursor/claude-opus-5-5-high`, `cursor/claude-opus-4-8[effort=high]` | what `cursor-agent models` lists; a listed model's name without its last part takes parameters in brackets |
@@ -39,10 +39,18 @@ Write it after the program: codex/gpt-6.1-sol.
 ```
 
 The list is asked of the program and kept for an hour. A name that is not on it is asked again first, so a model the
-program has just added is taken at once. A name is not checked (it goes to the program as you wrote it) when the
-program has no list, is not installed here, or its list cannot be read, and when the program is pointed at a provider
-of its own: Claude Code with `ANTHROPIC_BASE_URL` or a cloud (`CLAUDE_CODE_USE_BEDROCK`, `…_VERTEX`, `…_FOUNDRY`),
-Codex with a `model_provider` in its `config.toml`.
+program has just added is taken at once. When the program is installed but its list cannot be read (it is not logged
+in, offline, or fails), the name is refused too, with what the program said: run its list command in a terminal to
+fix that, or leave the model out.
+
+Claude Code has no command that lists its models, so its names are written in the board's table of programs. A Claude
+model newer than that table is refused until the board is updated: its short name (`claude/opus`) always means the
+newest of its kind.
+
+A name is not checked (it goes to the program as you wrote it) when the program has no list and no names written in
+the table, when it is not installed here, and when it is pointed at a provider of its own: Claude Code with
+`ANTHROPIC_BASE_URL` or a cloud (`CLAUDE_CODE_USE_BEDROCK`, `…_VERTEX`, `…_FOUNDRY`), Codex with a `model_provider` in
+its `config.toml`.
 
 ## An effort
 
@@ -73,5 +81,5 @@ names up with `herdr-projects models` and sets them the same way. Where a value 
 ## A new program
 
 How a program's models are listed and read is one entry in its row of the table of programs
-(`crates/core/src/agents/kinds/`, `models`): the command that lists them and its format, or the short names and the
-start of its full names. A program with neither is not checked.
+(`crates/core/src/agents/kinds/`, `models`): the command that lists them and its format, or its short and full names.
+A program with neither is not checked.

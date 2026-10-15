@@ -10,7 +10,8 @@
 //!   efforts      the effort levels it accepts                                   none: any word is passed on
 //!   effort       the arguments that give it an effort, `{}` the level           none: an effort is refused
 //!   model        the arguments that give it a model, `{}` the model             none: a model is refused
-//!   models       the model names it takes, and its own command that lists them  none: a name is not checked
+//!   models       the model names it takes: its own command that lists them, or  none: a name is not checked
+//!                its short and full names
 //!   resume       the arguments that reopen a conversation, `{}` its id          none: it starts afresh
 //!   session      the arguments that name a new conversation, `{}` a new uuid    none: herdr's integration tells it
 //!   fresh        the arguments that start a new conversation, not its last one  none
@@ -74,18 +75,18 @@ pub struct Headless {
     pub system: &'static [&'static str],
     pub prompt: &'static [&'static str],
 }
-/// The model names a program takes: those its own command lists, else its aliases and the start every full name has.
-/// With neither, a name is not checked: it goes to the program as written.
+/// The model names a program takes: those its own command lists, else its short names and the full names written
+/// here. With neither, a name is not checked: it goes to the program as written.
 pub struct Models {
     /// The program's own command that prints the names it takes (its arguments), and how that is read.
     pub list: &'static [&'static str],
     pub read: Read,
     /// Short names it always takes (claude's `opus`).
     pub aliases: &'static [&'static str],
-    /// The start every full name has, where it has no list (`claude-`).
-    pub prefix: &'static str,
+    /// Its full names, where it has no command that lists them (Claude Code): a newer one is one more line here.
+    pub known: &'static [&'static str],
     /// What may follow a name and is not part of it: from this mark on, it is cut off before the name is looked up
-    /// (`[`: cursor's parameters, claude's `[1m]`; `:`: pi's thinking level).
+    /// (`[`: cursor's parameters; `:`: pi's thinking level). A longer one is a whole ending (claude's `[1m]`).
     pub suffix: &'static [&'static str],
     /// How a model is written after the program, as the board's pages and refusals say it.
     pub example: &'static str,
@@ -104,7 +105,7 @@ pub enum Read {
     /// One name a line (opencode's provider/model).
     Lines,
 }
-pub const NO_MODELS: Models = Models { list: &[], read: Read::None, aliases: &[], prefix: "", suffix: &[], example: "" };
+pub const NO_MODELS: Models = Models { list: &[], read: Read::None, aliases: &[], known: &[], suffix: &[], example: "" };
 /// What an entry has that it does not name.
 pub const BASE: Kind = Kind {
     name: "", program: "", aliases: &[], min_version: "0", efforts: &[], access_full: &[], access_ask: Some(&[]), fast: false, tokens: false,

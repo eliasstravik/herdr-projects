@@ -18,8 +18,8 @@ fn roles_out(k: &Kind) -> String {
 fn names_of(k: &Kind) -> String {
     let m = &k.models;
     if !m.list.is_empty() { return format!("the names {} lists", code(&std::iter::once(program(k.name).to_string()).chain(m.list.iter().map(|s| s.to_string())).collect::<Vec<_>>())); }
-    if m.aliases.is_empty() && m.prefix.is_empty() { return "not checked".into(); }
-    format!("{}{}", m.aliases.iter().map(|a| format!("`{a}`")).collect::<Vec<_>>().join(", "), if m.prefix.is_empty() { String::new() } else { format!(" or a name with `{}` in it", m.prefix) })
+    if m.aliases.is_empty() && m.known.is_empty() { return "not checked".into(); }
+    format!("{} or one of its full names in the table ({})", m.aliases.iter().map(|a| format!("`{a}`")).collect::<Vec<_>>().join(", "), m.known.iter().take(3).map(|a| format!("`{a}`")).collect::<Vec<_>>().join(", "))
 }
 fn row(k: &Kind) -> Vec<String> {
     let mut name = format!("`{}`", k.name);

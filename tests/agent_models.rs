@@ -78,14 +78,21 @@ fn a_model_the_program_does_not_take_is_refused_with_the_ones_it_does() {
 #[test]
 fn claude_s_names_follow_its_own_rule_and_a_program_without_a_list_is_not_checked() {
     let _w = world();
-    for m in ["opus", "sonnet", "haiku", "fable", "opusplan", "default", "claude-opus-5-5", "claude-opus-5-5[1m]", "us.anthropic.claude-opus-5-5"] { taken("worker.agent", &format!("claude/{m}")); }
-    refused("worker.agent", "claude/gpt-5", r"claude has no model .gpt-5.\. claude takes a short name \(default, fable, opus, sonnet, haiku, opusplan\) or a full model name with claude- in it, such as claude/claude-opus-5-5\.");
+    for m in ["opus", "sonnet", "haiku", "fable", "opusplan", "default", "opus[1m]", "claude-opus-5-5", "claude-opus-5-5[1m]", "claude-sonnet-4-5-20250929"] { taken("worker.agent", &format!("claude/{m}")); }
+    refused("worker.agent", "claude/gpt-5", r#"^worker\.agent: claude has no model "gpt-5"\. It takes .*opus.*claude-opus-5-5.*, and \d+ more: `herdr-projects models claude` lists them all \(its short names, each the newest of its kind, and its full names\)\."#);
+    // Invented and mistyped names (the review of HP-16): refused, with the nearest real one.
+    refused("worker.agent", "claude/claude-opus-this-model-does-not-exist", r#"claude has no model "claude-opus-this-model-does-not-exist"\. It takes claude-opus-5-5, claude-opus-5, .*Write it after the program: claude/claude-opus-5-5\.$"#);
+    refused("worker.agent", "claude/typo-claude-anything", r"claude has no model");
+    refused("worker.agent", "claude/claude-opsu-5-5", r"Did you mean claude-opus-5-5\?");
+    refused("worker.agent", "claude/claude-opus-5-5[2m]", r"claude has no model");
     refused("coordinator.agent", "claude/claude-", r"claude has no model");
-    // Pointed at a provider of its own, any name goes.
-    unsafe { std::env::set_var("ANTHROPIC_BASE_URL", "http://gateway") };
-    let r = set_value("worker.agent", &json!("claude/my-gateway-model"), &Scope::you());
-    unsafe { std::env::remove_var("ANTHROPIC_BASE_URL") };
-    assert!(r.is_ok(), "{:?}", r.err().map(|e| e.msg));
+    // Pointed at a provider of its own (a gateway, a cloud), its names are that provider's: not checked.
+    for env in ["ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK"] {
+        unsafe { std::env::set_var(env, "1") };
+        let r = set_value("worker.agent", &json!("claude/us.anthropic.claude-opus-5-5-v1:0"), &Scope::you());
+        unsafe { std::env::remove_var(env) };
+        assert!(r.is_ok(), "{env}: {:?}", r.err().map(|e| e.msg));
+    }
     // No list of its own: any name, as before.
     taken("worker.agent", "agy/gemini-3-pro");
     taken("worker.agent", "copilot/whatever-it-takes");
@@ -107,7 +114,8 @@ fn the_models_command_names_what_each_program_takes_as_a_setting_writes_it() {
     assert!(text.ends_with("worker.agent codex/gpt-6.1-sol:\n\ncodex/gpt-6.1-sol\ncodex/gpt-6-luna"), "{text}");
     let (_, all) = models_command("").unwrap();
     assert!(has(&all, r"(?m)^codex +codex/gpt-6\.1-sol, codex/gpt-6-luna$"), "{all}");
-    assert!(has(&all, r"(?m)^claude +a short name \(default, fable"), "{all}");
+    assert!(has(&all, r"(?m)^claude +\d+ names, such as claude/default, claude/fable, claude/opus, claude/sonnet: herdr-projects models claude lists them all$"), "{all}");
+    assert!(models_command("claude").unwrap().1.contains("\nclaude/claude-opus-5-5\n"));
     assert!(has(&all, r"(?m)^droid +droid takes no model when the board starts it"), "{all}");
     assert!(has(&all, r"(?m)^agy +any name agy takes \(not checked"), "{all}");
     assert!(models_command("codx").unwrap_err().msg.contains("Did you mean codex?"));
@@ -136,8 +144,19 @@ fn real_programs_the_list_is_asked_of_the_program_and_kept() {
     assert_eq!(asked(), 1, "kept: not asked again");
     let (_, out, _) = run(&["models", "codex"]);
     assert!(out.contains("codex/gpt-6.1-sol\ncodex/gpt-6-luna"), "{out}");
-    // Not installed here: not checked.
+    // Installed, but its list cannot be read (not logged in, offline, broken): refused, with why, not let through
+    // unchecked; and not kept, so the next try asks again.
     std::fs::remove_file(sw::store::files::data_dir().join("models.json")).unwrap();
+    std::fs::write(bin.join("codex"), "#!/bin/sh\necho 'error: not logged in' >&2\nexit 2\n").unwrap();
+    let (code, _, err) = run(&["set", "worker.agent", "codex/this-model-does-not-exist"]);
+    assert_eq!(code, 1);
+    assert!(err.contains("codex's list of models could not be read, so \"this-model-does-not-exist\" cannot be checked: `codex debug models` failed (exit 2): error: not logged in. Run `codex debug models` in a terminal here"), "{err}");
+    assert!(!sw::store::files::data_dir().join("models.json").exists(), "a failed list is not kept");
+    let (code, out, _) = run(&["set", "worker.agent", "codex"]);
+    assert_eq!(code, 0, "without a model there is nothing to check: {out}");
+    let (_, out, _) = run(&["models"]);
+    assert!(has(&out, r"(?m)^codex +its list could not be read: `codex debug models` failed \(exit 2\)"), "{out}");
+    // Not installed here: not checked.
     std::fs::remove_file(bin.join("codex")).unwrap();
     let (code, _, err) = run(&["set", "worker.agent", "codex/gpt-5.5"]);
     assert_eq!(code, 0, "{err}");
