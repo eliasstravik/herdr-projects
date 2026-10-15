@@ -40,7 +40,7 @@ fn reconcile_a_pane_that_is_gone_an_agent_that_exited_and_a_finished_turn_missed
     sw::housekeeping::housekeeping(&w.socket, sw::housekeeping::Force::Yes);
     let t = settle(&id);
     assert_eq!(t.s("stage"), "done", "nothing to land: simply done");
-    assert_eq!(t.s("msg"), "Finished unseen.");
+    assert_eq!(t.s("msg"), "Finished unseen. No change needed.");
 }
 
 #[test]

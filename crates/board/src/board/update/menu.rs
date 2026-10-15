@@ -15,7 +15,7 @@ pub fn label(s: &State, k: K, r: Option<&Obj>) -> String {
     let st = |x: &str| r.map(|r| r.s("stage") == x).unwrap_or(false);
     let next_scope = super::remotes::scope_next(s);
     match k {
-        K::Yes => if st("pick") { "yes: keep the selected attempt".into() } else { "yes: approve the merge, say yes, retry, take it as it is, finish".into() },
+        K::Yes => if st("pick") { "yes: keep the selected attempt".into() } else { "yes: approve the merge, say yes, retry, take it as it is".into() },
         K::SendBack => "send it back: tell the agent to fix it, or to continue".into(),
         K::NextAttempt => if r.map(|r| choosing(s, r)).unwrap_or(false) { "move to this task's next attempt".into() } else { String::new() },
         K::Stop => match r { None => "stop the agent, or remove the task".into(), Some(r) if r.s("stage") == "progress" => "put this task back in to do".into(), Some(r) if running(r) => "stop this task's agent".into(), _ => "remove this task".into() },
