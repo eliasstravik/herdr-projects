@@ -52,8 +52,9 @@ had. The moment a limit is said, all of them are read, so a limit set late still
 review that ended before included.
 
 A program whose tokens the board cannot count adds nothing to the count, and `show <id>` says for it that
-`limit.tokens` does nothing (`does nothing for <program>: its tokens cannot be counted`). The three programs the
-board knows (Claude Code, Codex, pi) can all be counted.
+`limit.tokens` does nothing (`does nothing for <program>: its tokens cannot be counted`). The three programs whose
+conversation the board reads (Claude Code, Codex, pi) can all be counted; herdr's other programs cannot
+([agents](agents.md)).
 
 **When each is read.** `limit.time` is read when a run starts and holds for that run: set or changed while a run
 is under way, it counts from the next run (the next time the agent is set going, or the next review). `limit.tokens`

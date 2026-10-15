@@ -160,7 +160,12 @@ impl Herdr {
             Ok(r) => Ok(r.at("agent").clone()),
             // A program that quits as it starts (on an argument it does not know) leaves herdr waiting for it until the
             // timeout. What it printed says why.
-            Err(e) if e.code == "timeout" && self.agent_get(pane).ok().flatten().is_none() => Err(match self.quit_with(pane, kind) { Some(why) => HerdrError { code: e.code, message: format!("{kind} quit as it started: {why}") }, None => e }),
+            // One that runs on, unseen, is behind a launcher herdr cannot see through (kilo and qodercli from npm: a node
+            // script that starts the program as its child).
+            Err(e) if e.code == "timeout" && self.agent_get(pane).ok().flatten().is_none() => Err(match self.quit_with(pane, kind) {
+                Some(why) => HerdrError { code: e.code, message: format!("{kind} quit as it started: {why}") },
+                None => HerdrError { message: format!("{}: herdr did not see {kind} come up in its pane. If it runs there, it is behind a launcher that hides it from herdr (kilo and qodercli installed with npm are): install its standalone program (docs/agents.md).", e.message), code: e.code },
+            }),
             Err(e) => Err(e),
         }
     }

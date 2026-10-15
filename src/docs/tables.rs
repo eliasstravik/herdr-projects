@@ -1,11 +1,12 @@
-//! The two made tables: every key of the board (docs/keys.md) and every setting (docs/settings.md), each written
+//! The made tables: every key of the board (docs/keys.md), every setting (docs/settings.md) and every agent program
+//! (docs/agents.md, agents_table.rs), each written
 //! between its two marker lines from the one list it is made from, with what those lists must hold checked first.
 use crate::board::keys::{by_name, pair, written, GROUPS, KEYS};
 use crate::json::*;
 use crate::store::settings_list::{Kind, SETTINGS};
 
 fn cell(s: &str) -> String { s.replace('|', "\\|") }
-fn table(head: &[&str], rows: Vec<Vec<String>>) -> String {
+pub fn table(head: &[&str], rows: Vec<Vec<String>>) -> String {
     let mut out = vec![format!("| {} |", head.join(" | ")), format!("|{}|", head.iter().map(|_| "---").collect::<Vec<_>>().join("|"))];
     out.extend(rows.into_iter().map(|r| format!("| {} |", r.iter().map(|c| cell(c)).collect::<Vec<_>>().join(" | "))));
     out.join("\n")
@@ -43,7 +44,8 @@ pub fn settings_table() -> Result<String, String> {
     Ok(table(&["Setting", "Built in", "Can be said by", "Means"], rows?))
 }
 type Make = fn() -> Result<String, String>;
-const PARTS: [(&str, &str, &str, Make); 2] = [("docs/keys.md", "keys", "crates/flow/src/board/keys.rs", keys_table), ("docs/settings.md", "settings", "crates/core/src/store/settings_list.rs", settings_table)];
+const PARTS: [(&str, &str, &str, Make); 3] = [("docs/keys.md", "keys", "crates/flow/src/board/keys.rs", keys_table), ("docs/settings.md", "settings", "crates/core/src/store/settings_list.rs", settings_table),
+    ("docs/agents.md", "agents", "crates/core/src/agents/kinds/", super::agents_table::agents_table)];
 fn with_part(file: &str, id: &str, from: &str, body: &str) -> Result<String, String> {
     let text = super::read(file);
     let (start, end) = (format!("<!-- made:{id} "), format!("<!-- /made:{id} -->"));

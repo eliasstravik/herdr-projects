@@ -12,7 +12,7 @@ every second, so they keep moving between looks. Under 5% there is too little to
 own tasks are different: they show the `--progress` and `--eta` you give `report`, as given. The
 **Coordinator** is the agent you talk to in the chat: one long-lived chat that turns what you type into board commands, and
 can do whatever else an agent chat can. Like the Agent, it is Claude Code on its default model and effort unless you
-say otherwise, whatever the Agent is set to: set `coordinator.agent` (`claude`, `codex` or `pi`, with a model after
+say otherwise, whatever the Agent is set to: set `coordinator.agent` (`claude`, `codex`, `pi` or another program herdr starts: [agents](agents.md), with a model after
 a slash), `coordinator.effort`, `coordinator.fast`, `coordinator.access` and `coordinator.instructions`, or pick one
 for a single use with `coordinator new --agent …`. A changed default applies to the next new one; the chat says so.
 `coordinator.agent none`, a program that is not installed, or no
@@ -20,7 +20,7 @@ running herdr: the chat says "New task", and what you type is added word for wor
 
 **Every chat knows the board.** The plugin keeps a small how-to, a folder named
 `herdr-projects` holding `SKILL.md`, in each installed agent program's own skills folder (`~/.claude/skills`,
-`~/.codex/skills`, `~/.pi/agent/skills`), so an ordinary chat can "add this to the board" without being told how.
+`~/.codex/skills`, `~/.pi/agent/skills`; not herdr's other programs, whose skills folder the board does not know), so an ordinary chat can "add this to the board" without being told how.
 It gives the command by its full path, so it need not be on your PATH. `herdr-projects remove-extras` removes
 exactly what was written, and it is not written back; a folder of that name the plugin did not write is left alone.
 

@@ -214,7 +214,7 @@ fn finish_steps(id: &str, g: &mut Guard, mut t: Task, ev: Option<Value>, force: 
     let finished = turn.as_ref().map(|x| x.finished).unwrap_or(false);
     if !finished && fresh_note.is_none() && wake.is_null() {
         // Nothing says the turn finished normally: commit nothing and hold, with what is on the screen as the message.
-        let screen = last_lines(&read_screen(&api, &pane, a.as_ref().map(|a| a.s("agent_status")), 60), 12);
+        let screen = last_lines(&crate::agents::screen_text::screen_text(&read_screen(&api, &pane, a.as_ref().map(|a| a.s("agent_status")), 60)), 12); // its words, not its frames
         if is_auth_failure(&screen) {
             g.set(&keep)?;
             if hand_over(id, g, "logged out", "")? { return Ok(()); }

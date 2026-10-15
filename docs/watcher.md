@@ -1,7 +1,8 @@
 # The Watcher: how often it looks, and what it costs
 
 The Watcher is the small hidden model call behind the "doing now" line and the progress guess
-([roles](roles-and-commands.md)). Each look starts a whole program (`claude -p`, `codex exec` or `pi -p`), so it is
+([roles](roles-and-commands.md)). Each look starts a whole program (`claude -p`, `codex exec`, `pi -p`, or another program's one-shot:
+[agents](agents.md)), so it is
 built to start as few of them as it can.
 
 ## When it looks

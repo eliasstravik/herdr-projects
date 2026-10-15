@@ -44,8 +44,8 @@ landed (delegated again after its clean-up) starts with a new plan.
   **In its program's own plan mode where it has one**: Claude Code is started with `--permission-mode plan` in place
   of its access flags. In that mode it cannot edit unasked, and it presents its plan with its own tool
   (`ExitPlanMode`), which would ask in the terminal: the board takes the plan there instead, through a hook it
-  passes at launch, and tells the agent to stop. Codex and pi have no plan mode that can be asked for at launch: they
-  save the plan as a file in the task's own folder.
+  passes at launch, and tells the agent to stop. Every other program (Codex, pi, herdr's others: [agents](agents.md))
+  saves the plan as a file in the task's own folder.
 - **A planner of its own** (`plan.agent`: a program). It works in the task's worktree, in a tab of its own named
   **`Planner`** ([a task's tabs](tabs.md)), on its own program and model, while the working agent's tab `Agent`
   waits beside it. While it writes, it is the task's agent in every way: its row, the Watcher's line, the chat, a
@@ -67,7 +67,7 @@ The board does not only ask for it. Four things hold, from the moment the plan s
    a mount of its own (bubblewrap: `bwrap --ro-bind`), in which the task's worktree and its git folder cannot be
    written: a write, a delete, a commit, and also a `chmod` that would give the permission back, are answered
    `Read-only file system`, whatever the program's own access. That holds for every program (Claude Code, Codex,
-   pi), for a planner of its own, and for the reviewer that checks a plan. Everything else is as on the machine,
+   pi and herdr's others), for a planner of its own, and for the reviewer that checks a plan. Everything else is as on the machine,
    so the plan can be saved in the board's folder. After the yes the program is ended and started again the usual
    way, outside that mount, in the same conversation. **Where no such mount can be made** (bubblewrap is missing,
    or user namespaces are not allowed) **no plan is written in a repo at all**: the task does not start, and says

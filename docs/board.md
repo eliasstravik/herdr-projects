@@ -457,7 +457,8 @@ The chat is three things, and looks the same for the Coordinator and for a task'
 what was sent to it. Nothing of the program's own screen is: no tool call and none of its output, no spinner, timing
 or token count, no tip, no input box, rule or footer, no start screen or logo. The board reads them from the
 conversation the program itself saves (Claude Code, Codex and pi each keep one), not from its screen, so a new
-version of a program that draws its screen differently changes nothing here. Markdown reads as text: a list item's
+version of a program that draws its screen differently changes nothing here. For herdr's other programs, whose
+conversation the board does not read ([agents](agents.md)), the box shows the words on its screen instead. Markdown reads as text: a list item's
 next lines stand under its words, code keeps its lines, and the marks of a headline, of bold and of a code block
 are left out.
 
