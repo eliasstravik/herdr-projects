@@ -1,10 +1,11 @@
 # Builds the program for every platform and attaches it to the GitHub release of a version tag.
 #
 # Runs when a tag `v*` is pushed (`git tag v1.0.0 && git push origin v1.0.0`), or by hand with a tag to build the files
-# of an existing release again. Each file is `herdr-projects-<os>-<arch>` (os linux|macos, arch x86_64|aarch64) with
-# its `.sha256` beside it: bin/run.sh and `herdr-projects update` download exactly these names. The Linux files are
-# static (musl), so they run on any Linux. The tag must be the version in Cargo.toml and herdr-plugin.toml, or the run
-# fails: run.sh asks for the release named by Cargo.toml's version.
+# of an existing release again; by hand with `dry_run` it builds and checks every file but attaches nothing, to test the
+# workflow itself. Each file is `herdr-projects-<os>-<arch>` (os linux|macos, arch x86_64|aarch64) with its `.sha256`
+# beside it: bin/run.sh and `herdr-projects update` download exactly these names. The Linux files are static (musl), so
+# they run on any Linux. The tag must be the version in Cargo.toml and herdr-plugin.toml, or the run fails: run.sh asks
+# for the release named by Cargo.toml's version.
 name: Release
 
 on:
@@ -15,6 +16,10 @@ on:
       tag:
         description: The tag to build, e.g. v1.0.0
         required: true
+      dry_run:
+        description: Build and check every file, but attach nothing to the release
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -34,7 +39,7 @@ jobs:
           - { target: aarch64-apple-darwin, runner: macos-14, file: herdr-projects-macos-aarch64, runs: true }
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ env.TAG }}
 
@@ -84,7 +89,7 @@ jobs:
         if: contains(matrix.target, 'linux')
         run: file dist/${{ matrix.file }} | tee /dev/stderr | grep -q "statically linked\|static-pie linked"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.file }}
           path: dist/*
@@ -97,7 +102,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -112,6 +117,7 @@ jobs:
           done; done
 
       - name: Attach them to the release (made when it is not there yet)
+        if: ${{ !inputs.dry_run }}
         working-directory: dist
         run: |
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes
