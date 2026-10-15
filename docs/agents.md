@@ -1,11 +1,7 @@
 # Agent programs
 
-Every setting that picks a program for a role takes every program herdr can start and has its own integration for:
-`worker.agent`, `reviewer.agent`, `coordinator.agent`, `watcher.agent`, `plan.agent`, `worker.fallback`,
-`reviewer.fallback` and `attempts.by`. That is Claude Code, Codex and pi, and Antigravity CLI (`agy`), GitHub
-Copilot CLI (`copilot`), Cursor Agent (`cursor`), Devin (`devin`), Factory's Droid (`droid`), Grok (`grok`), Hermes
-(`hermes`), Kilo Code (`kilo`), Kimi Code (`kimi`), Letta Code (`letta`), MastraCode (`mastracode`), oh-my-pi (`omp`),
-OpenCode (`opencode`), Qoder (`qodercli`) and Qwen Code (`qwen`). A model goes after a slash, as for the others:
+**Every role can use any program Herdr can start and has its own integration for.** Claude Code, Codex and pi do
+everything the board does. The others work too, with a few limits (below).
 
 ```
 herdr-projects set reviewer.agent agy/gemini-3-pro
@@ -13,75 +9,96 @@ herdr-projects set worker.fallback "codex, copilot/gpt-5.5"
 herdr-projects delegate 12 --worker.agent qwen --reviewer.agent cursor
 ```
 
-herdr's integration name and the program's own name are taken too (`antigravity-cli` is `agy`, `cursor-agent` is
-`cursor`). A program is started as herdr starts it (`herdr agent start --kind <name>`), with the board's own
-arguments after it; herdr finds it in its pane and says whether it works or waits. The table at the end says, for
-each program, how it is started and what it can do. It is made from the code (`crates/core/src/agents/kinds/`), so it
-is never other than what the board does: adding a program is one more entry there.
+A model goes after a slash ([models and effort](models.md)). The settings that pick a program are `worker.agent`,
+`reviewer.agent`, `coordinator.agent`, `watcher.agent`, `plan.agent`, `worker.fallback`, `reviewer.fallback` and
+`attempts.by`.
 
-## What the board reads, and what it does not
-
-The board reads the conversation Claude Code, Codex and pi save, and so knows what they said, what went wrong with
-the provider and how many tokens they used ([how work gets done](how-work-gets-done.md)). It reads no other
-program's: there each of these comes from elsewhere.
-
-- **A turn's end** is herdr's: the program was at work and is at rest again (its `completion_seq`). What the agent
-  said is its **closing note**, the file the board tells every agent to write when it stops; one that stops without
-  one waits as `Stopped without a summary`, with the last words on its screen.
-- **A review** ends with the reviewer's verdict file, as for every program. A reviewer that stops without one ends
-  its round as soon as herdr sees it stop (15 seconds later), not after the review's whole time.
-- **The chat** with the agent shows the words on its screen, not its conversation ([the board](board.md)).
-- **Not there**: tokens are not counted (`limit.tokens` says `does nothing` for it), a provider's passing error is not
-  told from a lasting one (so the board does not wait and try again, and the fallback does not take over for it; a
-  logged-out screen still hands over), and helpers the agent starts are not followed.
-- **Started again** (after you stopped it, or after a plan's yes), it reopens its conversation where it can: by the id
-  herdr's integration for it reports (install it: `herdr integration install <name>`), or by the id the board gave it
-  at start (copilot, grok, qodercli and qwen take one). Without either it starts a new conversation with the task and
-  what it said last.
-- **The standing rules** go in its first prompt, except for a program that takes a rules file at start (droid, omp).
-
-## What is refused, and why
-
-A program that cannot do a role well is refused when the setting is set, with the reason and the programs that
-can:
-
-- **MastraCode works on no task** (`worker`, `reviewer`, `coordinator`, `plan`, the fallbacks and attempts): it can
-  be told neither its model nor to work without asking when it starts (only through environment variables, which
-  herdr's start cannot set), and it reopens its folder's last conversation, so a reviewer would join the worker's.
-  It can be the Watcher.
-- **The Watcher** needs a headless one-shot (a command that answers once and ends). Every program here has one; a
-  program without one would be refused.
-- **A model** where the program takes none when started for work: Droid (choose its model in Droid's own settings;
-  its one-shot takes one, so `watcher.agent droid/<model>` is taken).
-- **A model name** the program does not take, with the names it does: read from the program's own list where it has
-  one (`codex debug models`, `pi --list-models`, `cursor-agent models`, `opencode models`), else from its names
-  written in the table (Claude Code). `herdr-projects models` lists them ([models and effort](models.md)).
-- **An effort** the program does not have: a level not on its list, or any level where it takes none at start (most
-  of herdr's others). Cursor takes its effort in the model's name: `cursor/claude-opus-4-8[effort=high]`.
-- **`access ask`** for a program that never asks before it acts (pi).
-
-Two more are said when the program is started, not when it is set:
-
-- **omp and MastraCode need herdr's own integration**: without it herdr cannot tell whether they work. The board does
-  not install it into your agent's settings; it says to: `omp needs herdr's own integration, or herdr cannot see when
-  it works: run herdr integration install omp, then try again.`
-- **A program herdr cannot see**: Kilo Code and Qoder installed with npm run behind a small node launcher that starts
-  the real program as its child, and herdr 0.9.3 does not find them in the pane. The start then fails with `herdr did
-  not see kilo come up in its pane …`. Install the program's standalone build instead (tried: Kilo's own binary is
-  found at once).
+The programs: Claude Code (`claude`), Codex (`codex`), pi (`pi`), Antigravity CLI (`agy`), GitHub Copilot CLI
+(`copilot`), Cursor Agent (`cursor`), Devin (`devin`), Factory's Droid (`droid`), Grok (`grok`), Hermes (`hermes`),
+Kilo Code (`kilo`), Kimi Code (`kimi`), Letta Code (`letta`), MastraCode (`mastracode`), oh-my-pi (`omp`), OpenCode
+(`opencode`), Qoder (`qodercli`) and Qwen Code (`qwen`). Herdr's integration name and the program's own name work too
+(`antigravity-cli` is `agy`, `cursor-agent` is `cursor`).
 
 ## Before a program's first task
 
-Start it once yourself, in a terminal, in a folder of a repo: log in, finish its first setup, and trust the folder
-if it asks. herdr reads a login page as a program at rest, so a program that is not logged in is typed into like one
-that is (Cursor, Devin, Grok, agy and Letta all came up at a login or a setup page when tried here). A folder-trust
-dialog of a new worktree is a dialog like any other: the task waits for you (`needs you`), and Claude Code and Codex
-are told beforehand to trust it ([how work gets done](how-work-gets-done.md)).
+**Start it once yourself**, in a terminal, in a folder of a repo: log in, finish its first setup, and trust the folder
+if it asks.
 
-## Not here
+Why: Herdr reads a login page as a program at rest, so the board types the task into a logged-out program as if it were
+ready. Cursor, Devin, Grok, agy and Letta all came up at a login or setup page when tried here.
 
-herdr also starts Gemini CLI, Cline, Kiro, Amp, Maki and Muse, for which it has no integration (it calls them less
-tested): they are not taken. Each is one more entry in the table.
+A folder-trust dialog in a new worktree is a dialog like any other: the task waits for you (`needs you`). Claude Code
+and Codex are told beforehand to trust it ([how work gets done](how-work-gets-done.md)).
+
+If a start still fails, the task says why: [when an agent could not start](could-not-start.md).
+
+## How a program is started
+
+As Herdr starts it (`herdr agent start --kind <name>`), with the board's own arguments after it. Herdr finds it in its
+pane and says whether it works or waits.
+
+The table at the end says, for each program, how it is started and what it can do. It is made from the code
+(`crates/core/src/agents/kinds/`), so it always matches what the board does. Adding a program is one more entry there.
+
+## What the board knows about each program
+
+The board reads the conversations Claude Code, Codex and pi save. So it knows what they said, what went wrong with the
+provider, and how many tokens they used ([how work gets done](how-work-gets-done.md)).
+
+It reads no other program's conversation. For those, each of these comes from somewhere else:
+
+- **A turn's end** comes from Herdr: the program was at work and is at rest again (its `completion_seq`).
+- **What the agent said** is its **closing note**, the file the board tells every agent to write when it stops. One
+  that stops without it waits as `Stopped without a summary`, with the last words on its screen.
+- **A review** ends with the reviewer's verdict file, as for every program. A reviewer that stops without one ends its
+  round as soon as Herdr sees it stop (15 seconds later), not after the review's whole time.
+- **The chat** with the agent shows the words on its screen, not its conversation ([the board](board.md)).
+- **Started again** (after you stopped it, or after a plan's yes), it reopens its conversation where it can: by the id
+  Herdr's integration reports (install it: `herdr integration install <name>`), or by an id the board gave it at start
+  (copilot, grok, qodercli and qwen take one). Without either it starts a new conversation with the task and what it
+  said last.
+- **The standing rules** go in its first prompt, except for a program that takes a rules file at start (droid, omp).
+
+What these programs do **not** get:
+
+- Tokens are not counted (`limit.tokens` says `does nothing` for them).
+- A provider's passing error is not told from a lasting one. So the board does not wait and try again, and the
+  fallback does not take over for it. A logged-out screen still hands over.
+- Helpers the agent starts are not followed.
+
+## What is refused, and why
+
+A program that cannot do a role well is refused when you set it, with the reason and the programs that can:
+
+- **MastraCode works on no task** (`worker`, `reviewer`, `coordinator`, `plan`, the fallbacks and attempts). It can be
+  told neither its model nor to work without asking when it starts (only through environment variables, which Herdr's
+  start cannot set). And it reopens its folder's last conversation, so a reviewer would join the worker's. It can be
+  the Watcher.
+- **The Watcher** needs a headless one-shot: a command that answers once and ends. Every program here has one; a
+  program without one would be refused.
+- **A model** for a program that takes none when started for work: Droid. Choose its model in Droid's own settings. Its
+  one-shot does take one, so `watcher.agent droid/<model>` works.
+- **A model name** the program does not take, with the names it does. They are read from the program's own list where
+  it has one (`codex debug models`, `pi --list-models`, `cursor-agent models`, `opencode models`), else from the names
+  written in the table (Claude Code). `herdr-projects models` lists them ([models and effort](models.md)).
+- **An effort** the program does not have: a level not on its list, or any level where it takes none at start (most of
+  Herdr's others). Cursor takes its effort in the model's name: `cursor/claude-opus-4-8[effort=high]`.
+- **`access ask`** for a program that never asks before it acts (pi).
+
+Two more are said when the program starts, not when it is set:
+
+- **omp and MastraCode need Herdr's own integration**, or Herdr cannot tell whether they work. The board does not
+  install it into your agent's settings. It tells you to: `omp needs herdr's own integration, or herdr cannot see when
+  it works: run herdr integration install omp, then try again.`
+- **A program Herdr cannot see.** Kilo Code and Qoder installed with npm run behind a small node launcher that starts
+  the real program as its child, and Herdr 0.9.3 does not find them in the pane. The start fails with `herdr did not see
+  kilo come up in its pane …`. Install the program's standalone build instead (tried: Kilo's own binary is found at
+  once).
+
+## Not supported
+
+Herdr also starts Gemini CLI, Cline, Kiro, Amp, Maki and Muse, but has no integration for them (it calls them less
+tested). The board does not take them. Each would be one more entry in the table.
 
 ## The programs
 

@@ -1,4 +1,13 @@
-# What was checked on herdr 0.9.3
+# What was checked on Herdr 0.9.3
+
+**You do not need this page to use the board.** It is the lab notebook behind it: each row is one thing about Herdr
+(or an agent program running in Herdr) that the board relies on, and what a real test on Herdr 0.9.3 showed. Other
+pages link here for the proof. Look a fact up by the words in its first column.
+
+The last section, [missing in Herdr](#missing-in-herdr), lists what Herdr would need for the board's popup to work like
+Herdr's own menu.
+
+## The facts
 
 | Fact | Result |
 |---|---|
