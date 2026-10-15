@@ -6,7 +6,7 @@
 
 <p align="center"><a href="https://github.com/eliasstravik/herdr-projects/blob/main/assets/herdr-projects-launch.mp4"><img src="assets/herdr-projects-launch.webp" width="88%" alt="Animation: you tell the Coordinator what you want, it adds tasks that each get an agent on their own branch, and the board groups them as needs you, ready to approve, and working" /></a></p>
 
-<p align="center"><a href="https://github.com/eliasstravik/herdr-projects/blob/main/docs/install.md"><img src="assets/buttons/open-the-work-board.svg" alt="Open the work board" /></a></p>
+<p align="center"><a href="https://github.com/eliasstravik/herdr-projects/blob/main/docs/get-started.md"><img src="assets/buttons/install-herdr-projects.svg" alt="Install herdr-projects" /></a></p>
 
 <p align="center"><sub>✓&nbsp;Free,&nbsp;MIT&nbsp;licensed &nbsp; ✓&nbsp;Runs&nbsp;on&nbsp;your&nbsp;machines,&nbsp;no&nbsp;hosted&nbsp;service &nbsp; ✓&nbsp;macOS&nbsp;and&nbsp;Linux,&nbsp;Herdr&nbsp;0.9.3+</sub></p>
 
@@ -63,7 +63,7 @@ An agent that asks you something, wants a permission or a sign-in says so to the
 <td align="center" valign="top"><sub>For developers who run coding agents in Herdr on macOS or Linux</sub><br /><h2>Free</h2><div align="left">&nbsp;&nbsp;&nbsp;✓&nbsp; A Coordinator that turns what you type into tasks<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Every task on its own worktree and branch, in its own Herdr space<br />&nbsp;&nbsp;&nbsp;✓&nbsp; A check and a second agent's review before anything merges<br />&nbsp;&nbsp;&nbsp;✓&nbsp; What needs you, on the board, in Herdr's sidebar and on your phone<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Branches kept up to date with main, cleanup after a merge<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Plans, attempts, limits, fallback agents and automations</div></td>
 </tr>
 <tr>
-<td align="center"><a href="https://github.com/eliasstravik/herdr-projects/blob/main/docs/install.md"><img src="assets/buttons/open-the-work-board.svg" alt="Open the work board" /></a></td>
+<td align="center"><a href="https://github.com/eliasstravik/herdr-projects/blob/main/docs/get-started.md"><img src="assets/buttons/install-herdr-projects.svg" alt="Install herdr-projects" /></a></td>
 </tr>
 </table>
 
@@ -124,6 +124,6 @@ Herdr Projects is free and [MIT licensed](LICENSE). Your agent CLI's usual usage
 
 <p align="center">Your board starts with an install, one key, and one sentence about what needs doing. Herdr Projects starts the agents, checks their work and keeps it in view. You choose what to answer and what to merge.</p>
 
-<p align="center"><a href="https://github.com/eliasstravik/herdr-projects/blob/main/docs/install.md"><img src="assets/buttons/open-the-work-board.svg" alt="Open the work board" /></a></p>
+<p align="center"><a href="https://github.com/eliasstravik/herdr-projects/blob/main/docs/get-started.md"><img src="assets/buttons/install-herdr-projects.svg" alt="Install herdr-projects" /></a></p>
 
 <p align="center"><sub>✓&nbsp;Free,&nbsp;MIT&nbsp;licensed &nbsp; ✓&nbsp;Runs&nbsp;on&nbsp;your&nbsp;machines,&nbsp;no&nbsp;hosted&nbsp;service &nbsp; ✓&nbsp;macOS&nbsp;and&nbsp;Linux,&nbsp;Herdr&nbsp;0.9.3+</sub></p>
