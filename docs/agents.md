@@ -88,11 +88,9 @@ A program that cannot do a role well is refused when you set it, with the reason
 Two more are said when the program starts, not when it is set:
 
 - **omp and MastraCode need Herdr's own integration**, or Herdr cannot tell whether they work. The board does not
-  install it into your agent's settings. It tells you to: `omp needs herdr's own integration, or herdr cannot see when
-  it works: run herdr integration install omp, then try again.`
+  install it into your agent's settings. It tells you to: `omp needs herdr's own integration, or herdr cannot see when it works: run herdr integration install omp, then try again.`
 - **A program Herdr cannot see.** Kilo Code and Qoder installed with npm run behind a small node launcher that starts
-  the real program as its child, and Herdr 0.9.3 does not find them in the pane. The start fails with `herdr did not see
-  kilo come up in its pane …`. Install the program's standalone build instead (tried: Kilo's own binary is found at
+  the real program as its child, and Herdr 0.9.3 does not find them in the pane. The start fails with `herdr did not see kilo come up in its pane …`. Install the program's standalone build instead (tried: Kilo's own binary is found at
   once).
 
 ## Not supported

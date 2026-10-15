@@ -39,7 +39,8 @@ never changes.
 - **Not the tags on the right.** `R#2` is the review round and `PR#18` the pull request: they sit at the right edge, in
   the colour of how the review and the checks went. The task's tag is at the left, grey, and has no `#`: a key is joined
   to the number with a dash.
-- **Several repos in one list:** the key tells them apart, so two tasks numbered 1 in two repos read `PW-1` and `HSW-1`.
+- **Several repos in one list:** the key tells them apart. A tag is the repo's key with the number (`PW-12`) in every list, so two tasks numbered 1 in two
+  repos read `PW-1` and `HSW-1`.
   To see each repo's tasks together, group the list by repo (`Alt+S`, in the `?` menu as "group by repo: see which repo
   each task is in"; the "Group by repo" button on the web board): each group's heading names its repo. The whole task
   names the repo too, in its `Task id` row (`pi-work/12`), with the session.
@@ -130,8 +131,7 @@ in `~/.herdr-projects/settings/config.json`:
   says so (`not used: another repo has or had the same key; its tasks go by BETA`), and so does the board's note on
   upgrade (`BETA for beta (its own KEEP is proj's too)`). Set another key for that repo and the stand-in goes.
 - **On upgrade.** The first time this version runs, every repo the board already knew without a key gets one, once, and
-  the board says which when it next opens: `Every repo and folder has a short key now: HOME for exedev, ROOT for home.
-  Change one: herdr-projects set repo.key <KEY> --repo <name>`. A key taken out of your file by hand is given again the
+  the board says which when it next opens: `Every repo and folder has a short key now: HOME for exedev, ROOT for home. Change one: herdr-projects set repo.key <KEY> --repo <name>`. A key taken out of your file by hand is given again the
   next time the board opens, and said the same way.
 
 ## Changing a key

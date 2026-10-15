@@ -301,8 +301,7 @@ machine. How a check reports, and what a repo's own check can do: [the check's p
   goes.
 - **A check that reports no count** shows the time it has run against last time (`running the check · 2m of about 5m`),
   and never a percent.
-- **When nothing moves** for far longer than a run takes, the row says so: `the check stands still · nothing finished for
-  13m · tests 31 of 47`, `waiting for its turn unusually long · …`, `the check runs far longer than usual · …`.
+- **When nothing moves** for far longer than a run takes, the row says so: `the check stands still · nothing finished for 13m · tests 31 of 47`, `waiting for its turn unusually long · …`, `the check runs far longer than usual · …`.
 - **Its colour is its own**: the mark, bar, percent and minutes left are a plain light grey (the theme's `subtext0`) while
   the board checks, so the agent's amber, the reviewer's blue and the board's grey read apart.
 
@@ -551,8 +550,7 @@ It looks the same for the Coordinator and for a task's agent, at every window wi
      the filter, the archive), `Esc` hides it too, before it does anything about closing the board. On the web board
      `Esc` does the same, while nothing is typed and find is closed.
 3. **One greyed hint line under the box**, with only the keys that do something right now. While you type, it says what
-   the keys do with your words (`enter send to the Coordinator · tab send, and put an agent on what it adds ·
-   shift+enter new line · esc put away`). What each hint says, and what gives way in a narrow window:
+   the keys do with your words (`enter send to the Coordinator · tab send, and put an agent on what it adds · shift+enter new line · esc put away`). What each hint says, and what gives way in a narrow window:
    [the hint line](keys.md#the-hint-line).
 
 ### Only the words of the conversation
@@ -578,8 +576,7 @@ screen or logo.
 ### While a task is under review, the chat is its reviewer's
 
 From the moment the review starts until it ends, the box shows what the reviewer says (`Reviewer:`), kept fresh as it
-goes, for every program a reviewer can be. Before it has said anything: `The reviewer has just started: nothing to show
-yet.`
+goes, for every program a reviewer can be. Before it has said anything: `The reviewer has just started: nothing to show yet.`
 
 A reviewer takes no messages (it judges the work as it is), so what you type still goes to the task's agent. The review
 goes on while you chat, as it does when you type in the agent's own pane, and stops only when the agent changes the code

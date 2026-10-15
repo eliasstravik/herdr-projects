@@ -1,8 +1,8 @@
 # Herdr's sidebar
 
 **Herdr's sidebar shows a small copy of each live agent's row on the board**, in the same words: the task's number and
-title, who is on it and where it stands, and the percent and time to go. Not the row's second line (what the agent says
-it does): that stays on the board.
+title, who is on it and where it stands, and the percent and time to go. Not the row's second line, what the agent says
+it does (`Reading the list code`, the question itself): that stays on the board, and row 2 already says where it stands.
 
 There is one entry per live agent: a task's agent, its reviewer while a review runs, and the Coordinator. A task nobody
 is on (to do, done and cleaned up) has no pane in Herdr, so no entry.
@@ -124,7 +124,6 @@ entry: its space, its tab, its name.
 - **Nothing stale is left.** What was written is replaced, never left to expire. A task that is stopped, done or moved
   on gets its new words at once, or within the second. An entry goes with its pane (Herdr drops what was written about a
   closed pane). A task archived or removed while its pane lives on has the board's words taken off it.
-- **As what.** It is written as Herdr's display metadata (`herdr pane report-metadata`, `herdr workspace
-  report-metadata` and the space's name), from the source `plugin:herdr-projects`. Row 2 is the agent's shown name, row
+- **As what.** It is written as Herdr's display metadata (`herdr pane report-metadata`, `herdr workspace report-metadata` and the space's name), from the source `plugin:herdr-projects`. Row 2 is the agent's shown name, row
   3 the token `progress`. The token `summary` is only the Coordinator's: on a task's pane and space it is cleared, so a
   line an older version wrote goes away by itself.

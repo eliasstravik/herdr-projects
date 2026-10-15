@@ -27,8 +27,7 @@ and stops counts as finished, and its work is checked and reviewed as it stands.
 - a stop without it means finished, whatever the last message, report or closing note says;
 - it is never run to put off the review of finished work.
 
-The command answers the agent with the same: `Reported: you are waiting, not finished, so no check and no review
-follow this stop.`
+The command answers the agent with the same: `Reported: you are waiting, not finished, so no check and no review follow this stop.`
 
 ## A report saved early
 

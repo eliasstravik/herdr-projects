@@ -113,11 +113,30 @@ lists every key; the hint line is not a list.
   `enter send to HSW-34's agent`, `enter send, and start an agent on HSW-34`, `enter add it as a task`. The text box's edge
   names no one.
 
+What it shows, for example:
+
+| Where | The hint line |
+|---|---|
+| A task nobody started | `tab put an agent on this task · space talk about this task · ? all keys` |
+| An agent at work | `enter open this task's agent · space talk to the agent · ctrl+x stop the agent · ? all keys` |
+| An agent asks you something | `space answer this task's agent · enter open the agent · ? all keys` |
+| Ready to approve | `ctrl+l approve and merge this task · ctrl+r send the review to the agent · space talk to the agent · ? all keys` |
+| Something went wrong | `ctrl+r tell this task's agent to fix it · ctrl+l retry as it is · space talk to the agent · ? all keys` |
+| Stopped without a summary | `ctrl+r tell this task's agent to continue · ctrl+l use its work as it is · enter open the agent · ? all keys` |
+| Talking to a task's agent | `enter open this task's agent · ctrl+x stop the agent · space back to the Coordinator` |
+| Typing to the Coordinator | `enter send to the Coordinator · tab send, and put an agent on what it adds · shift+enter new line · esc put away` |
+| The whole task | `… · ↑↓ scroll the task · esc back to the list` |
+| The archive | `ctrl+a restore this task · ctrl+x remove this task · esc back to the board · ? all keys` |
+| An automation's row | `enter open this automation · space turn this automation off · tab fire it now · ctrl+x remove it · ctrl+e its settings · ? all keys` (off: `space turn this automation on`, and no `tab`, which would fire nothing) |
+| One automation, whole | `↑↓ pick a firing · enter go to its task · space turn this automation off · tab fire it now · esc back to the list` (`enter` only on a firing that made a task) |
+| Find | `enter keep the filter · esc cancel` |
+| The `?` menu | `↑↓ pick a key · enter press it · esc close the menu` |
+| Words on their way to another machine | `ctrl+x stop sending this · enter take the words back to change · ? all keys` |
+
 **In a narrow window the line never runs off the screen: whole hints give way.**
 
 - The first hint (the main thing) and the last one (`? all keys`, or the way back) stay.
-- Between them, `alt+c hide the latest message` goes first, then the others from the last back. `alt+c show the latest
-  message` outlasts those, because it is how you see a reply.
+- Between them, `alt+c hide the latest message` goes first, then the others from the last back. `alt+c show the latest message` outlasts those, because it is how you see a reply.
 - While you type, `shift+enter new line` goes first and `esc put away` stays.
 - With room for only one hint, it is the main thing, except while you talk to a task's agent: there
   `space back to the Coordinator` stays, the one way back.

@@ -264,12 +264,10 @@ compares:
   stage it was in, with the same review, and no check, review or merge starts. Its row says so after the review's result
   (`Pass · 1 minor · Chatting · no changes, review kept`), and the task panel lists it under that review
   (`a chat changed no code, review 2 still stands`, with when and how often).
-- **A review was under way** when you wrote: it goes on (the box says `Send message to Agent: the review goes on unless
-  the code changes`). What the reviewer changed is not put back while the agent may be at work in the same folder. If
+- **A review was under way** when you wrote: it goes on (the box says `Send message to Agent: the review goes on unless the code changes`). What the reviewer changed is not put back while the agent may be at work in the same folder. If
   the agent's turn changed nothing, the review's result stands as it ends. If it changed the code, the review is stopped
   (or, if already through, its result no longer covers the work), and the change waits as below.
-- **The code changed**: nothing is reviewed after each message. The row says `Changes made · review starts when you're
-  done`, and the board waits until you are:
+- **The code changed**: nothing is reviewed after each message. The row says `Changes made · review starts when you're done`, and the board waits until you are:
   - you left the chat (selected another task on the board, or, for a chat in its own pane, Herdr shows another space
     than the agent's); or
   - `review.afterChat` (60 seconds) passed with no new message from you and the agent at rest.

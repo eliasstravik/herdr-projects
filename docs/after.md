@@ -73,8 +73,7 @@ done several times at once (`attempts.by`) hands the same to each attempt's agen
 ## When it cannot go on by itself
 
 If a task it waits for fails, is stopped, is removed, or is archived without being done, the tabbed task does not
-start. It waits for you under **needs you**, with the reason on its row (`gtm-skills/12 was archived without being
-done`), and you are told as for any task that needs you (`board.notify`).
+start. It waits for you under **needs you**, with the reason on its row (`gtm-skills/12 was archived without being done`), and you are told as for any task that needs you (`board.notify`).
 
 Nothing of that is final: get the other task going again, and once it is done the wait goes on by itself.
 

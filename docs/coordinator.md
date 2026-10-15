@@ -12,10 +12,11 @@ From a shell:
 
 ```
 herdr-projects coordinator                     how it stands
-herdr-projects coordinator tell <text>         send it a message (add --delegate for the same as Tab)
+herdr-projects coordinator tell <text>         send it a message
+herdr-projects coordinator tell <text> --delegate   the same as Tab
 herdr-projects coordinator restart             start it again, same conversation
 herdr-projects coordinator new                 a fresh conversation
-herdr-projects coordinator new --agent KIND[/MODEL] --effort E    a different one, this once
+herdr-projects coordinator new [--agent KIND[/MODEL]] [--effort E]    a different one, this once
 herdr-projects coordinator stop
 ```
 

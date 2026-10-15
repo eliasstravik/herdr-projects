@@ -27,8 +27,7 @@ The board closes the review, waits, and starts it again.
 - **A review that was cut off is not a review.** It uses up none of the task's `rounds`, has no number (the next one that
   runs is still the "1st"), and is not in the list of reviews.
 - **If the last try is cut off too**, the task fails with the real reason and the provider's own words:
-  `Review failed: the reviewer's model is at capacity, still after 5 tries over 15m. Its error: Selected model is at
-  capacity…`. `Ctrl+L` reviews again.
+  `Review failed: the reviewer's model is at capacity, still after 5 tries over 15m. Its error: Selected model is at capacity…`. `Ctrl+L` reviews again.
 
 ## The working agent
 

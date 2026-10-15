@@ -91,8 +91,7 @@ than its own counts as a change.
 - The task goes back to its agent with the list of what changed, to move the result out of the repo and undo every
   change, commits too.
 - That is one round of the review loop. After `review.rounds` of them (3 by default), the task stops and waits for you.
-  Its row says why: `Research only, but its agent changed the repo again after 3 rounds (2 changes in the repo): nothing
-  was pushed, opened or merged`.
+  Its row says why: `Research only, but its agent changed the repo again after 3 rounds (2 changes in the repo): nothing was pushed, opened or merged`.
 - From there, send it back once more (`ctrl+r`). Or, if you want the change after all, delegate it again as an ordinary
   task: `herdr-projects delegate <id> --no-research`, which is `set research.only false --task <id>` and a start in one.
 

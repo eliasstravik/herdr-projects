@@ -17,8 +17,7 @@
 
 ## An agent could not start
 
-The row says `Could not start: …` with the reason, for example `codex is not logged in` or `codex does not know the model
-it was given`. Fix what it says, then delegate again.
+The row says `Could not start: …` with the reason, for example `codex is not logged in` or `codex does not know the model it was given`. Fix what it says, then delegate again.
 
 The full table of reasons and fixes: [when an agent could not start](could-not-start.md).
 

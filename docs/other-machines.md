@@ -115,8 +115,7 @@ vm-a: its tasks cannot be read: herdr-projects is not found there.
 same conversation.
 
 - **In a Herdr window**, that machine's Herdr puts the agent's pane in front, as `Enter` does for an agent on this
-  machine. The board stays and says: `vm-a: its agent is in front there. Pick vm-a in herdr's sidebar to go to it:
-  “<its title>”; Local there brings you back here.` Herdr has no command that switches a window to another machine, so
+  machine. The board stays and says: `vm-a: its agent is in front there. Pick vm-a in herdr's sidebar to go to it: “<its title>”; Local there brings you back here.` Herdr has no command that switches a window to another machine, so
   that one click in its machines sidebar is yours. The agent is there when you do.
 - **Coming back:** **Local** in the sidebar (or `prefix+w` and a space of this machine) brings you back to the board,
   as you left it. The board's own key does not, while that machine is shown: Herdr runs it there, so it opens that
