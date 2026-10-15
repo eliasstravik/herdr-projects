@@ -52,14 +52,21 @@ pub fn tick(socket: &str) {
     if c.b("error") && !c.b("want") { return; } // a start that failed is not tried again by itself
     if due(&format!("coordinator-{}", session_name(socket)), 3000) { kick(socket); }
 }
-/// The conversation it is in: the newest one saved in its folder since this Coordinator began.
+/// The conversation it is in: the newest one saved in its folder since this Coordinator began; for a program whose
+/// files the board does not read, the one herdr's integration names for its pane.
 pub fn active(socket: &str, c: &Obj) -> Option<String> {
     let Some(run) = c.o("run") else { return c.so("session").map(String::from) };
     let since = if c.b("since") { c.i("since") } else { c.i("startedAt") };
     let h = home(socket);
-    let id = adapter::latest_session(run.s("kind"), &h, since, moved_from(&h).as_deref());
+    let id = adapter::latest_session(run.s("kind"), &h, since, moved_from(&h).as_deref()).or_else(|| told_session(socket, c));
     if let Some(i) = &id { if i != c.s("session") { let (since_v, i2) = (c.at("since").clone(), i.clone()); let _ = change(socket, |x| { if *x.at("since") != since_v || x.s("session") == i2 { return false; } x.put("session", i2.clone()); true }); } }
     id.or_else(|| c.so("session").map(String::from))
+}
+/// The conversation herdr's integration names for the Coordinator's pane, if any.
+fn told_session(socket: &str, c: &Obj) -> Option<String> {
+    if !c.b("pane") || !up(socket) { return None; }
+    let a = Herdr::new(Some(socket.into())).agent_get(c.s("pane")).ok().flatten()?;
+    Some(a.at("agent_session").t("value")).filter(|s| !s.is_empty())
 }
 fn ensure(api: &Herdr, socket: &str) -> Res<(Obj, bool)> {
     let mut c = get(socket).unwrap_or_default();
@@ -133,7 +140,8 @@ fn run_pump(socket: &str, taken: &mut HashSet<String>) -> Res<()> {
         let mut c = get(socket).unwrap_or_default();
         if let Some(w) = c.o("want").cloned() {
             taken.insert(w.t("at"));
-            if w.s("what") != "open" { close_place(&api, &c); }
+            // Its conversation is known before its terminal goes: a restart reopens it.
+            if w.s("what") != "open" { if c.b("run") { active(socket, &c); c = get(socket).unwrap_or(c); } close_place(&api, &c); }
             let _ = change(socket, |c| {
                 if c.at("want").at("at") == w.at("at") { c.put("want", Value::Null); }
                 if w.s("what") == "open" { return true; }
@@ -158,9 +166,6 @@ fn run_pump(socket: &str, taken: &mut HashSet<String>) -> Res<()> {
             // Asked to stop (or restart, or begin anew) while an earlier message went in: that comes first.
             if get(socket).map(|c| c.b("want")).unwrap_or(false) { break; }
             let ag = api.agent_get(c.s("pane")).ok().flatten();
-            // A program whose files the board does not read: its conversation is the one herdr's integration names.
-            let told = ag.as_ref().map(|a| a.at("agent_session").t("value")).unwrap_or_default();
-            if !told.is_empty() { change(socket, |c| { if c.s("session") == told { return false; } c.put("session", told.clone()); true })?; }
             let run = get(socket).map(|c| c.i("startedAt")).unwrap_or(0);
             let seq = ag.as_ref().map(|a| a.at("completion_seq").clone()).unwrap_or(Value::Null);
             let at_rest = ag.as_ref().map(|a| ["idle", "done"].contains(&a.s("agent_status"))).unwrap_or(false);

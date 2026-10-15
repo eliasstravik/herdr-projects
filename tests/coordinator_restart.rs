@@ -101,3 +101,24 @@ fn out_of_the_box_the_coordinator_is_claude_code_on_its_defaults_whatever_the_wo
     set_value("coordinator.agent", &json!("claude/claude-haiku-5-5"), &Scope::you()).unwrap();
     assert_eq!(choice().map(Value::Object), Some(json!({ "kind": "claude", "model": "claude-haiku-5-5", "effort": "" })));
 }
+
+/// A program whose conversation the board does not read (Kimi Code) is named its conversation by herdr's integration,
+/// once its first message went in. A restart right then reopens it: the id is taken before its terminal goes.
+#[test]
+fn a_coordinator_herdr_names_the_conversation_of_restarts_in_it_also_right_after_its_first_message() {
+    let w = coord_world_with(json!({ "coordinator.agent": "kimi" }));
+    w.script(json!({ "coordinator": [{ "session": "kimi-real-session" }] }));
+    cli(&["coordinator", "tell", "hello"]);
+    assert!(get(&w).at("session").is_null(), "not known yet: herdr named it once the message went in");
+    assert!(cli(&["coordinator", "restart"]).contains("restarting"));
+    assert_eq!(get(&w).s("session"), "kimi-real-session");
+    assert_eq!(arg(&w, "--session"), "kimi-real-session", "{:?}", agents(&w)[0].at("agent").at("args"));
+    // A look at it learns it too, with no restart.
+    drop(w);
+    let w = coord_world_with(json!({ "coordinator.agent": "kimi" }));
+    w.script(json!({ "coordinator": [{ "session": "kimi-other" }] }));
+    cli(&["coordinator", "tell", "hello"]);
+    sw::clock::advance(5000); // a look asks again at most every 3 seconds
+    look(&w.socket);
+    assert_eq!(get(&w).s("session"), "kimi-other");
+}
