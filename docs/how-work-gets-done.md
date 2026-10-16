@@ -14,8 +14,12 @@ All of this runs with the board open or closed.
 ## Delegating
 
 - **In a git repo**, the plugin asks Herdr for a worktree space (`herdr worktree create`), on its own branch
-  `work/<n>-<title>`, started from the remote's default branch (or from your commit, with `--workspace.from here`). A task
+  (`work/<n>-<title>`), started from the remote's default branch (or from your commit, with `--workspace.from here`). A task
   in a repo never works in your checkout.
+- **The branch's name is `workspace.branch`**, `work/{n}-{slug}` unless you set it: for you, for one repo, or for one
+  task, never in the repo's own file. `{n}` is the task's number (`7`, or `7b` for an attempt), `{slug}` its title
+  (`fix-the-login`), `{key}` its repo's key and number (`KIC-7`). So `feat/{key}-{slug}` makes `feat/KIC-7-fix-the-login`.
+  A name git would not take is refused, with the nearest one it does. A name already taken gets `-2` after it.
 - `workspace.setup` runs. Then the agent starts in that space's root pane, with the task and its rules.
 - **Outside git**, the agent works in place, in a plain Herdr space.
 - **At most `board.agents` (4) agents work at once.** More wait their turn. Tasks that wait for you hold no slot.

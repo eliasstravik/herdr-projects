@@ -27,6 +27,7 @@ pub fn value_words(row: &Obj) -> String {
         Ty::Agents => format!("programs ({PROGRAMS}), each with a model after a slash if you like, in the order they are tried, with commas between them; none for none"),
         Ty::Effort => "an effort level its program accepts, or default".into(),
         Ty::Text => "text; none for none".into(),
+        Ty::Branch => "a branch name with {n}, {slug} or {key} in it, such as work/{n}-{slug}".into(),
         Ty::List => "names, with commas between them; none for none".into(),
         Ty::Attempts => format!("a count from 1 to 5, or programs with commas between them ({PROGRAMS}), each with a model after a slash if you like"),
         _ => "typed".into(),
