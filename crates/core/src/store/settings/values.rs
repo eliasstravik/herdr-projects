@@ -176,6 +176,7 @@ fn check_ty(e: &Entry, v: &Value) -> Res<Value> {
             match n { Some(n) if n >= e.min => Ok(json!(n)), _ => refuse(format!("{name} must be a whole number, {} or more, not \"{}\".", e.min, word(v))) }
         }
         Ty::Agent => check_agent(e, v),
+        Ty::Branch => super::branch::check(name, v),
         Ty::Agents => {
             if let Value::String(s) = v { if s.trim().to_lowercase() == NONE { return Ok(json!(NONE)); } }
             let Some(items) = items_of(v) else { return refuse(format!("{name} is a list of agents ({}, each with an optional model after a slash), or none.", KIND_NAMES.join(", "))) };
