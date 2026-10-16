@@ -38,8 +38,9 @@ function Fetch($from, $to) {
   $gh = 'https://github.com/eliasstravik/herdr-projects/releases/download/'
   if ($from.StartsWith($gh) -and (Get-Command gh -ErrorAction SilentlyContinue)) {
     $rest = $from.Substring($gh.Length); $tag = $rest.Split('/')[0]; $file = $rest.Substring($tag.Length + 1)
-    & gh release download $tag -R eliasstravik/herdr-projects -p $file -O $to --clobber 2>$null | Out-Null
-    return ($LASTEXITCODE -eq 0)
+    # What gh says on stderr is not a reason to stop this script (Windows PowerShell turns it into an error).
+    $ErrorActionPreference = 'Continue'
+    try { & gh release download $tag -R eliasstravik/herdr-projects -p $file -O $to --clobber 2>$null | Out-Null; return ($LASTEXITCODE -eq 0) } catch { return $false }
   }
   return $false
 }
@@ -58,14 +59,16 @@ if ((Fetch $url $tmp) -and (Fetch "$url.sha256" "$tmp.sha256")) {
   }
   Say "the download does not match its checksum, so it is not used"
 } else {
-  Say "could not download $url (no network, no release v$want with this file yet, or a private repo: log in with gh auth login)"
+  Say "could not download $url (no network, no release v$want with a Windows file yet, or a private repo: log in with gh auth login). HERDR_PROJECTS_RELEASES names another place for the releases."
 }
 Remove-Item -Force -ErrorAction SilentlyContinue $tmp, "$tmp.sha256"
 
 if (Get-Command cargo -ErrorAction SilentlyContinue) {
   Say 'building it from source instead: cargo build --release (a few minutes)'
   Push-Location $root
-  try { & cargo build --release --locked } finally { Pop-Location }
+  $ErrorActionPreference = 'Continue'
+  try { & cargo build --release --locked } catch { Say "cargo could not build it: $_" } finally { Pop-Location }
+  $ErrorActionPreference = 'Stop'
   if ($LASTEXITCODE -eq 0) {
     if (Test-Path $prog) { Remove-Item -Force -ErrorAction SilentlyContinue "$prog.old"; Move-Item -Force $prog "$prog.old" }
     Copy-Item -Force (Join-Path $root 'target\release\herdr-projects.exe') $prog
