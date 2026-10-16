@@ -48,7 +48,9 @@ fn the_repos_own_file_cannot_name_it_and_a_bad_name_is_refused_with_a_near_one()
     let bad = |v: &str| set_value("workspace.branch", &json!(v), &Scope::you()).unwrap_err().msg;
     assert!(bad("work/{n}.lock").contains("Did you mean work/{n}?"), "{}", bad("work/{n}.lock"));
     assert!(bad("work /{n}~{slug}").contains("Did you mean work-/{n}-{slug}?"), "{}", bad("work /{n}~{slug}"));
-    assert!(bad("work/{number}").contains("Did you mean {n}?"));
+    assert!(bad("work/{number}").contains("Did you mean work/{n}?"));
+    assert!(bad("work/{n}.lock.lock").contains("Did you mean work/{n}?"), "{}", bad("work/{n}.lock.lock"));
+    assert!(bad("work/{n").contains("Did you mean work/{n}?"), "{}", bad("work/{n"));
     assert!(bad("work/{slug}").contains("needs {n} or {key}"));
 }
 
