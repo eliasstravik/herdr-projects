@@ -82,3 +82,22 @@ fn each_machines_automations_stand_in_its_own_part_and_fold_with_it_by_status_an
     s.press(&["enter", "alt+s", "alt+m"]); assert_eq!(s.s.scope, "vm-b");
     like(&t(&mut s, 120), r"\n ▾ to do\n[ ▌]○ #7 +Their task +0s ago\n\n ▾ automations\n[ ▌]⟳ on {2}Theirs nightly {2}every 5m · far +next in {2}4m\n");
 }
+
+#[test]
+fn another_machines_repo_with_only_automations_never_takes_this_machines_key() {
+    let w = world_with(Opts { repo: true, settings: json!({ "board.machines": "vm-b" }), ..Default::default() });
+    sw::clock::set(Some(sw::clock::now()));
+    w.add("Mine");
+    let mut s = open(&w.root, 44); s.s.side = false;
+    let _ = update(&mut s.s, Event::Machines(sw::remote::machines()));
+    // vm-b has no task, and one automation in a repo named as this machine's (here `proj`, whose key is PRJ).
+    let now = sw::clock::now();
+    let auto = json!({ "id": "0a1b2c3d", "name": "Theirs nightly", "prompt": "Audit it.", "trigger": parse_schedule("every 5m").unwrap(), "repo": "proj", "root": "/home/x/proj", "settings": {}, "on": true, "created": now, "since": now, "nextAt": now + 4 * 60000 + 500, "shown": { "firings": [], "own": [], "settings": [] } });
+    let _ = update(&mut s.s, Event::Remote { label: "vm-b".into(), answer: Ok(json!({ "host": "vm-b", "version": "0.2.0", "tasks": [], "automations": [auto] })) });
+    s.press(&["alt+m", "alt+s"]); assert!(s.s.scope == "*" && s.s.by_repo);
+    let text = t(&mut s, 120);
+    like(&text, r"\n ▾ proj · PRJ\n[ ▌]○ PRJ-1 Mine"); // this machine's own repo keeps its key
+    like(&text, r"\n ▾ vm-b ─+\n ▾ proj\n ⟳ on {4}Theirs nightly"); // vm-b's sent none: no key, never this machine's
+    let web = sw::webui::model::list::list_of(&s.s, &s.theme);
+    assert_eq!(web.arr("groups").iter().filter(|g| g.s("name") == "proj").map(|g| g.t("key")).collect::<Vec<_>>(), ["PRJ", ""]);
+}
