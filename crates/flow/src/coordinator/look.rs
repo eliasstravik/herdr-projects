@@ -28,7 +28,9 @@ pub struct Look {
     pub state: String, pub status: Option<String>, pub run: Option<Obj>, pub one_off: bool, pub queue: usize, pub waiting: Vec<String>, pub error: String, pub pane: String, pub workspace: String,
     pub agent: Value, pub turn: Option<Turn>, pub talk: Vec<Said>, pub readable: bool, pub said: String, pub last: String, pub sent: String, pub unseen: String, pub stale: bool, pub def: Option<Obj>,
 }
-static TURNS: LazyLock<Mutex<HashMap<String, (PathBuf, std::time::SystemTime, Option<Turn>)>>> = LazyLock::new(Default::default);
+/// A transcript's last read, by when it changed and its size: two writes inside one tick of the file system's clock
+/// keep its time, never its size.
+static TURNS: LazyLock<Mutex<HashMap<String, (PathBuf, (std::time::SystemTime, u64), Option<Turn>)>>> = LazyLock::new(Default::default);
 static SCREENS: LazyLock<Mutex<HashMap<String, (String, i64, String)>>> = LazyLock::new(Default::default);
 /// What you said, without what the board put around it on its way in.
 fn bare(text: &str, co: &Co) -> String {
@@ -61,8 +63,8 @@ pub fn look(co: impl Into<Co>) -> Look {
         let mut file = hit.as_ref().map(|h| h.0.clone());
         if let Some(s) = &session { if file.as_ref().map(|f| !f.exists()).unwrap_or(true) { file = adapter::transcript(&k, s, &home(&co)); } }
         if let Some(f) = &file {
-            let mtime = std::fs::metadata(f).and_then(|m| m.modified()).ok();
-            if mtime != hit.as_ref().map(|h| h.1) { cache.insert(key.clone(), (f.clone(), mtime.unwrap_or(std::time::UNIX_EPOCH), read_turn_of(&k, Some(f), "", &home(&co), false))); }
+            let mark = std::fs::metadata(f).ok().and_then(|m| Some((m.modified().ok()?, m.len())));
+            if mark != hit.as_ref().map(|h| h.1) { cache.insert(key.clone(), (f.clone(), mark.unwrap_or((std::time::UNIX_EPOCH, 0)), read_turn_of(&k, Some(f), "", &home(&co), false))); }
             turn = cache.get(&key).and_then(|h| h.2.clone());
             drop(cache);
             let h = home(&co);
