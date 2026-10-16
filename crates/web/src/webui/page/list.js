@@ -46,7 +46,7 @@ export function listEl(list, opts) {
   return el;
 }
 // A heading: a machine's (over its groups) or a group's (over its rows), as the terminal board has them. A tap folds it
-// to its one line, with how many tasks it holds, and unfolds it; the automations' heading has no id and does not fold.
+// to its one line, with how many tasks (and automations) it holds, and unfolds it.
 function headEl(g, selected, onFold) {
   const count = g.folded ? g.count : g.machine ? null : g.rows.length + g.more;
   // A repo's heading has its key beside its name, dimmed: `gtm-agent · AGT`.

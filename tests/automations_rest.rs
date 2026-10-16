@@ -47,7 +47,7 @@ fn on_an_automations_row_a_tasks_keys_change_no_task_removing_asks_and_find_and_
     l::add(Add { name: "Release note after a merge", prompt: "Write it.", trigger: Some(parse_event("merged", true).unwrap()), repo: "", folder: &w.root, settings: Obj::new(), research: None }).unwrap();
     l::add(Add { name: "Nightly audit", prompt: "Audit.", trigger: Some(parse_schedule("daily 03:00").unwrap()), repo: "", folder: &w.root, settings: Obj::new(), research: None }).unwrap();
     s.load();
-    s.press(&["down"]); assert_eq!(s.s.sel, format!("auto:{}", a.s("id")));
+    s.press(&["down", "down"]); assert_eq!(s.s.sel, format!("auto:{}", a.s("id")));
     // off, tab only says so: no task is made
     s.press(&["space", "tab"]); assert_eq!(tasks().len(), 1); s.press(&["space"]);
     // a key that acts on a task does nothing here: no task is archived or pinned

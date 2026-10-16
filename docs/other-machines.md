@@ -94,9 +94,9 @@ vm-a: its tasks cannot be read: herdr-projects is not found there.
 
 - **Headings.** With every machine shown, each machine is a heading of its own, with its repos (or status groups) under
   it. A row has its plain tag (`#1`); the heading above names its machine ([list headings](list-headings.md)).
-- **Automations.** A machine's [automations](automations.md) come with its tasks, in the list's last group. With every
-  machine shown, each row names its machine (`on otherbox`). Turning them on and off, firing, removing and changing
-  their settings all happen on the machine that has them.
+- **Automations.** A machine's [automations](automations.md) come with its tasks and stand in its part of the list, as
+  its tasks do: a group of their own after its tasks' (by repo: under their repo), folding with its heading. Turning them
+  on and off, firing, removing and changing their settings all happen on the machine that has them.
 - **The chat.** For each task someone is on, its machine sends the last few things said in the conversation: its
   agent's, or its reviewer's during a review, read there from the program's saved conversation. The chat and task panel
   show them like this machine's own, under the same lines that name who said them ([the board](board.md)).

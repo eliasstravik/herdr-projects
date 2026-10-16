@@ -125,15 +125,35 @@ nothing moves between machines.
 
 ## On the board
 
-The automations are in the main list: a group of their own under the heading `automations`, below the task groups
-([the board](board.md)). With no automation there is no heading. (There is no separate list behind a key any more:
-`Alt+O` is no key of the board.)
+**An automation belongs to its machine, as a task does**, and the list shows it there ([the board](board.md)). (There
+is no separate list behind a key any more: `Alt+O` is no key of the board.)
+
+- **By status**, a machine's automations are a group of its own under the heading `automations`, after its task groups
+  (`working`, `to do`, `done` …). With every machine shown (`Alt+M`), each machine's are in its own part of the list,
+  under its heading; on one machine's board, they are that machine's. A machine with no automation has no such heading.
+- **By repo** (`Alt+S`), each stands under its repo's heading, after that repo's tasks, and has no heading of its own.
+- **They fold as tasks do** ([list headings](list-headings.md)): `Enter` on the `automations` heading folds the group to
+  one line (`▸ automations  2 automations`), and a folded machine or repo hides its automations with its tasks and
+  counts both: `▸ vm-str  7 tasks, 1 automation`. Taken to one in a folded group (a firing's link, a jump), its group
+  unfolds.
+
+```
+ ▾ vm-str ──────────────────────────────────────────────────────────────────────────────────
+ ▾ to do
+ ○ HSW-2 Write the changelog                                                          1d ago
+
+ ▾ automations
+ ⟳ on    Daily triage of outside issues and PRs  daily 11:00                    next in 19h
+
+ ▸ otherbox  3 tasks, 2 automations ────────────────────────────────────────────────────────
+```
 
 - **One row per automation, in a task row's places** ([the board](board.md) has the table):
   - its mark, `⟳`, dimmed while it is off;
   - the word `on` or `off` where a task has its number (never colour alone);
   - its name where the titles start, and its trigger in plain words after it (`every 2h`,
-    `when a task is merged, in every repo`);
+    `when a task is merged, in every repo`), then its repo where that is not the one the board shows (grouped by repo,
+    the heading says it). Never its machine: the heading above says whose it is;
   - the task its last firing made, by that task's own mark and number (`✓ HSW-4`);
   - in the list's time column: `next in 4m` for a schedule that is on, else `fired 2h ago` (`skipped 2h ago` when the
     last firing made no task), else `never fired`.
@@ -142,7 +162,7 @@ The automations are in the main list: a group of their own under the heading `au
   window too narrow for the trigger beside the name, the trigger goes on a line under it.
 - **A colour of its own**: the heading, the marks and the `[auto]` tag of a task one made are a purple that no status has
   ([colours](colours.md)).
-- **Keys**, once the row is selected (`↑` `↓` reach it from the tasks, or a click):
+- **Keys**, once the row is selected (`↑` `↓` reach it where it stands, or a click):
 
   | Key | Does |
   |---|---|
@@ -167,14 +187,15 @@ The automations are in the main list: a group of their own under the heading `au
   word (then make the automation with the command).
 - **A task an automation made says so**: `[auto]` after its name on its row, in the automations' colour, and `Made by`
   in its panel's Status, naming the automation.
-- **Other machines' automations** show with their tasks ([other machines](other-machines.md)). On the board of every
-  machine each row names its machine (`on otherbox`); one machine's own board shows only its own. They are turned on and
-  off, fired and removed on the machine that has them. The whole automation is drawn from what that machine sent (its
+- **Other machines' automations** show with their tasks, in that machine's part of the list
+  ([other machines](other-machines.md)); one machine's own board shows only its own. The keys are the same from inside
+  any machine's part: they are turned on and off, fired and removed on the machine that has them. The whole automation is drawn from what that machine sent (its
   latest twenty firings). `Ctrl+E` opens its settings as for this machine's: the rows are that machine's own (every work
   setting as its next task will have it there), and a row changed or put back is changed on that machine. Only a machine
   on a version that sends no such rows has no page: there the board shows the command instead.
 
-The [web board](web-ui.md) has the same group at the foot of its list, the same automation whole and the same actions,
+The [web board](web-ui.md) has the same groups in the same places (a folded heading counts the same way:
+`1 task, 1 automation`), the same automation whole and the same actions,
 drawn from the same code: a row tapped open, buttons to turn it on or off, fire it now and remove it, and each firing that
 made a task as a link to it. A row shows all of what it says however narrow the page is (a task's row keeps to two
 lines): on or off, and when it fires, are never cut away. An automation's settings page is the terminal board's; on the

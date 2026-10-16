@@ -65,7 +65,8 @@ Tasks stand in five groups, in the order they need you:
 - **Headings:** the arrows stop on them too, and `Enter` on one folds it to one line, and unfolds it. With every machine
   shown, each machine has a heading of its own: [list headings](list-headings.md).
 - **The archive** (`Alt+A`) is a list of its own, newest first, outside this order.
-- **Automations** are the last group, below every task group ([below](#automations-in-the-list)).
+- **Automations** are a group of their own after the task groups, inside their machine's part of the list (by repo:
+  under their repo) ([below](#automations-in-the-list)).
 
 ### The list says what it hides
 
@@ -448,17 +449,18 @@ So you go through tasks one after another without arrowing back.
 
 ## Automations in the list
 
-**The automations are the last group**, under the heading `automations`, below every task group (also when the list is
-grouped by repo). With none, there is no heading. The heading and each row's mark are in a colour of their own, a purple
+**The automations are a group of their own**, under the heading `automations`, after the task groups: each machine's in
+its own part of the list, as its tasks are, and they fold as any group does. Grouped by repo, each stands under its
+repo's heading, after that repo's tasks ([automations](automations.md)). With none, there is no heading. The heading and each row's mark are in a colour of their own, a purple
 no status has ([colours](colours.md)). One row per automation, **in the list's own columns**, drawn by the code that draws
 a task's row:
 
 ```
- to do
+ ▾ to do
  ○ HSW-2 Write the changelog                                                                  1d ago
  ○ HSW-1 Fix the footer on the pricing page                                                   3h ago
 
- automations
+ ▾ automations
  ⟳ on    Look for old dependencies  every 2h                                 ✓ HSW-4 next in  4m
  ⟳ on    Release note after a merge  when a task is merged, in every repo            skipped  5h ago
  ⟳ off   Nightly audit  daily 03:00                                                      never fired
@@ -470,7 +472,7 @@ a task's row:
 | its mark | `⟳` (U+27F3), in the automations' colour while it is on and the same one dimmed while it is off: an arrow going round, where every task's mark is round, a diamond or a sign |
 | its tag (`HSW-12`) | the word `on` or `off`, in the same grey. It fills the numbers' column, so every name starts where the titles start |
 | its title | its name, plain as a to-do's title; greyed while it is off |
-| what it says, after the title | its trigger in plain words (`every 2h`, `when a task is merged, in every repo`), in the same grey; then its repo when that is not the one the board shows, and its machine (`on otherbox`) on the board of every machine |
+| what it says, after the title | its trigger in plain words (`every 2h`, `when a task is merged, in every repo`), in the same grey; then its repo when that is not the one the board shows (and not the heading it stands under). Never its machine: the heading above names that |
 | its review tag and pull request | the task its last firing made, by that task's own mark and number (`✓ HSW-4`: done; `◐ HSW-7`: an agent is on it), and the word that goes with the time (`next in`, `fired`, `skipped`) |
 | its time | how long until it fires (`4m`), or how long ago it last did (`2h ago`), in the list's time column, under the tasks' times. `never fired` stands there for one that never did |
 | a second line, for a live task | a second line only when it has something to say: why the board turned it off. Where the trigger has no room beside the names it stands there too, on every row of the group at once |
@@ -491,13 +493,13 @@ the rest of the name.
 one was skipped, the hour a schedule is next due, and how many times it fired (only the last 200 firings are kept, and 20
 are sent from another machine, so a count would not be true). All of that is in the automation, whole (`Enter`).
 
-- `↑` and `↓` go from the last task on to them. On such a row no task is selected, so the keys that act on a task do
+- `↑` and `↓` go from the last task on to their heading, then to them. On such a row no task is selected, so the keys that act on a task do
   nothing, and the row has keys of its own (open it, turn it on or off, fire it now, remove it, its settings), which the
   hint line shows: [automations](automations.md).
 - One that is off is drawn as quietly as a done task: its mark dimmed, its words greyed.
 - Find (`Ctrl+F`) matches them too, by name, trigger or repo. The archive has none.
 - No task gives way for them: where the list is longer than its room, the tasks fold as they always do, and the
-  automations are what is below.
+  automations scroll with the rest.
 
 ## The chat
 

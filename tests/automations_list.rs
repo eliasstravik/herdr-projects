@@ -43,7 +43,7 @@ fn the_group_has_a_colour_of_its_own_narrow_rows_a_menu_of_its_own_and_stays_wit
     assert_eq!(ink_of(&inked[5], "automations"), Some(Ink::Auto)); assert_eq!(ink_of(&inked[6], "⟳"), Some(Ink::Auto));
     let quiet = |l: &sw::shown::ink::Inked| l.0.iter().find(|p| p.t.contains('⟳')).map(|p| p.quiet).unwrap();
     assert!(!quiet(&inked[6]) && quiet(&inked[8]), "off: the same mark, dimmed");
-    s.press(&["down"]); assert_eq!(s.s.sel, row_id(&all[0]));
+    s.press(&["down"]); assert_eq!(s.s.sel, "head:status\t\tautomations", "the group's heading first: it folds as the others do"); s.press(&["down"]); assert_eq!(s.s.sel, row_id(&all[0]));
     assert_eq!(s.screen(60).last().unwrap(), "  enter open this automation · ? all keys", "the hints that give way are whole ones");
     // narrower still: what a row says wraps under its name as a live task's does, and nothing is cut with …
     let tight = s.screen(34);
@@ -83,7 +83,7 @@ fn the_group_has_a_colour_of_its_own_narrow_rows_a_menu_of_its_own_and_stays_wit
     // with no task at all the group is still there
     for x in sw::store::tasks::list(Default::default()) { sw::store::tasks::patch(x.s("id"), |t| t.put("archivedAt", sw::clock::now())).unwrap(); }
     s.load();
-    like(&t(&mut s, 120), r"^ herdr-projects {2}proj · PRJ\n\n   automations\n[ ▌]⟳ on {2}Look for old dependencies");
+    like(&t(&mut s, 120), r"^ herdr-projects {2}proj · PRJ\n\n ▾ automations\n[ ▌]⟳ on {2}Look for old dependencies");
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn more_automations_than_fit_the_list_says_how_many_it_does_not_show_and_the_sel
     let note = |l: &[String]| l.iter().find(|x| regex::Regex::new(r"^ [↓↑] ").unwrap().is_match(x)).cloned().unwrap_or_default();
     let lines = s.screen(100);
     let l1 = list(&lines);
-    like(&lines[3], r"^▌○ PRJ-\d Task \d"); assert!(l1.iter().any(|x| x == "   automations"));
+    like(&lines[3], r"^▌○ PRJ-\d Task \d"); assert!(l1.iter().any(|x| x == " ▾ automations"));
     assert!(l1.iter().any(|x| regex::Regex::new(r"^ ⟳ on {4}Automation 01 {2}every 1h +next in {2}1h$").unwrap().is_match(x)), "{}", lines.join("\n"));
     assert_eq!(note(&l1), format!(" ↓ {} automations", 16 - shown(&l1))); assert!(shown(&l1) >= 2 && shown(&l1) < 16);
     // no task gives way for them: every task shows
@@ -108,11 +108,12 @@ fn more_automations_than_fit_the_list_says_how_many_it_does_not_show_and_the_sel
     assert_eq!(s.s.sel, row_id(automations().last().unwrap()));
     let l2 = list(&s.screen(100));
     assert!(l2.iter().any(|x| x.starts_with("▌⟳ on    Automation 16 ")), "{}", l2.join("\n")); assert_eq!(note(&l2), format!(" ↑ 3 more, {} automations", 16 - shown(&l2)));
-    // one step up from the first automation is the last task
+    // one step up from the first automation is their heading, and one more the last task
     for _ in 0..15 { s.press(&["up"]); }
-    assert_eq!(s.s.sel, row_id(&automations()[0])); s.press(&["up"]); assert_eq!(&s.s.sel, s.s.steps.last().unwrap()); like(&s.s.sel, r"^proj/\d$");
+    assert_eq!(s.s.sel, row_id(&automations()[0])); s.press(&["up"]); assert_eq!(s.s.sel, "head:status\t\tautomations");
+    s.press(&["up"]); like(&s.s.sel, r"^proj/\d$");
     // a short narrow window, two lines a row: still whole rows, the selected one among them
-    s.rows = 16; s.press(&["down", "down", "down"]);
+    s.rows = 16; s.press(&["down", "down", "down", "down"]);
     let narrow = s.screen(40);
     let at = narrow.iter().position(|l| l == "▌⟳ on    Automation 03").unwrap_or_else(|| panic!("{}", narrow.join("\n")));
     assert_eq!(narrow[at + 1], "▌        every 3h             next in 3h");

@@ -33,7 +33,8 @@ machine**, its repos (or status groups) under it, and their tasks under those.
 ## Folding
 
 - **`Enter` on a heading folds it.** Its tasks hide, its caret turns to `▸`, and it says how many tasks it holds
-  (`▸ open-crm  4 tasks`). `Enter` again unfolds it.
+  (`▸ open-crm  4 tasks`), and how many automations where it holds some (`▸ vm-str  7 tasks, 1 automation`,
+  [automations](automations.md)). `Enter` again unfolds it.
 - **A click on a heading** does the same ([mouse](mouse.md)).
 - The hint line says what `Enter` will do (`enter fold this repo`, `enter unfold this machine`,
   `enter fold this group`), and the `?` menu lists it on the line for `enter`.
@@ -46,8 +47,6 @@ machine**, its repos (or status groups) under it, and their tasks under those.
 
 - A heading that folds has a **caret** in the marks' column, in the muted colour: `▾` open, `▸` folded. Its name starts
   one cell after it, where a task's tag starts.
-- A heading that does not fold (the automations') has a blank where the caret would be, so every heading's name starts
-  in the same column.
 - On a narrow list the caret stays and the heading is cut at the right edge.
 - The arrow keys stop on every heading, like on a row. A selected heading has the same bar and tint as a selected row.
 
@@ -64,7 +63,6 @@ own, as it has for its selection. The web board keeps its own folds the same way
 - **The selected task.** When the selection is brought to a task from elsewhere (Herdr's approve action, the popup
   opened from a task's pane), or the list is laid out again (another grouping, other machines), the task's machine and
   group unfold, so it is always in view.
-- **The automations.** Their group is last and has no fold.
 
 A list longer than its room counts what it does not show on its last line (`↓ 11 more`). Tasks under a folded heading
 are not in that count, since the heading already says how many it holds.

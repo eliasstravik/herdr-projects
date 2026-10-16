@@ -1,6 +1,7 @@
 //! The task list for the web board: the groups and rows the terminal board shows, in its order, each row with the mark,
-//! the words, the columns and the inks the board's own row code gives it (board/view/fields.rs). The automations are
-//! its last group, one row each. The page draws what is here and works nothing out.
+//! the words, the columns and the inks the board's own row code gives it (board/view/fields.rs). A machine's automations
+//! are a group of its own, one row each, after its tasks' (by repo: in their repo's). The page draws what is here and
+//! works nothing out.
 use super::super::ink::{first, pieces};
 use crate::board::state::{Row, State};
 use crate::board::tags::{row_tag, tag_cells};
@@ -53,12 +54,14 @@ pub fn list_of(s: &State, t: &Theme) -> Value {
     let now = crate::clock::now();
     let mut groups: Vec<Obj> = vec![];
     let push = |groups: &mut Vec<Obj>, row: Value| { if let Some(g) = groups.last_mut() { if let Some(a) = g.get_mut("rows").and_then(|x| x.as_array_mut()) { a.push(row); } } };
+    // A folded heading's count: how many rows it hides, in words where automations are among them (`7 tasks, 1 automation`).
+    let count = |folded: usize, autos: usize| if autos > 0 { json!(crate::board::update::heads::holds(folded, autos)) } else { json!(folded) };
     for (at, row) in s.rows.iter().enumerate() {
         match row {
-            Row::Head { name, autos: true, .. } => groups.push(obj(json!({ "name": name, "color": "auto", "repo": false, "automations": true, "rows": [], "more": 0 }))),
+            Row::Head { name, id, autos: true, folded, folded_autos, .. } => groups.push(obj(json!({ "name": name, "id": id, "folded": *folded > 0, "count": count(*folded, *folded_autos), "color": "auto", "repo": false, "automations": true, "rows": [], "more": 0 }))),
             // A machine's heading stands over its groups: one with no rows, that a tap folds and unfolds as a group's.
-            Row::Head { name, id, machine: true, folded, .. } => groups.push(obj(json!({ "name": name, "id": id, "machine": true, "folded": *folded > 0, "count": folded, "color": "accent", "repo": false, "rows": [], "more": 0 }))),
-            Row::Head { name, id, folded, .. } => groups.push(obj(json!({ "name": if s.by_repo { repo_label(name) } else { name.clone() }, "key": if s.by_repo { crate::board::tags::heading_key(&s.rows, at, &s.data.keys) } else { String::new() }, "id": id, "folded": *folded > 0, "count": folded, "color": if s.by_repo || !["needs you", "ready to approve", "working", "to do", "done"].contains(&name.as_str()) { "subtext0" } else { group_ink(name).name() }, "repo": s.by_repo, "rows": [], "more": 0 }))),
+            Row::Head { name, id, machine: true, folded, folded_autos, .. } => groups.push(obj(json!({ "name": name, "id": id, "machine": true, "folded": *folded > 0, "count": count(*folded, *folded_autos), "color": "accent", "repo": false, "rows": [], "more": 0 }))),
+            Row::Head { name, id, folded, folded_autos, .. } => groups.push(obj(json!({ "name": if s.by_repo { repo_label(name) } else { name.clone() }, "key": if s.by_repo { crate::board::tags::heading_key(&s.rows, at, &s.data.keys) } else { String::new() }, "id": id, "folded": *folded > 0, "count": count(*folded, *folded_autos), "color": if s.by_repo || !["needs you", "ready to approve", "working", "to do", "done"].contains(&name.as_str()) { "subtext0" } else { group_ink(name).name() }, "repo": s.by_repo, "rows": [], "more": 0 }))),
             Row::Auto(a) => push(&mut groups, auto_row_of(s, t, a, now)),
             Row::Rec(r) => push(&mut groups, row_of(s, t, r, now)),
             Row::Note(n) => if let Some(g) = groups.last_mut() { g.put("more", crate::re!(r"(\d+) more").captures(n).and_then(|c| c[1].parse::<i64>().ok()).unwrap_or(0)); },

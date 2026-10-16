@@ -1,4 +1,4 @@
-//! Automations: a group of the main list under the tasks (purple, ⟳, on or off where a task has its number), the keys
+//! Automations: a group of the main list under the tasks, that folds as theirs do (purple, ⟳, on or off where a task has its number), the keys
 //! that turn one on or off, fire it and remove it, and a schedule that makes a task and starts it by the keeper's tick.
 use crate::common;
 use common::board::open;
@@ -29,18 +29,18 @@ fn the_automations_are_a_group_of_the_main_list_with_keys_that_turn_fire_and_rem
     let all = three(&w);
     l::turn(all[2].s("id"), false).unwrap(); s.load();
     let lines = s.screen(120);
-    assert_eq!(lines[2..9].to_vec(), vec![" ▾ to do", "▌○ PRJ-1 Mine                                                                                                     0s ago", "", "   automations",
+    assert_eq!(lines[2..9].to_vec(), vec![" ▾ to do", "▌○ PRJ-1 Mine                                                                                                     0s ago", "", " ▾ automations",
         " ⟳ on    Look for old dependencies  every 2h                                                             next in  2h",
         " ⟳ on    Release note after a merge  when a task is merged, in every repo                                    never fired",
         " ⟳ off   Nightly audit  daily 03:00                                                                          never fired"]);
     assert_eq!(lines[0], " herdr-projects  proj · PRJ · 1 to do");
-    // the arrows go from the tasks on to the automations; the hint line shows the keys that act there
-    s.press(&["down"]); assert_eq!(s.s.sel, row_id(&all[0])); assert!(s.s.current().is_none());
+    // the arrows go from the tasks on to the automations' heading and their rows; the hint line shows the keys that act there
+    s.press(&["down"]); assert_eq!(s.s.sel, "head:status\t\tautomations"); s.press(&["down"]); assert_eq!(s.s.sel, row_id(&all[0])); assert!(s.s.current().is_none());
     assert!(s.screen(120)[6].starts_with("▌⟳ on    Look for old dependencies "));
     assert_eq!(s.screen(140).last().unwrap(), "  enter open this automation · space turn this automation off · tab fire it now · ctrl+x remove it · ctrl+e its settings · ? all keys");
     // a narrow screen: two lines each, nothing cut
     let narrow = s.screen(60);
-    assert_eq!(narrow[5..12].to_vec(), vec!["   automations", "▌⟳ on    Look for old dependencies", "▌        every 2h                                 next in 2h", " ⟳ on    Release note after a merge", "         when a task is merged, in every repo    never fired", " ⟳ off   Nightly audit", "         daily 03:00                             never fired"]);
+    assert_eq!(narrow[5..12].to_vec(), vec![" ▾ automations", "▌⟳ on    Look for old dependencies", "▌        every 2h                                 next in 2h", " ⟳ on    Release note after a merge", "         when a task is merged, in every repo    never fired", " ⟳ off   Nightly audit", "         daily 03:00                             never fired"]);
     for l in s.screen(30) { assert!(sw::text::width(&l) <= 30, "{l}"); }
     // space: off and on
     s.press(&["space"]); assert_eq!(sw::store::automations::automation(all[0].s("id")).unwrap().at("on"), &json!(false));
@@ -66,9 +66,9 @@ fn the_automations_are_a_group_of_the_main_list_with_keys_that_turn_fire_and_rem
     // find finds them too, by name; the archive has none
     s.press(&["ctrl+f"]); s.typed("nightly"); s.press(&["enter"]);
     let found = s.text();
-    assert!(found.contains("\n   automations\n▌⟳ off Nightly audit") && !found.contains("Mine"), "{found}");
+    assert!(found.contains("\n ▾ automations\n▌⟳ off Nightly audit") && !found.contains("Mine"), "{found}");
     s.press(&["esc"]);
-    s.press(&["alt+a"]); assert!(!s.text().contains("Nightly")); s.press(&["alt+a"]); assert!(s.text().contains("\n   automations\n"));
+    s.press(&["alt+a"]); assert!(!s.text().contains("Nightly")); s.press(&["alt+a"]); assert!(s.text().contains("\n ▾ automations\n"));
 }
 
 #[test]

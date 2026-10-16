@@ -29,6 +29,7 @@ mod automations_far;
 mod automations_firing;
 mod automations_list;
 mod automations_open;
+mod automations_place;
 mod automations_rest;
 mod automations_triggers;
 mod board_actions;

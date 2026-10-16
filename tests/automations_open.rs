@@ -122,9 +122,9 @@ fn a_task_an_automation_made_says_so_and_with_the_board_open_a_schedule_fires_by
     like(&t(&mut s, 120), r"\n[ ▌]. PRJ-1 Look for old dependencies \[auto\] ");
     like(&t(&mut s, 120), r"\n[ ▌]⟳ on {4}Look for old dependencies {2}every 2h +◇ PRJ-1 next in +\d");
     assert_eq!(s.s.sel, row_id(&a), "the selection stayed on the automation: a task it makes does not take it");
-    s.press(&["up"]); assert_eq!(s.s.sel, "proj/1"); s.press(&["alt+t"]); like(&t(&mut s, 120), "\n Made by {6}the automation \"Look for old dependencies\"\n"); s.press(&["esc"]);
+    s.press(&["up", "up"]); assert_eq!(s.s.sel, "proj/1"); s.press(&["alt+t"]); like(&t(&mut s, 120), "\n Made by {6}the automation \"Look for old dependencies\"\n"); s.press(&["esc"]);
     // on an automation's row with no Coordinator on, what is typed is a new task, as anywhere with no task selected
-    s.press(&["down"]); s.typed("tidy up");
+    s.press(&["down", "down"]); s.typed("tidy up");
     assert_eq!(last(&mut s), "  enter add it as a task · tab add it and put an agent on it · shift+enter new line · esc put away");
     s.press(&["enter"]);
     let mut titles: Vec<String> = sw::store::tasks::list(Default::default()).iter().map(|t| t.t("title")).collect(); titles.sort();

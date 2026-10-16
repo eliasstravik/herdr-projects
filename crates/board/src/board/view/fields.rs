@@ -87,13 +87,14 @@ pub fn says_under(s: &State, r: &Obj, says_beside_shown: bool) -> Inked {
     let st = r.s("stage");
     Inked::of(if st == "progress" { "Yours: no agent on it" } else if in_review(r) { "Not reviewed" } else if reviewer_mark(r) { "Under review" } else if r.s("state") == "working" { "Working" } else { "Needs you" }, Ink::Soft)
 }
-/// What an automation's row says: its trigger, its repo where that is not the board's, its machine on the board of
-/// every machine; and why the board turned it off. `part`: "beside" its name, "why" (under it), or "all" under it.
+/// What an automation's row says: its trigger, its repo where that is not the board's (never under its repo's own
+/// heading); and why the board turned it off. Its machine is the heading it stands under. `part`: "beside" its name,
+/// "why" (under it), or "all" under it.
 pub fn auto_said(s: &State, r: &Obj, part: &str) -> Inked {
     let a = auto(r);
     if part != "why" { if let Some(p) = pending_said(a.at("pending")) { return p; } }
     let row = a.at("rowNow");
-    let first = [if s.tags_gone { row.t("state") } else { String::new() }, row.t("trigger"), if row.s("repo") != s.data.repo { crate::shown::words::repo_label(row.s("repo")) } else { String::new() }, if a.b("host") && s.scope == "*" { format!("on {}", a.s("host")) } else { String::new() }];
+    let first = [if s.tags_gone { row.t("state") } else { String::new() }, row.t("trigger"), if row.s("repo") != s.data.repo && !s.by_repo { crate::shown::words::repo_label(row.s("repo")) } else { String::new() }];
     let mut parts: Vec<String> = if part == "why" { vec![] } else { first.to_vec() };
     if part != "beside" { parts.push(row.t("why")); }
     let said = parts.into_iter().filter(|x| !x.is_empty()).map(|x| crate::shown::words::clean(&x)).collect::<Vec<_>>().join(" · ");

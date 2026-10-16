@@ -51,10 +51,11 @@ pub struct ChatAt { pub key: String, pub top: Option<usize>, pub lines: Vec<Stri
 #[derive(Clone, Debug, Default)]
 pub struct ChatFit { pub total: usize, pub rows: usize, pub top: usize, pub above: usize, pub below: usize, pub latest: usize }
 /// One row of the folded list: a heading, a task, a note ("↓ 3 more done"), or an automation. A heading is a machine's
-/// (`machine`, with every machine shown) or a group's (a repo, a status), selectable by its `id` (update/heads.rs), and
-/// folded holds how many tasks it hides (0: open); the automations' heading has no id.
+/// (`machine`, with every machine shown) or a group's (a repo, a status, a machine's automations: `autos`), selectable
+/// by its `id` (update/heads.rs). `folded` holds how many rows it hides, tasks and automations (0: open), `folded_autos`
+/// how many of those are automations.
 #[derive(Clone, Debug)]
-pub enum Row { Head { name: String, autos: bool, id: String, machine: bool, folded: usize }, Rec(Rec), Note(String), Auto(Obj) }
+pub enum Row { Head { name: String, autos: bool, id: String, machine: bool, folded: usize, folded_autos: usize }, Rec(Rec), Note(String), Auto(Obj) }
 /// The selection's row in the list as last laid out, to keep the selection steady when rows move: `group` is the
 /// heading it stands under (a heading's own id; update/landing.rs for the rows that are no task's).
 #[derive(Clone, Debug, Default)]

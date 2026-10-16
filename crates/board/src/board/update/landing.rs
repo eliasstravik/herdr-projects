@@ -4,8 +4,10 @@
 use super::heads::is_head;
 use crate::board::state::SelRow;
 
-/// What the rows that are not tasks stand under: they are only landed on from one of their own.
+/// What the rows that are not tasks stand under: they are only landed on from one of their own. An automation's group
+/// is this and its machine (`automations\totherbox`).
 pub const AUTOS: &str = "automations";
+fn aside(g: &str) -> bool { g.starts_with(AUTOS) || g == JOBS }
 pub const JOBS: &str = "jobs";
 
 /// The row the selection goes to from `old[b]`, the row it was on: one of `ids` (the rows the list has now), a heading
@@ -17,7 +19,7 @@ pub fn land(old: &[SelRow], b: usize, ids: &[String], folded: &dyn Fn(&str) -> b
     let row = |r: &&SelRow| if is_head(&r.id) { folded(&r.id) } else { true };
     // Rows of the selection's own kind first: from a task, never on to an automation or words on their way while a
     // task (or a folded group) is left.
-    let kin = |r: &&SelRow| (r.group == AUTOS || r.group == JOBS) == (*g == AUTOS || *g == JOBS);
+    let kin = |r: &&SelRow| aside(&r.group) == aside(g);
     let below = &old[b + 1..];
     let above = || old[..b].iter().rev();
     below.iter().take_while(|r| r.group == *g).find(|r| here(r) && task(r))

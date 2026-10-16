@@ -9,7 +9,6 @@ That order is used everywhere machines are listed:
 - the machine headings in the list;
 - the header's `all machines:` line;
 - `Alt+M`'s round (this machine, every machine, then each other one);
-- the automations of every machine;
 - the same on the web board, and the web UI's Boards section, whatever order the web UI keeps its PCs in
   ([web UI](web-ui.md)).
 
