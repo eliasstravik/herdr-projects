@@ -243,6 +243,7 @@ fn check_ty(e: &Entry, v: &Value) -> Res<Value> {
             if k == "PR" { return refuse(format!("{name} cannot be PR: on a row that already means a pull request. Choose another.")); }
             Ok(json!(k))
         }
+        Ty::Keys => super::key_map::check(e, v),
         Ty::Notify => {
             let Value::String(s) = v else { return refuse(format!("{name} must be none, bell, or a command.")) };
             let w = s.trim();

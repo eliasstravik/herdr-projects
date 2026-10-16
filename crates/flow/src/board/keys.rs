@@ -11,7 +11,8 @@
 //! where it stands in the ? menu and docs/keys.md; `with` described in another entry's row; `doc` what it does, for
 //! docs/keys.md; `help` a plain key's line in the ? menu; `hint` its usual words on the hint line; `draft` the board's
 //! key with a draft in the text box too; `web` what its button is called on the web board. In doc, help and hint,
-//! another key is named as {name}, never by its chord. The order is the order everywhere.
+//! another key is named as {name}, never by its chord. The order is the order everywhere. Your own chord for a key
+//! (`board.keys`, remap.rs) takes the place of `keys` and `raw` in is() and in every name of the key.
 use std::cell::Cell;
 
 /// The groups, in the order the ? menu and docs/keys.md show them.
@@ -115,6 +116,7 @@ pub fn norm(chord: &str) -> String {
 /// Is this press the key `id`?
 pub fn is(p: &Press, id: K) -> bool {
     let k = entry(id);
+    if let Some(mine) = super::remap::chords(k.name) { let typed = norm(&p.chord); return mine.iter().any(|c| norm(c) == typed); } // yours only (board.keys)
     if let Some(c) = p.ch { if k.raw.iter().any(|r| r.chars().eq(std::iter::once(c))) { return true; } }
     let typed = norm(&p.chord);
     k.keys.iter().any(|c| norm(c) == typed)
@@ -125,7 +127,13 @@ pub fn typed(p: &Press, pick: impl Fn(&Key) -> bool) -> Option<K> { KEYS.iter().
 thread_local! { static BUTTONS: Cell<bool> = const { Cell::new(false) }; }
 /// The web board has buttons, not keys: there a key is named as its button is ("“Undo” brings it back").
 pub fn name_as_buttons(on: bool) { BUTTONS.with(|b| b.set(on)); }
-fn own(k: &Key) -> String { if BUTTONS.with(|b| b.get()) { if let Some(w) = k.web { return format!("“{w}”"); } } k.show.unwrap_or(k.keys.first().copied().unwrap_or("")).to_string() }
+fn own(k: &Key) -> String {
+    if BUTTONS.with(|b| b.get()) { if let Some(w) = k.web { return format!("“{w}”"); } }
+    if let Some(mine) = super::remap::chords(k.name) { return mine[0].clone(); }
+    k.show.unwrap_or(k.keys.first().copied().unwrap_or("")).to_string()
+}
+/// The chord a key is pressed with, yours where `board.keys` moves it ("ctrl+l"); "" for a key typed as a character.
+pub fn chord(id: K) -> String { let k = entry(id); super::remap::chords(k.name).map(|m| m[0].clone()).unwrap_or_else(|| if k.raw.is_empty() { k.keys.first().copied().unwrap_or("").to_string() } else { String::new() }) }
 /// The key called `id` as the board writes it: "ctrl+a".
 pub fn name(id: K) -> String { own(entry(id)) }
 /// With the keys described in the same row: "↑ ↓".

@@ -38,6 +38,7 @@ pub mod watcher;
 /// page's colours). sw-board's `board` module passes them on, so they are `crate::board::keys` everywhere.
 pub mod board {
     pub mod keys;
+    pub mod remap;
     pub mod theme;
 }
 /// What of the web UI the flow and the board's screen use: where the web UI is, its PCs, its link, and the

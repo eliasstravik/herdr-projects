@@ -17,7 +17,9 @@ fn key_words(text: &str) -> Result<String, String> {
     let out = crate::re!(r"\{(\w+)\}").replace_all(text, |c: &regex::Captures| match by_name(&c[1]) { Some(k) => written(&crate::board::keys::name(k.id)), None => { bad = Some(c[1].to_string()); String::new() } }).into_owned();
     match bad { Some(id) => Err(format!("\"{{{id}}}\" names no key (crates/flow/src/board/keys.rs)")), None => Ok(out) }
 }
-pub fn keys_table() -> Result<String, String> {
+/// docs/keys.md keeps the built-in chords, whatever `board.keys` the one running this says.
+pub fn keys_table() -> Result<String, String> { crate::board::remap::as_built(built_keys_table) }
+fn built_keys_table() -> Result<String, String> {
     for k in KEYS {
         if k.doc.is_none() && k.with.is_none() { return Err(format!("crates/flow/src/board/keys.rs: the key \"{}\" has no `doc` (or `with`, the entry whose row describes it)", k.name)); }
         if let Some(w) = k.with { if by_name(w).and_then(|x| x.doc).is_none() { return Err(format!("crates/flow/src/board/keys.rs: the key \"{}\" is described with \"{w}\", which has no `doc`", k.name)); } }
@@ -36,7 +38,8 @@ pub fn keys_table() -> Result<String, String> {
     parts.push(format!("**The text box's own** (not a key of the board, and not in the `?` menu)\n\n{}", table(&["Key", "Does"], rows(&|k| k.group.is_none())?)));
     Ok(parts.join("\n\n"))
 }
-pub fn settings_table() -> Result<String, String> {
+pub fn settings_table() -> Result<String, String> { crate::board::remap::as_built(built_settings_table) }
+fn built_settings_table() -> Result<String, String> {
     for s in SETTINGS.iter() { if s.doc.is_empty() { return Err(format!("crates/core/src/store/settings_list.rs: the setting \"{}\" has no `doc`", s.name)); } }
     let shown = |v: &Value| format!("`{}`", match v { Value::Array(a) => a.iter().map(text).collect::<Vec<_>>().join(", "), v => text(v) });
     let place = |s: &crate::store::settings_list::Entry| match s.kind { Kind::Board => "you only", Kind::Repo => "repo entry, repo file", Kind::Work if s.repo => "task, repo entry, you, repo file", Kind::Work => "task, repo entry, you" };

@@ -1,11 +1,12 @@
 //! The settings' commands: set, unset and show, for you, for your entry for a repo, or for one task.
+use crate::board::remap;
 use crate::err::Res;
 use crate::json::*;
 use crate::store::repos::known_repos;
 use crate::store::settings::change::{set_value, unset_value};
 use crate::store::settings::lookup::Scope;
 use crate::store::settings::show::{problems, rows, show_text};
-use crate::store::settings::values::say;
+use crate::store::settings::values::{check, say};
 use crate::store::tasks::{find, get};
 
 /// Which of you, a repo or a task a command means.
@@ -24,11 +25,20 @@ pub fn settings_command(cmd: &str, pos: &[String], w: &Where, value: Option<Valu
             crate::fail!("No repo \"{}\" on the board. Known: {}.", scope.repo, if names.is_empty() { "none yet".into() } else { names.join(", ") });
         }
         let list: Vec<Value> = rows(&scope).iter().map(|r| r.json()).collect();
-        return Ok((json!({ "settings": list, "problems": problems(task.as_ref()) }), show_text(&scope)));
+        // Your keys are checked against the keys' table, which the settings' own check cannot see.
+        let keys = if task.is_none() && scope.repo.is_empty() { remap::problems(&crate::extras::board_presses()) } else { vec![] };
+        let mut bad = problems(task.as_ref());
+        bad.extend(keys.iter().cloned());
+        let more = if keys.is_empty() { String::new() } else { format!("\n\nYour keys not counted (the key keeps its own chord):\n{}", keys.iter().map(|k| format!("  {k}")).collect::<Vec<_>>().join("\n")) };
+        return Ok((json!({ "settings": list, "problems": bad }), format!("{}{more}", show_text(&scope))));
     }
     let Some(name) = pos.get(1) else { crate::fail!("{cmd} needs a setting's name. `herdr-projects show` lists them all.") };
     let r = if cmd == "set" {
         let Some(v) = value else { crate::fail!("set needs a value: herdr-projects set {name} <value>. To take your answer away: herdr-projects unset {name}") };
+        if name == remap::SETTING && scope.task.is_none() && scope.repo.is_empty() {
+            let kept = check(name, &v, "")?;
+            if let Some(why) = remap::refusal(&kept, &crate::extras::board_presses()) { crate::refuse!("{why}"); }
+        }
         set_value(name, &v, &scope)?
     } else { unset_value(name, &scope)? };
     let fresh = task.as_ref().and_then(|t| get(t.s("id")));
