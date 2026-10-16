@@ -49,11 +49,18 @@ pub fn read(o: &Value, place: &str, allowed: &[&str], why: &str) -> (Obj, Vec<Pr
 #[derive(Clone, Debug, Default)]
 pub struct Mine { pub you: Obj, pub repos: BTreeMap<String, Obj>, pub problems: Vec<Problem> }
 static LAST: Mutex<Option<(String, Arc<Mine>)>> = Mutex::new(None);
+/// When the file's inode last changed (ctime): a file written and put back with its old time still differs. Windows: its
+/// creation time.
+fn changed(m: &std::fs::Metadata) -> i128 {
+    #[cfg(unix)]
+    { use std::os::unix::fs::MetadataExt; m.ctime() as i128 * 1_000_000_000 + m.ctime_nsec() as i128 }
+    #[cfg(windows)]
+    { m.created().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos() as i128).unwrap_or(0) }
+}
 /// Your settings. Asked for every setting that is looked up: the file is read again only when it changed on disk.
 pub fn yours() -> Arc<Mine> {
-    use std::os::unix::fs::MetadataExt;
     let f = config_file();
-    let mark = std::fs::metadata(&f).map(|m| format!("{}|{}|{}|{}.{}|{}.{}", f.display(), m.ino(), m.size(), m.mtime(), m.mtime_nsec(), m.ctime(), m.ctime_nsec())).unwrap_or_default();
+    let mark = std::fs::metadata(&f).map(|m| format!("{}|{}|{}|{}|{}", f.display(), crate::os::file_id(&m).1, m.len(), crate::os::mtime_ns(&m), changed(&m))).unwrap_or_default();
     if let Some((m, out)) = LAST.lock().unwrap().as_ref() { if !mark.is_empty() && *m == mark { return out.clone(); } }
     let out = Arc::new(read_yours());
     *LAST.lock().unwrap() = Some((mark, out.clone()));

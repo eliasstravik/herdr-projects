@@ -33,6 +33,8 @@ fn platform_names_urls_and_versions() {
     assert_eq!(platform_of("FreeBSD", "x86_64"), None);
     assert_eq!(platform_of("Linux", "riscv64"), None);
     assert_eq!(asset_name(("macos", "aarch64")), "herdr-projects-macos-aarch64");
+    assert_eq!(platform_of("windows", "x86_64"), Some(("windows", "x86_64")), "Rust's name for Windows");
+    assert_eq!(asset_name(("windows", "x86_64")), "herdr-projects-windows-x86_64.exe", "a Windows program ends in .exe");
     let base = "https://github.com/eliasstravik/herdr-projects/releases";
     assert_eq!(asset_url(base, Some("0.3.1"), "herdr-projects-linux-x86_64"), format!("{base}/download/v0.3.1/herdr-projects-linux-x86_64"));
     assert_eq!(asset_url(base, Some("v0.3.1"), "a"), format!("{base}/download/v0.3.1/a"), "a version typed with its v");

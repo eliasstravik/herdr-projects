@@ -1,0 +1,4 @@
+#!/bin/sh
+# What herdr runs for every plugin command (herdr-plugin.toml): bin/run.sh on Linux and macOS. On Windows the same
+# command, bin/run, starts bin\run.exe instead: the program bin/run.ps1 put there (and this file is removed there).
+exec sh "$(dirname -- "$0")/run.sh" "$@"

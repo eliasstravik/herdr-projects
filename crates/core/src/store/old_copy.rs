@@ -25,7 +25,7 @@ pub fn copy_place(data: &Path, version: &str) -> PathBuf { PathBuf::from(format!
 /// Files, folders and links as they are (a link stays a link); anything else (a socket) is left out.
 fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
     let m = fs::symlink_metadata(from)?;
-    if m.file_type().is_symlink() { return std::os::unix::fs::symlink(fs::read_link(from)?, to); }
+    if m.file_type().is_symlink() { return crate::os::symlink(&fs::read_link(from)?, to); }
     if m.is_dir() {
         fs::create_dir(to)?;
         for e in fs::read_dir(from)? { let e = e?; copy_tree(&e.path(), &to.join(e.file_name()))?; }
@@ -76,7 +76,7 @@ pub fn copy_at_start(cmd: &str) {
         add_line(&mut rec, &line);
         let _ = write_json(&file, &Value::Object(rec));
     }
-    if QUIET.contains(&cmd) || unsafe { libc::isatty(2) } == 0 { return; }
+    if QUIET.contains(&cmd) || !crate::os::is_tty(2) { return; }
     let said = move_note(&home, &env);
     if !said.is_empty() { eprintln!("{said}"); move_told(&home, &env); }
 }

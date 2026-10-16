@@ -2,6 +2,8 @@
 docs/where-things-live.md
 /target/
 /examples/
-# The program bin/run.sh downloads for this platform, with its version and its download lock.
+# The program bin/run.sh (bin/run.ps1 on Windows: bin/run.exe) downloads for this platform, with its version and its
+# download lock.
 /bin/herdr-projects-*
 /bin/.herdr-projects-*
+/bin/run.exe*

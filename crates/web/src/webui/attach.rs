@@ -51,12 +51,12 @@ fn too_big(name: &str) -> String { format!("Too large to attach: {}. A file can 
 /// git, also in a repo that does not leave `.herdr-projects/` alone.
 pub fn keep(dir: &Path, name: &str, kind: &str, bytes: &[u8]) -> std::io::Result<PathBuf> {
     use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
+    use crate::os::{no_follow, private};
     std::fs::create_dir_all(dir)?;
     // A link in the folder's place (`.herdr-projects` or `files` in a working folder an agent writes in) would send
     // the file somewhere else: refused, and the `.gitignore` is never written through one.
     for d in [dir, dir.parent().unwrap_or(dir)] { if std::fs::symlink_metadata(d)?.file_type().is_symlink() { return Err(std::io::Error::other("its folder is a link")); } }
-    match std::fs::OpenOptions::new().write(true).create_new(true).custom_flags(libc::O_NOFOLLOW).open(dir.join(".gitignore")) {
+    match no_follow(std::fs::OpenOptions::new().write(true).create_new(true)).open(dir.join(".gitignore")) {
         Ok(mut f) => f.write_all(b"*\n")?,
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
         Err(e) => return Err(e),
@@ -65,6 +65,6 @@ pub fn keep(dir: &Path, name: &str, kind: &str, bytes: &[u8]) -> std::io::Result
     let unique = format!("{stamp}-{}", crate::util::random_hex(4));
     let file = match PICTURES.iter().find(|(k, _)| *k == kind) { Some((_, end)) => format!("paste-{unique}.{end}"), None => { let (base, end) = own_name(name); format!("{base}-{unique}.{end}") } };
     let path = dir.join(file);
-    std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).custom_flags(libc::O_NOFOLLOW).open(&path)?.write_all(bytes)?;
+    no_follow(private(std::fs::OpenOptions::new().write(true).create_new(true))).open(&path)?.write_all(bytes)?;
     Ok(path)
 }

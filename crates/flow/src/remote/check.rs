@@ -7,7 +7,7 @@ use super::{ask, machines, Machine};
 use crate::json::*;
 use crate::store::settings::lookup::setting;
 
-fn host() -> String { let mut b = [0u8; 256]; unsafe { libc::gethostname(b.as_mut_ptr() as *mut libc::c_char, b.len()); } String::from_utf8_lossy(&b[..b.iter().position(|c| *c == 0).unwrap_or(0)]).into_owned() }
+fn host() -> String { crate::os::hostname() }
 pub fn hostname() -> String { host() }
 /// What SSH hands a command: the account, its shell and a short PATH. Nothing of the terminal this was typed in.
 fn run_bare(line: &str, ms: u64) -> Ended {

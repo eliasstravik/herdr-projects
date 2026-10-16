@@ -27,7 +27,13 @@ pub fn set_fake(f: Option<Rc<dyn Fake>>) { FAKE.with(|x| *x.borrow_mut() = f); }
 pub fn fake() -> Option<Rc<dyn Fake>> { FAKE.with(|x| x.borrow().clone()) }
 
 pub fn bin() -> String { std::env::var("HERDR_BIN_PATH").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| "herdr".into()) }
-fn config_home() -> PathBuf { std::env::var("XDG_CONFIG_HOME").ok().filter(|s| !s.is_empty()).map(PathBuf::from).unwrap_or_else(|| crate::store::files::user_home().join(".config")) }
+/// Where herdr keeps its settings and sockets: $XDG_CONFIG_HOME, else ~/.config (Windows: %APPDATA%), as herdr does.
+fn config_home() -> PathBuf {
+    let env = |k: &str| std::env::var(k).ok().filter(|s| !s.is_empty()).map(PathBuf::from);
+    if let Some(p) = env("XDG_CONFIG_HOME") { return p; }
+    if cfg!(windows) { if let Some(p) = env("APPDATA") { return p; } }
+    crate::store::files::user_home().join(if cfg!(windows) { "AppData/Roaming" } else { ".config" })
+}
 /// The session a plain command talks to: the pane it runs in, else the default session.
 pub fn current_socket() -> String {
     if let Ok(s) = std::env::var("HERDR_SOCKET_PATH") { if !s.is_empty() { return s; } }
@@ -35,12 +41,16 @@ pub fn current_socket() -> String {
     match std::env::var("HERDR_SESSION") { Ok(s) if !s.is_empty() => base.join("sessions").join(s).join("herdr.sock"), _ => base.join("herdr.sock") }.display().to_string()
 }
 pub fn session_name(socket: &str) -> String {
-    let parts: Vec<&str> = socket.split('/').collect();
+    let parts: Vec<&str> = socket.split(['/', '\\']).collect();
     let n = parts.len();
     if n >= 3 && parts[n - 1] == "herdr.sock" && parts[n - 3] == "sessions" { parts[n - 2].to_string() } else { "default".into() }
 }
 pub fn in_herdr() -> bool { std::env::var("HERDR_ENV").as_deref() == Ok("1") }
+#[cfg(unix)]
 pub fn socket_exists(socket: &str) -> bool { use std::os::unix::fs::FileTypeExt; std::fs::metadata(socket).map(|m| m.file_type().is_socket()).unwrap_or(false) }
+/// On Windows herdr listens on a named pipe named after the socket's path: there when it can be reached.
+#[cfg(windows)]
+pub fn socket_exists(socket: &str) -> bool { super::socket::reachable(socket) }
 
 /// Runs the program: what it gave, or why it could not be run. `timeout_ms` ends a program that takes longer.
 pub fn launch(socket: Option<&str>, args: &[String], input: &str, timeout_ms: u64) -> HRes<Ran> {

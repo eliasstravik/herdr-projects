@@ -10,10 +10,8 @@ pub const BATCH: usize = 8;
 
 /// How busy the machine is: the one-minute load per core. 1 is every core in use, 2 is twice what it can do.
 pub fn load_now() -> f64 {
-    let mut l = [0f64; 3];
-    let n = unsafe { libc::getloadavg(l.as_mut_ptr(), 3) };
     let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1) as f64;
-    if n < 1 { 0.0 } else { l[0] / cores.max(1.0) }
+    match crate::os::load_average() { Some(l) => l[0] / cores.max(1.0), None => 0.0 }
 }
 /// The Watcher is the first to give way: up to three quarters of the cores in use it keeps its pace, a fully used
 /// machine doubles the wait between looks, and from 1.75 on it looks five times less often.

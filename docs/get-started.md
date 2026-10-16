@@ -1,6 +1,6 @@
 # Get started
 
-You need [Herdr](https://herdr.dev) 0.9.3+ on macOS or Linux, and Claude Code, Codex, pi or another agent herdr supports.
+You need [Herdr](https://herdr.dev) 0.9.3+ on macOS or Linux (or [Windows](windows.md), in preview), and Claude Code, Codex, pi or another agent herdr supports.
 
 ## Option A: do it yourself
 

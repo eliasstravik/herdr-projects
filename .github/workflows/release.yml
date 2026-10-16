@@ -2,8 +2,9 @@
 #
 # Runs when a tag `v*` is pushed (`git tag v1.0.1 && git push origin v1.0.1`), or by hand with a tag to build the files
 # of an existing release again; by hand with `dry_run` it builds and checks every file but attaches nothing, to test the
-# workflow itself. Each file is `herdr-projects-<os>-<arch>` (os linux|macos, arch x86_64|aarch64) with its `.sha256`
-# beside it: bin/run.sh and `herdr-projects update` download exactly these names. The Linux files are static (musl), so
+# workflow itself. Each file is `herdr-projects-<os>-<arch>` (os linux|macos, arch x86_64|aarch64; on Windows
+# `herdr-projects-windows-x86_64.exe`) with its `.sha256` beside it: bin/run.sh, bin/run.ps1 and `herdr-projects update`
+# download exactly these names. The Linux files are static (musl), so
 # they run on any Linux. The tag must be the version in Cargo.toml and herdr-plugin.toml, or the run fails: run.sh asks
 # for the release named by Cargo.toml's version.
 name: Release
@@ -37,7 +38,12 @@ jobs:
           - { target: aarch64-unknown-linux-musl, runner: ubuntu-24.04, file: herdr-projects-linux-aarch64, zig: true }
           - { target: x86_64-apple-darwin, runner: macos-14, file: herdr-projects-macos-x86_64 }
           - { target: aarch64-apple-darwin, runner: macos-14, file: herdr-projects-macos-aarch64, runs: true }
+          - { target: x86_64-pc-windows-msvc, runner: windows-2022, file: herdr-projects-windows-x86_64.exe, runs: true, exe: .exe }
     runs-on: ${{ matrix.runner }}
+    # The same steps on every runner, Windows too (Git for Windows' bash).
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
         with:
@@ -72,8 +78,8 @@ jobs:
       - name: Name the file and write its checksum
         run: |
           mkdir dist
-          cp target/${{ matrix.target }}/release/herdr-projects dist/${{ matrix.file }}
-          cd dist && shasum -a 256 ${{ matrix.file }} > ${{ matrix.file }}.sha256 && cat ${{ matrix.file }}.sha256
+          cp target/${{ matrix.target }}/release/herdr-projects${{ matrix.exe }} dist/${{ matrix.file }}
+          cd dist && { shasum -a 256 ${{ matrix.file }} 2>/dev/null || sha256sum ${{ matrix.file }}; } > ${{ matrix.file }}.sha256 && cat ${{ matrix.file }}.sha256
 
       - name: Check it runs and says the release's version
         if: matrix.runs

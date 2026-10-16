@@ -4,7 +4,6 @@
 //! still work. Taken off when the build starts, when the board itself puts something back, and before the worktree is
 //! removed. Only the task's own worktree is ever locked: your own checkout is never made read-only.
 use crate::json::*;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 fn tree_of(t: &Obj) -> Option<PathBuf> { let w = t.s("worktree"); (!w.is_empty() && Path::new(w).exists()).then(|| PathBuf::from(w)) }
@@ -17,11 +16,26 @@ pub fn git_dir_of(tree: &Path) -> Option<PathBuf> {
 /// Links are left alone. A folder is opened before it loses its write bit and after it has it back.
 fn chmod(on: bool, dir: &Path) -> bool {
     let mut ok = true;
-    fn set(p: &Path, mode: u32, on: bool, ok: &mut bool) { let m = if on { mode | 0o200 } else { mode & !0o222 }; if std::fs::set_permissions(p, std::fs::Permissions::from_mode(m)).is_err() { *ok = false; } }
+    #[cfg(unix)]
+    fn set(p: &Path, mode: &std::fs::Permissions, on: bool, ok: &mut bool) {
+        use std::os::unix::fs::PermissionsExt;
+        let m = if on { mode.mode() | 0o200 } else { mode.mode() & !0o222 };
+        if std::fs::set_permissions(p, std::fs::Permissions::from_mode(m)).is_err() { *ok = false; }
+    }
+    // Windows has one read-only flag; on a folder it does not keep files from being added, so the files are what
+    // is locked there.
+    #[cfg(windows)]
+    fn set(p: &Path, mode: &std::fs::Permissions, on: bool, ok: &mut bool) {
+        if p.is_dir() { return; }
+        let mut m = mode.clone();
+        #[allow(clippy::permissions_set_readonly_false)] // the owner's own files, made writable again
+        m.set_readonly(!on);
+        if std::fs::set_permissions(p, m).is_err() { *ok = false; }
+    }
     fn walk(p: &Path, on: bool, ok: &mut bool) {
         let Ok(s) = std::fs::symlink_metadata(p) else { return };
         if s.file_type().is_symlink() { return; }
-        let mode = s.permissions().mode();
+        let mode = &s.permissions();
         if !s.is_dir() { set(p, mode, on, ok); return; }
         if on { set(p, mode, on, ok); }
         match std::fs::read_dir(p) { Ok(rd) => for e in rd.flatten() { walk(&e.path(), on, ok); }, Err(_) => *ok = false }
@@ -43,6 +57,8 @@ pub fn unlock(t: &Obj) -> bool {
 }
 pub fn is_locked(t: &Obj) -> bool {
     let Some(tree) = tree_of(t) else { return false };
-    let c = std::ffi::CString::new(tree.display().to_string()).unwrap_or_default();
-    unsafe { libc::access(c.as_ptr(), libc::W_OK) != 0 }
+    #[cfg(unix)]
+    { let c = std::ffi::CString::new(tree.display().to_string()).unwrap_or_default(); unsafe { libc::access(c.as_ptr(), libc::W_OK) != 0 } }
+    #[cfg(windows)]
+    { git_dir_of(&tree).and_then(|g| std::fs::metadata(g.join("HEAD")).ok()).map(|m| m.permissions().readonly()).unwrap_or(false) }
 }

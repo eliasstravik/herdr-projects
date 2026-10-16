@@ -57,11 +57,10 @@ fn repos_file() -> PathBuf { data_dir().join("repos.json") }
 /// Read again only when the file changed (it is written whole, under a new name): one look at the tasks asks it for
 /// every task.
 pub fn known_repos() -> Obj {
-    use std::os::unix::fs::MetadataExt;
-    static SEEN: std::sync::Mutex<Option<((PathBuf, u64, i64, i64, u64), Obj)>> = std::sync::Mutex::new(None);
+    static SEEN: std::sync::Mutex<Option<((PathBuf, u64, i128, u64), Obj)>> = std::sync::Mutex::new(None);
     let f = repos_file();
     let Ok(m) = fs::metadata(&f) else { return Obj::new() };
-    let key = (f.clone(), m.ino(), m.mtime(), m.mtime_nsec(), m.len());
+    let key = (f.clone(), crate::os::file_id(&m).1, crate::os::mtime_ns(&m), m.len());
     let mut seen = SEEN.lock().unwrap();
     if let Some((k, o)) = seen.as_ref() { if *k == key { return o.clone(); } }
     let o = read_obj(&f).unwrap_or_default();

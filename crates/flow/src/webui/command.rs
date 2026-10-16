@@ -42,7 +42,7 @@ pub fn unlink_now(answer: &str) -> Value {
 /// on demand, for evidence pages, and opens no front door while the answer is "removed".
 pub fn leave() -> Value {
     let out = unlink_now("removed");
-    if let Some(s) = crate::review_page::server_info() { unsafe { libc::kill(s.i("pid") as i32, libc::SIGTERM); } }
+    if let Some(s) = crate::review_page::server_info() { crate::os::term(s.i("pid")); }
     out
 }
 pub fn main(args: &[String]) -> Value {

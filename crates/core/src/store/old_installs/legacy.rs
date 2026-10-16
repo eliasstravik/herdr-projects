@@ -36,8 +36,7 @@ fn old_settings(dir: &Path) -> bool {
 fn ticker_held(root: &Path) -> Option<i64> {
     let file = root.join(".ticker.lock");
     let f = fs::File::open(&file).ok()?;
-    use std::os::fd::AsRawFd;
-    if unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 { unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_UN) }; return None; }
+    if crate::os::lock(&f, false) { crate::os::unlock(&f); return None; }
     Some(read_json(&file).map(|j| j.i("pid")).unwrap_or(0))
 }
 /// The ticker is asked to stop the old version's own way (a `.ticker.stop` file), then told to with a signal.
@@ -48,7 +47,7 @@ fn stop_ticker(root: &Path, wait_ms: i64) -> bool {
     let _ = fs::write(&stop, "");
     let wait = |ms: i64| { let until = crate::clock::now() + ms; while ticker_held(root).is_some() { if crate::clock::now() >= until { return false; } crate::clock::sleep_ms(100); } true };
     let mut free = wait(wait_ms);
-    if !free { if let Some(pid) = ticker_held(root).filter(|&p| p > 1) { unsafe { libc::kill(pid as i32, libc::SIGTERM); } free = wait(3000); } }
+    if !free { if let Some(pid) = ticker_held(root).filter(|&p| p > 1) { crate::os::term(pid); free = wait(3000); } }
     if free { let _ = fs::remove_file(&stop); }
     free
 }

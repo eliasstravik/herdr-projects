@@ -6,7 +6,6 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 /// Every stage a task can be in. The board's five states are derived from these in state.rs.
@@ -28,7 +27,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 // has a variable of its own too. The XDG_* variables only say where an older version kept things (move_home.rs).
 pub const HOME_NAME: &str = ".herdr-projects";
 fn env(k: &str) -> Option<String> { std::env::var(k).ok().filter(|v| !v.is_empty()) }
-pub fn user_home() -> PathBuf { env("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/")) }
+pub fn user_home() -> PathBuf { env("HOME").or_else(|| env("USERPROFILE")).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/")) }
 pub fn home_dir() -> PathBuf { env("HERDR_PROJECTS_HOME").map(PathBuf::from).unwrap_or_else(|| user_home().join(HOME_NAME)) }
 pub fn data_dir() -> PathBuf { env("HERDR_PROJECTS_DATA_DIR").map(PathBuf::from).unwrap_or_else(|| home_dir().join("data")) }
 pub fn config_dir() -> PathBuf { env("HERDR_PROJECTS_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| home_dir().join("settings")) }
@@ -48,18 +47,14 @@ pub fn artifacts_dir(id: &str) -> PathBuf { dir_of(id).join("artifacts") }
 /// Once an update put a new file at that path, Linux names the running one "… (deleted)", a file nothing can be started
 /// from: the path is the one without it, where the new program is.
 pub fn bin() -> PathBuf {
-    use std::os::unix::ffi::OsStrExt;
     let Ok(p) = std::env::current_exe() else { return PathBuf::from("herdr-projects") };
-    match p.as_os_str().as_bytes().strip_suffix(b" (deleted)") { Some(b) => PathBuf::from(std::ffi::OsStr::from_bytes(b)), None => p }
+    match p.to_str().and_then(|s| s.strip_suffix(" (deleted)")) { Some(s) => PathBuf::from(s), None => p }
 }
 pub fn absolute(p: &Path) -> PathBuf { if p.is_absolute() { p.to_path_buf() } else { std::env::current_dir().map(|d| d.join(p)).unwrap_or_else(|_| p.to_path_buf()) } }
 
 /// The user's name, as the owner of a task.
 pub fn me() -> String {
-    let name = unsafe {
-        let pw = libc::getpwuid(libc::getuid());
-        if pw.is_null() { String::new() } else { std::ffi::CStr::from_ptr((*pw).pw_name).to_string_lossy().into_owned() }
-    };
+    let name = crate::os::login_name();
     let name = if name.is_empty() { env("USER").unwrap_or_default() } else { name };
     let clean: String = name.chars().filter(|c| c.is_ascii_alphanumeric() || "_.+-".contains(*c)).take(32).collect();
     if clean.is_empty() { "you".into() } else { clean }
@@ -96,11 +91,7 @@ pub fn read_lines(file: &Path) -> Vec<Value> {
     out
 }
 
-pub fn pid_alive(pid: i64) -> bool {
-    if pid <= 0 { return false; }
-    let r = unsafe { libc::kill(pid as libc::pid_t, 0) };
-    r == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
-}
+pub fn pid_alive(pid: i64) -> bool { crate::os::pid_alive(pid) }
 /// A process marker is a pid plus that process's start time, so a pid reused after a reboot is not mistaken for it.
 pub fn proc_start(pid: i64) -> Option<String> {
     let s = fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
@@ -133,13 +124,8 @@ pub fn base64url(bytes: &[u8]) -> String {
     }
     out
 }
-fn same_file(f: &File, path: &Path) -> bool {
-    match (f.metadata(), fs::metadata(path)) { (Ok(a), Ok(b)) => a.ino() == b.ino() && a.dev() == b.dev(), _ => false }
-}
-fn flock(f: &File, wait: bool) -> bool {
-    use std::os::fd::AsRawFd;
-    unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX | if wait { 0 } else { libc::LOCK_NB }) == 0 }
-}
+fn same_file(f: &File, path: &Path) -> bool { crate::os::same_file(f, path) }
+fn flock(f: &File, wait: bool) -> bool { crate::os::lock(f, wait) }
 /// A lock taken: it is let go when this is dropped.
 pub struct Held { file: Option<File>, path: PathBuf }
 impl Drop for Held {

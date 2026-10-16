@@ -1,5 +1,5 @@
 # Runs the whole check (`npm run check -- --all`: build, made tables, the repo's rules, every test) on every push and
-# pull request, on Linux.
+# pull request, on Linux; and builds the program for Windows.
 name: Check
 
 on:
@@ -39,3 +39,40 @@ jobs:
           GIT_COMMITTER_NAME: ci
           GIT_COMMITTER_EMAIL: ci@example.com
         run: npm run check -- --all
+
+  # The program builds for Windows and runs there: the release's Windows file is this build. The tests are the Linux
+  # job's (they drive a fake herdr through sh).
+  windows:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Cache the build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-${{ hashFiles('Cargo.lock') }}
+          restore-keys: windows-
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: It runs and says its version
+        env:
+          HERDR_PROJECTS_INLINE: "1"
+          HERDR_PROJECTS_HOME: ${{ runner.temp }}/sw
+        run: |
+          out=$(target/release/herdr-projects.exe version)
+          echo "$out"
+          case "$out" in "herdr-projects "*) ;; *) echo "::error::expected herdr-projects <version>"; exit 1 ;; esac

@@ -29,7 +29,8 @@ fn login_shell() -> Option<String> {
 /// gh's login is never written down: where the login shell has one (the names are remembered) and this process has
 /// none, the shell is asked for it, and this process and all it starts take it in.
 pub fn user_env() {
-    if env_set("HERDR_PROJECTS_ENV_OK") || !env_set("HERDR_PLUGIN_ID") { return; }
+    // Windows has no login shell to ask: herdr's server already has the user's PATH and variables from Windows itself.
+    if cfg!(windows) || env_set("HERDR_PROJECTS_ENV_OK") || !env_set("HERDR_PLUGIN_ID") { return; }
     let file = data_dir().join("env.json");
     let mut cached = read_obj(&file);
     let stale = cached.as_ref().map(|c| now() - c.i("at") > 600000 || !c.b("PATH") || !c.has("gh")).unwrap_or(true);

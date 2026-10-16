@@ -16,7 +16,12 @@ pub fn host_names(host: &str) -> Vec<String> {
     if h.is_empty() || h == "localhost" { return vec![]; }
     match h.strip_suffix(".local").filter(|b| !b.is_empty() && !b.contains('.')) { Some(b) => vec![h.clone(), b.to_string()], None => vec![h] }
 }
+/// The addresses of this machine's network interfaces, loopback ones left out. Not looked up on Windows: the machine is
+/// known by its name there.
+#[cfg(windows)]
+fn addresses() -> Vec<IpAddr> { vec![] }
 /// The addresses of this machine's network interfaces, loopback ones left out.
+#[cfg(unix)]
 fn addresses() -> Vec<IpAddr> {
     let mut out = vec![];
     let mut list: *mut libc::ifaddrs = std::ptr::null_mut();

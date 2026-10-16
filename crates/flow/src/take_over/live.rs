@@ -17,8 +17,8 @@ fn old_program(pid: i64) -> bool {
     Path::new(prog).file_name().map(|n| n.to_string_lossy().starts_with(OLD_ID)).unwrap_or(false)
 }
 fn stop(pid: i64) {
-    unsafe { libc::kill(pid as i32, libc::SIGTERM); }
-    for n in 0..60 { if !pid_alive(pid) { return; } if n == 40 { unsafe { libc::kill(pid as i32, libc::SIGKILL); } } crate::clock::sleep_ms(50); }
+    crate::os::term(pid);
+    for n in 0..60 { if !pid_alive(pid) { return; } if n == 40 { crate::os::kill(pid); } crate::clock::sleep_ms(50); }
 }
 impl Sys for Live {
     fn launcher(&self) -> Option<String> { std::fs::read_to_string(crate::flow::send::shim()).ok() }

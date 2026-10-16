@@ -36,6 +36,8 @@ pub fn guard_panics() {
 /// Asked: false when it is no terminal (nothing is asked then).
 pub fn ask_colours() -> bool {
     use std::io::IsTerminal;
+    // Windows: the console cannot be waited on for an answer the way a Unix terminal can, so nothing is asked.
+    if cfg!(windows) { return false; }
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() || terminal::enable_raw_mode().is_err() { return false; }
     let mut out = std::io::stdout();
     let _ = out.write_all(b"\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b[c");
@@ -47,14 +49,12 @@ pub fn colours_told(asked: bool, ms: u64) -> crate::board::theme::Seen {
     let fgbg = std::env::var("COLORFGBG").ok().and_then(|v| v.rsplit(';').next().and_then(|x| x.parse::<u8>().ok())).map(|n| n == 7 || n == 15);
     let mut seen = crate::board::theme::Seen { light: fgbg, fg: None, bg: None };
     if !asked { return seen; }
-    let fd = 0;
     let mut buf = Vec::new();
     let until = std::time::Instant::now() + std::time::Duration::from_millis(ms);
     let done = |b: &[u8]| crate::board::theme::answers::read_answers(&String::from_utf8_lossy(b)).1;
     while std::time::Instant::now() < until && !done(&buf) {
-        let mut p = libc::pollfd { fd, events: libc::POLLIN, revents: 0 };
         let left = until.saturating_duration_since(std::time::Instant::now()).as_millis() as i32;
-        if unsafe { libc::poll(&mut p, 1, left.max(1)) } <= 0 { break; }
+        if !input_within(left.max(1)) { break; }
         let mut chunk = [0u8; 256];
         match std::io::stdin().read(&mut chunk) { Ok(n) if n > 0 => buf.extend_from_slice(&chunk[..n]), _ => break }
     }
@@ -65,3 +65,11 @@ pub fn colours_told(asked: bool, ms: u64) -> crate::board::theme::Seen {
     if told.light.is_some() { seen.light = told.light; }
     seen
 }
+/// Whether stdin has something to read within `ms`.
+#[cfg(unix)]
+fn input_within(ms: i32) -> bool {
+    let mut p = libc::pollfd { fd: 0, events: libc::POLLIN, revents: 0 };
+    unsafe { libc::poll(&mut p, 1, ms) > 0 }
+}
+#[cfg(windows)]
+fn input_within(_: i32) -> bool { false }

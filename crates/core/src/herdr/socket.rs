@@ -4,8 +4,39 @@
 use super::cli::{current_socket, fake, HRes, HerdrError};
 use crate::json::*;
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::UnixStream;
 use std::time::Duration;
+
+// Linux and macOS: a Unix socket at the path. Windows: herdr's named pipe for that path, `\\.\pipe\<path>`.
+#[cfg(unix)]
+type Stream = std::os::unix::net::UnixStream;
+#[cfg(unix)]
+fn connect(path: &str) -> std::io::Result<Stream> {
+    let s = Stream::connect(path)?;
+    let _ = s.set_read_timeout(Some(Duration::from_secs(5)));
+    Ok(s)
+}
+#[cfg(windows)]
+type Stream = std::fs::File;
+#[cfg(windows)]
+fn pipe_name(path: &str) -> String { if path.starts_with(r"\\.\pipe\") { path.to_string() } else { format!(r"\\.\pipe\{path}") } }
+#[cfg(windows)]
+fn connect(path: &str) -> std::io::Result<Stream> {
+    const ERROR_PIPE_BUSY: i32 = 231;
+    let name = pipe_name(path);
+    let mut tries = 0;
+    loop {
+        match std::fs::OpenOptions::new().read(true).write(true).open(&name) {
+            Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY) && tries < 50 => { tries += 1; std::thread::sleep(Duration::from_millis(100)); }
+            r => return r,
+        }
+    }
+}
+/// Whether herdr's pipe for this socket path is there.
+#[cfg(windows)]
+pub fn reachable(path: &str) -> bool {
+    const ERROR_PIPE_BUSY: i32 = 231;
+    match std::fs::OpenOptions::new().read(true).write(true).open(pipe_name(path)) { Ok(_) => true, Err(e) => e.raw_os_error() == Some(ERROR_PIPE_BUSY) }
+}
 
 fn request(method: &str, params: &Value) -> String { format!("{}\n", json!({ "id": "herdr-projects", "method": method, "params": params })) }
 /// One request: its result, or what herdr refused it with (`code`: "popup_not_open").
@@ -13,8 +44,7 @@ pub fn ask(method: &str, params: &Value, socket: Option<&str>) -> HRes<Value> {
     if let Some(f) = fake() { return f.ask(method, params); }
     let path = socket.map(String::from).unwrap_or_else(current_socket);
     let no = |m: String| HerdrError { code: "no_server".into(), message: m };
-    let mut s = UnixStream::connect(&path).map_err(|e| no(e.to_string()))?;
-    let _ = s.set_read_timeout(Some(Duration::from_secs(5)));
+    let mut s = connect(&path).map_err(|e| no(e.to_string()))?;
     s.write_all(request(method, params).as_bytes()).map_err(|e| no(e.to_string()))?;
     let mut line = String::new();
     BufReader::new(s).read_line(&mut line).map_err(|e| no(e.to_string()))?;
@@ -31,7 +61,7 @@ pub fn popup_close(socket: Option<&str>) -> HRes<bool> {
 pub fn on_tab_shown(socket: Option<String>, on: impl Fn(String) + Send + 'static, started: impl FnOnce() + Send + 'static) {
     std::thread::spawn(move || {
         let path = socket.unwrap_or_else(current_socket);
-        let Ok(mut s) = UnixStream::connect(&path) else { return };
+        let Ok(mut s) = connect(&path) else { return };
         if s.write_all(request("events.subscribe", &json!({ "subscriptions": [{ "type": "tab.focused" }] })).as_bytes()).is_err() { return; }
         let mut started = Some(started);
         for line in BufReader::new(s).lines() {

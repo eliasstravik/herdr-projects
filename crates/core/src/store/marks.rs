@@ -27,11 +27,10 @@ pub fn tilde(p: &str) -> String {
 // ---- per-launch hook tokens: beside the task, never in its record, so no listing, snapshot or log prints them --------
 fn tokens_file(id: &str) -> PathBuf { dir_of(id).join("tokens.json") }
 pub fn set_token(id: &str, role: &str, token: &str, round: i64) -> Res<()> {
-    use std::os::unix::fs::OpenOptionsExt;
     let mut j = read_obj(&tokens_file(id)).unwrap_or_default();
     if role == "reviewer" { j.obj_mut("reviewer").put(&round.to_string(), token); } else { j.put("agent", token); }
     fs::create_dir_all(dir_of(id))?;
-    let mut f = fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(tokens_file(id))?;
+    let mut f = crate::os::private(fs::OpenOptions::new().write(true).create(true).truncate(true)).open(tokens_file(id))?;
     std::io::Write::write_all(&mut f, serde_json::to_string(&j)?.as_bytes())?;
     Ok(())
 }

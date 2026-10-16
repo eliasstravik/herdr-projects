@@ -1,0 +1,6 @@
+# The launchers run as they are on every platform: shell scripts keep LF line endings even in a Windows checkout,
+# PowerShell gets CRLF. The TOML files stay LF, so the release workflow reads their version the same way on Windows.
+*.sh text eol=lf
+bin/run text eol=lf
+*.ps1 text eol=crlf
+*.toml text eol=lf

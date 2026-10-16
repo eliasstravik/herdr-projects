@@ -97,10 +97,9 @@ fn dirty_of(dir: &Path) -> Res<BTreeMap<String, String>> {
     }
     let mut out = BTreeMap::new();
     for rel in names {
-        use std::os::unix::fs::MetadataExt;
         let f = dir.join(&rel);
         let file = match fs::symlink_metadata(&f) {
-            Ok(s) => format!("{:o}:{}", s.mode(), if s.is_file() && s.len() < 8_000_000 { fs::read(&f).map(|b| sha1_smol::Sha1::from(b).digest().to_string()).unwrap_or_default() } else { format!("{}:{}", s.len(), s.mtime() * 1000 + s.mtime_nsec() / 1_000_000) }),
+            Ok(s) => format!("{:o}:{}", crate::os::mode(&s), if s.is_file() && s.len() < 8_000_000 { fs::read(&f).map(|b| sha1_smol::Sha1::from(b).digest().to_string()).unwrap_or_default() } else { format!("{}:{}", s.len(), crate::os::mtime_ms(&s) as i64) }),
             Err(_) => "gone".into(),
         };
         let line = format!("{file} {}{}", staged.get(&rel).map(|s| s.as_str()).unwrap_or("-"), hidden.get(&rel).map(|c| format!(" hidden:{c}")).unwrap_or_default());
@@ -214,7 +213,7 @@ pub fn keep_report(t: &Task, base: impl FnOnce() -> String) -> Option<Value> {
     let there = fs::read_link(&to).ok();
     let ok = if there.as_deref() != Some(from.as_path()) {
         let _ = fs::remove_dir_all(&to); let _ = fs::remove_file(&to);
-        to.parent().map(|p| fs::create_dir_all(p).is_ok()).unwrap_or(false) && std::os::unix::fs::symlink(&from, &to).is_ok()
+        to.parent().map(|p| fs::create_dir_all(p).is_ok()).unwrap_or(false) && crate::os::symlink(&from, &to).is_ok()
     } else { true };
     if ok { root = base(); }
     let link = if root.is_empty() { from.join(&file).display().to_string() } else { format!("{root}/{REPORT}/{}", crate::util::url_encode(&file)) };

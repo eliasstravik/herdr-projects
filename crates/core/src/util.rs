@@ -49,7 +49,7 @@ pub fn copy_dir(from: &std::path::Path, to: &std::path::Path) -> std::io::Result
         let e = e?;
         let (src, dst) = (e.path(), to.join(e.file_name()));
         let ft = e.file_type()?;
-        if ft.is_dir() { copy_dir(&src, &dst)?; } else if ft.is_symlink() { let target = std::fs::read_link(&src)?; let _ = std::fs::remove_file(&dst); std::os::unix::fs::symlink(target, &dst)?; } else { std::fs::copy(&src, &dst)?; }
+        if ft.is_dir() { copy_dir(&src, &dst)?; } else if ft.is_symlink() { let target = std::fs::read_link(&src)?; let _ = std::fs::remove_file(&dst); crate::os::symlink(&target, &dst)?; } else { std::fs::copy(&src, &dst)?; }
     }
     Ok(())
 }

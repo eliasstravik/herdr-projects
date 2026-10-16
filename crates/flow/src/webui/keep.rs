@@ -20,7 +20,7 @@ pub fn ensure_door() -> bool {
     if off() || web_ui(false).is_none() { return false; }
     if door_info().is_some() { return true; }
     if let Some(old) = crate::review_page::server_info() {
-        if !door_file().exists() { unsafe { libc::kill(old.i("pid") as i32, libc::SIGTERM); } }
+        if !door_file().exists() { crate::os::term(old.i("pid")); }
         return false;
     }
     crate::review_page::ensure_server();

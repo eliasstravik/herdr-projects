@@ -181,7 +181,7 @@ fn run_one(job: Job) -> Done {
             Job::ChatLeft { id } => { crate::finish::chat::left(&id); Done::default() }
             Job::OpenAgent { id, popup } => super::job_far::open_agent(&id, popup),
             Job::FreeSize { pids } => {
-                let ended = pids.iter().filter(|p| unsafe { libc::kill(**p as i32, libc::SIGTERM) } == 0).count();
+                let ended = pids.iter().filter(|p| crate::os::term(**p)).count();
                 if ended > 0 { Done::say(format!("Ended {}. The board has its own size again in a moment.", if ended == 1 { "the remote view of this pane".to_string() } else { format!("{ended} remote views of this pane") }), Ink::Green) }
                 else { Done::say("The remote view could not be ended from here: close it where it runs.", Ink::Yellow) }
             }

@@ -4,50 +4,57 @@ version = "1.0.1"
 # The oldest herdr this plugin was actually verified on.
 min_herdr_version = "0.9.3"
 description = "A work board: one list of tasks, each delegated one an ordinary herdr agent in its own space"
-platforms = ["linux", "macos"]
+platforms = ["linux", "macos", "windows"]
 
-# Commands go through bin/run.sh: herdr starts them with its server's environment, which may lack the user's PATH. It
-# runs the program built here, or the one downloaded for this platform from this version's GitHub release.
+# Commands go through bin/run. On Linux and macOS that runs bin/run.sh: herdr starts commands with its server's
+# environment, which may lack the user's PATH, and it runs the program built here, or the one downloaded for this
+# platform from this version's GitHub release. On Windows, bin/run is bin\run.exe, the program itself, which the build
+# step below (bin/run.ps1) puts there.
 
 # Gets the program when the plugin is installed: downloads it, or builds it from source when it cannot.
 [[build]]
-command = ["sh", "bin/run.sh", "--fetch"]
+platforms = ["linux", "macos"]
+command = ["bin/run", "--fetch"]
+
+[[build]]
+platforms = ["windows"]
+command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "bin/run.ps1"]
 
 [[startup]]
-command = ["sh", "bin/run.sh", "hook"]
+command = ["bin/run", "hook"]
 
 [[actions]]
 id = "open"
 title = "Open the work board"
-command = ["sh", "bin/run.sh", "open"]
+command = ["bin/run", "open"]
 
 [[actions]]
 id = "coordinator"
 title = "Go into the Coordinator's chat"
-command = ["sh", "bin/run.sh", "open-coordinator"]
+command = ["bin/run", "open-coordinator"]
 
 [[actions]]
 id = "approve-current"
 title = "Approve the task in the focused pane (the board asks first)"
 contexts = ["pane"]
-command = ["sh", "bin/run.sh", "approve-current"]
+command = ["bin/run", "approve-current"]
 
 [[events]]
 on = "pane.agent_status_changed"
-command = ["sh", "bin/run.sh", "hook"]
+command = ["bin/run", "hook"]
 
 # An agent exiting to its shell fires this (released) on herdr 0.9.3.
 [[events]]
 on = "pane.agent_detected"
-command = ["sh", "bin/run.sh", "hook"]
+command = ["bin/run", "hook"]
 
 [[events]]
 on = "pane.closed"
-command = ["sh", "bin/run.sh", "hook"]
+command = ["bin/run", "hook"]
 
 [[events]]
 on = "worktree.removed"
-command = ["sh", "bin/run.sh", "hook"]
+command = ["bin/run", "hook"]
 
 [[panes]]
 id = "board"
@@ -55,4 +62,4 @@ title = "Work board"
 # A tab of its own unless you choose the popup (`board.open`): the board key then opens this pane as herdr's popup
 # instead, a window over everything (src/board/run/place.rs).
 placement = "tab"
-command = ["sh", "bin/run.sh", "board"]
+command = ["bin/run", "board"]

@@ -63,15 +63,14 @@ fn free(file: &Path) -> PathBuf {
 /// Takes a lock file for a moment. None when a running process holds it.
 fn grab_now(file: &Path) -> Option<Option<fs::File>> {
     let Ok(f) = fs::File::open(file) else { return Some(None) };
-    use std::os::fd::AsRawFd;
-    if unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 { Some(Some(f)) } else { None }
+    if crate::os::lock(&f, false) { Some(Some(f)) } else { None }
 }
 fn is_lock(file: &Path) -> bool { file.extension().map(|e| e == "lock").unwrap_or(false) && file.parent().and_then(|p| p.file_name()).map(|n| n == "locks").unwrap_or(false) }
 fn keep(file: &Path, spot: &Path) { if fs::hard_link(file, spot).is_err() { let _ = copy_all(file, spot); } }
 fn copy_all(from: &Path, to: &Path) -> std::io::Result<()> {
     if fs::symlink_metadata(from)?.is_dir() { fs::create_dir_all(to)?; for e in fs::read_dir(from)? { let e = e?; copy_all(&e.path(), &to.join(e.file_name()))?; } Ok(()) } else { fs::copy(from, to).map(|_| ()) }
 }
-fn mtime(m: &fs::Metadata) -> f64 { use std::os::unix::fs::MetadataExt; m.mtime() as f64 * 1000.0 + m.mtime_nsec() as f64 / 1e6 }
+fn mtime(m: &fs::Metadata) -> f64 { crate::os::mtime_ms(m) }
 /// What the new place holds goes into the old one (the one in use); then the folder moves as one. Of a file both
 /// have, the newer one stays in use and the other goes to the set-aside folder. Returns how many were set aside.
 pub fn merge_into(from: &Path, to: &Path, aside: &Path) -> std::io::Result<usize> {
@@ -97,6 +96,9 @@ pub fn merge_into(from: &Path, to: &Path, aside: &Path) -> std::io::Result<usize
     Ok(kept)
 }
 /// Two paths change places in one step: there is no moment at which either is missing. False: not possible here.
+#[cfg(windows)]
+pub fn swap_now(_: &Path, _: &Path) -> bool { false }
+#[cfg(unix)]
 pub fn swap_now(a: &Path, b: &Path) -> bool {
     use std::ffi::CString;
     use std::os::unix::ffi::OsStrExt;
@@ -108,8 +110,8 @@ pub fn swap_now(a: &Path, b: &Path) -> bool {
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     { let _ = (ca, cb); false }
 }
-fn same_disk(a: &Path, b: &Path) -> bool { use std::os::unix::fs::MetadataExt; matches!((fs::metadata(a), fs::metadata(b)), (Ok(x), Ok(y)) if x.dev() == y.dev()) }
-fn link(target: &Path, at: &Path) -> std::io::Result<()> { std::os::unix::fs::symlink(target, at) }
+fn same_disk(a: &Path, b: &Path) -> bool { crate::os::same_disk(a, b) }
+fn link(target: &Path, at: &Path) -> std::io::Result<()> { crate::os::symlink(target, at) }
 /// One folder, in three steps each whole or not done (`<old>.moving` is the spare name the steps use):
 ///   1. two links are made: <old>.moving -> new, and new -> <old>.moving
 ///   2. <old> and <old>.moving change places: old -> new -> <old>.moving, which is now the folder
@@ -250,7 +252,7 @@ pub fn home_at_start(cmd: &str) {
     let r = move_home(&home, &env, &bin(), None, 3000, &swap_now);
     // Not moved: this run works on those folders where they are, as it did before.
     for x in &r.stay { unsafe { std::env::set_var(x.key, &x.from); } }
-    if QUIET.contains(&cmd) || unsafe { libc::isatty(2) } == 0 { return; }
+    if QUIET.contains(&cmd) || !crate::os::is_tty(2) { return; }
     let line = move_note(&home, &env);
     if !line.is_empty() { eprintln!("{line}"); move_told(&home, &env); }
 }

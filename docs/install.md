@@ -9,7 +9,7 @@ herdr plugin install eliasstravik/herdr-projects
 
 ## What you need
 
-- Linux or macOS, on x86_64 or aarch64.
+- Linux or macOS, on x86_64 or aarch64, or Windows on x86_64 (in preview: [Windows](windows.md)).
 - Herdr 0.9.3 or newer. Your **running** Herdr server must be 0.9.3 or newer too: an older one refuses the plugin until
   it is restarted.
 - `git`, and `curl` or `wget` to download the program.

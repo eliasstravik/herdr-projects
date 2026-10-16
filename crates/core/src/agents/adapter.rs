@@ -18,8 +18,7 @@ fn hook_command(h: &Hook) -> Vec<String> {
     c
 }
 fn write_private(file: &Path, text: &str) -> Res<()> {
-    use std::os::unix::fs::OpenOptionsExt;
-    let mut f = fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(file)?;
+    let mut f = crate::os::private(fs::OpenOptions::new().write(true).create(true).truncate(true)).open(file)?;
     std::io::Write::write_all(&mut f, text.as_bytes())?;
     Ok(())
 }

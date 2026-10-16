@@ -11,6 +11,7 @@ pub mod herdr;
 pub mod http;
 pub mod json;
 pub mod login_env;
+pub mod os;
 pub mod research;
 pub mod status_words;
 pub mod store;

@@ -14,7 +14,6 @@ use crate::store::inbox::queue_text;
 use crate::store::retries::waiting_of;
 use crate::store::tasks::{get, one_line, update_wait, Change, Task};
 use crate::submit::{hand, note_sent};
-use crate::util::shq;
 use std::path::PathBuf;
 
 /// "sent": typed, with enter pressed (whether the agent then started on it is looked at again: submit.rs); "queued".
@@ -41,21 +40,35 @@ pub fn prompt_tail(t: &Task) -> String {
     [rules, note].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n")
 }
 pub fn with_tail(t: &Task, text: &str) -> String { [text.to_string(), prompt_tail(t)].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n") }
+/// The launcher's file name: a shell script on Linux and macOS, a batch file on Windows.
+const SHIM_NAME: &str = if cfg!(windows) { "herdr-projects.cmd" } else { "herdr-projects" };
+#[cfg(unix)]
+fn shim_text() -> String {
+    let mut text = "#!/bin/sh\n".to_string();
+    for (k, v) in board_env() { text.push_str(&format!("export {k}={}\n", crate::util::shq(&v))); }
+    text.push_str(&format!("exec {} \"$@\"\n", crate::util::shq(&bin().display().to_string())));
+    text
+}
+#[cfg(windows)]
+fn shim_text() -> String {
+    // `setlocal` keeps the variables to this one run; `%*` passes every argument on as it was given.
+    let mut text = "@echo off\r\nsetlocal\r\n".to_string();
+    for (k, v) in board_env() { text.push_str(&format!("set \"{k}={v}\"\r\n")); }
+    text.push_str(&format!("\"{}\" %*\r\n", bin().display()));
+    text
+}
 /// The absolute path of the command, kept in the data folder, so agents and hooks find it without anything on their
 /// PATH. It names its own board: herdr cannot hand a worktree's space any environment.
 pub fn shim() -> PathBuf {
     let dir = data_dir().join("bin");
-    let file = dir.join("herdr-projects");
-    let mut text = "#!/bin/sh\n".to_string();
-    for (k, v) in board_env() { text.push_str(&format!("export {k}={}\n", shq(&v))); }
-    text.push_str(&format!("exec {} \"$@\"\n", shq(&bin().display().to_string())));
+    let file = dir.join(SHIM_NAME);
+    let text = shim_text();
     let is_link = std::fs::symlink_metadata(&file).map(|m| m.file_type().is_symlink()).unwrap_or(false);
     let have = if is_link { None } else { std::fs::read_to_string(&file).ok() };
     if have.as_deref() != Some(text.as_str()) && crate::herdr::cli::fake().is_none() {
-        use std::os::unix::fs::OpenOptionsExt;
         let _ = std::fs::create_dir_all(&dir);
         let tmp = dir.join(format!("herdr-projects.{}", std::process::id()));
-        let ok = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o755).open(&tmp).and_then(|mut f| std::io::Write::write_all(&mut f, text.as_bytes())).is_ok();
+        let ok = std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(&tmp).and_then(|mut f| std::io::Write::write_all(&mut f, text.as_bytes())).is_ok() && crate::os::make_runnable(&tmp).is_ok();
         if ok { let _ = std::fs::rename(&tmp, &file); }
     }
     file
