@@ -1,6 +1,7 @@
 //! Delegating: a herdr worktree workspace, the repo's setup, then the agent in its root pane with the first prompt. A
 //! delegated task is one herdr worktree workspace with its agent pane in it; herdr does the running. One part per file
 //! in delegate/: where a worktree starts, the rules and the first prompt, starting the program, and the jobs.
+pub mod from;
 pub mod jobs;
 pub mod launch;
 pub mod rules;

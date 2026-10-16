@@ -2,7 +2,8 @@
 //! its first prompt), restarting an exited agent, and reopening a task's space to go into it.
 use super::launch::{again_prompt, agent_now, exists, resumable, start_agent, unsent_prompt};
 use super::rules::{first_prompt, turned_words};
-use super::worktree::{base_ref, copy_includes, exclude_rule_dir, free_branch};
+use super::from::{base_ref, refuse_start};
+use super::worktree::{copy_includes, exclude_rule_dir, free_branch};
 use crate::agents::start_failed as sf;
 use crate::board::keys::key_name;
 use crate::clock::now;
@@ -17,7 +18,7 @@ use crate::store::failures::failure_patch;
 use crate::store::files::{board_env, dir_of, marker_alive};
 use crate::store::inbox::{take_text, untake_text};
 use crate::store::repos::{can_worktree, cwd_of, folder_of, git_out, is_repo};
-use crate::store::settings::lookup::{setting, setting_text};
+use crate::store::settings::lookup::setting;
 use crate::store::settings::places::repo_file;
 use crate::store::settings::values::{command_of, list_of};
 use crate::store::tasks::{find, get, update_wait, Change, Task};
@@ -86,6 +87,7 @@ fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
             res = flow::spaces::opening_worktree(&api, &root, || api.worktree_open(&root.display().to_string(), t.s("worktree"), &label))?;
             patch = Obj::new();
         } else if can_worktree(&root) && !t.b("startedOnce") { // a task in a repo always works in a worktree of its own
+            let from = match base_ref(&root, &t) { Ok(f) => f, Err(e) => return refuse_start(g, &e.msg) };
             // A repo with no commits yet has nothing to branch from: give it an empty first commit (files and index stay).
             if flow::git::head_of(&root).is_empty() && git_out(&root, &["rev-parse", "--verify", "HEAD"]).is_err() {
                 let tree = git_out(&root, &["hash-object", "-w", "-t", "tree", "/dev/null"])?;
@@ -93,7 +95,6 @@ fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
                 git_out(&root, &["update-ref", "HEAD", &c])?;
             }
             let branch = free_branch(&root, &t);
-            let from = base_ref(&root, &setting_text("workspace.from", Some(&t)));
             // An attempt works in a tab of its task's one space; any other task in a space of its own.
             res = if t.b("attemptOf") { crate::attempts::place::open_place(&api, &root, &t, &branch, &from)? } else { flow::spaces::opening_worktree(&api, &root, || api.worktree_create(&root.display().to_string(), &branch, &from, &label))? };
             let dir = if res.at("worktree").b("path") { res.at("worktree").t("path") } else { res.at("workspace").at("worktree").t("checkout_path") };

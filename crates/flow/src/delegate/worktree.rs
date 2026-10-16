@@ -1,6 +1,5 @@
-//! Where a task's worktree starts and what a fresh one is given: the commit it branches from, a free branch name
-//! (`workspace.branch`), the files it gets a copy of.
-use crate::flow::git::has_origin;
+//! What a fresh worktree is given: a free branch name (`workspace.branch`) and the files it gets a copy of. Where it
+//! starts is from.rs.
 use crate::flow::task::RULE_DIR;
 use crate::json::*;
 use crate::store::keys::repo_keys;
@@ -9,26 +8,11 @@ use crate::store::settings::branch::{branch_of, git_takes};
 use crate::store::settings::lookup::setting_text;
 use crate::store::settings_list::entry_of;
 use std::path::Path;
-use std::process::{Command, Stdio};
 
 pub fn slug_of(title: &str) -> String {
     let mut s = String::new();
     for c in title.to_lowercase().chars() { if c.is_ascii_lowercase() || c.is_ascii_digit() { s.push(c); } else if !s.ends_with('-') { s.push('-'); } }
     s.trim_matches('-').chars().take(30).collect()
-}
-/// `workspace.from` "main": the remote's default branch, fetched first if the repo has not been fetched in a day (5
-/// seconds at most, never asking for a password). With no remote, or with "here": your checkout's current commit.
-pub fn base_ref(root: &Path, from: &str) -> String {
-    if from != "here" && has_origin(root) {
-        let age = std::fs::metadata(root.join(".git").join("FETCH_HEAD")).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).map(|d| d.as_millis() as i64).unwrap_or(i64::MAX);
-        if age > 24 * 3600 * 1000 {
-            if let Ok(child) = Command::new("git").args(["fetch", "origin"]).current_dir(root).env("GIT_TERMINAL_PROMPT", "0").env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
-                let _ = crate::herdr::cli::wait_with_timeout(child, 5000);
-            }
-        }
-        for r in ["origin/HEAD", "origin/main", "origin/master"] { if git_out(root, &["rev-parse", "--verify", &format!("refs/remotes/{r}")]).is_ok() { return r.into(); } }
-    }
-    "HEAD".into()
 }
 /// The task's branch, named by `workspace.branch` (store/settings/branch.rs), and free: herdr checks out an existing
 /// branch of that name and ignores --base, so a name already taken gets `-2`, `-3` after it. A name git would not take

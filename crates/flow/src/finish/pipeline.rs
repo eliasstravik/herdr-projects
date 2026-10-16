@@ -179,12 +179,26 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
             g.set(|t| t.put("prHead", ph.clone()))?;
             let mut url = t.t("pr");
             if url.is_empty() {
-                let body = format!("{}\n\nTask: {}", if text.is_empty() { t.t("title") } else { text.to_string() }, task_ref(id, &repo_keys()));
-                let r = flow::git::gh(&["pr", "create", "--draft", "--head", t.s("branch"), "--title", if t.b("title") { t.s("title") } else { id }, "--body", &body], tp, 120000);
-                url = r.stdout.split_whitespace().find(|w| w.starts_with("http://") || w.starts_with("https://")).unwrap_or("").to_string();
-                // The agent opened one itself for this branch: the board goes on with that one.
-                if url.is_empty() { url = already::open_pr(t.s("branch"), tp).unwrap_or_default(); }
-                if url.is_empty() { return Err(crate::err::Error::new(format!("pr:{}", [r.stdout.trim(), r.stderr.trim()].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n")))); }
+                // It merges into the branch the task keeps up with: the one it started from at the remote.
+                let onto = t.s("from").starts_with("origin/").then(|| sync::main_branch(&root, &t));
+                let named = sync::named_base(&root, &t).is_some();
+                // Started from a named branch, the agent's own pull request is looked for first: GitHub would take a
+                // second one of the branch into another base.
+                let mut own = if named { already::open_pr(t.s("branch"), tp) } else { None };
+                if own.is_none() {
+                    let body = format!("{}\n\nTask: {}", if text.is_empty() { t.t("title") } else { text.to_string() }, task_ref(id, &repo_keys()));
+                    let mut args = vec!["pr", "create", "--draft", "--head", t.s("branch"), "--title", if t.b("title") { t.s("title") } else { id }, "--body", &body];
+                    if let Some(b) = &onto { args.extend(["--base", b.as_str()]); }
+                    let r = flow::git::gh(&args, tp, 120000);
+                    url = r.stdout.split_whitespace().find(|w| w.starts_with("http://") || w.starts_with("https://")).unwrap_or("").to_string();
+                    // The agent opened one itself for this branch: the board goes on with that one.
+                    if url.is_empty() { own = already::open_pr(t.s("branch"), tp); }
+                    if url.is_empty() && own.is_none() { return Err(crate::err::Error::new(format!("pr:{}", [r.stdout.trim(), r.stderr.trim()].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n")))); }
+                }
+                if let Some(p) = own {
+                    if let Some(why) = onto.as_deref().and_then(|b| already::wrong_base(&p, b)) { return Err(crate::err::Error::new(format!("prbase:{why}"))); }
+                    url = p.url;
+                }
                 g.set(|t| { t.put("pr", url.clone()); t.put("prSeen", ""); t.put("prState", "waiting"); })?;
             }
             Ok(Some(url))
@@ -194,6 +208,7 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
             Ok(None) => {}
             Err(e) if is_aborted(&e) => return Err(e),
             Err(_) if already::archived(Path::new(&tree)) => { fail(g, already::archived_failure(t.s("branch"), &tree), FailHow::default())?; return Ok(()); }
+            Err(e) if e.msg.starts_with("prbase:") => { fail(g, failure("pr", "The agent's pull request merges into another branch", &format!("Branch: {}\nFolder: {tree}\n\n{}", t.s("branch"), &e.msg[7..]), &format!("Change that pull request's base to {0} (gh pr edit <number> --base {0}), or close it, then finish again. The board goes on with it once it merges into {0}.", sync::main_branch(&root, &t))), FailHow::default())?; return Ok(()); }
             Err(e) if e.msg.starts_with("pr:") => { fail(g, failure("pr", "Could not open the pull request", &format!("Branch: {}\nFolder: {tree}\n\ngh pr create:\n{}", t.s("branch"), &e.msg[3..]), "Inspect the GitHub error, fix what you safely can, then finish again. The board retries opening the pull request; do not push or ship manually."), FailHow::default())?; return Ok(()); }
             Err(e) => { fail(g, failure("push", "Could not push the branch", &format!("Branch: {}\nFolder: {tree}\n\n{}", t.s("branch"), e.msg), "Inspect the Git error and fix what you safely can without altering the human's checkout. Finish again so the board retries the push."), FailHow::default())?; return Ok(()); }
         }

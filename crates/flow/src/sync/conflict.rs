@@ -14,7 +14,7 @@ use crate::store::tasks::{update_wait, Change};
 
 pub fn conflict_failure(t: &Obj, tree: &str, r: &Synced) -> Obj {
     obj(json!({ "stage": "merge", "phase": "sync", "target": r.target, "base": r.base, "agentCanFix": r.restored, "auth": false,
-        "title": if r.files.is_empty() { "Could not update task from main" } else { "Merge conflict with main" },
+        "title": format!("{} {}", if r.files.is_empty() { "Could not update task from" } else { "Merge conflict with" }, super::main_word(t)),
         "detail": format!("Conflicting files:\n{}\n\nTask branch: {}\nTarget branch: {}\nTarget commit: {}\nWorktree: {tree}\n\nGit output:\n{}\n\n{}", if r.files.is_empty() { "none reported" } else { &r.files }, t.s("branch"), r.base, r.target, r.out,
             if r.restored { "The private merge attempt was rolled back. The human's checkout is unchanged." } else { "The private merge could not be rolled back; inspect it before continuing." }),
         "next": format!("In {tree} on {}, merge target commit {} ({}), resolve and commit the conflicts, then finish. The board checks the result again (and reviews it again, unless a review already passed and the merge is all that changed){}. Never alter the human's checkout.", t.s("branch"), r.target, r.base, if t.b("mergeIntent") { " and retries the approved merge" } else { "" }) }))
