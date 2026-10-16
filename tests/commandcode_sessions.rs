@@ -44,6 +44,45 @@ fn commandcode_reads_the_active_branch_without_tools_thinking_or_injected_prompt
 }
 
 #[test]
+fn commandcode_keeps_a_run_error_when_the_native_store_flushes_messages_after_the_hook() {
+    let w = world(); let f = w.base.join("failed.jsonl");
+    let start = |id: &str, parent: Option<&str>| json!({ "type": "custom", "id": id, "parentId": parent, "timestamp": "2026-10-16T12:00:00Z", "customType": "herdr-projects/run-start" });
+    let mut user = message("u", Some("end"), "user", json!([{ "type": "text", "text": "Do the work" }]));
+    user["message"]["meta"] = json!({ "source": "user", "messageId": "user-id", "createdAt": sw::agents::read_turn::when(&json!("2026-10-16T11:59:59Z")) });
+    // On a failed first model call, Command Code commits the user and its error feedback after onRunEnd.
+    let mut rows = vec![start("start", None),
+        json!({ "type": "custom", "id": "end", "parentId": "start", "timestamp": "2026-10-16T12:00:00Z", "customType": "herdr-projects/run-end", "data": { "stop": "run_error", "error": "Provider overloaded", "status": 529 } }),
+        user, message("feedback", Some("u"), "user", json!([{ "type": "text", "text": "Error: Provider overloaded" }]))];
+    write_rows(&f, &rows);
+    let t = read_turn("commandcode", &f, TAIL).unwrap();
+    assert_eq!(t.error, "Provider overloaded"); assert!(t.passing && !t.pending && !t.finished);
+    let event = json!({ "finished_at": sw::agents::read_turn::when(&json!("2026-10-16T12:00:00Z")), "stop": "run_error", "error": "Provider overloaded", "status": 529 });
+    assert!(commandcode::turn::reported(Some(t), &event).unwrap().passing);
+    let mut next = message("next", Some("feedback"), "user", json!([{ "type": "text", "text": "Try again" }]));
+    next["message"]["meta"] = json!({ "source": "user", "createdAt": sw::agents::read_turn::when(&json!("2026-10-16T12:00:01Z")) });
+    rows.push(next); write_rows(&f, &rows);
+    let t = read_turn("commandcode", &f, TAIL).unwrap();
+    assert!(t.pending && t.error.is_empty() && !t.passing, "a later prompt clears the error even without a run-start hook");
+    rows.pop();
+    rows.push(start("retry", Some("feedback")));
+    rows.push(message("answer", Some("retry"), "assistant", json!([{ "type": "text", "text": "Done." }])));
+    write_rows(&f, &rows);
+    let t = read_turn("commandcode", &f, TAIL).unwrap();
+    assert!(t.finished && t.error.is_empty() && !t.passing && !t.auth);
+}
+
+#[test]
+fn commandcode_human_messages_with_injected_context_remain_visible() {
+    let w = world(); let f = w.base.join("context.jsonl");
+    let mut user = message("u", None, "user", json!([{ "type": "text", "text": "Fix this" }]));
+    user["message"]["meta"] = json!({ "source": "user", "injected": { "sessionStartHookContext": "Private hook context", "companions": [{ "kind": "skill", "text": "Private skill" }] } });
+    write_rows(&f, &[user.clone()]);
+    let chat = commandcode::turn::talk(&[user]);
+    assert_eq!(chat.len(), 1); assert!(chat[0].you); assert_eq!(chat[0].text, "Fix this");
+    assert_eq!(read_turn("commandcode", &f, TAIL).unwrap().began, sw::agents::read_turn::when(&json!("2026-10-16T12:00:01Z")));
+}
+
+#[test]
 fn commandcode_errors_before_any_transcript_keep_the_provider_classification() {
     let _w = world();
     for (error, code, status, auth, passing) in [("Provider overloaded", "overloaded_error", 529, false, true), ("Login required", "unauthorized", 401, true, false), ("Quota exhausted", "billing_error", 429, false, false)] {

@@ -21,7 +21,7 @@ fn branch(rows: &[Value]) -> Vec<&Value> {
 }
 fn human(m: &Value) -> bool {
     let meta = m.at("meta");
-    m.s("role") == "user" && !meta.b("injected") && !meta.b("isMeta") && ["", "user", "steering"].contains(&meta.s("source")) && !m.arr("content").iter().any(|c| c.s("type") == "tool_result")
+    m.s("role") == "user" && !meta.b("isMeta") && ["", "user", "steering"].contains(&meta.s("source")) && !m.arr("content").iter().any(|c| c.s("type") == "tool_result")
 }
 fn usage(e: &Value) -> Option<Usage> {
     let u = e.at("usage");
@@ -35,8 +35,11 @@ pub fn read(file: &Path, bytes: u64) -> Option<Turn> {
     for e in branch(&rows) {
         let m = e.at("message");
         if e.s("type") == "message" {
+            // A failed run flushes its original prompt and synthetic error feedback after onRunEnd.
+            if t.stop == "run_error" && m.s("role") == "user" && when(m.at("meta").at("createdAt")) <= t.pos { continue; }
             t.id = e.t("id"); t.pos = when(e.at("timestamp"));
             t.finished = false; t.pending = true; t.interrupted = false; t.error.clear(); t.stop.clear();
+            t.auth = false; t.passing = false; t.reason.clear();
             if human(m) { t.began = t.pos; t.said.clear(); }
             if m.s("role") == "assistant" {
                 let text = text_of(m.at("content"), &["text"]);
@@ -50,6 +53,7 @@ pub fn read(file: &Path, bytes: u64) -> Option<Turn> {
         } else if e.s("type") == "custom" && e.s("customType") == "herdr-projects/run-start" {
             t.id = e.t("id"); t.pos = when(e.at("timestamp")); t.began = t.pos;
             t.finished = false; t.pending = true; t.interrupted = false; t.error.clear(); t.said.clear(); t.stop.clear();
+            t.auth = false; t.passing = false; t.reason.clear();
         } else if e.s("type") == "custom" && e.s("customType") == "herdr-projects/run-end" {
             let d = e.at("data");
             t.id = e.t("id"); t.pos = when(e.at("timestamp")); t.stop = d.t("stop");
