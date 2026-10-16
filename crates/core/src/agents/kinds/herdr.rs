@@ -2,7 +2,7 @@
 //! their conversations: herdr's own state says when a turn ended, and the agent's closing note says what it said. Every
 //! entry is plain data, read off the program's own `--help` (the version in `checked`); docs/agents.md says what each
 //! one can do and what was tried for real.
-use super::{Headless, Kind, Models, Read, BASE, NO_MODELS};
+use super::{Headless, Kind, Login, Models, Read, BASE, NO_MODELS};
 
 const ANSWER: &[&str] = &["{}"];
 pub static KINDS: &[Kind] = &[
@@ -21,6 +21,7 @@ pub static KINDS: &[Kind] = &[
         effort_note: "cursor takes its effort in the model's name: cursor/claude-opus-4-8[effort=high]",
         access_full: &["--yolo"], resume: &["--resume", "{}"], rules_file: Some("AGENTS.md"),
         headless: Some(Headless { args: &["-p", "--output-format", "text", "--mode", "ask", "--trust"], model: &["--model", "{}"], system: &[], prompt: ANSWER }),
+        login: Some(Login { status: &["status"], how: "cursor-agent login" }), // says "Not logged in", and still exits 0
         checked: "flags from cursor-agent --help 2026.10.01; started by herdr 0.9.3 on the board's flags, given a task", ..BASE },
     Kind { name: "devin", integration: "devin", model: &["--model", "{}"], access_full: &["--permission-mode", "dangerous"], resume: &["--resume", "{}"],
         headless: Some(Headless { args: &["--respect-workspace-trust", "false"], model: &["--model", "{}"], system: &[], prompt: &["-p", "{}"] }),

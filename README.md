@@ -90,7 +90,7 @@ Run:
 herdr-projects doctor
 ```
 
-The command looks over the install and says where things stand. [Installing](docs/install.md) walks through the first run, the blocks the board can add to Herdr's config, and taking the plugin out again.
+It checks the program and its launcher, the plugin in Herdr, your agent programs (installed, signed in) and their model and effort settings, your other machines, free disk space, and leftover worktrees it could clean. Each problem comes with what to do, and it exits non-zero when there is one. [Troubleshooting](docs/troubleshooting.md#the-health-check) lists every check. [Installing](docs/install.md) walks through the first run, the blocks the board can add to Herdr's config, and taking the plugin out again.
 
 ### What permissions do the agents get?
 

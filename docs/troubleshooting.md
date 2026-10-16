@@ -7,13 +7,34 @@
 
 | Command | Tells you |
 |---|---|
-| `herdr-projects doctor` | whether an older install (herdr-superwork, herdr-projects 0.2) is still around, and takes over what is left of it ([older installs](old-installs.md)) |
+| `herdr-projects doctor` | the health check: every problem below in one run, each with what to do ([the health check](#the-health-check)) |
 | `herdr-projects install` | writes the `herdr-projects` launcher again, and says if something else of that name comes first on your PATH ([installing](install.md)) |
 | `herdr-projects models [program]` | the model names each agent program takes here, or why its list cannot be read ([models](models.md)) |
 | `herdr-projects machines` | whether each other machine answers, and why not ([other machines](other-machines.md)) |
 | `herdr-projects show <id>` | every setting a task runs on, and where each value comes from ([settings](settings.md)) |
 | `herdr-projects details <id>` | everything about one task: reviews, hand-overs, limits, what it waits for |
 | `herdr workspace list` | whether Herdr itself runs and answers |
+
+## The health check
+
+`herdr-projects doctor` looks at everything below at once and takes about a second. A line with `✓` is fine. A line
+with `✗` is a problem, with what to do under it. It exits 1 when there is a problem, so a script can run it too.
+
+| It checks | A problem it reports | What to do |
+|---|---|---|
+| this program | its version and how it was installed (downloaded, built from source); older than the plugin's own version | `herdr-projects update`, or build it again |
+| the launcher | `~/.herdr-projects/data/bin/herdr-projects` (what agents and hooks run) is missing, names a program that is gone, or not the plugin's | `sh <plugin folder>/bin/run.sh install`, or open the board once from Herdr |
+| your PATH | `herdr-projects` is not on it, or something else of that name comes first | put the launcher's folder first ([installing](install.md#the-command-on-your-path)) |
+| Herdr and the plugin | Herdr not found, older than the plugin needs, the plugin not installed, turned off, or linked to a folder that is gone | install or update Herdr; `herdr plugin enable herdr-projects`; link or install the plugin again |
+| each agent program your settings name | not installed, older than the board was checked on, not signed in (Claude Code, Codex and Cursor can say), missing Herdr's integration | install it or choose another; `claude auth login`, `codex login`, `cursor-agent login`; `herdr integration install <name>` |
+| model and effort settings | a model the program does not take, an effort it does not have, a program that cannot do its role, a value written by hand that does not count | `herdr-projects set <setting> …` ([models](models.md)) |
+| other machines | one does not answer, runs an older version, or cannot ask this one | what `herdr-projects machines` says ([other machines](other-machines.md)) |
+| disk space | under 10 GB free on a disk that holds the board's data, your repos, worktrees, build caches or temporary files: a task's setup may fail there | free some space, starting with the leftovers below |
+| leftovers | the worktree of a done or archived task (a clean-up keeps one with unsaved work), a worktree on a task branch no task has, one git still lists whose folder is gone, an old warm build in `~/.cache/herdr-projects` | the `git worktree remove`, `git worktree prune` or `rm -rf` it names. It never removes anything itself |
+| older installs | herdr-superwork or herdr-projects 0.2 still in the way | it takes over what it can, and says what is left ([older installs](old-installs.md)) |
+
+Other machines are asked only when there are some, and each for at most 5 seconds. A done task's worktree is no
+leftover while its clean-up is still to come, or when `workspace.cleanup` is `false`.
 
 ## An agent could not start
 
