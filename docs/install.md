@@ -67,7 +67,8 @@ Without them, Herdr shows the first two, with the tab's name (`Agent`) after the
 sidebar shows no custom value. Rows an older version of the plugin wrote are updated by themselves, between the same
 marker lines. Rows of your own are never touched: when your config already sets `ui.sidebar`, however it writes it
 (`[ui.sidebar.agents]`, `sidebar = {…}` under `[ui]`, or a dotted key), the plugin's rows are not offered. The first
-run says in one line that yours are kept and shows the plugin's rows, to merge into yours by hand.
+run says in one line that yours are kept and shows the plugin's rows, to merge into yours by hand (in a small window,
+`↑` `↓` and `pgup` `pgdn` scroll them; any other key goes on).
 
 Nothing else is needed: no Herdr integration, no hooks in your own agent settings.
 

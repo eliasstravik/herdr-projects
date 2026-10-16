@@ -118,3 +118,40 @@ fn the_key_that_opens_the_board_is_found_in_any_spelling() {
     assert_eq!(sw::extras::found::bound_key(&format!("[[keys.command]]\nkey = \"prefix+w\"\n{open}\n[broken\n")), "prefix+w");
     drop(w);
 }
+
+#[test]
+fn text_to_paste_is_whole_in_a_small_window_the_arrows_scroll_it_and_any_other_key_puts_it_away() {
+    let w = world();
+    let file = sw::extras::herdr_config();
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "[ui]\nsidebar = { agents = { rows = [[\"workspace\"]] } }\n").unwrap();
+    let note = sw::extras::offers().t("sidebarKept");
+    let mut b = open(&w.root, 15);
+    b.cols = 60;
+    b.s.paste_text = note.clone();
+    // Every line of it is on some screen, down to its last, and the keys that show the rest are always named.
+    let mut seen = String::new();
+    for _ in 0..40 {
+        let t = b.text();
+        assert!(flat(&t).contains("↑ ↓ pgup pgdn more · lines") && flat(&t).contains("any other key continues"), "{t}");
+        seen.push_str(&t);
+        if b.s.paste_at == b.s.paste_more { break; }
+        b.press(&["down"]);
+    }
+    assert!(b.s.paste_more > 0 && b.s.paste_at == b.s.paste_more, "scrolled to the end");
+    let end = flat(&b.text());
+    assert!(end.contains(&format!("of {} ·", b.s.paste_more + b.s.paste_room)) && end.contains("\"git_status\"], [{ token = \"$summary\", dim = true }, \"$progress\"]]"), "the last line: {end}");
+    assert!(seen.contains("[ui.sidebar.spaces]") && flat(&seen).contains("\"$progress\"]]"), "its last line: {seen}");
+    b.press(&["pageUp", "pageUp", "pageUp", "pageUp", "pageUp"]);
+    assert_eq!(b.s.paste_at, 0, "back to the top");
+    assert!(b.text().contains("Your own sidebar rows"));
+    b.press(&["x"]);
+    assert!(b.s.paste_text.is_empty() && !b.text().contains("Your own sidebar rows"), "any other key puts it away");
+    // Text that fits says only that any key continues, and the arrows put it away too.
+    let mut b = open(&w.root, 40);
+    b.cols = 100;
+    b.s.paste_text = "short".into();
+    assert!(b.text().contains("any key continues"));
+    b.press(&["down"]);
+    assert!(b.s.paste_text.is_empty());
+}
