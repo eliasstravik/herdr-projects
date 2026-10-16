@@ -64,17 +64,22 @@ pub fn rows(scope: &Scope) -> Vec<Row> {
 }
 /// What is wrong in the files, one sentence each. The board keeps running: each such setting falls to the next place.
 pub fn problems(task: Option<&Task>) -> Vec<String> {
-    let mine = yours();
     let scope = task.map(Scope::task).unwrap_or_default();
-    let at = places_of(&scope, &mine);
-    let mut out: Vec<String> = mine.problems.iter().chain(at.problems.iter()).map(|p| format!("{}: {}", p.place, p.why)).collect();
-    for s in SETTINGS.iter().filter(|s| (s.ty == Ty::Effort || s.ty == Ty::Access) && (task.is_none() || s.kind == Kind::Work)) {
-        if let Ok(f) = lookup_at(&s.name, &scope, &at) { out.extend(f.skipped); }
-    }
+    let mut out = problems_in(&scope);
     if let Some(t) = task {
         let refused: Vec<String> = if t.at("repoRefused").is_array() { strings(t.at("repoRefused")) }
             else if !t.b("repoFile") && in_repo(t) { repo_file(&folder_of(t.s("id")), None).1 } else { vec![] };
         out.extend(refused);
+    }
+    out
+}
+/// The same for any scope (yours, a repo's, a task's), without what only a task's own record holds.
+pub fn problems_in(scope: &Scope) -> Vec<String> {
+    let mine = yours();
+    let at = places_of(scope, &mine);
+    let mut out: Vec<String> = mine.problems.iter().chain(at.problems.iter()).map(|p| format!("{}: {}", p.place, p.why)).collect();
+    for s in SETTINGS.iter().filter(|s| (s.ty == Ty::Effort || s.ty == Ty::Access) && (scope.task.is_none() && scope.repo.is_empty() || s.kind == Kind::Work)) {
+        if let Ok(f) = lookup_at(&s.name, scope, &at) { out.extend(f.skipped); }
     }
     out
 }

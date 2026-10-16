@@ -64,8 +64,9 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
   herdr-projects web-ui [link|unlink]          the board inside the herdr web UI: how it stands; point the web UI's shared link at it, or back
   herdr-projects version                       this program's version, and where it is
   herdr-projects install                       write the launcher in the data folder (agents and hooks run it) for this program
-  herdr-projects doctor                       older installs on this machine (herdr-superwork, herdr-projects 0.2): take over
-                                                what is left of them, and say where things stand
+  herdr-projects doctor                        the health check: the program and its launcher, the plugin in herdr, the
+                                                agent programs and their settings, other machines, disk space, leftovers
+                                                to clean, older installs; each problem with what to do (exits 1 on one)
   herdr-projects update [VERSION]              this program, in place, from the newest release (or that version)
   herdr-projects remove-extras                 take out what the plugin added outside its own folders (the how-to
                                                 files, its blocks in herdr's config); run it before unlinking

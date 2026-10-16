@@ -123,18 +123,27 @@ pub fn update(exe: &Path, version: Option<&str>, fetch: &dyn Fn(&str, &Path) -> 
     Ok(format!("Updated herdr-projects {VERSION} → {} ({}). An open board and the keeper load it by themselves.", got.version, exe.display()))
 }
 
+/// What is in the way of typing `herdr-projects` in a shell, as (what, what to do); None when the first one on the
+/// PATH is the launcher `at` (or a link to it) or this program.
+pub fn path_problem(at: &Path, exe: &Path, path: &str) -> Option<(String, String)> {
+    let dir = at.parent().map(Path::to_path_buf).unwrap_or_default();
+    let real = |p: &Path| std::fs::canonicalize(p).ok();
+    use std::os::unix::fs::PermissionsExt;
+    // As a shell looks: the first file of that name it may run.
+    let runs = |f: &Path| std::fs::metadata(f).map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0).unwrap_or(false);
+    match std::env::split_paths(path).map(|d| d.join("herdr-projects")).find(|f| runs(f)) {
+        Some(f) if f == at || real(&f).is_some() && (real(&f) == real(at) || real(&f) == real(exe)) => None,
+        Some(f) => Some((format!("{} comes first on your PATH (an older install? `npm unlink -g herdr-projects` takes out the Node one)", f.display()), format!("Remove it, or put {} before it.", dir.display()))),
+        None => Some(("herdr-projects is not on your PATH".into(), format!("To type herdr-projects in any shell, put its folder on your PATH (in ~/.profile or your shell's start-up file): export PATH=\"{}:$PATH\"", dir.display()))),
+    }
+}
 /// `install`: the launcher in the data folder names this program (flow/send.rs writes it, the only writer), and what
 /// is in the way of typing `herdr-projects` in a shell is said.
 pub fn install(exe: &Path) -> String {
     let at = crate::flow::send::shim();
-    let dir = at.parent().map(Path::to_path_buf).unwrap_or_default();
     let mut said = vec![format!("{} runs {}: agents and hooks use it.", at.display(), exe.display())];
-    let path = std::env::var("PATH").unwrap_or_default();
-    let first = std::env::split_paths(&path).map(|d| d.join("herdr-projects")).find(|f| f.is_file());
-    match first {
-        Some(f) if f == at || std::fs::canonicalize(&f).ok() == std::fs::canonicalize(exe).ok() => {}
-        Some(f) => said.push(format!("{} comes first on your PATH (an older install? `npm unlink -g herdr-projects` takes out the Node one): remove it, or put {} before it.", f.display(), dir.display())),
-        None => said.push(format!("To type herdr-projects in any shell, put its folder on your PATH (in ~/.profile or your shell's start-up file): export PATH=\"{}:$PATH\"", dir.display())),
+    if let Some((what, fix)) = path_problem(&at, exe, &std::env::var("PATH").unwrap_or_default()) {
+        said.push(if what.ends_with("not on your PATH") { fix } else { format!("{what}: {}{}", fix[..1].to_lowercase(), &fix[1..]) });
     }
     said.join("\n")
 }

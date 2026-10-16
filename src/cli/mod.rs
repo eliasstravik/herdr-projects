@@ -81,7 +81,7 @@ fn run(cmd: &str, a: &Args) -> Res<i32> {
         "help" => { print!("{}", help::HELP); return Ok(0); }
         _ if a.flags.b("help") => { print!("{}", help::HELP); return Ok(0); }
         "install" | "update" => return Ok(crate::install::main(cmd, &a.pos[1..])),
-        "doctor" => { println!("{}", crate::take_over::look::look_here().join("\n")); return Ok(0); }
+        "doctor" => return Ok(crate::doctor::doctor_main()),
         "version" => { println!("herdr-projects {} ({})", crate::store::files::VERSION, crate::store::files::bin().display()); return Ok(0); }
         "docs" => {
             let mut v: Vec<String> = ["check", "guard"].iter().filter(|k| a.flags.b(k)).map(|k| format!("--{k}")).collect();

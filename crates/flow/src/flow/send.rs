@@ -41,11 +41,13 @@ pub fn prompt_tail(t: &Task) -> String {
     [rules, note].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n")
 }
 pub fn with_tail(t: &Task, text: &str) -> String { [text.to_string(), prompt_tail(t)].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n") }
+/// Where the launcher is, without writing it (`doctor` looks at it as it is).
+pub fn launcher_file() -> PathBuf { data_dir().join("bin").join("herdr-projects") }
 /// The absolute path of the command, kept in the data folder, so agents and hooks find it without anything on their
 /// PATH. It names its own board: herdr cannot hand a worktree's space any environment.
 pub fn shim() -> PathBuf {
+    let file = launcher_file();
     let dir = data_dir().join("bin");
-    let file = dir.join("herdr-projects");
     let mut text = "#!/bin/sh\n".to_string();
     for (k, v) in board_env() { text.push_str(&format!("export {k}={}\n", shq(&v))); }
     text.push_str(&format!("exec {} \"$@\"\n", shq(&bin().display().to_string())));

@@ -10,6 +10,7 @@ pub mod attempts;
 pub mod automations;
 pub mod coordinator;
 pub mod delegate;
+pub mod doctor;
 pub mod extras;
 pub mod finish;
 pub mod flow;

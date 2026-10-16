@@ -2,7 +2,7 @@
 //! 2.1.296, codex 0.160.0, pi 1.1.0 (docs/checked-on-herdr.md). What they do beyond these facts is code of their own
 //! in adapter.rs (the turn-end hook, the conversation files, the Watcher's lean start, Codex's rules and fast mode,
 //! pi's provider in its model).
-use super::{EffortsRead, Kind, Models, Read, BASE, NO_MODELS};
+use super::{EffortsRead, Kind, Login, Models, Read, BASE, NO_MODELS};
 
 pub static KINDS: &[Kind] = &[
     Kind { name: "claude", min_version: "2.1.296", efforts: &["low", "medium", "high", "xhigh", "max"], access_full: &["--dangerously-skip-permissions"],
@@ -12,6 +12,7 @@ pub static KINDS: &[Kind] = &[
         // of its own (models/listed.rs `own_provider`) its names are that provider's, and not checked.
         models: Models { aliases: &["default", "fable", "opus", "sonnet", "haiku", "opusplan"], known: CLAUDE_MODELS, suffix: &["[1m]"], example: "claude/claude-opus-5-5", ..NO_MODELS },
         effort: &["--effort", "{}"], resume: &["--resume", "{}"], session: &["--session-id", "{}"], standing: &["--append-system-prompt-file", "{}"], integration: "claude",
+        login: Some(Login { status: &["auth", "status"], how: "claude auth login" }),
         checked: "everything the board does, on 2.1.296 to 2.1.300", ..BASE },
     // --no-daemon: a shared Codex background server of another version shows a restart dialog that herdr reads as
     // idle, so a prompt would be typed into it. Each agent runs on its own instead. Codex before 0.156.0 has no shared
@@ -20,6 +21,7 @@ pub static KINDS: &[Kind] = &[
         fast: true, tokens: true, rules_file: Some("AGENTS.md"), since: &[("--no-daemon", "0.156.0")], reads_turn: true, model: &["-m", "{}"],
         models: Models { list: &["debug", "models"], read: Read::Catalog, server: &["app-server"], example: "codex/gpt-6.1-sol", ..NO_MODELS },
         effort: &["-c", "model_reasoning_effort=\"{}\""], resume: &["resume", "{}"], integration: "codex",
+        login: Some(Login { status: &["login", "status"], how: "codex login" }),
         checked: "everything the board does, on 0.153.4 to 0.162.1", ..BASE },
     // pi never asks before running something: it has no `ask`.
     Kind { name: "pi", min_version: "1.1.0", efforts: &["off", "minimal", "low", "medium", "high", "xhigh", "max"], access_ask: None,
