@@ -15,7 +15,10 @@ pub struct Prog { pub kind: String, pub named_by: Vec<String>, pub found: bool, 
 pub fn named() -> Vec<(String, Vec<String>)> {
     let mut out: Vec<(String, Vec<String>)> = vec![];
     for at in super::settings::places() {
-        for (name, n, _) in super::settings::agents_at(&at) {
+        for (name, n, from) in super::settings::agents_at(&at) {
+            // A repo or a task is named only where it says so itself, not for what it inherits.
+            let own = at.label.is_empty() || from.ends_with(&at.label) || !at.repo.is_empty() && from.starts_with("your entry for");
+            if !own { continue; }
             let by = format!("{name}{}", at.label);
             match out.iter_mut().find(|(x, _)| *x == n.kind) { Some((_, v)) => if !v.contains(&by) { v.push(by) }, None => out.push((n.kind, vec![by])) }
         }
