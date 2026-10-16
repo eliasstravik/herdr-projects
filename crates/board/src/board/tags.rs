@@ -48,18 +48,15 @@ pub fn numbering(recs: &[&Obj], keys: &Keys, autos: bool) -> Numbering {
 /// The tags' column in a list this wide: none where the tags gave way.
 pub fn number_cells(width: usize, n: Numbering) -> usize { if n.cells > 0 && width >= 3 + n.widest + 1 + NAME_LEFT { n.cells } else { 0 } }
 /// The key beside a repo's name where the board names the repo (`gtm-agent · AGT`), never on a task's row, which starts
-/// with it: from the first task under the repo's heading at `at` (another machine's tasks come with theirs), else this
-/// machine's keys. "" for a heading that is no repo's, and for another machine's repo that has only automations here.
-pub fn heading_key(rows: &[crate::board::state::Row], at: usize, keys: &Keys) -> String {
+/// with it. The heading's id names whose repo it is: this machine's has this machine's key; another machine's the one
+/// its tasks came with (folded or not), and none where it has only automations here (that machine sends no key, and
+/// this machine's are not its). "" for a heading that is no repo's.
+pub fn heading_key(s: &crate::board::state::State, at: usize) -> String {
     use crate::board::state::Row;
-    let Some(Row::Head { name, machine: false, autos: false, .. }) = rows.get(at) else { return String::new() };
-    let under: Vec<&Row> = rows[at + 1..].iter().take_while(|r| !matches!(r, Row::Head { .. })).collect();
-    if let Some(o) = under.iter().find_map(|r| if let Row::Rec(o) = r { Some(o) } else { None }) { return if o.b("host") { o.t("key") } else { keys.get(name).cloned().unwrap_or_default() }; }
-    // Only automations under it: another machine's sends no key, and this machine's keys are not its.
-    match under.iter().find_map(|r| if let Row::Auto(a) = r { Some(a) } else { None }) {
-        Some(a) if a.b("host") => String::new(),
-        _ => keys.get(name).cloned().unwrap_or_default(),
-    }
+    let Some(Row::Head { name, id, machine: false, autos: false, .. }) = s.rows.get(at) else { return String::new() };
+    let host = id.split('\t').nth(1).unwrap_or("");
+    if host.is_empty() { return s.data.keys.get(name).cloned().unwrap_or_default(); }
+    s.items.iter().find(|r| r.s("host") == host && r.s("rid").split('/').next() == Some(name.as_str())).map(|r| r.t("key")).unwrap_or_default()
 }
 /// A repo named with its key: `gtm-agent · AGT`, or the name alone where it has none.
 pub fn repo_with_key(name: &str, key: &str) -> String { if key.is_empty() { name.to_string() } else { format!("{name} · {key}") } }

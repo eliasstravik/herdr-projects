@@ -79,7 +79,7 @@ pub fn unread_lines(s: &State, width: usize) -> Vec<Inked> {
 fn heading(s: &State, rows: &[Row], at: usize, width: usize) -> Inked {
     let r = &rows[at];
     let Row::Head { name, autos, machine, folded, folded_autos, id } = r else { return Inked::new() };
-    let key = if s.by_repo { crate::board::tags::heading_key(rows, at, &s.data.keys) } else { String::new() };
+    let key = if s.by_repo { crate::board::tags::heading_key(s, at) } else { String::new() };
     let named = if *autos { Inked::of(name.clone(), Ink::Auto) } else if *machine { Inked::of(name.clone(), MACHINE_INK).bold() } else if s.by_repo { Inked::of(repo_label(name), REPO_INK).bold() } else { Inked::of(name.clone(), group_ink(name)) };
     let named = if key.is_empty() { named } else { named.add(Inked::of(format!(" · {key}"), Ink::Muted)) };
     let caret = if id.is_empty() { Inked::plain("  ") } else { Inked::of(if *folded > 0 { "▸ " } else { "▾ " }, Ink::Muted) };
