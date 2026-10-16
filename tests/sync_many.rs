@@ -1,6 +1,6 @@
 //! Many tasks of one repo bringing main in at the same moment (one fetch at a time, shared, never "cannot lock ref"),
-//! a remote whose main branch is not called main and was never named here, and a merge that cannot fetch main: it
-//! waits as "behind main", and is never failed for it.
+//! a remote whose main branch is not called main and was never named here, and a remote that cannot be reached
+//! before the push or at the merge: the work waits as "behind main", is never failed for it, and goes on by itself.
 use crate::common;
 use common::*;
 use serde_json::json;
@@ -64,12 +64,48 @@ fn a_remote_main_not_called_main_and_never_named_here_is_asked_of_the_remote_and
     assert_eq!(git(&w.root, &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]), "origin/trunk"); assert_eq!(t.s("from"), "origin/HEAD");
     // one started before that (from your checkout's commit), with origin/HEAD unknown again: the sync asks origin too
     git(&w.root, &["remote", "set-head", "origin", "--delete"]);
+    git(&w.root, &["update-ref", "-d", "refs/remotes/origin/trunk"]); // not even a copy of trunk here (renamed at the remote)
     update(&id, |t| { t.put("from", "HEAD"); Ok(Change::Write) }).unwrap();
     let target = they_push(&w, "trunk", "theirs.txt");
     talk::tell(&id, "The first one.", false).unwrap();
     let t = settle(&id);
     assert_eq!(t.s("stage"), "approval", "{}", t.at("failure")); assert!(t.at("syncBlocked").is_null(), "{}", t.at("syncBlocked"));
     assert_eq!(t.s("syncedTo"), target); assert!(holds(Path::new(t.s("worktree")), &target));
+}
+
+#[test]
+fn a_finished_turn_whose_remote_cannot_be_reached_at_all_waits_before_its_push_and_goes_on_by_itself() {
+    let w = world_with(Opts { repo: true, origin: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    let (bare, gone) = (w.base.join("origin.git").display().to_string(), w.base.join("gone.git").display().to_string());
+    w.script(json!({ "worker": [{ "note": "Which one?" }, { "files": { "a.txt": "mine\n" }, "commit": "mine", "note": "Done." }] }));
+    let id = w.add("Offline");
+    delegate(&id);
+    assert_eq!(settle(&id).s("stage"), "asks");
+    // neither fetching nor pushing works
+    git(&w.root, &["remote", "set-url", "origin", &gone]);
+    talk::tell(&id, "The first one.", false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure")); assert!(t.at("failure").is_null(), "{}", t.at("failure")); assert!(!t.b("reviewedHead")); assert!(!t.b("pr"));
+    assert!(t.at("syncBlocked").s("why").starts_with("main could not be fetched (origin is not a repository the board can read"), "{}", t.at("syncBlocked"));
+    assert!(t.at("syncBlocked").s("why").ends_with("and the branch could not be pushed"), "{}", t.at("syncBlocked"));
+    assert!(t.at("syncBlocked").s("detail").contains("does not appear to be a git repository"));
+    assert!(t.s("msg").starts_with("Behind main")); assert_ne!(row(&id).s("state"), "error");
+    assert!(finish_line::approve(&id, None, false).unwrap_err().msg.contains("behind main and cannot be approved yet"));
+    // still unreachable at the next try: it keeps waiting, and still goes on by itself later
+    update(&id, |t| { t.put("syncRetryAt", sw::clock::now() - 1); Ok(Change::Write) }).unwrap();
+    housekeep(&w);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "approval"); assert!(t.at("syncBlocked").b("rerun"), "{}", t.at("syncBlocked")); assert!(t.at("failure").is_null());
+    // the remote answers: pushed, its pull request opened, and ready to approve
+    git(&w.root, &["remote", "set-url", "origin", &bare]);
+    update(&id, |t| { t.put("syncRetryAt", sw::clock::now() - 1); Ok(Change::Write) }).unwrap();
+    housekeep(&w);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure")); assert!(t.at("syncBlocked").is_null(), "{}", t.at("syncBlocked"));
+    assert!(t.b("pr")); assert!(t.b("reviewedHead"));
+    assert_eq!(git(&w.root, &["ls-remote", "--heads", "origin", t.s("branch")]).split('\t').next().unwrap(), git(Path::new(t.s("worktree")), &["rev-parse", "HEAD"]));
+    finish_line::approve(&id, None, false).unwrap();
+    assert_eq!(settle(&id).s("stage"), "done");
 }
 
 #[test]

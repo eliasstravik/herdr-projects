@@ -111,8 +111,10 @@ agent, and it goes on ([an agent that waits for you](waiting-for-you.md)).
 
 Before a finished task is reviewed, and again right before it merges, the board fetches main and merges it into the
 task's branch. When that fetch fails, nothing is failed: the task is checked and reviewed as usual, then waits as
-`behind main`. It cannot be approved until it is up to date, and the board tries again by itself every minute. A merge
-you had approved waits the same way, with nothing merged: approve it again once the row is back to ready.
+`behind main`. It cannot be approved until it is up to date, and the board tries again by itself every minute. When
+the remote cannot be reached at all, so the branch cannot be pushed either, the task waits the same way before its
+push and review, and those run by themselves once the remote answers. A merge you had approved waits the same way,
+with nothing merged: approve it again once the row is back to ready.
 
 The panel (`Alt+P`) says why in plain words under **Behind main**, and what git itself said under **Details**:
 
@@ -121,7 +123,7 @@ The panel (`Alt+P`) says why in plain words under **Behind main**, and what git 
 | origin asked for a login | make `git fetch origin` work in your checkout without a prompt: an SSH key loaded in the agent, or a credential helper. The board never types a password |
 | origin did not answer within 60 seconds | the same, if it waits for a password or a passphrase; otherwise a slow or busy remote, and the next try may pass |
 | origin could not be reached | the network or the server: nothing to do, the board tries again |
-| origin has no branch … | the remote's main branch has another name, or the branch the task started from (`workspace.from`) is gone: `git remote set-head origin --auto` in your checkout, or push that branch again |
+| origin has no branch … | the remote's main branch has another name, or the branch the task started from (`workspace.from`) is gone: `git fetch origin`, then `git remote set-head origin --auto` in your checkout, or push that branch again |
 | git's lock file … stayed in the way | another git command was writing the same ref the whole time, or one that stopped left its `.lock` file behind: if no git command runs in that repo, delete the file it names |
 | origin is not a repository the board can read | `git remote -v` shows where origin points |
 
@@ -130,7 +132,7 @@ of a repo writes the same `origin/main`), so the board fetches it for one task a
 another's fetch takes that one's result. A fetch that git refused because another program fetched at that very moment
 (an agent's own `git fetch`, yours, an editor's) is tried again after 2 and 4 seconds, and a copy that program just
 fetched counts. A remote whose main is not called `main` and was never named in your clone (no `origin/HEAD`, as after
-`git remote add`) is asked which branch it is, once.
+`git remote add`) is asked which branch it is, and that branch is fetched, once.
 
 ## Where the logs are
 

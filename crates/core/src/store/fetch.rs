@@ -49,13 +49,15 @@ fn network(said: &str) -> bool {
 fn login(said: &str) -> bool {
     crate::store::failures::is_auth_failure(said) || has(said, &["permission denied", "authentication failed", "could not read username", "could not read password", "terminal prompts disabled", "host key verification failed"])
 }
+/// origin could not be reached at all: the network, the server, or no answer in time.
+pub fn unreachable(said: &str) -> bool { network(said) || has(said, &["did not answer within", "does not appear to be a git repository"]) }
 /// Whether git said origin has no such branch.
 pub fn no_such_branch(said: &str) -> bool { has(said, &["couldn't find remote ref"]) }
 /// What a fetch that failed means, in plain words, with what to do: the first line of every failure that names it.
 pub fn plain(said: &str, b: &str) -> String {
     if let Some(f) = lock_file(said) { return format!("git's lock file {f} stayed in the way on every try: another git command is writing origin's copy of {b}, or one that stopped left it behind. If no git command runs in this repo, delete that file; the board tries again by itself"); }
     if locked(said) { return "another fetch of this repo was writing the same branch at that moment, again on every try. Nothing is wrong with the work; the board tries again by itself".into(); }
-    if no_such_branch(said) { return format!("origin has no branch {b}. If the remote's main branch has another name, run git remote set-head origin --auto in your checkout"); }
+    if no_such_branch(said) { return format!("origin has no branch {b}. If the remote's main branch has another name, run git fetch origin and then git remote set-head origin --auto in your checkout"); }
     if login(said) { return "origin asked for a login, and the board never types one in. Make sure git fetch origin works in your checkout without a prompt (an SSH key in the agent, or a credential helper)".into(); }
     if has(said, &["did not answer within"]) { return format!("origin did not answer within {} seconds. If it waits for a password or a passphrase, make sure git fetch origin works without a prompt", FETCH_MS / 1000); }
     if network(said) { return "origin could not be reached (the network or the server). The board tries again by itself".into(); }
@@ -89,11 +91,16 @@ pub fn fetch_branch(dir: &Path, b: &str) -> Res<()> {
     }).map_err(|e| if e.kind == crate::err::Kind::Busy { Error::new(format!("another fetch of this repo has been running for over {} minutes. The board tries again by itself.", WAIT_MS / 60000)) } else { e })
 }
 /// origin's own main branch was never named here (no `origin/HEAD`, as after `git remote add`): asked of origin once,
-/// and kept. True when it is known now.
+/// fetched (a branch renamed there has no copy here yet) and kept. True when it is known now.
 pub fn learn_origin_head(dir: &Path) -> bool {
     let known = || git_out(dir, &["symbolic-ref", "-q", "refs/remotes/origin/HEAD"]).is_ok();
     if known() { return true; }
-    let _ = with_repo_lock(dir, || { if !known() { let _ = quiet_git(dir, &["remote", "set-head", "origin", "--auto"], 10000); } Ok(()) });
+    let Ok(said) = quiet_git(dir, &["ls-remote", "--symref", "origin", "HEAD"], 10000) else { return false };
+    // "ref: refs/heads/trunk<TAB>HEAD"
+    let Some(b) = said.lines().find_map(|l| l.strip_prefix("ref: refs/heads/").and_then(|r| r.split('\t').next())).map(str::to_string) else { return false };
+    let tracking = format!("refs/remotes/origin/{b}");
+    if fetch_branch(dir, &b).is_err() && git_out(dir, &["rev-parse", "--verify", "-q", &tracking]).is_err() { return false; }
+    let _ = git_out(dir, &["symbolic-ref", "refs/remotes/origin/HEAD", &tracking]);
     known()
 }
 

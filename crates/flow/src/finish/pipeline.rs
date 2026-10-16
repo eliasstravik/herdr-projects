@@ -13,6 +13,7 @@ use crate::flow;
 use crate::json::*;
 use crate::runner::{claim, is_aborted, release, sh, Guard};
 use crate::store::failures::{bound_detail, failure_patch, is_auth_failure};
+use crate::store::fetch;
 use crate::store::keys::{repo_keys, task_ref};
 use crate::store::repos::{branch_of, cwd_of, folder_of, git_out, git_slow};
 use crate::store::reviews::{current_review, passed_review};
@@ -22,6 +23,11 @@ use crate::store::tasks::{get, one_line};
 use crate::sync;
 use std::path::Path;
 
+/// A push or pull request that failed because the remote cannot be reached: main could not be fetched just before, or
+/// the push itself could not reach it.
+fn offline(sync_r: Option<&sync::Synced>, said: &str) -> bool {
+    !said.starts_with("prbase:") && (sync_r.is_some_and(|r| r.status == "error") || (!said.starts_with("pr:") && fetch::unreachable(said)))
+}
 /// "Finish anyway" on a turn that left no closing note: the screen text is the summary.
 pub fn pipeline_job(id: &str) {
     let Ok(Some(t)) = claim(id, "pipeline", |_| {}) else { return };
@@ -209,6 +215,12 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
             Err(e) if is_aborted(&e) => return Err(e),
             Err(_) if already::archived(Path::new(&tree)) => { fail(g, already::archived_failure(t.s("branch"), &tree), FailHow::default())?; return Ok(()); }
             Err(e) if e.msg.starts_with("prbase:") => { fail(g, failure("pr", "The agent's pull request merges into another branch", &format!("Branch: {}\nFolder: {tree}\n\n{}", t.s("branch"), &e.msg[7..]), &format!("Change that pull request's base to {0} (gh pr edit <number> --base {0}), or close it, then finish again. The board goes on with it once it merges into {0}.", sync::main_branch(&root, &t))), FailHow::default())?; return Ok(()); }
+            // The remote cannot be reached (main could not be fetched either): it waits, and goes on by itself.
+            Err(e) if offline(sync_r, &e.msg) => {
+                let (what, said) = if let Some(m) = e.msg.strip_prefix("pr:") { ("its pull request could not be opened", m) } else { ("the branch could not be pushed", e.msg.as_str()) };
+                let why = match sync_r.filter(|r| r.status == "error") { Some(r) => format!("{}, and {what}", sync::held_why(r)), None => format!("{what} ({})", fetch::plain(said, t.s("branch"))) };
+                return super::sync_job::unpushed(g, &why, &format!("Branch: {}\nFolder: {tree}\n\n{}\n\n{said}", t.s("branch"), sync_r.map(|r| r.detail.as_str()).unwrap_or("")));
+            }
             Err(e) if e.msg.starts_with("pr:") => { fail(g, failure("pr", "Could not open the pull request", &format!("Branch: {}\nFolder: {tree}\n\ngh pr create:\n{}", t.s("branch"), &e.msg[3..]), "Inspect the GitHub error, fix what you safely can, then finish again. The board retries opening the pull request; do not push or ship manually."), FailHow::default())?; return Ok(()); }
             Err(e) => { fail(g, failure("push", "Could not push the branch", &format!("Branch: {}\nFolder: {tree}\n\n{}", t.s("branch"), e.msg), "Inspect the Git error and fix what you safely can without altering the human's checkout. Finish again so the board retries the push."), FailHow::default())?; return Ok(()); }
         }
