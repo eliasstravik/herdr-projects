@@ -11,8 +11,9 @@
 //!   efforts_read where the program says its levels itself (efforts.rs)          its --help, else `efforts`
 //!   effort       the arguments that give it an effort, `{}` the level           none: an effort is refused
 //!   model        the arguments that give it a model, `{}` the model             none: a model is refused
-//!   models       the model names it takes: its own command that lists them, or  none: a name is not checked
-//!                its short and full names
+//!   models       the model names it takes: its own command that lists them (or  none: a name is not checked
+//!                its app-server, for the account it is signed in with), or its
+//!                short and full names
 //!   resume       the arguments that reopen a conversation, `{}` its id          none: it starts afresh
 //!   session      the arguments that name a new conversation, `{}` a new uuid    none: herdr's integration tells it
 //!   fresh        the arguments that start a new conversation, not its last one  none
@@ -84,6 +85,9 @@ pub struct Models {
     /// The program's own command that prints the names it takes (its arguments), and how that is read.
     pub list: &'static [&'static str],
     pub read: Read,
+    /// Its app-server, asked for the names the account it is signed in with can use (Codex's `model/list`, and its
+    /// sign-in from `account/read`, models/server.rs); `list` when it cannot be asked.
+    pub server: &'static [&'static str],
     /// Short names it always takes (claude's `opus`).
     pub aliases: &'static [&'static str],
     /// Its full names, where it has no command that lists them (Claude Code): a newer one is one more line here.
@@ -118,7 +122,7 @@ pub enum EffortsRead {
     /// Codex's catalog (its `models.list`): each model's `supported_reasoning_levels`.
     Catalog,
 }
-pub const NO_MODELS: Models = Models { list: &[], read: Read::None, aliases: &[], known: &[], suffix: &[], example: "" };
+pub const NO_MODELS: Models = Models { list: &[], read: Read::None, server: &[], aliases: &[], known: &[], suffix: &[], example: "" };
 /// What an entry has that it does not name.
 pub const BASE: Kind = Kind {
     name: "", program: "", aliases: &[], min_version: "0", efforts: &[], efforts_read: EffortsRead::Help, access_full: &[], access_ask: Some(&[]), fast: false, tokens: false,

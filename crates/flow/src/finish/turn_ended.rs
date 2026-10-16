@@ -4,6 +4,7 @@
 //! task. `force`: the status hook already decided a turn ended (missed-turn recovery). A finish runner that finds
 //! another unhandled event when it is done keeps its marker and processes that one too.
 use super::hand_over::hand_over;
+use super::model_refused;
 use super::pipeline::pipeline;
 use super::review::close_reviewer;
 use super::shared::{fail, failure, last_lines, ms, FailHow};
@@ -195,9 +196,13 @@ fn finish_steps(id: &str, g: &mut Guard, mut t: Task, ev: Option<Value>, force: 
             flow::sidebar::tell_sidebar(&w);
             return Ok(());
         }
+        // Its model was refused: the program again on its own default model, once (finish/model_refused.rs).
+        let refused = if x.error.is_empty() || x.auth || x.passing { None } else { crate::agents::model_refused::read(&k, &x.error) };
+        if let Some(r) = &refused { if model_refused::on_default(id, g, &t, r)? { return Ok(()); } }
         // It cannot go on: the next agent on `worker.fallback` takes the task over; with nobody left it waits for you.
-        let hw = if !x.error.is_empty() { why_of(&why, x.auth, x.passing, &x.reason, tries + 1, now()) } else if x.stop == "length" { "it ran out of room (context or output limit)".into() } else { "its model refused to continue".into() };
+        let hw = if let Some(r) = &refused { r.plain.clone() } else if !x.error.is_empty() { why_of(&why, x.auth, x.passing, &x.reason, tries + 1, now()) } else if x.stop == "length" { "it ran out of room (context or output limit)".into() } else { "its model refused to continue".into() };
         if hand_over(id, g, &hw, "")? { return Ok(()); }
+        if let Some(r) = &refused { return model_refused::fail_refused(g, &t, r, &why); }
         if x.passing {
             let gu = format!("{}. ", gave_up("agent", &x.reason, tries + 1));
             let mut f = failure("agent", "Agent stopped", &format!("{}{}The board told it to carry on each time and has stopped trying.\n\nIts error:\n{why}", gu[..1].to_uppercase(), &gu[1..]), &format!("Wait for the provider to recover (or choose another model), then reply or press {} to tell the agent to continue.", key_name("sendBack")));

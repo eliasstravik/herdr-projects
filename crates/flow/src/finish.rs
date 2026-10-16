@@ -8,6 +8,7 @@ pub mod check_again;
 pub mod check_run;
 pub mod hand_over;
 pub mod line;
+pub mod model_refused;
 pub mod old_holds;
 pub mod pipeline;
 pub mod pipeline_end;

@@ -7,6 +7,7 @@ pub mod helpers;
 pub mod homes;
 pub mod installed;
 pub mod kinds;
+pub mod model_refused;
 pub mod models;
 pub mod prompts;
 pub mod provider_error;

@@ -56,10 +56,14 @@ const KEPT: [&str; 23] = ["agent", "app", "on", "tried", "session", "transcript"
 /// Hand the task to the next agent on `worker.fallback`, read now. `why`: why the one on it cannot go on, in plain
 /// words. `findings`: what is open, when the caller knows it better than the saved review. True when another agent is
 /// on it; false when nobody took over, and the caller goes on as it always did.
-pub fn hand_over(id: &str, g: &mut Guard, why: &str, findings: &str) -> Res<bool> {
+pub fn hand_over(id: &str, g: &mut Guard, why: &str, findings: &str) -> Res<bool> { hand_over_to(id, g, why, findings, None) }
+/// The same, with `first` tried before the list: the program on it again on its own default model, when the model it
+/// was given was refused (finish/model_refused.rs).
+pub fn hand_over_to(id: &str, g: &mut Guard, why: &str, findings: &str, first: Option<&str>) -> Res<bool> {
     let mut t = g.check()?;
     let w = work(Some(&t));
-    let list = list_of(w.at("worker.fallback"));
+    let mut list = list_of(w.at("worker.fallback"));
+    if let Some(f) = first { list.insert(0, f.to_string()); }
     if list.is_empty() || !t.at("link").b("pane") { return Ok(false); }
     let api = flow::task::h(&t);
     let from = on_now(&t, &w.t("worker.agent"));

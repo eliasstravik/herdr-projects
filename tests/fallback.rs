@@ -46,7 +46,7 @@ fn logged_out_the_list_is_gone_through_in_order_and_used_up_the_task_waits_for_y
     delegate(&id);
     let t = settle(&id);
     assert_eq!(starts(&w), vec!["claude", "codex", "pi"], "claude itself is on the list: it is not handed to itself");
-    assert_eq!(handovers(&t).iter().map(handover_line).collect::<Vec<_>>(), vec!["codex took over from claude: its model is not available", "pi took over from codex: logged out"]);
+    assert_eq!(handovers(&t).iter().map(handover_line).collect::<Vec<_>>(), vec!["codex took over from claude: claude can't use the model not-a-real-model-zz", "pi took over from codex: logged out"]);
     assert_eq!(t.s("stage"), "failed");
     assert!(t.s("msg").starts_with("Agent stopped: "), "{}", t.s("msg"));
     assert_eq!(row(&id).s("state"), "error");

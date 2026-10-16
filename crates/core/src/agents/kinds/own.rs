@@ -18,7 +18,7 @@ pub static KINDS: &[Kind] = &[
     // server and no such flag (HP-11).
     Kind { name: "codex", min_version: "0.160.0", efforts: &["low", "medium", "high", "xhigh", "max", "ultra"], efforts_read: EffortsRead::Catalog, access_full: &["--dangerously-bypass-approvals-and-sandbox", "--no-daemon"], access_ask: Some(&["--no-daemon"]),
         fast: true, tokens: true, rules_file: Some("AGENTS.md"), since: &[("--no-daemon", "0.156.0")], reads_turn: true, model: &["-m", "{}"],
-        models: Models { list: &["debug", "models"], read: Read::Catalog, example: "codex/gpt-6.1-sol", ..NO_MODELS },
+        models: Models { list: &["debug", "models"], read: Read::Catalog, server: &["app-server"], example: "codex/gpt-6.1-sol", ..NO_MODELS },
         effort: &["-c", "model_reasoning_effort=\"{}\""], resume: &["resume", "{}"], integration: "codex",
         checked: "everything the board does, on 0.153.4 to 0.162.1", ..BASE },
     // pi never asks before running something: it has no `ask`.

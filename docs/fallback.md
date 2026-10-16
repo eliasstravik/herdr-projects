@@ -26,7 +26,9 @@ The working agent **cannot go on** in three cases:
    ([a turn cut off by the provider](provider-errors.md)). Only when the fifth try is cut off too is the task handed
    over.
 2. **It is out of allowance, or logged out**, or its model is not there, or its reply was cut for good (out of room, a
-   refusal). Waiting does not fix these, so they are never retried: the task is handed over at once.
+   refusal). Waiting does not fix these, so they are never retried: the task is handed over at once. A model the board
+   gave it that its program refuses comes first: the same program starts again on its own default model, and only when
+   that is refused too is the task handed over ([models](models.md#a-model-refused-while-the-agent-works)).
 3. **Its work still fails after its rounds.** A failed review goes back to the agent `review.rounds` times. When the
    review after the last of those still fails, the next agent gets the work. Same for the repo's check: it goes back
    `review.rounds` times, and a check that fails after that is handed over. With `review.rounds 0` nothing goes back by
@@ -117,7 +119,8 @@ The reason is said from the provider's own words:
 
 - `out of allowance until 17:00`, where they say when it comes back (`resets 5pm`, `try again at 5:00 PM`,
   `try again in 2 hours`), and `out of allowance` where they do not;
-- `logged out`, `its model is not available`, `its provider is overloaded, still after 5 tries`;
+- `logged out`, `gpt-6.1 can't be used with your ChatGPT sign-in`, `claude can't use the model claude-x`, `its provider
+  is overloaded, still after 5 tries`;
 - `its work still failed review after 3 rounds`, `the check still failed after 4 tries`;
 - anything else, as the provider said it.
 

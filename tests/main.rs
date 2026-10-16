@@ -156,6 +156,7 @@ mod linking;
 mod machine_order;
 mod merge;
 mod merge_rest;
+mod model_refused;
 mod notify;
 mod old_suggestions;
 mod plan;

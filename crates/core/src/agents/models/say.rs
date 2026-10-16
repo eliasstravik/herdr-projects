@@ -28,6 +28,8 @@ fn efforts_said(k: &str) -> (String, Value) {
     (format!("{}{from}{odd}", l.levels.join(", ")), json!({ "levels": l.levels, "by": by }))
 }
 fn shown_of(l: Listing) -> Option<Vec<String>> { match l { Listing::Names(n) => Some(if n.shown.is_empty() { n.taken } else { n.shown }), _ => None } }
+/// The sign-in its names are for, where it said one.
+fn signin_of(l: &Listing) -> String { match l { Listing::Names(n) => n.signin.clone(), _ => String::new() } }
 pub fn models_command(only: &str) -> Res<(Value, String)> {
     if !only.is_empty() {
         let Some(k) = kind_named(only.split('/').next().unwrap_or("")) else {
@@ -37,14 +39,16 @@ pub fn models_command(only: &str) -> Res<(Value, String)> {
         let k = k.name;
         let names = names_of(k, true);
         if let Listing::Failed(why) = &names { crate::refuse!("{k}'s list of models could not be read: {why}."); }
+        let signin = signin_of(&names);
         let shown = shown_of(names);
         let (effort, efforts) = efforts_said(k);
+        let here = if signin.is_empty() { String::new() } else { format!(" (here: your {signin})") };
         let text = match &shown {
-            Some(s) => format!("{k} takes {}. Write one after the program, as in worker.agent {k}/{}:\n\n{}", how(k), s[0], s.iter().map(|m| format!("{k}/{m}")).collect::<Vec<_>>().join("\n")),
+            Some(s) => format!("{k} takes {}{here}. Write one after the program, as in worker.agent {k}/{}:\n\n{}", how(k), s[0], s.iter().map(|m| format!("{k}/{m}")).collect::<Vec<_>>().join("\n")),
             None => format!("{k}: {}.", how(k)),
         };
         let text = format!("{text}\n\nEffort (worker.effort and the like): {effort}.");
-        return Ok((json!({ "agent": k, "how": how(k), "models": shown, "efforts": efforts }), text));
+        return Ok((json!({ "agent": k, "how": how(k), "models": shown, "signin": signin, "efforts": efforts }), text));
     }
     let mut rows = vec![];
     let mut lines = vec!["A model goes after its program, as in worker.agent codex/<model>; without one the program uses its own default. A name or an effort it does not take is refused with the ones it does.".to_string(), String::new()];
@@ -52,6 +56,7 @@ pub fn models_command(only: &str) -> Res<(Value, String)> {
         let k = a.name;
         let names = names_of(k, false);
         let failed = if let Listing::Failed(why) = &names { Some(why.clone()) } else { None };
+        let signin = signin_of(&names);
         let shown = shown_of(names);
         let line = match &shown {
             _ if failed.is_some() => format!("its list could not be read: {}", failed.clone().unwrap_or_default()),
@@ -60,9 +65,9 @@ pub fn models_command(only: &str) -> Res<(Value, String)> {
             None => how(k),
         };
         let (effort, efforts) = efforts_said(k);
-        lines.push(format!("{k:<11} {line}"));
+        lines.push(format!("{k:<11} {line}{}", if signin.is_empty() { String::new() } else { format!(" (for your {signin})") }));
         lines.push(format!("{:<11} effort: {effort}", ""));
-        rows.push(json!({ "agent": k, "how": how(k), "models": shown, "efforts": efforts }));
+        rows.push(json!({ "agent": k, "how": how(k), "models": shown, "signin": signin, "efforts": efforts }));
     }
     Ok((Value::Array(rows), lines.join("\n")))
 }

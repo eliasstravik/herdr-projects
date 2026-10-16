@@ -17,7 +17,7 @@
 
 ## An agent could not start
 
-The row says `Could not start: …` with the reason, for example `codex is not logged in` or `codex does not know the model it was given`. Fix what it says, then delegate again.
+The row says `Could not start: …` with the reason, for example `codex is not logged in` or `sol-6.1 can't be used with your ChatGPT sign-in`. Fix what it says, then delegate again.
 
 The full table of reasons and fixes: [when an agent could not start](could-not-start.md).
 
@@ -29,18 +29,31 @@ setup, and trust the folder if it asks ([agent programs](agents.md#before-a-prog
 **A wrong name is refused when you set it**, with the names the program does take and the nearest one:
 
 ```
-$ herdr-projects set worker.agent codex/gpt-5.5
-worker.agent: codex has no model "gpt-5.5". It takes gpt-6.1-sol, gpt-6-astra, gpt-6-sol, … (from `codex debug models`).
-Write it after the program: codex/gpt-6.1-sol.
+$ herdr-projects set worker.agent codex/sol-6.1
+worker.agent: codex has no model "sol-6.1" for your ChatGPT sign-in (pro plan). Did you mean gpt-6.1-sol? It takes
+gpt-6.1-sol, gpt-6-astra, gpt-6-sol, … (codex's own list for that sign-in). Write it after the program: codex/gpt-6.1-sol.
 ```
 
-- **See what a program takes:** `herdr-projects models codex`.
+- **See what a program takes:** `herdr-projects models codex`. For Codex that is what your own sign-in can use: a ChatGPT
+  sign-in and an API key take different names.
 - **"Its list cannot be read":** the program is installed but its list command failed (not logged in, offline). Run that
   list command in a terminal to see why, or leave the model out.
 - **A new Claude model is refused:** the board's table of Claude names is older than the model. Use the short name
   (`claude/opus`): it always means the newest of its kind. Updating the board (`herdr-projects update`) brings the new
   names.
 - **An effort is refused:** each program has its own levels. The refusal lists the ones it has.
+
+### "can't be used with your ChatGPT sign-in" while the agent works
+
+Codex refused the model at the agent's first turn (`The 'sol-6.1' model is not supported when using Codex with a
+ChatGPT account`). The board catches it:
+
+- **`…: started again on codex's own default model`**: the board had given Codex that model; Codex now works on its own
+  default. Nothing to do. To choose another, `herdr-projects models codex` lists the ones your sign-in can use.
+- **`Agent stopped: … can't be used with your ChatGPT sign-in; try gpt-6.1-sol`**: its default was refused too, or the
+  board gave it no model (then the name comes from Codex's own `model` in `~/.codex/config.toml`). Choose one for the
+  task, `herdr-projects set worker.agent codex/gpt-6.1-sol --task <id>`, or fix that line, then `Ctrl+L` (retry): the
+  agent starts again on it.
 
 More: [models and effort](models.md).
 
@@ -58,6 +71,7 @@ Find what its row says:
 | `Stopped without a summary` | the agent stopped and the board cannot tell if it finished | `Ctrl+R` tells it to go on; `Ctrl+L` takes the work as it is |
 | `Agent's connection dropped, trying again in 2m` | the provider cut the turn off | nothing: the board retries by itself ([a turn cut off by the provider](provider-errors.md)) |
 | `Agent stopped` | an error waiting cannot fix: a usage limit, a refusal | read the reason in the panel; reply, or `Ctrl+R` |
+| `Agent stopped: … can't be used with your ChatGPT sign-in` | its program refused its model | choose a model, then `Ctrl+L` ([above](#cant-be-used-with-your-chatgpt-sign-in-while-the-agent-works)) |
 | `Needs a login` | the agent's program is logged out | log in (go into the agent with `Enter`), then reply or `Ctrl+R` |
 | `stopped at its 2h limit` | it reached `limit.time` or `limit.tokens` | `Ctrl+R` to continue, a higher limit, or `Ctrl+L` to take it as it is ([limits](limits.md)) |
 | `resolving a conflict with main` | main changed under it; its agent is fixing that | wait |

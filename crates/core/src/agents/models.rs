@@ -1,8 +1,10 @@
 //! Is a model name one the program takes: checked when a setting names it (`codex/<model>`), so a wrong one is refused
 //! there with the names it does take, not found out when the agent fails to start (docs/models.md). The names are the
-//! program's own list where it has one (kinds.rs `models`), else its short and full names written in the table.
+//! program's own list where it has one (kinds.rs `models`; Codex's for the account it is signed in with), else its
+//! short and full names written in the table.
 pub mod listed;
 pub mod say;
+pub mod server;
 
 use super::kinds::{kind, Kind};
 use crate::store::settings::values::distance;
@@ -25,10 +27,17 @@ fn in_list(names: &Names, a: &Kind, m: &str) -> bool {
         None => false,
     }
 }
-/// The names nearest to what was typed: one that holds it first, then by how few edits make one the other.
-fn nearest(m: &str, names: &[String], n: usize) -> Vec<String> {
+/// Every part of what was typed is a part of this name, in any order: `sol-6.1` of `gpt-6.1-sol`.
+fn parts_in(lm: &str, lx: &str) -> bool {
+    let of = |s: &str| s.split(['-', '_', '/', ' ']).filter(|p| !p.is_empty()).map(String::from).collect::<Vec<_>>();
+    let (want, has) = (of(lm), of(lx));
+    want.len() > 1 && want.iter().all(|p| has.contains(p))
+}
+/// The names nearest to what was typed: one that holds it first, then one that holds all its parts, then by how few
+/// edits make one the other.
+pub fn nearest(m: &str, names: &[String], n: usize) -> Vec<String> {
     let lm = m.to_lowercase();
-    let mut v: Vec<(usize, &String)> = names.iter().map(|x| { let lx = x.to_lowercase(); (if lx.contains(&lm) { 0 } else { 1 + distance(&lm, &lx) }, x) }).collect();
+    let mut v: Vec<(usize, &String)> = names.iter().map(|x| { let lx = x.to_lowercase(); (if lx.contains(&lm) { 0 } else if parts_in(&lm, &lx) { 1 } else { 2 + distance(&lm, &lx) }, x) }).collect();
     v.sort_by_key(|(d, x)| (*d, x.len()));
     v.into_iter().take(n).map(|(_, x)| x.clone()).collect()
 }
@@ -38,10 +47,16 @@ pub fn names_of(k: &str, fresh: bool) -> Listing {
     if !a.models.list.is_empty() { return listed(k, fresh); }
     if (a.models.aliases.is_empty() && a.models.known.is_empty()) || listed::own_provider(k) { return Listing::Unchecked; }
     let all: Vec<String> = a.models.aliases.iter().chain(a.models.known.iter()).map(|s| s.to_string()).collect();
-    Listing::Names(Names { taken: all.clone(), shown: all })
+    Listing::Names(Names { taken: all.clone(), shown: all, ..Default::default() })
 }
 /// Where a program's names come from, as a refusal says it.
-fn source(a: &Kind) -> String { if a.models.list.is_empty() { "its short names, each the newest of its kind, and its full names".into() } else { format!("from `{}`", list_command(a.name)) } }
+fn source(a: &Kind, n: &Names) -> String {
+    if a.models.list.is_empty() { return "its short names, each the newest of its kind, and its full names".into(); }
+    if !n.signin.is_empty() { return format!("{}'s own list for that sign-in", a.name); }
+    format!("from `{}`", list_command(a.name))
+}
+/// "for your ChatGPT sign-in (pro plan)", where the names are that sign-in's.
+pub fn for_signin(n: &Names) -> String { if n.signin.is_empty() { String::new() } else { format!(" for your {}", n.signin) } }
 /// Why this program does not take this model, naming the ones it does; None when it takes it, or when its names are
 /// not to be checked (no list of its own, a provider of its own, not installed here). A list that could not be read
 /// is a refusal too, with why: the name would otherwise go to the program unchecked.
@@ -61,18 +76,19 @@ pub fn why_not(k: &str, m: &str) -> Option<String> {
         return Some(format!("{k} takes \"{m}\" only with its parameters in brackets, as in {k}/{m}[effort=high], or as one of its listed variants ({}).", nearest(m, &names.taken, 3).join(", ")));
     }
     let shown = if names.shown.is_empty() { &names.taken } else { &names.shown };
-    let near = nearest(m, shown, 1).into_iter().next().filter(|x| { let d = distance(&m.to_lowercase(), &x.to_lowercase()); x.to_lowercase().contains(&m.to_lowercase()) || d <= 3.max(m.len() / 2) });
+    let near = nearest(m, shown, 1).into_iter().next().filter(|x| { let d = distance(&m.to_lowercase(), &x.to_lowercase()); x.to_lowercase().contains(&m.to_lowercase()) || parts_in(&m.to_lowercase(), &x.to_lowercase()) || d <= 3.max(m.len() / 2) });
     // The nearest ones, in the program's own order (newest first, where it has one).
     let close = nearest(m, shown, SHOWN);
     let some: Vec<String> = shown.iter().filter(|x| close.contains(x)).cloned().collect();
     let more = if shown.len() > SHOWN { format!(", and {} more: `herdr-projects models {k}` lists them all", shown.len() - SHOWN) } else { String::new() };
-    Some(format!("{k} has no model \"{m}\".{} It takes {}{more} ({}). Write it after the program: {k}/{}.",
-        near.as_ref().map(|n| format!(" Did you mean {n}?")).unwrap_or_default(), some.join(", "), source(a), near.or_else(|| some.first().cloned()).unwrap_or_default()))
+    Some(format!("{k} has no model \"{m}\"{}.{} It takes {}{more} ({}). Write it after the program: {k}/{}.", for_signin(&names),
+        near.as_ref().map(|n| format!(" Did you mean {n}?")).unwrap_or_default(), some.join(", "), source(a, &names), near.or_else(|| some.first().cloned()).unwrap_or_default()))
 }
 /// In a few words, how a model is given to this program and where its names come from (`herdr-projects models`).
 pub fn how(k: &str) -> String {
     let Some(a) = kind(k) else { return String::new() };
     if a.model.is_empty() { return format!("{k} takes no model when the board starts it: choose it in {k}'s own settings."); }
+    if !a.models.server.is_empty() { return format!("the names {k} lists for the account it is signed in with"); }
     if !a.models.list.is_empty() { return format!("the names `{}` lists", list_command(k)); }
     if !a.models.aliases.is_empty() || !a.models.known.is_empty() { return format!("a short name ({}), each the newest of its kind, or a full name such as {}", a.models.aliases.join(", "), a.models.known.first().copied().unwrap_or("")); }
     format!("any name {k} takes (not checked: {k} has no list of them)")

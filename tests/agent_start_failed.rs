@@ -127,7 +127,9 @@ fn each_reason_is_said_in_plain_words() {
     let said = "timed out waiting for agent startup";
     let cases = [
         (said, "  Welcome to Codex\n  Sign in with ChatGPT\n  Provide your own API key", "codex is not logged in", "Run `codex` in a terminal here and log in, then delegate again."),
-        (said, "error: model 'gpt-9' not found", "codex does not know the model it was given", "Choose a model it has in worker.agent (written as codex/<model>; `herdr-projects models codex` lists them), or leave the model out, then delegate again."),
+        (said, "error: model 'gpt-9' not found", "codex can't use the model gpt-9", "Choose a model it has in worker.agent (written as codex/<model>; `herdr-projects models codex` lists the ones it can use), or leave the model out, then delegate again."),
+        (said, "ERROR: The 'sol-6.1' model is not supported when using Codex with a ChatGPT account.", "sol-6.1 can't be used with your ChatGPT sign-in", "Choose a model it has in worker.agent (written as codex/<model>; `herdr-projects models codex` lists the ones it can use), or leave the model out, then delegate again."),
+        (said, "  Unsupported model", "codex does not know the model it was given", "Choose a model it has in worker.agent (written as codex/<model>; `herdr-projects models codex` lists the ones it can use), or leave the model out, then delegate again."),
         ("codex quit as it started: error: unexpected argument '--frob' found", "", "codex 9.9.9 does not take one of the board's start arguments", "Update codex to its latest version, then delegate again."),
         ("agent target pane w1:p1 is not an available shell", "", "its terminal was not at its shell prompt", "End what runs in the task's terminal (or close it), then delegate again."),
         ("herdr did not answer in time", "", "herdr did not answer in time", "Check that herdr is running and answers (`herdr workspace list`), then delegate again."),

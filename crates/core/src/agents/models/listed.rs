@@ -1,5 +1,6 @@
-//! The model names a program lists itself (kinds.rs `models.list`), asked of the program and kept for an hour in
-//! models.json, and read by the program's own format; or why they could not be had.
+//! The model names a program lists itself (kinds.rs `models.list`, or its app-server for the account it is signed in
+//! with: models/server.rs), asked of the program and kept for an hour in models.json, and read by the program's own
+//! format; or why they could not be had.
 use super::super::homes::codex_file;
 use super::super::kinds::{kind, program, Read};
 use crate::clock::now;
@@ -10,9 +11,10 @@ use std::process::{Command, Stdio};
 
 const KEPT: i64 = 3_600_000;
 const RUN_MS: u64 = 10_000;
-/// The names a program takes, and the ones it shows (codex hides some it still takes).
+/// The names a program takes, and the ones it shows (codex hides some it still takes). `signin`: the sign-in they are
+/// for, where the program said it ("ChatGPT sign-in (pro plan)"); `from`: the command that said them, "" for its list's.
 #[derive(Clone, Debug, Default)]
-pub struct Names { pub taken: Vec<String>, pub shown: Vec<String> }
+pub struct Names { pub taken: Vec<String>, pub shown: Vec<String>, pub signin: String, pub from: String }
 
 fn file() -> PathBuf { data_dir().join("models.json") }
 /// The program is pointed at a provider of its own, whose names its list does not hold: its names are not checked.
@@ -27,8 +29,14 @@ pub fn own_provider(k: &str) -> bool {
     }
 }
 fn kept(v: &Value) -> Listing {
-    if v.at("taken").is_array() { return Listing::Names(Names { taken: strings(v.at("taken")), shown: strings(v.at("shown")) }); }
+    if v.at("taken").is_array() { return Listing::Names(Names { taken: strings(v.at("taken")), shown: strings(v.at("shown")), signin: v.t("signin"), from: v.t("from") }); }
     Listing::Unchecked
+}
+/// The names this program said last, however old, without asking it again: for words written while the board works
+/// (a model refused at a turn's end), which never wait for a program.
+pub fn kept_names(k: &str) -> Option<Names> {
+    if own_provider(k) { return None; }
+    match kept(read_obj(&file()).unwrap_or_default().at(k)) { Listing::Names(n) => Some(n), _ => None }
 }
 /// The names a program takes, as far as they can be had.
 #[derive(Clone, Debug)]
@@ -50,11 +58,16 @@ pub fn listed(k: &str, fresh: bool) -> Listing {
     if had.at("taken").is_array() && age < KEPT && !(fresh && age >= 60_000) { return kept(had); }
     // The tests never run a real program: they write models.json themselves.
     if crate::util::env_set("HERDR_PROJECTS_NO_MODEL_LIST") { return kept(had); }
-    let got = run(program(k), a.models.list);
-    let names = match got { Ok(Some(out)) => read(a.models.read, &out), Ok(None) => return Listing::Unchecked, Err(why) => return Listing::Failed(why) };
+    // Its app-server first: the names of the account it is signed in with. Its list command when that cannot be asked.
+    let served = if a.models.server.is_empty() { Err(String::new()) } else { super::server::ask(program(k), a.models.server) };
+    let names = match served {
+        Ok(Some(n)) => n,
+        Ok(None) => return Listing::Unchecked,
+        Err(_) => match run(program(k), a.models.list) { Ok(Some(out)) => read(a.models.read, &out), Ok(None) => return Listing::Unchecked, Err(why) => return Listing::Failed(why) },
+    };
     if names.taken.is_empty() { return Listing::Failed(format!("`{}` listed no models", list_command(k))); }
     let mut all = read_obj(&file()).unwrap_or_default();
-    all.put(k, json!({ "at": now(), "taken": names.taken, "shown": names.shown }));
+    all.put(k, json!({ "at": now(), "taken": names.taken, "shown": names.shown, "signin": names.signin, "from": names.from }));
     let _ = write_json(&file(), &Value::Object(all));
     Listing::Names(names)
 }

@@ -1,9 +1,11 @@
 //! The reviewer's hand-over (`reviewer.fallback`, docs/fallback.md): the reviewer cannot review (its provider is still
 //! down after the board's own tries, it is out of allowance or logged out, or its program is not installed here), and
 //! the next one on the list reviews in its place: the same review, started again, in a tab of its own. It reviews the
-//! later rounds of the task too, until you step in. A reviewer that reviewed and found faults is never replaced.
+//! later rounds of the task too, until you step in. A reviewer that reviewed and found faults is never replaced. One
+//! whose model was refused reviews again first on its program's own default model (docs/models.md).
 use super::hand_over::usable;
 use crate::agents::installed::installed;
+use crate::agents::model_refused;
 use crate::err::Res;
 use crate::json::*;
 use crate::runner::Guard;
@@ -23,6 +25,13 @@ pub fn reviewer_now(t: &Obj, ch: &Obj) -> (String, String) {
 pub struct Cut { pub passing: bool, pub reason: String, pub error: String }
 /// The reviewer `from` was cut off for good. The next on the list, written on the task, or "" when nobody is left.
 pub fn next_reviewer(g: &mut Guard, ch: &Obj, from: &str, cut: &Cut, auth: bool, tries: i64, tried: &[String]) -> Res<String> {
+    // Its model was refused: the same program reviews again on its own default model, once, before the list does.
+    let a = agent_of(from);
+    if let Some(r) = model_refused::read(&a.kind, &cut.error).filter(|_| !auth && !cut.passing && !a.model.is_empty() && !tried.contains(&a.kind) && usable(&a.kind, ch.s("reviewer.access")).is_empty()) {
+        let why = format!("{} (now on its own default model)", r.plain);
+        g.set(|t| { log_handover(t, "reviewer", from, &a.kind, &why); t.put("reviewerOn", a.kind.clone()); t.put("msg", format!("{}: the review starts again on {}'s own default model", r.plain, a.kind)); t.put("waiting", Value::Null); })?;
+        return Ok(a.kind);
+    }
     let list = list_of(ch.at("reviewer.fallback"));
     if list.is_empty() { return Ok(String::new()); }
     let (next, skipped) = next_fallback(&list, from, tried, |a| usable(a, ch.s("reviewer.access")));

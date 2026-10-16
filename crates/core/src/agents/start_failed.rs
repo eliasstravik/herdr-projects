@@ -42,7 +42,10 @@ pub fn explain(s: &Start, said: &str, screen: &str) -> Why {
     if said.contains("needs herdr's own integration") { return why(format!("{k} needs herdr's own integration"), format!("Run `herdr integration install {}`, then {again}.", super::kinds::kind(k).map(|a| a.integration).unwrap_or(k))); }
     if cut_off(screen) { return why("its start command was cut off: the terminal's shell was still starting".into(), format!("The board cleared the half-typed command: {again}.")); }
     if LOGIN.is_match(&all) || is_auth_failure(&all) { return Why { short: format!("{k} is not logged in"), next: format!("Run `{k}` in a terminal here and log in, then {again}."), auth: true }; }
-    if MODEL.is_match(&all) { return why(format!("{k} does not know the model it was given"), format!("Choose a model it has in {} (written as {k}/<model>; `herdr-projects models {k}` lists them), or leave the model out, then {again}.", s.setting)); }
+    if MODEL.is_match(&all) {
+        let short = super::model_refused::read(s.kind, &all).filter(|r| !r.model.is_empty() || !r.signin.is_empty()).map(|r| super::model_refused::say(s.kind, &r)).unwrap_or_else(|| format!("{k} does not know the model it was given"));
+        return why(short, format!("Choose a model it has in {} (written as {k}/<model>; `herdr-projects models {k}` lists the ones it can use), or leave the model out, then {again}.", s.setting));
+    }
     if ARG.is_match(&all) {
         let v = version_of(s.kind);
         return why(format!("{k}{} does not take one of the board's start arguments", if v.is_empty() { String::new() } else { format!(" {v}") }), format!("Update {k} to its latest version, then {again}."));

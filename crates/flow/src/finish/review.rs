@@ -13,6 +13,14 @@ use crate::runner::{is_aborted, Guard};
 use crate::store::retries::{gave_up, retry_waits};
 use crate::store::tasks::{get, one_line, update_wait, Change};
 
+/// Why a reviewer stopped for good; for a model it could not use, the reason in plain words and what to do.
+fn refused_words(by: &str, error: &str) -> String {
+    let a = crate::store::settings::values::agent_of(by);
+    match crate::agents::model_refused::read(&a.kind, error) {
+        Some(r) => format!("{}. Choose a model it can use in reviewer.agent (`herdr-projects models {}` lists them), or leave the model out. Its error: {}", crate::agents::model_refused::say(&a.kind, &r), a.kind, error.trim_end_matches(|c: char| c == '.' || c.is_whitespace())),
+        None => format!("the reviewer stopped: {error}"),
+    }
+}
 pub fn close_reviewer(id: &str) {
     let Some(t) = get(id) else { return };
     if !t.at("link").at("reviewer").b("pane") { return; }
@@ -54,7 +62,7 @@ pub fn run_review_with(id: &str, g: &mut Guard, text: &str, change: Option<&Valu
                 Err(e) => return Err(e),
             }
         }
-        if !cut.passing { return Ok(Reviewed { error: format!("the reviewer stopped: {}", cut.error), auth: r.auth, cut: true, ..Default::default() }); }
+        if !cut.passing { return Ok(Reviewed { error: refused_words(&r.by, &cut.error), auth: r.auth, cut: true, ..Default::default() }); }
         if tries >= waits.len() as i64 { return Ok(Reviewed { error: format!("{}. Its error: {}", gave_up("reviewer", &cut.reason, tries + 1), cut.error.trim_end_matches(|c: char| c == '.' || c.is_whitespace())), cut: true, ..Default::default() }); }
         let until = crate::clock::now() + waits[tries as usize];
         let w = json!({ "who": "reviewer", "reason": cut.reason, "error": one_line(&cut.error, 400), "until": until, "tries": tries + 1 });

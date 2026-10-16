@@ -116,7 +116,7 @@ fn an_error_waiting_cannot_fix_is_not_retried_a_missing_model_fails_at_once_a_mi
     delegate(&id);
     let t = settle(&id);
     assert_eq!(t.s("stage"), "failed"); assert_eq!(reviewer_starts(&w), 1);
-    assert!(regex::Regex::new(r"^Review failed: the reviewer stopped: .*model is not supported").unwrap().is_match(t.s("msg")), "{}", t.s("msg"));
+    assert!(regex::Regex::new(r"^Review failed: gpt-6\.1 can't be used with your ChatGPT sign-in\. Choose a model it can use in reviewer\.agent ").unwrap().is_match(t.s("msg")), "{}", t.s("msg"));
     assert_eq!(t.at("failure").at("auth"), &json!(false));
     assert!(review_history(&t).is_empty()); assert_eq!(review_round(&t), 0);
     w.script(json!({ "worker": [work()], "reviewer": [{ "ends": "codex-unauthorized" }] }));
