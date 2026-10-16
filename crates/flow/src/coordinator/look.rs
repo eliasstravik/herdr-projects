@@ -1,9 +1,10 @@
-//! What the board shows of the Coordinator: its state, latest message and screen; going into its chat. Read on every
+//! What the board shows of a coordinator: its state, latest message and screen; going into its chat. Read on every
 //! beat of the board: one small file, one `agent get`, and the end of the saved conversation when that file changed.
 //! `state` is one of: none, starting, working, blocked, idle, exited.
+use super::co::Co;
 use super::pump::active;
 use super::requests::{open, tab_note, typed_there};
-use super::rules::intro_line;
+use super::rules_place::intro_line_of;
 use super::state::{get, home, pumping};
 use super::who::{choice, describe, same_choice};
 use crate::agents::adapter;
@@ -13,7 +14,7 @@ use crate::agents::read_turn::Turn;
 use crate::agents::talk::{talk_of, Said};
 use crate::err::Res;
 use crate::herdr::api::read_screen;
-use crate::herdr::cli::{session_name, socket_exists};
+use crate::herdr::cli::socket_exists;
 use crate::herdr::Herdr;
 use crate::json::*;
 use crate::store::marks::due;
@@ -30,16 +31,18 @@ pub struct Look {
 static TURNS: LazyLock<Mutex<HashMap<String, (PathBuf, std::time::SystemTime, Option<Turn>)>>> = LazyLock::new(Default::default);
 static SCREENS: LazyLock<Mutex<HashMap<String, (String, i64, String)>>> = LazyLock::new(Default::default);
 /// What you said, without what the board put around it on its way in.
-fn bare(text: &str, dir: &std::path::Path) -> String {
+fn bare(text: &str, co: &Co) -> String {
     let mut s = text.to_string();
-    let intro = intro_line(dir);
+    let intro = intro_line_of(co);
     if let Some(r) = s.strip_prefix(&intro) { s = r.trim().to_string(); }
     let note = tab_note();
     if let Some(r) = s.strip_suffix(&note) { s = r.trim().to_string(); }
     s
 }
-pub fn look(socket: &str) -> Look {
-    let c = get(socket);
+pub fn look(co: impl Into<Co>) -> Look {
+    let co = co.into();
+    let socket = co.socket.as_str();
+    let c = get(&co);
     let def = choice();
     let Some(c) = c.filter(|c| c.b("run") || c.b("pane") || !c.arr("queue").is_empty() || c.b("want") || c.b("error")) else {
         return Look { state: "none".into(), run: def.clone(), def, ..Default::default() };
@@ -51,19 +54,19 @@ pub fn look(socket: &str) -> Look {
     let (mut turn, mut talk) = (None, vec![]);
     if let Some(r) = c.o("run") {
         let k = r.t("kind");
-        let session = if due(&format!("coordinator-session-{}", session_name(socket)), 3000) { active(socket, &c) } else { c.so("session").map(String::from) };
-        let key = format!("{socket}|{}", session.clone().unwrap_or_default());
+        let session = if due(&co.mark("coordinator-session"), 3000) { active(&co, &c) } else { c.so("session").map(String::from) };
+        let key = format!("{}|{}", co.key(), session.clone().unwrap_or_default());
         let mut cache = TURNS.lock().unwrap();
         let hit = cache.get(&key).cloned();
         let mut file = hit.as_ref().map(|h| h.0.clone());
-        if let Some(s) = &session { if file.as_ref().map(|f| !f.exists()).unwrap_or(true) { file = adapter::transcript(&k, s, &home(socket)); } }
+        if let Some(s) = &session { if file.as_ref().map(|f| !f.exists()).unwrap_or(true) { file = adapter::transcript(&k, s, &home(&co)); } }
         if let Some(f) = &file {
             let mtime = std::fs::metadata(f).and_then(|m| m.modified()).ok();
-            if mtime != hit.as_ref().map(|h| h.1) { cache.insert(key.clone(), (f.clone(), mtime.unwrap_or(std::time::UNIX_EPOCH), read_turn_of(&k, Some(f), "", &home(socket), false))); }
+            if mtime != hit.as_ref().map(|h| h.1) { cache.insert(key.clone(), (f.clone(), mtime.unwrap_or(std::time::UNIX_EPOCH), read_turn_of(&k, Some(f), "", &home(&co), false))); }
             turn = cache.get(&key).and_then(|h| h.2.clone());
             drop(cache);
-            let h = home(socket);
-            talk = talk_of(&k, Some(f), "", &h, 12).unwrap_or_default().into_iter().map(|m| if m.you { Said { text: bare(&m.text, &h), ..m } } else { m }).filter(|m| !m.text.is_empty()).collect();
+            let h = home(&co);
+            talk = talk_of(&k, Some(f), "", &h, 12).unwrap_or_default().into_iter().map(|m| if m.you { Said { text: bare(&m.text, &co), ..m } } else { m }).filter(|m| !m.text.is_empty()).collect();
         }
     }
     let queue = c.arr("queue").len();
@@ -79,37 +82,41 @@ pub fn look(socket: &str) -> Look {
         agent: agent.unwrap_or(Value::Null), turn, talk, readable, said, last: c.t("last"), sent, unseen, stale, def, run }
 }
 /// What is on its screen, for when there is no message to show (a dialog, a program without a readable conversation).
-pub fn screen(v: &Look, socket: &str) -> String {
+pub fn screen(v: &Look, co: impl Into<Co>) -> String {
+    let co = co.into();
+    let socket = co.socket.as_str();
     let Some(status) = &v.status else { return String::new() };
     if v.pane.is_empty() { return String::new(); }
     let now = crate::clock::now();
-    if let Some((p, at, text)) = SCREENS.lock().unwrap().get(socket) { if *p == v.pane && now - at < 2000 { return text.clone(); } }
+    if let Some((p, at, text)) = SCREENS.lock().unwrap().get(&co.key()) { if *p == v.pane && now - at < 2000 { return text.clone(); } }
     let raw = read_screen(&Herdr::new(Some(socket.into())), &v.pane, Some(if status == "idle" || status == "done" { status } else { "working" }), 60);
     let mut text = raw.split('\n').map(|l| l.trim_end()).collect::<Vec<_>>().join("\n");
     while text.contains("\n\n\n") { text = text.replace("\n\n\n", "\n\n"); }
     let text = text.trim().to_string();
-    SCREENS.lock().unwrap().insert(socket.into(), (v.pane.clone(), now, text.clone()));
+    SCREENS.lock().unwrap().insert(co.key(), (v.pane.clone(), now, text.clone()));
     text
 }
 /// Going into it: herdr moves to its real pane, as it does for any task's agent.
-pub fn focus(v: &Look, socket: &str) -> Res<()> { Herdr::new(Some(socket.into())).agent_focus(&v.pane)?; typed_there(socket); Ok(()) }
+pub fn focus(v: &Look, co: impl Into<Co>) -> Res<()> { let co = co.into(); Herdr::new(Some(co.socket.clone())).agent_focus(&v.pane)?; typed_there(&co); Ok(()) }
 /// "Go into the Coordinator's chat" from anywhere in herdr: no board in between. Not running: it is started with
 /// nothing said first, and this waits for it.
-pub fn go_in(socket: &str, wait_ms: i64) -> Res<Look> {
+pub fn go_in(co: impl Into<Co>, wait_ms: i64) -> Res<Look> {
+    let co = co.into();
     let mut asked = false;
     let until = crate::clock::now() + wait_ms;
     loop {
-        let v = look(socket);
-        if v.status.is_some() && !v.pane.is_empty() { focus(&v, socket)?; return Ok(v); }
-        if asked && !v.error.is_empty() { crate::fail!("The Coordinator could not be started: {}", v.error); }
-        if !asked { open(socket)?; asked = true; }
-        if crate::clock::now() > until { crate::fail!("The Coordinator did not start in time."); }
+        let v = look(&co);
+        if v.status.is_some() && !v.pane.is_empty() { focus(&v, &co)?; return Ok(v); }
+        if asked && !v.error.is_empty() { crate::fail!("The {} could not be started: {}", co.name(), v.error); }
+        if !asked { open(&co)?; asked = true; }
+        if crate::clock::now() > until { crate::fail!("The {} did not start in time.", co.name()); }
         std::thread::sleep(std::time::Duration::from_millis(400));
     }
 }
 /// For the command line and for other machines.
-pub fn summary(socket: &str) -> Value {
-    let v = look(socket);
-    json!({ "state": v.state, "agent": v.run.as_ref().map(|r| r.t("kind")).unwrap_or_default(), "model": v.run.as_ref().map(|r| r.t("model")).unwrap_or_default(), "effort": v.run.as_ref().map(|r| r.t("effort")).unwrap_or_default(),
+pub fn summary(co: impl Into<Co>) -> Value {
+    let co = co.into();
+    let v = look(&co);
+    json!({ "name": co.name(), "state": v.state, "agent": v.run.as_ref().map(|r| r.t("kind")).unwrap_or_default(), "model": v.run.as_ref().map(|r| r.t("model")).unwrap_or_default(), "effort": v.run.as_ref().map(|r| r.t("effort")).unwrap_or_default(),
         "oneOff": v.one_off, "default": describe(v.def.as_ref()), "pane": v.pane, "queued": v.queue, "error": v.error, "said": v.said })
 }

@@ -91,6 +91,7 @@ pub mod actions;
 pub mod autos;
 pub mod beat;
 pub mod chat;
+pub mod coords;
 pub mod done;
 pub mod edit;
 pub mod keys;

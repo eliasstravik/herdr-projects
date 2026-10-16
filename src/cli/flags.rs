@@ -8,7 +8,7 @@ use crate::store::settings_list::SETTINGS;
 
 /// Positional arguments, flags (`--flag value`, `--flag` true, `--no-flag` false), and each flag as it was typed.
 pub struct Args { pub pos: Vec<String>, pub flags: Obj, pub typed: Obj }
-const BOOL: [&str; 12] = ["json", "archived", "all", "delegate", "force", "help", "skill", "research", "every-repo", "anyway", "now", "clear"];
+const BOOL: [&str; 13] = ["json", "archived", "all", "delegate", "force", "help", "skill", "research", "every-repo", "anyway", "now", "clear", "machine"];
 pub fn parse(argv: &[String]) -> Args {
     let (mut pos, mut flags, mut typed) = (vec![], Obj::new(), Obj::new());
     let mut i = 0;
@@ -62,7 +62,7 @@ fn takes(cmd: &str, sub: &str) -> Option<Takes> {
         "set" | "unset" | "show" => f(WHERE),
         "models" => f(&[]),
         "automations" | "automation" => match sub { "add" | "new" => s(AUTO_ADD), "change" | "edit" => f(AUTO_CHANGE), _ => f(&[]) },
-        "coordinator" => match sub { "tell" => f(&["delegate"]), "new" | "fresh" => f(&["agent", "effort"]), _ => f(&[]) },
+        "coordinator" => match sub { "tell" => f(&["delegate", "machine", "project"]), "new" | "fresh" => f(&["agent", "effort", "machine", "project"]), _ => f(&["machine", "project"]) },
         "machines" | "web-ui" | "remove-extras" | "reopen" | "version" | "install" | "update" | "doctor" => f(&[]),
         "housekeep" => f(&["pr"]),
         "check" => f(&["all", "fresh"]),

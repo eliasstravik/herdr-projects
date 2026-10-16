@@ -22,6 +22,7 @@ fn parts_text(parts: &[Part]) -> String { parts.iter().map(|p| format!("{}{}", i
 pub fn chat_of(s: &mut State, t: &Theme, r: Option<&Obj>) -> Option<Who> {
     same_chat(s);
     if s.mode == Mode::Find { return None; }
+    if let Some(c) = crate::board::update::coords::talking(s) { return Some(super::coords::sub_who(s, t, &c)); }
     if let (true, Some(r)) = (s.reply, r) {
         let to_agent = has_agent(r);
         let word = if r.b("archivedAt") { "archived".to_string() } else if under_review(r) { reviewer_word(r).to_string() } else { standing(r) };
@@ -62,7 +63,7 @@ pub fn chat_of(s: &mut State, t: &Theme, r: Option<&Obj>) -> Option<Who> {
     Some(c)
 }
 /// A Coordinator as the chat shows it, this machine's or another's (`fresh`: it said something you have not seen).
-fn coord_who(t: &Theme, v: &crate::coordinator::look::Look, screen: &str, fresh: bool) -> Who {
+pub fn coord_who(t: &Theme, v: &crate::coordinator::look::Look, screen: &str, fresh: bool) -> Who {
     let color = if fresh { Ink::Green } else { match v.state.as_str() { "working" | "starting" => Ink::Yellow, "blocked" => Ink::Red, "idle" => Ink::Green, _ => Ink::Muted } };
     let err = !v.error.is_empty();
     let word = if !err && fresh { "new reply".to_string() } else { coordinator_stands(&v.state, &v.error) };

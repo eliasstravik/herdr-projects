@@ -20,7 +20,7 @@ fn put(id: &str, f: impl FnOnce(&mut Obj)) { update(id, |t| { f(t); Ok(Change::W
 /// The board's loader comes in, as on every beat: how often did the bell ring.
 fn rings(b: &mut common::board::Board) -> usize {
     use sw::board::data::{load, Wants};
-    let d = load(&Wants { ids: vec![b.s.sel.clone()], cwd: b.s.ctx.cwd.clone(), own_pane: String::new(), web: false });
+    let d = load(&Wants { ids: vec![b.s.sel.clone()], cwd: b.s.ctx.cwd.clone(), own_pane: String::new(), web: false, ..Default::default() });
     sw::board::update::update(&mut b.s, sw::board::update::Event::Loaded(Box::new(d))).iter().filter(|e| matches!(e, sw::board::update::Effect::Bell)).count()
 }
 

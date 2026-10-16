@@ -8,12 +8,14 @@ use crate::remote::{ask, attach_command, why::unanswered, Machine};
 use crate::shown::ink::Ink;
 use crate::store::{inbox::{clear_dispatch, get_dispatch, new_dispatch, set_dispatch}, settings::{change::{set_value, unset_value}, lookup::{to_send, Scope}, show::rows, values::say}, settings_list::entry_of, tasks::{find, get}};
 
-/// Words for another machine's Coordinator, as a row of this board until that machine has taken them.
-pub fn dispatch(m: Machine, text: String, delegate: bool, about: String) -> Done {
+/// Words for another machine's Coordinator (`to`: "" its top-level one, else its machine or a repo's coordinator), as a
+/// row of this board until that machine has taken them.
+pub fn dispatch(m: Machine, text: String, delegate: bool, about: String, to: String) -> Done {
     let job = match new_dispatch(&format!("@{} {text}", m.label), obj(json!({ "remote": m.label }))) { Ok(j) => j, Err(e) => return Done::fail(e.msg) };
     let id = job.t("id");
     let mut req = obj(json!({ "text": text, "delegate": delegate, "settings": to_send("", &crate::store::settings::places::yours()), "from": crate::remote::check::hostname() }));
     if !about.is_empty() { req.put("about", about); }
+    if !to.is_empty() { req.put("to", to); }
     let answer = ask(&m, "dispatch", Some(&Value::Object(req)), 150000);
     if get_dispatch(&id).is_none() { return Done::default(); } // stopped meanwhile
     match answer {

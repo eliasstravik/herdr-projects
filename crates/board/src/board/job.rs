@@ -20,18 +20,18 @@ pub enum Job {
     Clear { id: String, name: String },
     Pick { id: String, letter: String },
     /// What you typed, for this machine's Coordinator; with no Coordinator, a task (or words added to one's description).
-    CoordSend { cwd: String, text: String, delegate: bool, about: String },
+    CoordSend { cwd: String, text: String, delegate: bool, about: String, to: String },
     Add { cwd: String, text: String, delegate: bool },
     Describe { id: String, text: String },
     /// Words for another machine's Coordinator: a row of their own until that machine has them.
-    Dispatch { machine: crate::remote::Machine, text: String, delegate: bool, about: String },
+    Dispatch { machine: crate::remote::Machine, text: String, delegate: bool, about: String, to: String },
     StopDispatch { id: String },
     /// One of the exact actions, on a task or an automation of another machine.
     Far { machine: crate::remote::Machine, host: String, action: String, req: Value, quiet: bool },
     AutoTurn { id: String, on: bool }, AutoFire { id: String }, AutoRemove { id: String, name: String },
     /// A setting of a task (or an automation, `auto`): a value, or none to put it back.
     Set { id: String, name: String, value: Option<String>, auto: bool },
-    CoordSeen { unseen: String },
+    CoordSeen { unseen: String, to: String },
     /// You left the chat with a task whose chat changed its code: its review need not wait the quiet time.
     ChatLeft { id: String },
     /// Into a task's agent: its real herdr pane (`attempt`: the selected attempt's, not the task's).
@@ -157,7 +157,7 @@ fn run_one(job: Job) -> Done {
                 if kept.is_empty() { Done::say(format!("Removed {name}."), Ink::Muted) } else { Done::say(format!("Removed {name}. Kept, so no work is lost: {}", kept.join(", ")), Ink::Yellow) }
             }
             Job::Pick { id, letter } => green(crate::attempts::settle::pick(&id, &letter)?.msg),
-            Job::CoordSend { cwd, text, delegate, about } => { crate::coordinator::requests::send(std::path::Path::new(&cwd), &text, delegate, &about, &crate::herdr::cli::current_socket())?; Done::default() }
+            Job::CoordSend { cwd, text, delegate, about, to } => { crate::coordinator::requests::send(std::path::Path::new(&cwd), &text, delegate, &about, crate::coordinator::co::Co::of(&crate::herdr::cli::current_socket(), &to))?; Done::default() }
             Job::Add { cwd, text, delegate } => {
                 let (title, rest) = text.split_once('\n').unwrap_or((&text, ""));
                 let t = filing::add(std::path::Path::new(&cwd), title, filing::AddOpts { description: rest.into(), ..Default::default() })?;
@@ -170,14 +170,14 @@ fn run_one(job: Job) -> Done {
                 filing::describe(&id, &desc)?;
                 green(format!("{id}: updated (description)"))
             }
-            Job::Dispatch { machine, text, delegate, about } => super::job_far::dispatch(machine, text, delegate, about),
+            Job::Dispatch { machine, text, delegate, about, to } => super::job_far::dispatch(machine, text, delegate, about, to),
             Job::StopDispatch { id } => { crate::watcher::stop_dispatch(&id); Done::say("Stopped.", Ink::Yellow) }
             Job::Far { machine, host, action, req, quiet } => super::job_far::far(&machine, &host, &action, req, quiet),
             Job::AutoTurn { id, on } => { let (w, ink) = crate::automations::show::turned_words(&crate::automations::list::turn(&id, on)?); Done::say(w, ink) }
             Job::AutoFire { id } => { let a = crate::automations::list::find(&id)?; let f = crate::automations::fire::fire(&id, crate::automations::told::Cause::Run, crate::clock::now())?; let (w, ink) = crate::automations::show::fired_words(&a, &f); Done::say(w, ink) }
             Job::AutoRemove { id, name } => { crate::automations::list::remove(&id)?; Done::say(format!("Removed the automation \"{name}\"."), Ink::Muted).and(Then::AutoGone) }
             Job::Set { id, name, value, auto } => super::job_far::set(&id, &name, value, auto)?,
-            Job::CoordSeen { unseen } => { crate::coordinator::requests::seen(&unseen, &crate::herdr::cli::current_socket()); Done::default() }
+            Job::CoordSeen { unseen, to } => { crate::coordinator::requests::seen(&unseen, crate::coordinator::co::Co::of(&crate::herdr::cli::current_socket(), &to)); Done::default() }
             Job::ChatLeft { id } => { crate::finish::chat::left(&id); Done::default() }
             Job::OpenAgent { id, popup } => super::job_far::open_agent(&id, popup),
             Job::FreeSize { pids } => {

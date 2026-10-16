@@ -42,7 +42,7 @@ fn poll(s: &mut crate::board::state::State, run: &mut Run, now_too: bool) {
 pub fn open_board(folder: &std::path::Path) -> i32 {
     let (mut s, theme, named) = start::prepare(folder);
     let (tx, rx) = channel::<Msg>();
-    let wants = Arc::new(Mutex::new(Wants { ids: vec![s.sel.clone()], cwd: s.ctx.cwd.clone(), own_pane: place::own_name(), web: false }));
+    let wants = Arc::new(Mutex::new(Wants { ids: vec![s.sel.clone()], cwd: s.ctx.cwd.clone(), own_pane: place::own_name(), web: false, coord: String::new() }));
     let load = Arc::new((Mutex::new(true), std::sync::Condvar::new()));
     let mut run = Run { tx: tx.clone(), wants: wants.clone(), load: load.clone(), machines_at: 0 };
     start::threads(&tx, &wants, &load);
@@ -114,7 +114,7 @@ pub fn open_board(folder: &std::path::Path) -> i32 {
             }
         }
         // What the loader reads closer: the selected task, and the one the chat talks to.
-        { let mut w = wants.lock().unwrap(); let ids = vec![s.sel.clone(), s.reply_id.clone()]; if w.ids != ids || w.cwd != s.ctx.cwd { w.ids = ids; w.cwd = s.ctx.cwd.clone(); drop(w); run.kick(); } }
+        { let mut w = wants.lock().unwrap(); let (ids, coord) = (vec![s.sel.clone(), s.reply_id.clone()], crate::board::update::coords::wanted(&s)); if w.ids != ids || w.cwd != s.ctx.cwd || w.coord != coord { w.ids = ids; w.cwd = s.ctx.cwd.clone(); w.coord = coord; drop(w); run.kick(); } }
         if STOP.load(Ordering::SeqCst) { prefs::save(&s); close = true; }
         if close || reload { break; }
     }

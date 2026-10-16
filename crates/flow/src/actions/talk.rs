@@ -22,10 +22,13 @@ pub fn reply(id: &str, text: &str, by: &str) -> Res<Said> {
     if let Ok(t) = find(id) { crate::store::said_by::note_person(t.s("id"), by, text.trim()); }
     tell_as(id, text, false, true)
 }
-/// Who runs this command: the Coordinator where it runs in the Coordinator's own folder, else you.
+/// Who runs this command: a coordinator where it runs in the Coordinator's own folder or in a coordinator's pane, else you.
 pub fn asker() -> &'static str {
-    let home = crate::coordinator::state::home(&crate::herdr::cli::current_socket());
-    if std::env::current_dir().map(|d| d.starts_with(&home)).unwrap_or(false) { "coordinator" } else { crate::status_words::who::YOU }
+    let socket = crate::herdr::cli::current_socket();
+    let home = crate::coordinator::state::home(&socket);
+    let pane = crate::util::env_val("HERDR_PANE_ID").unwrap_or_default();
+    let in_one = !pane.is_empty() && crate::coordinator::state::all(&socket).iter().any(|co| crate::coordinator::state::get(co).map(|c| c.s("pane") == pane).unwrap_or(false));
+    if in_one || std::env::current_dir().map(|d| d.starts_with(&home)).unwrap_or(false) { "coordinator" } else { crate::status_words::who::YOU }
 }
 /// A reply from the board is a human turn: it re-arms the pipeline, revokes an approval, cancels a pending
 /// auto-merge and marks the old review stale, exactly as typing in the agent's own terminal does.

@@ -39,10 +39,12 @@ pub fn side_of(s: &mut State, t: &Theme) -> Obj {
         // The part it opens on: the newest thing said, whoever said it.
         "from": crate::board::view::talk::opens_at(&w.parts),
         "raw": w.raw, "mine": w.mine, "tone": if w.name == "Coordinator" && w.parts.first().map(|p| p.tone == "red").unwrap_or(false) { "red" } else { "" }, "note": w.note,
-        "toAgent": s.reply && r.is_some(), "box": crate::board::view::textbox::box_ink(s, r.as_ref()).name(),
+        "toAgent": s.reply && (r.is_some() || crate::board::update::coords::talking(s).is_some()), "box": crate::board::view::textbox::box_ink(s, r.as_ref()).name(),
         // Whether the latest message shows (alt+c), and the two you can talk to: the Coordinator, and the selected task's
-        // agent (only on a task's row: on an automation's the key is the automation's own).
+        // agent (only on a task's row: on an automation's the key is the automation's own), or on a machine's or a
+        // repo's heading its coordinator (`head`).
         "open": chat_up(s, Some(w)), "coord": coord_name(s), "task": r.as_ref().filter(|r| r.has("title")).map(|r| number_tag(r, &s.data.keys, &s.scope, true)).unwrap_or_default(),
+        "head": crate::board::update::coords::of_head(s, &s.sel).map(|c| c.name).unwrap_or_default(),
     })).unwrap_or(Value::Null);
     let ask = s.ask.as_ref().map(|a| {
         let keys: Vec<Value> = if a.keys.is_empty() { vec![json!({ "id": "sayYes", "label": "yes" }), json!({ "id": "sayNo", "label": "no" })] } else { a.keys.iter().map(|(id, l)| json!({ "id": id, "label": l })).collect() };

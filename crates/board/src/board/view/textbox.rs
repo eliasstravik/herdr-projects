@@ -36,6 +36,7 @@ pub fn box_lines(s: &mut State, width: usize, max_rows: usize, r: Option<&Obj>) 
     let mut lines = d.lines;
     let place = if let Some(e) = &s.editing { if !e.typing.is_empty() { "type the new value".to_string() } else { "pick a setting above".into() } }
         else if s.mode == Mode::Find { "type to filter, archived tasks too".into() }
+        else if let Some(c) = crate::board::update::coords::talking(s) { send_to(&c.name) }
         else if replying { let r = r.unwrap(); if r.b("archivedAt") { "archived: read-only".into() } else if is_agent(r) { format!("{}{}", send_to(AGENT_TAB), if reviewing(r) { ": the review goes on unless the code changes" } else { "" }) } else if !r.b("host") && ["todo", "progress"].contains(&r.s("stage")) { "your message starts an agent on it".into() } else if s.data.can_dispatch || r.b("host") { send_to(COORDINATOR_TAB) } else { "what should change?".into() } }
         else if s.talks_to_coord() { send_to(COORDINATOR_TAB) } else { "Add a task".into() };
     // The placeholder never runs past the box: it is cut with … like any other greyed line.

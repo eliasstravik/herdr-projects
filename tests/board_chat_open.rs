@@ -17,7 +17,7 @@ fn said(from: usize, to: usize, twice: &[usize]) -> Vec<sw::agents::talk::Said> 
 /// The list read again, as the board's own reads bring it: the Coordinator in `state`, saying messages `from` to `to`.
 fn read(b: &mut Board, from: usize, to: usize, state: &str) { read_twice(b, from, to, state, &[]) }
 fn read_twice(b: &mut Board, from: usize, to: usize, state: &str, twice: &[usize]) {
-    let mut d = load(&Wants { ids: vec![b.s.sel.clone()], cwd: b.s.ctx.cwd.clone(), own_pane: String::new(), web: false });
+    let mut d = load(&Wants { ids: vec![b.s.sel.clone()], cwd: b.s.ctx.cwd.clone(), own_pane: String::new(), web: false, ..Default::default() });
     d.can_dispatch = true;
     let c = &mut d.coord;
     c.state = state.into(); c.readable = true; c.status = None; c.error.clear(); c.sent.clear(); c.unseen.clear(); c.stale = false;

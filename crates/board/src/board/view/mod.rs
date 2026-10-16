@@ -14,6 +14,7 @@ pub mod ask;
 pub mod chat;
 pub mod chat_keep;
 pub mod chat_text;
+pub mod coords;
 pub mod hints;
 pub mod list;
 pub mod menu;

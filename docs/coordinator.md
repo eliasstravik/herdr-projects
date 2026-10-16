@@ -4,6 +4,9 @@
 It is one long-lived agent chat, not a call per message: everything you type goes into the same conversation, so
 "delegate that one too" works, and it can ask you something back.
 
+Each machine and each repo has a coordinator of its own too, beside this one: `Space` on its heading
+([machine and project coordinators](machine-and-project-coordinators.md)).
+
 - `Enter` sends your message.
 - `Tab` sends it and **starts an agent on every task it adds** from that message.
 - `Alt+C` shows and hides its latest message on the board.

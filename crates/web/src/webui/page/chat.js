@@ -89,11 +89,12 @@ export function chatEl({ onSend, onPress }) {
       if (!c) return;
       // The switch: the Coordinator (or, with none, a new task), and the selected task's agent. Only on a task's row:
       // on an automation's row that key is the automation's own (it turns it on or off).
-      const onTask = !!snap.list.selected && snap.flags?.onTask !== false && !!c.task;
+      // On a machine's or a repo's heading the other choice is its own coordinator (`head`).
+      const onTask = !!snap.list.selected && snap.flags?.onTask !== false && !!c.task, onHead = !onTask && !!c.head;
       coord.textContent = c.coord || c.name; coord.setAttribute("aria-pressed", String(!c.toAgent));
-      agent.textContent = onTask ? `${c.task} agent` : "A task's agent"; agent.setAttribute("aria-pressed", String(!!c.toAgent));
-      agent.disabled = !onTask && !c.toAgent; agent.title = agent.disabled ? "Select a task to talk to its agent" : "";
-      coord.title = c.toAgent ? "Talk to the Coordinator" : ""; if (!c.toAgent && onTask) agent.title = "Talk to this task's agent";
+      agent.textContent = onTask ? `${c.task} agent` : onHead ? c.head : "A task's agent"; agent.setAttribute("aria-pressed", String(!!c.toAgent));
+      agent.disabled = !onTask && !onHead && !c.toAgent; agent.title = agent.disabled ? "Select a task to talk to its agent" : "";
+      coord.title = c.toAgent ? "Talk to the Coordinator" : ""; if (!c.toAgent && (onTask || onHead)) agent.title = onHead ? `Talk to the ${c.head}` : "Talk to this task's agent";
       // Where they stand, as the terminal's line over the box says it: the mark, the task's name (the switch names the
       // Coordinator), what it is doing. Only what there is: replaceChildren would write a missing part out as "null".
       who.replaceChildren(...[markEl(c.mark.t, c.mark.c), c.toAgent ? h("span.sw-who-name", c.name) : null, h("span.sw-who-status", [c.status, c.progress].filter(Boolean).join("  "))].filter(Boolean));

@@ -49,7 +49,7 @@ pub fn send(c: &mut Client, words: &str, delegate: bool, to: Option<(String, boo
             if !sc.is_empty() && sc != "*" && !c.s.remotes.contains_key(sc) { c.s.flash(format!("{sc} is not among the machines you can reach now. Nothing was sent."), Ink::Yellow); return true; }
             set_scope(c, sc);
         }
-        if reply && !c.s.items.iter().any(|r| r.s("id") == id) {
+        if reply && !crate::board::update::coords::exists(&c.s, id) {
             let was = back.as_ref().unwrap().3.clone();
             if c.s.scope != was { set_scope(c, &was); }
             c.s.flash("The task those words were for is gone. Nothing was sent.", Ink::Yellow); return true;

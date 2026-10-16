@@ -46,7 +46,9 @@ pub fn entry_of(t: &Obj, who_is: &str, now: i64) -> Entry {
 }
 pub fn reviewer_entry(t: &Obj, now: i64) -> Entry { entry_of(t, who::REVIEWER, now) }
 /// The Coordinator's: its name and where it stands as the line above the board's box says it, and its last message.
-pub fn coordinator_entry(state_word: &str, waiting: usize, said: &str) -> Entry {
-    let place = format!("{COORDINATOR}{SEP}{}", coordinator_status(state_word, waiting));
-    Entry { name: COORDINATOR.into(), stands: cut(&place), place, age: String::new(), line: cut(&words(said)), progress: String::new() }
+pub fn coordinator_entry(state_word: &str, waiting: usize, said: &str) -> Entry { named_coordinator_entry(COORDINATOR, state_word, waiting, said) }
+/// Any coordinator's, under its own name ("vm-str coordinator").
+pub fn named_coordinator_entry(name: &str, state_word: &str, waiting: usize, said: &str) -> Entry {
+    let place = format!("{name}{SEP}{}", coordinator_status(state_word, waiting));
+    Entry { name: name.into(), stands: cut(&place), place, age: String::new(), line: cut(&words(said)), progress: String::new() }
 }

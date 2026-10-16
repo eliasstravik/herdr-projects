@@ -13,10 +13,10 @@ use crate::store::{automations::automations, inbox::{clear_dispatch, dispatches}
 use std::collections::BTreeMap;
 
 /// Another machine, as the board knows it: its tasks as rows, its automations, its Coordinator as it sent it
-/// (coordinator/far.rs), and why it did not answer; `sidebar`: its herdr list of machines as it last sent it
+/// (coordinator/far.rs) and its machine's and repos' coordinators (`coords`, by level), and why it did not answer; `sidebar`: its herdr list of machines as it last sent it
 /// (remote/sidebar.rs), None from one that sends none.
 #[derive(Clone, Debug, Default)]
-pub struct Remote { pub machine: crate::remote::Machine, pub items: Vec<crate::board::state::Rec>, pub autos: Vec<Obj>, pub ok: bool, pub busy: bool, pub fail_at: i64, pub why: Option<Value>, pub version: String, pub coord: Value, pub sidebar: Option<Vec<crate::remote::sidebar::Entry>> }
+pub struct Remote { pub machine: crate::remote::Machine, pub items: Vec<crate::board::state::Rec>, pub autos: Vec<Obj>, pub ok: bool, pub busy: bool, pub fail_at: i64, pub why: Option<Value>, pub version: String, pub coord: Value, pub coords: Value, pub sidebar: Option<Vec<crate::remote::sidebar::Entry>> }
 
 #[derive(Clone, Debug, Default)]
 pub struct Data {
@@ -27,6 +27,9 @@ pub struct Data {
     /// Words on their way to another machine's Coordinator.
     pub jobs: Vec<Obj>,
     pub coord: Look, pub coord_screen: String, pub can_dispatch: bool,
+    /// The machine's or a repo's coordinator of this machine the chat talks to: its level ("machine",
+    /// "project:<repo>"), how it stands, and its screen (update/coords.rs).
+    pub sub: Option<(String, Look, String)>,
     pub keys: Keys, pub repos: Vec<String>, pub roots: BTreeMap<String, String>, pub session: String, pub notify: String,
     /// The repo the board is in (where it was opened, or where a draft was typed), its folder, and the tasks' file.
     pub repo: String, pub repo_root: String,
@@ -40,7 +43,7 @@ pub struct Data {
 }
 /// What the board wants a closer look at.
 #[derive(Clone, Debug, Default)]
-pub struct Wants { pub ids: Vec<String>, pub cwd: String, pub own_pane: String, pub web: bool }
+pub struct Wants { pub ids: Vec<String>, pub cwd: String, pub own_pane: String, pub web: bool, pub coord: String }
 
 /// The repo the board is in, worked out once for each folder: a busy lock keeps what was known.
 pub fn repo_here(cwd: &str) -> (String, String) {
@@ -70,10 +73,11 @@ pub fn load(wants: &Wants) -> Data {
     let jobs = jobs.into_iter().filter(|j| j.s("state") != "done").rev().collect();
     let coord = look(&socket);
     let coord_screen = if !coord.readable && coord.status.is_some() { screen_text(&screen(&coord, &socket)) } else { String::new() };
+    let sub = (!wants.coord.is_empty()).then(|| { let co = crate::coordinator::co::Co::of(&socket, &wants.coord); let v = look(&co); let sc = if !v.readable && v.status.is_some() { screen_text(&screen(&v, &co)) } else { String::new() }; (wants.coord.clone(), v, sc) });
     let here = repo_here(&wants.cwd);
     let roots: BTreeMap<String, String> = known_repos().iter().map(|(k, v)| (k.clone(), text(v))).collect();
     Data {
-        items, autos, jobs, coord, coord_screen, can_dispatch: crate::coordinator::who::ready(&socket), keys: repo_keys(), repos: roots.keys().cloned().collect(), roots,
+        items, autos, jobs, coord, coord_screen, sub, can_dispatch: crate::coordinator::who::ready(&socket), keys: repo_keys(), repos: roots.keys().cloned().collect(), roots,
         session: session_name(&socket), notify: setting("board.notify", None).as_str().unwrap_or("").to_string(),
         repo: here.0, repo_root: here.1, host: crate::remote::check::hostname(),
         // herdr's approve action and a line left by the board key are for a board in a terminal, never the web board.

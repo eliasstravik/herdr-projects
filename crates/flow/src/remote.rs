@@ -115,8 +115,11 @@ pub fn remote_list() -> Value {
     }).collect();
     // This machine's Coordinator, which gets what the asking side types while it shows this machine's board.
     let socket = crate::herdr::cli::current_socket();
-    let coordinator = crate::coordinator::far::sent(&crate::coordinator::look::look(&socket), crate::coordinator::who::ready(&socket));
-    json!({ "host": check::hostname(), "version": VERSION, "automations": automations::automations_sent(), "coordinator": coordinator, "sidebar": sidebar::sent(), "tasks": tasks })
+    let ready = crate::coordinator::who::ready(&socket);
+    let coordinator = crate::coordinator::far::sent(&crate::coordinator::look::look(&socket), ready);
+    // Its machine's and its repos' coordinators that were ever talked to, by level ("machine", "project:<repo>").
+    let coordinators: Obj = crate::coordinator::state::all(&socket).into_iter().filter(|co| !co.is_top()).map(|co| (co.to(), crate::coordinator::far::sent(&crate::coordinator::look::look(&co), ready))).collect();
+    json!({ "host": check::hostname(), "version": VERSION, "automations": automations::automations_sent(), "coordinator": coordinator, "coordinators": coordinators, "sidebar": sidebar::sent(), "tasks": tasks })
 }
 pub fn remote_main(a: &[String]) -> i32 {
     let what = a.first().cloned().unwrap_or_default();
@@ -185,6 +188,13 @@ pub fn door(what: &str, req: &Value) -> Res<Value> {
         "dispatch" => {
             let cwd = if req.b("about") { folder_of(req.s("about")) } else { crate::store::files::user_home() };
             let socket = crate::herdr::cli::current_socket();
+            // For this machine's own machine coordinator, or a repo's: none runs without the Coordinator's settings.
+            let co = crate::coordinator::co::Co::of(&socket, req.s("to"));
+            if !co.is_top() {
+                if !crate::coordinator::who::ready(&socket) { crate::fail!("{} has no coordinators: {}", check::hostname(), crate::coordinator::who::OFF_WORDS); }
+                crate::coordinator::requests::send(&cwd, &req.t("text"), req.b("delegate"), "", &co)?;
+                return ok(format!("sent to the {}", co.name()));
+            }
             if !crate::coordinator::who::ready(&socket) {
                 let text = req.t("text");
                 let (title, rest) = text.split_once('\n').unwrap_or((&text, ""));

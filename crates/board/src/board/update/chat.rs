@@ -33,9 +33,12 @@ pub fn sent_to(s: &mut State, r: &Obj) -> String {
 }
 /// Called on every beat and after every change: a Coordinator reply you can see counts as seen.
 pub fn sync_coord(s: &mut State, fx: &mut Vec<Effect>) {
+    // A machine's or a repo's coordinator of this machine you talk to: its reply you can see counts as seen too.
+    let (here, open) = (super::coords::wanted(s), s.chat_open && s.setup.is_none());
+    if let Some((to, v, _)) = s.data.sub.as_mut().filter(|x| !x.1.unseen.is_empty() && open && here == x.0) { fx.push(Effect::Run(crate::board::job::Job::CoordSeen { unseen: v.unseen.clone(), to: to.clone() })); v.unseen.clear(); }
     let unseen = s.data.coord.unseen.clone();
     if unseen.is_empty() { return; }
-    if !s.reply && s.chat_open && s.setup.is_none() { fx.push(Effect::Run(crate::board::job::Job::CoordSeen { unseen })); s.data.coord.unseen.clear(); }
+    if !s.reply && s.chat_open && s.setup.is_none() { fx.push(Effect::Run(crate::board::job::Job::CoordSeen { unseen, to: String::new() })); s.data.coord.unseen.clear(); }
     else if s.reply && s.told_reply != unseen && s.msg.is_empty() { s.told_reply = unseen; s.flash(format!("The Coordinator replied. {} goes back to it.", crate::board::keys::key_name("talk")), crate::shown::ink::Ink::Green); }
 }
 /// Scroll the message `by` lines (up when negative). Down again from the end of a conversation that was opened (or

@@ -56,6 +56,8 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
   herdr-projects coordinator new [--agent KIND[/MODEL]] [--effort E]
                                                 a fresh one; with options, that choice is for this one only
   herdr-projects coordinator stop              close it; the next message starts it again where it left off (words still waiting go in then)
+  herdr-projects coordinator --machine …       the same for this machine's machine coordinator
+  herdr-projects coordinator --project REPO …  the same for a repo's project coordinator
   herdr-projects --skill                       instructions an agent can load
   herdr-projects machines                      other machines: whether each answers, its version, or why not and what to do;
                                                 and whether another machine could ask this one

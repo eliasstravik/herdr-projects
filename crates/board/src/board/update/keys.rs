@@ -54,7 +54,7 @@ fn press(s: &mut State, p: &Press, fx: &mut Vec<Effect>) {
         // step only shows how the board closes (the popup closes on it).
         if s.mode != Mode::New { s.mode = Mode::New; s.input.set_text(""); }
         else if !s.value().is_empty() {
-            if !text.is_empty() { s.draft_away = Some(Away { text: s.value(), to: if s.reply { r.as_ref().map(|r| r.t("id")).unwrap_or_default() } else { String::new() }, cwd: s.ctx.cwd.clone(), warned: false }); s.flash(format!("Put away. {} brings it back.", key_name("undo")), Ink::Muted); }
+            if !text.is_empty() { s.draft_away = Some(Away { text: s.value(), to: if s.reply { r.as_ref().map(|r| r.t("id")).or_else(|| super::coords::talking(s).map(|_| s.sel.clone())).unwrap_or_default() } else { String::new() }, cwd: s.ctx.cwd.clone(), warned: false }); s.flash(format!("Put away. {} brings it back.", key_name("undo")), Ink::Muted); }
             s.input.set_text("");
         }
         else if s.full { return act::fold_panel(s); }

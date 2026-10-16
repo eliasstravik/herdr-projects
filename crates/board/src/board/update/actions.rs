@@ -37,6 +37,7 @@ pub fn has_agent(r: &Obj) -> bool { is_agent(r) && (r.b("host") || crate::flow::
 // ---- enter and tab ---------------------------------------------------------------------------------------------------
 pub fn enter(s: &mut State, text: &str, r: Option<&Obj>, fx: &mut Vec<Effect>) {
     if text.is_empty() { if let Some(r) = r { open_agent(s, r, fx); } return; } // with nothing typed, enter opens the selected task's agent
+    if let Some(t) = super::coords::talking(s) { let w = s.value(); return super::coords::send(s, &t, w.trim(), false, fx); }
     // Who gets it is who the chat names: the selected task's agent after space, the Coordinator otherwise.
     if s.reply { if let Some(r) = r {
         if r.b("archivedAt") { return s.flash(read_only(), Ink::Yellow); }
@@ -53,6 +54,7 @@ pub fn enter(s: &mut State, text: &str, r: Option<&Obj>, fx: &mut Vec<Effect>) {
     s.input.set_text("");
 }
 pub fn tab(s: &mut State, text: &str, r: Option<&Obj>, fx: &mut Vec<Effect>) {
+    if let Some(t) = super::coords::talking(s).filter(|_| !text.is_empty()) { let w = s.value(); return super::coords::send(s, &t, w.trim(), true, fx); }
     if !text.is_empty() { if (s.reply && r.is_some()) || s.mode != crate::board::state::Mode::New { return; } let w = s.value(); dispatch(s, w.trim(), true, None, fx); s.input.set_text(""); return; }
     let Some(r) = r else { return };
     if r.b("archivedAt") { return s.flash(read_only(), Ink::Yellow); }
@@ -76,7 +78,7 @@ pub fn dispatch(s: &mut State, text: &str, delegate: bool, about: Option<&Obj>, 
         let named_here = named.as_ref().map(|(m, _)| *m == label).unwrap_or(false);
         let words = if about.map(|a| a.b("host")).unwrap_or(false) || !named_here { text.to_string() } else { named.unwrap().1 };
         let m = s.remotes[&label].machine.clone();
-        fx.push(Effect::Run(Job::Dispatch { machine: m, text: words, delegate, about: about.filter(|a| a.b("host")).map(|a| a.t("rid")).unwrap_or_default() }));
+        fx.push(Effect::Run(Job::Dispatch { machine: m, text: words, delegate, about: about.filter(|a| a.b("host")).map(|a| a.t("rid")).unwrap_or_default(), to: String::new() }));
         fx.push(Effect::Load);
         return;
     }
@@ -85,7 +87,7 @@ pub fn dispatch(s: &mut State, text: &str, delegate: bool, about: Option<&Obj>, 
         fx.push(Effect::Run(Job::Add { cwd: s.ctx.cwd.clone(), text: text.into(), delegate }));
         return;
     }
-    fx.push(Effect::Run(Job::CoordSend { cwd: s.ctx.cwd.clone(), text: text.into(), delegate, about: about.map(|a| a.t("id")).unwrap_or_default() }));
+    fx.push(Effect::Run(Job::CoordSend { cwd: s.ctx.cwd.clone(), text: text.into(), delegate, about: about.map(|a| a.t("id")).unwrap_or_default(), to: String::new() }));
     fx.push(Effect::Load);
 }
 /// Into the selected task's agent: its real herdr pane (attempts.rs: the selected attempt's while one is picked).
@@ -189,17 +191,18 @@ pub fn remove(s: &mut State, r: &Obj) {
 pub fn undo(s: &mut State, fx: &mut Vec<Effect>) {
     // A draft comes back only to whoever it was for: a reply stays a reply to that task, never a new task.
     if let Some(mut d) = s.draft_away.clone() {
-        if !d.to.is_empty() && !s.items.iter().any(|r| r.s("id") == d.to && !r.b("archivedAt")) {
+        if !d.to.is_empty() && !s.items.iter().any(|r| r.s("id") == d.to && !r.b("archivedAt")) && super::coords::of_head(s, &d.to).filter(|_| super::coords::exists(s, &d.to)).is_none() {
             if !d.warned { d.warned = true; s.draft_away = Some(d); return s.flash(format!("The task that reply was for is gone. {} again brings the words back as a draft of their own.", key_name("undo")), Ink::Yellow); }
             d.to.clear();
         }
-        let now = if s.reply && s.current().is_some() { s.sel.clone() } else { String::new() };
+        let now = if s.reply && (s.current().is_some() || super::coords::talking(s).is_some()) { s.sel.clone() } else { String::new() };
         if d.to != now {
-            let title = s.items.iter().find(|r| r.s("id") == d.to).map(|r| r.t("title")).unwrap_or_else(|| d.to.clone());
+            let title = s.items.iter().find(|r| r.s("id") == d.to).map(|r| r.t("title")).or_else(|| super::coords::of_head(s, &d.to).map(|c| c.name)).unwrap_or_else(|| d.to.clone());
             let nm = format!("\"{}\"", crate::text::cut(&clean(&title), 40));
             s.draft_away = Some(d.clone());
             return s.flash(if d.to.is_empty() { format!("Those words were for the Coordinator. {} goes back to it, then {} brings them back.", key_name("talk"), key_name("undo")) }
                 else if !now.is_empty() { format!("Those words were for {nm}. Move to it, then {} brings them back.", key_name("undo")) }
+                else if super::heads::is_head(&d.to) { format!("Those words were for the {}. Select its heading and press {}, then {} brings them back.", clean(&title), key_name("talk"), key_name("undo")) }
                 else { format!("Those words were for the agent on {nm}. Select it and press {}, then {} brings them back.", key_name("talk"), key_name("undo")) }, Ink::Yellow);
         }
         s.draft_away = None;
@@ -226,8 +229,8 @@ pub fn pin(s: &mut State, r: &Obj, fx: &mut Vec<Effect>) {
 }
 /// The one key that changes who you talk to: the selected task's agent, and back to the Coordinator.
 pub fn flip_reply(s: &mut State, r: Option<&Obj>) {
-    let Some(r) = r else { return };
-    if s.reply { s.reply = false; s.panel_top = 0; return relist(s); }
+    if s.reply && (r.is_some() || super::coords::talking(s).is_some()) { s.reply = false; s.panel_top = 0; return relist(s); }
+    let Some(r) = r else { super::coords::flip(s); return };
     if r.b("archivedAt") { return s.flash(read_only(), Ink::Yellow); }
     s.reply = true; s.reply_id = r.t("id");
 }

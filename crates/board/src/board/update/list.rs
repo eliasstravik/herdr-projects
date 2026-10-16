@@ -139,8 +139,8 @@ fn first_row(ids: &[String]) -> String { ids.iter().find(|i| !is_head(i)).or(ids
 /// Coordinator, never on to a neighbour's agent. On a row with no task, `reply_id` is empty.
 pub fn sync_reply(s: &mut State) {
     if !s.reply || s.sel == s.reply_id { return; }
-    if !s.reply_id.is_empty() && !s.items.iter().any(|r| r.s("id") == s.reply_id) { s.reply = false; s.full = false; s.panel_top = 0; }
-    else { s.reply_id = if s.current().is_some() { s.sel.clone() } else { String::new() }; s.panel_top = 0; }
+    if !s.reply_id.is_empty() && !super::coords::exists(s, &s.reply_id) { s.reply = false; s.full = false; s.panel_top = 0; }
+    else { s.reply_id = if s.current().is_some() || super::coords::of_head(s, &s.sel).is_some() { s.sel.clone() } else { String::new() }; s.panel_top = 0; }
 }
 /// The rows under their headings. A long done list folds to its latest few; a list taller than its room shows fewer
 /// done rows, down to one, then fewer to-dos of a list that has live tasks. The selected task is never folded away,

@@ -154,7 +154,7 @@ fn a_board_in_a_tab_keeps_running_beside_the_popup_each_has_its_own_note_and_its
 /// What the loader reads for the board in pane `own` (the lines left for it), as the board's loop would ask.
 fn load_own(b: &mut Board, own: &str) {
     use sw::board::update::{update, Effect, Event};
-    let d = sw::board::data::load(&sw::board::data::Wants { ids: vec![b.s.sel.clone(), b.s.reply_id.clone()], cwd: b.s.ctx.cwd.clone(), own_pane: own.into(), web: false });
+    let d = sw::board::data::load(&sw::board::data::Wants { ids: vec![b.s.sel.clone(), b.s.reply_id.clone()], cwd: b.s.ctx.cwd.clone(), own_pane: own.into(), web: false, ..Default::default() });
     let mut fx = update(&mut b.s, Event::Loaded(Box::new(d)));
     while let Some(e) = fx.pop() { if let Effect::Run(j) = e { let d = sw::board::job::run(j); fx.extend(update(&mut b.s, Event::Done(d))); } }
 }

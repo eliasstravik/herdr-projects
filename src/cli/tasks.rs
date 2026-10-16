@@ -142,10 +142,13 @@ mod finish_line_said { pub use crate::actions::shared::Said; }
 
 fn coordinator(a: &Args, here: &std::path::Path) -> Res<(Value, String)> {
     use crate::coordinator::{look, requests as r, state, who};
-    let socket = current_socket();
+    let flag = |k: &str| a.flags.get(k).map(text).unwrap_or_default();
+    // Which one: the top-level Coordinator, this machine's (--machine), or a repo's (--project <repo>).
+    let socket = if a.flags.b("project") { let repo = flag("project"); crate::coordinator::co::Co::project(&current_socket(), &crate::store::repos::known_repos().keys().find(|k| k.to_lowercase() == repo.to_lowercase()).cloned().unwrap_or(repo)).key() }
+        else if a.flags.b("machine") { crate::coordinator::co::Co::machine(&current_socket()).key() } else { current_socket() };
+    let name = crate::coordinator::co::Co::from(&socket).name();
     let what = a.pos.get(1).map(|s| s.as_str()).unwrap_or("status");
     let rest = a.pos.iter().skip(2).cloned().collect::<Vec<_>>().join(" ");
-    let flag = |k: &str| a.flags.get(k).map(text).unwrap_or_default();
     match what {
         "where" => return Ok((json!({ "where": state::get(&socket).map(|c| c.at("where").clone()).unwrap_or(json!([])) }), r::where_text(&socket))),
         "tell" => { if rest.is_empty() { crate::fail!("coordinator needs the text. Try: herdr-projects help"); } r::send(here, &rest, a.flags.b("delegate"), "", &socket)?; }
@@ -157,11 +160,11 @@ fn coordinator(a: &Args, here: &std::path::Path) -> Res<(Value, String)> {
     }
     let s = look::summary(&socket);
     let text = match what {
-        "tell" => "sent to the Coordinator".to_string(),
-        "restart" => "the Coordinator is restarting, in the same conversation".into(),
-        "new" | "fresh" => "a new Coordinator is starting".into(),
-        "stop" => "the Coordinator is stopped; the next message starts it again".into(),
-        _ => format!("Coordinator: {} · {}{} · default: {}{}{}", s.s("state"),
+        "tell" => format!("sent to the {name}"),
+        "restart" => format!("the {name} is restarting, in the same conversation"),
+        "new" | "fresh" => format!("a new {name} is starting"),
+        "stop" => format!("the {name} is stopped; the next message starts it again"),
+        _ => format!("{name}: {} · {}{} · default: {}{}{}", s.s("state"),
             [s.t("agent"), if s.b("model") { s.t("model") } else { "default model".into() }, if s.b("effort") { s.t("effort") } else { "default effort".into() }].join(" · "),
             if s.b("oneOff") { " (for this one only)" } else { "" }, s.s("default"), if s.b("error") { format!("\n{}", s.s("error")) } else { String::new() }, if s.b("said") { format!("\n\n{}", s.s("said")) } else { String::new() }),
     };

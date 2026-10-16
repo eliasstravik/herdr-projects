@@ -31,7 +31,7 @@ pub fn answered(s: &mut State, label: &str, answer: Result<Value, Value>) {
     m.busy = false;
     match answer {
         Ok(j) if j.at("tasks").is_array() => {
-            m.ok = true; m.why = None; m.version = j.t("version"); m.coord = j.at("coordinator").clone(); m.sidebar = sidebar::read(j.at("sidebar"));
+            m.ok = true; m.why = None; m.version = j.t("version"); m.coord = j.at("coordinator").clone(); m.coords = j.at("coordinators").clone(); m.sidebar = sidebar::read(j.at("sidebar"));
             let mc = m.machine.clone();
             m.items = j.arr("tasks").iter().filter_map(|x| x.as_object()).map(|x| {
                 let mut r = crate::shown::states::as_row(x);
