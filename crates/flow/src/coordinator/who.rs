@@ -12,7 +12,7 @@ use crate::store::settings_list::entry_of;
 pub fn choice() -> Option<Obj> {
     let who = role_of("coordinator", &|n| setting(n, None));
     if who.kind.is_empty() { return None; }
-    let mut c = obj(json!({ "kind": who.kind, "model": who.model, "effort": effort_for(&who.kind, &who.effort) }));
+    let mut c = obj(json!({ "kind": who.kind, "model": who.model, "effort": effort_for(&who.kind, &who.model, &who.effort) }));
     extra(&mut c, who.fast, &who.access);
     Some(c)
 }
@@ -28,9 +28,10 @@ pub fn pick_of(agent: &str, effort: &str) -> Res<Option<Obj>> {
     if let Some(n) = &named { if n.kind.is_empty() { crate::fail!("A Coordinator for one use needs a program: {}.", crate::agents::roles::able("coordinator").join(", ")); } }
     let kind = named.as_ref().map(|n| n.kind.clone()).unwrap_or_else(|| base.t("kind"));
     let same = kind == base.s("kind");
-    let level = if !effort.is_empty() { text(&check("coordinator.effort", &json!(effort), &kind)?) } else if same { base.t("effort") } else { String::new() };
     let model = named.as_ref().map(|n| n.model.clone()).filter(|m| !m.is_empty()).unwrap_or_else(|| if same && named.is_none() { base.t("model") } else { String::new() });
-    let mut c = obj(json!({ "kind": kind, "model": model, "effort": effort_for(&kind, &level) }));
+    let on = if model.is_empty() { kind.clone() } else { format!("{kind}/{model}") };
+    let level = if !effort.is_empty() { text(&check("coordinator.effort", &json!(effort), &on)?) } else if same { base.t("effort") } else { String::new() };
+    let mut c = obj(json!({ "kind": kind, "model": model, "effort": effort_for(&kind, &model, &level) }));
     extra(&mut c, base.b("fast"), base.s("access"));
     Ok(Some(c))
 }

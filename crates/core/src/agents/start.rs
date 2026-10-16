@@ -5,10 +5,11 @@ use crate::err::Res;
 use crate::json::*;
 
 pub fn has_fast(k: &str) -> bool { kind(k).map(|a| a.fast).unwrap_or(false) }
-/// The effort a program is really given: none for `default`, and none for a level it does not accept.
-pub fn effort_for(k: &str, effort: &str) -> String {
-    if effort.is_empty() || effort == "default" { return String::new(); }
-    match kind(k) { Some(a) if a.effort.is_empty() || (!a.efforts.is_empty() && !a.efforts.contains(&effort)) => String::new(), _ => effort.to_string() }
+/// The effort a program (with this model) is really given: none for `default`, and none for a level it does not
+/// accept, by the levels it said last (efforts.rs: a start never waits for the program to say them).
+pub fn effort_for(k: &str, model: &str, effort: &str) -> String {
+    if effort.is_empty() || effort == "default" || kind(k).is_none() { return String::new(); }
+    if super::efforts::why_not(k, model, effort, super::efforts::Ask::Kept).is_some() { String::new() } else { effort.to_string() }
 }
 /// The flags of `<role>.access` for this program. A program that cannot ask is never started as if it could.
 pub fn access_args(k: &str, access: &str) -> Res<Vec<String>> {
@@ -31,7 +32,7 @@ pub fn start_args(k: &str, o: &StartOpts) -> Res<Vec<String>> {
     if o.resume.is_empty() { out.extend(session_args(k, &o.session)); out.extend(fresh_args(k)); }
     match &o.plan { Some(p) => out.extend(p.iter().cloned()), None => out.extend(access_args(k, if o.access.is_empty() { "full" } else { &o.access })?) }
     if !o.model.is_empty() { out.extend(model_args(k, &o.model)); }
-    let level = effort_for(k, &o.effort);
+    let level = effort_for(k, &o.model, &o.effort);
     if !level.is_empty() { out.extend(effort_args(k, &level)); }
     if let Some(f) = o.fast { out.extend(fast_args(k, f)); }
     out.extend(o.extra.iter().cloned());
