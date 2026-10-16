@@ -201,6 +201,7 @@ mod tabs;
 mod take_over;
 mod take_over_more;
 mod talk;
+mod talk_commands;
 mod talk_rest;
 mod talk_who;
 mod task_keys;

@@ -2,6 +2,7 @@
 //! back, oldest first. Only words: no tool call, no tool's output, no thinking, nothing the program wrote for itself.
 //! It is what the board shows of a chat (the box, the task panel, the web board).
 use super::read_turn::{tail_lines, when, TAIL};
+use super::talk_commands::{self as cmd, claude_markup, is_stop, STOPPED};
 use crate::json::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -29,20 +30,39 @@ pub fn unwrap_paste(s: &str) -> String {
 }
 /// Claude Code. An entry is the program's own only on evidence: it names another origin than the human, or it lacks
 /// the mark the program puts on every submitted prompt (`promptSource`) while entries of that same version carry it.
+/// A command typed to it, a stop and a compaction are read in plain words (talk_commands.rs), never as its markup.
 fn claude_talk(rows: &[Value]) -> Vec<Said> {
     let marks: std::collections::HashSet<String> = rows.iter().filter(|e| e.s("type") == "user" && e.b("promptSource")).map(|e| e.t("version")).collect();
     let own = |e: &Value| if e.at("origin").b("kind") { e.at("origin").s("kind") != "human" } else { !e.b("promptSource") && marks.contains(&e.t("version")) };
     let mut out = vec![];
     let mut id: Option<String> = None;
+    let mut waits = None;
     for e in rows {
         if e.b("isSidechain") || e.b("isMeta") || e.b("isCompactSummary") { continue; }
+        let at = when(e.at("timestamp"));
+        // A newer version files a command's outcome as a note of its own; a compaction it did by itself is one too.
+        if e.s("type") == "system" {
+            let said = match e.s("subtype") {
+                "local_command" => claude_markup(e.s("content")).map(|m| cmd::read(m, &mut waits)).unwrap_or_default(),
+                "compact_boundary" if e.at("compactMetadata").s("trigger") != "manual" => vec![(false, cmd::COMPACTED_ITSELF.to_string())],
+                _ => vec![],
+            };
+            for (you, text) in &said { add(&mut out, *you, text, at); id = None; }
+            continue;
+        }
         // Words typed while it works wait in its queue and go in during its turn: written down as that, never as a
         // prompt of their own. Only a person's words (a helper that finished is queued the same way).
         if let Some(text) = queued(e) { add(&mut out, true, &text, when(e.at("timestamp"))); id = None; continue; }
         if !e.at("message").is_object() { continue; }
         if e.s("type") == "user" {
             let text = unwrap_paste(&text_of(e.at("message").at("content"), &["text"]));
-            if text.is_empty() || own(e) || text.starts_with("[Request interrupted by user") { continue; }
+            if is_stop(&text) { add(&mut out, false, STOPPED, at); id = None; continue; }
+            if let Some(m) = claude_markup(&text) {
+                if e.at("origin").b("kind") && e.at("origin").s("kind") != "human" { continue; }
+                for (you, text) in cmd::read(m, &mut waits) { add(&mut out, you, &text, at); id = None; }
+                continue;
+            }
+            if text.is_empty() || own(e) { continue; }
             add(&mut out, true, &text, when(e.at("timestamp"))); id = None;
         } else if e.s("type") == "assistant" && !e.b("isApiErrorMessage") {
             let text = text_of(e.at("message").at("content"), &["text"]);
@@ -75,16 +95,30 @@ fn codex_talk(rows: &[Value]) -> Vec<Said> {
     for e in rows {
         let (p, at) = (e.at("payload"), when(e.at("timestamp")));
         if let Some(t) = typed(e) { add(&mut out, true, &t, at); }
+        else if e.s("type") == "event_msg" && p.s("type") == "turn_aborted" && ["", "interrupted"].contains(&p.s("reason")) { add(&mut out, false, STOPPED, at); }
+        else if e.s("type") == "compacted" { add(&mut out, false, cmd::COMPACTED, at); }
         else if e.s("type") == "response_item" && p.s("type") == "message" && p.s("role") == "assistant" { add(&mut out, false, &text_of(p.at("content"), &["output_text", "text"]), at); }
         else if !events && e.s("type") == "response_item" && p.s("type") == "message" && p.s("role") == "user" { add(&mut out, true, &text_of(p.at("content"), &["input_text", "text"]), at); }
     }
     out
 }
+/// pi. Its model and thinking level are set at the start of a session; a change of one after that was asked for.
 fn pi_talk(rows: &[Value]) -> Vec<Said> {
     let mut out = vec![];
+    let (mut model, mut level) = (String::new(), String::new());
     for e in rows {
-        let m = e.at("message");
-        if e.s("type") == "message" && (m.s("role") == "user" || m.s("role") == "assistant") { add(&mut out, m.s("role") == "user", &text_of(m.at("content"), &["text"]), when(e.at("timestamp"))); }
+        let (m, at) = (e.at("message"), when(e.at("timestamp")));
+        if e.s("type") == "message" && (m.s("role") == "user" || m.s("role") == "assistant") {
+            add(&mut out, m.s("role") == "user", &text_of(m.at("content"), &["text"]), at);
+            if m.s("role") == "assistant" && m.s("stopReason") == "aborted" { add(&mut out, false, STOPPED, at); }
+        } else if e.s("type") == "compaction" { add(&mut out, false, cmd::COMPACTED, at); }
+        else if e.s("type") == "model_change" && e.t("modelId") != model {
+            if !out.is_empty() && !model.is_empty() { add(&mut out, false, &format!("Model switched to {}.", e.t("modelId")), at); }
+            model = e.t("modelId");
+        } else if e.s("type") == "thinking_level_change" && e.t("thinkingLevel") != level {
+            if !out.is_empty() && !level.is_empty() { add(&mut out, false, &format!("Thinking level set to {}.", e.t("thinkingLevel")), at); }
+            level = e.t("thinkingLevel");
+        }
     }
     out
 }

@@ -16,3 +16,4 @@ pub mod screen_text;
 pub mod start;
 pub mod start_failed;
 pub mod talk;
+pub mod talk_commands;

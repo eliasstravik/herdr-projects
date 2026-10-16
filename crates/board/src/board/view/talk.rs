@@ -24,6 +24,9 @@ pub fn with_mine(parts: Vec<Part>, mine: &str) -> Vec<Part> {
     let words = mine.trim();
     let head: String = words.chars().take(200).collect();
     let same = said.last().map(|l| l.sent && (if l.whole.is_empty() { &l.text } else { &l.whole }).contains(&head)).unwrap_or(false);
+    // A command (`/clear`) is answered by what it did, which the program writes down at once: it stands with its answer.
+    let done = words.starts_with('/') && said.len() >= 2 && said[said.len() - 2].sent && said[said.len() - 2].text == words && !said[said.len() - 1].sent;
+    if done { return said; }
     let mut out: Vec<Part> = if same { said[..said.len() - 1].to_vec() } else { said };
     out.push(Part { by: "You".into(), text: words.into(), mine: true, sent: true, ..Default::default() });
     out

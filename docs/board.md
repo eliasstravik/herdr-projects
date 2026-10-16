@@ -566,6 +566,10 @@ screen or logo.
   its shape.
 - Markdown reads as text: a list item's next lines stand under its words, code keeps its lines, and the marks of a
   headline, of bold and of a code block are left out.
+- **A command you typed to it** (`/clear`, `/compact`, `/model` …) shows as you typed it, and then in plain words what
+  it did: `Chat reset: a fresh session started.`, `Conversation compacted: …`, `Model switched to …`. A stop shows as
+  `Stopped: interrupted before it finished.` The program's own markup for these (`<command-name>`,
+  `<local-command-stdout>` …) never shows.
 - **While it works and has said nothing new**, its last words stay, and the line above the box says what it is doing now.
   One that has said nothing yet says so: `The agent has just started: nothing to show yet.`
 - **A dialog that is only on its screen** (a permission prompt, a question with choices) is said in a line of its own,
