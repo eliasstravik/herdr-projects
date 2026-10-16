@@ -9,20 +9,24 @@ use crate::store::marks::mark;
 use std::path::{Path, PathBuf};
 
 fn versions_file() -> PathBuf { data_dir().join("versions.json") }
+/// How long a program is given to say its version: one that hangs holds up nobody for longer (`late`).
+const VERSION_MS: u64 = 5000;
 /// The installed version of a program ("" when it is not installed), asked at most every ten minutes, of its own
 /// executable (cursor: cursor-agent).
 pub fn version_of(k: &str) -> String {
     if k.is_empty() || !k.chars().next().unwrap().is_ascii_lowercase() || !k.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-') { return String::new(); }
     let all = read_obj(&versions_file()).unwrap_or_default();
     if all.at(k).is_object() && now() - all.at(k).i("at") < 600000 { return all.at(k).t("v"); }
-    let r = std::process::Command::new(super::kinds::program(k)).arg("--version").stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null()).output();
-    let (v, found) = match &r {
-        Ok(o) if o.status.success() => (first_version(&String::from_utf8_lossy(&o.stdout)), true),
-        Ok(_) => (String::new(), true),
-        Err(_) => (String::new(), false),
+    use std::process::{Command, Stdio};
+    let r = Command::new(super::kinds::program(k)).arg("--version").stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn()
+        .map_err(|_| false).and_then(|c| crate::herdr::cli::wait_with_timeout(c, VERSION_MS).map_err(|_| true));
+    let (v, found, late) = match &r {
+        Ok(o) if o.status == 0 => (first_version(&o.stdout), true, false),
+        Ok(_) => (String::new(), true, false),
+        Err(late) => (String::new(), *late, *late),
     };
     let mut all = read_obj(&versions_file()).unwrap_or_default();
-    all.put(k, json!({ "v": v, "at": now(), "found": found }));
+    all.put(k, if late { json!({ "v": v, "at": now(), "found": found, "late": true }) } else { json!({ "v": v, "at": now(), "found": found }) });
     let _ = write_json(&versions_file(), &Value::Object(all));
     v
 }
@@ -30,6 +34,8 @@ fn first_version(s: &str) -> String {
     static RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| regex::Regex::new(r"\d+\.\d+(?:\.\d+)?").unwrap());
     RE.find(s).map(|m| m.as_str().to_string()).unwrap_or_default()
 }
+/// Its `--version` did not answer in time, when it was last asked.
+pub fn late(k: &str) -> bool { read_obj(&versions_file()).unwrap_or_default().at(k).b("late") }
 pub fn installed(k: &str) -> bool { version_of(k); read_obj(&versions_file()).unwrap_or_default().at(k).at("found") != &json!(false) }
 pub fn at_least(v: &str, min: &str) -> bool {
     let a: Vec<i64> = v.split('.').map(|x| x.parse().unwrap_or(0)).collect();

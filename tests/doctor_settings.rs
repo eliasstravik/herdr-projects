@@ -5,6 +5,8 @@ use crate::common;
 use common::*;
 use serde_json::{json, Value};
 use sw::doctor::{agents, settings, Found};
+use sw::json::JsMut;
+use sw::store::tasks::{update, Change};
 
 /// Your settings file, as somebody wrote it by hand: never checked on the way in.
 fn hand_written(extra: Value) {
@@ -56,4 +58,28 @@ fn a_model_or_an_effort_the_program_does_not_take_is_a_problem() {
     hand_written(json!({ "worker.effort": "default", "reviewer.agent": "mastracode" }));
     let f = settings::check();
     assert!(f.iter().any(|f| f.problem && f.what.contains("reviewer.agent: mastracode cannot review")), "{f:?}");
+}
+
+#[test]
+fn a_repo_s_entry_and_a_task_s_own_settings_are_checked_too() {
+    let w = world();
+    codex_list();
+    let id = w.add("one");
+    // The reviewer's case: your entry for the repo names a model codex does not take, and an effort it has not.
+    hand_written(json!({ "repos": { "proj": { "worker.agent": "codex/this-model-does-not-exist", "worker.effort": "banana" } } }));
+    let f = settings::check();
+    let what: Vec<&str> = f.iter().filter(|f| f.problem).map(|f| f.what.as_str()).collect();
+    assert!(what.iter().any(|w| w.starts_with("worker.agent for proj: codex has no model \"this-model-does-not-exist\"")), "{f:?}");
+    assert!(what.iter().any(|w| w.starts_with("your entry for proj: worker.effort:") && w.contains("banana")), "{f:?}");
+    assert!(f.iter().any(|f| f.fix.ends_with("--repo proj  (or herdr-projects unset worker.agent --repo proj)")), "{f:?}");
+    // Said once, not again for the task in that repo that only inherits it.
+    assert_eq!(what.iter().filter(|w| w.contains("this-model-does-not-exist")).count(), 1, "{f:?}");
+    let named = agents::named();
+    assert!(named.iter().any(|(k, by)| k == "codex" && by.contains(&"worker.agent for proj".to_string())), "{named:?}");
+    // A task's own setting.
+    hand_written(json!({ "repos": {} }));
+    update(&id, |t| { t.put("settings", json!({ "worker.agent": "codex/gpt-0" })); Ok(Change::Write) }).unwrap();
+    let f = settings::check();
+    let k = short(&id);
+    assert!(f.iter().any(|f| f.problem && f.what.starts_with(&format!("worker.agent of {k}: codex has no model \"gpt-0\"")) && f.fix.contains(&format!("--task {k}"))), "{f:?}");
 }

@@ -128,7 +128,10 @@ pub fn update(exe: &Path, version: Option<&str>, fetch: &dyn Fn(&str, &Path) -> 
 pub fn path_problem(at: &Path, exe: &Path, path: &str) -> Option<(String, String)> {
     let dir = at.parent().map(Path::to_path_buf).unwrap_or_default();
     let real = |p: &Path| std::fs::canonicalize(p).ok();
-    match std::env::split_paths(path).map(|d| d.join("herdr-projects")).find(|f| f.is_file()) {
+    use std::os::unix::fs::PermissionsExt;
+    // As a shell looks: the first file of that name it may run.
+    let runs = |f: &Path| std::fs::metadata(f).map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0).unwrap_or(false);
+    match std::env::split_paths(path).map(|d| d.join("herdr-projects")).find(|f| runs(f)) {
         Some(f) if f == at || real(&f).is_some() && (real(&f) == real(at) || real(&f) == real(exe)) => None,
         Some(f) => Some((format!("{} comes first on your PATH (an older install? `npm unlink -g herdr-projects` takes out the Node one)", f.display()), format!("Remove it, or put {} before it.", dir.display()))),
         None => Some(("herdr-projects is not on your PATH".into(), format!("To type herdr-projects in any shell, put its folder on your PATH (in ~/.profile or your shell's start-up file): export PATH=\"{}:$PATH\"", dir.display()))),

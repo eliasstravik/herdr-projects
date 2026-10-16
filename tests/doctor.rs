@@ -68,6 +68,7 @@ fn a_shell_must_find_the_launcher_on_the_path() {
     let w = world();
     let s = setup(&w);
     std::fs::create_dir_all(s.launcher.parent().unwrap()).unwrap();
+    program_file(&s.launcher);
     std::fs::write(&s.launcher, launcher_for(&s.prog)).unwrap();
     let f = bad(&program::check(&here(&s, Some(launcher_for(&s.prog)), true)));
     assert_eq!(f.len(), 1, "{f:?}");
@@ -77,6 +78,13 @@ fn a_shell_must_find_the_launcher_on_the_path() {
     let f = program::check(&here(&s, Some(launcher_for(&s.prog)), true));
     assert_eq!(bad(&f), Vec::<String>::new());
     assert!(f[1].what.ends_with("and a shell finds it on the PATH"), "{:?}", f[1]);
+    // A launcher that cannot be run: agents and hooks cannot use it, and a shell does not find it.
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&s.launcher, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let f = bad(&program::check(&here(&s, Some(launcher_for(&s.prog)), true)));
+    assert_eq!(f.len(), 1, "{f:?}");
+    assert!(f[0].contains("cannot be run: it is not executable → Run: sh "), "{f:?}");
+    std::fs::set_permissions(&s.launcher, std::fs::Permissions::from_mode(0o755)).unwrap();
     // Something else of that name first.
     std::fs::remove_file(s.path.join("herdr-projects")).unwrap();
     program_file(&s.path.join("herdr-projects"));
@@ -117,19 +125,39 @@ fn herdr_must_run_the_plugin_enabled_from_a_folder_that_is_there() {
 #[test]
 fn each_program_must_be_installed_new_enough_and_signed_in() {
     let _w = world();
-    let p = |k: &str, found: bool, v: &str, signed: Option<bool>| agents::Prog { kind: k.into(), named_by: vec!["worker.agent".into()], found, version: v.into(), signed_in: signed, integration: None };
-    let f = agents::check(&[p("claude", true, "2.1.301", Some(true)), p("pi", true, "1.1.0", None)]);
+    use agents::Sign;
+    let p = |k: &str, found: bool, v: &str, sign: Sign| agents::Prog { kind: k.into(), named_by: vec!["worker.agent".into()], found, version: v.into(), sign, ..Default::default() };
+    let f = agents::check(&[p("claude", true, "2.1.301", Sign::In), p("pi", true, "1.1.0", Sign::Unknown)]);
     assert_eq!(f.iter().map(|f| f.what.as_str()).collect::<Vec<_>>(), ["claude 2.1.301, signed in (worker.agent)", "pi 1.1.0 (worker.agent)"]);
-    assert_eq!(bad(&agents::check(&[p("codex", false, "", None)])), ["codex is not installed here (worker.agent) → Install codex, or choose another program: herdr-projects set worker.agent <program>"]);
-    assert_eq!(bad(&agents::check(&[p("codex", true, "0.162.1", Some(false))])), ["codex is not signed in (worker.agent) → Run `codex login` in a terminal here."]);
-    assert!(bad(&agents::check(&[p("claude", true, "2.1.100", Some(true))]))[0].starts_with("claude 2.1.100 is older than 2.1.296"));
-    let mut m = p("mastracode", true, "1.0.0", None);
+    assert_eq!(bad(&agents::check(&[p("codex", false, "", Sign::Unknown)])), ["codex is not installed here (worker.agent) → Install codex, or choose another program: herdr-projects set worker.agent <program>"]);
+    assert_eq!(bad(&agents::check(&[p("codex", true, "0.162.1", Sign::Out)])), ["codex is not signed in (worker.agent) → Run `codex login` in a terminal here."]);
+    assert!(bad(&agents::check(&[p("claude", true, "2.1.100", Sign::In)]))[0].starts_with("claude 2.1.100 is older than 2.1.296"));
+    let mut m = p("mastracode", true, "1.0.0", Sign::Unknown);
     m.integration = Some(false);
     assert!(bad(&agents::check(&[m]))[0].ends_with("→ Run: herdr integration install mastracode"));
+    // A sign-in command that does not answer is no "signed in": said, with what to run.
+    assert_eq!(bad(&agents::check(&[p("claude", true, "2.1.301", Sign::NoAnswer("it did not answer in 5s".into()))])), ["Could not tell whether claude is signed in: `claude auth status`: it did not answer in 5s → Run `claude auth status` in a terminal here to see why; if it says you are signed out, run `claude auth login`."]);
+    // A program not installed for a repo's or a task's setting is set there.
+    let mut q = p("codex", false, "", Sign::Unknown);
+    q.named_by = vec!["reviewer.agent for proj".into()];
+    assert!(bad(&agents::check(&[q]))[0].ends_with("herdr-projects set reviewer.agent <program> --repo proj"));
     // What a status command says: it failed, or it says it is signed out (cursor-agent exits 0 either way).
     assert!(agents::signed_out(1, "{\"loggedIn\": false}"));
     assert!(agents::signed_out(0, "Not logged in"));
     assert!(!agents::signed_out(0, "Logged in using ChatGPT"));
+}
+
+#[test]
+fn a_version_command_that_hangs_is_said_and_never_asked_again_at_once() {
+    let _w = world();
+    // What the last ask found (installed.rs gives `--version` 5s, then writes this): it did not answer.
+    let f = sw::store::files::data_dir().join("versions.json");
+    let mut v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&f).unwrap()).unwrap();
+    v["claude"] = json!({ "v": "", "at": sw::clock::now(), "found": true, "late": true });
+    std::fs::write(&f, v.to_string()).unwrap();
+    let p = agents::ask("claude", vec!["worker.agent".into()]);
+    assert!(p.found && p.late && p.sign == agents::Sign::Unknown, "{p:?}");
+    assert_eq!(bad(&agents::check(&[p])), ["claude did not say its version in time: `claude --version` hangs (worker.agent) → Run `claude --version` in a terminal here to see why, and fix or reinstall claude."]);
 }
 
 #[test]

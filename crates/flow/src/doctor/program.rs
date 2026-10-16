@@ -51,6 +51,7 @@ pub fn check(h: &Here) -> Vec<Found> {
         None => { out.push(Found::bad(format!("The launcher {l} is missing: agents and hooks run herdr-projects through it"), fix)); return out; }
         Some(text) => launcher_target(text),
     };
+    if h.launcher.exists() && !is_program(&h.launcher) { out.push(Found::bad(format!("The launcher {l} cannot be run: it is not executable"), fix)); return out; }
     let Some(target) = target else { out.push(Found::bad(format!("The launcher {l} names no program"), fix)); return out; };
     if !is_program(&target) { out.push(Found::bad(format!("The launcher {l} runs {}, which is not there", t(&target)), fix)); return out; }
     if let Some(r) = root {
