@@ -98,6 +98,7 @@ pub mod keys;
 pub mod landing;
 pub mod menu;
 pub mod mouse;
+pub mod paste;
 pub mod pending;
 pub mod remotes;
 pub mod setup;

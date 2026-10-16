@@ -51,7 +51,8 @@ The file is backed up first, each block sits between two marker lines, and a cha
 - A key that Herdr binds by default, or that your config already binds, is never taken. The screen refuses it and says
   what the key does today (`prefix+w`, for one, is Herdr's own workspace picker). This holds for the offered key and for
   one you type with `k`, however your config writes a binding (one key, a list of keys, the older `[keys.indexed]`).
-- A key already set up for the board is left as it is.
+- A key already set up for the board is left as it is, however your config writes it (`[[keys.command]]`, or
+  `command = [{…}]` under `[keys]`).
 - The key opens the board in a tab of its own. To open it as a popup over Herdr's window instead (and close it again
   with the same key): `herdr-projects set board.open popup` ([the board](board.md)). The key itself stays.
 
@@ -64,7 +65,10 @@ The file is backed up first, each block sits between two marker lines, and a cha
 
 Without them, Herdr shows the first two, with the tab's name (`Agent`) after the title, and not the third: its default
 sidebar shows no custom value. Rows an older version of the plugin wrote are updated by themselves, between the same
-marker lines. Rows of your own are never touched.
+marker lines. Rows of your own are never touched: when your config already sets `ui.sidebar`, however it writes it
+(`[ui.sidebar.agents]`, `sidebar = {…}` under `[ui]`, or a dotted key), the plugin's rows are not offered. The first
+run says in one line that yours are kept and shows the plugin's rows, to merge into yours by hand (in a small window,
+`↑` `↓` and `pgup` `pgdn` scroll them; any other key goes on).
 
 Nothing else is needed: no Herdr integration, no hooks in your own agent settings.
 

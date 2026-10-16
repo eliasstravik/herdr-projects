@@ -35,7 +35,7 @@ fn press(s: &mut State, p: &Press, fx: &mut Vec<Effect>) {
     let again = s.closing.is_some();
     s.closing = None;
     if again && is(p, K::Close) { fx.push(Effect::Close); return; }
-    if !s.paste_text.is_empty() { s.paste_text.clear(); return; }
+    if !s.paste_text.is_empty() { return super::paste::key(s, p); }
     let (esc, close, tab) = (is(p, K::Back), is(p, K::Close), is(p, K::Delegate));
     // An error stays until esc dismisses it; anything else is gone with the next key.
     if !s.msg.is_empty() && s.msg_kind == Ink::Red { if esc { s.msg.clear(); return super::pending::dismiss(s); } } else { s.msg.clear(); }

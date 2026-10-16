@@ -74,6 +74,7 @@ fn start_setup(s: &mut State) {
     if (!in_herdr() && env("HERDR_PLUGIN_ID").is_empty()) || crate::runner::inline() { return; }
     let o = crate::extras::offers();
     if o.b("asked") { return; }
+    if o.b("sidebarKept") { s.paste_text = o.t("sidebarKept"); } // the user's own rows stay: said once, ours to paste
     if o.at("key").is_null() && o.at("sidebar").is_null() { crate::extras::answer(json!({})); return; }
     let key = o.at("key");
     s.setup = Some(Setup { file: o.t("file"), typing: false, key: if key.is_object() { Some((key.b("suggest"), key.t("suggest"), key.t("note"))) } else { None }, sidebar: if o.at("sidebar").is_null() { None } else { Some(true) } });

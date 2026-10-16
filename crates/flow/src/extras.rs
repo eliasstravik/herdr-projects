@@ -2,11 +2,12 @@
 //!   1. a small how-to in each installed agent program's own skills folder (always written; `remove-extras` takes it
 //!      out for good), so any chat knows the board without being told (its words: extras/skill_text.rs);
 //!   2. on a yes at the board's first run, marked blocks in herdr's config.toml: a key to open the board and the
-//!      sidebar rows that show the plugin's labels (extras/config.rs);
+//!      sidebar rows that show the plugin's labels (extras/config.rs; what the config already holds: extras/found.rs);
 //!   3. on a yes, with the herdr web UI plugin installed: where that web UI's shared link (`tailscale serve`) points,
 //!      so the Board shows in it (webui/link.rs does it and writes down what it changed).
 //! `remove-extras` takes all of it out again. The plugin never edits a file, a block or a link it did not write.
 pub mod config;
+pub mod found;
 pub mod skill_text;
 pub use config::{add_block, block_text, board_key, board_presses, check_key, herdr_config, offers, refresh_sidebar, remove_blocks, remove_popups};
 
