@@ -74,8 +74,16 @@ fn onto_named(id: &str, g: &mut Guard, t: &Task, root: &Path, tree: &str, b: &st
         return Ok(false);
     }
     if !t.b("pr") { return Ok(true); }
-    let base = serde_json::from_str::<Value>(&gh(&["pr", "view", &pr_number(t.s("pr")), "--json", "baseRefName"], root, 60000).stdout).map(|v| v.t("baseRefName")).unwrap_or_default();
-    if base.is_empty() || base == b { return Ok(true); }
+    let r = gh(&["pr", "view", &pr_number(t.s("pr")), "--json", "baseRefName"], root, 60000);
+    let base = if r.status == 0 { serde_json::from_str::<Value>(&r.stdout).map(|v| v.t("baseRefName")).unwrap_or_default() } else { String::new() };
+    // Not known is not "into b": nothing merges until GitHub says which branch it merges into.
+    if base.is_empty() {
+        let said = [r.stderr.trim(), r.stdout.trim()].into_iter().find(|s| !s.is_empty()).unwrap_or("no branch named").to_string();
+        fail(g, "Could not read which branch the pull request merges into", &format!("Pull request: {}\nThis task started from, and lands on: {b}\n\ngh pr view:\n{said}\n\nNothing was merged.", t.s("pr")),
+            "Make sure gh is logged in and reaches GitHub (gh auth status), then approve again.", Fail { agent_can_fix: false, auth: Some(is_auth_failure(&said)), keep_intent: false })?;
+        return Ok(false);
+    }
+    if base == b { return Ok(true); }
     fail(g, &format!("The pull request merges into {base}, not {b}"), &format!("Pull request: {}\nIt merges into: {base}\nThis task started from, and lands on: {b}\n\nNothing was merged.", t.s("pr")),
         &format!("Change the pull request's base back to {b} (gh pr edit {} --base {b}), then approve again.", pr_number(t.s("pr"))), no_fix())?;
     Ok(false)

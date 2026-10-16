@@ -3,7 +3,7 @@
 //! the agent, its pull request into it, the agent's own one taken only when it merges into it, and merged and cleaned up.
 use crate::common;
 use common::*;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::path::Path;
 use sw::actions::{finish_line, talk};
 use sw::json::*;
@@ -82,6 +82,19 @@ fn it_keeps_up_with_that_branch_opens_its_pull_request_into_it_merges_there_and_
     assert_eq!(t.s("stage"), "approval", "{}", t.at("failure"));
     assert!(holds(tree(&t), &d2) && !holds(tree(&t), &m2)); assert_eq!(t.s("syncedTo"), d2);
     assert_eq!(sw::sync::lands_on(&t), "develop");
+    // GitHub cannot say which branch it merges into: nothing merges
+    w.gh_says(json!({ "view": "not an object" }));
+    w.gh.log.borrow_mut().clear();
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!((t.s("stage"), t.at("failure").s("title")), ("approval", "Could not read which branch the pull request merges into"), "{}", t.at("failure"));
+    assert!(!gh_log(&w).contains("pr merge"), "{}", gh_log(&w));
+    w.gh_says(json!({ "noLogin": true }));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.at("failure").s("title"), "Could not read which branch the pull request merges into", "{}", t.at("failure"));
+    assert!(!gh_log(&w).contains("pr merge"), "{}", gh_log(&w));
+    sw::store::tasks::patch(&id, |t| { t.put("stage", "approval"); t.put("failure", Value::Null); }).unwrap();
     // its base was changed on GitHub meanwhile: nothing merges
     w.gh_says(json!({ "view": { "state": "OPEN", "headRefOid": t.at("prHead"), "baseRefName": "main" } }));
     finish_line::approve(&id, None, false).unwrap();
