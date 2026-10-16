@@ -12,12 +12,12 @@ use std::path::{Path, PathBuf};
 
 /// The hook's call back into the board, at each turn end.
 pub struct Hook { pub shim: String, pub id: String, pub role: String, pub token: String, pub round: i64, pub dir: PathBuf, pub plan: bool }
-fn hook_command(h: &Hook) -> Vec<String> {
+pub(super) fn hook_command(h: &Hook) -> Vec<String> {
     let mut c = vec![h.shim.clone(), "turn-ended".into(), "--id".into(), h.id.clone(), "--role".into(), h.role.clone(), "--token".into(), h.token.clone()];
     if h.role == "reviewer" { c.extend(["--round".to_string(), h.round.to_string()]); }
     c
 }
-fn write_private(file: &Path, text: &str) -> Res<()> {
+pub(super) fn write_private(file: &Path, text: &str) -> Res<()> {
     use std::os::unix::fs::OpenOptionsExt;
     let mut f = fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(file)?;
     std::io::Write::write_all(&mut f, text.as_bytes())?;
@@ -26,6 +26,7 @@ fn write_private(file: &Path, text: &str) -> Res<()> {
 /// Launch arguments that make the program call `turn-ended` at every turn end. None: no hook for it here.
 pub fn hook_args(kind: &str, h: &Hook) -> Res<Option<Vec<String>>> {
     match kind {
+        "commandcode" => super::commandcode::hook::args(h).map(Some),
         // A settings file of the task's own, added to the user's settings for this one launch (the user's own hooks
         // still run). The hooks are asynchronous, so a slow or failing one never holds the agent's turn. In plan mode
         // the plan is presented with ExitPlanMode, which asks in the terminal: the board takes the plan there instead.
@@ -72,7 +73,7 @@ export default function (pi: any) {{
         _ => Ok(None),
     }
 }
-pub fn has_hook(kind: &str) -> bool { matches!(kind, "claude" | "codex" | "pi") }
+pub fn has_hook(kind: &str) -> bool { matches!(kind, "claude" | "codex" | "pi" | "commandcode") }
 /// A conversation id of the board's own choosing, where the program takes one (kinds.rs `session`).
 pub fn new_session(kind: &str) -> Option<String> {
     match kind { "pi" => Some(format!("sw-{}", &uuid()[..13])), k => super::kinds::kind(k).filter(|a| !a.session.is_empty()).map(|_| uuid()) }
@@ -84,6 +85,7 @@ pub fn fresh_args(kind: &str) -> Vec<String> { super::kinds::kind(kind).map(|a| 
 /// breaks, so a program reads them from a file (kinds.rs `standing`); Codex takes them as a setting, and is pointed at
 /// a file when they are long.
 pub fn standing(kind: &str, text: &str, dir: &Path) -> Res<Vec<String>> {
+    if kind == "commandcode" { return super::commandcode::hook::rules(text, dir); }
     // Inline when short; else a file it is told to read: a long start command is cut off by the terminal (hand_limits.rs).
     if kind == "codex" {
         let inline = serde_json::to_string(text)?;
@@ -102,6 +104,7 @@ fn dashed(p: &Path) -> String { p.display().to_string().chars().map(|c| if c.is_
 /// Where a conversation is saved.
 pub fn transcript(kind: &str, session: &str, cwd: &Path) -> Option<PathBuf> {
     match kind {
+        "commandcode" => super::commandcode::sessions::transcript(session, cwd),
         "claude" => {
             let direct = claude_home().join("projects").join(dashed(&real(cwd))).join(format!("{session}.jsonl"));
             if direct.exists() { return Some(direct); }
@@ -118,6 +121,7 @@ fn first_line(s: &str) -> &str { s.split('\n').next().unwrap_or("") }
 /// The newest conversation saved in a folder since a time: the program's own "new chat" command starts another one.
 /// `was`: the path this folder had before it was moved; a program started back then still saves under that one.
 pub fn latest_session(kind: &str, cwd: &Path, since: i64, was: Option<&Path>) -> Option<String> {
+    if kind == "commandcode" { return super::commandcode::sessions::latest(cwd, since, was, None, ""); }
     let real = real(cwd);
     match kind {
         "claude" => {
@@ -163,6 +167,7 @@ pub fn latest_session(kind: &str, cwd: &Path, since: i64, was: Option<&Path>) ->
 pub fn find_session(kind: &str, cwd: &Path, since: i64, needle: &str) -> Option<String> { find_session_but(kind, cwd, since, needle, "") }
 /// The same, leaving out a conversation already known to be another's (`but`: the one a review started again had).
 pub fn find_session_but(kind: &str, cwd: &Path, since: i64, needle: &str, but: &str) -> Option<String> {
+    if kind == "commandcode" { return super::commandcode::sessions::latest(cwd, since, None, Some(needle), but); }
     if kind != "codex" { return None; }
     let real = real(cwd).display().to_string();
     let hits: Vec<(i64, String)> = find_file(&codex_home().join("sessions"), &|n| n.ends_with(".jsonl"), 4).into_iter()
@@ -173,7 +178,7 @@ pub fn find_session_but(kind: &str, cwd: &Path, since: i64, needle: &str, but: &
     let since_launch: Vec<&(i64, String)> = hits.iter().filter(|h| h.0 >= since).collect();
     match (hits.len(), since_launch.len()) { (1, _) => Some(hits[0].1.clone()), (_, 1) => Some(since_launch[0].1.clone()), _ => None }
 }
-pub fn can_find_session(kind: &str) -> bool { kind == "codex" }
+pub fn can_find_session(kind: &str) -> bool { matches!(kind, "codex" | "commandcode") }
 pub fn resume_args(kind: &str, id: &str) -> Vec<String> { super::kinds::kind(kind).map(|a| fill(a.resume, id)).unwrap_or_default() }
 /// pi takes a provider apart from its model (`pi/anthropic/claude-opus-5-5`).
 pub fn model_args(kind: &str, m: &str) -> Vec<String> {

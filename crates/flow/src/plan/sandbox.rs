@@ -36,7 +36,9 @@ pub const NO_MOUNT: &str = "This task starts with a plan (plan.approve), and its
 pub fn boxed_command(t: &Obj, name: &str, kind: &str, args: &[String]) -> String {
     let tree = guarded(t).map(|p| p.display().to_string()).unwrap_or_default();
     let git = git_dir_of(std::path::Path::new(&tree)); // a worktree's git folder is elsewhere; a checkout's is inside it
-    let mut all: Vec<String> = vec!["env".into(), format!("HERDR_PROJECTS_AGENT={name}"), "bwrap".into(), "--dev-bind".into(), "/".into(), "/".into(), "--ro-bind".into(), tree.clone(), tree];
+    let mut all: Vec<String> = vec!["env".into()];
+    if kind == "commandcode" { all.extend(["-u".into(), "CMD_HERDR_PANE_OWNER".into(), "CMD_HERDR=1".into()]); }
+    all.extend([format!("HERDR_PROJECTS_AGENT={name}"), "bwrap".into(), "--dev-bind".into(), "/".into(), "/".into(), "--ro-bind".into(), tree.clone(), tree]);
     if let Some(g) = git { let g = g.display().to_string(); all.extend(["--ro-bind".into(), g.clone(), g]); }
     all.extend(["--die-with-parent".into(), "--".into(), crate::agents::kinds::program(kind).into()]);
     all.extend(args.iter().cloned());
@@ -49,7 +51,12 @@ pub fn start_program(api: &Herdr, t: &Obj, name: &str, kind: &str, pane: &str, a
     if open(t) && guarded(t).is_some() && !sandbox_ok() { return Err(herr("failed", NO_MOUNT.replace("<id>", t.s("id")))); } // never a plan writer in a repo without it
     if !boxed(t) { return api.agent_start(name, kind, pane, args, 60000).map(|_| ()); }
     api.integration_ready(kind)?;
-    api.pane_run(pane, &boxed_command(t, name, kind, args))?;
+    if kind == "commandcode" { crate::herdr::commandcode::available(api, pane)?; }
+    let terminal = api.pane_get(pane).unwrap_or_default().t("terminal_id");
+    let mut args = args.to_vec();
+    if kind == "commandcode" { args.extend(crate::agents::commandcode::identity::args(&api.socket_path(), &terminal).map_err(|e| herr("failed", e.msg))?); }
+    api.pane_run(pane, &boxed_command(t, name, kind, &args))?;
+    if kind == "commandcode" { return crate::herdr::commandcode::ready(api, name, pane, &terminal, 60000).map(|_| ()); }
     let step = std::env::var("HERDR_PROJECTS_READY_STEP_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(250u64);
     let until = crate::clock::now() + 60000;
     loop {

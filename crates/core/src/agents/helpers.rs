@@ -29,7 +29,17 @@ pub fn still_at_work(kind: &str, turn: Option<&Turn>, since: i64) -> bool { turn
 /// one set going before the program now running was started (`since`: a conversation resumed by a new program) is
 /// gone. Nothing else ends one: a helper may wait on a long command, without a word, for as long as it takes.
 pub fn running(kind: &str, file: &Path, since: i64) -> usize {
-    match kind { "codex" => codex_running(file, since), "claude" => claude_running(file, since), _ => 0 }
+    match kind { "codex" => codex_running(file, since), "claude" => claude_running(file, since), "commandcode" => commandcode_running(file, since), _ => 0 }
+}
+fn commandcode_running(file: &Path, since: i64) -> usize {
+    let mut live = std::collections::HashSet::new();
+    for (_, e) in lines_with(file, &["herdr-projects/helper"]) {
+        if e.s("customType") != "herdr-projects/helper" || when(e.at("timestamp")) < since { continue; }
+        let d = e.at("data");
+        if !d.b("id") { continue; }
+        if d.at("running") == &json!(true) { live.insert(d.t("id")); } else { live.remove(d.s("id")); }
+    }
+    live.len()
 }
 /// The whole file's lines that hold these words, as JSON: a helper may have been started long before the tail.
 fn lines_with(file: &Path, words: &[&str]) -> Vec<(String, Value)> {

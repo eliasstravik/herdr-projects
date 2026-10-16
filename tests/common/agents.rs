@@ -18,6 +18,7 @@ pub fn agent(f: &F, verb: &str, arg2: &str, argv: &[String], flag: &dyn Fn(&str)
             let Some(pi) = flag("--pane").and_then(|id| st.arr("panes").iter().position(|p| p.s("pane_id") == id)) else { return fail("pane_not_found", "pane not found") };
             if st["panes"][pi].at("agent").is_object() { return fail("pane_busy", "the pane is not at its shell prompt"); }
             let kind = flag("--kind").unwrap_or_default();
+            if kind == "commandcode" { return fail("unsupported_kind", "unsupported interactive agent kind: commandcode"); }
             let rest: Vec<Value> = argv.iter().position(|a| a == "--").map(|i| argv[i + 1..].iter().map(|x| json!(x)).collect()).unwrap_or_default();
             // `refuses`: per kind, the arguments its installed version does not know. It quits at once, as real
             // herdr shows it: the pane back at its shell and `timed out waiting for agent startup` at the timeout.
@@ -51,6 +52,7 @@ pub fn agent(f: &F, verb: &str, arg2: &str, argv: &[String], flag: &dyn Fn(&str)
         _ => {}
     }
     let Some(pi) = st.arr("panes").iter().position(|p| p.at("agent").is_object() && (p.s("pane_id") == arg2 || p.at("agent").s("name") == arg2)) else { return fail("agent_not_found", &format!("agent target {arg2} not found")) };
+    if st["panes"][pi]["agent"].s("kind") == "commandcode" && argv.first().is_some_and(|s| s == "agent") && ["prompt", "send-keys", "focus"].contains(&verb) { return fail("agent_not_ready", "custom agent has no native input profile"); }
     match verb {
         "get" => {
             if st.b("agentGetFails") { return fail("timeout", "timed out"); }
@@ -92,6 +94,7 @@ pub fn agent(f: &F, verb: &str, arg2: &str, argv: &[String], flag: &dyn Fn(&str)
         }
         "focus" => { let pid = st["panes"][pi].t("pane_id"); arr(&mut st, "focus").push(json!(format!("agent {pid}"))); let p = st["panes"][pi].clone(); ok(json!({ "type": "agent_info", "agent": F::agent_out(&p) })) }
         "read" => out(st["panes"][pi]["agent"].s("screen")),
+        "rename" => { st["panes"][pi]["agent"]["name"] = json!(argv.get(3).cloned().unwrap_or_default()); let p = st["panes"][pi].clone(); ok(json!({ "type": "agent_info", "agent": F::agent_out(&p) })) }
         _ => fail("unknown_command", "agent"),
     }
 }

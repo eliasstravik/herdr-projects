@@ -28,7 +28,7 @@ pub fn named() -> Vec<(String, Vec<String>)> {
 /// Not signed in, by what its status command said: it failed, or it says so.
 pub fn signed_out(code: i32, said: &str) -> bool {
     static RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| regex::Regex::new(r"(?i)not (logged|signed) in|logged out").unwrap());
-    code != 0 || RE.is_match(said)
+    code != 0 || RE.is_match(said) || serde_json::from_str::<serde_json::Value>(said).ok().is_some_and(|v| v.get("authenticated").and_then(|a| a.as_bool()) == Some(false))
 }
 /// How long a sign-in command is given.
 pub const WAIT_MS: u64 = 5000;
@@ -74,7 +74,8 @@ pub fn check(progs: &[Prog]) -> Vec<Found> {
         let v = if p.version.is_empty() { String::new() } else { format!(" {}", p.version) };
         let before = out.len();
         if !p.version.is_empty() && a.min_version != "0" && !at_least(&p.version, a.min_version) {
-            out.push(Found::bad(format!("{k}{v} is older than {}, the oldest the board was checked on: it runs without its turn-end hook", a.min_version), format!("Update {k}.")));
+            let effect = if k == "commandcode" { "the board cannot start it" } else { "it runs without its turn-end hook" };
+            out.push(Found::bad(format!("{k}{v} is older than {}, the oldest the board was checked on: {effect}", a.min_version), format!("Update {k}.")));
         }
         match &p.sign {
             Sign::Out => out.push(Found::bad(format!("{k} is not signed in ({by})"), format!("Run `{}` in a terminal here.", a.login.as_ref().map(|l| l.how).unwrap_or(k)))),

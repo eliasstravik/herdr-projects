@@ -1,0 +1,2 @@
+{"type":"message","id":"cc-answer","parentId":null,"timestamp":"2026-10-16T12:00:00Z","message":{"role":"assistant","content":[{"type":"text","text":"Implemented the change."}]},"model":"anthropic/claude-sonnet-4-6","usage":{"inputTokens":12,"outputTokens":8,"cacheReadTokens":20,"cacheWriteTokens":5}}
+{"type":"custom","id":"cc-end","parentId":"cc-answer","timestamp":"2026-10-16T12:00:01Z","customType":"herdr-projects/run-end","data":{"stop":"end_turn","finalText":"Implemented the change.","error":""}}

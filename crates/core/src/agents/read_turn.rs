@@ -90,7 +90,7 @@ pub struct Turn {
     #[serde(skip_serializing_if = "Option::is_none")] pub file: Option<PathBuf>,
 }
 /// The provider's side of an error, decided once the turn is read.
-fn judge(mut t: Turn, code: &str, status: i64, auth_code: bool) -> Turn {
+pub(super) fn judge(mut t: Turn, code: &str, status: i64, auth_code: bool) -> Turn {
     if t.error.is_empty() { return t; }
     let pe = provider_error(&t.error, code, status);
     t.auth = auth_code || pe.auth || is_auth_failure(&t.error);
@@ -234,7 +234,7 @@ pub fn read_pi(file: &Path, bytes: u64) -> Option<Turn> {
 }
 /// The end of a conversation, by this program's reader.
 pub fn read_turn(kind: &str, file: &Path, bytes: u64) -> Option<Turn> {
-    match kind { "claude" => read_claude(file, bytes), "codex" => read_codex(file, bytes), "pi" => read_pi(file, bytes), _ => None }
+    match kind { "claude" => read_claude(file, bytes), "codex" => read_codex(file, bytes), "pi" => read_pi(file, bytes), "commandcode" => super::commandcode::turn::read(file, bytes), _ => None }
 }
 /// A file whose name passes `test`, anywhere under a folder (a few levels deep), newest first.
 pub fn find_file(root: &Path, test: &dyn Fn(&str) -> bool, depth: usize) -> Vec<PathBuf> {

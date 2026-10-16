@@ -1,6 +1,6 @@
 # Agent programs
 
-**Every role can use any program Herdr can start and has its own integration for.** Claude Code, Codex and pi do
+**Every role can use any supported program.** Claude Code, Codex, Command Code and pi do
 everything the board does. The others work too, with a few limits (below).
 
 ```
@@ -13,7 +13,7 @@ A model goes after a slash ([models and effort](models.md)). The settings that p
 `reviewer.agent`, `coordinator.agent`, `watcher.agent`, `plan.agent`, `worker.fallback`, `reviewer.fallback` and
 `attempts.by`.
 
-The programs: Claude Code (`claude`), Codex (`codex`), pi (`pi`), Antigravity CLI (`agy`), GitHub Copilot CLI
+The programs: Claude Code (`claude`), Codex (`codex`), Command Code (`commandcode`, also `command-code`, `cmd`, `cmdc`), pi (`pi`), Antigravity CLI (`agy`), GitHub Copilot CLI
 (`copilot`), Cursor Agent (`cursor`), Devin (`devin`), Factory's Droid (`droid`), Grok (`grok`), Hermes (`hermes`),
 Kilo Code (`kilo`), Kimi Code (`kimi`), Letta Code (`letta`), MastraCode (`mastracode`), oh-my-pi (`omp`), OpenCode
 (`opencode`), Qoder (`qodercli`) and Qwen Code (`qwen`). Herdr's integration name and the program's own name work too
@@ -37,12 +37,16 @@ If a start still fails, the task says why: [when an agent could not start](could
 As Herdr starts it (`herdr agent start --kind <name>`), with the board's own arguments after it. Herdr finds it in its
 pane and says whether it works or waits.
 
+Command Code is started directly in its pane: its own built-in herdr mod reports it as `cmd`. It needs Command Code
+1.82.5 or newer, with no separate integration to install. The board passes private mods only to that launch; it
+does not change your Command Code settings. [Command Code](commandcode.md) covers its sessions and launch details.
+
 The table at the end says, for each program, how it is started and what it can do. It is made from the code
 (`crates/core/src/agents/kinds/`), so it always matches what the board does. Adding a program is one more entry there.
 
 ## What the board knows about each program
 
-The board reads the conversations Claude Code, Codex and pi save. So it knows what they said, what went wrong with the
+The board reads the conversations Claude Code, Codex, Command Code and pi save. So it knows what they said, what went wrong with the
 provider, and how many tokens they used ([how work gets done](how-work-gets-done.md)).
 
 It reads no other program's conversation. For those, each of these comes from somewhere else:
@@ -106,6 +110,7 @@ tested). The board does not take them. Each would be one more entry in the table
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | `claude` | `claude --dangerously-skip-permissions` | `--model <model>`; `default`, `fable`, `opus`, `sonnet`, `haiku`, `opusplan` or one of its full names in the table (`claude-fable-5-1`, `claude-fable-5`, `claude-opus-5-5`) | `--effort <level>`; the levels `claude --help` lists, else low, medium, high, xhigh, max | its own default | `--append-system-prompt-file <file>` | `--resume <id>` | `claude -p --no-session-persistence --tools ""`, the prompt on its input | its conversation file | `claude` | every role | everything the board does, on 2.1.296 to 2.1.300 |
 | `codex` | `codex --dangerously-bypass-approvals-and-sandbox --no-daemon` | `-m <model>`; the names `codex debug models` lists | `-c model_reasoning_effort="<level>"`; the levels `codex debug models` lists for the model, else low, medium, high, xhigh, max, ultra | `--no-daemon` | `-c developer_instructions=…` | `resume <id>` | `codex exec --skip-git-repo-check --ephemeral --color never <prompt>` | its conversation file | `codex` | every role | everything the board does, on 0.153.4 to 0.162.1 |
+| `commandcode` (also `command-code`, `cmd`, `cmdc`) | `commandcode --trust --skip-onboarding --no-auto-update --yolo` | `--model <model>`; the names `commandcode --list-models` lists | `--effort <level>`: any level | `--trust --skip-onboarding --no-auto-update --permission-mode standard` | `--mod <file>` | `--resume <id>` | `commandcode -p --no-session --no-skills --no-auto-update --skip-onboarding --permission-mode plan <prompt>` | its conversation file | built into Command Code (`cmd`) | every role | work and review to done, callbacks, chat/tokens, Coordinator resume and Watcher on 1.82.5 with herdr 0.9.3 |
 | `pi` | `pi` | `--model <model>`; the names `pi --list-models` lists | `--thinking <level>`; the levels `pi --help` lists, else off, minimal, low, medium, high, xhigh, max | cannot ask | `--append-system-prompt <file>` | `--session-id <id>` | `pi -p --no-session --no-tools --no-skills --no-context-files -- <prompt>` | its conversation file | `pi` | every role | everything the board does, on 1.1.0 |
 | `agy` (also `antigravity-cli`, `antigravity`) | `agy --dangerously-skip-permissions` | `--model <model>`; not checked | `--effort <level>`; the levels `agy --help` lists, else low, medium, high, xhigh, max | its own default | in its first prompt | `--conversation <id>` | `agy --disable-slash-commands -p <prompt>` | herdr's state and its closing note | `antigravity-cli` | every role | flags from agy --help 1.3.6; started by herdr 0.9.3 on the board's flags (it came up at its login) |
 | `copilot` | `copilot --yolo` | `--model <model>`; not checked | `--reasoning-effort <level>`; the levels `copilot --help` lists, else none, minimal, low, medium, high, xhigh, max | its own default | in its first prompt | `--resume=<id>` | `copilot -s --no-custom-instructions --no-ask-user --allow-all-tools -p <prompt>` | herdr's state and its closing note | `copilot` | every role | flags from copilot --help 1.0.98; started by herdr 0.9.3 on the board's flags (its folder-trust dialog) |

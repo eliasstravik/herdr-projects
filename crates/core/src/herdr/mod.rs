@@ -2,6 +2,7 @@
 //! command line (cli.rs, api.rs), and its socket (socket.rs).
 pub mod api;
 pub mod cli;
+pub mod commandcode;
 pub mod keys;
 pub mod palette;
 pub mod socket;

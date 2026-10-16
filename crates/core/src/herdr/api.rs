@@ -136,7 +136,13 @@ impl Herdr {
     /// The agent in a pane (or by name), or None when no agent is there.
     pub fn agent_get(&self, target: &str) -> HRes<Option<Value>> {
         match self.call(args(&["agent", "get", target])) {
-            Ok(r) => Ok(Some(r.at("agent").clone()).filter(|v| !v.is_null())),
+            Ok(r) => {
+                let mut a = r.at("agent").clone();
+                if ["cmd", "commandcode", "command-code"].contains(&a.s("agent")) {
+                    if let Some(id) = crate::agents::commandcode::identity::session(&self.socket_path(), a.s("terminal_id"), a.s("cwd")) { a["agent_session"] = json!({ "kind": "id", "value": id }); }
+                }
+                Ok(Some(a).filter(|v| !v.is_null()))
+            }
             Err(e) if ["agent_not_found", "not_found", "agent_not_running", "pane_not_found"].contains(&e.code.as_str()) => Ok(None),
             Err(e) => Err(e),
         }
@@ -153,6 +159,7 @@ impl Herdr {
         Ok(())
     }
     pub fn agent_start(&self, name: &str, kind: &str, pane: &str, extra: &[String], timeout_ms: u64) -> HRes<Value> {
+        if kind == "commandcode" { return super::commandcode::start(self, name, pane, extra, timeout_ms); }
         self.integration_ready(kind)?;
         let mut a = args(&["agent", "start", name, "--kind", kind, "--pane", pane, "--timeout", &timeout_ms.to_string()]);
         if !extra.is_empty() { a.push("--".into()); a.extend(extra.iter().cloned()); }
@@ -178,11 +185,23 @@ impl Herdr {
         let from = before.iter().rposition(|l| l.starts_with(prompt) && l.contains(kind)).map(|i| i + 1).unwrap_or(0);
         before[from..].iter().find(|l| l.to_lowercase().contains("error")).map(|l| l.chars().take(300).collect())
     }
-    pub fn agent_prompt(&self, target: &str, text: &str) -> HRes<Value> { self.call_t(args(&["agent", "prompt", target, text]), 60000) }
+    pub fn agent_prompt(&self, target: &str, text: &str) -> HRes<Value> {
+        match self.call_t(args(&["agent", "prompt", target, text]), 60000) {
+            Err(e) if e.code == "agent_not_ready" => match super::commandcode::agent(self, target) { Some(a) => super::commandcode::prompt(self, &a, text), None => Err(e) },
+            r => r,
+        }
+    }
     /// Text typed into a pane as it is, with no enter.
     pub fn pane_text(&self, id: &str, text: &str) -> HRes<Value> { self.call(args(&["pane", "send-text", id, text])) }
-    pub fn agent_keys(&self, target: &str, keys: &[&str]) -> HRes<Value> { let mut a = args(&["agent", "send-keys", target]); a.extend(args(keys)); self.call(a) }
-    pub fn agent_focus(&self, target: &str) -> HRes<Value> { self.call(args(&["agent", "focus", target])) }
+    pub fn agent_keys(&self, target: &str, keys: &[&str]) -> HRes<Value> {
+        let mut a = args(&["agent", "send-keys", target]); a.extend(args(keys));
+        match self.call(a) { Err(e) => match super::commandcode::agent(self, target) { Some(a) => super::commandcode::pane_keys(self, a.s("pane_id"), keys), None => Err(e) }, r => r }
+    }
+    pub fn agent_focus(&self, target: &str) -> HRes<Value> {
+        match self.call(args(&["agent", "focus", target])) {
+            Err(e) => match super::commandcode::agent(self, target) { Some(a) => { self.workspace_focus(a.s("workspace_id"))?; self.tab_focus(a.s("tab_id"))?; self.pane_focus(a.s("pane_id"))?; Ok(a) }, None => Err(e) }, r => r,
+        }
+    }
     pub fn agent_read(&self, target: &str, source: &str, lines: Option<i64>) -> HRes<String> {
         let mut a = args(&["agent", "read", target, "--source", source]);
         if let Some(n) = lines { a.extend(args(&["--lines", &n.to_string()])); }

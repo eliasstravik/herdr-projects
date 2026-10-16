@@ -1,8 +1,8 @@
-//! The three programs whose saved conversation the board reads itself: Claude Code, Codex and pi. Verified on claude
+//! The programs whose saved conversation the board reads itself: Claude Code, Codex, Command Code and pi. Verified on claude
 //! 2.1.296, codex 0.160.0, pi 1.1.0 (docs/checked-on-herdr.md). What they do beyond these facts is code of their own
 //! in adapter.rs (the turn-end hook, the conversation files, the Watcher's lean start, Codex's rules and fast mode,
 //! pi's provider in its model).
-use super::{EffortsRead, Kind, Login, Models, Read, BASE, NO_MODELS};
+use super::{EffortsRead, Headless, Kind, Login, Models, Read, BASE, NO_MODELS};
 
 pub static KINDS: &[Kind] = &[
     Kind { name: "claude", min_version: "2.1.296", efforts: &["low", "medium", "high", "xhigh", "max"], access_full: &["--dangerously-skip-permissions"],
@@ -23,6 +23,16 @@ pub static KINDS: &[Kind] = &[
         effort: &["-c", "model_reasoning_effort=\"{}\""], resume: &["resume", "{}"], integration: "codex",
         login: Some(Login { status: &["login", "status"], how: "codex login" }),
         checked: "everything the board does, on 0.153.4 to 0.162.1", ..BASE },
+    Kind { name: "commandcode", aliases: &["command-code", "cmd", "cmdc"], min_version: "1.82.5",
+        access_full: &["--trust", "--skip-onboarding", "--no-auto-update", "--yolo"],
+        access_ask: Some(&["--trust", "--skip-onboarding", "--no-auto-update", "--permission-mode", "standard"]),
+        tokens: true, rules_file: Some("AGENTS.md"), reads_turn: true,
+        model: &["--model", "{}"], effort: &["--effort", "{}"], efforts_read: EffortsRead::Table,
+        models: Models { list: &["--list-models"], read: Read::Described, example: "commandcode/anthropic/claude-sonnet-4-6", ..NO_MODELS },
+        resume: &["--resume", "{}"], standing: &["--mod", "{}"],
+        login: Some(Login { status: &["status", "--json"], how: "commandcode login" }),
+        headless: Some(Headless { args: &["-p", "--no-session", "--no-skills", "--no-auto-update", "--skip-onboarding", "--permission-mode", "plan"], model: &["--model", "{}"], system: &[], prompt: &["{}"] }),
+        checked: "work and review to done, callbacks, chat/tokens, Coordinator resume and Watcher on 1.82.5 with herdr 0.9.3", ..BASE },
     // pi never asks before running something: it has no `ask`.
     Kind { name: "pi", min_version: "1.1.0", efforts: &["off", "minimal", "low", "medium", "high", "xhigh", "max"], access_ask: None,
         tokens: true, rules_file: Some("AGENTS.md"), reads_turn: true, model: &["--model", "{}"], effort: &["--thinking", "{}"],

@@ -10,11 +10,11 @@ use std::sync::{LazyLock, Mutex};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Said { pub you: bool, pub text: String, pub at: i64 }
-fn text_of(c: &Value, types: &[&str]) -> String {
+pub(super) fn text_of(c: &Value, types: &[&str]) -> String {
     match c { Value::String(s) => s.trim().to_string(), Value::Array(a) => a.iter().filter(|x| types.contains(&x.s("type"))).map(|x| x.t("text")).collect::<String>().trim().to_string(), _ => String::new() }
 }
 /// Two entries in a row from the same side with the same words are one.
-fn add(out: &mut Vec<Said>, you: bool, text: &str, at: i64) {
+pub(super) fn add(out: &mut Vec<Said>, you: bool, text: &str, at: i64) {
     let t = text.trim();
     if t.is_empty() || out.last().map(|l| l.you == you && l.text == t).unwrap_or(false) { return; }
     out.push(Said { you, text: t.to_string(), at });
@@ -122,7 +122,7 @@ fn pi_talk(rows: &[Value]) -> Vec<Said> {
     }
     out
 }
-fn reader(kind: &str) -> Option<fn(&[Value]) -> Vec<Said>> { match kind { "claude" => Some(claude_talk), "codex" => Some(codex_talk), "pi" => Some(pi_talk), _ => None } }
+fn reader(kind: &str) -> Option<fn(&[Value]) -> Vec<Said>> { match kind { "claude" => Some(claude_talk), "codex" => Some(codex_talk), "pi" => Some(pi_talk), "commandcode" => Some(super::commandcode::turn::talk), _ => None } }
 pub fn can_read_talk(kind: &str) -> bool { reader(kind).is_some() }
 
 // Read again only when the file changed, and a conversation's file is looked for once: the board asks on every beat.

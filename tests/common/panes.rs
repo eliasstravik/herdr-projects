@@ -63,6 +63,23 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
         // (`env HERDR_PROJECTS_AGENT=<name> bwrap … -- <kind> <args>`) leaves that agent in the pane.
         "run" => {
             let w = words(&argv[3..].join(" "));
+            if let Some(at) = w.iter().position(|x| x == "commandcode") {
+                if p.at("agent").is_object() { return fail("pane_busy", "pane busy"); }
+                let name = w.iter().find_map(|x| x.strip_prefix("HERDR_PROJECTS_AGENT=")).unwrap_or("");
+                let seq = st.i("seq") + 1; st["seq"] = json!(seq);
+                st["panes"][pi]["agent"] = json!({ "kind": "commandcode", "name": name, "status": "idle", "seq": seq, "args": w[at + 1..], "pid": 5000000 + seq, "boxed": w.iter().any(|x| x == "bwrap") });
+                let session = w.iter().position(|a| a == "--resume").and_then(|i| w.get(i + 1)).cloned().unwrap_or_else(|| format!("cc-{}-{seq}", arg2.replace(':', "-")));
+                st["panes"][pi]["agent"]["thread"] = json!(session);
+                for a in &w[at + 1..] {
+                    let path = std::path::Path::new(a);
+                    if path.extension().is_some_and(|e| e == "mjs") && path.parent().is_some_and(|p| p == sw::store::files::data_dir().join("commandcode")) {
+                        std::fs::write(path.with_extension("json"), json!({ "session": session, "cwd": p.s("cwd") }).to_string()).unwrap();
+                    }
+                }
+                let d = st.at("dialogs").i("commandcode");
+                if d > 0 { st["dialogs"]["commandcode"] = json!(d - 1); st["panes"][pi]["agent"]["status"] = json!("blocked"); }
+                return ok(json!({ "type": "ok" }));
+            }
             let at = w.iter().position(|x| x == "--");
             let name = w.iter().find_map(|x| x.strip_prefix("HERDR_PROJECTS_AGENT=")).unwrap_or("").to_string();
             if let (true, Some(at), false) = (w.iter().any(|x| x == "bwrap"), at, p.at("agent").is_object()) {
@@ -81,6 +98,9 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
         }
         // The interrupt character clears a command its shell waits to see the end of.
         "send-text" => {
+            if p.at("agent").s("kind") == "commandcode" {
+                if let Some(text) = argv.get(3).and_then(|s| s.strip_prefix("\u{1b}[200~")).and_then(|s| s.strip_suffix("\u{1b}[201~")) { st["panes"][pi]["agent"]["box"] = json!(text); }
+            }
             if argv.get(3).map(|t| t == "\u{3}").unwrap_or(false) && p.s("screen").trim_end().ends_with('>') { st["panes"][pi]["screen"] = json!(format!("{}^C\nuser@host:{}$ ", p.s("screen"), p.s("cwd"))); }
             arr(st, "typed").push(json!({ "pane": arg2, "text": argv.get(3) }));
             ok(json!({ "type": "ok" }))

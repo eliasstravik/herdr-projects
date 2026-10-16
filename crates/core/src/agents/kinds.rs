@@ -1,7 +1,7 @@
 //! Everything agent-specific lives in this one table: what each program accepts, how it is started, where it saves
 //! its conversation and how that is read. Every entry is optional and has a stated fallback, so a new program is one
 //! more entry in kinds/ (and, for one whose conversation the board reads, its readers in read_turn.rs, read_tokens.rs
-//! and talk.rs). The programs are herdr's own (`herdr agent start --kind`); what was tried on which version is each
+//! and talk.rs). Programs use herdr's native start or their own custom-agent reporting; what was tried on which version is each
 //! entry's `checked` (docs/agents.md, docs/checked-on-herdr.md).
 //!
 //!   program      the executable                                                 the name
@@ -117,6 +117,8 @@ pub enum Read {
     Dashed,
     /// One name a line (opencode's provider/model).
     Lines,
+    /// Command Code's provider/model followed by its description, grouped under provider headings.
+    Described,
 }
 /// Where a program says the effort levels it takes.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -138,7 +140,7 @@ pub const BASE: Kind = Kind {
 mod herdr;
 mod own;
 
-/// Every program, in the order they are named: the board's three first, then herdr's others.
+/// Every program, in the order they are named: the ones the board reads first, then herdr's others.
 pub fn all() -> impl Iterator<Item = &'static Kind> { own::KINDS.iter().chain(herdr::KINDS.iter()) }
 /// The programs' names, as a setting gives them.
 pub static KIND_NAMES: std::sync::LazyLock<Vec<&'static str>> = std::sync::LazyLock::new(|| all().map(|k| k.name).collect());

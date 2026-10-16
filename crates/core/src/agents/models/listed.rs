@@ -107,6 +107,9 @@ pub fn read(how: Read, out: &str) -> Names {
         }
         Read::Dashed => for l in out.lines() { if let Some((name, _)) = l.split_once(" - ") { if one_word(name.trim()) { add(name.trim(), true, &mut n); } } },
         Read::Lines => for l in out.lines().map(str::trim) { if one_word(l) && !l.starts_with('[') { add(l, true, &mut n); } },
+        Read::Described => for l in out.lines() {
+            if let Some(name) = l.split_whitespace().next().filter(|n| n.contains('/') && one_word(n) && !n.starts_with('-')) { add(name, true, &mut n); }
+        },
     }
     n
 }

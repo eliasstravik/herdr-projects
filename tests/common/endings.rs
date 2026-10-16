@@ -39,18 +39,32 @@ pub fn end_turn(f: &F, pi: usize, prompt: &str, step: &Value) {
             open.push(json!({ "type": "message", "id": format!("u{seq}"), "timestamp": iso, "message": { "role": "user", "content": [{ "type": "text", "text": prompt }] } }));
             (file, id, open)
         }
+        "commandcode" => {
+            let id = if a.b("thread") { a.t("thread") } else if !arg(&["--resume"]).is_empty() { arg(&["--resume"]) } else { format!("cc-{}-{seq}", pane.replace(':', "-")) };
+            f.st.borrow_mut()["panes"][pi]["agent"]["thread"] = json!(id);
+            let file = sw::store::files::user_home().join(".commandcode/projects/test").join(format!("{id}.jsonl"));
+            let mut open = vec![];
+            if !file.exists() { open.push(json!({ "type": "session", "id": id, "cwd": real, "timestamp": iso })); }
+            open.push(json!({ "type": "message", "id": format!("u{seq}"), "parentId": null, "timestamp": iso, "message": { "role": "user", "content": [{ "type": "text", "text": prompt }] } }));
+            (file, id, open)
+        }
         _ => return,
     };
     let lines = if step.b("ends") { fixture(step.s("ends")) } else { vec![] };
     if let Some(d) = file.parent() { let _ = std::fs::create_dir_all(d); }
     // A while after the prompt was sent, as the real ones are.
     let at = now + 1500;
-    let body: String = open.into_iter().chain(lines).enumerate().map(|(i, mut l)| { l["timestamp"] = json!(sw::clock::iso(at + i as i64)); format!("{l}\n") }).collect();
+    let mut parent = std::fs::read_to_string(&file).ok().and_then(|s| s.lines().rev().find_map(|l| serde_json::from_str::<Value>(l).ok().filter(|e| e.s("type") != "session").map(|e| e.t("id")))).unwrap_or_default();
+    let body: String = open.into_iter().chain(lines).enumerate().map(|(i, mut l)| {
+        l["timestamp"] = json!(sw::clock::iso(at + i as i64));
+        if kind == "commandcode" && l.s("type") != "session" { l["id"] = json!(format!("{}-{seq}", l.s("id"))); l["parentId"] = if parent.is_empty() { Value::Null } else { json!(parent) }; parent = l.t("id"); }
+        format!("{l}\n")
+    }).collect();
     use std::io::Write;
     let _ = std::fs::OpenOptions::new().create(true).append(true).open(&file).and_then(|mut fh| fh.write_all(body.as_bytes()));
     if !step.b("hook") { return; }
     let first = a.arr("prompts").first().map(text).unwrap_or_default();
-    let says = match kind.as_str() { "codex" => json!({ "thread-id": id, "input-messages": [first] }), "claude" => json!({ "session_id": id, "transcript_path": file.display().to_string() }), _ => json!({ "transcript_path": file.display().to_string() }) };
+    let says = match kind.as_str() { "codex" => json!({ "thread-id": id, "input-messages": [first] }), "claude" | "commandcode" => json!({ "session_id": id, "transcript_path": file.display().to_string() }), _ => json!({ "transcript_path": file.display().to_string() }) };
     report(&first, says);
 }
 /// A Codex sub-agent the agent started (a review's `/root/check_plans`) ending its own turn: its conversation, which

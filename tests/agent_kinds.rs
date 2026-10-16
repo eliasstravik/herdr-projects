@@ -20,8 +20,8 @@ fn taken(name: &str, value: &str) -> String { set_value(name, &json!(value), &Sc
 #[test]
 fn every_program_herdr_has_an_integration_for_is_in_the_table_and_starts_on_its_own_flags() {
     let _w = world();
-    for k in ["claude", "codex", "pi", "agy", "copilot", "cursor", "devin", "droid", "grok", "hermes", "kilo", "kimi", "letta", "mastracode", "omp", "opencode", "qodercli", "qwen"] { assert!(kind(k).is_some(), "{k}"); }
-    assert_eq!(all().count(), 18);
+    for k in ["claude", "codex", "commandcode", "pi", "agy", "copilot", "cursor", "devin", "droid", "grok", "hermes", "kilo", "kimi", "letta", "mastracode", "omp", "opencode", "qodercli", "qwen"] { assert!(kind(k).is_some(), "{k}"); }
+    assert_eq!(all().count(), 19);
     assert!(all().all(|k| !k.checked.is_empty()), "every program says what was tried on which version");
     // Model, effort and full access, each in the program's own words.
     assert_eq!(args("agy", opts("gemini-3-pro", "high")), ["--dangerously-skip-permissions", "--model", "gemini-3-pro", "--effort", "high"]);
@@ -73,7 +73,7 @@ fn the_watcher_one_shot_of_each_program_comes_from_the_table() {
 fn a_program_that_cannot_do_a_role_or_take_what_it_is_given_is_refused_with_the_reason() {
     let _w = world();
     // mastracode cannot be told its model or to work without asking at start: never on a task, but the Watcher.
-    refused("worker.agent", "mastracode", r"^worker\.agent: mastracode cannot work on a task: .*environment variables.* These can: claude, codex, pi, agy");
+    refused("worker.agent", "mastracode", r"^worker\.agent: mastracode cannot work on a task: .*environment variables.* These can: claude, codex, commandcode, pi, agy");
     refused("reviewer.fallback", "codex, mastracode", r"^reviewer\.fallback: mastracode cannot review");
     refused("attempts.by", "claude, mastracode", r"^attempts\.by: mastracode cannot work on a task");
     refused("plan.agent", "mastracode", r"mastracode cannot write a plan");
@@ -94,7 +94,7 @@ fn a_program_that_cannot_do_a_role_or_take_what_it_is_given_is_refused_with_the_
     // herdr's integration name, and the executable's, name the program too.
     assert_eq!(taken("reviewer.agent", "antigravity-cli/gemini-3-pro"), "agy/gemini-3-pro");
     assert_eq!(taken("reviewer.fallback", "cursor-agent, Qwen"), r#"["cursor","qwen"]"#);
-    refused("worker.agent", "gemni", r#"no agent program "gemni"\. It must be claude, codex, pi, agy, .*, qwen\."#);
+    refused("worker.agent", "gemni", r#"no agent program "gemni"\. It must be claude, codex, commandcode, pi, agy, .*, qwen\."#);
 }
 
 #[test]

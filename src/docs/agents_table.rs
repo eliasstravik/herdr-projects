@@ -45,7 +45,7 @@ fn row(k: &Kind) -> Vec<String> {
     let again = if k.resume.is_empty() { "starts afresh".into() } else { code(&fill(k.resume, "<id>")) };
     let watcher = if !can_one_shot(k.name) { "none".into() } else { one_shot(k.name, "", "", "<prompt>", "", false).map(|o| format!("{}{}", code(&std::iter::once(o.command).chain(o.args).collect::<Vec<_>>()), if o.stdin.is_some() { ", the prompt on its input" } else { "" })).unwrap_or_default() };
     let read = if k.reads_turn { "its conversation file".into() } else { "herdr's state and its closing note".into() };
-    let herdr = if k.integration.is_empty() { "none".into() } else if k.needs_integration { format!("`{}`, needed", k.integration) } else { format!("`{}`", k.integration) };
+    let herdr = if k.name == "commandcode" { "built into Command Code (`cmd`)".into() } else if k.integration.is_empty() { "none".into() } else if k.needs_integration { format!("`{}`, needed", k.integration) } else { format!("`{}`", k.integration) };
     vec![name, code(&started), model, effort, ask, rules, again, watcher, read, herdr, roles_out(k), k.checked.into()]
 }
 pub fn agents_table() -> Result<String, String> {

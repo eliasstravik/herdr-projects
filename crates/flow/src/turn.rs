@@ -42,6 +42,7 @@ pub fn turn_ended(id: &str, role: &str, token: &str, round: i64, extra: &[String
     let helper = j.b("thread-id") && helpers::is_helper("codex", &session);
     let mut ev = json!({ "at": now(), "role": role, "round": round, "session": session, "file": j.t("transcript_path"), "error": j.t("error"),
         "side": helper || (j.b("thread-id") && !first.trim_start().starts_with(&format!("Work board task {me},"))) });
+    for key in ["code", "status", "stop", "finished_at"] { if j.has(key) { ev[key] = j.at(key).clone(); } }
     if helper { ev["helper"] = json!(true); }
     let mut start = false;
     let r = update_wait(t.s("id"), 2000, |t| {
@@ -65,7 +66,8 @@ pub fn why_stopped(t: &Task, role: &str, event: Option<&Value>) -> Stopped {
     let session = ev_session.unwrap_or_else(|| if role == "reviewer" { t.t("reviewSession") } else { t.t("session") });
     let ev_file = event.map(|e| e.t("file")).filter(|s| !s.is_empty());
     let file = ev_file.or_else(|| (role == "agent" && t.b("transcript")).then(|| t.t("transcript")));
-    let turn = installed::read_turn_of(&k, file.as_deref().map(Path::new), &session, &cwd_of(t), false);
+    let mut turn = installed::read_turn_of(&k, file.as_deref().map(Path::new), &session, &cwd_of(t), false);
+    if k == "commandcode" { if let Some(e) = event { turn = crate::agents::commandcode::turn::reported(turn, e); } }
     let why = match &turn {
         Some(x) if !x.error.is_empty() => "error".to_string(),
         Some(x) if x.interrupted => "interrupted".into(),

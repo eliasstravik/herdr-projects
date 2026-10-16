@@ -49,7 +49,7 @@ fn a_real_setting_set_and_unset_in_every_place_refused_values_never_the_repos_fi
     assert_eq!(ok(&["unset", "worker.fallback", "--repo", "proj"]), "worker.fallback for proj: codex, claude/claude-opus-5-5  (you)\n");
     assert!(has(&ok(&["show"]), r"\n\* worker\.fallback +codex, claude/claude-opus-5-5 +you\n"));
     // a refused value changes nothing and names the nearest right one
-    assert!(has(&fails(&["set", "worker.fallback", "codx"]), r#"worker\.fallback: no agent program "codx"\. It must be claude, codex, pi, agy, .*, qwen\. Did you mean codex\?"#), "{}", fails(&["set", "worker.fallback", "codx"]));
+    assert!(has(&fails(&["set", "worker.fallback", "codx"]), r#"worker\.fallback: no agent program "codx"\. It must be claude, codex, commandcode, pi, agy, .*, qwen\. Did you mean codex\?"#), "{}", fails(&["set", "worker.fallback", "codx"]));
     assert!(fails(&["set", "worker.fallback", "codex, none"]).contains("none stands alone"));
     assert!(has(&fails(&["set", "worker.fallbak", "codex"]), r#"Unknown setting "worker\.fallbak"\. Did you mean worker\.fallback\?"#));
     assert!(fails(&["set", "reviewer.fallback", "claude/bad model"]).contains("reviewer.fallback"));

@@ -66,7 +66,19 @@ pub fn pi_tokens(file: &Path, state: &Value) -> std::io::Result<Value> {
     }
     Ok(json!({ "at": at, "n": n }))
 }
+/// Command Code writes usage on each assistant entry, outside the message; cache writes include the 1h subset.
+pub fn commandcode_tokens(file: &Path, state: &Value) -> std::io::Result<Value> {
+    let s = from(file, state);
+    let mut n = s.f("n");
+    let (rows, at) = grown(file, s.f("at") as u64)?;
+    for e in rows {
+        if e.s("type") != "message" || e.at("message").s("role") != "assistant" { continue; }
+        let u = e.at("usage");
+        n += u.f("inputTokens") + u.f("outputTokens") + u.f("cacheReadTokens") + u.f("cacheWriteTokens");
+    }
+    Ok(json!({ "at": at, "n": n }))
+}
 /// This program's counter, where it has one.
 pub fn tokens(kind: &str, file: &Path, state: &Value) -> Option<Value> {
-    match kind { "claude" => claude_tokens(file, state).ok(), "codex" => codex_tokens(file, state).ok(), "pi" => pi_tokens(file, state).ok(), _ => None }
+    match kind { "claude" => claude_tokens(file, state).ok(), "codex" => codex_tokens(file, state).ok(), "pi" => pi_tokens(file, state).ok(), "commandcode" => commandcode_tokens(file, state).ok(), _ => None }
 }

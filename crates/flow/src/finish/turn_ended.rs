@@ -108,6 +108,7 @@ fn finish_steps(id: &str, g: &mut Guard, mut t: Task, ev: Option<Value>, force: 
         let until = now() + ms("HERDR_PROJECTS_READ_MS", 10000);
         loop {
             turn = installed::read_turn_of(&k, file, &session, &cwd_of(&t), false);
+            if k == "commandcode" { turn = crate::agents::commandcode::turn::reported(turn, e); }
             if newer(turn.as_ref(), &t) && turn.as_ref().map(|x| x.finished || !x.error.is_empty()).unwrap_or(false) { break; }
             if now() >= until { break; }
             sleep(400);

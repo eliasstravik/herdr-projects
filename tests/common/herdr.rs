@@ -129,6 +129,7 @@ impl FakeHerdr {
             }
             ("worktree", _) => return super::worktrees::worktree(self, &mut st, verb, &flag, has("--force")),
             ("tab", _) => return self.tab(&mut st, verb, &arg2, argv, &flag, &env_of),
+            ("pane", "send-keys") if st.arr("panes").iter().any(|p| p.s("pane_id") == arg2 && p.at("agent").s("kind") == "commandcode") => { drop(st); return super::agents::agent(self, "send-keys", &arg2, argv, &flag); }
             ("pane", _) => return super::panes::pane(&mut st, verb, &arg2, argv, &flag, &env_of),
             ("agent", _) => { drop(st); return super::agents::agent(self, verb, &arg2, argv, &flag); }
             ("notification", _) => { arr(&mut st, "notifications").push(json!({ "title": arg2, "body": flag("--body").unwrap_or_default() })); return ok(json!({ "type": "notification_show", "shown": true })); }

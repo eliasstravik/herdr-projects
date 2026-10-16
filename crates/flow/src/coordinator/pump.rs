@@ -64,7 +64,7 @@ pub fn active(co: impl Into<Co>, c: &Obj) -> Option<String> {
     let h = home(co);
     // A project coordinator shares its folder with the human's own chats in the repo: the newest one there may be theirs.
     // Only what herdr names for its own pane moves it to another conversation; else it keeps the one it has.
-    let id = if co.repo().is_some() { told_session(co, c) } else { adapter::latest_session(run.s("kind"), &h, since, moved_from(&h).as_deref()).or_else(|| told_session(co, c)) };
+    let id = if co.repo().is_some() || run.s("kind") == "commandcode" { told_session(co, c) } else { adapter::latest_session(run.s("kind"), &h, since, moved_from(&h).as_deref()).or_else(|| told_session(co, c)) };
     if let Some(i) = &id { if i != c.s("session") { let (since_v, i2) = (c.at("since").clone(), i.clone()); let _ = change(co, |x| { if *x.at("since") != since_v || x.s("session") == i2 { return false; } x.put("session", i2.clone()); true }); } }
     id.or_else(|| c.so("session").map(String::from))
 }
