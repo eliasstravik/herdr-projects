@@ -20,13 +20,24 @@ fn lines(text: &str) -> Vec<String> { text.lines().map(|l| l.trim().to_string())
 pub fn main_branch(root: &Path, t: &Obj) -> String {
     let from = t.s("from");
     if let Some(b) = from.strip_prefix("origin/") { if b != "HEAD" { return b.to_string(); } }
+    default_branch(root)
+}
+/// Origin's own main branch, what `workspace.from` "main" means: its default, else main or master.
+pub fn default_branch(root: &Path) -> String {
     if let Ok(r) = git_out(root, &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) { return r.trim_start_matches("origin/").to_string(); }
     for b in ["main", "master"] { if git_out(root, &["rev-parse", "--verify", &format!("refs/remotes/origin/{b}")]).is_ok() { return b.into(); } }
     "main".into()
 }
-/// Where a task lands decides what "main" is for it: through its pull request, the remote's main; otherwise the branch
-/// your checkout is on.
-pub fn via_remote(root: &Path, t: &Obj) -> bool { t.b("pr") || (setting("merge.pr", Some(t)) == json!(true) && has_origin(root)) }
+/// The branch a task started from by name (`workspace.from develop`) and lands on, when it is not origin's main.
+pub fn named_base(root: &Path, t: &Obj) -> Option<String> {
+    let b = t.s("from").strip_prefix("origin/").filter(|b| *b != "HEAD")?;
+    (b != default_branch(root)).then(|| b.to_string())
+}
+/// Where a task lands decides what "main" is for it: through its pull request, the remote's main (or the branch it was
+/// started from by name, always); otherwise the branch your checkout is on.
+pub fn via_remote(root: &Path, t: &Obj) -> bool { t.b("pr") || (setting("merge.pr", Some(t)) == json!(true) && has_origin(root)) || (has_origin(root) && named_base(root, t).is_some()) }
+/// "main", or the branch a task lands on when it was started from one by name: for the words that name it.
+pub fn main_word(t: &Obj) -> String { named_base(&folder_of(t.s("id")), t).unwrap_or_else(|| "main".into()) }
 /// The branch a task's work lands on, in words, for the question that asks before a merge.
 pub fn lands_on(t: &Obj) -> String {
     let root = folder_of(t.s("id"));

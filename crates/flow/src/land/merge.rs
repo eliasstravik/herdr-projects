@@ -65,6 +65,21 @@ fn reverify(id: &str, g: &mut Guard, t: &Task, why: &str, synced: Option<&sync::
     let summary = if t.b("summary") { t.t("summary") } else { "Branch updated with main.".into() };
     crate::finish::pipeline::pipeline(id, g, &summary, true, "sync", synced)
 }
+/// A task started from a named branch (`workspace.from develop`) lands there through its pull request only, and only
+/// while that merges into it. False: it may not merge, and that was said on the task.
+fn onto_named(id: &str, g: &mut Guard, t: &Task, root: &Path, tree: &str, b: &str) -> Res<bool> {
+    if !t.b("pr") && !tree.is_empty() {
+        fail(g, &format!("Lands on {b} only through a pull request"), &format!("This task started from {b} at the remote and keeps up with it. It has no pull request (merge.pr is off), and a local merge would land on the branch your checkout is on instead.\n\nNothing was merged."),
+            &format!("Turn merge.pr on for this task (herdr-projects set merge.pr true --task {}) and tell its agent to finish again: the board then opens its pull request into {b}.", task_ref(id, &repo_keys())), no_fix())?;
+        return Ok(false);
+    }
+    if !t.b("pr") { return Ok(true); }
+    let base = serde_json::from_str::<Value>(&gh(&["pr", "view", &pr_number(t.s("pr")), "--json", "baseRefName"], root, 60000).stdout).map(|v| v.t("baseRefName")).unwrap_or_default();
+    if base.is_empty() || base == b { return Ok(true); }
+    fail(g, &format!("The pull request merges into {base}, not {b}"), &format!("Pull request: {}\nIt merges into: {base}\nThis task started from, and lands on: {b}\n\nNothing was merged.", t.s("pr")),
+        &format!("Change the pull request's base back to {b} (gh pr edit {} --base {b}), then approve again.", pr_number(t.s("pr"))), no_fix())?;
+    Ok(false)
+}
 /// Runs with the task in stage "merging" and this runner's guard standing on it.
 pub fn land_core(id: &str, g: &mut Guard) -> Res<()> {
     if called_off(g) { return Ok(()); } // `merge.by` went back to `you` before this merge of the board's own began
@@ -74,6 +89,7 @@ pub fn land_core(id: &str, g: &mut Guard) -> Res<()> {
     let root = folder_of(t.s("id"));
     let tree = sync::tree_of(&t);
     let how = setting_text("merge.method", Some(&t)); // read right before the merge. squash by default
+    if let Some(b) = sync::named_base(&root, &t) { if !onto_named(id, g, &t, &root, &tree, &b)? { return Ok(()); } }
     if !tree.is_empty() {
         let tp = Path::new(&tree);
         let pre = (|| -> Res<Option<&'static str>> {

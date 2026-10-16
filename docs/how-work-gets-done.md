@@ -14,12 +14,19 @@ All of this runs with the board open or closed.
 ## Delegating
 
 - **In a git repo**, the plugin asks Herdr for a worktree space (`herdr worktree create`), on its own branch
-  (`work/<n>-<title>`), started from the remote's default branch (or from your commit, with `--workspace.from here`). A task
-  in a repo never works in your checkout.
+  (`work/<n>-<title>`), started from the remote's default branch (or from your commit, with `--workspace.from here`, or
+  from another branch at the remote, with `--workspace.from develop`). A task in a repo never works in your checkout.
 - **The branch's name is `workspace.branch`**, `work/{n}-{slug}` unless you set it: for you, for one repo, or for one
   task, never in the repo's own file. `{n}` is the task's number (`7`, or `7b` for an attempt), `{slug}` its title
   (`fix-the-login`), `{key}` its repo's key and number (`KIC-7`). So `feat/{key}-{slug}` makes `feat/KIC-7-fix-the-login`.
   A name git would not take is refused, with the nearest one it does. A name already taken gets `-2` after it.
+- **Started from a named branch** (`workspace.from develop`, for a long branch with small tasks on top), the task lands
+  there too. The branch is fetched from origin on every start (10 seconds at most, never asking for a password); one
+  origin does not have is refused with the reason, and the task waits as failed. If origin cannot be reached, the copy it
+  last gave is used. The task keeps up with that branch, its pull request merges into it (`gh pr create --base develop`),
+  a pull request the agent opened itself is taken on only while it merges into it, and `merge.checks` reads the checks of
+  a pull request into it. It needs `merge.pr` on: a local merge lands on your checkout's branch, so a named branch with
+  `merge.pr` off is refused at the start and at the merge, for now.
 - `workspace.setup` runs. Then the agent starts in that space's root pane, with the task and its rules.
 - **Outside git**, the agent works in place, in a plain Herdr space.
 - **At most `board.agents` (4) agents work at once.** More wait their turn. Tasks that wait for you hold no slot.
@@ -218,8 +225,9 @@ and finish again.
   says so, `Ctrl+L` is refused with the reason, and the board tries again every minute until the branch really is up to
   date.
 
-**"Main" is where the task will land**: the remote's main when it lands through a pull request. Otherwise (no remote, or
-`pr` off), the branch your checkout was on when the task first finished. For those, checking out another branch merges
+**"Main" is where the task will land**: the remote's main when it lands through a pull request, or the branch it was
+started from by name (`workspace.from develop`). Otherwise (no remote, or `pr` off), the branch your checkout was on when
+the task first finished. For those, checking out another branch merges
 nothing into waiting tasks, and they are held as "behind main" until your checkout is back on it.
 
 ### A review that passed is not repeated for a merge of main
