@@ -8,10 +8,12 @@ use crate::board::keys::{hint, name, pair, K};
 use crate::board::state::{Mode, State};
 use crate::board::update::actions::{attempt_now, choosing};
 use crate::json::*;
+use crate::shown::ink::Ink;
 use crate::shown::states::{can_send_error, failed_review, failure_for, in_review, is_agent, stuck_finishing};
 
+/// `lit`: words of `words` drawn in `tint` (a heading's coordinator's name, in its heading's colour).
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct Hint { pub key: String, pub words: String, pub stays: bool, pub short: String, pub shortest: String }
+pub struct Hint { pub key: String, pub words: String, pub stays: bool, pub short: String, pub shortest: String, pub lit: String, pub tint: Ink }
 fn h(p: (String, String)) -> Hint { Hint { key: p.0, words: p.1, ..Default::default() } }
 fn hk(k: K, words: &str) -> Hint { h(hint(k, Some(words))) }
 fn plain(key: String, words: &str) -> Hint { Hint { key, words: words.into(), ..Default::default() } }
@@ -43,14 +45,14 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
     // words are locked to it while the list may be scrolled to others, and the box's edge names no one.
     let head = crate::board::update::coords::talking(s);
     if !s.value().is_empty() {
-        if let Some(c) = &head { return (vec![Hint { key: enter, words: format!("send to the {}", c.name), stays: false, short: "send".into(), shortest: "send".into() }, plain(tab, "send, and put an agent on what it adds"), line, put], chat_key); }
+        if let Some(c) = &head { return (vec![Hint { key: enter, words: format!("send to the {}", c.name), stays: false, short: "send".into(), shortest: "send".into(), lit: c.name.clone(), tint: c.ink() }, plain(tab, "send, and put an agent on what it adds"), line, put], chat_key); }
         if let (true, Some(r)) = (s.reply, r) {
             let (fresh, t) = (!r.b("host") && ["todo", "progress"].contains(&r.s("stage")), draft_task(s, r));
             let (w, short) = if crate::board::update::actions::has_agent(r) { (format!("send to {t}'s agent"), format!("send to {t}")) } else if fresh { (format!("send, and start an agent on {t}"), format!("send to {t}")) } else if s.data.can_dispatch || r.b("host") { (format!("send to the Coordinator, about {t}"), "send to the Coordinator".into()) } else { (format!("add to {t}'s description"), format!("add to {t}")) };
-            return (vec![Hint { key: enter, words: w, stays: false, short, shortest: "send".into() }, line, put], chat_key);
+            return (vec![Hint { key: enter, words: w, stays: false, short, shortest: "send".into(), ..Default::default() }, line, put], chat_key);
         }
         let (coordinator, short) = far_coordinator(s).map(|m| (format!("send to the Coordinator on {m}"), format!("send to {m}"))).unwrap_or_else(|| ("send to the Coordinator".into(), "send to the Coordinator".into()));
-        if s.talks_to_coord() { return (vec![Hint { key: enter, words: coordinator, stays: false, short, shortest: "send".into() }, plain(tab, "send, and put an agent on what it adds"), line, put], chat_key); }
+        if s.talks_to_coord() { return (vec![Hint { key: enter, words: coordinator, stays: false, short, shortest: "send".into(), ..Default::default() }, plain(tab, "send, and put an agent on what it adds"), line, put], chat_key); }
         return (vec![plain(enter.clone(), "add it as a task"), plain(tab, "add it and put an agent on it"), line, put], chat_key);
     }
     // The popup closes on its last esc: it says so, last on the line (not while esc would hide the chat's message).
@@ -61,7 +63,7 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
     if let Some(a) = s.auto() { return (auto_hints(s, a, &back, &more), chat_key); }
     if let Some(w) = crate::board::update::heads::says(s) {
         // A machine's or a repo's heading: space talks to its coordinator, and back.
-        let talk = if head.is_some() { Some(Hint { stays: true, ..hk(K::Talk, "back to the Coordinator") }) } else { crate::board::update::coords::of_head(s, &s.sel).map(|c| hk(K::Talk, &format!("talk to the {}", c.name))) };
+        let talk = if head.is_some() { Some(Hint { stays: true, ..hk(K::Talk, "back to the Coordinator") }) } else { crate::board::update::coords::of_head(s, &s.sel).map(|c| Hint { lit: c.name.clone(), tint: c.ink(), ..hk(K::Talk, &format!("talk to the {}", c.name)) }) };
         let mut v = vec![hk(K::Enter, &w)]; v.extend(back); v.extend(key);
         match talk { Some(t) if t.stays => { v.push(t) } Some(t) => { v.insert(0, t); v.push(more) } None => v.push(more) }
         return (v, chat_key);

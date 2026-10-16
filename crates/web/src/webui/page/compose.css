@@ -13,9 +13,10 @@
   --sw-frame: var(--sw-text);
 }
 /* Who the box sends to, by its frame (view/textbox.js: boxColor): the Coordinator's is the plain text colour, an
-   agent's its task's status colour. */
+   agent's its task's status colour, a machine's or a repo's coordinator's its heading's colour (board.css: .sw-c-*). */
 .sw-card.sw-b-text { --sw-frame: var(--sw-text); } .sw-card.sw-b-red { --sw-frame: var(--sw-red); } .sw-card.sw-b-green { --sw-frame: var(--sw-green); } .sw-card.sw-b-yellow { --sw-frame: var(--sw-yellow); }
 .sw-card.sw-b-teal { --sw-frame: var(--sw-teal); } .sw-card.sw-b-review { --sw-frame: var(--sw-review); } .sw-card.sw-b-queue { --sw-frame: var(--sw-queue); } .sw-card.sw-b-check { --sw-frame: var(--sw-check); } .sw-card.sw-b-todo, .sw-card.sw-b-overlay0 { --sw-frame: var(--sw-todo); }
+.sw-card.sw-b-accent { --sw-frame: var(--accent, #f0a830); } .sw-card.sw-b-subtext0 { --sw-frame: var(--sw-dim); }
 /* Focus is the card's, as in the web UI: no rectangle on the field inside it. There the border turns to the accent;
    here the border already says who, so a ring of that same colour is drawn round it. */
 .sw-card:focus-within { box-shadow: var(--shadow-card, 0 4px 16px rgba(0, 0, 0, .35)), 0 0 0 var(--hairline, 1px) color-mix(in srgb, var(--sw-frame) 55%, transparent); }

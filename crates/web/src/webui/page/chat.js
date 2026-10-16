@@ -87,6 +87,8 @@ export function chatEl({ onSend, onPress }) {
       const c = snap.chat;
       el.hidden = !c;
       if (!c) return;
+      // A machine's or a repo's coordinator is drawn in its heading's colour: its name, who said what (chat.css).
+      if (c.tint) el.dataset.tint = c.tint; else delete el.dataset.tint;
       // The switch: the Coordinator (or, with none, a new task), and the selected task's agent. Only on a task's row:
       // on an automation's row that key is the automation's own (it turns it on or off).
       // On a machine's or a repo's heading the other choice is its own coordinator (`head`).
@@ -112,7 +114,7 @@ export function chatEl({ onSend, onPress }) {
       said.set(c.parts && c.parts.length ? c.parts : c.text ? [{ by: "", text: c.text, mine: c.mine, raw: c.raw, tone: c.tone }] : [], fresh, !!c.raw, c.parts && c.parts.length ? c.from : 0, same);
       said.show(shown);
       // The box's frame says who gets your words, as on the terminal board: the plain text colour for the Coordinator,
-      // the task's status colour for its agent.
+      // the task's status colour for its agent, a heading's colour for its coordinator.
       tone = c.box || "text"; // (drawn by `sync`, below, once who is shown now is known)
       box.placeholder = cap(snap.send.place || "");
       labels = snap.send;

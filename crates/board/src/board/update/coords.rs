@@ -13,6 +13,15 @@ use crate::shown::ink::Ink;
 /// "project:<repo>"), and its name ("vm-str coordinator").
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Target { pub host: String, pub to: String, pub name: String }
+/// A machine's heading's colour, which its machine coordinator takes too: the theme's accent.
+pub const MACHINE_INK: Ink = Ink::Accent;
+/// A repo's heading's colour (grouped by repo), which its project coordinator takes too: the brighter grey.
+pub const REPO_INK: Ink = Ink::Soft;
+impl Target {
+    /// Its heading's colour: on the chat's frame, its name and its labels, and its name in the hints. The top-level
+    /// Coordinator has none of its own (plain text).
+    pub fn ink(&self) -> Ink { if self.to == "machine" { MACHINE_INK } else { REPO_INK } }
+}
 /// The coordinator a heading stands for: a machine's heading, or a repo's. A status group's has none.
 pub fn of_head(s: &State, id: &str) -> Option<Target> {
     let rest = id.strip_prefix(HEAD)?;

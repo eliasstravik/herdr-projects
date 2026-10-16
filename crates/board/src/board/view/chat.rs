@@ -15,8 +15,10 @@ use crate::status_words::{coordinator_stands, coordinator_status, COORDINATOR_UN
 
 /// The fewest cells the status keeps when the progress stands beside it.
 const CHAT_STATUS_MIN: usize = 20;
+/// `tint`: the colour of what a machine's or a repo's coordinator belongs to, its heading's (update/coords.rs), on its
+/// name and on who said what; Plain for the Coordinator and a task's agent.
 #[derive(Clone, Debug, Default)]
-pub struct Who { pub mark: Inked, pub tag: String, pub name: String, pub status: String, pub progress: Vec<Inked>, pub text: String, pub parts: Vec<Part>, pub mine: bool, pub raw: bool, pub said: bool, pub turn: String, pub note: String, pub always: bool, pub ink: Ink }
+pub struct Who { pub mark: Inked, pub tag: String, pub name: String, pub status: String, pub progress: Vec<Inked>, pub text: String, pub parts: Vec<Part>, pub mine: bool, pub raw: bool, pub said: bool, pub turn: String, pub note: String, pub always: bool, pub ink: Ink, pub tint: Ink }
 fn parts_text(parts: &[Part]) -> String { parts.iter().map(|p| format!("{}{}", if p.by.is_empty() { String::new() } else { format!("{}:\n", p.by) }, p.text)).collect::<Vec<_>>().join("\n\n") }
 /// Who the chat talks to now, as the chat draws it. None in find.
 pub fn chat_of(s: &mut State, t: &Theme, r: Option<&Obj>) -> Option<Who> {
@@ -99,7 +101,7 @@ pub fn chat_head(c: &Who, width: usize, tight: bool) -> Vec<Inked> {
     let tagged = !c.tag.is_empty() && width as i64 - bare.width() as i64 - crate::text::width(&c.tag) as i64 - 1 >= CHAT_STATUS_MIN as i64;
     let lead = if tagged { bare.add(Inked::of(c.tag.clone(), Ink::Muted)).add(Inked::plain(" ")) } else { bare };
     let room = width.saturating_sub(lead.width()).max(1);
-    let name = Inked::plain(c.name.clone()).bold();
+    let name = Inked::of(c.name.clone(), c.tint).bold();
     let nw = name.width();
     if nw > room && tight { return vec![lead.add(name.cut(room))]; }
     if nw > room {
@@ -132,7 +134,7 @@ pub fn chat_up(s: &State, c: Option<&Who>) -> bool { c.map(|c| s.chat_open || c.
 pub fn chat_message(s: &mut State, c: Option<&Who>, width: usize, max: usize) -> Vec<Inked> {
     let Some(c) = c.filter(|c| !c.text.is_empty()) else { return vec![] };
     if max < 1 { return vec![]; }
-    let paint = |by: bool, l: Inked, p: &Part| if by { l.recolor(Ink::Muted) } else if !p.tone.is_empty() { l.recolor(crate::board::update::beat::ink_of(&p.tone)) } else if p.mine { l } else { l.recolor(Ink::Soft) };
+    let paint = |by: bool, l: Inked, p: &Part| if by && c.tint != Ink::Plain { l.recolor(c.tint).bold() } else if by { l.recolor(Ink::Muted) } else if !p.tone.is_empty() { l.recolor(crate::board::update::beat::ink_of(&p.tone)) } else if p.mine { l } else { l.recolor(Ink::Soft) };
     let (lines, starts) = super::chat_text::part_lines(&c.parts, width.max(1), &paint);
     // The newest thing said alone, whoever said it: the rest of the conversation is above it.
     let latest = starts.get(opens_at(&c.parts)).copied().unwrap_or(0);
