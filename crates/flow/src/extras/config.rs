@@ -1,6 +1,7 @@
 //! herdr's config.toml: the marked blocks the plugin adds on a yes (the key that opens the board, the sidebar rows),
 //! checked on a copy first, backed up, and put back when herdr rejects them. herdr is told to reload after each change.
 use super::{extras, save};
+use super::found::{bound_key, has_sidebar};
 use crate::flow::tabs::AGENT_TAB;
 use crate::herdr::{cli::launch, keys};
 use crate::json::*;
@@ -44,16 +45,18 @@ pub fn offers() -> Value {
     let bound = regex::Regex::new(r#"command\s*=\s*["']herdr-projects\.open["']"#).unwrap().is_match(&text);
     let offer_key = !bound && x.s("key") != "no"; // an existing binding is left as it is
     let (key, note) = if offer_key && !x.b("asked") { keys::suggest(&text, &keys::defaults()) } else { (String::new(), String::new()) };
-    let sidebar = !crate::re!(r"(?m)^\s*\[ui\.sidebar").is_match(&text) && x.s("sidebarAnswer") != "no";
-    json!({ "file": herdr_config().display().to_string(), "asked": x.b("asked"), "key": if offer_key { json!({ "suggest": key, "note": note }) } else { Value::Null }, "sidebar": if sidebar { json!({}) } else { Value::Null } })
+    // Rows of the user's own, in any spelling, are kept: ours added beside them would make herdr reject the file.
+    let (own, ours) = (has_sidebar(&text), text.contains(&begin("sidebar")));
+    let sidebar = !own && x.s("sidebarAnswer") != "no";
+    let kept = own && !ours && x.s("sidebarAnswer") != "no";
+    json!({ "file": herdr_config().display().to_string(), "asked": x.b("asked"), "key": if offer_key { json!({ "suggest": key, "note": note }) } else { Value::Null }, "sidebar": if sidebar { json!({}) } else { Value::Null }, "sidebarKept": if kept { json!(kept_note()) } else { Value::Null } })
+}
+/// Said once when the config has sidebar rows of its own: they are kept, and ours are there to put in by hand.
+fn kept_note() -> String {
+    format!("Your own sidebar rows in {} are kept. To show each task's stage there too, merge these into them yourself, then run: herdr server reload-config\n\n{}", tilde(&herdr_config().display().to_string()), block("sidebar", ""))
 }
 /// The key that opens the board, as herdr's config binds it ("prefix+w"), or "" when none is bound.
-pub fn board_key() -> String {
-    let text = read();
-    let re = regex::Regex::new(r#"\[\[keys\.command\]\][^\[]*?command\s*=\s*"herdr-projects\.open""#).unwrap();
-    let Some(m) = re.find(&text) else { return String::new() };
-    regex::Regex::new(r#"(?m)^\s*key\s*=\s*"([^"]+)""#).unwrap().captures(m.as_str()).map(|c| c[1].to_string()).unwrap_or_default()
-}
+pub fn board_key() -> String { bound_key(&read()) }
 /// That key as key presses, for the board in herdr's popup, which herdr hands every key to: its own key closes it.
 pub fn board_presses() -> Option<(Vec<String>, String)> { keys::presses(&board_key(), &read(), &keys::built_in()) }
 /// May the board take this key? Asked as soon as one is typed at the first run, and again before it is written.
