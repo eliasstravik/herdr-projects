@@ -7,16 +7,25 @@ use crate::store::repos::git_out;
 use crate::store::tasks::Task;
 use std::path::Path;
 
-/// The pull requests GitHub has for this head branch, newest first: { number, url, state }. None when gh cannot say.
+/// The pull requests GitHub has for this head branch, newest first: { number, url, state, baseRefName }. None when gh
+/// cannot say.
 fn prs_of(branch: &str, cwd: &Path) -> Vec<Value> {
     if branch.is_empty() { return vec![]; }
-    let r = gh(&["pr", "list", "--head", branch, "--state", "all", "--limit", "10", "--json", "number,url,state"], cwd, 60000);
+    let r = gh(&["pr", "list", "--head", branch, "--state", "all", "--limit", "10", "--json", "number,url,state,baseRefName"], cwd, 60000);
     if r.status != 0 { return vec![]; }
     serde_json::from_str::<Value>(r.stdout.trim()).ok().and_then(|v| v.as_array().cloned()).unwrap_or_default()
 }
-/// The pull request the agent opened itself for the task's branch, still open: the board takes it as its own.
-pub fn open_pr(branch: &str, cwd: &Path) -> Option<String> {
-    prs_of(branch, cwd).into_iter().find(|p| p.s("state") == "OPEN").map(|p| p.t("url")).filter(|u| !u.is_empty())
+/// A pull request the agent opened itself: its link, its number and the branch it merges into ("" when not said).
+pub struct OwnPr { pub url: String, pub number: String, pub base: String }
+/// The pull request the agent opened itself for the task's branch, still open: the board takes it as its own, once it
+/// merges into the branch the task lands on (`wrong_base`).
+pub fn open_pr(branch: &str, cwd: &Path) -> Option<OwnPr> {
+    prs_of(branch, cwd).into_iter().find(|p| p.s("state") == "OPEN" && p.b("url")).map(|p| OwnPr { url: p.t("url"), number: p.t("number"), base: p.t("baseRefName") })
+}
+/// Why the agent's own pull request cannot be the task's: it merges into another branch than `onto`, the one the task
+/// started from and keeps up with. None when it merges into that one.
+pub fn wrong_base(p: &OwnPr, onto: &str) -> Option<String> {
+    (!p.base.is_empty() && p.base != onto).then(|| format!("The agent opened pull request #{} ({}) for this branch itself, and it merges into {}. This task started from {onto} and lands on {onto}, so the board does not take it as its own and opens none beside it.", p.number, p.url, p.base))
 }
 /// Whether the task made commits of its own: those on its branch before main was brought in now, that neither the
 /// branch it started from nor main as it was last brought in has.
@@ -34,7 +43,7 @@ pub fn nothing_to_land(t: &Task, tree: &Path, own: bool, ask: bool) -> Option<St
     let merged = if ask { prs_of(t.s("branch"), tree).into_iter().find(|p| p.s("state") == "MERGED") } else { None };
     Some(match merged {
         Some(p) => format!("Already merged in #{}", p.t("number")),
-        None if own => "Already on main".into(),
+        None if own => format!("Already on {}", crate::sync::main_word(t)),
         None => "No change needed".into(),
     })
 }

@@ -1,5 +1,6 @@
 //! What a setting's value may be: a typed or hand-written value is checked against its entry in settings_list.rs and
 //! comes back as the board keeps it, or is refused with the nearest right one as a hint.
+use crate::agents::efforts::{why_not as why_not_effort, Ask};
 use crate::agents::kinds::{kind, kind_named, KIND_NAMES};
 use crate::agents::roles::refusal;
 use crate::err::{Error, Res};
@@ -92,15 +93,13 @@ pub fn agent_of(value: &str) -> AgentName {
     if value.is_empty() || value == NONE { return AgentName::default(); }
     match value.split_once('/') { Some((k, m)) => AgentName { kind: k.into(), model: m.into() }, None => AgentName { kind: value.into(), model: String::new() } }
 }
-/// An effort or an access is right or wrong for one program: "" when it fits, else why not.
-pub fn fits(name: &str, value: &str, agent: &str) -> String {
-    let (Some(e), Some(a)) = (entry_of(name), kind(&agent_of(agent).kind)) else { return String::new() };
-    if e.ty == Ty::Effort && value != "default" && a.effort.is_empty() {
-        return if a.effort_note.is_empty() { format!("{} takes no effort level when the board starts it: leave it at default.", a.name) } else { format!("{}: leave it at default.", a.effort_note) };
-    }
-    if e.ty == Ty::Effort && value != "default" && !a.efforts.is_empty() && !a.efforts.contains(&value) {
-        return format!("{} has no effort \"{value}\": it takes {} (or default, for its own).", a.name, a.efforts.join(", "));
-    }
+/// An effort or an access is right or wrong for one program (an effort: for its model too): "" when it fits, else
+/// why not. `ask`: a value being set, for which the program may be asked its levels; a value read is checked against
+/// the levels it said last (agents/efforts.rs), so reading never waits for a program.
+pub fn fits(name: &str, value: &str, agent: &str, ask: bool) -> String {
+    let n = agent_of(agent);
+    let (Some(e), Some(a)) = (entry_of(name), kind(&n.kind)) else { return String::new() };
+    if e.ty == Ty::Effort { return why_not_effort(a.name, &n.model, value, if ask { Ask::Fresh } else { Ask::Kept }).unwrap_or_default(); }
     if e.ty == Ty::Access && value != "full" && !(value == "ask" && a.access_ask.is_some()) {
         return format!("{} cannot do \"{value}\": it never asks before it acts. Keep {name} at full, or choose another program for {}.agent.", a.name, name.split('.').next().unwrap_or(""));
     }
@@ -177,6 +176,7 @@ fn check_ty(e: &Entry, v: &Value) -> Res<Value> {
         }
         Ty::Agent => check_agent(e, v),
         Ty::Branch => super::branch::check(name, v),
+        Ty::From => super::from::check(name, v),
         Ty::Agents => {
             if let Value::String(s) = v { if s.trim().to_lowercase() == NONE { return Ok(json!(NONE)); } }
             let Some(items) = items_of(v) else { return refuse(format!("{name} is a list of agents ({}, each with an optional model after a slash), or none.", KIND_NAMES.join(", "))) };
@@ -258,7 +258,7 @@ pub fn check(name: &str, value: &Value, agent: &str) -> Res<Value> {
     let e = known(name)?;
     if value.is_null() { return refuse(format!("{name} needs a value.")); }
     let v = check_ty(e, value)?;
-    if !agent.is_empty() { let why = fits(name, &text(&v), agent); if !why.is_empty() { return refuse(format!("{name}: {why}")); } }
+    if !agent.is_empty() { let why = fits(name, &text(&v), agent, true); if !why.is_empty() { return refuse(format!("{name}: {why}")); } }
     Ok(v)
 }
 /// A model named in a value being set is one its program takes (agents/models.rs). Only when a value is set: a value

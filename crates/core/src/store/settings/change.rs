@@ -62,17 +62,17 @@ pub fn checked(pairs: &[(String, Value)], scope: &Scope) -> Res<Obj> {
         let e = known(name)?;
         let role = role_of(name);
         if e.ty == Ty::Effort || e.ty == Ty::Access {
-            let why = fits(name, &text(value), &get(&format!("{role}.agent"), &out));
+            let why = fits(name, &text(value), &get(&format!("{role}.agent"), &out), true);
             if !why.is_empty() { return refuse(format!("{name}: {why}")); }
         }
         // Every agent of a list of attempts works with the working agent's access.
         if e.ty == Ty::Attempts && value.is_string() {
             let access = get("worker.access", &out);
-            for a in text(value).split(", ") { let why = fits("worker.access", &access, a); if !why.is_empty() { return refuse(format!("{name}: {why}")); } }
+            for a in text(value).split(", ") { let why = fits("worker.access", &access, a, true); if !why.is_empty() { return refuse(format!("{name}: {why}")); } }
         }
         if e.ty == Ty::Agent && entry_of(&format!("{role}.access")).is_some() {
             let access = get(&format!("{role}.access"), &out);
-            let why = fits(&format!("{role}.access"), &access, &text(value));
+            let why = fits(&format!("{role}.access"), &access, &text(value), true);
             if !why.is_empty() { return refuse(format!("{name}: {why}")); }
         }
     }

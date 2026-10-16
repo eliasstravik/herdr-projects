@@ -148,7 +148,7 @@ fn values_a_switch_a_choice_a_time_with_its_unit_an_agent_with_its_model_and_the
     // an agent: the model travels with the program, and effort and access are checked against it
     assert_eq!(set_value("worker.agent", &json!("Codex/gpt-5.5"), &you()).unwrap().value, json!("codex/gpt-5.5")); assert_eq!(agent_of("codex/gpt-5.5"), AgentName { kind: "codex".into(), model: "gpt-5.5".into() });
     refused(set_value("worker.agent", &json!("gpt"), &you()), r#"no agent program "gpt"\. It must be claude, codex, pi, agy, .*, qwen\."#);
-    refused(set_value("worker.effort", &json!("max"), &you()), r#"worker\.effort: codex has no effort "max": it takes minimal, low, medium, high, xhigh"#);
+    refused(set_value("worker.effort", &json!("minimal"), &you()), r#"worker\.effort: codex has no effort "minimal": it takes low, medium, high, xhigh, max, ultra"#);
     assert_eq!(set_value("worker.effort", &json!("xhigh"), &you()).unwrap().value, json!("xhigh")); assert_eq!(set_value("worker.access", &json!("ask"), &you()).unwrap().value, json!("ask"));
     refused(set_value("worker.agent", &json!("pi"), &you()), r#"worker\.agent: pi cannot do "ask": it never asks before it acts"#);
     assert_eq!(set_value("reviewer.access", &json!("ask"), &Scope::repo("proj")).unwrap().value, json!("ask")); // codex can ask

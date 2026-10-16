@@ -1,7 +1,8 @@
 //! The made table of agent programs (docs/agents.md): how the board starts each one and what it can do, made from the
 //! one table of programs (crates/core/src/agents/kinds/), so the page never says other than the code.
 use crate::agents::adapter::{can_one_shot, one_shot};
-use crate::agents::kinds::{all, fill, program, Kind};
+use crate::agents::efforts::effort_command;
+use crate::agents::kinds::{all, fill, program, EffortsRead, Kind};
 use crate::agents::roles::why_not;
 
 fn code(args: &[String]) -> String { if args.is_empty() { String::new() } else { format!("`{}`", args.iter().map(|a| if a.is_empty() { "\"\"".to_string() } else { a.clone() }).collect::<Vec<_>>().join(" ")) } }
@@ -21,6 +22,15 @@ fn names_of(k: &Kind) -> String {
     if m.aliases.is_empty() && m.known.is_empty() { return "not checked".into(); }
     format!("{} or one of its full names in the table ({})", m.aliases.iter().map(|a| format!("`{a}`")).collect::<Vec<_>>().join(", "), m.known.iter().take(3).map(|a| format!("`{a}`")).collect::<Vec<_>>().join(", "))
 }
+/// Which effort levels it takes, as `efforts.rs` reads them: from the program, else those in the table.
+fn efforts_of(k: &Kind) -> String {
+    if k.effort.is_empty() { return if k.effort_note.is_empty() { "none".into() } else { k.effort_note.into() }; }
+    let from = effort_command(k.name);
+    let table = if k.efforts.is_empty() { "any level".to_string() } else { k.efforts.join(", ") };
+    if from.is_empty() { return format!("{}: {table}", code(&fill(k.effort, "<level>"))); }
+    let each = if k.efforts_read == EffortsRead::Catalog { " for the model" } else { "" };
+    format!("{}; the levels `{from}` lists{each}, else {table}", code(&fill(k.effort, "<level>")))
+}
 fn row(k: &Kind) -> Vec<String> {
     let mut name = format!("`{}`", k.name);
     if !k.aliases.is_empty() { name.push_str(&format!(" (also {})", k.aliases.iter().map(|a| format!("`{a}`")).collect::<Vec<_>>().join(", "))); }
@@ -29,7 +39,7 @@ fn row(k: &Kind) -> Vec<String> {
     started.extend(fill(k.fresh, ""));
     started.extend(fill(k.access_full, ""));
     let model = if k.model.is_empty() { "none at start".into() } else { format!("{}; {}", code(&fill(k.model, "<model>")), names_of(k)) };
-    let effort = if k.effort.is_empty() { if k.effort_note.is_empty() { "none".into() } else { k.effort_note.into() } } else if k.efforts.is_empty() { format!("{} (any level)", code(&fill(k.effort, "<level>"))) } else { format!("{}: {}", code(&fill(k.effort, "<level>")), k.efforts.join(", ")) };
+    let effort = efforts_of(k);
     let ask = match k.access_ask { None => "cannot ask".into(), Some(a) if a.is_empty() => "its own default".into(), Some(a) => code(&a.iter().map(|s| s.to_string()).collect::<Vec<_>>()) };
     let rules = if k.name == "codex" { "`-c developer_instructions=…`".into() } else if k.standing.is_empty() { "in its first prompt".into() } else { code(&fill(k.standing, "<file>")) };
     let again = if k.resume.is_empty() { "starts afresh".into() } else { code(&fill(k.resume, "<id>")) };

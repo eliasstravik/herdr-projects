@@ -61,7 +61,7 @@ pub fn listed(k: &str, fresh: bool) -> Listing {
 /// The program's own command that lists its models, as typed.
 pub fn list_command(k: &str) -> String { std::iter::once(program(k)).chain(kind(k).map(|a| a.models.list).unwrap_or(&[]).iter().copied()).collect::<Vec<_>>().join(" ") }
 /// What the program printed; None when it is not installed here; Err: why it gave nothing.
-fn run(prog: &str, args: &[&str]) -> Result<Option<String>, String> {
+pub fn run(prog: &str, args: &[&str]) -> Result<Option<String>, String> {
     let cmd = std::iter::once(prog).chain(args.iter().copied()).collect::<Vec<_>>().join(" ");
     let child = match Command::new(prog).args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
         Ok(c) => c,

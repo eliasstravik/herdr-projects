@@ -5,8 +5,8 @@ its own default. Effort (how hard the agent thinks) is a setting of its own. A w
 set it, with the ones that work.
 
 ```
-herdr-projects models            every program, a few names each
-herdr-projects models codex      every name codex takes, written as a setting writes them
+herdr-projects models            every program, a few names each, and its effort levels
+herdr-projects models codex      every name codex takes, written as a setting writes them, and its effort levels
 ```
 
 Every agent the board starts has a **program**, and if you want, a **model** and an **effort**. You choose them per role:
@@ -73,17 +73,33 @@ Write it after the program: codex/gpt-6.1-sol.
 
 `<role>.effort` is how hard the agent thinks: `default` (the program's own) or a level, such as `low`, `medium` or `high`.
 
-- **Each program has its own levels** ([the table in agents](agents.md#the-programs)): Claude Code `low` to `max`, Codex
-  `minimal` to `xhigh`, pi `off` to `xhigh`.
-- A level the role's program does not have is refused, with the ones it has. A program that takes no effort at start
-  takes only `default`.
+- **Each program has its own levels, and the board asks the program for them**, as it does for model names:
+  - Codex: what `codex debug models` lists for each model (today `low` to `max`, and `ultra` on some). A level is checked
+    against the model you chose (`codex/gpt-6-luna` has no `ultra`); with no model, against every level any model takes.
+  - The others: what their `--help` lists at their effort argument (`claude --help`: `low` to `max`; `pi --help`: `off`
+    to `max`).
+  - The levels are kept for an hour. A level that is not on the list is asked again first, so a level the program has
+    just added is taken at once.
+  - **When they cannot be read** (the program is not installed here, is offline, or its help names none), the levels
+    written in the board's table of programs are used ([the table in agents](agents.md#the-programs)). Never a refusal
+    of every level.
+- A level the role's program (or its model) does not have is refused, with the ones it has:
+
+  ```
+  $ herdr-projects set worker.effort minimal
+  worker.effort: codex has no effort "minimal": it takes low, medium, high, xhigh, max, ultra, as `codex debug models` lists them (or default, for its own).
+  ```
+
+- A program that takes no effort at start takes only `default`.
 - Cursor takes its effort in the model's name (`cursor/claude-opus-4-8[effort=high]`). pi also takes one after its model
   (`:high`).
-- An effort set for one program, and kept when you choose another, is left out at start if the new one does not have it.
+- An effort set for one program, and kept when you choose another (program or model), is left out at start if the new
+  one does not have it. A start goes by the levels the program said last: it never waits to ask.
 - `<role>.fast` is Codex's faster service tier. Elsewhere it does nothing.
 
 ## A new program
 
 How a program's models are listed and read is one entry in its row of the table of programs
 (`crates/core/src/agents/kinds/`, `models`): the command that lists them and its format, or its short and full names. A
-program with neither is not checked.
+program with neither is not checked. Its effort levels are read from its `--help` unless its row says otherwise
+(`efforts_read`: Codex's catalog, or only the table); its `efforts` are the levels used when they cannot be read.

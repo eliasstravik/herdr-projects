@@ -92,7 +92,7 @@ pub fn lookup_at(name: &str, scope: &Scope, at: &Places) -> Res<Found> {
     if entry.ty == Ty::Effort || entry.ty == Ty::Access {
         let agent = text(&lookup_at(&format!("{}.agent", name.split('.').next().unwrap_or("")), scope, at)?.value);
         said.retain(|p| {
-            let why = if p.place == "builtin" { String::new() } else { fits(name, &text(&p.values()[name]), &agent) };
+            let why = if p.place == "builtin" { String::new() } else { fits(name, &text(&p.values()[name]), &agent, false) };
             if !why.is_empty() { skipped.push(format!("{}: {name}: {why}", if p.from == "you" { "your settings" } else { &p.from })); }
             why.is_empty()
         });

@@ -7,7 +7,8 @@
 //!   program      the executable                                                 the name
 //!   aliases      other names a setting may give it (herdr's integration name)   none
 //!   access_full / access_ask  the arguments for each `<role>.access` value     no `ask`: the value is refused for it
-//!   efforts      the effort levels it accepts                                   none: any word is passed on
+//!   efforts      the effort levels it accepts, where the program cannot say them none: any word is passed on
+//!   efforts_read where the program says its levels itself (efforts.rs)          its --help, else `efforts`
 //!   effort       the arguments that give it an effort, `{}` the level           none: an effort is refused
 //!   model        the arguments that give it a model, `{}` the model             none: a model is refused
 //!   models       the model names it takes: its own command that lists them, or  none: a name is not checked
@@ -33,6 +34,8 @@ pub struct Kind {
     pub aliases: &'static [&'static str],
     pub min_version: &'static str,
     pub efforts: &'static [&'static str],
+    /// Where the program says the effort levels it takes (efforts.rs); `efforts` when it cannot be asked.
+    pub efforts_read: EffortsRead,
     pub access_full: &'static [&'static str],
     pub access_ask: Option<&'static [&'static str]>,
     pub fast: bool,
@@ -111,10 +114,20 @@ pub enum Read {
     /// One name a line (opencode's provider/model).
     Lines,
 }
+/// Where a program says the effort levels it takes.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EffortsRead {
+    /// Nowhere: only the levels written in its row (`efforts`).
+    Table,
+    /// Its `--help`, at the line of its effort argument: `(low, medium, high)` or `level: off, low, high`.
+    Help,
+    /// Codex's catalog (its `models.list`): each model's `supported_reasoning_levels`.
+    Catalog,
+}
 pub const NO_MODELS: Models = Models { list: &[], read: Read::None, aliases: &[], known: &[], suffix: &[], example: "" };
 /// What an entry has that it does not name.
 pub const BASE: Kind = Kind {
-    name: "", program: "", aliases: &[], min_version: "0", efforts: &[], access_full: &[], access_ask: Some(&[]), fast: false, tokens: false,
+    name: "", program: "", aliases: &[], min_version: "0", efforts: &[], efforts_read: EffortsRead::Help, access_full: &[], access_ask: Some(&[]), fast: false, tokens: false,
     interrupt: "esc", rules_file: None, since: &[], reads_turn: false, plan_mode: false, lead: &[], model: &[], models: NO_MODELS, effort: &[], effort_note: "",
     resume: &[], session: &[], fresh: &[], standing: &[], headless: None, integration: "", needs_integration: false, login: None, cannot: &[], checked: "",
 };

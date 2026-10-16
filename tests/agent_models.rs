@@ -111,7 +111,7 @@ fn the_models_command_names_what_each_program_takes_as_a_setting_writes_it() {
     lists(json!({ "codex": { "taken": ["gpt-6.1-sol", "gpt-6-luna", "codex-auto-review"], "shown": ["gpt-6.1-sol", "gpt-6-luna"] } }));
     let (v, text) = models_command("codex").unwrap();
     assert_eq!(v["models"], json!(["gpt-6.1-sol", "gpt-6-luna"]));
-    assert!(text.ends_with("worker.agent codex/gpt-6.1-sol:\n\ncodex/gpt-6.1-sol\ncodex/gpt-6-luna"), "{text}");
+    assert!(text.contains("worker.agent codex/gpt-6.1-sol:\n\ncodex/gpt-6.1-sol\ncodex/gpt-6-luna\n\nEffort"), "{text}");
     let (_, all) = models_command("").unwrap();
     assert!(has(&all, r"(?m)^codex +codex/gpt-6\.1-sol, codex/gpt-6-luna$"), "{all}");
     assert!(has(&all, r"(?m)^claude +\d+ names, such as claude/default, claude/fable, claude/opus, claude/sonnet: herdr-projects models claude lists them all$"), "{all}");

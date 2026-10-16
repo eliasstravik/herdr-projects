@@ -14,7 +14,7 @@ use std::sync::LazyLock;
 pub enum Kind { Work, Board, Repo }
 impl Kind { pub fn name(self) -> &'static str { match self { Kind::Work => "work", Kind::Board => "board", Kind::Repo => "repo" } } }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Ty { Switch, Choice, Time, Count, Tokens, Agent, Agents, Effort, Access, Text, List, Machines, Notify, Key, Attempts, Keys, Branch }
+pub enum Ty { Switch, Choice, Time, Count, Tokens, Agent, Agents, Effort, Access, Text, List, Machines, Notify, Key, Attempts, Keys, Branch, From }
 
 #[derive(Clone, Debug)]
 pub struct Entry {
@@ -66,7 +66,7 @@ pub static SETTINGS: LazyLock<Vec<Entry>> = LazyLock::new(|| {
     // what the work is
     s.push(e("research.only", "Research only", Work, Ty::Switch, json!(false), "research only: the task's agent changes nothing in the repo and its result is a report, with a private link. Nothing is committed, pushed, opened as a pull request or merged for it, and its row says `[research]`. Read when the agent starts: a change counts from the task's next start, and turning it on is refused once the agent has changed the repo or a pull request is open. `--research` and `--no-research` on `add` and `delegate` are short for it. More: [reports and research-only tasks](research.md)").repo().means("its agent changes nothing in the repo; the result is a report, and nothing is pushed, opened or merged"));
     // where it works
-    s.push(e("workspace.from", "Worktree starts from", Work, Ty::Choice, json!("main"), "where a worktree starts: `main` (the remote's main branch, fetched first) or `here` (the commit your checkout is on)").values(&["main", "here"]));
+    s.push(e("workspace.from", "Worktree starts from", Work, Ty::From, json!("main"), "where a worktree starts, and where its work lands: `main` (the remote's main branch, fetched first), `here` (the commit your checkout is on) or a branch's name at the remote (`develop`). A named branch is fetched from origin on every start, and one origin does not have is refused; the task keeps up with that branch, its pull request merges into it and GitHub's checks are those of a pull request into it. It needs `merge.pr` on: a local merge of a named branch is refused for now. Read when the worktree is made. More: [how work gets done](how-work-gets-done.md)"));
     s.push(e("workspace.branch", "Branch name", Work, Ty::Branch, json!("work/{n}-{slug}"), "the name of a task's branch: `{n}` is the task's number (an attempt's letter included: `7b`), `{slug}` its title in small words with dashes, `{key}` its repo's key and number (`KIC-123`). It needs `{n}` or `{key}`. git must take it as a branch name (`git check-ref-format`); one it would refuse is refused with the nearest one it takes. A name already taken gets `-2`, `-3` and so on after it. Read when the worktree is made. More: [how work gets done](how-work-gets-done.md)"));
     s.push(e("workspace.setup", "Set-up command", Work, Ty::Text, json!("none"), "a command run in the fresh worktree before the agent starts").repo());
     s.push(e("workspace.include", "Files copied in", Work, Ty::List, json!("none"), "ignored files a fresh worktree lacks and gets a copy of (`.env`); `.worktreeinclude` in the repo names more").repo());
