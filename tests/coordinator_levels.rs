@@ -141,3 +141,34 @@ fn the_command_line_reaches_each_coordinator() {
     assert!(said.starts_with("proj coordinator: idle"), "{said}");
     assert_eq!(j.s("name"), "proj coordinator");
 }
+
+#[test]
+fn a_project_coordinator_keeps_its_own_conversation_when_a_newer_chat_of_the_humans_is_in_the_repo() {
+    let w = coord_world();
+    let p = Co::project(&w.socket, "proj");
+    w.script(json!({ "coordinator": [{ "said": "Project coordinator here." }, { "said": "Still the project coordinator." }] }));
+    tell(&w, &p, "who are you?");
+    let session = state::get(&p).unwrap().t("session");
+    stop(&p).unwrap(); drain();
+    // the human's own chat in the repo, newer than the coordinator's
+    let real = std::fs::canonicalize(&w.root).unwrap().display().to_string();
+    let dir = std::path::Path::new(&std::env::var("CLAUDE_CONFIG_DIR").unwrap()).join("projects").join(real.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect::<String>());
+    let now = sw::clock::iso(sw::clock::now() + 5000);
+    std::fs::write(dir.join("11111111-2222-3333-4444-555555555555.jsonl"), format!("{}\n{}\n", json!({ "type": "user", "message": { "role": "user", "content": "my own question" }, "timestamp": now }),
+        json!({ "type": "assistant", "uuid": "x1", "message": { "id": "msg_x", "role": "assistant", "content": [{ "type": "text", "text": "UNRELATED HUMAN CHAT" }], "stop_reason": "end_turn" }, "timestamp": now }))).unwrap();
+    let _ = std::fs::remove_file(sw::store::marks::stamp_file(&p.mark("coordinator-session")));
+    assert_eq!(look(&p).said, "Project coordinator here.");
+    assert_eq!(state::get(&p).unwrap().t("session"), session, "its saved conversation stays its own");
+    tell(&w, &p, "still you?");
+    assert_eq!(after(&args(&agent(&w, "sw-coordinator-proj")), "--resume"), session);
+    assert_eq!(look(&p).said, "Still the project coordinator.");
+}
+
+#[test]
+fn a_project_coordinators_agent_name_is_one_herdr_takes_for_any_repo_name() {
+    let ok = regex::Regex::new(r"^[a-z0-9_-]{1,29}$").unwrap();
+    for (repo, want) in [("proj", "sw-coordinator-proj"), ("My.Project+x", "sw-coordinator-my-project-x"), ("a-very-long-project-name-indeed", "sw-coordinator-a-very-long-pr")] {
+        let n = Co::project("/s", repo).agent_name();
+        assert_eq!(n, want); assert!(ok.is_match(&n), "{n}");
+    }
+}

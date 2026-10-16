@@ -10,6 +10,7 @@ pub enum Level { #[default] Top, Machine, Project(String) }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Co { pub socket: String, pub level: Level }
 const SEP: char = '\u{1f}';
+pub const AGENT_NAME_MAX: usize = 32;
 
 impl Co {
     pub fn top(socket: &str) -> Co { Co { socket: socket.into(), level: Level::Top } }
@@ -29,9 +30,16 @@ impl Co {
     pub fn name(&self) -> String {
         match &self.level { Level::Top => crate::status_words::COORDINATOR.into(), Level::Machine => named(&crate::remote::check::hostname()), Level::Project(r) => named(&crate::shown::words::repo_label(r)) }
     }
-    /// Its agent's inner name in herdr: one each, so a machine runs them side by side.
+    /// Its agent's inner name in herdr: one each, so a machine runs them side by side. herdr takes lowercase letters,
+    /// digits, `-` and `_`, at most 32 characters: room is left for the `-2` that tells two alike apart (pump.rs).
     pub fn agent_name(&self) -> String {
-        match &self.level { Level::Top => "sw-coordinator".into(), Level::Machine => "sw-coordinator-machine".into(), Level::Project(r) => format!("sw-coordinator-{}", safe(r)) }
+        match &self.level {
+            Level::Top => "sw-coordinator".into(), Level::Machine => "sw-coordinator-machine".into(),
+            Level::Project(r) => {
+                let tail: String = r.to_lowercase().chars().map(|c| if c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' { c } else { '-' }).collect();
+                format!("sw-coordinator-{tail}").chars().take(AGENT_NAME_MAX - 3).collect::<String>().trim_end_matches('-').to_string()
+            }
+        }
     }
     /// The end of its lock's and its marks' names: nothing for the top-level one, which keeps the names it always had.
     pub fn suffix(&self) -> String { match &self.level { Level::Top => String::new(), Level::Machine => "-machine".into(), Level::Project(r) => format!("-project-{}", safe(r)) } }
