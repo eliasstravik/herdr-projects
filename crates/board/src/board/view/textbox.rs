@@ -1,7 +1,7 @@
 //! The text box you type in, as the board draws it. Its prompt is only ❯: who gets your words is said by its grey words
 //! while it is empty, by the hint line under it while it holds any (`enter send to #34's agent`), and by the colour of
-//! its frame and prompt: a task's agent's in that task's status colour (the very one its mark has), the Coordinator's
-//! in plain text. Its edge names no one.
+//! its frame and prompt: a task's agent's in that task's status colour (the very one its mark has), a machine's or a
+//! repo's coordinator's in its heading's colour, the Coordinator's in plain text. Its edge names no one.
 use super::chat::more_word;
 use crate::board::state::{Mode, State};
 use crate::board::tags::number_tag;
@@ -22,6 +22,7 @@ pub fn draft_task(s: &State, r: &Obj) -> String {
 pub fn far_coordinator(s: &State) -> Option<&str> { (!s.scope.is_empty() && s.scope != "*" && s.remotes.contains_key(&s.scope)).then_some(s.scope.as_str()) }
 /// The box's colour: who it sends to.
 pub fn box_ink(s: &State, r: Option<&Obj>) -> Ink {
+    if let Some(c) = crate::board::update::coords::talking(s).filter(|_| s.mode != Mode::Find) { return c.ink(); }
     let Some(r) = r.filter(|_| s.mode != Mode::Find && s.reply) else { return Ink::Text };
     if r.b("archivedAt") || has_agent(r) || (!r.b("host") && !is_agent(r) && ["todo", "progress"].contains(&r.s("stage"))) { status_ink(r) } else { Ink::Text }
 }

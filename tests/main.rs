@@ -43,6 +43,7 @@ mod board_chat_yours;
 mod board_colours;
 mod board_colours_rest;
 mod board_coordinators;
+mod board_coordinators_inks;
 mod board_evidence;
 mod board_frames;
 mod board_hints;
