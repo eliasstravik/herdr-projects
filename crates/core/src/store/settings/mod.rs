@@ -1,6 +1,7 @@
 //! Settings as saved and read: yours, your entry for a repo, one task's own, and the repo's file. What there is to set
 //! is settings_list.rs: a new setting goes there. Each part is a file of its own here: the values, the places, the one
-//! lookup, set and unset, `show`, and the one-time move from the old names.
+//! lookup, set and unset, the task branch's name, `show`, and the one-time move from the old names.
+pub mod branch;
 pub mod change;
 pub mod lookup;
 pub mod migrate;

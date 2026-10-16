@@ -1,9 +1,13 @@
-//! Where a task's worktree starts and what a fresh one is given: the commit it branches from, a free branch name, the
-//! files it gets a copy of.
+//! Where a task's worktree starts and what a fresh one is given: the commit it branches from, a free branch name
+//! (`workspace.branch`), the files it gets a copy of.
 use crate::flow::git::has_origin;
 use crate::flow::task::RULE_DIR;
 use crate::json::*;
+use crate::store::keys::repo_keys;
 use crate::store::repos::git_out;
+use crate::store::settings::branch::{branch_of, git_takes};
+use crate::store::settings::lookup::setting_text;
+use crate::store::settings_list::entry_of;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -26,10 +30,15 @@ pub fn base_ref(root: &Path, from: &str) -> String {
     }
     "HEAD".into()
 }
-/// herdr checks out an existing branch of that name and ignores --base, so the name must be free first.
+/// The task's branch, named by `workspace.branch` (store/settings/branch.rs), and free: herdr checks out an existing
+/// branch of that name and ignores --base, so a name already taken gets `-2`, `-3` after it. A name git would not take
+/// (a pattern saved before it was checked) is the built-in one's.
 pub fn free_branch(root: &Path, t: &Obj) -> String {
     let slug = slug_of(t.s("title"));
-    let stem = format!("work/{}{}", t.t("n"), if slug.is_empty() { String::new() } else { format!("-{slug}") });
+    let key = repo_keys().get(t.s("repo")).cloned().unwrap_or_default();
+    let named = |pattern: &str| branch_of(pattern, &t.t("n"), &slug, &key);
+    let mut stem = named(&setting_text("workspace.branch", Some(t)));
+    if !git_takes(&stem) { stem = named(&text(&entry_of("workspace.branch").map(|e| e.builtin.clone()).unwrap_or_default())); }
     let mut branch = stem.clone();
     let mut i = 2;
     while git_out(root, &["rev-parse", "--verify", &format!("refs/heads/{branch}")]).is_ok() { branch = format!("{stem}-{i}"); i += 1; }

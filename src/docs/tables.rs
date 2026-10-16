@@ -11,10 +11,11 @@ pub fn table(head: &[&str], rows: Vec<Vec<String>>) -> String {
     out.extend(rows.into_iter().map(|r| format!("| {} |", r.iter().map(|c| cell(c)).collect::<Vec<_>>().join(" | "))));
     out.join("\n")
 }
-/// Words that name a key as {name}, with each key as a page writes it.
+/// Words that name a key as {name}, with each key as a page writes it. Between backticks a {name} is as written
+/// (`workspace.branch`'s `{n}`).
 fn key_words(text: &str) -> Result<String, String> {
     let mut bad = None;
-    let out = crate::re!(r"\{(\w+)\}").replace_all(text, |c: &regex::Captures| match by_name(&c[1]) { Some(k) => written(&crate::board::keys::name(k.id)), None => { bad = Some(c[1].to_string()); String::new() } }).into_owned();
+    let out = crate::re!(r"`[^`]*`|\{(\w+)\}").replace_all(text, |c: &regex::Captures| match c.get(1) { None => c[0].to_string(), Some(id) => match by_name(id.as_str()) { Some(k) => written(&crate::board::keys::name(k.id)), None => { bad = Some(id.as_str().to_string()); String::new() } } }).into_owned();
     match bad { Some(id) => Err(format!("\"{{{id}}}\" names no key (crates/flow/src/board/keys.rs)")), None => Ok(out) }
 }
 pub fn keys_table() -> Result<String, String> {
