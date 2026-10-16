@@ -1,6 +1,6 @@
 //! The chat with a heading's coordinator (update/coords.rs), drawn as the Coordinator's is but under its own name
-//! ("vm-str coordinator", "herdr-projects coordinator"): this machine's as read here, another machine's as that machine
-//! sent it with its tasks (coordinator/far.rs).
+//! ("vm-str coordinator", "herdr-projects coordinator") and in its heading's colour: this machine's as read here,
+//! another machine's as that machine sent it with its tasks (coordinator/far.rs).
 use super::chat::{coord_who, Who};
 use super::talk::Part;
 use crate::board::state::State;
@@ -22,11 +22,11 @@ fn renamed(mut c: Who, t: &Target) -> Who {
     c.text = c.parts.iter().map(|p| format!("{}{}", if p.by.is_empty() { String::new() } else { format!("{}:\n", p.by) }, p.text)).collect::<Vec<_>>().join("\n\n");
     let flag = t.to.strip_prefix("project:").map(|r| format!("--project {r}")).unwrap_or_else(|| "--machine".into());
     c.note = c.note.replace("coordinator new starts", &format!("coordinator new {flag} starts"));
-    Who { name: t.name.clone(), ..c }
+    Who { name: t.name.clone(), tint: t.ink(), ..c }
 }
 fn muted(t: &Theme, target: &Target, status: String, parts: Vec<Part>) -> Who {
     let text = parts.iter().map(|p| p.text.clone()).collect::<Vec<_>>().join("\n\n");
-    Who { mark: Inked::of(t.mark("unknown", ""), Ink::Muted), name: target.name.clone(), status, text, said: !parts.is_empty(), parts, ink: Ink::Muted, ..Default::default() }
+    Who { mark: Inked::of(t.mark("unknown", ""), Ink::Muted), name: target.name.clone(), status, text, said: !parts.is_empty(), parts, ink: Ink::Muted, tint: target.ink(), ..Default::default() }
 }
 /// The chat's line and message for that coordinator.
 pub fn sub_who(s: &State, t: &Theme, target: &Target) -> Who {

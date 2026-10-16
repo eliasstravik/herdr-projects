@@ -4,6 +4,7 @@
 pub mod branch;
 pub mod change;
 pub mod from;
+pub mod key_map;
 pub mod lookup;
 pub mod migrate;
 pub mod places;

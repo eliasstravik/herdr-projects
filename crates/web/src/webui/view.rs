@@ -4,7 +4,7 @@
 //! page's own save. The board follows the web UI to the machine it is on (follow).
 use super::model::side::TERMINAL_ONLY;
 use super::web::{effects, Client};
-use crate::board::keys::{by_name, Press};
+use crate::board::keys::{by_name, chord, Press};
 use crate::board::state::State;
 use crate::board::update::{list::relist, update, Effect, Event};
 use crate::json::*;
@@ -13,8 +13,9 @@ use crate::shown::ink::Ink;
 /// What a terminal sends for a key of the board, so a button presses exactly that key.
 pub fn press_of(id: &str) -> Result<Press, String> {
     let k = by_name(id).ok_or_else(|| format!("No key is called \"{id}\""))?;
-    if let Some(c) = k.raw.first().and_then(|r| r.chars().next()) { return Ok(Press::char(c)); }
-    k.keys.first().map(|c| Press::chord(c)).ok_or_else(|| format!("The key \"{id}\" cannot be pressed from the web board"))
+    let c = chord(k.id); // yours, where board.keys moves it
+    if c.is_empty() { if let Some(c) = k.raw.first().and_then(|r| r.chars().next()) { return Ok(Press::char(c)); } }
+    if c.is_empty() { Err(format!("The key \"{id}\" cannot be pressed from the web board")) } else { Ok(Press::chord(&c)) }
 }
 fn on_board(s: &State, id: &str) -> bool { s.items.iter().any(|r| r.s("id") == id) || s.jobs.iter().any(|j| j.s("id") == id) || s.autos.iter().any(|a| a.s("row") == id) }
 fn key(c: &mut Client, p: Press) { let fx = update(&mut c.s, Event::Key(p)); effects(c, fx, false); }
