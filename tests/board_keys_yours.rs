@@ -62,6 +62,9 @@ fn a_chord_that_clashes_is_refused_naming_the_key_it_clashes_with() {
     let e = set("chatMessage=ctrl+").unwrap_err(); assert!(e.contains("is not a chord"), "{e}");
     let e = set("talk=t, sayYes=t").unwrap_err(); assert!(e.contains("sayYes=t: talk=t is the same chord") || e.contains("talk=t: sayYes=t is the same chord"), "{e}");
     set("talk=t").unwrap(); assert!(is(&Press::char('t'), K::Talk) && is(&Press::char('T'), K::Talk) && !is(&Press::char(' '), K::Talk));
+    // A function key in the one spelling a terminal sends it in.
+    assert!(set("menu=F01").unwrap().starts_with("board.keys: menu=f1  (you)"));
+    assert!(is(&Press::chord("f1"), K::Menu) && key_name("menu") == "f1");
     // The key that opens the board: itself, or herdr's prefix when it starts with that.
     let (_, bad) = read(&json!("chatMessage=alt+w"), &Some((vec![], "alt+w".into())));
     assert_eq!(bad, v(&["chatMessage=alt+w: alt+w opens the board"]));
@@ -84,4 +87,24 @@ fn it_is_yours_only_a_hand_written_mistake_is_left_out_and_the_page_keeps_the_bu
     std::fs::write(w.root.join(".herdr-projects.json"), r#"{ "board.keys": "side=alt+o" }"#).unwrap();
     let (_, said) = sw::store::settings::places::repo_file(&w.root, None);
     assert!(said.iter().any(|p| p.contains("board.keys is refused")), "{said:?}");
+}
+
+#[test]
+fn a_hand_written_chord_of_the_key_that_opens_the_board_does_not_count_on_the_board_either() {
+    let w = world_with(Opts { repo: true, settings: json!({ "board.keys": "menu=alt+w, side=alt+o" }), ..Default::default() });
+    let conf = sw::extras::herdr_config();
+    std::fs::create_dir_all(conf.parent().unwrap()).unwrap();
+    let bind = |key: &str| std::fs::write(&conf, format!("[[keys.command]]\nkey = \"{key}\"\ntype = \"plugin_action\"\ncommand = \"herdr-projects.open\"\n")).unwrap();
+    bind("alt+w");
+    assert_eq!((key_name("menu"), key_name("side")), ("?".to_string(), "alt+o".to_string()));
+    assert!(!is(&Press::chord("alt+w"), K::Menu) && is(&Press::char('?'), K::Menu));
+    let mut s = open(&w.root, 34);
+    s.press(&["alt+w"]); assert!(s.s.menu.is_none(), "alt+w is the board's own key: the menu stays closed");
+    s.press(&["?"]); assert!(s.s.menu.is_some() && !s.text().contains("alt+w"), "{}", s.text());
+    let (_, shown) = settings_command("show", &["show".into()], &you(), None).unwrap();
+    assert!(shown.contains("board.keys: menu=alt+w: alt+w opens the board"), "{shown}");
+    // Once the board opens on another key, the chord is yours.
+    bind("prefix+a");
+    assert_eq!(key_name("menu"), "alt+w");
+    assert!(is(&Press::chord("alt+w"), K::Menu));
 }

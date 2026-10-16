@@ -22,7 +22,10 @@ pub fn chord_of(c: &str) -> Option<String> {
     if one.len() == 1 && one[0].is_uppercase() && mods.is_empty() { mods.push("shift"); } // `Ctrl+O` is ctrl and o
     let key = key.to_lowercase();
     let key = match key.as_str() { "return" => "enter", "esc" => "escape", "pgup" => "pageup", "pgdn" => "pagedown", k => k }.to_string();
-    let f = key.strip_prefix('f').and_then(|n| n.parse::<u8>().ok()).is_some_and(|n| (1..=12).contains(&n));
+    // A terminal says f1, never f01: the number in its one spelling.
+    let fkey = key.strip_prefix('f').filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).and_then(|n| n.parse::<u8>().ok()).filter(|n| (1..=12).contains(n));
+    let f = fkey.is_some();
+    let key = fkey.map(|n| format!("f{n}")).unwrap_or(key);
     let char = key.chars().count() == 1 && key.chars().all(|ch| !ch.is_control() && !ch.is_whitespace());
     if !(NAMED.contains(&key.as_str()) || f || char) { return None; }
     let mut out: Vec<&str> = MODS.into_iter().filter(|m| mods.contains(m)).collect();
@@ -66,6 +69,8 @@ mod tests {
         assert_eq!(chord_of("ctrl+Esc").as_deref(), Some("ctrl+escape"));
         assert_eq!(chord_of("Y").as_deref(), Some("shift+y"));
         assert_eq!(chord_of("F5").as_deref(), Some("f5"));
+        assert_eq!(chord_of("f01").as_deref(), Some("f1"));
+        assert_eq!(chord_of("f13"), None);
         assert_eq!(chord_of("ctrl+ctrl+o"), None);
         assert_eq!(chord_of("hyper+o"), None);
         assert_eq!(chord_of("ctrl+oo"), None);

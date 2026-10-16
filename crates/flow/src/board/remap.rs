@@ -80,16 +80,26 @@ pub fn read(v: &Value, board: &Option<(Vec<String>, String)>) -> (Moved, Vec<Str
 
 thread_local! {
     static AS_BUILT: Cell<bool> = const { Cell::new(false) };
-    static LAST: RefCell<Option<(Arc<Mine>, Rc<Moved>)>> = const { RefCell::new(None) };
+    static LAST: RefCell<Option<(Arc<Mine>, String, Rc<Moved>)>> = const { RefCell::new(None) };
 }
 /// The keys as they come, whatever you set: for the made pages (docs/keys.md keeps the built-in chords).
 pub fn as_built<T>(f: impl FnOnce() -> T) -> T { let was = AS_BUILT.with(|b| b.replace(true)); let out = f(); AS_BUILT.with(|b| b.set(was)); out }
-/// The keys your settings move, read again only when your settings changed.
+/// herdr's config.toml as it is on disk now: where it is and when it last changed.
+fn config_mark() -> String {
+    use std::os::unix::fs::MetadataExt;
+    let f = crate::extras::herdr_config();
+    let m = std::fs::metadata(&f).map(|m| format!("{}|{}|{}.{}", m.ino(), m.size(), m.mtime(), m.mtime_nsec())).unwrap_or_default();
+    format!("{}|{m}", f.display())
+}
+/// The keys your settings move, as `show` counts them (the key that opens the board included), read again only when
+/// your settings or herdr's config changed.
 fn now() -> Rc<Moved> {
-    let mine = yours();
-    if let Some(m) = LAST.with(|l| l.borrow().as_ref().filter(|(was, _)| Arc::ptr_eq(was, &mine)).map(|(_, m)| m.clone())) { return m; }
-    let m = Rc::new(read(mine.you.get(SETTING).unwrap_or(&Value::Null), &None).0);
-    LAST.with(|l| *l.borrow_mut() = Some((mine, m.clone())));
+    let (mine, mark) = (yours(), config_mark());
+    if let Some(m) = LAST.with(|l| l.borrow().as_ref().filter(|(was, at, _)| Arc::ptr_eq(was, &mine) && *at == mark).map(|(_, _, m)| m.clone())) { return m; }
+    let v = mine.you.get(SETTING).cloned().unwrap_or(Value::Null);
+    let opener = if v.is_null() || text(&v) == "none" { None } else { crate::extras::board_presses() };
+    let m = Rc::new(read(&v, &opener).0);
+    LAST.with(|l| *l.borrow_mut() = Some((mine, mark, m.clone())));
     m
 }
 /// Your chords for the key with this name, where you moved it.
