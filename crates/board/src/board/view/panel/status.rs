@@ -105,7 +105,8 @@ pub fn status(k: &mut Kit, c: &Ctx, r: &Obj) -> (usize, Top, usize, String) {
         let title = if same(f.s("title"), &heading) { String::new() } else { format!("{}\n", f.s("title")) };
         k.alert(Ink::Red, &heading, &format!("{title}{next}"), &[("Next step", if f.b("next") { f.t("next") } else { "Find the cause and fix it.".into() }), ("Details", f.t("detail"))]);
     } else if r.s("state") == "blocked" && r.s("stage") == "approval" && r.b("syncBlocked") {
-        k.alert(Ink::Peach, "Behind main", &format!("Cannot be approved yet: {}. The board keeps trying to bring it up to date.", r.at("syncBlocked").s("why")), &[]);
+        let said = r.at("syncBlocked").t("detail");
+        k.alert(Ink::Peach, "Behind main", &format!("Cannot be approved yet: {}. The board keeps trying to bring it up to date.", r.at("syncBlocked").s("why")), &if said.is_empty() { vec![] } else { vec![("Details", said)] });
     } else if failed_review(r) {
         let tally = review_tally(r);
         k.alert(Ink::Red, "Review failed", &format!("{}{}", if tally.is_empty() { String::new() } else { format!("It found {tally}. ") }, if c.web { "Send the review to the agent to fix it, or merge it anyway: that asks first.".to_string() } else { format!("{} sends the review to the agent to fix. {} merges it anyway, and asks first.", key_name("sendBack"), key_name("yes")) }), &[]);

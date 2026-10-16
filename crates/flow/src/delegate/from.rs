@@ -6,6 +6,7 @@ use crate::flow::git::has_origin;
 use crate::json::*;
 use crate::runner::Guard;
 use crate::store::failures::failure_patch;
+use crate::store::fetch;
 use crate::store::repos::git_out;
 use crate::store::settings::from::named;
 use crate::store::settings::lookup::{setting, setting_text};
@@ -25,8 +26,11 @@ fn main_ref(root: &Path, from: &str) -> String {
     if from != "here" && has_origin(root) {
         let age = std::fs::metadata(root.join(".git").join("FETCH_HEAD")).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).map(|d| d.as_millis() as i64).unwrap_or(i64::MAX);
         if age > 24 * 3600 * 1000 {
-            if let Ok(child) = quiet_git(root, &["fetch", "origin"]).stdout(Stdio::null()).stderr(Stdio::null()).spawn() { let _ = crate::herdr::cli::wait_with_timeout(child, 5000); }
+            // One fetch at a time in a repo: every worktree of it writes the same remote-tracking refs.
+            let _ = fetch::with_repo_lock(root, || { if let Ok(child) = quiet_git(root, &["fetch", "origin"]).stdout(Stdio::null()).stderr(Stdio::null()).spawn() { let _ = crate::herdr::cli::wait_with_timeout(child, 5000); } Ok(()) });
         }
+        // Origin's main branch never named here (a remote added by hand): asked of origin, so the task keeps up with it.
+        fetch::learn_origin_head(root);
         for r in ["origin/HEAD", "origin/main", "origin/master"] { if git_out(root, &["rev-parse", "--verify", &format!("refs/remotes/{r}")]).is_ok() { return r.into(); } }
     }
     "HEAD".into()
@@ -42,8 +46,8 @@ pub fn base_ref(root: &Path, t: &Obj) -> Res<String> {
     }
     if !has_origin(root) { crate::refuse!("workspace.from is {b}, a branch at the remote, and this repo has no remote named origin. Add the remote, or set workspace.from to main or here."); }
     let spec = format!("+refs/heads/{b}:refs/remotes/origin/{b}");
-    let ran = quiet_git(root, &["fetch", "--no-tags", "origin", &spec]).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())
-        .and_then(|c| crate::herdr::cli::wait_with_timeout(c, FETCH_MS).map_err(|e| if e.code == "timeout" { format!("origin did not answer within {} seconds", FETCH_MS / 1000) } else { e.message }));
+    let ran = fetch::with_repo_lock(root, || Ok(quiet_git(root, &["fetch", "--no-tags", "origin", &spec]).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())
+        .and_then(|c| crate::herdr::cli::wait_with_timeout(c, FETCH_MS).map_err(|e| if e.code == "timeout" { format!("origin did not answer within {} seconds", FETCH_MS / 1000) } else { e.message })))).unwrap_or_else(|e| Err(e.msg));
     let said = match ran { Ok(r) if r.status == 0 => return Ok(format!("origin/{b}")), Ok(r) => r.stderr.trim().to_string(), Err(e) => e };
     if said.to_lowercase().contains("couldn't find remote ref") {
         crate::refuse!("origin has no branch {b} (workspace.from), so the task cannot start from it. Push {b} first, or set workspace.from to a branch origin has (git ls-remote --heads origin lists them), main or here.");

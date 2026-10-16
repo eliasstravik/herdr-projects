@@ -72,8 +72,8 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
         }
         let r = sync::sync_main(&t, &tree);
         if r.status == "conflict" { sync::conflict_back(id, g, &tree, &r, &mut |g, failure, seen| { let _ = fail(g, failure, FailHow { keep_intent: true, patch: seen }); }); return Ok(()); }
-        // Main could not be read: work that was not brought up to date is never reviewed or put up for approval.
-        if r.status == "error" { let mut f = failure("merge", "Could not synchronize main", &format!("Branch: {}\nFolder: {tree}\n\n{}", t.s("branch"), r.detail), "Investigate the fetch/Git error and fix what you safely can without altering the human's checkout. Finish again so the board retries the sync."); f.put("phase", "fetch"); fail(g, f, FailHow { keep_intent: true, ..Default::default() })?; return Ok(()); }
+        // Main could not be read (status "error"): the finished work is not failed for it. It is checked and reviewed,
+        // then waits as "behind main", never approvable, while the board tries the sync again by itself (sync_job.rs).
         own_sync = Some(r);
     }
     let sync_r = synced.or(own_sync.as_ref());

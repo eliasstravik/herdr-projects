@@ -2,13 +2,11 @@
 //! task's branch up to date by itself, and checks it again. Started by the housekeeping pass. Only a task at rest is
 //! touched: waiting for approval, its worktree clean and on exactly the commit that was reviewed. `force`: main could
 //! not even be asked about (the periodic fetch failed), so look at whatever is known locally.
-use super::shared::{approval_message, fail, failure, first_line, FailHow};
-use crate::clock::now;
+use super::shared::{approval_message, fail, failure, FailHow};
 use crate::flow;
 use crate::json::*;
 use crate::runner::{claim, is_aborted, release, Guard};
 use crate::store::repos::branch_of;
-use crate::store::tasks::one_line;
 use crate::sync;
 use std::path::Path;
 
@@ -27,9 +25,9 @@ pub fn sync_job(id: &str, force: bool) {
         else if !flow::git::dirty(tp).is_empty() { why = "its worktree has unsaved files".into(); }
         else if t.b("reviewedHead") && flow::git::head_of(tp) != t.s("reviewedHead") { why = "its branch changed after the review".into(); }
         else { r = Some(sync::sync_main(&t, &tree)); }
-        if let Some(x) = &r { if x.status == "error" { let f = one_line(&first_line(&x.detail), 200); why = format!("main could not be fetched ({})", if f.is_empty() { "git fetch failed".into() } else { f }); } if x.status == "skip" { why = sync::skip_why(x); } }
+        if let Some(x) = &r { why = sync::held_why(x); }
         if !why.is_empty() {
-            let b = g.set(|t| { let p = sync::seen_patch(t, None); sync::apply(t, p); t.put("syncBlocked", json!({ "why": why, "at": now() })); t.put("msg", sync::behind_msg(&why)); })?;
+            let b = g.set(|t| { let p = sync::seen_patch(t, None); sync::apply(t, p); t.put("syncBlocked", sync::blocked(&why, r.as_ref())); t.put("msg", sync::behind_msg(&why)); })?;
             flow::sidebar::tell_sidebar(&b);
             return Ok(());
         }

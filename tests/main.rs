@@ -205,6 +205,7 @@ mod submit_turns;
 mod sync;
 mod sync_behind;
 mod sync_conflict;
+mod sync_many;
 mod sync_remote;
 mod tabs;
 mod take_over;

@@ -219,8 +219,9 @@ and finish again.
 
 **Only a task at rest is ever updated**: its worktree clean, on exactly the commit that was reviewed.
 
-- A fetch that fails is never taken for a sync. A finished turn is saved as "Could not synchronize main" instead of going
-  on to review, and as "Task is on the wrong branch" when its worktree has left the task's own branch.
+- A fetch that fails is never taken for a sync, and never fails finished work: the turn is checked and reviewed, then
+  held as "behind main" until a fetch works ([troubleshooting](troubleshooting.md#behind-main-main-could-not-be-fetched)).
+  A finished turn whose worktree has left the task's own branch is saved as "Task is on the wrong branch".
 - A waiting task whose main cannot be fetched, or that was not at rest when main moved, is held as "behind main": its row
   says so, `Ctrl+L` is refused with the reason, and the board tries again every minute until the branch really is up to
   date.

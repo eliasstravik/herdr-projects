@@ -96,7 +96,7 @@ Find what its row says:
 | `Needs a login` | the agent's program is logged out | log in (go into the agent with `Enter`), then reply or `Ctrl+R` |
 | `stopped at its 2h limit` | it reached `limit.time` or `limit.tokens` | `Ctrl+R` to continue, a higher limit, or `Ctrl+L` to take it as it is ([limits](limits.md)) |
 | `resolving a conflict with main` | main changed under it; its agent is fixing that | wait |
-| `behind main` | main could not be brought in | the board tries again every minute; check your network, or put your checkout back on its branch ([how work gets done](how-work-gets-done.md#staying-current-with-main)) |
+| `behind main` | main could not be brought in; the work itself is fine | the board tries again every minute; the reason is in the panel ([below](#behind-main-main-could-not-be-fetched)) |
 | `Waiting for GitHub checks · 2 of 3 passed` | the pull request's checks still run | wait: it merges by itself once they pass |
 | `Could not read GitHub's checks` | `gh` is not logged in, or its token may not read Actions and Commit statuses | log `gh` in, or give the token those two read permissions ([how work gets done](how-work-gets-done.md#a-fine-grained-github-token-is-enough)) |
 | `The check stands still · nothing finished for 13m` | the repo's check hangs | look at what the check runs ([the check's progress](check-progress.md)) |
@@ -106,6 +106,31 @@ agent and answer it there.
 
 **An agent asked a question in plain words and stopped**: the board takes that as finished and reviews it. Reply to the
 agent, and it goes on ([an agent that waits for you](waiting-for-you.md)).
+
+## Behind main: main could not be fetched
+
+Before a finished task is reviewed, and again right before it merges, the board fetches main and merges it into the
+task's branch. When that fetch fails, nothing is failed: the task is checked and reviewed as usual, then waits as
+`behind main`. It cannot be approved until it is up to date, and the board tries again by itself every minute. A merge
+you had approved waits the same way, with nothing merged: approve it again once the row is back to ready.
+
+The panel (`Alt+P`) says why in plain words under **Behind main**, and what git itself said under **Details**:
+
+| The reason says | What to do |
+|---|---|
+| origin asked for a login | make `git fetch origin` work in your checkout without a prompt: an SSH key loaded in the agent, or a credential helper. The board never types a password |
+| origin did not answer within 60 seconds | the same, if it waits for a password or a passphrase; otherwise a slow or busy remote, and the next try may pass |
+| origin could not be reached | the network or the server: nothing to do, the board tries again |
+| origin has no branch … | the remote's main branch has another name, or the branch the task started from (`workspace.from`) is gone: `git remote set-head origin --auto` in your checkout, or push that branch again |
+| git's lock file … stayed in the way | another git command was writing the same ref the whole time, or one that stopped left its `.lock` file behind: if no git command runs in that repo, delete the file it names |
+| origin is not a repository the board can read | `git remote -v` shows where origin points |
+
+Many tasks of one repo finishing at once never get in each other's way: they share one copy of main (every worktree
+of a repo writes the same `origin/main`), so the board fetches it for one task at a time, and a task that waited for
+another's fetch takes that one's result. A fetch that git refused because another program fetched at that very moment
+(an agent's own `git fetch`, yours, an editor's) is tried again after 2 and 4 seconds, and a copy that program just
+fetched counts. A remote whose main is not called `main` and was never named in your clone (no `origin/HEAD`, as after
+`git remote add`) is asked which branch it is, once.
 
 ## Where the logs are
 

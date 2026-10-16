@@ -88,6 +88,18 @@ fn onto_named(id: &str, g: &mut Guard, t: &Task, root: &Path, tree: &str, b: &st
         &format!("Change the pull request's base back to {b} (gh pr edit {} --base {b}), then approve again.", pr_number(t.s("pr"))), no_fix())?;
     Ok(false)
 }
+/// Main could not be fetched right before the merge: nothing is merged, and nothing failed. The task waits for your
+/// approval again as "behind main", which it cannot be given until the board's own retry brings it up to date.
+fn behind(g: &mut Guard, r: &sync::Synced) -> Res<()> {
+    let why = sync::held_why(r);
+    let t = g.set(|t| {
+        let p = sync::seen_patch(t, None); sync::apply(t, p);
+        t.put("stage", "approval"); t.put("since", now()); t.put("mergeIntent", Value::Null); t.put("autoMerge", false); t.put("autoMergeLocal", false);
+        t.put("syncBlocked", sync::blocked(&why, Some(r))); t.put("msg", sync::behind_msg(&why));
+    })?;
+    flow::sidebar::tell_sidebar(&t);
+    Ok(())
+}
 /// Runs with the task in stage "merging" and this runner's guard standing on it.
 pub fn land_core(id: &str, g: &mut Guard) -> Res<()> {
     if called_off(g) { return Ok(()); } // `merge.by` went back to `you` before this merge of the board's own began
@@ -114,13 +126,13 @@ pub fn land_core(id: &str, g: &mut Guard) -> Res<()> {
             Ok(Some(_)) => return reverify(id, g, &t, "Checking work that changed after its review", None),
             Ok(None) => {}
             Err(e) if is_aborted(&e) => return Err(e),
-            Err(e) => return fail(g, "Could not synchronize main", &e.msg, "Investigate the fetch/Git error, then retry after fixing it.", Fail::default()),
+            Err(e) => return fail(g, "Could not read the task's worktree", &format!("Worktree: {tree}\n\nWhat git said:\n{}", e.msg), "Check that the worktree is still there and on the task's own branch, then approve again.", Fail::default()),
         }
         // The last safety net: the branch was brought up to date before its review and whenever main moved since.
         let r = sync::sync_main(&t, &tree);
         match r.status {
             "skip" => return fail(g, "Your checkout is on another branch", &format!("Checkout: {}\nIt is on: {}\nThis task lands on: {}\n\nNothing was merged.", root.display(), r.onto.as_deref().filter(|s| !s.is_empty()).unwrap_or("no branch"), r.want), &format!("Switch your checkout back to {}, then approve again.", r.want), no_fix()),
-            "error" => return fail(g, "Could not synchronize main", &r.detail, "Investigate the fetch/Git error, then retry after fixing it.", Fail::default()),
+            "error" => return behind(g, &r),
             "conflict" => {
                 sync::conflict_back(id, g, &tree, &r, &mut |g, failure, seen| {
                     if let Ok(f) = g.set(|t| { for (k, v) in failure_patch(&failure) { t.insert(k, v); } for (k, v) in seen { t.insert(k, v); } t.put("stage", "approval"); t.put("mergeFailed", true); t.put("msg", failure.at("title").clone()); }) { flow::sidebar::tell_sidebar(&f); }

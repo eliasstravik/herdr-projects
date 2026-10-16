@@ -63,6 +63,13 @@ fn a_row_waiting_for_approval_says_the_advice_in_words_with_the_pr_on_the_right(
     m(&v.row(&behind, 120), r"^[ ▌]! #\d+ Build a flying game [^\n]*\n[ ▌] {5}Behind main, and not up to date yet");
     m(&v.page(&behind, false), r"\n Behind main ─+\n Cannot be approved yet: main could not be fetched \(network is down\)\. The board\n keeps trying");
     no(&v.page(&behind, false), "ready to approve");
+    // what git itself said is in its details
+    let said = with(&pr, json!({ "summary": "Did the work.", "syncBlocked": { "why": "main could not be fetched (origin could not be reached)", "detail": "origin could not be reached.\n\nWhat git said (git fetch origin main):\nfatal: Could not resolve host: github.com" }, "msg": "Behind main" }));
+    m(&v.page(&said, false), r"
+ Behind main ─+
+[^─]*
+ Details +origin could not be reached\.");
+    m(&v.page(&said, false), r"fatal: Could not resolve host: github\.com");
 }
 
 #[test]

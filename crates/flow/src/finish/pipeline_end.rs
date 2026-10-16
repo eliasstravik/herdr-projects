@@ -95,10 +95,10 @@ pub fn after_review(c: Ctx, g: &mut Guard) -> Res<()> {
         return Ok(());
     } }
     if let (Some((limit, used)), true) = (&over, to_land) {
-        let why = c.sync.filter(|s| s.status == "skip").map(sync::skip_why).unwrap_or_default();
+        let why = c.sync.map(sync::held_why).unwrap_or_default();
         let ch2 = change.clone().unwrap_or(Value::Null);
         let head = { let h = ch2.t("head"); if h.is_empty() { flow::git::head_of(c.folder) } else { h } };
-        g.set(|t| { t.put("review", review.clone().unwrap_or(Value::Null)); t.put("stat", ch2.at("stat").clone()); t.put("reviewedHead", if head.is_empty() { Value::Null } else { json!(head) }); t.put("mergeFailed", false); t.put("failure", Value::Null); t.put("syncBlocked", if why.is_empty() { Value::Null } else { json!({ "why": why, "at": now() }) }); })?;
+        g.set(|t| { t.put("review", review.clone().unwrap_or(Value::Null)); t.put("stat", ch2.at("stat").clone()); t.put("reviewedHead", if head.is_empty() { Value::Null } else { json!(head) }); t.put("mergeFailed", false); t.put("failure", Value::Null); t.put("syncBlocked", if why.is_empty() { Value::Null } else { sync::blocked(&why, c.sync) }); })?;
         stop_at(id, "tokens", limit, *used, StopHow { role: "reviewer".into(), ready: true, ..Default::default() });
         return Ok(());
     }
@@ -142,16 +142,16 @@ pub fn after_review(c: Ctx, g: &mut Guard) -> Res<()> {
     t = g.set(|t| { t.put("review", review.clone().unwrap_or(Value::Null)); t.put("stat", stat.clone()); t.put("reviewedHead", head_v.clone()); t.put("mergeFailed", false); })?;
     if hold_pr_failure(g, &t)? { return Ok(()); }
     // A task that merges by itself (`merge.by`, read now) still wants a review that passed the gate.
-    let skip = c.sync.map(|s| s.status == "skip").unwrap_or(false);
+    let skip = c.sync.map(|s| !sync::held_why(s).is_empty()).unwrap_or(false);
     if by_itself(&t) && !t.b("requireApproval") && !t.b("chat") && !skip && (!review_needed || (review.is_some() && passed)) {
         g.set(|t| { t.put("stage", "merging"); t.put("msg", "Merging"); t.put("mergeIntent", json!({ "approvedAt": now(), "repairs": 0, "verifiedHead": head_v, "auto": true })); })?;
         return crate::land::land_core(id, g);
     }
     // Finished work that waits for your yes is not done: it is blocked on you. Checked and reviewed, but not against where
-    // it would land (your checkout is on another branch): not approvable yet.
-    let behind = c.sync.filter(|s| s.status == "skip").map(sync::skip_why).unwrap_or_default();
+    // it would land (your checkout is on another branch, or main could not be fetched): not approvable yet.
+    let behind = c.sync.map(sync::held_why).unwrap_or_default();
     let note = c.note.clone();
-    t = g.set(|t| { t.put("stage", "approval"); let m = if behind.is_empty() { approval_message_with(t, &note) } else { sync::behind_msg(&behind) }; t.put("msg", m); if !behind.is_empty() { t.put("syncBlocked", json!({ "why": behind, "at": now() })); } })?;
+    t = g.set(|t| { t.put("stage", "approval"); let m = if behind.is_empty() { approval_message_with(t, &note) } else { sync::behind_msg(&behind) }; t.put("msg", m); if !behind.is_empty() { t.put("syncBlocked", sync::blocked(&behind, c.sync)); } })?;
     flow::sidebar::tell_sidebar(&t);
     let _ = (c.keep_intent, c.reason);
     Ok(())

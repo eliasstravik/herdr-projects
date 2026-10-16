@@ -1,5 +1,6 @@
 //! Keeping tasks up to date with a remote's main: main moving there is noticed by the periodic fetch and the updated
-//! branch pushed; a fetch that fails is never a sync; with pull requests off, your local branch is the main.
+//! branch pushed; a fetch that fails is never a sync, and never fails finished work; with pull requests off, your
+//! local branch is the main.
 use crate::common;
 use common::*;
 use serde_json::json;
@@ -55,21 +56,28 @@ fn with_a_remote_main_moving_there_is_noticed_by_the_periodic_fetch_and_the_upda
 fn a_fetch_that_fails_is_not_a_sync_a_finished_turn_is_held_and_a_waiting_task_is_tried_again_once_the_remote_answers() {
     let w = world_with(Opts { repo: true, origin: true, settings: json!({ "review.when": "never" }), ..Default::default() });
     let (bare, gone) = remote(&w);
-    // before review: no review and no approval for work that could not be brought up to date
-    w.script(json!({ "worker": [{ "note": "Which one?" }, { "files": { "a.txt": "from the agent\n" }, "commit": "agent", "note": "Changed a.txt." }, { "note": "Nothing to change." }] }));
+    // before review: main cannot be fetched (pushing still works). The finished work is not failed for it: it is
+    // checked, then waits as "behind main", never approvable, with what git said, and the board tries again by itself
+    w.script(json!({ "worker": [{ "note": "Which one?" }, { "files": { "a.txt": "from the agent\n" }, "commit": "agent", "note": "Changed a.txt." }] }));
     let id = w.add("Offline");
     delegate(&id);
     assert_eq!(settle(&id).s("stage"), "asks");
+    git(&w.root, &["remote", "set-url", "--push", "origin", &bare]);
     git(&w.root, &["remote", "set-url", "origin", &gone]);
     talk::tell(&id, "The first one.", false).unwrap();
     let t = settle(&id);
-    assert_eq!(t.s("stage"), "failed"); assert_eq!(t.at("failure").s("title"), "Could not synchronize main"); assert!(!t.b("reviewedHead"));
-    assert_eq!(row(&id).s("state"), "error");
-    assert!(finish_line::approve(&id, None, false).unwrap_err().msg.contains("not waiting for an approval"));
+    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure")); assert!(t.at("failure").is_null()); assert!(t.b("reviewedHead"));
+    assert!(t.at("syncBlocked").s("why").starts_with("main could not be fetched (origin is not a repository the board can read"), "{}", t.at("syncBlocked"));
+    assert!(t.at("syncBlocked").s("detail").contains("does not appear to be a git repository"), "{}", t.at("syncBlocked"));
+    assert!(t.s("msg").starts_with("Behind main")); assert_ne!(row(&id).s("state"), "error"); assert_eq!(place(&t), "behind main");
+    assert!(finish_line::approve(&id, None, false).unwrap_err().msg.contains("behind main and cannot be approved yet"));
     git(&w.root, &["remote", "set-url", "origin", &bare]);
-    finish_line::send_error(&id).unwrap();
+    update(&id, |t| { t.put("syncRetryAt", sw::clock::now() - 1); Ok(Change::Write) }).unwrap();
+    clear_jobs();
+    housekeep(&w);
+    assert_eq!(sync_jobs(), 1);
     let t = settle(&id);
-    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure"));
+    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure")); assert!(t.at("syncBlocked").is_null(), "{}", t.at("syncBlocked")); assert!(!t.s("msg").starts_with("Behind main"));
     // waiting for approval: main moves at the remote, with a conflict, and is known here; then the remote goes away
     let target = they_push(&w, "a.txt", "theirs\n");
     sw::housekeeping::poll_prs();

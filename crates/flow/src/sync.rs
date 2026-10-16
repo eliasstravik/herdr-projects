@@ -9,7 +9,8 @@ pub use conflict::{conflict_back, conflict_failure, conflict_message};
 pub use merge_only::merge_only;
 use crate::flow::git::{has_origin, head_of};
 use crate::json::*;
-use crate::store::repos::{branch_of, folder_of, git_out, git_slow};
+use crate::store::fetch;
+use crate::store::repos::{branch_of, folder_of, git_out};
 use crate::store::settings::lookup::setting;
 use crate::store::tasks::Task;
 use std::collections::HashMap;
@@ -62,8 +63,29 @@ pub fn known_target(t: &Obj, cache: &mut HashMap<String, String>) -> String {
     cache.insert(key, sha.clone());
     sha
 }
-/// Ask the remote where main is. The remote-tracking ref is named, so what git knows locally is updated by every fetch.
-pub fn fetch_main(dir: &Path, b: &str) -> crate::err::Res<String> { git_slow(dir, &["fetch", "origin", &format!("+refs/heads/{b}:refs/remotes/origin/{b}")], 60000) }
+/// Ask the remote where main is. The remote-tracking ref is named, so what git knows locally is updated by every fetch;
+/// the tasks of a repo fetch it one at a time, and share a fetch (store/fetch.rs).
+pub fn fetch_main(dir: &Path, b: &str) -> crate::err::Res<()> { fetch::fetch_branch(dir, b) }
+/// Where main stands at the remote, asked now: the remote-tracking ref of `b`, read after the fetch (never FETCH_HEAD,
+/// which a fetch shared with another task does not write). A fetch that lost a race for the ref to another one (an
+/// agent's own, yours) takes what that one wrote. Any other failure says nothing about main: Err says why in plain
+/// words, then what git said.
+fn remote_main(root: &Path, t: &Obj, tree: &Path) -> Result<(String, String), String> {
+    let mut b = main_branch(root, t);
+    let mut fetched = fetch_main(tree, &b);
+    // Origin's main is not called main and was never named here (no origin/HEAD): asked of origin once.
+    if fetched.as_ref().is_err_and(|e| fetch::no_such_branch(&e.msg)) && named_base(root, t).is_none() && fetch::learn_origin_head(root) {
+        let d = default_branch(root);
+        if d != b { b = d; fetched = fetch_main(tree, &b); }
+    }
+    let known = git_out(tree, &["rev-parse", "--verify", "-q", &format!("refs/remotes/origin/{b}^{{commit}}")]);
+    match (fetched, known) {
+        (Ok(()), Ok(x)) => Ok((x, b)),
+        (Err(e), Ok(x)) if fetch::moved(&e.msg) => Ok((x, b)),
+        (Err(e), _) => Err(e.msg),
+        (Ok(()), Err(e)) => Err(format!("origin/{b} could not be read after the fetch.\n\nWhat git said:\n{}", e.msg)),
+    }
+}
 /// What a sync found: current, merged, conflict, skip or error, with what it looked at.
 #[derive(Clone, Debug, Default)]
 pub struct Synced { pub status: &'static str, pub target: String, pub seen: String, pub base: String, pub onto: Option<String>, pub adopt: bool, pub head: String, pub before: String, pub overlap: Option<Vec<String>>, pub files: String, pub restored: bool, pub out: String, pub want: String, pub detail: String }
@@ -74,9 +96,8 @@ pub fn sync_main(t: &Task, tree: &str) -> Synced {
     let tree = Path::new(tree);
     let (target, base, onto, adopt);
     if via_remote(&root, t) {
-        let b = main_branch(&root, t);
-        if let Err(e) = fetch_main(tree, &b) { return Synced { status: "error", detail: e.msg, ..Default::default() }; }
-        match git_out(tree, &["rev-parse", "FETCH_HEAD"]) { Ok(x) => target = x, Err(e) => return Synced { status: "error", detail: e.msg, ..Default::default() } }
+        let b;
+        (target, b) = match remote_main(&root, t, tree) { Ok(x) => x, Err(detail) => return Synced { status: "error", detail, ..Default::default() } };
         base = format!("origin/{b}"); onto = None; adopt = false;
     } else {
         let on = branch_of(&root);
@@ -112,6 +133,20 @@ pub fn sync_main(t: &Task, tree: &str) -> Synced {
 }
 fn retry_ms() -> i64 { std::env::var("HERDR_PROJECTS_SYNC_RETRY_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(60000) }
 pub fn skip_why(r: &Synced) -> String { format!("your checkout is on {}, not on {}, the branch this task lands on", r.onto.as_deref().filter(|s| !s.is_empty()).unwrap_or("no branch"), r.want) }
+/// Why work that was checked is not up to date with where it lands, so it cannot be approved yet: empty when it is.
+/// Main that could not be fetched is said in plain words; the board tries again by itself.
+pub fn held_why(r: &Synced) -> String {
+    match r.status {
+        "skip" => skip_why(r),
+        "error" => { let f: String = r.detail.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("").chars().take(300).collect(); format!("main could not be fetched ({})", if f.is_empty() { "git fetch failed" } else { f.trim_end_matches('.') }) }
+        _ => String::new(),
+    }
+}
+/// What a task held as "behind main" keeps: why, in plain words, since when, and what git itself said, for its details.
+pub fn blocked(why: &str, r: Option<&Synced>) -> Value {
+    let detail = r.filter(|r| r.status == "error").map(|r| r.detail.clone()).unwrap_or_default();
+    json!({ "why": why, "at": crate::clock::now(), "detail": if detail.is_empty() { Value::Null } else { json!(detail) } })
+}
 pub fn behind_msg(why: &str) -> String { format!("Behind main, and not up to date yet: {why}. The board keeps trying; it cannot be approved until then") }
 /// What a task remembers of a sync that was tried: where main stood for the commit that was really merged. Only a
 /// sync that really looked counts as seen; one that could not read main or was not tried marks only when to try again.
