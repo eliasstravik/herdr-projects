@@ -60,6 +60,7 @@ pub fn turn_ended(id: &str, role: &str, token: &str, round: i64, extra: &[String
 /// by the hook's event and the saved conversation.
 pub struct Stopped { pub when: i64, pub why: String, pub turn: Option<Turn>, pub hooked: bool, pub kind: String, pub version: String, pub can_read: bool }
 pub fn why_stopped(t: &Task, role: &str, event: Option<&Value>) -> Stopped {
+    let _account = crate::agents::account::task(t, role);
     let k = if role == "reviewer" { t.at("link").at("reviewer").t("kind") } else { t.t("agent") };
     let ev_session = event.map(|e| e.t("session")).filter(|s| !s.is_empty());
     let session = ev_session.unwrap_or_else(|| if role == "reviewer" { t.t("reviewSession") } else { t.t("session") });

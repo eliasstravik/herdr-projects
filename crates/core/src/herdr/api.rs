@@ -154,6 +154,7 @@ impl Herdr {
     }
     pub fn agent_start(&self, name: &str, kind: &str, pane: &str, extra: &[String], timeout_ms: u64) -> HRes<Value> {
         self.integration_ready(kind)?;
+        crate::agents::profile_launch::prepare(self, pane)?;
         let mut a = args(&["agent", "start", name, "--kind", kind, "--pane", pane, "--timeout", &timeout_ms.to_string()]);
         if !extra.is_empty() { a.push("--".into()); a.extend(extra.iter().cloned()); }
         match self.call_t(a, timeout_ms + 15000) {

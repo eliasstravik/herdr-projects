@@ -78,6 +78,7 @@ pub fn compare_job(id: &str) {
     let _ = to_pick(id, Some(Value::Object(comparison)), "reviewing");
 }
 fn compare(id: &str, g: &mut Guard, t: &Task) -> Res<Obj> {
+    let _account = crate::agents::account::task(t, "reviewer");
     let api = flow::task::h(t);
     let dir = compare_dir(t);
     let file = dir.join("comparison.json");

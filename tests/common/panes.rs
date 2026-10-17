@@ -61,7 +61,17 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
         "close" => { arr(st, "panes").remove(pi); F::drop_empty(st); ok(json!({ "type": "ok" })) }
         // A command run at the pane's shell. One that starts an agent program in a read-only mount
         // (`env HERDR_PROJECTS_AGENT=<name> bwrap … -- <kind> <args>`) leaves that agent in the pane.
+        "wait-output" => {
+            let re = flag("--regex").unwrap_or_default();
+            if regex::Regex::new(&re).ok().map(|r| p.s("screen").lines().any(|l| r.is_match(l))).unwrap_or(false) { return ok(json!({ "type": "ok" })); }
+            fail("timeout", "the requested shell output did not arrive")
+        }
         "run" => {
+            let command = argv.get(3).cloned().unwrap_or_default();
+            if command.contains("; printf '%s\\n' 'hp-profile-") {
+                let mark = command.rsplit(" 'hp-profile-").next().unwrap_or("").trim_end_matches('\'');
+                st["panes"][pi]["screen"] = json!(format!("hp-profile-{mark}"));
+            }
             let w = words(&argv[3..].join(" "));
             let at = w.iter().position(|x| x == "--");
             let name = w.iter().find_map(|x| x.strip_prefix("HERDR_PROJECTS_AGENT=")).unwrap_or("").to_string();

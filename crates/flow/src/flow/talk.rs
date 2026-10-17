@@ -15,6 +15,7 @@ pub fn talker(t: &Obj) -> &'static str { if ["reviewing", "reviewneeds"].contain
 /// characters (what goes to another machine is kept small).
 pub fn task_talk(t: &Obj, keep: usize, most: usize) -> Value {
     let who = talker(t);
+    let _account = crate::agents::account::task(t, who);
     let kind = if who == "reviewer" { t.at("link").at("reviewer").t("kind") } else { t.t("agent") };
     if who == "reviewer" && kind.is_empty() { return json!({ "who": who, "kind": kind, "readable": true, "list": [] }); }
     if !can_read_talk(&kind) { return json!({ "who": who, "kind": kind, "readable": false, "list": [] }); }

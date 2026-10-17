@@ -13,6 +13,8 @@ pub fn choice() -> Option<Obj> {
     let who = role_of("coordinator", &|n| setting(n, None));
     if who.kind.is_empty() { return None; }
     let mut c = obj(json!({ "kind": who.kind, "model": who.model, "effort": effort_for(&who.kind, &who.model, &who.effort) }));
+    let env = crate::agents::account::configured(None, "coordinator");
+    if env.as_object().map(|o| !o.is_empty()).unwrap_or(false) { c.put("profile", env); }
     extra(&mut c, who.fast, &who.access);
     Some(c)
 }
@@ -32,6 +34,7 @@ pub fn pick_of(agent: &str, effort: &str) -> Res<Option<Obj>> {
     let on = if model.is_empty() { kind.clone() } else { format!("{kind}/{model}") };
     let level = if !effort.is_empty() { text(&check("coordinator.effort", &json!(effort), &on)?) } else if same { base.t("effort") } else { String::new() };
     let mut c = obj(json!({ "kind": kind, "model": model, "effort": effort_for(&kind, &model, &level) }));
+    if base.has("profile") { c.put("profile", base.at("profile").clone()); }
     extra(&mut c, base.b("fast"), base.s("access"));
     Ok(Some(c))
 }
@@ -39,7 +42,7 @@ pub fn describe(k: Option<&Obj>) -> String {
     match k { Some(k) => format!("{} · {} · {}", k.s("kind"), if k.b("model") { k.s("model") } else { "default model" }, if k.b("effort") { k.s("effort") } else { "default effort" }), None => "off".into() }
 }
 pub fn same_choice(a: &Obj, b: &Obj) -> bool {
-    a.s("kind") == b.s("kind") && a.s("model") == b.s("model") && a.s("effort") == b.s("effort") && a.b("fast") == b.b("fast") && (if a.b("access") { a.s("access") } else { "full" }) == (if b.b("access") { b.s("access") } else { "full" })
+    a.at("profile") == b.at("profile") && a.s("kind") == b.s("kind") && a.s("model") == b.s("model") && a.s("effort") == b.s("effort") && a.b("fast") == b.b("fast") && (if a.b("access") { a.s("access") } else { "full" }) == (if b.b("access") { b.s("access") } else { "full" })
 }
 /// Can the box talk to a Coordinator here? It needs a running herdr to live in, and its program installed.
 pub fn ready(socket: &str) -> bool {

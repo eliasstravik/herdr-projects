@@ -1,5 +1,6 @@
 //! Everything agent-specific: the table of agent programs (kinds.rs and adapter.rs), reading what they saved,
 //! starting them, and what is installed. One area per file.
+pub mod account;
 pub mod adapter;
 pub mod efforts;
 pub mod hand_limits;
@@ -9,6 +10,8 @@ pub mod installed;
 pub mod kinds;
 pub mod model_refused;
 pub mod models;
+pub mod profiles;
+pub mod profile_launch;
 pub mod prompts;
 pub mod provider_error;
 pub mod read_tokens;

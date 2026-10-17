@@ -34,6 +34,10 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
         if !keep { t.put("msg", if plan.is_some() { "The reviewer checks the plan" } else { "Under review" }); }
         t.put("stage", "reviewing"); t.put("watch", Value::Null); t.put("waiting", Value::Null); t.put("reviewAt", now());
     })?;
+    crate::agents::profiles::load()?;
+    let chosen = crate::agents::account::for_start(Some(&t), "reviewer")?;
+    t = g.set(|t| { t.obj_mut("agentEnvs").put("reviewer", chosen.clone()); })?;
+    let _account = crate::agents::account::task(&t, "reviewer");
     g.allow(&["reviewneeds"]);
     let api = flow::task::h(&t);
     let folder = cwd_of(&t);

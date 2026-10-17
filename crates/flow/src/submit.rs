@@ -147,6 +147,7 @@ pub const NOT_STARTED: &str = "Not started: its instructions sit unsent in its b
 /// Called on every pass with the agent as herdr shows it now. Never waits: one look, at most one enter.
 pub fn check_sent(id: &str, a: Option<&Value>, api: &Herdr) {
     let Some(t) = get(id) else { return };
+    let _account = crate::agents::account::task(&t, "agent");
     let m = t.at("sent").clone();
     if !m.is_object() { return; }
     let mine = |c: &Task| c.at("sent").is_object() && c.at("sent").at("at") == m.at("at") && c.at("sent").at("tries") == m.at("tries");
@@ -195,6 +196,7 @@ pub fn check_sent(id: &str, a: Option<&Value>, api: &Herdr) {
 }
 /// "Not started", and the words do stand in the agent's saved conversation: it took them after all.
 pub fn took_after_all(t: &Task) -> Option<bool> {
+    let _account = crate::agents::account::task(t, "agent");
     let u = t.at("unsent");
     if !u.is_object() { return None; }
     let since = if u.b("typed") { u.i("at") } else { (if u.b("at") { u.i("at") } else { i64::MAX }).min(t.i("startedAgentAt")) };

@@ -28,6 +28,7 @@ fn up(socket: &str) -> bool { crate::herdr::cli::fake().is_some() || socket_exis
 fn mine(c: &Obj) -> bool { c.at("pump").i("pid") == std::process::id() as i64 }
 fn said_in(co: &Co, mark: &Value, text: &str) -> Option<bool> {
     let c = get(co)?;
+    let _account = crate::agents::account::enter(c.at("run").at("profile"));
     shown(c.at("run").s("kind"), c.so("transcript").map(Path::new), c.s("session"), &home(co), mark, text)
 }
 /// Words typed into a turn the Coordinator was in the middle of: one look per tick, at most one enter.
@@ -60,6 +61,7 @@ pub fn tick(co: impl Into<Co>) {
 pub fn active(co: impl Into<Co>, c: &Obj) -> Option<String> {
     let co = &co.into();
     let Some(run) = c.o("run") else { return c.so("session").map(String::from) };
+    let _account = crate::agents::account::enter(run.at("profile"));
     let since = if c.b("since") { c.i("since") } else { c.i("startedAt") };
     let h = home(co);
     // A project coordinator shares its folder with the human's own chats in the repo: the newest one there may be theirs.
@@ -75,6 +77,7 @@ fn told_session(co: &Co, c: &Obj) -> Option<String> {
     Some(a.at("agent_session").t("value")).filter(|s| !s.is_empty())
 }
 fn ensure(api: &Herdr, co: &Co) -> Res<(Obj, bool)> {
+    crate::agents::profiles::load()?;
     let mut c = get(co).unwrap_or_default();
     if c.b("run") { active(co, &c); c = get(co).unwrap_or_default(); }
     std::fs::create_dir_all(home(co))?;
@@ -91,7 +94,9 @@ fn ensure(api: &Herdr, co: &Co) -> Res<(Obj, bool)> {
     if api.agent_get(pane.s("pane_id"))?.is_some() { return Ok((c, false)); }
     // Its program is not running: start it. The same conversation when there was one and the program can reopen it.
     let run = match c.o("run").cloned().or_else(|| c.o("pick").cloned().map(|mut p| { p.put("oneOff", true); p })).or_else(choice) { Some(r) => r, None => crate::fail!("{OFF_WORDS}") };
+    if !c.b("run") { crate::agents::account::for_start(None, "coordinator")?; }
     let k = run.t("kind");
+    let _account = crate::agents::account::enter(run.at("profile"));
     if !installed::installed(&k) { crate::fail!("\"{k}\" is not installed here, so it cannot be the {}.", co.name()); }
     let saved = !crate::agents::kinds::kind(&k).map(|a| a.reads_turn).unwrap_or(false) || adapter::transcript(&k, c.s("session"), &home(co)).is_some();
     let resume = if c.b("run") && c.b("session") && !adapter::resume_args(&k, "x").is_empty() && saved { Some(c.t("session")) } else { None };

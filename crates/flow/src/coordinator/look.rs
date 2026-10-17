@@ -55,6 +55,7 @@ pub fn look(co: impl Into<Co>) -> Look {
     let busy = pumping(&c) || c.b("want");
     let (mut turn, mut talk) = (None, vec![]);
     if let Some(r) = c.o("run") {
+    let _account = crate::agents::account::enter(r.at("profile"));
         let k = r.t("kind");
         let session = if due(&co.mark("coordinator-session"), 3000) { active(&co, &c) } else { c.so("session").map(String::from) };
         let key = format!("{}|{}", co.key(), session.clone().unwrap_or_default());

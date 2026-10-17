@@ -89,6 +89,7 @@ fn finish_once(id: &str, force: bool) -> bool {
     true
 }
 fn finish_steps(id: &str, g: &mut Guard, mut t: Task, ev: Option<Value>, force: bool) -> Res<()> {
+    let _account = crate::agents::account::task(&t, "agent");
     let api = flow::task::h(&t);
     let k = t.t("agent");
     let ver = installed::version_of(&k);
