@@ -54,6 +54,10 @@ pub fn yours() -> Arc<Mine> {
     use std::os::unix::fs::MetadataExt;
     let f = config_file();
     let mark = std::fs::metadata(&f).map(|m| format!("{}|{}|{}|{}.{}|{}.{}", f.display(), m.ino(), m.size(), m.mtime(), m.mtime_nsec(), m.ctime(), m.ctime_nsec())).unwrap_or_default();
+    // A named profile's validity can change without config.json changing. Include its file in the cache mark.
+    let profile = config_dir().join("profiles.json");
+    let pm = std::fs::metadata(profile).ok().map(|m| (m.ino(), m.size(), m.mtime(), m.mtime_nsec(), m.ctime(), m.ctime_nsec()));
+    let mark = format!("{}|{mark}|{pm:?}", f.display());
     if let Some((m, out)) = LAST.lock().unwrap().as_ref() { if !mark.is_empty() && *m == mark { return out.clone(); } }
     let out = Arc::new(read_yours());
     *LAST.lock().unwrap() = Some((mark, out.clone()));

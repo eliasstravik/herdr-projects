@@ -200,6 +200,7 @@ fn stale_review(t: &mut Task) { if t.at("review").is_object() && !t.at("review")
 /// The working agent's saved conversation ends in an error newer than the turn that was handled last and than the
 /// prompt that armed this one (what the finish line itself asks before it takes an error for the turn's end).
 fn ended_in_error(t: &Task) -> bool {
+    let _account = crate::agents::account::task(t, "agent");
     let cwd = cwd_of(t);
     let session = if t.b("session") { t.t("session") } else { find_session(t.s("agent"), &cwd, if t.b("startedAgentAt") { t.i("startedAgentAt") } else { t.i("armedAt") }, &task_line(t)).unwrap_or_default() };
     read_turn_of(t.s("agent"), t.so("transcript").map(Path::new), &session, &cwd, false).map(|turn| !turn.error.is_empty() && turn.pos > t.at("handled").i("pos") && turn.pos > t.i("armedAt")).unwrap_or(false)

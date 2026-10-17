@@ -22,6 +22,7 @@ use std::sync::{LazyLock, Mutex};
 fn stand_in() -> Option<Vec<String>> { std::env::var("HERDR_PROJECTS_HELPER_CMD").ok().and_then(|v| serde_json::from_str::<Vec<String>>(&v).ok()).filter(|a| !a.is_empty()) }
 fn helper_command(prompt: &str, system: &str, lean: bool) -> Option<OneShot> {
     if let Some(o) = stand_in() { return Some(OneShot { command: o[0].clone(), args: o[1..].to_vec(), stdin: Some(format!("{}{prompt}", if system.is_empty() { String::new() } else { format!("{system}\n\n") })) }); }
+    crate::agents::account::for_start(None, "watcher").ok()?;
     let a = agent_of(setting("watcher.agent", None).as_str().unwrap_or(""));
     one_shot(&a.kind, &a.model, "", prompt, system, lean)
 }
@@ -36,6 +37,9 @@ fn run_helper(cmd: OneShot, extra_env: &[(&str, &str)], done: impl FnOnce(i32, S
     use std::process::{Command, Stdio};
     user_env();
     let mut c = Command::new(&cmd.command);
+    let account = crate::agents::account::configured(None, "watcher");
+    let _account = crate::agents::account::enter(&account);
+    crate::agents::account::command(&mut c);
     c.args(&cmd.args).current_dir(data_dir()).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let path = format!("{}:{}", shim().parent().map(|p| p.display().to_string()).unwrap_or_default(), std::env::var("PATH").unwrap_or_default());
     c.env("PATH", path).env("HERDR_PROJECTS_NO_KEEPER", "1");

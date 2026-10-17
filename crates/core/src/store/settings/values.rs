@@ -136,6 +136,7 @@ fn items_of(v: &Value) -> Option<Vec<String>> {
 }
 fn check_ty(e: &Entry, v: &Value) -> Res<Value> {
     let name = &e.name;
+    if name.ends_with(".profile") { return crate::agents::profiles::check_name(v); }
     match e.ty {
         Ty::Switch => {
             if let Value::Bool(b) = v { return Ok(json!(b)); }

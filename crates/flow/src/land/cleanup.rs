@@ -30,6 +30,7 @@ fn settle_ms() -> i64 { std::env::var("HERDR_PROJECTS_SETTLE_MS").ok().and_then(
 #[derive(Clone, Copy)]
 struct AgentNow { busy: bool, unknown: bool }
 pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
+    let _account = crate::agents::account::task(t, "agent");
     let root = folder_of(t.s("id"));
     let link = t.at("link");
     let sock = link.t("socket");

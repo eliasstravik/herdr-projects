@@ -15,6 +15,7 @@ use std::path::Path;
 
 fn busy(id: &str) -> Error { Error::busy(format!("{id} is busy. Try again in a moment.")) }
 pub fn finish_stuck(cur: &Task) -> Res<Said> {
+    let _account = crate::agents::account::task(cur, "agent");
     let id = cur.t("id");
     if runner_alive(cur) { return Err(busy(&id)); }
     if !flow::task::is_agent_task(cur) { crate::fail!("{id} has no agent to finish for."); }

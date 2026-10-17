@@ -30,6 +30,7 @@ pub struct Extras { pub hook: Vec<String>, pub rules: Vec<String>, pub hooked: b
 /// The launch arguments that are the board's own: the turn-end hook (with a new secret token) and the standing rules.
 /// Nothing is written to the user's own agent settings.
 pub fn launch_extras(t: &Task, role: &str, kind: &str, round: i64, standing: &str, resume: Option<&str>) -> Res<Extras> {
+    let _account = crate::agents::account::task(t, role);
     let token = crate::util::random_hex(18);
     set_token(t.s("id"), role, &token, round)?;
     let mut hook = None;
@@ -43,7 +44,13 @@ pub fn launch_extras(t: &Task, role: &str, kind: &str, round: i64, standing: &st
 }
 /// Used by a first delegation and by restarting an exited agent. The pane must be at its shell prompt.
 pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) -> Res<&'static str> {
+    crate::agents::profiles::load()?;
     let t = get(id).ok_or("the task is gone")?;
+    let t = if !t.at("agentEnvs").has("agent") {
+        let chosen = crate::agents::account::for_start(Some(&t), if plan::planner(&t) { "plan" } else { "worker" })?;
+        g.set(|t| { t.obj_mut("agentEnvs").put("agent", chosen.clone()); })?
+    } else { t };
+    let _account = crate::agents::account::task(&t, "agent");
     let api = flow::task::h(&t);
     let kind = t.t("agent");
     // The worker's settings, read now, as it starts. A planner of its own runs on its own program and model.
@@ -116,6 +123,7 @@ pub fn agent_now(g: &mut Guard, t: Task) -> Res<Task> {
 /// program whose files the board does not read is taken at its word: the id herdr's integration reported, or the one
 /// the board gave it, which it saved once it was prompted.
 pub fn resumable(t: &Task) -> bool {
+    let _account = crate::agents::account::task(t, "agent");
     let k = t.s("agent");
     if !t.b("session") || adapter::resume_args(k, "x").is_empty() { return false; }
     if !crate::agents::kinds::kind(k).map(|a| a.reads_turn).unwrap_or(false) { return t.b("sent") || t.b("said"); }

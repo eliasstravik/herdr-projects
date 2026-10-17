@@ -133,7 +133,7 @@ const FAR: u64 = 6 * 1024 * 1024;
 pub fn talk_of(kind: &str, file: Option<&Path>, session: &str, cwd: &Path, keep: usize) -> Option<Vec<Said>> {
     let read = reader(kind)?;
     let mut f = file.filter(|f| f.exists()).map(|f| f.to_path_buf());
-    let key = format!("{kind}|{session}|{}", cwd.display());
+    let key = format!("{kind}|{session}|{}|{:?}", cwd.display(), super::account::current());
     if f.is_none() && !session.is_empty() {
         let mut files = FILES.lock().ok()?;
         f = files.get(&key).filter(|p| p.exists()).cloned().or_else(|| { let found = super::adapter::transcript(kind, session, cwd); if let Some(p) = &found { files.insert(key.clone(), p.clone()); } found });

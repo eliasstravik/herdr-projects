@@ -91,6 +91,7 @@ pub fn start_build_by(id: &str, g: &mut Guard, by: &str) -> Res<()> {
             let p = t.obj_mut("plan"); p.put("home", Value::Null); p.put("usage", usage); p.put("model", model); p.put("took", now() - if asked > 0 { asked } else { now() });
             let l = t.obj_mut("link"); l.put("tab", home.at("tab").clone()); l.put("pane", home.at("pane").clone()); l.put("terminal", home.at("terminal").clone());
             t.put("agent", worker.clone()); t.put("app", worker);
+            t.obj_mut("agentEnvs").del("agent");
             for k in FORGET { t.del(k); } // another program in another pane: nothing the board knew of the planner's is the worker's
         })?;
         api.tab_close(&was.0); api.pane_close(&was.1);

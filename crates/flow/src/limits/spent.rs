@@ -18,10 +18,15 @@ fn known(t: &Task, role: &str) -> Option<Value> {
     let k = kind_of(t, role);
     let session = if role == "reviewer" { t.t("reviewSession") } else { t.t("session") };
     let file = if role != "reviewer" && t.b("transcript") { t.t("transcript") } else { String::new() };
-    (!k.is_empty() && (!session.is_empty() || !file.is_empty())).then(|| json!({ "kind": k, "session": session, "file": file, "cwd": cwd_of(t).display().to_string() }))
+    if k.is_empty() || (session.is_empty() && file.is_empty()) { return None; }
+    let mut e = json!({ "kind": k, "session": session, "file": file, "cwd": cwd_of(t).display().to_string() });
+    let env = crate::agents::account::selected(t, role);
+    if env.as_object().map(|o| !o.is_empty()).unwrap_or(false) { e["account"] = env; }
+    Some(e)
 }
-fn same(a: &Value, b: &Value) -> bool { a.s("kind") == b.s("kind") && a.s("session") == b.s("session") && a.s("file") == b.s("file") }
+fn same(a: &Value, b: &Value) -> bool { a.at("account") == b.at("account") && a.s("kind") == b.s("kind") && a.s("session") == b.s("session") && a.s("file") == b.s("file") }
 fn file_of(e: &Value) -> Option<PathBuf> {
+    let _account = crate::agents::account::enter(e.at("account"));
     if !e.s("file").is_empty() && Path::new(e.s("file")).exists() { return Some(PathBuf::from(e.s("file"))); }
     if e.s("session").is_empty() { return None; }
     adapter::transcript(e.s("kind"), e.s("session"), Path::new(e.s("cwd")))

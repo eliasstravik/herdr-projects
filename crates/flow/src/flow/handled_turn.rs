@@ -7,6 +7,7 @@ use std::path::Path;
 
 /// The saved conversation still ends in the message the finish line already handled.
 pub fn same_turn(t: &Obj) -> bool {
+    let _account = crate::agents::account::task(t, "agent");
     if !t.at("handled").b("msg") { return false; }
     let file = t.so("transcript").map(Path::new);
     read_turn_of(t.s("agent"), file, t.s("session"), &cwd_of(t), false).map(|turn| turn.id == t.at("handled").s("msg")).unwrap_or(false)
