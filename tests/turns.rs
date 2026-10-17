@@ -54,13 +54,11 @@ fn an_agent_that_reports_itself_blocked_gets_the_right_kind_and_stopping_after_t
 
 #[test]
 fn review_a_verdict_for_another_commit_is_ignored_a_missing_verdict_is_a_saved_failure_reviewer_edits_are_put_back() {
-    let w = world_with(Opts { repo: true, settings: json!({ "review.rounds": 0 }), ..Default::default() });
-    unsafe { std::env::set_var("HERDR_PROJECTS_REVIEW_MS", "600") };
+    let w = world_with(Opts { repo: true, settings: json!({ "review.rounds": 0, "review.timeout": "1s" }), ..Default::default() });
     w.script(json!({ "worker": [{ "files": { "f.txt": "v1\n" }, "commit": "v1", "note": "Did v1." }], "reviewer": [{ "verdict": { "meets": true, "findings": [], "text": "Fine.", "commit": "deadbeefdeadbeef" } }] }));
     let id = w.add("Wrong commit");
     delegate(&id);
     let t = settle(&id);
-    unsafe { std::env::set_var("HERDR_PROJECTS_REVIEW_MS", "120000") };
     assert_eq!(t.s("stage"), "failed");
     assert!(t.at("failure").s("detail").contains("review timed out"), "{}", t.at("failure"));
     assert!(t.at("review").is_null());
