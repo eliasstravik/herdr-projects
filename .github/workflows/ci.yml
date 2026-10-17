@@ -1,5 +1,6 @@
 # Runs the whole check (`npm run check -- --all`: build, made tables, the repo's rules, every test) on every push and
-# pull request, on Linux.
+# pull request, on Linux; and on macOS the tests of what differs there: a plan writer's read-only mount, made with
+# `sandbox-exec` (tests/plan_sandbox.rs, its real_programs_ test refuses a write into the guarded folders for real).
 name: Check
 
 on:
@@ -39,3 +40,31 @@ jobs:
           GIT_COMMITTER_NAME: ci
           GIT_COMMITTER_EMAIL: ci@example.com
         run: npm run check -- --all
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Cache the build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: macos-${{ runner.os }}-
+
+      - name: The plan's read-only mount
+        env:
+          GIT_AUTHOR_NAME: ci
+          GIT_AUTHOR_EMAIL: ci@example.com
+          GIT_COMMITTER_NAME: ci
+          GIT_COMMITTER_EMAIL: ci@example.com
+        run: cargo test --profile quick --locked --test main plan_sandbox -- --nocapture

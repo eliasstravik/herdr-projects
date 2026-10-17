@@ -1,11 +1,12 @@
 //! `herdr-projects doctor`: the health check. One file in doctor/ per area (the program and its launcher, herdr's
-//! plugin, the agent programs, the model and effort settings, other machines, free disk space, leftovers it could
-//! clean); older installs are take_over/look.rs. Each area hands back what it found: a fact that is fine, or a problem
-//! in one plain line with what to do. The areas are asked at the same time, so the check takes as long as its slowest
-//! one; it exits 1 when there is a problem (docs/troubleshooting.md).
+//! plugin, the agent programs, the model and effort settings, plan approval's read-only mount, other machines, free
+//! disk space, leftovers it could clean); older installs are take_over/look.rs. Each area hands back what it found: a
+//! fact that is fine, or a problem in one plain line with what to do. The areas are asked at the same time, so the
+//! check takes as long as its slowest one; it exits 1 when there is a problem (docs/troubleshooting.md).
 pub mod agents;
 pub mod disk;
 pub mod machines;
+pub mod plan;
 pub mod plugin;
 pub mod program;
 pub mod settings;
@@ -49,6 +50,7 @@ pub fn doctor_main() -> i32 {
         let herdr = s.spawn(plugin::ask);
         let progs = s.spawn(|| agents::named().into_iter().map(|(k, by)| std::thread::spawn(move || agents::ask(&k, by))).collect::<Vec<_>>().into_iter().filter_map(|h| h.join().ok()).collect::<Vec<_>>());
         let set = s.spawn(settings::check);
+        let mount = s.spawn(plan::ask);
         let far = s.spawn(machines::ask);
         let disks = s.spawn(disk::ask);
         let left = s.spawn(|| stale::ask(&stale::cache_dir()));
@@ -58,6 +60,7 @@ pub fn doctor_main() -> i32 {
         all.extend(plugin::check(&herdr));
         all.extend(agents::check(&progs.join().unwrap_or_default()));
         all.extend(set.join().unwrap_or_default());
+        if let Ok(m) = mount.join() { all.extend(plan::check(&m)); }
         all.extend(machines::check(far.join().unwrap_or_default().as_ref()));
         all.extend(disk::check(&disks.join().unwrap_or_default()));
         all.extend(stale::check(&left.join().unwrap_or_default()));
