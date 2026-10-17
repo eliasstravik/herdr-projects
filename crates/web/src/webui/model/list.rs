@@ -87,6 +87,7 @@ pub fn list_of(s: &State, t: &Theme) -> Value {
         "head": {
             // The repo new tasks go to, by its name: no folder path, and nothing for the home folder.
             "where": if s.archive_view || s.data.repo_root == home { String::new() } else { s.data.repo.clone() },
+            "repoScope": crate::board::saved_views::label(s),
             "whereKey": if s.archive_view || s.data.repo_root == home { String::new() } else { s.data.keys.get(&s.data.repo).cloned().unwrap_or_default() },
             "session": if s.data.session == "default" { String::new() } else { s.data.session.clone() },
             "machines": if s.scope == "*" { let l: Vec<String> = crate::board::update::remotes::others(s).into_iter().map(|m| if m.ok { m.machine.label.clone() } else { format!("{} (no answer)", m.machine.label) }).collect(); if l.is_empty() { "no others found".to_string() } else { l.join(", ") } } else { String::new() },

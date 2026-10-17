@@ -97,6 +97,7 @@ mod board_still;
 mod board_still_rest;
 mod board_still_sight;
 mod board_textbox;
+mod board_views;
 mod board_widths;
 mod board_widths_rest;
 mod chat_review;

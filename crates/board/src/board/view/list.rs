@@ -26,6 +26,8 @@ pub fn hl(t: &Theme, line: &Inked, width: usize) -> Inked {
 pub fn head_lines(s: &State, w: usize) -> Vec<Inked> {
     let others: Vec<String> = crate::board::update::remotes::others(s).into_iter().map(|m| if m.ok { m.machine.label.clone() } else { format!("{} (no answer)", m.machine.label) }).collect();
     let scope = if s.scope == "*" { format!("all machines: {}", if others.is_empty() { "no others found".into() } else { others.join(", ") }) } else if s.all() { format!("only {}{}", s.scope, if s.remotes.get(&s.scope).map(|m| m.ok).unwrap_or(false) { "" } else { " (no answer)" }) } else { String::new() };
+    let repo_scope = crate::board::saved_views::label(s);
+    let scope = [scope, repo_scope].into_iter().filter(|v| !v.is_empty()).collect::<Vec<_>>().join(" · ");
     let n = counts(s);
     let c = |k: &str| n.get(k).copied().unwrap_or(0);
     // The repo with its key beside it (`gtm-agent · AGT`), in the header's quiet ink as the rest of it.
@@ -49,6 +51,9 @@ pub fn head_lines(s: &State, w: usize) -> Vec<Inked> {
     let tail = if !rest.is_empty() && more.is_empty() && left >= 4 { Inked::of(format!("{}{}", if scope.is_empty() { "" } else { " · " }, crate::text::cut(&rest, left as usize)), Ink::Muted) } else { Inked::new() };
     let mut head = vec![first.add(tail)];
     head.extend(more);
+    for repo in s.repos.iter().filter(|repo| !s.data.roots.contains_key(*repo)) {
+        head.extend(Inked::of(format!(" Unknown repo {repo}: not registered on this machine."), Ink::Yellow).wrap(w.max(4)));
+    }
     let f = (if s.mode == Mode::Find { s.value() } else { s.filter.clone() }).trim().to_string();
     if f.is_empty() { return head; }
     let found: usize = s.grouped.iter().map(|(_, r)| r.len()).sum();

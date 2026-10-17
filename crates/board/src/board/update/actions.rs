@@ -71,6 +71,9 @@ pub fn tab(s: &mut State, text: &str, r: Option<&Obj>, fx: &mut Vec<Effect>) {
 /// theirs you have open, or when the words start with its name: "@vm-a fix the build"). With no Coordinator what you
 /// type is added as a task, word for word.
 pub fn dispatch(s: &mut State, text: &str, delegate: bool, about: Option<&Obj>, fx: &mut Vec<Effect>) {
+    if !s.repos.is_empty() {
+        match crate::board::saved_views::folder(s) { Ok(cwd) => s.ctx.cwd = cwd, Err(e) => { s.flash(e.msg, Ink::Yellow); return; } }
+    }
     let named = crate::re!(r"^@?([A-Za-z0-9_.-]+)[:\s]\s*([\s\S]+)$").captures(text).map(|c| (c[1].to_string(), c[2].to_string()));
     let at_named = named.as_ref().filter(|(m, _)| s.all() && (text.starts_with('@') || text[m.len()..].starts_with(':'))).and_then(|(m, _)| s.remotes.get(m)).map(|m| m.machine.label.clone());
     let there = match about { Some(a) if a.b("host") => Some(a.t("host")), Some(_) => at_named, None => at_named.or_else(|| s.remotes.get(&s.scope).map(|m| m.machine.label.clone())) };
