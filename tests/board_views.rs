@@ -147,3 +147,25 @@ fn board_views_remote_rows_use_the_original_exact_repo_name() {
     b.s.scope = "*".into(); sw::board::update::list::relist(&mut b.s);
     assert_eq!(b.s.items.len(), 3);
 }
+#[test]
+fn board_views_scoped_board_keeps_all_five_status_groups() {
+    let w = common::world(); repo(&w, "alpha"); repo(&w, "beta");
+    let states = [("1", json!({"state": "blocked", "kind": "question"})), ("2", json!({"state": "blocked", "kind": "permission", "stage": "approval"})),
+        ("3", json!({"state": "working"})), ("4", json!({"state": "todo"})), ("5", json!({"state": "done"}))];
+    for name in ["alpha", "beta"] {
+        for (n, _) in &states { if *n != "1" && *n != "2" { sw::actions::filing::add(&w.base.join(name), &format!("{name} extra {n}"), Default::default()).unwrap(); } }
+    }
+    let mut b = named(&w, "alpha", Some("alpha"));
+    for r in b.s.data.items.iter_mut() {
+        let at = r.s("id").split('/').nth(1).and_then(|n| n.parse::<usize>().ok()).unwrap_or(0);
+        if let Some((_, patch)) = states.get(at.saturating_sub(1)) { let o = std::sync::Arc::make_mut(r); for (k, v) in patch.as_object().unwrap() { o.put(k, v.clone()); } }
+    }
+    sw::board::update::list::relist(&mut b.s);
+    for g in sw::shown::states::GROUPS {
+        let rows = &b.s.grouped.iter().find(|(name, _)| name == g).unwrap_or_else(|| panic!("group {g} dropped")).1;
+        assert!(!rows.is_empty(), "group {g} is empty");
+        assert!(rows.iter().all(|r| r.s("id").starts_with("alpha/")), "{g} holds a task of another repo");
+    }
+    let head: String = sw::board::view::list::head_lines(&b.s, 200).iter().map(|l| l.text()).collect::<Vec<_>>().join(" ");
+    for want in ["needs you", "ready", "working", "to do", "done"] { assert!(head.contains(want), "header lacks {want}: {head}"); }
+}
