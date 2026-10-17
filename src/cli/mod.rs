@@ -89,9 +89,10 @@ fn run(cmd: &str, a: &Args) -> Res<i32> {
             return Ok(crate::docs::docs_main(&v));
         }
         "board" => {
+            let view = crate::board::saved_views::View::parse(&a.flags)?;
             use std::io::IsTerminal;
             if !std::io::stdout().is_terminal() || !std::io::stdin().is_terminal() { print!("{}", help::HELP); return Ok(0); }
-            return Ok(crate::board::open_board(&context_folder()));
+            return Ok(crate::board::run::open_view(&context_folder(), &view));
         }
         _ => {}
     }

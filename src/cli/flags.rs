@@ -46,7 +46,8 @@ const AUTO_CHANGE: &[&str] = &["name", "prompt", "schedule", "when", "every-repo
 /// an agent's hook and the board itself run are here too: no command lets a flag through unread.
 fn takes(cmd: &str, sub: &str) -> Option<Takes> {
     Some(match cmd {
-        "board" | "--skill" | "skill" => f(&["skill"]),
+        "board" => f(&["skill", "repo", "view"]),
+        "--skill" | "skill" => f(&["skill"]),
         "help" | "hook" | "keeper" | "keeper-work" | "open" | "open-coordinator" | "approve-current" | "serve" | "remote" => f(&[]),
         "docs" => f(&["check", "where", "guard"]),
         "turn-ended" => f(&["id", "role", "token", "round"]),

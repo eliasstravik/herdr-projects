@@ -4,6 +4,7 @@
 pub mod fields;
 pub mod guard;
 pub mod row;
+pub mod repo_col;
 pub mod row_fit;
 pub mod row_tall;
 pub mod row_wrap;

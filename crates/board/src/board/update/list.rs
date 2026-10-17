@@ -36,6 +36,7 @@ pub fn autos_shown(s: &State, f: &str) -> Vec<Obj> {
     if s.archive_view { return vec![]; }
     let mut all: Vec<Obj> = if s.scope.is_empty() || s.scope == "*" { s.data.autos.iter().map(|a| { let mut a = a.clone(); let row = format!("auto:{}", a.s("id")); a.put("row", row); a.put("host", ""); a }).collect() } else { vec![] };
     for m in super::remotes::in_view(s) { all.extend(m.autos.iter().cloned()); }
+    all.retain(|a| crate::board::saved_views::includes(s, a.s("repo")));
     all.sort_by_key(|a| super::remotes::place(s, a.s("host")));
     if f.is_empty() { return all; }
     all.into_iter().filter(|a| { let r = a.at("rowNow"); format!("automation {} {} {} {} {}", r.s("name"), r.s("trigger"), r.s("repo"), r.s("state"), a.s("host")).to_lowercase().contains(f) }).collect()
@@ -46,11 +47,13 @@ pub fn relist(s: &mut State) {
     let mine = &s.data.items;
     s.items = if s.scope.is_empty() { mine.clone() } else if s.scope == "*" { mine.iter().cloned().chain(super::remotes::others(s).into_iter().flat_map(|m| m.items.iter().cloned())).collect() } else { s.remotes.get(&s.scope).map(|m| m.items.clone()).unwrap_or_default() };
     super::pending::overlay(s);
+    let repos = s.repos.clone();
+    s.items.retain(|r| repos.is_empty() || repos.iter().any(|n| n == repo_name(r)));
     s.jobs = if s.archive_view { vec![] } else { s.data.jobs.clone() };
     let f = filter_now(s);
     s.autos = autos_shown(s, &f);
     super::pending::overlay_autos(s);
-    let layout = serde_json::to_string(&json!([s.scope, s.by_repo, s.all_done, s.archive_view, f])).unwrap_or_default();
+    let layout = serde_json::to_string(&json!([s.scope, s.repos, s.by_repo, s.all_done, s.archive_view, f])).unwrap_or_default();
     // The task the selection is held on (or that the panel shows whole, in the same list) keeps its row whatever it has
     // become meanwhile.
     let held = |r: &Obj| r.s("id") == s.sel && (r.s("id") == s.stick || (s.full && layout == s.selection_layout));

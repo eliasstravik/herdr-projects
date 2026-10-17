@@ -26,7 +26,8 @@ pub fn quick_data(cwd: &str) -> Data {
     Data { items, autos: crate::store::automations::automations().into_iter().map(|a| crate::board::data::shown_auto(a, now)).collect(), keys: crate::store::keys::repo_keys(), repos: roots.keys().cloned().collect(), roots,
         session: crate::herdr::cli::session_name(&current_socket()), repo: here.0, repo_root: here.1, can_dispatch: true, ..Default::default() }
 }
-pub fn prepare(folder: &std::path::Path) -> (State, Theme, Option<(String, String)>) {
+pub fn prepare(folder: &std::path::Path) -> (State, Theme, Option<(String, String)>) { prepare_view(folder, &Default::default()) }
+pub fn prepare_view(folder: &std::path::Path, view: &crate::board::saved_views::View) -> (State, Theme, Option<(String, String)>) {
     crate::runner::user_env(); // the popup starts with herdr's server environment: helpers and git need the user's PATH
     // herdr's theme. The terminal is asked for its own text and background colours (the greys are made readable on
     // them), and answers while the tasks are read.
@@ -41,7 +42,7 @@ pub fn prepare(folder: &std::path::Path) -> (State, Theme, Option<(String, Strin
         own_pane: place::own_name(), board_key: crate::extras::board_key(), own_key: crate::extras::board_presses(), can_reload: reloads < 5, web: false, leave_ms: 700, settle_ms: 1000, in_herdr: in_herdr() };
     // Every repo has a short key: given before the first look, and the ones given since the board last opened said once.
     let keys = crate::store::keys_given::keys_note();
-    let mut s = view(ctx, folder);
+    let mut s = view_with(ctx, folder, view);
     // The one-time move of an older version's folders, said once.
     let (home, envn) = (crate::store::files::user_home(), crate::store::move_home::env_now());
     let moved = crate::store::move_home::move_note(&home, &envn);
@@ -55,8 +56,9 @@ pub fn prepare(folder: &std::path::Path) -> (State, Theme, Option<(String, Strin
 }
 /// What the board opens on: the view it had when it last closed (the popup's own), in the repo a draft left in its box
 /// was typed for, on the task of the pane you came from.
-pub fn view(mut ctx: Ctx, folder: &std::path::Path) -> State {
-    let p = prefs::read(ctx.popup);
+pub fn view(ctx: Ctx, folder: &std::path::Path) -> State { view_with(ctx, folder, &Default::default()) }
+pub fn view_with(mut ctx: Ctx, folder: &std::path::Path, view: &crate::board::saved_views::View) -> State {
+    let p = prefs::read_view(ctx.popup, &view.name);
     // Opened from the Coordinator's own pane: its folder is nobody's repo. The board is where it was when you left it.
     if crate::coordinator::requests::in_home(folder, &current_socket()) { ctx.cwd = if p.b("cwd") && std::path::Path::new(p.s("cwd")).exists() { p.t("cwd") } else { crate::store::files::user_home().display().to_string() }; }
     let data = quick_data(&ctx.cwd);
@@ -66,7 +68,9 @@ pub fn view(mut ctx: Ctx, folder: &std::path::Path) -> State {
     if !p.s("draft").trim().is_empty() { crate::board::update::setup::to_repo_of(&mut s, p.s("cwd")); }
     // The popup opens on the task that belongs to where you are: the one whose agent runs in the pane you came from.
     if s.ctx.popup && !s.ctx.from.is_empty() { if let Some(t) = place::task_at(&s.ctx.from).filter(|t| !t.b("archivedAt")) { s.sel = t.t("id"); s.stick = t.t("id"); if !s.scope.is_empty() && s.scope != "*" { s.scope.clear(); } } }
+    crate::board::saved_views::configure(&mut s, view);
     relist(&mut s);
+    if !s.view_name.is_empty() { prefs::save(&s); }
     s
 }
 /// The first run: one screen asks what the plugin may add to herdr's settings. Only inside herdr, only what is missing.

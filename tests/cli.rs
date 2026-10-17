@@ -56,7 +56,7 @@ fn real_programs_a_flag_a_command_does_not_know_is_refused_with_the_nearest_righ
     refused(&w, &["set", "board.agents", "2", "--tsak", "1"], r"set does not know --tsak\. Did you mean --task\?");
     refused(&w, &["automations", "add", "n", "--prompt", "p", "--schedule", "daily 09:00", "--evry-repo"], r"Did you mean --every-repo\?");
     refused(&w, &["report", "--title", "x", "--query=y"], r"report does not know --query\.");
-    refused(&w, &["--archived"], r"herdr-projects does not know --archived\. It takes: --skill, --json, --help");
+    refused(&w, &["--archived"], r"herdr-projects does not know --archived\. It takes: --skill, --repo, --view, --json, --help");
     refused(&w, &["nonsense", "--x"], r#"Unknown command "nonsense""#);
     refused(&w, &["help", "--bogus"], r"help does not know --bogus\. It takes: --json, --help");
     for hidden in ["hook", "keeper", "keeper-work", "open", "open-coordinator", "approve-current", "serve", "run", "turn-ended", "plan-written", "skill", "remote"] { refused(&w, &[hidden, "--bogus"], &format!("{hidden} does not know --bogus")); }

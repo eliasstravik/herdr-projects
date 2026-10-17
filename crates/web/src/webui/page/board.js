@@ -42,6 +42,7 @@ function chips() {
   if (f.archive) out.push(chip("Archive", "Back to the board", () => press("archiveView")));
   if (f.filter) out.push(chip(`Find: ${f.filter}`, "Clear the filter", () => call("find", { text: "" })));
   if (head.machines) out.push(chip(`All machines: ${head.machines}`, "Change whose board you see", () => press("scope")));
+  if (head.repoScope) out.push(h("span.sw-chip", head.repoScope));
   if (head.only) out.push(chip(`Only ${head.only}`, "Change whose board you see", () => press("scope")));
   if (f.byRepo) out.push(chip("By repo", "Group by status", () => press("byRepo")));
   return out;

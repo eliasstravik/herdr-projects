@@ -40,7 +40,10 @@ fn poll(s: &mut crate::board::state::State, run: &mut Run, now_too: bool) {
     }
 }
 pub fn open_board(folder: &std::path::Path) -> i32 {
-    let (mut s, theme, named) = start::prepare(folder);
+    open_view(folder, &Default::default())
+}
+pub fn open_view(folder: &std::path::Path, view: &crate::board::saved_views::View) -> i32 {
+    let (mut s, theme, named) = start::prepare_view(folder, view);
     let (tx, rx) = channel::<Msg>();
     let wants = Arc::new(Mutex::new(Wants { ids: vec![s.sel.clone()], cwd: s.ctx.cwd.clone(), own_pane: place::own_name(), web: false, coord: String::new() }));
     let load = Arc::new((Mutex::new(true), std::sync::Condvar::new()));
