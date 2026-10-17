@@ -42,3 +42,5 @@ another machine will not match. This is a view filter, not an access-control bou
 
 When sending to a remote machine's Coordinator, its existing dispatch rules choose the task repo; the saved repo
 scope filters what comes back but does not change that remote dispatch contract.
+
+The board of every repo can also name each task's repo on its row: [the repo column](repo-column.md).

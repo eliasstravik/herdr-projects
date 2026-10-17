@@ -95,6 +95,7 @@ mod board_stay_keys;
 mod board_stay_popup;
 mod board_still;
 mod board_still_rest;
+mod board_repo_column;
 mod board_still_sight;
 mod board_textbox;
 mod board_views;

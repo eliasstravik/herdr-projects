@@ -23,7 +23,7 @@ const PROGRESS: [&str; 3] = ["bar", "percent", "eta"];
 #[derive(Clone, Debug, Default)]
 pub struct Layout {
     pub now: i64, pub pr: usize, pub elapsed: usize, pub cols: Vec<(&'static str, usize)>, pub auto_cols: Vec<(&'static str, usize)>,
-    pub num: usize, pub numbering: Numbering, pub ago: bool, pub show: HashMap<String, (usize, bool, usize)>, pub tall: bool, pub third: Option<Third>,
+    pub num: usize, pub numbering: Numbering, pub ago: bool, pub show: HashMap<String, (usize, bool, usize)>, pub tall: bool, pub third: Option<Third>, pub repo_col: bool,
 }
 fn say_need(said: &Inked, r: &Obj) -> usize { if is_auto(r) { said.width() } else { said.width().min(SENTENCE_MIN) } }
 pub fn number_wide(s: &State, r: &Obj, cells: usize) -> usize {
@@ -65,7 +65,7 @@ pub fn row_layout(s: &mut State, t: &Theme, records: &[crate::board::state::Rec]
     if let Some(g) = cols.iter().position(|(k, _)| !PROGRESS.contains(k)) { if g > 0 { cols.insert(g, ("gap", 0)); } }
     let own = |k: &str| records.iter().enumerate().filter(|(_, r)| is_auto(r)).map(|(n, _)| fmap.get(&n).map(|f| f.get(k).width()).unwrap_or(0)).max().unwrap_or(0);
     let auto_cols: Vec<(&'static str, usize)> = [("tag", own("tag")), ("lead", own("lead")), ("time", if tall { 0 } else { elapsed })].into_iter().filter(|(_, w)| *w > 0).collect();
-    let mut lay = Layout { now, pr, elapsed, cols: cols.clone(), auto_cols: auto_cols.clone(), num, numbering: nb, ago: !tall && fields_of.iter().any(|(_, f)| f.ago), show: HashMap::new(), tall, third: None };
+    let mut lay = Layout { now, pr, elapsed, cols: cols.clone(), auto_cols: auto_cols.clone(), num, numbering: nb, ago: !tall && fields_of.iter().any(|(_, f)| f.ago), show: HashMap::new(), tall, third: None, repo_col: crate::board::view::repo_col::wanted(s) };
     if tall {
         let live: Vec<F> = records.iter().filter(|r| tall && is_live(r)).map(|r| fields(s, t, r, now)).collect();
         lay.third = Some(tall_layout(&live, width_, 3 + if num > 0 { num + 1 } else { 0 }));
@@ -137,7 +137,9 @@ pub fn row(s: &State, t: &Theme, r: &Obj, w: usize, lay: &Layout) -> Inked {
     let tail = if said.is_empty() || say_room < say_need(&said, r) as i64 { Inked::new() } else { said.cut(say_room as usize) };
     let label = if tail.is_empty() { title } else { title.add(Inked::plain("  ")).add(tail) };
     let gap = rm.room.saturating_sub(label.width() + rm.metadata.width());
-    rm.prefix.add(label).add(Inked::spaces(gap)).add(rm.metadata)
+    // The repo's name takes only what the title, the columns and what the row says leave over.
+    let (repo, gap) = super::repo_col::beside(r, lay, gap);
+    rm.prefix.add(label).add(Inked::spaces(gap)).add(repo).add(rm.metadata)
 }
 /// A live task's second line: what it says, under its name, with the row's whole width; cut at its end.
 pub fn status_line(s: &State, t: &Theme, r: &Obj, w: usize, lay: &Layout) -> Inked {
