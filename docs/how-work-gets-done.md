@@ -187,7 +187,8 @@ it waits for you with `Could not read GitHub's checks`.
 
 Herdr may start the board's keeper (after a reboot) without your login shell's environment. So the board takes your PATH
 and gh's login variables (`GH_TOKEN`, `GH_HOST`, `GH_ENTERPRISE_TOKEN`, …) from a login shell, never writing a token
-down.
+down. It takes the SSH agent (`SSH_AUTH_SOCK`, `SSH_AGENT_PID`) the same way, so that its `git fetch` and `git push` over
+SSH work: only when the keeper has no agent of its own and the login shell's socket is there.
 
 ## Staying current with main
 
