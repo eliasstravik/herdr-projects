@@ -95,7 +95,7 @@ pub fn relist(s: &mut State) {
             else if let Some(a) = autos.get(id.as_str()) { Some((Rec::new(obj(json!({ "id": id, "state": "automation", "created": a.at("created") }))), format!("{AUTOS}\t{}", a.s("host")))) }
             else { recs.get(id.as_str()).map(|r| ((*r).clone(), under.get(id).cloned().unwrap_or_default())) })
         .chain(s.jobs.iter().cloned().map(|j| (Rec::new(j), JOBS.to_string()))).collect();
-    let folded_heads: Vec<String> = s.rows.iter().filter_map(|r| match r { Row::Head { id, folded, .. } if *folded > 0 => Some(id.clone()), _ => None }).collect();
+    let folded_heads: Vec<String> = s.rows.iter().filter_map(|r| match r { Row::Head { id, .. } if r.shut() => Some(id.clone()), _ => None }).collect();
     // Only the selected task's ordering data matters: new rows, progress and other tasks moving never steal the selection.
     let base: std::collections::HashMap<String, i64> = s.items.iter().enumerate().map(|(n, r)| (r.t("id"), n as i64)).collect();
     let next: Vec<SelRow> = selectable.iter().map(|(r, group)| { let task = r.has("title"); SelRow { group: group.clone(),
@@ -163,20 +163,21 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
             let autos: Vec<Vec<Obj>> = p.groups.iter().map(|(name, _)| autos_in(s, &p.host, name)).collect();
             let n_autos: usize = autos.iter().map(|a| a.len()).sum();
             let n: usize = p.groups.iter().map(|(_, recs)| recs.len()).sum::<usize>() + n_autos;
-            if n == 0 { continue; }
-            // A machine's heading, with every machine shown: folded, its one line stands for all its groups.
-            if p.heading {
+            // A machine's heading, with every machine shown: folded, its one line stands for all its groups. One with
+            // nothing in view shows folded (`0 tasks`), so that its machine coordinator is still a space away.
+            if p.heading && (n > 0 || super::heads::empty_shown(s)) {
                 let id = machine_id(&p.host);
                 let shut = super::heads::folded(s, &id);
-                rows.push(Row::Head { name: super::heads::label(s, &p.host), autos: false, id, machine: true, folded: if shut { n } else { 0 }, folded_autos: if shut { n_autos } else { 0 } });
+                rows.push(Row::Head { name: super::heads::label(s, &p.host), autos: false, id, machine: true, folded: if shut { n } else { 0 }, folded_autos: if shut { n_autos } else { 0 }, empty: n == 0 });
                 if shut { continue; }
             }
+            if n == 0 { continue; }
             for ((name, recs), autos) in p.groups.iter().zip(&autos) {
                 if recs.is_empty() && autos.is_empty() { continue; }
                 let id = group_id(s, &p.host, name);
                 let shut = super::heads::folded(s, &id);
                 let own = !s.by_repo && name == AUTOMATIONS;
-                rows.push(Row::Head { name: name.clone(), autos: own, id, machine: false, folded: if shut { recs.len() + autos.len() } else { 0 }, folded_autos: if shut { autos.len() } else { 0 } });
+                rows.push(Row::Head { name: name.clone(), autos: own, id, machine: false, folded: if shut { recs.len() + autos.len() } else { 0 }, folded_autos: if shut { autos.len() } else { 0 }, empty: false });
                 if shut { continue; }
                 let mut list = recs.clone();
                 list.sort_by(|a, b| (if s.by_repo { rank(a).cmp(&rank(b)) } else { std::cmp::Ordering::Equal })
@@ -214,7 +215,7 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
     rows
 }
 /// The lines the heading at `n` takes: an empty line above it, but for a group's heading right under its machine's.
-pub fn heading_height(rows: &[Row], n: usize) -> usize { if n > 0 && matches!(rows[n - 1], Row::Head { machine: true, folded: 0, .. }) { 1 } else { 2 } }
+pub fn heading_height(rows: &[Row], n: usize) -> usize { if n > 0 && matches!(rows[n - 1], Row::Head { machine: true, folded: 0, empty: false, .. }) { 1 } else { 2 } }
 /// A row the arrow keys stop on: a task, an automation or a heading.
 fn step_id(r: &Row) -> Option<String> { match r { Row::Rec(o) => Some(o.t("id")), Row::Auto(a) => Some(a.t("row")), Row::Head { id, .. } if !id.is_empty() => Some(id.clone()), _ => None } }
 /// Up or down `d` rows: through every task (folded to-dos too) and automation, then words on their way.

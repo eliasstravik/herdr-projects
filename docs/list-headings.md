@@ -23,7 +23,12 @@ machine**, its repos (or status groups) under it, and their tasks under those.
 - **A machine's heading** is its name in bold, in the accent colour, with a rule to the edge of the list. This machine
   shows its own name (its hostname).
 - Machines come in the order of Herdr's machines sidebar ([machine order](machine-order.md)).
-- A machine with no task in view has no heading. One whose tasks cannot be read says so above the list, as always.
+- **Every machine that answered has a heading, also one with no task yet.** It shows folded, `▸ vm-ssa  0 tasks`, and
+  does what any machine's heading does: `Space` talks to its machine coordinator, which adds tasks there
+  ([machine and project coordinators](machine-and-project-coordinators.md)), and its automations show under it. `Enter`
+  has nothing to unfold and says so; its first task opens it. While a filter is on, or in the archive, a machine with
+  nothing that matches has no heading.
+- One whose tasks cannot be read has no heading: it says so above the list, as always.
 - **A row never names its machine.** Its tag is the one it has on its own machine's board: the repo's key and number
   (`HSW-151`, [task numbers](task-numbers.md)). The heading above says whose it is.
 - **A repo's heading** is its name with its key beside it, dimmed (`herdr-projects · HSW`), never

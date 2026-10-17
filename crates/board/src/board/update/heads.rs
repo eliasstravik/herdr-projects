@@ -2,11 +2,13 @@
 //! under it (or alone, on one machine) each repo's or each status group's, the machine's automations among them. Enter
 //! on one folds it to its one line, which says how many tasks (and automations) it holds, and enter again unfolds it;
 //! what is folded is kept with the board's view (run/prefs.rs), so it stays folded while the list refreshes and after
-//! the board closes.
+//! the board closes. With every machine shown, a machine with nothing in view has its heading too, folded (`0 tasks`):
+//! space there still talks to its machine coordinator.
 use super::list::{filter_now, relist, AUTOMATIONS};
 use super::Effect;
 use crate::board::state::{Rec, Row, State};
 use crate::json::*;
+use crate::shown::ink::Ink;
 
 /// What every heading's id starts with: no task's or automation's id does.
 pub const HEAD: &str = "head:";
@@ -24,6 +26,8 @@ pub fn label(s: &State, host: &str) -> String {
 }
 /// Folding holds while nothing is filtered: every task that matches a filter shows.
 pub fn folded(s: &State, id: &str) -> bool { filter_now(s).is_empty() && s.folded.contains(id) }
+/// Whether a machine with nothing in view has its heading: not while a filter or the archive narrows the list.
+pub fn empty_shown(s: &State) -> bool { filter_now(s).is_empty() && !s.archive_view }
 /// One machine's part of the list: its groups, and whether it has a heading of its own (only with every machine shown).
 pub struct Part { pub host: String, pub heading: bool, pub groups: Vec<(String, Vec<Rec>)> }
 /// The groups, machine by machine in the order of herdr's sidebar (remotes.rs: place), this machine where it stands
@@ -34,6 +38,8 @@ pub fn parts(s: &State, groups: &[(String, Vec<Rec>)]) -> Vec<Part> {
     for r in &s.items { let h = host_of(r); if !hosts.contains(&h) { hosts.push(h); } }
     for a in &s.autos { let h = a.t("host"); if !hosts.contains(&h) { hosts.push(h); } }
     for (_, recs) in groups { for r in recs { let h = host_of(r); if !hosts.contains(&h) { hosts.push(h); } } }
+    // Every machine that answered, also one with no task yet. One that did not is said above the list (view/list.rs).
+    if empty_shown(s) { for m in super::remotes::others(s) { if m.ok && !hosts.contains(&m.machine.label) { hosts.push(m.machine.label.clone()); } } }
     hosts.sort_by_key(|h| super::remotes::place(s, h));
     hosts.into_iter().map(|h| Part { groups: groups.iter().map(|(n, recs)| (n.clone(), recs.iter().filter(|r| host_of(r) == h).cloned().collect())).collect(), host: h, heading: true }).collect()
 }
@@ -51,14 +57,21 @@ pub fn holds(folded: usize, autos: usize) -> String {
 }
 /// The selected heading, when the selection is on one.
 pub fn selected(s: &State) -> Option<&Row> { if !is_head(&s.sel) { return None; } s.rows.iter().find(|r| matches!(r, Row::Head { id, .. } if *id == s.sel)) }
-/// What enter does on the selected heading, in words: for the hint line.
+/// What enter does on the selected heading, in words: for the hint line ("" nothing).
 pub fn says(s: &State) -> Option<String> {
-    let Some(Row::Head { machine, folded, .. }) = selected(s) else { return None };
+    let Some(Row::Head { machine, folded, empty, .. }) = selected(s) else { return None };
+    // An empty machine's has nothing to unfold.
+    if *empty { return Some(String::new()); }
     let what = if *machine { "this machine" } else if s.by_repo { "this repo" } else { "this group" };
     Some(format!("{} {what}", if *folded > 0 { "unfold" } else { "fold" }))
 }
 /// Fold the heading `id`, or unfold it. The selection stays on it.
 pub fn toggle(s: &mut State, id: &str, fx: &mut Vec<Effect>) {
+    if let Some(Row::Head { name, empty: true, .. }) = s.rows.iter().find(|r| matches!(r, Row::Head { id: h, .. } if h == id)) {
+        let say = format!("No tasks on {name} yet. {} talks to its machine coordinator, which adds them there.", crate::board::keys::key_name("talk"));
+        s.sel = id.to_string();
+        return s.flash(say, Ink::Muted);
+    }
     if !s.folded.remove(id) { s.folded.insert(id.to_string()); }
     s.sel = id.to_string();
     fx.push(Effect::Save);

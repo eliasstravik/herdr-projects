@@ -74,17 +74,17 @@ pub fn unread_lines(s: &State, width: usize) -> Vec<Inked> {
 }
 /// A heading's line. A machine's in bold accent, a rule after it to the edge; a repo's in bold, a status group's in its
 /// colour, a machine's automations' in theirs. Each has a caret in the marks' column, `▾` open, `▸` folded (then with
-/// how many tasks and automations it holds: `7 tasks, 1 automation`).
+/// how many tasks and automations it holds: `7 tasks, 1 automation`; a machine with nothing in view: `0 tasks`).
 /// A repo's heading has its key beside its name, dimmed (`gtm-agent · AGT`): the first thing to go where room is short.
 fn heading(s: &State, rows: &[Row], at: usize, width: usize) -> Inked {
     let r = &rows[at];
-    let Row::Head { name, autos, machine, folded, folded_autos, id } = r else { return Inked::new() };
+    let Row::Head { name, autos, machine, folded, folded_autos, id, .. } = r else { return Inked::new() };
     let key = if s.by_repo { crate::board::tags::heading_key(s, at) } else { String::new() };
     let named = if *autos { Inked::of(name.clone(), Ink::Auto) } else if *machine { Inked::of(name.clone(), MACHINE_INK).bold() } else if s.by_repo { Inked::of(repo_label(name), REPO_INK).bold() } else { Inked::of(name.clone(), group_ink(name)) };
     let named = if key.is_empty() { named } else { named.add(Inked::of(format!(" · {key}"), Ink::Muted)) };
-    let caret = if id.is_empty() { Inked::plain("  ") } else { Inked::of(if *folded > 0 { "▸ " } else { "▾ " }, Ink::Muted) };
+    let caret = if id.is_empty() { Inked::plain("  ") } else { Inked::of(if r.shut() { "▸ " } else { "▾ " }, Ink::Muted) };
     let mut out = Inked::plain(" ").add(caret).add(named);
-    if *folded > 0 { out = out.add(Inked::of(format!("  {}", crate::board::update::heads::holds(*folded, *folded_autos)), Ink::Muted)); }
+    if r.shut() { out = out.add(Inked::of(format!("  {}", crate::board::update::heads::holds(*folded, *folded_autos)), Ink::Muted)); }
     if *machine { let rest = width.saturating_sub(out.width() + 2); if rest > 0 { out = out.add(Inked::of(format!(" {}", "─".repeat(rest)), Ink::Muted)); } }
     if out.width() > width { out = out.fit(width); }
     out
@@ -129,10 +129,10 @@ pub fn list_lines(s: &mut State, t: &Theme, width: usize, h: usize, screen: usiz
     let rows = s.rows.clone();
     for (k, r) in rows.iter().enumerate() {
         match r {
-            Row::Head { id, folded, .. } => {
+            Row::Head { id, .. } => {
                 if heading_height(&rows, k) > 1 { lines.push(L { head: true, ..line(Inked::new()) }); }
                 // An open heading at the foot of what shows goes with the empty line above it; a folded one is a row.
-                lines.push(L { head: *folded == 0, sel: !id.is_empty() && *id == s.sel, id: id.clone(), ..line(heading(s, &rows, k, width)) });
+                lines.push(L { head: !r.shut(), sel: !id.is_empty() && *id == s.sel, id: id.clone(), ..line(heading(s, &rows, k, width)) });
             }
             Row::Note(n) => lines.push(line(Inked::plain("   ").add(Inked::of(n.clone(), Ink::Muted)))),
             Row::Rec(_) | Row::Auto(_) => {

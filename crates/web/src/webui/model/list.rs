@@ -59,8 +59,9 @@ pub fn list_of(s: &State, t: &Theme) -> Value {
     for (at, row) in s.rows.iter().enumerate() {
         match row {
             Row::Head { name, id, autos: true, folded, folded_autos, .. } => groups.push(obj(json!({ "name": name, "id": id, "folded": *folded > 0, "count": count(*folded, *folded_autos), "color": "auto", "repo": false, "automations": true, "rows": [], "more": 0 }))),
-            // A machine's heading stands over its groups: one with no rows, that a tap folds and unfolds as a group's.
-            Row::Head { name, id, machine: true, folded, folded_autos, .. } => groups.push(obj(json!({ "name": name, "id": id, "machine": true, "folded": *folded > 0, "count": count(*folded, *folded_autos), "color": "accent", "repo": false, "rows": [], "more": 0 }))),
+            // A machine's heading stands over its groups: one with no rows, that a tap folds and unfolds as a group's. One with
+            // nothing in view shows folded, `0 tasks`.
+            Row::Head { name, id, machine: true, folded, folded_autos, empty, .. } => groups.push(obj(json!({ "name": name, "id": id, "machine": true, "folded": *folded > 0 || *empty, "count": if *empty { json!("0 tasks") } else { count(*folded, *folded_autos) }, "color": "accent", "repo": false, "rows": [], "more": 0 }))),
             Row::Head { name, id, folded, folded_autos, .. } => groups.push(obj(json!({ "name": if s.by_repo { repo_label(name) } else { name.clone() }, "key": if s.by_repo { crate::board::tags::heading_key(s, at) } else { String::new() }, "id": id, "folded": *folded > 0, "count": count(*folded, *folded_autos), "color": if s.by_repo || !["needs you", "ready to approve", "working", "to do", "done"].contains(&name.as_str()) { "subtext0" } else { group_ink(name).name() }, "repo": s.by_repo, "rows": [], "more": 0 }))),
             Row::Auto(a) => push(&mut groups, auto_row_of(s, t, a, now)),
             Row::Rec(r) => push(&mut groups, row_of(s, t, r, now)),
