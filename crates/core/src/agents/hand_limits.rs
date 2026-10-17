@@ -1,16 +1,17 @@
 //! How much can be handed to a program through herdr, and the files that carry what is longer. A start command is typed
 //! into the pane's shell, and a terminal takes at most 4096 bytes on one line while that shell is still starting (its
-//! line editor not yet up): a longer one arrives cut off, the shell waits at its continuation prompt and herdr times out
-//! (seen on herdr 0.9.3 with Codex's rules in `-c developer_instructions=…`). A message is one argument of `herdr agent
-//! prompt`, and Linux takes at most 128 KiB in one argument.
+//! line editor not yet up), macOS only 1024: a longer one arrives cut off, the shell waits at its continuation prompt and
+//! herdr times out (seen on herdr 0.9.3 with Codex's rules in `-c developer_instructions=…`), or herdr 0.9.5 refuses it
+//! (herdr/shell_ready.rs). A message is one argument of `herdr agent prompt`, and Linux takes at most 128 KiB in one
+//! argument.
 use crate::err::Res;
 use crate::store::files::{data_dir, write_atomic};
 use std::path::Path;
 
-/// The longest line a terminal takes while its shell is starting.
-pub const LINE_MAX: usize = 4096;
+/// The longest line a terminal takes while its shell is starting: macOS' (Linux: 4096).
+pub const LINE_MAX: usize = 1024;
 /// A launch argument longer than this goes in a file, so that the whole start command stays well under `LINE_MAX`.
-pub const ARG_MAX: usize = 2000;
+pub const ARG_MAX: usize = 300;
 /// The longest single argument Linux passes to a program.
 pub const PROGRAM_ARG_MAX: usize = 131072;
 /// A message longer than this is handed over in a file.

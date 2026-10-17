@@ -76,7 +76,7 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
         }
     };
     if let Err(e) = start_with(hooked) { // once more without the hook arguments, from a clean shell prompt
-        if !hooked { return Err(e); }
+        if !hooked || e.msg.contains("canonical mode") { return Err(e); } // its shell was never at its prompt: tried again already
         start_failed::tidy(&api, &pane, &start_failed::screen_of(&api, &pane));
         hooked = false; start_with(false)?;
     }
