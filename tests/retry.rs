@@ -95,17 +95,15 @@ fn a_review_cut_off_again_and_again_gives_up_with_the_real_error_and_retry_revie
 
 #[test]
 fn the_report_of_a_try_that_was_cut_off_does_not_end_the_next_try() {
-    let w = cut_world("30", json!({}));
-    unsafe { std::env::set_var("HERDR_PROJECTS_REVIEW_MS", "1500") }; // the second reviewer works on and runs into the time limit
+    let w = cut_world("30", json!({ "review.timeout": "2s" })); // the second reviewer works on and runs into the time limit
     unsafe { std::env::set_var("HERDR_PROJECTS_ENDED_MS", "60000") }; // only reports count here: the first try's file is seconds old
     w.script(json!({ "worker": [work()], "reviewer": [{ "ends": "codex-at-capacity", "hook": true }, { "status": "working" }] }));
     let id = w.add("Second try is slow");
     delegate(&id);
     let t = settle(&id);
-    unsafe { std::env::set_var("HERDR_PROJECTS_REVIEW_MS", "120000") };
     assert_eq!(t.s("stage"), "failed"); assert_eq!(reviewer_starts(&w), 2);
     assert!(t.at("failure").s("detail").contains("review timed out"), "{}", t.at("failure"));
-    assert_eq!(review_history(&t).iter().map(|e| (e.i("round"), e.t("error"))).collect::<Vec<_>>(), vec![(1, "review timed out".to_string())]);
+    assert_eq!(review_history(&t).iter().map(|e| (e.i("round"), e.t("error"))).collect::<Vec<_>>(), vec![(1, "review timed out after 2s (review.timeout)".to_string())]);
 }
 
 #[test]

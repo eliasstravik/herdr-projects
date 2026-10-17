@@ -3,7 +3,7 @@
 use super::review::{close_reviewer, Reviewed};
 use super::review_brief::{parse_verdict, review_brief, Brief};
 use super::review_fallback::{reviewer_now, Cut};
-use super::shared::ms;
+use super::shared::{ms, review_until, timed_out};
 use crate::agents::{adapter, helpers::still_at_work, installed, start, start_failed};
 use crate::clock::now;
 use crate::delegate::{launch_extras, rules::task_line_as};
@@ -96,7 +96,7 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
             mark_cell.borrow().as_ref().and_then(|m| crate::submit::shown(&rkind, None, &s, &folder, m, &brief))
         };
         let reads = crate::agents::kinds::kind(&rkind).map(|k| k.reads_turn).unwrap_or(false);
-        let until = now() + ms("HERDR_PROJECTS_REVIEW_MS", 20 * 60000);
+        let until = review_until(ch);
         let every = ms("HERDR_PROJECTS_POLL_MS", 3000);
         let (mut sent, mut sent_at, mut quiet_since, mut comp_at_send) = (false, 0i64, 0i64, Value::Null);
         let mut waited: Vec<i64> = vec![]; // its own turn-end reports while its helpers were still at work
@@ -123,7 +123,7 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
                     Err(e) => { error = crate::text::squash(&e.msg).chars().take(400).collect(); if error.is_empty() { error = "no valid verdict".into(); } break; }
                 }
             }
-            if now() > until { error = "review timed out".into(); break; }
+            if until.is_some_and(|u| now() > u) { error = timed_out("review", ch); break; }
             let cur = get(id).ok_or("the task is gone")?;
             // The reviewer's own turn-end report for this round, and still no verdict: the review failed, at once.
             let rev = pending_events(&cur).into_iter().find(|e| e.s("role") == "reviewer" && e.i("round") == round && !e.b("side") && e.i("at") >= started_at && !waited.contains(&e.i("n")));

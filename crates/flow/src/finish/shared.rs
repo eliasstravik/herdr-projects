@@ -9,6 +9,10 @@ use crate::store::reviews::{current_review, kept_words, review_history};
 use crate::store::tasks::Task;
 
 pub fn ms(name: &str, fallback: i64) -> i64 { std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(fallback) }
+/// When a review that starts now must have its answer (`review.timeout`, from the task's settings `ch`); None: no limit.
+pub fn review_until(ch: &Obj) -> Option<i64> { let l = crate::store::settings::values::ms(ch.s("review.timeout")); (l > 0).then(|| crate::clock::now() + l) }
+/// What a review that ran out of time failed with: `what` timed out, and the limit it had.
+pub fn timed_out(what: &str, ch: &Obj) -> String { format!("{what} timed out after {} (review.timeout)", ch.s("review.timeout")) }
 pub fn last_lines(text: &str, n: usize) -> String {
     let all: Vec<&str> = text.split('\n').map(|l| l.trim_end()).filter(|l| !l.trim().is_empty()).collect();
     all[all.len().saturating_sub(n)..].join("\n")
