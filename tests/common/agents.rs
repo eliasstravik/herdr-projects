@@ -39,10 +39,18 @@ pub fn agent(f: &F, verb: &str, arg2: &str, argv: &[String], flag: &dyn Fn(&str)
                 st["panes"][pi]["screen"] = json!(format!("user@host:{cwd}$ {typed}\nbash: {kind}: command not found\nuser@host:{cwd}$ "));
                 return fail("timeout", "timed out waiting for agent startup");
             }
+            // `canonical`: that many starts find the pane's shell not at its prompt yet, its terminal taking 1024 bytes
+            // on a line (macOS): herdr types nothing and says so. `canonicalLate`: it says so, and the program came up.
+            // `canonicalName`: only the agents whose name ends so.
+            let refused = st.i("canonical") > 0 && arg2.ends_with(st.s("canonicalName"));
+            if refused { st["canonical"] = json!(st.i("canonical") - 1); }
+            let canonical = format!("input contains a {}-byte line but the terminal is in canonical mode with a 1024-byte limit; wait for the shell prompt and retry", typed.len().max(1025));
+            if refused && !st.b("canonicalLate") { return fail("invalid_input", &canonical); }
             let seq = st.i("seq") + 1; st["seq"] = json!(seq);
             let mut a = json!({ "kind": kind, "name": arg2, "status": "idle", "seq": seq, "args": rest, "pid": 5000000 + seq });
             if st.i("slowStart") > 0 { a["boot"] = json!(st.i("slowStart")); }
             st["panes"][pi]["agent"] = a;
+            if refused { return fail("invalid_input", &canonical); }
             let d = st.at("dialogs").i(&kind);
             if d > 0 { st["dialogs"][&kind] = json!(d - 1); st["panes"][pi]["agent"]["status"] = json!("blocked"); return fail("agent_not_ready", &format!("agent {arg2} is blocked during startup and is not ready for prompts")); }
             let p = st["panes"][pi].clone();

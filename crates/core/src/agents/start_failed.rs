@@ -41,6 +41,9 @@ pub fn explain(s: &Start, said: &str, screen: &str) -> Why {
     }
     if said.contains("needs herdr's own integration") { return why(format!("{k} needs herdr's own integration"), format!("Run `herdr integration install {}`, then {again}.", super::kinds::kind(k).map(|a| a.integration).unwrap_or(k))); }
     if cut_off(screen) { return why("its start command was cut off: the terminal's shell was still starting".into(), format!("The board cleared the half-typed command: {again}.")); }
+    if said.contains("canonical mode") {
+        return why("its terminal's shell was not ready for the start command".into(), format!("The board waited for the shell's prompt and tried {} times. Wait until the task's terminal shows its prompt, then {again}. A shell that is slow to start (its startup file) causes this.", crate::herdr::shell_ready::RETRIES + 1));
+    }
     if LOGIN.is_match(&all) || is_auth_failure(&all) { return Why { short: format!("{k} is not logged in"), next: format!("Run `{k}` in a terminal here and log in, then {again}."), auth: true }; }
     if MODEL.is_match(&all) {
         let short = super::model_refused::read(s.kind, &all).filter(|r| !r.model.is_empty() || !r.signin.is_empty()).map(|r| super::model_refused::say(s.kind, &r)).unwrap_or_else(|| format!("{k} does not know the model it was given"));

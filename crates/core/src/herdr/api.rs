@@ -106,7 +106,7 @@ impl Herdr {
     }
     pub fn pane_close(&self, id: &str) -> Option<Value> { self.call(args(&["pane", "close", id])).ok() }
     /// Run a command in the pane, at its shell: typed and entered.
-    pub fn pane_run(&self, id: &str, command: &str) -> HRes<Value> { self.call(args(&["pane", "run", id, command])) }
+    pub fn pane_run(&self, id: &str, command: &str) -> HRes<Value> { self.when_at_prompt(id, || self.call(args(&["pane", "run", id, command]))) }
     /// End the program in the pane's foreground, so the pane is at its shell again. True once herdr sees no agent there.
     pub fn pane_quit(&self, id: &str, wait_ms: i64) -> bool {
         let gone = || matches!(self.agent_get(id), Ok(None));
@@ -156,8 +156,9 @@ impl Herdr {
         self.integration_ready(kind)?;
         let mut a = args(&["agent", "start", name, "--kind", kind, "--pane", pane, "--timeout", &timeout_ms.to_string()]);
         if !extra.is_empty() { a.push("--".into()); a.extend(extra.iter().cloned()); }
-        match self.call_t(a, timeout_ms + 15000) {
-            Ok(r) => Ok(r.at("agent").clone()),
+        // A shell not at its prompt yet takes no long line: waited for and tried again (shell_ready.rs).
+        match self.when_at_prompt(pane, || self.call_t(a.clone(), timeout_ms + 15000).map(|r| r.at("agent").clone())) {
+            Ok(r) => Ok(r),
             // A program that quits as it starts (on an argument it does not know) leaves herdr waiting for it until the
             // timeout. What it printed says why.
             // One that runs on, unseen, is behind a launcher herdr cannot see through (kilo and qodercli from npm: a node
