@@ -170,6 +170,7 @@ mod plan;
 mod plan_modes;
 mod plan_more;
 mod plan_rest;
+mod plan_sandbox;
 mod plan_steps;
 mod plan_untouched;
 mod pull_requests;

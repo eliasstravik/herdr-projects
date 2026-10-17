@@ -108,17 +108,20 @@ One file, `plan.md`, in the task's own folder on the board
 
 The board does not only ask for it. Four things hold, from the moment the plan step begins until the build starts:
 
-1. **The plan's writer runs where the worktree is a read-only file system.** The board starts its program inside a mount
-   of its own (bubblewrap: `bwrap --ro-bind`), where the task's worktree and its git folder cannot be written. A write, a
-   delete, a commit, and also a `chmod` that would give the permission back, are answered `Read-only file system`,
-   whatever the program's own access.
+1. **The plan's writer runs where the worktree cannot be written.** The board starts its program inside a mount of its
+   own, made by the platform's own tool ([which one](#the-mount-on-linux-and-on-macos)), where the task's worktree and
+   its git folder cannot be written. A write, a delete, a commit, and also a `chmod` that would give the permission
+   back, are refused (`Read-only file system` on Linux, `Operation not permitted` on macOS), whatever the program's own
+   access.
    - This holds for every program (Claude Code, Codex, pi and Herdr's others), for a planner of its own, and for the
      reviewer that checks a plan.
-   - Everything else is as on the machine, so the plan can be saved in the board's folder.
+   - Everything else is as on the machine, so the plan can be saved in the board's folder, and the program keeps its
+     own session files.
    - After the yes, the program is ended and started again the usual way, outside that mount, in the same conversation.
-   - **Where no such mount can be made** (bubblewrap is missing, or user namespaces are not allowed), **no plan is
-     written in a repo at all**. The task does not start, and says what is missing and the two ways on: install
-     bubblewrap, or `set plan.approve none --task <id>`. A lesser guard is never used instead.
+   - **Where no such mount can be made**, **no plan is written in a repo at all**. The task does not start, and says
+     what is missing and the two ways on: make the mount possible (on Linux: install bubblewrap; on macOS: start Herdr
+     outside any sandbox), or `set plan.approve none --task <id>`. A lesser guard is never used instead.
+     `herdr-projects doctor` says whether plan approval can run on this machine, and why not.
 2. **The worktree's files are read-only too.** Every file and folder in it loses its write permission, ignored files
    too, and so does the worktree's own git folder (its index, its `HEAD`). Whatever runs outside the mount is answered
    `Permission denied`. The permission comes back when the build starts (and before the worktree is removed).
@@ -137,6 +140,27 @@ a pull request or reviewed.
 What the mount is not: a wall against a program that sets out to get around it (one that asks Herdr to run a command in
 another pane, say). It stops every write made the ordinary way, with or without the write permission put back. The
 board's own look, and the hold on the build, are for the rest.
+
+### The mount on Linux and on macOS
+
+| | Linux | macOS |
+|---|---|---|
+| The tool | bubblewrap: `bwrap --dev-bind / / --ro-bind <worktree> <worktree> --ro-bind <git folder> <git folder>` | macOS's own sandbox: `sandbox-exec -p '<profile>'` |
+| What it guards | the worktree and its git folder are mounted read-only | a Seatbelt profile allows everything except a write under the worktree and its git folder: `(version 1)(allow default)(deny file-write* (subpath "<worktree>") (subpath "<git folder>"))`, each by its real path (`/var/…` is `/private/var/…`) |
+| A write there | `Read-only file system` | `Operation not permitted` |
+| It needs | bubblewrap installed, and user namespaces allowed | `/usr/bin/sandbox-exec` (part of macOS), and Herdr not itself started inside a sandbox |
+
+- The guarantee is the same on both: the program cannot write under those two folders, and cannot take the guard off.
+- **macOS allows no sandbox inside another.** A program that runs its own commands in a sandbox of its own would see
+  every command fail inside ours, so for the plan step the board turns that sandbox off; ours is the guard:
+  - Codex: `-c sandbox_mode="danger-full-access"` (with full access, `--dangerously-bypass-approvals-and-sandbox`
+    already has it off). Its approvals stay as they were.
+  - Claude Code: `"sandbox": {"enabled": false}` in the settings the board passes it for that launch (`--settings`),
+    in case your own settings turn its sandbox on. Its plan mode stays on.
+  - pi has no sandbox of its own.
+  After the yes the program starts again the usual way, its own sandbox as you set it.
+- `HERDR_PROJECTS_SANDBOX` picks the tool outright: `bwrap`, `sandbox-exec`, or `none` (no mount: no plan is written in
+  a repo). Unset, the board tries the platform's own and remembers for ten minutes whether it works.
 
 ### A task in your own checkout
 

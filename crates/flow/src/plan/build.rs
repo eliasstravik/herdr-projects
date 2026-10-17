@@ -4,7 +4,7 @@
 //! the yes is written down, the repo is looked at once more, and the builder is handed the plan. A task done several
 //! times at once is split only now: one plan, approved once, and every attempt is handed it.
 use super::lock::{lock, unlock};
-use super::sandbox::{sandbox_ok, NO_MOUNT};
+use super::sandbox::{no_mount, sandbox_ok};
 use super::untouched::{held_failure, ignored_mark, put_back};
 use super::{approved, go_words, wanted};
 use crate::agents::installed::installed;
@@ -30,7 +30,7 @@ pub fn begin(g: &mut Guard, t: Task, api: &Herdr) -> Res<Task> {
     // In a repo the plan's writer runs in a read-only mount. Where none can be made, no plan is written and nothing starts.
     let dir = cwd_of(&t);
     let repo = is_repo(&dir);
-    if repo && !sandbox_ok() { crate::fail!("{}", NO_MOUNT.replace("<id>", t.s("id"))); }
+    if repo && !sandbox_ok() { crate::fail!("{}", no_mount(t.s("id"))); }
     let who = agent_of(&setting_text("plan.agent", Some(&t)));
     // A planner that is not installed here: the working agent plans, and the task says so.
     let own = !who.kind.is_empty() && installed(&who.kind);
