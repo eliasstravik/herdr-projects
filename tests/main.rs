@@ -16,6 +16,7 @@ mod agent_kinds;
 mod agent_kinds_flow;
 mod agent_models;
 mod agent_start_failed;
+mod agent_start_prompt;
 mod agent_versions;
 mod attempts;
 mod attempts_more;

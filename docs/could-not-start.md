@@ -12,6 +12,7 @@ again (or reply, for an agent that is started again).
 | `Could not start: codex quit as it started` | Read what it printed, in the task panel, and fix that. |
 | `Could not start: codex did not come up within a minute` | Look at its terminal: whatever it shows (an update, a question, an error) is in the way. |
 | `Could not start: its start command was cut off: the terminal's shell was still starting` | Delegate again: the board has cleared the half-typed command. |
+| `Could not start: its terminal's shell was not ready for the start command` | Wait until the task's terminal shows its prompt, then delegate again. The board already waited and tried 4 times; a shell that is slow to start (its `.zshrc`) causes this. |
 | `Could not start: its terminal was not at its shell prompt` | End what runs in the task's terminal, or close it. |
 | `Could not start: herdr did not answer in time` | Check that Herdr runs and answers (`herdr workspace list`). |
 
@@ -34,10 +35,16 @@ Two limits once made long text fail to start an agent, with no reason given. Bot
 
 - **Long rules go in a file.** Herdr starts a program by typing its command into the pane's shell. While that shell is
   still starting (its line editor not up yet: a slow `.bashrc` or `.zshrc`), the terminal takes at most 4096 bytes on one
-  line. Codex used to get a task's rules inline, in `-c developer_instructions=…`. With your own `worker.instructions`,
-  that went over 4096 bytes: the command arrived cut off, the shell waited at its `>` continuation prompt, and the start
-  timed out. Now rules longer than 2000 bytes go in a file in the task's folder (`rules.md`, as for Claude Code and pi),
-  and Codex is told to read it and follow it for the whole session.
+  line, and on macOS only 1024. Codex used to get a task's rules inline, in `-c developer_instructions=…`. With your own
+  `worker.instructions`, that went over the limit: the command arrived cut off, the shell waited at its `>` continuation
+  prompt, and the start timed out. Now rules longer than 300 bytes go in a file in the task's folder (`rules.md`), and
+  Codex is told to read it and follow it for the whole session. Claude Code, pi, Droid and the rest always take their
+  rules as a file name, so their start command stays short: Codex alone takes them only as text.
+- **A shell not at its prompt yet is waited for.** Herdr 0.9.5 refuses a line longer than the terminal takes before the
+  shell's prompt is up ("the terminal is in canonical mode with a 1024-byte limit; wait for the shell prompt and retry"):
+  a new task's first start failed that way on macOS. The board now waits for the pane to show its prompt and tries again,
+  up to 3 more times within about 15 seconds, for every start (a task's agent, a reviewer, the Coordinator, a
+  comparison's picker). It looks for an agent in the pane first, so it never starts a second one.
 - **Very long messages go in a file.** A message is one argument of `herdr agent prompt`, and Linux passes at most 128 KiB
   in one argument. A message longer than 100,000 bytes (a task's first prompt, a reply, a message to the Coordinator) is
   written to a file in the board's folder (`messages/`), and a line naming that file is typed in instead. Anything shorter
