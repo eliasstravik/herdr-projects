@@ -115,7 +115,7 @@ fn compare(id: &str, g: &mut Guard, t: &Task) -> Res<Obj> {
             Err(e) => Err(crate::agents::start_failed::say(&api, &crate::agents::start_failed::Start { kind: &k, setting: "reviewer.agent", again: "pick again" }, &pane, &e.message, &crate::store::files::dir_of(t.s("id")).join("runner.log")).into()) }
     };
     if let Err(e) = start_with(x.hook.clone()) { if x.hook.is_empty() { return Err(e); } start_with(vec![])?; }
-    let until = now() + ms("HERDR_PROJECTS_REVIEW_MS", 20 * 60000);
+    let until = crate::finish::shared::review_until(&ch);
     let every = ms("HERDR_PROJECTS_POLL_MS", 3000);
     let (mut sent, mut comp_at_send, mut quiet_since) = (false, Value::Null, 0i64);
     let reads = crate::agents::kinds::kind(&k).map(|a| a.reads_turn).unwrap_or(false);
@@ -130,7 +130,7 @@ fn compare(id: &str, g: &mut Guard, t: &Task) -> Res<Obj> {
                 Err(e) => err(&format!("the reviewer's comparison could not be read: {}", crate::text::squash(&e.msg).chars().take(300).collect::<String>())),
             };
         }
-        if now() > until { return err("the comparison timed out"); }
+        if until.is_some_and(|u| now() > u) { return err(&crate::finish::shared::timed_out("the comparison", &ch)); }
         // The reviewer's own turn-end report, and still no answer: it finished without one.
         let ended = get(id).and_then(|c| pending_events(&c).into_iter().find(|e| e.s("role") == "reviewer" && !e.b("side") && e.i("at") >= started_at && !waited.contains(&e.i("n"))));
         if let (Some(e), true) = (&ended, sent) {

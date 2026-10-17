@@ -46,6 +46,9 @@ The severity says what the fault does:
   left out (a pre-existing fault is still noted). A reply from you starts a full review again.
 - **`review.rounds 0`** sends nothing back by itself: findings wait for you (`Ctrl+R` sends them). The review is still
   judged at `review.mustFix`, and a failed one never merges by itself.
+- **`review.timeout`** (`20m`, or `none`) is how long one review may take: past it the review fails (`review timed out
+  after 20m (review.timeout)`) and goes on as any failed review does. `limit.time` is another thing: it stops any run,
+  the agent's too, keeps its work and waits for you ([limits](limits.md)).
 
 Findings below the gate still show on the review page, in the task panel and in a comment on the pull request, marked
 as not required.
