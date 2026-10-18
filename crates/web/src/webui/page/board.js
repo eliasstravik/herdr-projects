@@ -72,7 +72,7 @@ function draw() {
   once("pick", picking ? [snap.flags.scope] : null, () => { if (picking) pickerEl(snap.flags.scope, { onPick: scopeTo, onClose: () => { picking = false; draw(); } }).then((el) => { if (picking && root) part("pick-host").replaceChildren(el); }); else part("pick-host").replaceChildren(); });
   part("find-row").hidden = !finding;
   chat.update(snap);
-  if (wantFull && snap.chat?.text) { wantFull = false; chat.full(true); }
+  if (wantFull) { wantFull = false; chat.full(true); } // (only where the chat has something to show)
   if (snap.msg && snap.msg.n !== seenMsg) { seenMsg = snap.msg.n; toast(part("toast-host"), snap.msg, () => press("back")); }
   // Into a task's agent (Open agent), or the chat full screen: the web UI's own view of that pane (talk.js).
   if (snap.go && seenGo !== null && snap.go.n !== seenGo) { seenGo = snap.go.n; const full = fullAsked; fullAsked = false; return full ? goFull(snap.go, snap) : goTo(snap.go); }

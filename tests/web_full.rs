@@ -74,6 +74,6 @@ fn the_page_goes_full_screen_into_the_web_uis_chat_view_with_a_bar_that_flips_an
     assert!(TALK.contains("return goFull(out.go, out, true);") && TALK.contains("keep(null); sync(); onBoard(true);"));
     assert!(TALK.contains("if (x && x.depth === history.length && here(x)) history.back(); else onBoard(false);"));
     assert!(START.contains("fullBar((full) => show(true, full));"));
-    // under the web UI's drawer, and its first message is not under the bar
-    assert!(TALK_CSS.contains("z-index: 14;") && TALK_CSS.contains("html.sw-full-on .pane-frame.is-current .chat-virtual-header { padding-top:"));
+    // under the web UI's menus and drawer, and its first message is not under the bar
+    assert!(TALK_CSS.contains("z-index: 9;") && TALK_CSS.contains("html.sw-full-on .pane-frame.is-current .chat-virtual-header { padding-top:"));
 }

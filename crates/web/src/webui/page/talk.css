@@ -1,9 +1,9 @@
 /* The bar over the web UI's own chat view when the board's chat went full screen into it (talk.js): one pill at the top
    left of the pane, under the web UI's header and tabs, with the back arrow to the board and the button that names who
-   you talk to and flips it. It is the web UI's raised surface, nearly opaque, with its glass blur, and its type, and sits
-   under its drawer, so the drawer covers it as it covers the chat. */
+   you talk to and flips it. It is the web UI's raised surface, nearly opaque, with its glass blur, and its type. It stands
+   over the chat and under everything the web UI opens over it (its menus, scrim, drawer and dialogs: 10 and up). */
 .sw-full-bar {
-  position: fixed; z-index: 14; display: inline-flex; align-items: center; gap: 2px; max-width: calc(100vw - 24px);
+  position: fixed; z-index: 9; display: inline-flex; align-items: center; gap: 2px; max-width: calc(100vw - 24px);
   margin: var(--space-2, 8px) var(--space-3, 12px); padding: 2px; box-sizing: border-box;
   border: var(--hairline, 1px) solid var(--border, #2d2924); border-radius: var(--radius-pill, 999px);
   background: color-mix(in srgb, var(--bg-elevated, #211e1a) 92%, transparent); -webkit-backdrop-filter: var(--glass-blur, blur(20px)); backdrop-filter: var(--glass-blur, blur(20px));
