@@ -1,9 +1,10 @@
 //! Who fires the automations: the keeper and an open board, by this one pass, once a second, so it works with the
 //! board closed. One pass at a time on the machine: whoever finds it taken skips, and what is due is decided and
 //! written down under it, so nothing fires twice. A schedule fires when it is due; a tick found more than LATE late is
-//! skipped and never caught up. A board event fires the automations that wait for it.
+//! skipped and never caught up. A board event fires the automations that wait for it, those whose condition holds.
+use super::condition::mismatch;
 use super::events::new_events;
-use super::fire::{fire, one_at_a_time};
+use super::fire::{fire, one_at_a_time, say_cause};
 use super::told::{made_by, Cause};
 use super::triggers::next_after;
 use crate::err::Kind;
@@ -52,7 +53,10 @@ fn events_pass(now: i64) -> crate::err::Res<Vec<Value>> {
             if !a.at("trigger").b("everyRepo") && e.task.s("repo") != a.s("repo") { continue; }
             if e.at < a.i("since") { continue; } // it happened before this automation began to wait for it
             if let Some(m) = made_by(&e.task) { if m.arr("chain").iter().any(|c| text(c) == a.s("id")) || m.s("id") == a.s("id") { continue; } } // no loops
-            fired.push(fire(a.s("id"), Cause::Event { event: e.event.clone(), task: e.task.clone() }, now)?);
+            let cause = Cause::Event { event: e.event.clone(), task: e.task.clone() };
+            // its condition does not hold for this task: a written skip, no task, nothing counted toward a runaway
+            if let Some(why) = mismatch(a.at("trigger"), &e.task) { fired.push(note_firing(a.s("id"), obj(json!({ "at": now, "cause": "event", "what": say_cause(&a, &cause), "skipped": why })))?); continue; }
+            fired.push(fire(a.s("id"), cause, now)?);
         }
     }
     Ok(fired)

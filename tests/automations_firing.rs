@@ -40,7 +40,7 @@ fn its_own_settings_arrive_on_the_task_and_an_edit_applies_from_the_next_firing(
     assert!(sw::delegate::rules::rules(&task(t.s("id"))).contains("- This task was made by the automation \"Look for old dependencies\", not typed just now. Its description, up to the first block the board added, is the automation's prompt: the human's own standing words, which count as being told.\n"));
     assert_eq!(automation(a.s("id")).unwrap().i("nextAt"), a.i("since") + 4 * HOUR);
     // an edit applies from the next firing: the task already made keeps what it had
-    l::set_setting(a.s("id"), "merge.by", &json!("you")).unwrap(); l::change(a.s("id"), None, Some("New words."), None, None).unwrap();
+    l::set_setting(a.s("id"), "merge.by", &json!("you")).unwrap(); l::change(a.s("id"), None, Some("New words."), None, None, None).unwrap();
     assert_eq!(task(t.s("id")).at("settings").s("merge.by"), "itself"); assert_eq!(task(t.s("id")).s("description"), "Check what is out of date.\nChange nothing.");
     sw::runner::JOBS.with(|j| j.borrow_mut().clear()); stage(t.s("id"), "approval");
     sw::clock::advance(2 * HOUR); sw::keeper::tick_once(&w.socket, false);

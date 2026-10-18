@@ -1,7 +1,8 @@
-//! The automations themselves: making one, changing its name, prompt or trigger, its own settings, on and off, removing
+//! The automations themselves: making one, changing its name, prompt, trigger or its condition, its own settings, on and off, removing
 //! it. An automation is a saved task plus a trigger: { id, name, prompt, trigger, repo, root, settings, on, since, nextAt,
 //! offWhy, created, lastTask, made }. `settings` holds only the work settings that differ, exactly as a task holds its
 //! own; at a firing they are put on the new task and everything else is looked up by the one rule.
+use super::condition::with_condition;
 use super::triggers::next_after;
 use crate::clock::now;
 use crate::err::{Error, Res};
@@ -97,16 +98,24 @@ pub fn add(o: Add) -> Res<Obj> {
         Ok(a.clone())
     })
 }
-/// A change applies from the next firing: tasks already made keep what they had.
-pub fn change(reference: &str, name: Option<&str>, prompt: Option<&str>, trigger: Option<Value>, research: Option<bool>) -> Res<Obj> {
+/// A change applies from the next firing: tasks already made keep what they had. `cond`: --if, Some(None) for none; a
+/// new --when without it keeps the condition the trigger had.
+pub fn change(reference: &str, name: Option<&str>, prompt: Option<&str>, trigger: Option<Value>, cond: Option<Option<Value>>, research: Option<bool>) -> Res<Obj> {
     let a = find(reference)?;
-    if name.is_none() && prompt.is_none() && trigger.is_none() && research.is_none() { return refuse("Nothing to change: give --name, --prompt, a trigger (--schedule, --when), or --research / --no-research.".into()); }
+    if name.is_none() && prompt.is_none() && trigger.is_none() && cond.is_none() && research.is_none() { return refuse("Nothing to change: give --name, --prompt, a trigger (--schedule, --when), a condition (--if), or --research / --no-research.".into()); }
     let mut next = Obj::new();
     if let Some(n) = name { next.put("name", name_of(n, a.s("id"))?); }
     if let Some(p) = prompt { next.put("prompt", prompt_of(p)?); }
     if research.is_some() { next.put("settings", checked_settings(&a, &with_research(a.o("settings").unwrap_or(&Obj::new()), research))?); }
+    let rearm = trigger.is_some();
+    let kept = a.at("trigger").at("if");
+    let trigger = match (trigger, cond) {
+        (t, Some(c)) => Some(with_condition(t.as_ref().unwrap_or(a.at("trigger")), c.as_ref()).map_err(|e| Error::refused(e.msg))?),
+        (Some(t), None) if t.s("kind") == "event" && kept.b("field") => Some(with_condition(&t, Some(kept))?),
+        (t, None) => t,
+    };
     let now = now();
-    change_automation(a.s("id"), |x| { for (k, v) in next { x.insert(k, v); } if let Some(t) = trigger { x.put("trigger", t); arm(x, now); } })?.ok_or_else(|| "the automation is gone".into())
+    change_automation(a.s("id"), |x| { for (k, v) in next { x.insert(k, v); } if let Some(t) = trigger { x.put("trigger", t); if rearm { arm(x, now); } } })?.ok_or_else(|| "the automation is gone".into())
 }
 /// Off, it never fires and keeps everything. On again, a schedule counts from now and the runaway count starts over.
 pub fn turn(reference: &str, on: bool) -> Res<Obj> {
