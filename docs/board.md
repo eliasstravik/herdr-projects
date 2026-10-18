@@ -713,7 +713,10 @@ that running board from anywhere, instead of opening a second one.
   on it, also when an agent's pane is split beside it in the same tab.
 - **Pressed on the board itself, the key takes you back** to the pane you came from: a way there and a way back. When that
   pane is closed, or you started the board by hand, the board says on its message line that it is the board already.
-- Closing the board (`Ctrl+C` twice) closes its tab.
+- Closing the board (`Ctrl+C` twice) closes its tab. **The Coordinator keeps running**, and the line that asks for the
+  second `Ctrl+C` says so while it runs: it is not this board's but the machine's, the same one the popup, the web board
+  and `coordinator tell` talk to, and it may be at work on what you asked. `herdr-projects coordinator stop` ends it
+  ([the Coordinator](coordinator.md)).
 
 **A board you start with `herdr-projects` names its tab `herdr-projects`**, for as long as the board is open, so you can
 tell it from your other tabs.

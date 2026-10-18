@@ -30,9 +30,11 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
     let key: Vec<Hint> = if who.map(|w| w.said && !w.text.is_empty() && !s.chat_folded).unwrap_or(false) { vec![hk(K::ChatMessage, &format!("{} the latest message", if up { "hide" } else { "show" }))] } else { vec![] };
     let chat_key = if up { None } else { key.first().cloned() };
     if s.ask.is_some() { return (vec![], chat_key); }
-    // After esc at the top (which closes nothing) the line names the key that does.
+    // After esc at the top (which closes nothing) the line names the key that does. A running Coordinator is no part of
+    // this board (the popup, the web board and `coordinator tell` share it): it keeps running, and the line says so.
     if let Some((_, by_esc)) = s.closing {
-        let w = if by_esc { format!("{} closes the board", name(K::Close)) } else { format!("Press {} again to close the board", name(K::Close)) };
+        let keeps = if ["starting", "working", "blocked", "idle"].contains(&s.data.coord.state.as_str()) { " · the Coordinator keeps running" } else { "" };
+        let w = if by_esc { format!("{} closes the board{keeps}", name(K::Close)) } else { format!("Press {} again to close the board{keeps}", name(K::Close)) };
         return (vec![Hint { key: String::new(), words: w, stays: false, short: if by_esc { format!("{} closes the board", name(K::Close)) } else { format!("{} again closes the board", name(K::Close)) }, ..Default::default() }], chat_key);
     }
     if s.menu.is_some() { return (vec![plain(arrows, "pick a key"), plain(enter, "press it"), plain(esc, "close the menu")], chat_key); }

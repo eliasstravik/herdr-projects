@@ -37,7 +37,7 @@ fn esc_hides_but_never_shows_the_chat_and_a_task_with_no_agent_is_talked_about_t
     assert!(has(&s.text(), &format!(r"\n *\n[ ▌]○ Coordinator {{2}}idle *\n─[^\n]*\n❯ Send message to Coordinator *\n─+\n[ ▌] [^\n]*{chat_key} show the latest message · \? all keys *$")), "{}", s.text());
     // esc never shows the message, and never closes the board: hidden, it stays hidden, and nothing is asked.
     s.press(&["esc"]); assert!(!s.s.chat_open && s.s.ask.is_none() && !s.closed && s.s.closing.is_some());
-    assert!(has(&s.text(), &format!(r"\n  {} closes the board *$", regex::escape(&key_name("close")))), "{}", s.text()); s.s.closing = None;
+    assert!(has(&s.text(), &format!(r"\n  {} closes the board · the Coordinator keeps running *$", regex::escape(&key_name("close")))), "{}", s.text()); s.s.closing = None;
     // Shown, with nothing else to step back from, esc hides it as its own key does (the chat's line names only that key).
     s.press(&["alt+c"]); assert!(s.s.chat_open && s.text().contains("Added proj/1.")); assert!(has(&s.text(), &format!("{chat_key} hide the latest message"))); assert!(!s.text().contains("esc hide"));
     s.press(&["esc"]); assert!(!s.s.chat_open && s.s.ask.is_none() && !s.closed && s.s.closing.is_none() && !s.text().contains("Added proj/1."));

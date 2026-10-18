@@ -89,11 +89,13 @@ impl Herdr {
         i.i("foreground_process_group_id") == sp && i.arr("foreground_processes").iter().all(|p| p.i("pid") == sp) && kids(sp).map(|k| k.is_empty()).unwrap_or(false)
     }
     /// Does nothing run in the pane but the program in its foreground (and the shell that started it)? Unknown: no.
+    /// The program is its whole process group: the helpers it keeps beside it (an MCP server, the native program an npm
+    /// wrapper starts) are in that group, while a command it runs, in the background too, gets a group of its own.
     pub fn pane_childless(&self, id: &str) -> bool {
         let Some(i) = self.process_info(id) else { return false };
         let front: Vec<i64> = i.arr("foreground_processes").iter().filter(|p| crate::gate::is_int(p.at("pid"))).map(|p| p.i("pid")).collect();
         if front.is_empty() { return false; }
-        for pid in &front { match kids(*pid) { Ok(k) if k.is_empty() => {} _ => return false } }
+        for pid in &front { match kids(*pid) { Ok(k) if k.iter().all(|p| front.contains(p)) => {} _ => return false } }
         if !crate::gate::is_int(i.at("shell_pid")) { return true; }
         kids(i.i("shell_pid")).map(|k| k.iter().all(|p| front.contains(p))).unwrap_or(false)
     }

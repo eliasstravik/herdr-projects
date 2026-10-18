@@ -16,8 +16,11 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
             let Some(pi) = flag("--pane").and_then(|id| find(st, &id)) else { return fail("pane_not_found", "pane not found") };
             let p = &st["panes"][pi];
             let shell = 4194400;
-            let fg = if st.b("pids") && p.at("agent").is_object() { p.at("agent").i("pid") } else if p.b("tool") { 1 } else if p.b("busy") { shell + 1 } else { shell };
-            return ok(json!({ "type": "pane_process_info", "process_info": { "pane_id": p.at("pane_id"), "shell_pid": if p.b("job") { 1 } else { shell }, "foreground_process_group_id": if p.b("busy") { shell + 1 } else { shell }, "foreground_processes": [{ "pid": fg, "name": if p.b("tool") { "agent" } else if p.b("busy") { "sleep" } else { "bash" } }] } }));
+            // `tool`: the agent (pid 1) has a command of its own group under it (pid 2); `helper`: that process is in the agent's group
+            let fg = if st.b("pids") && p.at("agent").is_object() { p.at("agent").i("pid") } else if p.b("tool") || p.b("helper") { 1 } else if p.b("busy") { shell + 1 } else { shell };
+            let mut front = vec![json!({ "pid": fg, "name": if p.b("tool") || p.b("helper") { "agent" } else if p.b("busy") { "sleep" } else { "bash" } })];
+            if p.b("helper") { front.push(json!({ "pid": 2, "name": "mcp-server" })); }
+            return ok(json!({ "type": "pane_process_info", "process_info": { "pane_id": p.at("pane_id"), "shell_pid": if p.b("job") { 1 } else { shell }, "foreground_process_group_id": if p.b("busy") { shell + 1 } else { shell }, "foreground_processes": front } }));
         }
         "layout" => {
             let Some(pi) = flag("--pane").and_then(|id| find(st, &id)) else { return fail("pane_not_found", "pane not found") };

@@ -1,5 +1,6 @@
 //! A clean-up put off because the task's space was in use (a command of yours, a tool the agent started, an agent herdr
-//! cannot place, a turn in its own terminal) is tried again by the housekeeping pass once the space is free.
+//! cannot place, a turn in its own terminal) is tried again by the housekeeping pass once the space is free. The helpers an
+//! agent keeps in its own process group (an MCP server) are part of it, not a command in use.
 use crate::common;
 use common::*;
 use serde_json::{json, Value};
@@ -141,4 +142,21 @@ fn a_clean_up_put_off_because_the_space_was_in_use_is_tried_again_by_itself_once
     assert!(tree.join("more.txt").exists()); assert_eq!(git(&w.root, &["log", "-1", "--format=%s", t.s("branch")]), "more");
     assert_eq!(pass(&w, &id), 0);
     unsafe { std::env::remove_var("HERDR_PROJECTS_QUIET_MS") };
+}
+
+#[test]
+fn a_helper_the_agent_keeps_in_its_own_process_group_does_not_keep_a_merged_task_open() {
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    // an MCP server, or the native program an npm wrapper starts: in the agent's process group, so part of the agent
+    w.script(json!({ "worker": [{ "files": { "m.txt": "x\n" }, "commit": "m", "note": "Did it." }] }));
+    let id = w.add("With a helper");
+    delegate(&id);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure"));
+    pane(&w, t.at("link").s("pane"), |p| p["helper"] = json!(true));
+    sw::actions::finish_line::approve(&id, None, false).unwrap();
+    let c = settle(&id);
+    assert_eq!(c.s("stage"), "done", "{}", c.at("failure"));
+    assert!(!c.b("kept") && !c.b("tidy"), "{}", kept(&c));
+    assert!(gone(&w, &t), "its space left herdr's sidebar");
 }

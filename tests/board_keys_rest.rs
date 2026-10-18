@@ -80,4 +80,10 @@ fn closing_takes_ctrl_c_twice_and_the_hints_say_so_wherever_you_are() {
     s3.press(&["ctrl+c"]); assert!(s3.closed); assert_eq!(s3.s.value(), "half a thought");
     let mut s4 = open(&w.root, 34); s4.s.sel = id.clone(); s4.load(); s4.press(&["space"]); assert!(s4.s.reply);
     s4.typed("to the agent"); s4.press(&["ctrl+c", "ctrl+c"]); assert!(s4.closed); assert_eq!(s4.s.value(), "to the agent");
+    // a running Coordinator is not closed with the board, and the line says so; with none running it says nothing of it
+    let keeps = "the Coordinator keeps running";
+    let mut s5 = open(&w.root, 34); s5.s.data.coord = sw::coordinator::look::Look { state: "idle".into(), ..Default::default() };
+    s5.press(&["ctrl+c"]); assert!(s5.text().contains(keeps), "{}", s5.text());
+    let mut s6 = open(&w.root, 34); s6.s.data.coord = sw::coordinator::look::Look { state: "exited".into(), ..Default::default() };
+    s6.press(&["ctrl+c"]); assert!(has(&s6.text(), &hint) && !s6.text().contains(keeps), "{}", s6.text());
 }

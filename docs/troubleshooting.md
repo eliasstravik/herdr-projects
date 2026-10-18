@@ -108,6 +108,24 @@ agent and answer it there.
 **An agent asked a question in plain words and stopped**: the board takes that as finished and reviews it. Reply to the
 agent, and it goes on ([an agent that waits for you](waiting-for-you.md)).
 
+## A done task stays in Herdr's sidebar
+
+A merged or finished task's space closes by itself (`workspace.cleanup`, on by default). When one stays, its line in the
+task panel ends in `Kept:` and says why:
+
+| It says | Why | What to do |
+|---|---|---|
+| `(uncommitted changes)` | its checkout has files that were never committed | look at them; reply to the task, or remove the worktree yourself |
+| `(unmerged work on <branch>)` | its branch holds commits that were not merged | merge them, or reply to the task to go on with them |
+| `(its space is in use again)` | a turn in its agent's terminal, a command still running in one of its panes, or an agent Herdr cannot place | nothing: it is tried again about every half minute and closes once the space is free |
+| `(its herdr session cannot be reached)` | the Herdr session it ran in is not running | start that session; it is tried again |
+
+- **Nothing says `Kept:`, and the space still stays**: `herdr-projects show <id>` tells whether `workspace.cleanup` was
+  turned off, and where. `herdr-projects set workspace.cleanup true` turns it on again.
+- **An agent with MCP servers used to stay `in use` for good**: its servers counted as a command still running. Since
+  this was fixed, the next pass closes those spaces by itself.
+- **To close one at once**: archive the task (`Ctrl+A`); what is kept on disk stays, and the task says where.
+
 ## Behind main: main could not be fetched
 
 Before a finished task is reviewed, and again right before it merges, the board fetches main and merges it into the

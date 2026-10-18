@@ -7,6 +7,12 @@ it does (`Reading the list code`, the question itself): that stays on the board,
 There is one entry per live agent: a task's agent, its reviewer while a review runs, and the Coordinator. A task nobody
 is on (to do, done and cleaned up) has no pane in Herdr, so no entry.
 
+**A done task leaves the sidebar by itself**: once it is merged (here or on GitHub), finished with nothing to merge, or
+called done by you, its whole space closes. That is the setting `workspace.cleanup`, on unless you turned it off. A
+space that stays has a reason, and the task's line says it (`Kept: … (uncommitted changes)`): see
+[when a task is done](how-work-gets-done.md#when-a-task-is-done) and
+[a done task stays in the sidebar](troubleshooting.md#a-done-task-stays-in-herdrs-sidebar).
+
 To get all three rows, let the board add its sidebar rows to Herdr's config on its first screen ([installing](install.md)).
 
 ## The three rows of an entry
