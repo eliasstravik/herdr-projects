@@ -19,6 +19,10 @@ measured against the original.
 - **+** attaches files. Pasting a picture or dropping files works too.
 - **The mic** dictates.
 - **Escape** goes one step back, as on the terminal board. The draft stays.
+- **Sending keeps the keyboard up** on a phone: the round button and **Send + start** never take the focus from the box,
+  as the web UI's Send does, so you can type the next message at once. A tap while the keyboard still composes the last
+  word (some Android keyboards compose every word) finishes that word and sends it; one that does not finish it at once
+  says `Finish the word, then send.`
 
 ## What is the same as the web UI
 

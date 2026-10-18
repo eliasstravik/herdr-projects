@@ -248,6 +248,7 @@ mod web_door;
 mod web_door_more;
 mod web_door_rest;
 mod web_far;
+mod web_full;
 mod web_link;
 mod web_link_ask;
 mod web_link_rest;

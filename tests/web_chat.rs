@@ -18,6 +18,7 @@ const COMPOSE: &str = include_str!("../crates/web/src/webui/page/compose.js");
 const CSS: &str = include_str!("../crates/web/src/webui/page/chat.css");
 const BOARD_CSS: &str = include_str!("../crates/web/src/webui/page/board.css");
 const BOARD_JS: &str = include_str!("../crates/web/src/webui/page/board.js");
+const TALK: &str = include_str!("../crates/web/src/webui/page/talk.js");
 
 fn call(what: &str, args: Value) -> Value { let mut a = args; if a.get("role").is_none() { a["role"] = json!("drive"); } sw::webui::web::call("t", what, a, "", None).unwrap_or_else(|e| panic!("{what}: {e}")) }
 fn far_world() -> (World, Far) {
@@ -91,12 +92,12 @@ fn the_page_has_a_switch_hide_and_show_a_conversation_that_scrolls_back_and_tab_
     // who you talk to: one button, as space on the terminal board: it names who gets your words, and a tap presses the
     // board's own key, which flips to the other; with nobody else to flip to, it only names them
     assert!(CHAT.contains(r#"const talk = h("button.btn.sw-talk", { type: "button", onclick: () => { if (!busy && now && !talk.disabled) onPress("talk"); } });"#));
-    assert!(CHAT.contains("const [is, other] = c.toAgent ? [agent, coord] : [coord, onTask || onHead ? agent : \"\"];") && CHAT.contains("`${c.task} agent`"));
-    assert!(CHAT.contains("talk.disabled = !other; talk.title = other ? `Talk to ${other} instead`"));
+    assert!(TALK.contains("const [is, other] = c.toAgent ? [agent, coord] : [coord, onTask || onHead ? agent : \"\"];") && TALK.contains("`${c.task} agent`"));
+    assert!(TALK.contains("btn.disabled = !other; btn.title = other ? `Talk to ${other} instead`") && CHAT.contains("drawTalk(talk, talkNames(snap));"));
     assert!(!CHAT.contains("segmented"), "no switch with two choices any more");
     // full screen: the conversation fills the board, whole; its button, Esc or the back arrow go back
     assert!(SAID.contains(r#"el.closest(".sw-board")?.classList.toggle("sw-chat-full", on);"#) && SAID.contains("if (on && !open && from > 0) opening(0); else if (!on && open) close(); else mark();"));
-    assert!(CSS.contains(".sw-board.sw-chat-full > :is(.sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }") && CSS.contains(".sw-board.sw-chat-full .sw-said { max-height: none;"));
+    assert!(CSS.contains(".sw-board.sw-chat-full > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }") && CSS.contains(".sw-board.sw-chat-full .sw-said { max-height: none;"));
     assert!(BOARD_JS.contains("if (chat.full()) return chat.full(false);") && BOARD_JS.contains("chat.full() ? chat.full(false) : closing?.()"));
     // markdown read as the terminal reads it: bold is bold, the marks go; a screen stays as it is
     assert!(SAID.contains("h(\"div.sw-said-text\", p.raw ? p.text : prose(p.text))") && SAID.contains("out.push(i % 2 ? h(\"strong\", bit) : bit)"));

@@ -53,9 +53,14 @@
   .sw-talk { min-height: var(--touch-target, 40px); }
   .sw-hide, .sw-said-nav .icon-button { min-height: var(--touch-target, 40px); min-width: var(--touch-target, 40px); }
 }
-/* Full screen: the conversation takes the board's whole height over the box; the list and the open task step aside
-   (they are still there when it goes back). Last here, so it wins over every height above. */
-.sw-board.sw-chat-full > :is(.sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }
-.sw-board.sw-chat-full .sw-chat { flex: 1; min-height: 0; border-top: 0; }
-.sw-board.sw-chat-full .sw-said-box { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); }
-.sw-board.sw-chat-full .sw-said { max-height: none; height: 100%; font-size: var(--fs-md, 14px); }
+/* Full screen, where the web UI cannot show them in its own chat view (talk.js): the conversation takes the board's
+   whole height over the box, the board's header too, and reads as the web UI's chat does (its type, no card round it);
+   the list and the open task step aside (they are still there when it goes back, with its button or Esc). Last here,
+   so it wins over every height above. */
+.sw-board.sw-chat-full > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }
+.sw-board.sw-chat-full .sw-chat { flex: 1; min-height: 0; border-top: 0; padding-top: max(var(--space-2, 8px), env(safe-area-inset-top, 0px)); }
+.sw-board.sw-chat-full .sw-said-box { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); border-color: transparent; background: none; padding-left: 0; }
+.sw-board.sw-chat-full .sw-said { max-height: none; height: 100%; color: var(--sw-text); font-size: var(--chat-fs-body, 15px); line-height: var(--lh-prose, 1.65); }
+/* There the chat's own back arrow stands first, for the header's: one back arrow at a time. */
+.sw-chat-back { display: none; flex: none; color: var(--sw-dim); }
+.sw-board.sw-chat-full .sw-chat-back { display: inline-flex; }

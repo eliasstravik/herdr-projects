@@ -24,7 +24,8 @@ function prose(text) {
 // One thing said: who said it, in words, then the words. A program's screen stays as it is.
 const partEl = (p) => h(`div.sw-said-turn${p.mine ? ".is-mine" : ""}${p.raw ? ".is-raw" : ""}${p.tone ? `.sw-c-${p.tone}` : ""}`, p.by ? h("div.sw-by", `${p.by}:`) : null, h("div.sw-said-text", p.raw ? p.text : prose(p.text)));
 
-export function saidEl() {
+// `onGrow()`: the full screen button, pressed while not full screen, asks for it (chat.js); without it, it goes full.
+export function saidEl({ onGrow } = {}) {
   // `start`: a new message is to be placed at its beginning, once it can be laid out (it may come while hidden).
   // `from`: the part it opens on (the newest thing said).
   // `full`: the conversation fills the board (its button, or Esc and the back arrow to leave), the whole of it open.
@@ -81,7 +82,7 @@ export function saidEl() {
     if (on && !open && from > 0) opening(0); else if (!on && open) close(); else mark();
   };
   look();
-  grow.addEventListener("click", () => setFull(!full));
+  grow.addEventListener("click", () => { if (!full && onGrow) onGrow(); else setFull(!full); });
   // A new message starts at its beginning (a screen at its end), once it can be laid out.
   const begin = () => {
     const place = () => { if (start && !el.hidden && text.clientHeight) { text.scrollTop = raw ? text.scrollHeight : 0; start = false; } mark(); };
