@@ -9,9 +9,11 @@ use crate::store::settings::values::nearest;
 /// What of the task a condition can look at.
 pub const FIELDS: [&str; 3] = ["branch", "title", "repo"];
 const HOW: &str = "A condition is a field, = or != and a pattern: --if 'branch = feature/KIC-*' (fields: branch, title, repo; * is anything, ? one character)";
+/// Trimmed, and out of its quotes ("…" or '…') when it is in one pair of them: what is inside them is kept as it is,
+/// spaces too.
 fn unquote(s: &str) -> &str {
     let s = s.trim();
-    for q in ['"', '\''] { if s.len() >= 2 && s.starts_with(q) && s.ends_with(q) { return s[1..s.len() - 1].trim(); } }
+    for q in ['"', '\''] { if s.len() >= 2 && s.starts_with(q) && s.ends_with(q) && !s[1..s.len() - 1].contains(q) { return &s[1..s.len() - 1]; } }
     s
 }
 pub fn parse_condition(typed: &str) -> Res<Value> {
@@ -48,7 +50,11 @@ pub fn mismatch(trigger: &Value, task: &Obj) -> Option<String> {
     Some(format!("its condition did not match ({})", if value.is_empty() { format!("no {} yet", c.s("field")) } else { format!("{} \"{value}\"", c.s("field")) }))
 }
 /// In plain words, after the trigger's: "if its branch is like *KIC-*".
-pub fn say_condition(c: &Value) -> String { format!("if its {} is {}like {}", c.s("field"), if c.s("op") == "!=" { "not " } else { "" }, c.s("pattern")) }
+/// A pattern with a space at either end is said in quotes, so the space shows.
+pub fn say_condition(c: &Value) -> String {
+    let p = c.s("pattern");
+    format!("if its {} is {}like {}", c.s("field"), if c.s("op") == "!=" { "not " } else { "" }, if p.trim() != p { format!("\"{p}\"") } else { p.to_string() })
+}
 /// --if as given: None when it is not, Some(None) for `--if none` (no condition), else the condition.
 pub fn condition_of(flags: &Obj) -> Res<Option<Option<Value>>> {
     match flags.get("if") {

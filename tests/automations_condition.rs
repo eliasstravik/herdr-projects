@@ -22,6 +22,13 @@ fn a_condition_is_a_field_an_operator_and_a_pattern_and_what_is_refused() {
     assert_eq!(parse_condition("Title!=\"*wip*\"").unwrap(), json!({ "field": "title", "op": "!=", "pattern": "*wip*" }));
     assert_eq!(parse_condition("'repo = proj'").unwrap(), json!({ "field": "repo", "op": "=", "pattern": "proj" }));
     assert_eq!(parse_condition("branch == main").unwrap().s("pattern"), "main");
+    // what is inside quotes is kept as it is, spaces too, and said in quotes so the spaces show
+    let spaced = parse_condition("title = \" urgent \"").unwrap();
+    assert_eq!(spaced.s("pattern"), " urgent ");
+    assert_eq!(parse_condition("'title = \" urgent \"'").unwrap().s("pattern"), " urgent ");
+    assert!(!like(spaced.s("pattern"), "urgent") && like(spaced.s("pattern"), " URGENT "));
+    assert_eq!(sw::automations::condition::say_condition(&spaced), "if its title is like \" urgent \"");
+    assert_eq!(parse_condition("title = \"a\" and \"b\"").unwrap().s("pattern"), "\"a\" and \"b\"", "quotes inside the pattern are its own");
     refused(parse_condition("brnch = x"), r#""brnch" is not something a condition can look at\. Did you mean branch\? One of: branch, title, repo\."#);
     refused(parse_condition("branch feature/*"), r#""branch feature/\*" has no = or !=\. A condition is a field"#);
     refused(parse_condition("branch = ''"), r"The pattern after = is empty");
