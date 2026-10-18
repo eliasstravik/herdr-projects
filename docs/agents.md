@@ -40,6 +40,14 @@ pane and says whether it works or waits.
 The table at the end says, for each program, how it is started and what it can do. It is made from the code
 (`crates/core/src/agents/kinds/`), so it always matches what the board does. Adding a program is one more entry there.
 
+## Helpers (subagents)
+
+An agent on a task uses its program's own helpers (Claude Code's subagents, Codex's spawned agents, opencode's tasks,
+and skills that use them) as it would outside the board. The board's arguments limit no tool, and its rules say only
+that the work is not handed on to another task or agent on the board: helpers are named as allowed, also when the task
+or a skill asks for them. Told only "never hand it to anyone else", Claude and Codex took that as no helpers and
+refused them even when the task asked (HP-53). A test holds both: `tests/agent_helpers.rs`.
+
 ## What the board knows about each program
 
 The board reads the conversations Claude Code, Codex and pi save. So it knows what they said, what went wrong with the
