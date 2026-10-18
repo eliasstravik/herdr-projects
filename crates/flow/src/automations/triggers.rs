@@ -2,7 +2,9 @@
 //! typed, saying it in plain words, and working out when a schedule is next due (this machine's time zone).
 //!   { kind: "schedule", text, every: ms }   every 2h
 //!   { kind: "schedule", text, cron }        daily 09:00 · mon 09:00 · cron "0 9 * * 1"
-//!   { kind: "event", event, everyRepo }     one of EVENTS, for the automation's repo or for every repo
+//!   { kind: "event", event, everyRepo, if? }   one of EVENTS, for the automation's repo or for every repo; `if`: a
+//!                                             condition on the task (automations/condition.rs)
+use super::condition::say_condition;
 use super::cron::{cron_next, parse_cron, DAYS};
 use super::events::{event_named, EVENTS};
 use crate::err::Res;
@@ -64,7 +66,8 @@ pub fn trigger_of(flags: &Obj) -> Res<Option<Value>> {
 pub fn say_trigger(t: &Value) -> String {
     match t.s("kind") {
         "schedule" => t.t("text"),
-        "event" => format!("when a task {}{}", event_named(t.s("event")).map(|e| e.words).unwrap_or(t.s("event")), if t.b("everyRepo") { ", in every repo" } else { "" }),
+        "event" => format!("when a task {}{}{}", event_named(t.s("event")).map(|e| e.words).unwrap_or(t.s("event")), if t.b("everyRepo") { ", in every repo" } else { "" },
+            if t.at("if").b("field") { format!(", {}", say_condition(t.at("if"))) } else { String::new() }),
         _ => "no trigger".into(),
     }
 }

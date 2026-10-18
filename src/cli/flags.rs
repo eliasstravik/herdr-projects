@@ -39,8 +39,8 @@ const fn s(flags: &'static [&'static str]) -> Takes { Takes { flags, settings: t
 const ADD: &[&str] = &["desc", "description", "repo", "delegate", "research", "after"];
 const LIST: &[&str] = &["archived", "all", "query"];
 const WHERE: &[&str] = &["repo", "task", "automation"];
-const AUTO_ADD: &[&str] = &["prompt", "desc", "schedule", "when", "every-repo", "repo", "research"];
-const AUTO_CHANGE: &[&str] = &["name", "prompt", "schedule", "when", "every-repo", "research"];
+const AUTO_ADD: &[&str] = &["prompt", "desc", "schedule", "when", "every-repo", "if", "repo", "research"];
+const AUTO_CHANGE: &[&str] = &["name", "prompt", "schedule", "when", "every-repo", "if", "research"];
 /// One command per line, beside the commands it belongs with, never at the end. A command with subcommands names
 /// what each takes instead (`automations add`), and the command's own for one that is not named. The entries herdr,
 /// an agent's hook and the board itself run are here too: no command lets a flag through unread.

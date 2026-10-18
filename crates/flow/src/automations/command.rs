@@ -1,7 +1,9 @@
 //! `herdr-projects automations …`: the commands. List them, add one (a name, a prompt, one trigger, a repo, any work
-//! setting; --research is short for --research.only true), show one, change its name, prompt or trigger, turn it on or
+//! setting; --research is short for --research.only true; --if a condition on a --when), show one, change its name,
+//! prompt, trigger or condition, turn it on or
 //! off, run it now, read its firings, remove it. Its own settings are changed by the settings' own commands with
 //! --automation <name>. Every command returns the value for --json, and the text.
+use super::condition::{condition_of, with_condition};
 use super::fire::fire;
 use super::list as l;
 use super::show::{describe, firing_line, firings, list_line};
@@ -18,12 +20,13 @@ use std::path::Path;
 
 pub const HOW: &str = "automations takes:
   automations                                   the list
-  automations add \"<name>\" --prompt \"<what its task is to do>\" (--schedule \"<when>\" | --when <event> [--every-repo])
+  automations add \"<name>\" --prompt \"<what its task is to do>\" (--schedule \"<when>\" | --when <event> [--every-repo] [--if '…'])
                   [--repo NAME|PATH] [--<setting> VALUE ...] [--research|--no-research]
       --schedule   every 2h · daily 09:00 · mon 09:00 · mon,thu 09:00 · cron \"0 9 * * 1\"   (this machine's time zone)
       --when       added · approval · review-failed · failed · needs-you · merged   (a task of its repo; --every-repo: of any)
+      --if         only for a task like this: 'branch = feature/KIC-*' · 'title != *wip*'   (branch, title or repo; * anything, ? one)
   automations show <name>                       all of it: prompt, trigger, settings, last firings
-  automations change <name> [--name NEW] [--prompt TEXT] [--schedule … | --when …] [--research | --no-research]
+  automations change <name> [--name NEW] [--prompt TEXT] [--schedule … | --when …] [--if '…' | --if none] [--research | --no-research]
   automations on|off <name>                     off, it never fires and keeps everything
   automations run <name>                        fire it now
   automations firings <name>                    every firing: when, what fired it, the task it made or why it was skipped
@@ -62,12 +65,13 @@ pub fn automations_command(pos: &[String], flags: &Obj, here: &Path) -> Res<(Val
         }
         "add" | "new" => {
             let prompt = flag_text(flags, "prompt").or_else(|| flag_text(flags, "desc")).unwrap_or_default();
-            let a = l::add(l::Add { name: &need()?, prompt: &prompt, trigger: trigger_of(flags)?, repo: &flag_text(flags, "repo").unwrap_or_default(), folder: here, settings: settings_of(flags), research: research(flags) })?;
+            let trigger = match (trigger_of(flags)?, condition_of(flags)?) { (Some(t), Some(c)) => Some(with_condition(&t, c.as_ref())?), (t, _) => t };
+            let a = l::add(l::Add { name: &need()?, prompt: &prompt, trigger, repo: &flag_text(flags, "repo").unwrap_or_default(), folder: here, settings: settings_of(flags), research: research(flags) })?;
             Ok((describe(&a, n), format!("Added the automation \"{}\": {}, in {}. Each firing adds a task and puts an agent on it.", a.s("name"), say_trigger(a.at("trigger")), a.s("repo"))))
         }
         "show" => { let a = l::find(&need()?)?; let mut d = describe(&a, n); d.as_object_mut().unwrap().put("firings", firings(&a)); Ok((d, show_text(&a))) }
         "change" | "edit" => {
-            let a = l::change(&need()?, flag_text(flags, "name").as_deref(), flag_text(flags, "prompt").as_deref(), trigger_of(flags)?, research(flags))?;
+            let a = l::change(&need()?, flag_text(flags, "name").as_deref(), flag_text(flags, "prompt").as_deref(), trigger_of(flags)?, condition_of(flags)?, research(flags))?;
             Ok((describe(&a, n), format!("Changed \"{}\": {}. It applies from its next firing; tasks already made keep what they had.", a.s("name"), say_trigger(a.at("trigger")))))
         }
         "on" | "off" => { let a = l::turn(&need()?, cmd == "on")?; Ok((describe(&a, n), format!("\"{}\" is {cmd}.{}", a.s("name"), if cmd == "off" { " It never fires while it is off, and keeps everything." } else { "" }))) }

@@ -62,16 +62,38 @@ Only what happens after the automation began to wait counts: from when it was ma
 trigger. Nothing that was already so fires anything, and nothing that happens after that is missed, even when nobody
 looked for a while. Each thing that happened fires once.
 
+### Only for some tasks: `--if`
+
+`--if '<field> = <pattern>'` fires the automation only for a task that is like the pattern; `!=` only for one that is not.
+
+```
+herdr-projects automations add "Jira handoff" --prompt "Move the ticket to Done" --when merged --if 'branch = *KIC-*'
+```
+
+- **Fields:** `branch`, `title`, `repo` of the task the event happened to.
+- **The pattern** is a wildcard, not a regex: `*` is any run of characters, `?` is one character, everything else is
+  itself. It matches the whole field, in any case: `feature/KIC-*`, `*KIC-*`. It may be quoted (`"…"` or `'…'`).
+- **A mismatch is not a firing.** It makes no task, holds no agent and does not count toward the runaway limit. One line
+  among the firings says so: `skipped: its condition did not match (branch "feature/KAM-13")`, the same one again with a
+  count.
+- A task that has no branch yet (`added`) has an empty branch: an `=` condition on it does not match, unless the pattern is
+  `*`.
+- The trigger says it in plain words, on the board and in `automations show`: `when a task is merged, if its branch is
+  like *KIC-*`.
+- `automations change <name> --if '…'` sets or replaces it, `--if none` removes it. A new `--when` without `--if` keeps
+  the condition it had; `--schedule` has none. A schedule takes no condition (there is no task to look at), and
+  `automations run` fires without looking at it.
+
 ## Commands
 
 ```
 herdr-projects automations                         the list
 herdr-projects automations add "<name>" --prompt "<what each task is to do>"
-                (--schedule "<when>" | --when <event> [--every-repo])
+                (--schedule "<when>" | --when <event> [--every-repo] [--if '<field> = <pattern>'])
                 [--repo NAME|PATH] [--<setting> VALUE ...] [--research|--no-research]
 herdr-projects automations show <name>             all of it: prompt, trigger, settings, last firings
 herdr-projects automations change <name> [--name NEW] [--prompt TEXT] [--schedule … | --when …]
-                [--research | --no-research]
+                [--if '…' | --if none] [--research | --no-research]
 herdr-projects automations on|off <name>
 herdr-projects automations run <name>              fire it now (through the same guards; never while it is off)
 herdr-projects automations firings <name>          when, what fired it, the task it made or why it was skipped
