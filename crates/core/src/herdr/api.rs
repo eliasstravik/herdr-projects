@@ -1,6 +1,6 @@
 //! herdr's commands, bound to one herdr session (by socket path): spaces, tabs, panes, agents and the rest. `None` as
 //! the socket means whatever this process would talk to.
-use super::cli::{args, kids, run, run_raw, HRes, HerdrError};
+use super::cli::{args, kids, on_terminal, run, run_raw, HRes, HerdrError};
 use crate::json::*;
 
 #[derive(Clone, Debug, Default)]
@@ -88,13 +88,18 @@ impl Herdr {
         let sp = shell.as_i64().unwrap_or(-1);
         i.i("foreground_process_group_id") == sp && i.arr("foreground_processes").iter().all(|p| p.i("pid") == sp) && kids(sp).map(|k| k.is_empty()).unwrap_or(false)
     }
-    /// Does nothing run in the pane but the program in its foreground (and the shell that started it)? Unknown: no.
-    /// The program is its whole process group: the helpers it keeps beside it (an MCP server, the native program an npm
-    /// wrapper starts) are in that group, while a command it runs, in the background too, gets a group of its own.
-    pub fn pane_childless(&self, id: &str) -> bool {
+    /// Does nothing run in the pane but the program `agent` in its foreground (and the shell that started it)? Unknown:
+    /// no. Beside the program, its process group may hold only its helpers: one that talks to it alone, not to the
+    /// terminal (an MCP server), or the agent's own program under a wrapper (`codex` installed with npm). A command that
+    /// uses the terminal is at work, in the program's group or not; one in a group of its own is not in the list at all.
+    pub fn pane_childless(&self, id: &str, agent: &str) -> bool {
         let Some(i) = self.process_info(id) else { return false };
-        let front: Vec<i64> = i.arr("foreground_processes").iter().filter(|p| crate::gate::is_int(p.at("pid"))).map(|p| p.i("pid")).collect();
+        let procs: Vec<&Value> = i.arr("foreground_processes").iter().filter(|p| crate::gate::is_int(p.at("pid"))).collect();
+        let front: Vec<i64> = procs.iter().map(|p| p.i("pid")).collect();
         if front.is_empty() { return false; }
+        let lead = i.i("foreground_process_group_id");
+        let helper = |p: &Value| p.i("pid") == lead || (!agent.is_empty() && p.s("name") == agent) || on_terminal(p.i("pid")) == Some(false);
+        if !procs.iter().all(|p| helper(p)) { return false; }
         for pid in &front { match kids(*pid) { Ok(k) if k.iter().all(|p| front.contains(p)) => {} _ => return false } }
         if !crate::gate::is_int(i.at("shell_pid")) { return true; }
         kids(i.i("shell_pid")).map(|k| k.iter().all(|p| front.contains(p))).unwrap_or(false)

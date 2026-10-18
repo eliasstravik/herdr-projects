@@ -159,4 +159,27 @@ fn a_helper_the_agent_keeps_in_its_own_process_group_does_not_keep_a_merged_task
     assert_eq!(c.s("stage"), "done", "{}", c.at("failure"));
     assert!(!c.b("kept") && !c.b("tidy"), "{}", kept(&c));
     assert!(gone(&w, &t), "its space left herdr's sidebar");
+    // the agent's own program under an npm wrapper uses the terminal, and is the agent all the same
+    let t = merged_with(&w, "wrapped");
+    assert!(!task(t.s("id")).b("kept") && gone(&w, &t), "{}", kept(&task(t.s("id"))));
+    // a command on the terminal in the agent's own group is at work: kept until it ends
+    let t = merged_with(&w, "child");
+    let (id, p) = (t.t("id"), t.at("link").t("pane"));
+    assert!(kept(&task(&id)).contains("in use again"), "{}", kept(&task(&id))); assert!(open_and_kept(&w, &t));
+    pane(&w, &p, |p| p["child"] = json!(false));
+    assert_eq!(pass(&w, &id), 1);
+    assert!(gone(&w, &t));
+}
+/// A task approved and merged while its agent's pane has `flag` set.
+fn merged_with(w: &World, flag: &str) -> Obj {
+    w.script(json!({ "worker": [{ "files": { format!("{flag}.txt"): "x\n" }, "commit": flag, "note": "Did it." }] }));
+    let id = w.add(&format!("With {flag}"));
+    delegate(&id);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure"));
+    pane(w, t.at("link").s("pane"), |p| p[flag] = json!(true));
+    sw::actions::finish_line::approve(&id, None, false).unwrap();
+    let c = settle(&id);
+    assert_eq!(c.s("stage"), "done", "{}", c.at("failure"));
+    t
 }

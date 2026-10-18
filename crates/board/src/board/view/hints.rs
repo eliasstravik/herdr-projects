@@ -31,11 +31,14 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
     let chat_key = if up { None } else { key.first().cloned() };
     if s.ask.is_some() { return (vec![], chat_key); }
     // After esc at the top (which closes nothing) the line names the key that does. A running Coordinator is no part of
-    // this board (the popup, the web board and `coordinator tell` share it): it keeps running, and the line says so.
+    // this board (the popup, the web board and `coordinator tell` share it): it keeps running, and the line says so, in
+    // shorter words in a narrow window, never left out.
     if let Some((_, by_esc)) = s.closing {
-        let keeps = if ["starting", "working", "blocked", "idle"].contains(&s.data.coord.state.as_str()) { " · the Coordinator keeps running" } else { "" };
-        let w = if by_esc { format!("{} closes the board{keeps}", name(K::Close)) } else { format!("Press {} again to close the board{keeps}", name(K::Close)) };
-        return (vec![Hint { key: String::new(), words: w, stays: false, short: if by_esc { format!("{} closes the board", name(K::Close)) } else { format!("{} again closes the board", name(K::Close)) }, ..Default::default() }], chat_key);
+        let runs = ["starting", "working", "blocked", "idle"].contains(&s.data.coord.state.as_str());
+        let (key, keeps, stays) = (name(K::Close), if runs { " · the Coordinator keeps running" } else { "" }, if runs { " · the Coordinator stays" } else { "" });
+        let (w, short) = if by_esc { (format!("{key} closes the board{keeps}"), format!("{key} closes the board{stays}")) } else { (format!("Press {key} again to close the board{keeps}"), format!("{key} again closes the board{stays}")) };
+        let shortest = if !runs { String::new() } else if by_esc { format!("{key} closes{stays}") } else { format!("{key} again closes{stays}") };
+        return (vec![Hint { key: String::new(), words: w, stays: false, short, shortest, ..Default::default() }], chat_key);
     }
     if s.menu.is_some() { return (vec![plain(arrows, "pick a key"), plain(enter, "press it"), plain(esc, "close the menu")], chat_key); }
     if let Some(e) = &s.editing {

@@ -84,6 +84,11 @@ fn closing_takes_ctrl_c_twice_and_the_hints_say_so_wherever_you_are() {
     let keeps = "the Coordinator keeps running";
     let mut s5 = open(&w.root, 34); s5.s.data.coord = sw::coordinator::look::Look { state: "idle".into(), ..Default::default() };
     s5.press(&["ctrl+c"]); assert!(s5.text().contains(keeps), "{}", s5.text());
+    // narrower, in shorter words, but never left out
+    for (cols, said) in [(70, format!("{} again closes the board · the Coordinator stays", key_name("close"))), (50, format!("{} again closes · the Coordinator stays", key_name("close")))] {
+        let mut n = open(&w.root, 34); n.cols = cols; n.s.data.coord = sw::coordinator::look::Look { state: "idle".into(), ..Default::default() };
+        n.press(&["ctrl+c"]); assert!(n.text().contains(&said), "{cols} columns:\n{}", n.text());
+    }
     let mut s6 = open(&w.root, 34); s6.s.data.coord = sw::coordinator::look::Look { state: "exited".into(), ..Default::default() };
     s6.press(&["ctrl+c"]); assert!(has(&s6.text(), &hint) && !s6.text().contains(keeps), "{}", s6.text());
 }

@@ -85,7 +85,7 @@ pub fn sweep_closing(socket: &str) {
             Ok(_) => {
                 let Ok(panes) = api.panes(Some(ws)) else { return false };
                 // status "unknown" may be an agent at work
-                let busy = panes.iter().any(|p| match api.agent_get(p.s("pane_id")) { Ok(Some(a)) => !["idle", "done"].contains(&a.s("agent_status")) || !api.pane_childless(p.s("pane_id")), Ok(None) => !api.pane_idle(p.s("pane_id")), Err(_) => true });
+                let busy = panes.iter().any(|p| match api.agent_get(p.s("pane_id")) { Ok(Some(a)) => !["idle", "done"].contains(&a.s("agent_status")) || !api.pane_childless(p.s("pane_id"), a.s("agent")), Ok(None) => !api.pane_idle(p.s("pane_id")), Err(_) => true });
                 if busy { return false; }
                 api.workspace_close(ws).is_ok()
             }

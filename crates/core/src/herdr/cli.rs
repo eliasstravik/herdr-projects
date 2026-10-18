@@ -20,7 +20,7 @@ fn herr(code: &str, message: impl Into<String>) -> HerdrError { HerdrError { cod
 /// What a run of the program gave: its status, its output, its error output.
 pub struct Ran { pub status: i32, pub stdout: String, pub stderr: String }
 /// A stand-in for herdr, for tests: answers each command line as the program would.
-pub trait Fake { fn run(&self, args: &[String], input: &str) -> Ran; fn kids(&self, _pid: i64) -> Vec<i64> { vec![] } fn kill(&self, _pid: i64) {} fn ask(&self, _method: &str, _params: &Value) -> Result<Value, HerdrError> { Err(herr("no_server", "no herdr")) } }
+pub trait Fake { fn run(&self, args: &[String], input: &str) -> Ran; fn kids(&self, _pid: i64) -> Vec<i64> { vec![] } fn on_terminal(&self, _pid: i64) -> Option<bool> { Some(false) } fn kill(&self, _pid: i64) {} fn ask(&self, _method: &str, _params: &Value) -> Result<Value, HerdrError> { Err(herr("no_server", "no herdr")) } }
 thread_local! { static FAKE: RefCell<Option<Rc<dyn Fake>>> = const { RefCell::new(None) }; }
 /// Tests only: herdr is this stand-in on this thread (None: the real program again).
 pub fn set_fake(f: Option<Rc<dyn Fake>>) { FAKE.with(|x| *x.borrow_mut() = f); }
@@ -111,6 +111,25 @@ pub fn kids(pid: i64) -> Result<Vec<i64>, ()> {
     let o = Command::new("pgrep").args(["-P", &pid.to_string()]).output().map_err(|_| ())?;
     if o.status.code().unwrap_or(2) > 1 { return Err(()); }
     Ok(String::from_utf8_lossy(&o.stdout).lines().filter_map(|l| l.trim().parse().ok()).collect())
+}
+/// Does the process read or write a terminal (its standard input, output or error)? None: it cannot be told.
+pub fn on_terminal(pid: i64) -> Option<bool> {
+    if let Some(f) = fake() { return f.on_terminal(pid); }
+    let tty = |s: &str| s.starts_with("/dev/pts/") || s.starts_with("/dev/tty") || s == "/dev/console";
+    if cfg!(target_os = "linux") {
+        let mut any = false;
+        for fd in 0..3 {
+            match std::fs::read_link(format!("/proc/{pid}/fd/{fd}")) {
+                Ok(p) => any |= tty(&p.to_string_lossy()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {} // closed, or the process has ended
+                Err(_) => return None,
+            }
+        }
+        return Some(any);
+    }
+    let o = Command::new("lsof").args(["-a", "-p", &pid.to_string(), "-d", "0,1,2", "-Fn"]).output().ok()?;
+    if o.status.code().unwrap_or(2) > 1 || (!o.status.success() && !o.stderr.is_empty()) { return None; }
+    Some(String::from_utf8_lossy(&o.stdout).lines().any(|l| l.strip_prefix('n').map(tty).unwrap_or(false)))
 }
 pub fn args(a: &[&str]) -> Vec<String> { a.iter().map(|s| s.to_string()).collect() }
 pub fn path_str(p: &Path) -> String { p.display().to_string() }

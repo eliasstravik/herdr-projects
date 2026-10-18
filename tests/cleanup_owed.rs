@@ -22,6 +22,7 @@ impl Fake for Flaky {
         self.0.run(a, input)
     }
     fn kids(&self, pid: i64) -> Vec<i64> { self.0.kids(pid) }
+    fn on_terminal(&self, pid: i64) -> Option<bool> { self.0.on_terminal(pid) }
     fn kill(&self, pid: i64) { self.0.kill(pid) }
 }
 fn flaky(w: &World) { sw::herdr::cli::set_fake(Some(Rc::new(Flaky(w.fake.clone())))); }

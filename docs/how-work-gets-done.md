@@ -306,9 +306,10 @@ itself, and its worktree and branch are removed. `workspace.cleanup false` keeps
   and a reply continues there.
 - A space you are using again is not closed: a turn in the agent's own terminal, a command running in any of its panes
   (including one a finished agent left running in the background).
-- What an agent program keeps running as part of itself is no such command: its MCP servers, or the native program an
-  npm wrapper (`codex` installed with npm) starts. Those stay in the agent's own process group, while a command it runs
-  gets a group of its own, so a finished agent with MCP servers is closed like any other.
+- What an agent program keeps running as part of itself is no such command: its MCP servers, or its own program under
+  an npm wrapper (`codex` installed with npm). They are in the agent's own process group, and an MCP server talks to the
+  agent alone, never to the terminal. So a finished agent with MCP servers is closed like any other. A command that
+  uses the terminal keeps the space open, in the agent's group or not, and so does one in a group of its own.
 - Nor is one Herdr could not answer for, or whose Herdr session is not running: then nothing of the task is touched.
 - The clean-up is tried again by itself (about every half minute, board open or closed) and happens once the space is
   free. After a turn of the agent, only once that has been quiet for ten minutes. Work that appeared meanwhile is kept.

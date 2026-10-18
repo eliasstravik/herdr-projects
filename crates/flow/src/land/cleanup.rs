@@ -62,7 +62,7 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
         *quiet.borrow_mut() = json!({ "sig": sig, "at": at });
         if o.since.as_ref().map(|s| s.at("still").s("sig") != sig).unwrap_or(true) || now() - at < still_ms() { return false; }
         if let Some(turn) = read_turn_of(t.s("agent"), t.so("transcript").map(Path::new), t.s("session"), &cwd_of(t), false) { if !(turn.finished || !turn.error.is_empty() || turn.interrupted) { return false; } }
-        api.pane_childless(link.s("pane")) // a command it left running in the background would go down with the space
+        api.pane_childless(link.s("pane"), a.s("agent")) // a command it left running in the background would go down with the space
     };
     // After a task ended (`still`): herdr is asked directly: an agent at work in the pane, or a turn of it that ended
     // since, is a turn you started in its terminal. What herdr cannot tell counts as busy.
@@ -73,7 +73,7 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
                 *seen.borrow_mut() = a.at("completion_seq").clone();
                 let st = a.s("agent_status");
                 let busy = st == "working" || st == "blocked";
-                let unknown = if st == "idle" || st == "done" { !api.pane_childless(link.s("pane")) } else { !busy && !at_rest(&a) };
+                let unknown = if st == "idle" || st == "done" { !api.pane_childless(link.s("pane"), a.s("agent")) } else { !busy && !at_rest(&a) };
                 Some(AgentNow { busy, unknown })
             }
             Ok(None) => { *seen.borrow_mut() = Value::Null; None }
