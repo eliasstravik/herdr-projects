@@ -68,10 +68,13 @@ async function flip() {
   const was = (await get("board")).go?.n || 0;
   let out = await post("press", { id: "talk" });
   if (out.ok) out = await post("full");
-  // The agent's space is opened again first, which may take a moment: its link comes with a later look.
-  for (let i = 0; out.ok && out.full && !(out.go?.n > was) && i < 50; i++) { await new Promise((r) => setTimeout(r, 600)); out = await get("board"); }
+  // Whether the board will link to their chat view is said once, by `full`; the link itself may come later: the
+  // agent's space is opened again first (on another machine always after the answer), and a later look brings it.
+  const asked = out.ok && !!out.full;
+  let link = asked && out.go?.n > was ? out : null;
+  for (let i = 0; asked && !link && i < 50; i++) { await new Promise((r) => setTimeout(r, 600)); const look = await get("board"); if (look.ok && look.go?.n > was) link = look; }
   busy = false; bar.classList.remove("is-busy");
-  if (out.ok && out.full && out.go?.n > was) return goFull(out.go, out, true);
+  if (link) return goFull(link.go, link, true);
   keep(null); sync(); onBoard(true);
 }
 // Shown while the web UI shows the pane the board's chat went to, and the board is closed.

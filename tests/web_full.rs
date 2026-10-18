@@ -71,7 +71,11 @@ fn the_page_goes_full_screen_into_the_web_uis_chat_view_with_a_bar_that_flips_an
     // a flip presses the board's own key, asks again, and shows the other one's view in place of this one (Back still
     // goes to the board); one the web UI cannot show is the board's, full screen
     assert!(TALK.contains(r#"let out = await post("press", { id: "talk" });"#) && TALK.contains(r#"if (out.ok) out = await post("full");"#));
-    assert!(TALK.contains("return goFull(out.go, out, true);") && TALK.contains("keep(null); sync(); onBoard(true);"));
+    assert!(TALK.contains("if (link) return goFull(link.go, link, true);") && TALK.contains("keep(null); sync(); onBoard(true);"));
+    // the link may come with a later look (the agent's space opened again first): `full` said so once, and the looks
+    // (which never say it again) are read only for the link
+    assert!(TALK.contains("const asked = out.ok && !!out.full;") && TALK.contains("for (let i = 0; asked && !link && i < 50; i++)"));
+    assert!(TALK.contains(r#"const look = await get("board"); if (look.ok && look.go?.n > was) link = look;"#));
     assert!(TALK.contains("if (x && x.depth === history.length && here(x)) history.back(); else onBoard(false);"));
     assert!(START.contains("fullBar((full) => show(true, full));"));
     // under the web UI's menus and drawer, and its first message is not under the bar
