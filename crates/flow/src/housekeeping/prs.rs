@@ -4,6 +4,7 @@
 use crate::actions::finish_line::send_failure;
 use crate::clock::now;
 use crate::finish::shared::approval_message;
+use crate::flow::gitlab_words::{is_mr, reword, say};
 use crate::flow::{git::{board_comment, drop_remote_branch, gh, gh_user, pr_number, remote_head, CHECK_BAD, CHECK_GOOD}, sidebar::tell_sidebar, spaces::tidy_mark};
 use crate::json::*;
 use crate::land::{checks, readable};
@@ -19,19 +20,19 @@ pub fn poll_prs() {
         // Its checks as the token can read them (land/readable.rs): a fine-grained token cannot read GitHub's list.
         match readable::pr_view(&folder_of(first.s("id")), first.s("pr"), "state,reviewDecision,author,comments,reviews,headRefOid,mergeCommit") {
             Ok(r) => poll_one(first.s("id"), first.s("pr"), &r.view, r.via()),
-            Err(said) => unread(first.s("id"), &said),
+            Err(said) => unread(first.s("id"), first.s("pr"), &said),
         }
     }
 }
 /// GitHub could not be asked (gh not logged in here, the network): a merge that waits for its checks says so, never
 /// waiting in silence, and past `check.timeout` the land step looks once more and says why it cannot merge.
-fn unread(id: &str, said: &str) {
+fn unread(id: &str, pr: &str, said: &str) {
     let why: String = said.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("no answer").chars().take(160).collect();
     let mut land = false;
     let _ = update_wait(id, 10000, |t| {
         if !t.b("autoMerge") || !t.b("checksWait") || runner_alive(t) { return Ok(Change::Keep); }
         if checks::overdue(t) { land = true; t.put("autoMerge", false); t.put("autoMergeLocal", false); t.put("msg", "Merging"); }
-        else { t.put("msg", format!("Waiting for GitHub checks · could not read them ({why})")); }
+        else { let m = format!("Waiting for GitHub checks · could not read them ({why})"); t.put("msg", if is_mr(pr) { say(&m) } else { m }); }
         Ok(Change::Write)
     });
     if land { spawn_runner("land", id, &[]); }
@@ -185,6 +186,8 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
         Ok(Change::Write)
     });
     let Ok(t) = res else { return };
+    // On GitLab, what the watch wrote is said in GitLab's words.
+    let t = if is_mr(pr) { update_wait(id, 10000, |t| Ok(if reword(t) { Change::Write } else { Change::Keep })).unwrap_or(t) } else { t };
     match then {
         Then::Merged => {
             tell_sidebar(&t);

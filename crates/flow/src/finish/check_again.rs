@@ -31,8 +31,11 @@ pub fn choose(t: &Obj, ch: &Obj, full: &str, tree: &str, root: &Path) -> Chosen 
 }
 /// GitHub runs its checks on this work before it merges: through its pull request, which waits for them
 /// (`merge.checks`), with a workflow of the branch that runs for it. Then the full suite still runs before the merge.
+/// On GitLab: its merge request, with a pipeline (`.gitlab-ci.yml` in the task's worktree).
 fn guarded(t: &Obj, ch: &Obj, root: &Path) -> bool {
-    if ch.s("merge.checks") != "github" || !t.b("pr") || !ch.b("merge.pr") { return false; }
+    if !["github", "gitlab"].contains(&ch.s("merge.checks")) || !t.b("pr") || !ch.b("merge.pr") { return false; }
+    // shortcut: any `.gitlab-ci.yml` counts, its `rules:` are not read as GitHub's triggers are (triggers.rs).
+    if crate::flow::gitlab_words::is_mr(t.s("pr")) { return Path::new(t.s("worktree")).join(".gitlab-ci.yml").exists(); }
     !crate::land::expected::flows_for(t, &crate::sync::main_branch(root, t)).is_empty()
 }
 /// Kept on the task when the full check passed: the commit it passed on (with what the check wrote committed) and

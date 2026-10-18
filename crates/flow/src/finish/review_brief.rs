@@ -42,7 +42,7 @@ pub fn review_brief(t: &Obj, b: &Brief) -> String {
     [
         "You are an adversarial reviewer. Another agent says the task below is finished. Assume it is not until the evidence says so: your job is to find what is wrong, missing or risky, and to prove what works.".to_string(),
         where_, plan_rule,
-        if b.check.is_empty() { String::new() } else if t.b("checkShort") { format!("This repo's check is `{}`. On this round the board ran its shorter form, `{}` (what the change since the full check reaches), and that passed on this commit; the full check runs on GitHub before the merge. Run tests only through these.", b.check, t.s("checkShort")) } else { format!("This repo's check is `{}`; it passed on this commit. Run tests only through it.", b.check) },
+        if b.check.is_empty() { String::new() } else if t.b("checkShort") { format!("This repo's check is `{}`. On this round the board ran its shorter form, `{}` (what the change since the full check reaches), and that passed on this commit; the full check runs on {} before the merge. Run tests only through these.", b.check, t.s("checkShort"), if crate::flow::gitlab_words::on_gitlab(t) { "GitLab" } else { "GitHub" }) } else { format!("This repo's check is `{}`; it passed on this commit. Run tests only through it.", b.check) },
         "You are here to review, not to fix. Do not change, commit, push or merge anything in the repository. Whatever you alter in the code is discarded when you finish.".into(),
         reviewer_board_rule(), automation_rule(t), evidence,
         format!("Task: {}", t.s("title")), if desc.is_empty() { String::new() } else { format!("Details:\n{desc}") },

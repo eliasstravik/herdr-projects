@@ -2,6 +2,7 @@
 //! title and closing note, and
 //! the pull request and merge commit where its work merged, or the report where it was research. Taken when the wait
 //! ends and kept on the task (`afterDone`), so a clean-up of the task before it loses nothing of it.
+use crate::flow::gitlab_words::pr_word;
 use super::{after_of, say, stand_of, Stand};
 use crate::clock::now;
 use crate::flow::task::note_stat;
@@ -54,9 +55,9 @@ pub fn words(t: &Obj) -> String {
         let mut line = format!("- {} \"{}\" (repo {}{on}): {}", say(&id), d.s("title"), d.s("repo"), if d.b("done") { "done" } else { "not done yet" });
         if d.b("merged") {
             line.push_str(", its work merged");
-            if d.b("pr") { line.push_str(&format!(": pull request {}", d.s("pr"))); }
+            if d.b("pr") { line.push_str(&format!(": {} {}", pr_word(d.s("pr")), d.s("pr"))); }
             if d.b("commit") { line.push_str(&format!(", merge commit {}", d.s("commit"))); }
-        } else if d.b("pr") { line.push_str(&format!(", pull request {} (not merged)", d.s("pr"))); }
+        } else if d.b("pr") { line.push_str(&format!(", {} {} (not merged)", pr_word(d.s("pr")), d.s("pr"))); }
         if d.b("report") { line.push_str(&format!(", {}report: {}", if d.b("research") { "research only, its " } else { "its " }, d.s("report"))); }
         line.push('.');
         if d.b("note") { line.push_str(&format!(" Its closing note:\n{}", d.s("note").lines().map(|l| format!("    {l}")).collect::<Vec<_>>().join("\n"))); }

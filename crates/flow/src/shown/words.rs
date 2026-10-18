@@ -1,4 +1,4 @@
-//! Small words and numbers the board's parts share: a time as "12m", a pull request as "PR#16", a long text cut short.
+//! Small words and numbers the board's parts share: a time as "12m", a pull request as "PR#16" (a merge request "MR!16"), a long text cut short.
 use super::ink::{Ink, Inked};
 use crate::json::*;
 use chrono::{Datelike, Local, TimeZone, Timelike};
@@ -26,7 +26,7 @@ pub fn age(ms: i64) -> String {
 }
 /// The minutes left on a row, never wider than four cells ("999m"): from a thousand on they are hours ("17h").
 pub fn left(min: i64) -> String { if min < 1000 { format!("{min}m") } else { format!("{}h", ((min as f64 / 60.0).round() as i64).min(999)) } }
-pub fn pr_number(r: &Obj) -> String { if r.b("pr") { format!("PR#{}", r.t("pr").rsplit('/').next().unwrap_or("")) } else { String::new() } }
+pub fn pr_number(r: &Obj) -> String { if r.b("pr") { format!("{}{}", if crate::flow::gitlab_words::is_mr(r.s("pr")) { "MR!" } else { "PR#" }, r.t("pr").rsplit('/').next().unwrap_or("")) } else { String::new() } }
 pub fn merged(r: &Obj) -> bool { r.b("prMerged") || r.s("prState") == "merged" }
 /// The work landed: its pull request is merged, or the task finished.
 pub fn landed(r: &Obj) -> bool { merged(r) || r.s("stage") == "done" }

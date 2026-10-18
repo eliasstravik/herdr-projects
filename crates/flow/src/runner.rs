@@ -87,9 +87,10 @@ pub fn aborted(why: &str) -> Error { Error { msg: format!("aborted: {why}"), kin
 pub fn is_aborted(e: &Error) -> bool { e.msg.starts_with("aborted: ") }
 /// Before every later step a runner re-reads the task under the lock and aborts if the stage is no longer the one it
 /// set or `armedAt` moved, or the agent finished a new turn.
-pub struct Guard { id: String, stages: Vec<String>, armed: Value, seen: f64, free: bool }
+/// `gitlab`: whether the task's repo is on GitLab, asked once: what it writes is then in GitLab's words (gitlab_words.rs).
+pub struct Guard { id: String, stages: Vec<String>, armed: Value, seen: f64, free: bool, gitlab: Option<bool> }
 impl Guard {
-    pub fn new(id: &str) -> Self { Guard { id: id.into(), stages: vec![], armed: Value::Null, seen: f64::INFINITY, free: false } }
+    pub fn new(id: &str) -> Self { Guard { id: id.into(), stages: vec![], armed: Value::Null, seen: f64::INFINITY, free: false, gitlab: None } }
     /// A guard that only changes the task, with no runner of its own to check (a start that is no job's).
     pub fn free(id: &str) -> Self { Guard { free: true, ..Guard::new(id) } }
     /// A turn of a chat that began while a review was under way, and changed nothing it looks at, is no new turn here.
@@ -116,6 +117,9 @@ impl Guard {
     }
     /// Change the task as this runner, only if it is still ours; remembers the new stage.
     pub fn set(&mut self, f: impl FnOnce(&mut Task)) -> Res<Task> {
+        let id = self.id.clone();
+        let gitlab = *self.gitlab.get_or_insert_with(|| crate::flow::gitlab::is_gitlab(&crate::store::repos::folder_of(&id)));
+        let f = move |t: &mut Task| { f(t); if gitlab { crate::flow::gitlab_words::reword(t); } };
         if self.free { return update_wait(&self.id, 10000, move |t| { f(t); Ok(Change::Write) }); }
         let (stages, armed) = (self.stages.clone(), self.armed.clone());
         let t = update_wait(&self.id, 10000, move |t| {

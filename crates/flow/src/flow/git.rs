@@ -18,12 +18,14 @@ pub fn has_origin(root: &Path) -> bool {
     }
     git_out(root, &["remote"]).map(|o| o.lines().any(|l| l == "origin")).unwrap_or(false)
 }
-/// What `gh` gave. A test answers for gh itself (`set_fake_gh`), so no program is started then.
+/// What `gh` gave. A test answers for gh itself (`set_fake_gh`), so no program is started then. In a repo on GitLab
+/// glab answers instead, in gh's words (gitlab.rs).
 pub struct GhOut { pub status: i32, pub stdout: String, pub stderr: String }
 thread_local! { static FAKE_GH: std::cell::RefCell<Option<std::rc::Rc<dyn Fn(&[String]) -> GhOut>>> = const { std::cell::RefCell::new(None) }; }
 pub fn set_fake_gh(f: Option<std::rc::Rc<dyn Fn(&[String]) -> GhOut>>) { FAKE_GH.with(|x| *x.borrow_mut() = f); }
 pub fn gh(args: &[&str], cwd: &Path, timeout_ms: u64) -> GhOut {
     let a: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+    if super::gitlab::is_gitlab(cwd) { return super::gitlab::answer(&a, cwd, timeout_ms); }
     if let Some(f) = FAKE_GH.with(|x| x.borrow().clone()) { return f(&a); }
     crate::runner::user_env();
     let child = Command::new("gh").args(&a).current_dir(cwd).env("GH_PROMPT_DISABLED", "1").env("GIT_TERMINAL_PROMPT", "0").stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn();
@@ -32,7 +34,7 @@ pub fn gh(args: &[&str], cwd: &Path, timeout_ms: u64) -> GhOut {
         Err(e) => GhOut { status: -1, stdout: String::new(), stderr: e },
     }
 }
-pub fn pr_number(pr: &str) -> String { pr.split("/pull/").nth(1).map(|r| r.chars().take_while(|c| c.is_ascii_digit()).collect()).filter(|s: &String| !s.is_empty()).unwrap_or_else(|| pr.to_string()) }
+pub fn pr_number(pr: &str) -> String { pr.split("/pull/").nth(1).or_else(|| pr.split("/merge_requests/").nth(1)).map(|r| r.chars().take_while(|c| c.is_ascii_digit()).collect()).filter(|s: &String| !s.is_empty()).unwrap_or_else(|| pr.to_string()) }
 /// How GitHub words a check's result.
 pub const CHECK_BAD: [&str; 7] = ["FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE", "STALE"];
 pub const CHECK_GOOD: [&str; 3] = ["SUCCESS", "NEUTRAL", "SKIPPED"];
@@ -100,9 +102,9 @@ pub fn dirty(dir: &Path) -> String { git_out(dir, &["status", "--porcelain"]).un
 /// The board's own comments on a pull request are posted as the logged-in user: each ends with this mark.
 pub const BOARD_COMMENT: &str = "\n\n<!-- herdr-projects -->";
 pub fn board_comment(body: &str) -> bool { body.contains("<!-- herdr-projects -->") || { let b = body.trim_start(); b.starts_with("**Review ·") || (b.starts_with("**Review ") && b[9..].split(' ').next().map(|n| n.bytes().all(|c| c.is_ascii_digit())).unwrap_or(false) && b.contains(" · ")) } }
-/// Who is logged in to GitHub here: the human. Asked once a day; "" when gh cannot say.
+/// Who is logged in to GitHub here (or to the repo's GitLab host): the human. Asked once a day; "" when gh cannot say.
 pub fn gh_user(cwd: &Path) -> String {
-    let file = data_dir().join("gh-user.json");
+    let file = data_dir().join(super::gitlab::gitlab_host(cwd).map(|h| format!("glab-user-{h}.json")).unwrap_or_else(|| "gh-user.json".into()));
     if let Some(k) = read_obj(&file) { if now() - k.i("at") < 24 * 3600 * 1000 { return k.t("login"); } }
     let r = gh(&["api", "user", "--jq", ".login"], cwd, 20000);
     let mut login = if r.status == 0 { r.stdout.trim().lines().next().unwrap_or("").to_string() } else { String::new() };

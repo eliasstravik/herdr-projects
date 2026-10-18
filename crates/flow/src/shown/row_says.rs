@@ -51,7 +51,7 @@ pub fn sentence(r: &Obj) -> Inked {
         let adv = match rv.at("recommend").as_bool() { Some(true) => " reviewer says yes", Some(false) => " reviewer says no", None => "" };
         return Inked::of(format!("{}/5", rv.t("score")), result_ink(rv)).add(quiet(adv.into()));
     }
-    if r.s("stage") == "approval" && r.s("prState") == "failing" && !r.b("mergeFailed") && !r.b("syncBlocked") { return quiet("The pull request's checks fail".into()); }
+    if r.s("stage") == "approval" && r.s("prState") == "failing" && !r.b("mergeFailed") && !r.b("syncBlocked") { return quiet(if crate::flow::gitlab_words::is_mr(r.s("pr")) { "The merge request's pipeline fails" } else { "The pull request's checks fail" }.into()); }
     if r.s("stage") == "plan" && r.s("state") == "blocked" { let m = words(r.s("msg")); return plainly("Plan ready".into()).add(quiet(if m.is_empty() { m } else { format!(" · {m}") })); }
     let raw = words(&if r.at("review").b("stale") { review_note(r) } else { r.t("msg") });
     let msg = if r.b("plain") || ["working", "needs you", "under review", "idle"].contains(&raw.as_str()) { String::new() } else { raw };

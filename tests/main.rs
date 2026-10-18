@@ -143,6 +143,8 @@ mod gate;
 mod gate_more;
 mod gate_rest;
 mod gate_rounds;
+mod gitlab;
+mod gitlab_parity;
 mod guard;
 mod guard_rest;
 mod helpers;

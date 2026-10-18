@@ -113,11 +113,13 @@ pub fn looked_at(t: &Obj) -> bool { setting_text("merge.checks", Some(t)) != "no
 /// The short reason, the same from the land step and from the pull requests' watch (housekeeping/prs.rs).
 pub fn failed_why(pr: &str, names: &[String]) -> String { format!("Checks failed on the pull request {pr}: {}. Look at them (gh pr checks) and fix them on your branch.", names.join(", ")) }
 const LOG_LINES: usize = 40;
-/// The end of a failing check's log, where GitHub Actions ran it (`gh run view --job <id> --log-failed`).
+/// The end of a failing check's log, where GitHub Actions (or GitLab CI) ran it (`gh run view --job <id> --log-failed`).
 fn log_of(root: &Path, c: &Value) -> String {
     let url = [c.s("detailsUrl"), c.s("targetUrl")].into_iter().find(|s| !s.is_empty()).unwrap_or("").to_string();
-    let job: String = url.split("/job/").nth(1).map(|r| r.chars().take_while(|c| c.is_ascii_digit()).collect()).unwrap_or_default();
-    if job.is_empty() || !url.contains("/actions/runs/") { return if url.is_empty() { "GitHub gave no link to its log.".into() } else { format!("Its log is not one gh can read: {url}") }; }
+    // A GitLab job's log is its `/-/jobs/<id>`, read as its trace (flow/gitlab.rs).
+    let job: String = url.split("/job/").nth(1).or_else(|| url.split("/-/jobs/").nth(1)).map(|r| r.chars().take_while(|c| c.is_ascii_digit()).collect()).unwrap_or_default();
+    if url.contains("/-/pipelines/") { return "The pipeline as a whole: its jobs below say what failed.".into(); }
+    if job.is_empty() || !(url.contains("/actions/runs/") || url.contains("/-/jobs/")) { return if url.is_empty() { "GitHub gave no link to its log.".into() } else { format!("Its log is not one gh can read: {url}") }; }
     let r = gh(&["run", "view", "--job", &job, "--log-failed"], root, 60000);
     // A line reads `<job>\t<step>\t<time> <text>`: only the text is kept.
     let lines: Vec<String> = r.stdout.lines().map(|l| {
@@ -147,7 +149,8 @@ pub fn failed_on(t: &Obj) -> Option<String> {
     let f = t.at("prFailure");
     if f.s("remoteKind") != "checks" || (t.b("prHead") && f.b("head") && f.s("head") != t.s("prHead")) { return None; }
     let names = strings(f.at("checks"));
-    Some(if names.is_empty() { "its pull request's checks failed on GitHub".into() } else { format!("GitHub's checks failed on its pull request: {}", names.join(", ")) })
+    let why = if names.is_empty() { "its pull request's checks failed on GitHub".into() } else { format!("GitHub's checks failed on its pull request: {}", names.join(", ")) };
+    Some(crate::flow::gitlab_words::for_task(t, &why))
 }
 /// The board has waited for GitHub's checks longer than `check.timeout`.
 pub fn overdue(t: &Obj) -> bool { let l = ms(&setting_text("check.timeout", Some(t))); l > 0 && now() - t.at("checksWait").i("since") >= l }
