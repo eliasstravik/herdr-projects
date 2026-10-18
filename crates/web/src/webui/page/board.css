@@ -73,7 +73,9 @@
 
 /* One back arrow at a time: while a task is open on a phone, the task's own stands for the Board's. */
 .sw-wide { display: none; } .sw-narrow, .sw-wide { line-height: 0; }
-@media (max-width: 899px) { .sw-board.has-task .sw-back { display: none; } }
+/* With the chat full screen the open task is out of sight, and its arrow with it: the Board's own stands again, and
+   goes back to the board (chat.js). */
+@media (max-width: 899px) { .sw-board.has-task:not(.sw-chat-full) .sw-back { display: none; } }
 @media (min-width: 900px) { .sw-panel-back .sw-narrow { display: none; } .sw-panel-back .sw-wide { display: inline; } }
 
 /* One task. */
