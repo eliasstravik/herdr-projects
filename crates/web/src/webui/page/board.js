@@ -2,15 +2,18 @@
 // to show, and sending it what you do. It is kept fresh while it is open: asked every two seconds, drawn again only
 // where something changed. Nothing about a task is worked out here: every word, colour and button comes from the
 // board (crates/web/src/webui/*-model.js), and a button only says which key of the board it presses.
-/* global document, window, location, history, PopStateEvent, CustomEvent */
+/* global document, window, CustomEvent */
 import { h, icon, get, post } from "./dom.js";
 import { listEl } from "./list.js";
 import { panelEl, settingsEl } from "./panel.js";
 import { chatEl } from "./chat.js";
 import { askEl, menuEl, pickerEl, toast, trapEscape } from "./sheets.js";
+import { goTo, goFull } from "./talk.js";
 
 let root = null, timer = null, closing = null, snap = null, mark = "", busy = false;
 let menuOpen = false, picking = false, finding = false, seenMsg = -1, seenGo = null, chat = null, untrap = null, wentTo = 0;
+// The chat full screen: asked of the board (its link is the next one it gives), or wanted as soon as the board shows.
+let fullAsked = false, wantFull = false;
 const drawn = { list: "", panel: "", settings: "", ask: "", menu: "", chips: "", pick: "" };
 const part = (name) => root.querySelector(`.sw-${name}`);
 
@@ -24,16 +27,6 @@ function fit() {
   const side = document.querySelector(".sidebar") || document.querySelector(".sidebar-shell"), box = side?.getBoundingClientRect();
   const beside = box && box.width > 0 && box.left >= 0 && box.right < window.innerWidth - 400 && window.innerWidth > 768;
   root.style.left = beside ? `${Math.round(box.right)}px` : "0";
-}
-// Into a task's agent: the web UI's own view of its pane, on this machine or on another. Its address says where the app is, and it follows a change
-// of address as it follows Back, so the page is not loaded again.
-function goTo(go) {
-  const q = new URLSearchParams(location.search);
-  for (const k of ["machine", "file", "settings", "section", "new", "cwd", "name", "agent", "sidebar"]) q.delete(k);
-  if (go.machine) q.set("machine", go.machine); // on another of the web UI's PCs: its own name for it
-  q.set("ws", go.workspace); q.set("pane", go.pane); q.set("view", go.view);
-  history.pushState(null, "", `${location.pathname}?${q}`);
-  window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
 }
 function note(text) { const n = part("note"); n.textContent = text || ""; n.hidden = !text; }
 // What the board shows beyond its plain view, each a chip whose × puts the plain view back. Whose tasks show (every
@@ -79,8 +72,10 @@ function draw() {
   once("pick", picking ? [snap.flags.scope] : null, () => { if (picking) pickerEl(snap.flags.scope, { onPick: scopeTo, onClose: () => { picking = false; draw(); } }).then((el) => { if (picking && root) part("pick-host").replaceChildren(el); }); else part("pick-host").replaceChildren(); });
   part("find-row").hidden = !finding;
   chat.update(snap);
+  if (wantFull && snap.chat?.text) { wantFull = false; chat.full(true); }
   if (snap.msg && snap.msg.n !== seenMsg) { seenMsg = snap.msg.n; toast(part("toast-host"), snap.msg, () => press("back")); }
-  if (snap.go && seenGo !== null && snap.go.n !== seenGo) { seenGo = snap.go.n; return goTo(snap.go); }
+  // Into a task's agent (Open agent), or the chat full screen: the web UI's own view of that pane (talk.js).
+  if (snap.go && seenGo !== null && snap.go.n !== seenGo) { seenGo = snap.go.n; const full = fullAsked; fullAsked = false; return full ? goFull(snap.go, snap) : goTo(snap.go); }
   seenGo = snap.go ? snap.go.n : 0;
 }
 function take(out) {
@@ -106,13 +101,20 @@ async function call(what, body) {
   return out;
 }
 // A key that brings words back (a draft that was put away, words taken back to change) puts them in the text box.
-const press = async (id) => { const out = await call("press", { id }); if (out.draft) chat?.fill(out.draft); return out; };
+const press = async (id) => { fullAsked = false; const out = await call("press", { id }); if (out.draft) chat?.fill(out.draft); return out; };
+// The chat full screen: the web UI's own chat view of whoever it talks to, which the board links to; where it has no
+// link (nobody's pane to show), the board's own chat goes full screen.
+async function full() {
+  fullAsked = true;
+  const out = await call("full");
+  if (root && !(out.ok && out.full)) { fullAsked = false; chat?.full(true); }
+}
 
-export function openBoard({ onClose }) {
+export function openBoard({ onClose, full: fullNow = false }) {
   if (root) return;
-  closing = onClose; snap = null; mark = ""; seenGo = null; seenMsg = -1; menuOpen = false; picking = false; finding = false;
+  closing = onClose; snap = null; mark = ""; seenGo = null; seenMsg = -1; menuOpen = false; picking = false; finding = false; fullAsked = false; wantFull = fullNow;
   for (const k of Object.keys(drawn)) drawn[k] = "";
-  chat = chatEl({ onSend: async (text, delegate, to) => { const out = await call("send", { text, delegate, to }); return !out.ok || !!out.kept; }, onPress: press });
+  chat = chatEl({ onSend: async (text, delegate, to) => { const out = await call("send", { text, delegate, to }); return !out.ok || !!out.kept; }, onPress: press, onFull: full });
   let wait = null;
   const find = h("input.sw-find", { type: "search", placeholder: "Type to filter, archived tasks too", "aria-label": "Find tasks", oninput: (e) => { clearTimeout(wait); const text = e.target.value; wait = setTimeout(() => call("find", { text }), 200); } });
   root = h("section.sw-board", { role: "region", "aria-label": "Work board" },

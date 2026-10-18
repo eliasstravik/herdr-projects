@@ -3,13 +3,14 @@
 // growing with the text, the files attached above it (files.js), and one row of controls under it, the add button, the
 // mic (voice.js) and who the words are for on the left and the round Send on the right. Its grip, its keys and its sizes are the web
 // UI's (docs/web-chat-box.md says how that was measured). What it does with the words is chat.js's.
-/* global window, localStorage, getComputedStyle */
+/* global window, document, localStorage, getComputedStyle, setTimeout, clearTimeout */
 import { h, icon } from "./dom.js";
 import { filesEl } from "./files.js";
 import { voiceEl } from "./voice.js";
 
 // The web UI's own numbers: a key's step on the grip, how far a press must travel to be a drag, two taps that reset.
-const STEP = 24, SLACK = { mouse: 3, touch: 10 }, TWICE = 350, MOST = 480, LONGEST = 20000;
+// And how long a tap on Send waits for a keyboard to finish the word it is composing.
+const STEP = 24, SLACK = { mouse: 3, touch: 10 }, TWICE = 350, MOST = 480, LONGEST = 20000, COMMIT_WAIT = 300;
 const HEIGHT = "sw-box-height";
 const savedHeight = () => { try { const n = Number(localStorage.getItem(HEIGHT)); return n > 0 ? n : null; } catch { return null; } };
 const keepHeight = (n) => { try { if (n == null) localStorage.removeItem(HEIGHT); else localStorage.setItem(HEIGHT, String(n)); } catch {} };
@@ -72,8 +73,30 @@ export function composeEl({ onSend, onInput, onTab = () => false, whom = () => n
     if (e.key === "Tab" && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && !e.isComposing && box.value.trim() && onTab()) e.preventDefault();
   });
   files.dropOn(card);
-  send.addEventListener("click", () => onSend(false));
-  also.addEventListener("click", () => onSend(true));
+  // Sending keeps the focus in the box, as the web UI's Send does: a button that took it would close a phone's
+  // keyboard (and move out from under the tap before the click lands). So a press on either never takes the focus.
+  // A tap while the keyboard still composes the last word (Gboard composes every word) finishes that word first: a
+  // blur and a focus within the same tap commit it and keep the keyboard up, and the words go once it is committed.
+  // A keyboard that has not committed it within the tap's time gets the tap withdrawn, and the box says so.
+  let composing = false, waiting = null;
+  const sendTapped = (delegate) => {
+    clearTimeout(waiting?.timer); waiting = null;
+    if (!composing) return onSend(delegate);
+    const w = { delegate, timer: setTimeout(() => { if (waiting === w) { waiting = null; say("Finish the word, then send."); } }, COMMIT_WAIT) };
+    waiting = w;
+    if (document.activeElement === box) { box.blur(); box.focus({ preventScroll: true }); }
+  };
+  box.addEventListener("compositionstart", () => { composing = true; });
+  box.addEventListener("compositionend", () => {
+    composing = false;
+    // WebKit puts the committed word in with an input event after compositionend: it is sent after that.
+    const w = waiting;
+    if (w) { clearTimeout(w.timer); waiting = null; setTimeout(() => { if (!composing) onSend(w.delegate); }); }
+  });
+  for (const [b, delegate] of [[send, false], [also, true]]) {
+    b.addEventListener("pointerdown", (e) => e.preventDefault());
+    b.addEventListener("click", () => sendTapped(delegate));
+  }
   const fit = () => { if (manual != null && manual > most()) grow(); };
   window.addEventListener?.("resize", fit);
   const destroy = () => { window.removeEventListener?.("resize", fit); voice.destroy(); };

@@ -36,7 +36,19 @@ fn the_box_is_the_web_uis_card_the_message_first_one_row_of_controls_the_grip_an
     assert!(JS.contains("SLACK = { mouse: 3, touch: 10 }, TWICE = 350") && JS.contains("if (u.timeStamp - tapped < TWICE) { tapped = 0; setHeight(null); }"));
     // a file dropped on the box is attached (files.js), never opened by the browser in the board's place
     assert!(JS.contains("files.dropOn(card);"));
-    assert!(JS.contains(r#"send.addEventListener("click", () => onSend(false));"#) && JS.contains(r#"also.addEventListener("click", () => onSend(true));"#));
+    assert!(JS.contains(r#"for (const [b, delegate] of [[send, false], [also, true]]) {"#) && JS.contains(r#"b.addEventListener("click", () => sendTapped(delegate));"#));
+}
+
+#[test]
+fn sending_keeps_the_focus_in_the_box_so_a_phone_keeps_its_keyboard() {
+    // as the web UI's Send: a press on either send button never takes the focus from the box
+    assert!(JS.contains(r#"b.addEventListener("pointerdown", (e) => e.preventDefault());"#));
+    // a tap while a keyboard composes a word: a blur and a focus within the tap commit it, and it is sent once
+    // committed; one that does not commit within the tap's time is withdrawn, and the box says so
+    assert!(JS.contains("COMMIT_WAIT = 300") && JS.contains("if (!composing) return onSend(delegate);"));
+    assert!(JS.contains("if (document.activeElement === box) { box.blur(); box.focus({ preventScroll: true }); }"));
+    assert!(JS.contains("if (w) { clearTimeout(w.timer); waiting = null; setTimeout(() => { if (!composing) onSend(w.delegate); }); }"));
+    assert!(JS.contains(r#"say("Finish the word, then send.")"#));
 }
 
 #[test]
@@ -73,5 +85,5 @@ fn the_styles_are_the_web_uis_variables_hide_the_browsers_own_looks_and_name_the
     // The page says how it was measured, the moment of sending among it. (The measuring script was a node program and
     // is in the repo's history now, not in the repo: the page says so.)
     assert!(DOC.contains("chat-box-match.js") && DOC.contains("--sending"));
-    assert!(START.contains(r#"["board", "chat", "compose", "files", "voice", "boards"]"#), "the page loads the chat's, the box's, its files', its mic's and the boards' styles");
+    assert!(START.contains(r#"["board", "chat", "compose", "files", "voice", "boards", "talk"]"#), "the page loads the chat's, the box's, its files', its mic's, the boards' and the full screen bar's styles");
 }

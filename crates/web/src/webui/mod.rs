@@ -12,6 +12,7 @@ pub mod boards;
 pub mod door;
 pub mod door_loop;
 pub mod follow;
+pub mod full;
 pub mod ink;
 pub mod model;
 pub mod page;
