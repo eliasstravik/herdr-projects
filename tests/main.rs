@@ -26,6 +26,7 @@ mod auto_merge;
 mod auto_merge_line;
 mod automations;
 mod automations_command;
+mod automations_condition;
 mod automations_far;
 mod automations_firing;
 mod automations_list;

@@ -22,7 +22,7 @@ fn off_an_automation_keeps_its_firings_and_edits_and_on_again_its_schedule_count
     sw::clock::advance(2 * HOUR + 1000); sw::keeper::tick_once(&w.socket, false);
     let t = tasks().remove(0);
     assert_eq!((t.at("automation").s("id"), t.at("automation").s("name"), t.at("automation").s("cause"), t.at("automation").at("chain")), (a.s("id"), a.s("name"), "schedule", &json!([a.s("id")])));
-    l::set_setting(a.s("id"), "merge.by", &json!("you")).unwrap(); l::change(a.s("id"), None, Some("New words."), None, None).unwrap();
+    l::set_setting(a.s("id"), "merge.by", &json!("you")).unwrap(); l::change(a.s("id"), None, Some("New words."), None, None, None).unwrap();
     sw::runner::JOBS.with(|j| j.borrow_mut().clear());
     sw::store::tasks::patch(t.s("id"), |t| t.put("stage", "approval")).unwrap(); // its agent's run is not this test's
     // off: it never fires and keeps everything

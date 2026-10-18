@@ -77,7 +77,7 @@ fn the_repos_own_file_may_say_it_and_an_automation_holds_it_as_one_of_its_settin
     assert_eq!(L::set_setting(a.s("id"), NAME, &json!("false")).unwrap().unwrap().from, "this automation");
     assert!(!L::research_only(&L::find(a.s("id")).unwrap()));
     assert_eq!(sw::automations::show::describe(&L::find(a.s("id")).unwrap(), sw::clock::now()).at("research"), &json!(false));
-    L::change(a.s("id"), None, None, None, Some(true)).unwrap();
+    L::change(a.s("id"), None, None, None, None, Some(true)).unwrap();
     assert_eq!(L::find(a.s("id")).unwrap().at("settings"), &json!({ NAME: true }));
     L::unset_setting(a.s("id"), NAME).unwrap();
     assert_eq!(L::find(a.s("id")).unwrap().at("settings"), &json!({}));

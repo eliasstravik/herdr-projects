@@ -22,7 +22,7 @@ const HOUR: i64 = 3600000;
 /// One firing at a time on the machine, whoever asks: the keeper, an open board, a command.
 pub fn one_at_a_time<T>(wait_ms: i64, f: impl FnOnce() -> Res<T>) -> Res<T> { with_lock_wait("automations-fire", wait_ms, f) }
 /// What fired it, in a few words: "every 2h", "proj/3 was merged", "run now".
-fn say_cause(a: &Obj, c: &Cause) -> String {
+pub fn say_cause(a: &Obj, c: &Cause) -> String {
     match c { Cause::Event { event, task } => format!("{} {}", task.s("id"), event_named(event).map(|e| e.what).unwrap_or(event)), Cause::Run => "run now".into(), Cause::Schedule => say_trigger(a.at("trigger")) }
 }
 /// The task of its last firing that made one is still being worked on.
