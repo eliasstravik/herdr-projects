@@ -255,6 +255,7 @@ mod web_more;
 mod web_page;
 mod web_pcs;
 mod web_rest;
+mod web_select;
 mod web_settings;
 mod web_voice;
 mod workspace_branch;

@@ -105,15 +105,18 @@ fn the_web_board_says_the_same_an_unread_machine_is_a_line_with_its_reason_behin
     assert_eq!(s.at("list").at("head").s("machines"), "vm-a (no answer), vm-b");
     assert_eq!(s.at("list").arr("groups").iter().flat_map(|g| g.arr("rows").to_vec()).map(|r| r.t("title")).collect::<Vec<_>>(), vec!["Theirs 2"]);
     let unread = s.at("list").arr("unread").to_vec();
-    assert_eq!(unread.iter().map(|u| (u.t("machine"), u.t("line"))).collect::<Vec<_>>(), vec![("vm-a".to_string(), "vm-a: its tasks cannot be read: it does not let the board in.".to_string())]);
+    // the machine and why (the notice says they do not answer); what to do first, what came back last
+    assert_eq!(unread.iter().map(|u| (u.t("machine"), u.t("line"), u.b("asking"))).collect::<Vec<_>>(), vec![("vm-a".to_string(), "vm-a: it does not let the board in.".to_string(), false)]);
     let d = unread[0].arr("detail").iter().map(text).collect::<Vec<_>>().join("\n");
-    assert!(has(&d, r"(?s)^What came back:\n {2}me@vm-a: Permission denied.*batch mode.*ssh-copy-id [^ ]*vm-a"), "{d}");
+    assert!(has(&d, r"(?s)^vm-a refused the login.*batch mode.*ssh-copy-id [^ ]*vm-a.*\n\nWhat came back:\n {2}me@vm-a: Permission denied"), "{d}");
     let s = web_as(&w, "t", "press", json!({ "id": "scope", "role": "watch" })).unwrap();
     assert_eq!(s.at("flags").s("scope"), "vm-a");
     assert_eq!((s.at("list").s("empty"), s.at("list").arr("unread").len(), s.at("list").arr("groups").len()), ("", 1, 0));
     assert!(!has(s.at("msg").s("text"), "cannot be read|let the board in"));
-    // the page draws it: the line, and the rest behind "Why, and what to do" (the page's own code, read as text)
+    // the page draws it: one notice that says what is wrong, each machine's line, and the rest behind "What to do"; it
+    // can be dismissed, and comes back when another machine stops answering or one answers for another reason (the
+    // page's own code, read as text)
     let page = include_str!("../crates/web/src/webui/page/list.js");
-    for part in ["sw-unread-line", "sw-unread-detail", "Why, and what to do", "summary"] { assert!(page.contains(part), "list.js has {part}"); }
+    for part in ["sw-unread-line", "sw-unread-detail", "\"What to do\"", "summary", "not answer, so ", "The board keeps asking by itself.", "\"aria-label\": \"Dismiss\"", "const said1 = (u) => `${u.machine}\\n${u.line}`;", "!bad.every((u) => off.includes(said1(u)))"] { assert!(page.contains(part), "list.js has {part}"); }
     assert!(has(page, r"empty"), "an empty list says so");
 }

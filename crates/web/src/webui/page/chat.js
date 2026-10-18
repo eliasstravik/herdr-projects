@@ -1,6 +1,7 @@
-// The chat at the foot of the board, the terminal board's chat: a switch with the two you can talk to (the Coordinator,
-// or the selected task's agent), which shows who gets your words; the line on where they stand; the conversation
-// (said.js: the newest thing said, the rest above it) with Hide and Show; and what the box you type in (compose.js) does
+// The chat at the foot of the board, the terminal board's chat: one button that names who gets your words and flips
+// between the two you can talk to (the Coordinator, or the selected task's agent), as space does there; the line on
+// where they stand; the conversation (said.js: the newest thing said, the rest above it, full screen when asked) with
+// Hide and Show; and what the box you type in (compose.js) does
 // with your words: who they are for, kept with them until they are sent, and who a file attached is for. Who that
 // is, what the box says while empty and what its buttons do come from the board (webui/model/side.rs).
 /* global sessionStorage */
@@ -49,11 +50,9 @@ export function chatEl({ onSend, onPress }) {
   const { el: compose, card, box, to: chip, send, also, grow, files, voice, say, destroy } = composeEl({ onSend: go, onInput: () => { if (closed) return; sync(); keep(box.value, to); }, onTab: () => { if (also.hidden || busy) return false; go(true); return true; }, whom, hold: () => busy });
   box.value = saved();
   if (box.value.trim()) to = savedTo(); // a reload brings the words back with who they were for
-  // Who you talk to: two choices, the one that gets your words pressed. The other presses the board's own key for it.
-  const coord = h("button", { type: "button" }), agent = h("button", { type: "button" });
-  const flip = (want) => () => { if (!busy && now && now.reply !== want) onPress("talk"); };
-  coord.addEventListener("click", flip(false)); agent.addEventListener("click", flip(true));
-  const pick = h("div.segmented.sw-switch", { role: "group", "aria-label": "Who you talk to" }, coord, agent);
+  // Who you talk to: one button, as space on the terminal board. It names who gets your words; a tap presses the
+  // board's own key, which flips to the other (and back with the next tap).
+  const talk = h("button.btn.sw-talk", { type: "button", onclick: () => { if (!busy && now && !talk.disabled) onPress("talk"); } });
   const who = h("div.sw-who");
   const hide = h("button.btn.btn-ghost.sw-hide", { type: "button", onclick: () => onPress("chatMessage") });
   const said = saidEl();
@@ -75,13 +74,15 @@ export function chatEl({ onSend, onPress }) {
     chip.hidden = !moved; chip.className = "sw-to is-locked"; chip.textContent = moved ? `To: ${to.label}${to.reply ? " agent" : ""} · not who is shown above` : "";
     send.disabled = !typing || busy || files.busy(); files.refresh(); voice.sync(); send.title = cap(l.enter) || "Send message"; also.hidden = !typing || !l.delegate; also.disabled = busy; also.title = l.delegate ? `${cap(l.delegate)} (Tab)` : "";
   }
-  const el = h("footer.sw-chat", { "aria-label": "Chat" }, h("div.sw-chat-head", pick, who, hide), note, said.el, compose);
+  const el = h("footer.sw-chat", { "aria-label": "Chat" }, h("div.sw-chat-head", talk, who, hide), note, said.el, compose);
   return {
     el,
     typing: () => !!box.value.trim(),
     // The board closed: dictation stops and lets the microphone go, and nothing this box still hears of (an answer, a
     // file, a dictation) changes the kept draft, which the next board's box shows.
     destroy() { closed = true; destroy(); },
+    // The conversation full screen (said.js): asked, set, or left.
+    full: (on) => said.full(on),
     fill(text) { box.value = text; to = null; sync(); keep(text, to); grow(); box.focus(); },
     update(snap) {
       const c = snap.chat;
@@ -93,10 +94,11 @@ export function chatEl({ onSend, onPress }) {
       // on an automation's row that key is the automation's own (it turns it on or off).
       // On a machine's or a repo's heading the other choice is its own coordinator (`head`).
       const onTask = !!snap.list.selected && snap.flags?.onTask !== false && !!c.task, onHead = !onTask && !!c.head;
-      coord.textContent = c.coord || c.name; coord.setAttribute("aria-pressed", String(!c.toAgent));
-      agent.textContent = onTask ? `${c.task} agent` : onHead ? c.head : "A task's agent"; agent.setAttribute("aria-pressed", String(!!c.toAgent));
-      agent.disabled = !onTask && !onHead && !c.toAgent; agent.title = agent.disabled ? "Select a task to talk to its agent" : "";
-      coord.title = c.toAgent ? "Talk to the Coordinator" : ""; if (!c.toAgent && (onTask || onHead)) agent.title = onHead ? `Talk to the ${c.head}` : "Talk to this task's agent";
+      const coord = c.coord || c.name, agent = onTask ? `${c.task} agent` : onHead ? c.head : c.name;
+      const [is, other] = c.toAgent ? [agent, coord] : [coord, onTask || onHead ? agent : ""];
+      talk.replaceChildren(...[other ? icon("swap") : null, h("span.sw-talk-name", is)].filter(Boolean));
+      talk.disabled = !other; talk.title = other ? `Talk to ${other} instead` : "Select a task to talk to its agent";
+      talk.setAttribute("aria-label", `Talking to ${is}. ${talk.title}.`);
       // Where they stand, as the terminal's line over the box says it: the mark, the task's name (the switch names the
       // Coordinator), what it is doing. Only what there is: replaceChildren would write a missing part out as "null".
       who.replaceChildren(...[markEl(c.mark.t, c.mark.c), c.toAgent ? h("span.sw-who-name", c.name) : null, h("span.sw-who-status", [c.status, c.progress].filter(Boolean).join("  "))].filter(Boolean));

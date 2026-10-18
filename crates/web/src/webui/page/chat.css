@@ -1,16 +1,18 @@
-/* The chat at the foot of the web board (chat.js, said.js): the switch with the two you can talk to, the line on where
-   they stand, Hide and Show, and the conversation over the box, all as wide as the box (compose.css) and centred on it.
-   The switch is the web UI's own segmented control (`.segmented`, as its Chat/Terminal switch), and the buttons its
-   `.btn` and `.icon-button`: their looks are the web UI's, sized here for a thumb. */
+/* The chat at the foot of the web board (chat.js, said.js): the button that says who you talk to and flips it, the
+   line on where they stand, Hide and Show, and the conversation over the box, all as wide as the box (compose.css) and
+   centred on it; the conversation full screen when asked. The buttons are the web UI's `.btn` and `.icon-button`:
+   their looks are the web UI's, sized here for a thumb. */
 .sw-chat { flex: none; display: flex; flex-direction: column; gap: var(--space-2, 8px); padding: var(--space-2, 8px) var(--space-4, 16px) max(var(--space-4, 16px), calc(env(safe-area-inset-bottom, 0px) - var(--space-4, 16px))); border-top: var(--hairline, 1px) solid var(--sw-line); background: var(--sw-bg); }
 @media (max-width: 480px) { .sw-chat { padding-inline: var(--space-3, 12px); } }
 .sw-chat > :not(.sw-composer) { width: min(100%, var(--chat-w, 820px)); margin-inline: auto; box-sizing: border-box; }
 .sw-chat-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1, 4px) var(--space-3, 12px); min-width: 0; }
-/* Who you talk to: two choices; the pressed one gets your words. */
-.sw-switch { flex: none; max-width: 100%; }
-.sw-switch > button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.sw-switch > button:disabled { cursor: default; opacity: 0.55; }
-.sw-switch > button:focus-visible, .sw-hide:focus-visible, .sw-said-nav .icon-button:focus-visible, .sw-said:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
+/* Who you talk to: one button with their name, and the arrows that say a tap flips it. With nobody else to flip to it
+   only names them, as plainly as ever (it is not a control that is off). */
+.sw-talk { flex: 0 1 auto; min-width: 0; max-width: 100%; display: inline-flex; align-items: center; gap: var(--space-2, 8px); font-weight: var(--fw-semibold, 600); color: var(--sw-strong); }
+.sw-talk svg { flex: none; width: 16px; height: 16px; color: var(--sw-dim); }
+.sw-talk-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sw-talk:disabled { cursor: default; opacity: 1; background: none; border-color: transparent; padding-left: 0; }
+.sw-talk:focus-visible, .sw-hide:focus-visible, .sw-said-nav .icon-button:focus-visible, .sw-said:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
 /* Where they stand: the mark, the task's name, what it does now, greyed; one line, cut with … */
 .sw-who { flex: 1 1 5em; display: flex; align-items: baseline; gap: var(--space-2, 8px); min-width: 0; white-space: nowrap; }
 .sw-who .sw-mark { width: auto; }
@@ -19,17 +21,23 @@
 .sw-hide { flex: none; margin-left: auto; color: var(--sw-dim); }
 .sw-hide[aria-pressed="true"] { color: var(--sw-text); }
 /* On a phone the switch and Hide share the first line, where they stand on the second, whole. */
-@media (max-width: 640px) { .sw-who { order: 3; flex-basis: 100%; } }
+@media (max-width: 640px) {
+  .sw-who { order: 3; flex-basis: 100%; }
+  /* There the line may take two lines: what they do now is often a sentence (`no agent on it: …`). */
+  .sw-who { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
+  .sw-who > * + * { margin-left: var(--space-2, 8px); }
+}
 .sw-chat-note { margin: 0; color: var(--sw-dim); font-size: var(--fs-xs, 12px); }
 /* The conversation: the newest thing said, the rest above it, and Earlier and Later in a gutter of their own. */
 .sw-said-box { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-1, 4px); padding: var(--space-2, 8px) var(--space-1, 4px) var(--space-2, 8px) var(--space-4, 16px); border: var(--hairline, 1px) solid var(--sw-line); border-radius: var(--radius-lg, 12px); background: var(--sw-panel); }
-.sw-said { max-height: calc(var(--app-height, 100vh) * 0.3); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: var(--border-strong, #3e3830) transparent; color: var(--sw-dim); font-size: var(--fs-sm, 13px); white-space: pre-wrap; overflow-wrap: anywhere; }
-.sw-said-box.is-open .sw-said { max-height: calc(var(--app-height, 100vh) * 0.4); }
+.sw-said { max-height: calc(var(--app-height, 100vh) * 0.25); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: var(--border-strong, #3e3830) transparent; color: var(--sw-dim); font-size: var(--fs-sm, 13px); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* (Full screen is there for reading more: the list keeps most of the window.) */
+.sw-said-box.is-open .sw-said { max-height: calc(var(--app-height, 100vh) * 0.35); }
 /* A phone's window is short: the list keeps the most of it. */
-@media (max-width: 640px) { .sw-said { max-height: calc(var(--app-height, 100vh) * 0.22); } .sw-said-box.is-open .sw-said { max-height: calc(var(--app-height, 100vh) * 0.3); } }
+@media (max-width: 640px) { .sw-said { max-height: calc(var(--app-height, 100vh) * 0.22); } .sw-said-box.is-open .sw-said { max-height: calc(var(--app-height, 100vh) * 0.25); } }
 .sw-said a { color: var(--accent, #f0a830); text-underline-offset: 0.2em; }
-.sw-said-nav { display: flex; flex-direction: column; justify-content: space-between; gap: var(--space-1, 4px); }
-.sw-said-nav .sw-said-up[hidden] + .sw-said-down { margin-top: auto; }
+.sw-said-nav { display: flex; flex-direction: column; gap: var(--space-1, 4px); }
+.sw-said-nav .sw-said-down { margin-top: auto; }
 .sw-said-nav .icon-button { color: var(--sw-dim); }
 .sw-said-turn + .sw-said-turn { margin-top: var(--space-3, 12px); }
 .sw-by { color: var(--sw-text); font-weight: var(--fw-semibold, 600); }
@@ -37,9 +45,17 @@
 .sw-chat[data-tint="accent"] :is(.sw-who-name, .sw-by) { color: var(--accent, #f0a830); }
 .sw-chat[data-tint="subtext0"] :is(.sw-who-name, .sw-by) { color: var(--sw-dim); }
 .sw-said-turn.is-mine { color: var(--sw-text); }
+.sw-said strong { color: var(--sw-text); font-weight: var(--fw-semibold, 600); }
+.sw-said .sw-code { font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-xs, 12px); }
 .sw-said-turn.is-raw .sw-said-text { font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-xs, 12px); white-space: pre; overflow-x: auto; }
 /* A thumb's size, as everything tapped on the board. */
 @media (pointer: coarse) {
-  .sw-switch > button { height: calc(var(--touch-target, 40px) - 6px); }
+  .sw-talk { min-height: var(--touch-target, 40px); }
   .sw-hide, .sw-said-nav .icon-button { min-height: var(--touch-target, 40px); min-width: var(--touch-target, 40px); }
 }
+/* Full screen: the conversation takes the board's whole height over the box; the list and the open task step aside
+   (they are still there when it goes back). Last here, so it wins over every height above. */
+.sw-board.sw-chat-full > :is(.sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }
+.sw-board.sw-chat-full .sw-chat { flex: 1; min-height: 0; border-top: 0; }
+.sw-board.sw-chat-full .sw-said-box { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+.sw-board.sw-chat-full .sw-said { max-height: none; height: 100%; font-size: var(--fs-md, 14px); }

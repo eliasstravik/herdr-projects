@@ -37,17 +37,18 @@ pub fn auto_row_of(s: &State, t: &Theme, a: &Obj, now: i64) -> Value {
         "says": pieces(&crate::board::view::fields::auto_said(s, &rec, "all")), "progress": Value::Null, "percent": "", "eta": "", "review": pieces(&f.tag), "pr": [], "prUrl": "", "time": f.when, "quiet": !a.b("on"),
         "pinned": false, "archived": false, "app": "", "automation": true }) // `automation`: its word (on, off) never gives way, and what it says is never clamped (board.css)
 }
-/// The machines in view whose tasks could not be read, each with why and what to do: said where their tasks would be.
+/// The machines in view whose tasks could not be read, each with why and what to do: one notice over the list, which
+/// says they do not answer, then a line each (`vm-a: cannot connect (it refused the connection).`). `asking`: its first
+/// answer has not come yet, which is no fault.
 pub fn unread(s: &State) -> Vec<Value> {
     let all = crate::board::update::remotes::in_view(s);
     all.into_iter().filter(|m| !m.ok).map(|m| match &m.why {
         Some(w) => {
-            let mut d: Vec<String> = vec![];
-            if w.b("said") { d.push("What came back:".into()); d.extend(w.s("said").split('\n').map(|l| format!("  {l}"))); d.push(String::new()); }
-            d.extend(w.arr("detail").iter().map(text));
-            json!({ "machine": m.machine.label, "line": format!("{}: its tasks cannot be read: {}.", m.machine.label, w.s("line")), "detail": d })
+            let mut d: Vec<String> = w.arr("detail").iter().map(text).collect();
+            if w.b("said") { d.push(String::new()); d.push("What came back:".into()); d.extend(w.s("said").split('\n').map(|l| format!("  {l}"))); }
+            json!({ "machine": m.machine.label, "line": format!("{}: {}.", m.machine.label, if w.b("line") { w.t("line") } else { "it did not answer".into() }), "detail": d, "asking": false })
         }
-        None => json!({ "machine": m.machine.label, "line": format!("{}: asking for its tasks…", m.machine.label), "detail": [] }),
+        None => json!({ "machine": m.machine.label, "line": format!("Asking {} for its tasks…", m.machine.label), "detail": [], "asking": true }),
     }).collect()
 }
 pub fn list_of(s: &State, t: &Theme) -> Value {

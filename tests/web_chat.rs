@@ -17,6 +17,7 @@ const SAID: &str = include_str!("../crates/web/src/webui/page/said.js");
 const COMPOSE: &str = include_str!("../crates/web/src/webui/page/compose.js");
 const CSS: &str = include_str!("../crates/web/src/webui/page/chat.css");
 const BOARD_CSS: &str = include_str!("../crates/web/src/webui/page/board.css");
+const BOARD_JS: &str = include_str!("../crates/web/src/webui/page/board.js");
 
 fn call(what: &str, args: Value) -> Value { let mut a = args; if a.get("role").is_none() { a["role"] = json!("drive"); } sw::webui::web::call("t", what, a, "", None).unwrap_or_else(|e| panic!("{what}: {e}")) }
 fn far_world() -> (World, Far) {
@@ -87,10 +88,18 @@ fn the_page_gets_the_two_you_can_talk_to_and_hiding_the_message_is_the_boards_ow
 
 #[test]
 fn the_page_has_a_switch_hide_and_show_a_conversation_that_scrolls_back_and_tab_that_sends() {
-    // the switch: the web UI's own segmented control, the pressed choice gets your words; the other presses the key
-    assert!(CHAT.contains(r#"h("div.segmented.sw-switch", { role: "group", "aria-label": "Who you talk to" }, coord, agent)"#));
-    assert!(CHAT.contains(r#"coord.setAttribute("aria-pressed", String(!c.toAgent));"#) && CHAT.contains(r#"agent.setAttribute("aria-pressed", String(!!c.toAgent));"#));
-    assert!(CHAT.contains(r#"if (!busy && now && now.reply !== want) onPress("talk");"#) && CHAT.contains("`${c.task} agent`"));
+    // who you talk to: one button, as space on the terminal board: it names who gets your words, and a tap presses the
+    // board's own key, which flips to the other; with nobody else to flip to, it only names them
+    assert!(CHAT.contains(r#"const talk = h("button.btn.sw-talk", { type: "button", onclick: () => { if (!busy && now && !talk.disabled) onPress("talk"); } });"#));
+    assert!(CHAT.contains("const [is, other] = c.toAgent ? [agent, coord] : [coord, onTask || onHead ? agent : \"\"];") && CHAT.contains("`${c.task} agent`"));
+    assert!(CHAT.contains("talk.disabled = !other; talk.title = other ? `Talk to ${other} instead`"));
+    assert!(!CHAT.contains("segmented"), "no switch with two choices any more");
+    // full screen: the conversation fills the board, whole; its button, Esc or the back arrow go back
+    assert!(SAID.contains(r#"el.closest(".sw-board")?.classList.toggle("sw-chat-full", on);"#) && SAID.contains("if (on && !open && from > 0) opening(0); else if (!on && open) close(); else mark();"));
+    assert!(CSS.contains(".sw-board.sw-chat-full > :is(.sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }") && CSS.contains(".sw-board.sw-chat-full .sw-said { max-height: none;"));
+    assert!(BOARD_JS.contains("if (chat.full()) return chat.full(false);") && BOARD_JS.contains("chat.full() ? chat.full(false) : closing?.()"));
+    // markdown read as the terminal reads it: bold is bold, the marks go; a screen stays as it is
+    assert!(SAID.contains("h(\"div.sw-said-text\", p.raw ? p.text : prose(p.text))") && SAID.contains("out.push(i % 2 ? h(\"strong\", bit) : bit)"));
     assert!(!CHAT.contains("Talk to this task's agent\") : null"), "no text link any more");
     // Hide and Show press alt+c's key
     assert!(CHAT.contains(r#"onclick: () => onPress("chatMessage")"#) && CHAT.contains(r#"c.open ? "Hide" : "Show""#));
@@ -105,9 +114,9 @@ fn the_page_has_a_switch_hide_and_show_a_conversation_that_scrolls_back_and_tab_
     assert!(SAID.contains("const i = was ? Math.min(Math.max(0, was.i - shift(before, parts)), parts.length - 1) : -1;"));
     assert!(SAID.contains("if (end) text.scrollTop = text.scrollHeight; else if (i >= 0) text.scrollTop = rel(text.children[i]) - was.off;"));
     assert!(SAID.contains(r#"up.addEventListener("click", () => { if (!open && from > 0 && text.scrollTop <= 1) opening(half()); else scroll(-half()); });"#));
-    assert!(SAID.contains(r#"down.addEventListener("click", () => { if (open && atEnd()) close(); else scroll(half()); });"#));
+    assert!(SAID.contains(r#"down.addEventListener("click", () => { if (open && atEnd()) { if (!full) close(); } else scroll(half()); });"#));
     assert!(SAID.contains(r#"text.addEventListener("wheel""#) && SAID.contains(r#"text.addEventListener("touchmove""#));
-    assert!(SAID.contains("if (!keep) { start = true; begin(); return; }") && SAID.contains("text.scrollTop = raw ? text.scrollHeight : 0; start = false;"));
+    assert!(SAID.contains("if (!keep) { start = true; begin(); if (full) requestAnimationFrame(() => { if (full && !open && from > 0) opening(0); }); return; }") && SAID.contains("text.scrollTop = raw ? text.scrollHeight : 0; start = false;"));
     // hidden, nothing is measured; shown again (Show, also after a reload with it hidden) or resized, the buttons are
     // measured again, so a long reply has its Later button
     assert!(SAID.contains("if (el.hidden || !text.clientHeight) return;") && SAID.contains("if (on) begin();"));

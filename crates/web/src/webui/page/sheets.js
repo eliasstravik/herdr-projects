@@ -1,8 +1,8 @@
 // What comes up over the board: the question it asks (approve a merge, remove a task), the
-// More menu with every other action, and the board's short message to you. The question's words and answers and the
+// More menu with every other action, the choice of whose tasks to show, and the board's short message to you. The question's words and answers and the
 // menu's entries come from the board (webui/side-model.js): each button presses the key it stands for.
 /* global document */
-import { h, icon } from "./dom.js";
+import { h, icon, get } from "./dom.js";
 
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const GROUPS = { ctrl: "Do", alt: "Show" };
@@ -24,6 +24,17 @@ export function menuEl(snap, { onPress, onClose, onFind }) {
     group("ctrl"),
     h("section.sw-menu-group", h("h4.sw-menu-name", "Find"), h("button.sw-menu-item", { type: "button", onclick: () => { onClose(); onFind(); } }, "Find: show only the tasks that match")),
     group("alt")));
+}
+// Whose tasks to show: every board the sidebar's Boards section lists (webui/boards.rs), each with how it stands, the
+// one shown now checked. A machine that does not answer says so, and can still be picked: its board says why.
+export async function pickerEl(scope, { onPick, onClose }) {
+  const out = await get("boards");
+  const rows = out.ok ? out.boards || [] : [];
+  return h("div.sw-scrim", { onclick: (e) => { if (e.target === e.currentTarget) onClose(); } }, h("div.sw-sheet.sw-menu", { role: "dialog", "aria-modal": "true", "aria-label": "Whose tasks to show" },
+    h("header.sw-menu-head", h("span.sw-menu-title", "Whose tasks to show"), h("button.icon-button", { type: "button", "aria-label": "Close", onclick: onClose }, icon("close"))),
+    rows.length ? rows.map((b) => h(`button.sw-menu-item.sw-pick-item${b.off ? ".is-off" : ""}`, { type: "button", "aria-current": b.scope === scope ? "true" : null, onclick: () => (b.scope === scope ? onClose() : onPick(b.scope)) },
+      h("span.sw-pick-copy", h("span.sw-pick-name", b.name), h("span.sw-pick-line", b.line)), b.scope === scope ? icon("check") : null))
+      : h("p.sw-set-means", out.msg || "The machines could not be listed just now.")));
 }
 // The board's message: a short line that goes by itself; one that says something went wrong stays until dismissed.
 export function toast(host, msg, onDismiss) {

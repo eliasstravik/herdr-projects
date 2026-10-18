@@ -53,6 +53,13 @@
 .sw-chips:not(:empty) { padding-top: var(--space-2, 8px); padding-bottom: var(--space-2, 8px); border-bottom: var(--hairline, 1px) solid var(--sw-line); }
 .sw-chip { display: inline-flex; align-items: center; gap: var(--space-1, 4px); min-height: var(--touch-target, 40px); padding: 0 var(--space-3, 12px); border: var(--hairline, 1px) solid var(--sw-line); border-radius: var(--radius-pill, 999px); background: var(--sw-lift); color: var(--sw-text); font: inherit; font-size: var(--fs-xs, 12px); cursor: pointer; }
 .sw-chip-x { color: var(--sw-dim); }
+/* Whose tasks show: two taps in one chip, the name (pick another) and its × (this machine's own), each a thumb's size. */
+.sw-chip-pick { padding: 0; gap: 0; cursor: default; }
+.sw-chip-main, .sw-chip-pick .sw-chip-x { display: inline-flex; align-items: center; gap: var(--space-1, 4px); min-height: var(--touch-target, 40px); border: 0; background: none; color: inherit; font: inherit; cursor: pointer; border-radius: var(--radius-pill, 999px); }
+.sw-chip-main { padding: 0 var(--space-1, 4px) 0 var(--space-3, 12px); }
+.sw-chip-pick .sw-chip-x { justify-content: center; min-width: var(--touch-target, 40px); color: var(--sw-dim); }
+.sw-chip-pick svg { width: 14px; height: 14px; }
+.sw-chip-main:focus-visible, .sw-chip-pick .sw-chip-x:focus-visible, .sw-open:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
 /* The list and one task: side by side on a wide screen, one at a time on a phone. */
 .sw-body { flex: 1; min-height: 0; display: flex; }
 .sw-list-host, .sw-task-host { flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: var(--space-2, 8px) var(--space-2, 8px) var(--space-6, 24px); }
@@ -121,15 +128,27 @@
 .sw-menu-name { margin: var(--space-3, 12px) 0 var(--space-1, 4px); font-size: var(--fs-sm, 13px); font-weight: var(--fw-semibold, 600); color: var(--sw-dim); }
 .sw-menu-item { display: block; width: 100%; min-height: var(--touch-target, 40px); padding: var(--space-2, 8px) var(--space-3, 12px); border: 0; border-radius: var(--radius-md, 8px); background: none; color: var(--sw-text); font: inherit; text-align: left; cursor: pointer; }
 .sw-menu-item:hover { background: var(--sw-hover); }
+.sw-pick-item { display: flex; align-items: center; gap: var(--space-3, 12px); }
+.sw-pick-item[aria-current] { background: var(--sw-hover); }
+.sw-pick-item svg { flex: none; width: 18px; height: 18px; color: var(--accent, #f0a830); }
+.sw-pick-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sw-pick-line { color: var(--sw-dim); font-size: var(--fs-sm, 13px); }
+.sw-pick-item.is-off .sw-pick-name { color: var(--sw-dim); }
 .sw-toast-host { flex: none; position: relative; height: 0; }
 .sw-toast { position: absolute; left: var(--space-3, 12px); right: var(--space-3, 12px); bottom: var(--space-2, 8px); z-index: 3; display: flex; align-items: flex-start; gap: var(--space-2, 8px); max-width: 640px; margin: 0 auto; padding: var(--space-2, 8px) var(--space-3, 12px); border-radius: var(--radius-md, 8px); border: var(--hairline, 1px) solid var(--sw-line); background: var(--sw-lift); color: var(--sw-text); box-shadow: var(--shadow-pop, 0 8px 24px rgba(0, 0, 0, .4)); font-size: var(--fs-sm, 13px); }
 .sw-toast-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .sw-toast-red { border-color: var(--sw-red); color: var(--danger-text, #ffd9d4); background: color-mix(in srgb, var(--sw-red) 14%, var(--sw-lift)); }
 .sw-toast-green { border-color: var(--sw-green); } .sw-toast-yellow { border-color: var(--sw-yellow); }
 .sw-toast-x { flex: none; width: var(--touch-target, 40px); height: var(--touch-target, 40px); min-width: var(--touch-target, 40px); min-height: var(--touch-target, 40px); }
-.sw-unread { margin: var(--space-3, 12px) var(--space-3, 12px) 0; padding: var(--space-2, 8px) var(--space-3, 12px); border: var(--hairline, 1px) solid var(--sw-yellow); border-radius: var(--radius-md, 8px); font-size: var(--fs-sm, 13px); }
+/* Machines that do not answer: one notice, what is wrong on top, each machine's reason and what to do under it. */
+.sw-unread { margin: var(--space-2, 8px) var(--space-3, 12px) 0; padding: var(--space-2, 8px) var(--space-1, 4px) var(--space-2, 8px) var(--space-3, 12px); border: var(--hairline, 1px) solid var(--sw-yellow); border-radius: var(--radius-md, 8px); background: color-mix(in srgb, var(--sw-yellow) 6%, transparent); font-size: var(--fs-sm, 13px); }
+.sw-unread-top { display: flex; align-items: flex-start; gap: var(--space-2, 8px); }
+.sw-unread-head { flex: 1; margin: var(--space-2, 8px) 0 0; color: var(--sw-strong); font-weight: var(--fw-semibold, 600); overflow-wrap: anywhere; }
+.sw-unread-x { flex: none; min-width: var(--touch-target, 40px); min-height: var(--touch-target, 40px); color: var(--sw-dim); }
+.sw-unread-one { margin: var(--space-2, 8px) var(--space-2, 8px) 0 0; }
 .sw-unread-line { margin: 0; color: var(--sw-text); overflow-wrap: anywhere; }
-.sw-unread summary { margin-top: var(--space-1, 4px); color: var(--sw-dim); cursor: pointer; }
+.sw-asking { margin: var(--space-2, 8px) var(--space-3, 12px) 0; color: var(--sw-dim); font-size: var(--fs-sm, 13px); }
+.sw-unread summary { display: flex; align-items: center; min-height: var(--touch-target, 40px); color: var(--accent, #f0a830); cursor: pointer; }
 .sw-unread-detail { margin: var(--space-2, 8px) 0 0; color: var(--sw-dim); font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
 .sw-empty { color: var(--sw-dim); padding: var(--space-6, 24px) var(--space-4, 16px); margin: 0; text-align: center; }
 
@@ -138,6 +157,7 @@
   display: flex; align-items: baseline; gap: var(--space-2, 8px); margin: 0; padding: 0 var(--space-3, 12px) var(--space-1, 4px);
   font-size: var(--fs-sm, 13px); font-weight: var(--fw-semibold, 600);
 }
+.sw-machine-name:first-of-type { margin-top: var(--space-2, 8px); }
 .sw-machine-name {
   margin: var(--space-5, 20px) var(--space-3, 12px) 0; padding-bottom: var(--space-1, 4px); border-bottom: var(--hairline, 1px) solid var(--sw-line);
   font-size: var(--fs-md, 14px); font-weight: var(--fw-bold, 700);
@@ -145,6 +165,7 @@
 /* A heading folds with a tap: the whole heading is the button, its caret says which way; selected, it has a row's tint. */
 .sw-fold { display: inline-flex; align-items: baseline; gap: var(--space-2, 8px); margin: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
 .sw-caret { width: 1em; color: var(--sw-dim); font-weight: var(--fw-regular, 400); }
+@media (pointer: coarse) { .sw-fold { align-items: center; min-height: var(--touch-target, 40px); } .sw-group-name { align-items: center; padding-bottom: 0; } }
 .sw-group-name.is-selected, .sw-machine-name.is-selected { background: var(--sw-lift); box-shadow: inset 3px 0 0 var(--accent, #f0a830); border-radius: var(--radius-md, 8px); }
 .sw-fold:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
 .sw-count { color: var(--sw-dim); font-weight: var(--fw-regular, 400); letter-spacing: 0; }
@@ -154,7 +175,8 @@
   display: flex; align-items: flex-start; gap: var(--space-3, 12px); min-height: var(--touch-target, 40px);
   padding: var(--space-2, 8px) var(--space-3, 12px); border-radius: var(--radius-md, 8px); cursor: pointer;
 }
-.sw-row:hover { background: var(--sw-hover); }
+/* Only where there is a pointer that hovers: on a phone the tint would stay on the row last tapped. */
+@media (hover: hover) { .sw-row:hover { background: var(--sw-hover); } }
 /* The selected row: its tint, and a bar in its gutter, so that which task is selected never hangs on a tint alone. */
 .sw-row.is-selected { background: var(--sw-lift); box-shadow: inset 3px 0 0 var(--accent, #f0a830); }
 .sw-row:focus-visible, .sw-more:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: calc(-1 * var(--ring-offset, 2px)); }
@@ -194,6 +216,10 @@
 a.sw-tag:hover { text-decoration: underline; }
 .sw-row.is-quiet .sw-title { color: var(--sw-dim); }
 .sw-more { margin: var(--space-1, 4px) 0 0 calc(var(--space-3, 12px) + 1.25em); color: var(--sw-dim); font-size: var(--fs-xs, 12px); }
+/* The selected row's Open: a step of its own, under what the row says. */
+.sw-row-acts { display: flex; margin-top: var(--space-2, 8px); }
+.sw-open { display: inline-flex; align-items: center; gap: var(--space-1, 4px); height: auto; min-height: var(--touch-target, 40px); padding: 0 var(--space-2, 8px) 0 var(--space-3, 12px); }
+.sw-open svg { width: 16px; height: 16px; }
 
 /* The board's colour names. */
 .sw-c-red { color: var(--sw-red); } .sw-c-green { color: var(--sw-green); } .sw-c-yellow { color: var(--sw-yellow); }
