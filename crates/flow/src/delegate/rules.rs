@@ -11,6 +11,10 @@ use crate::store::keys::{repo_keys, say_id};
 use crate::store::settings::lookup::work;
 use crate::store::settings::values::command_of;
 
+/// The work stays in this task: it is never handed on to another task or agent on the board. Its program's own helpers
+/// are another matter: told only "never hand it to anyone else", Claude and Codex refused subagents even when the task
+/// asked for them (HP-53, docs/agents.md).
+pub const OWN_WORK_RULE: &str = "Do this task's work in this folder, and do not hand it on to another task or agent on the work board. Your program's own helpers (subagents, and skills that use them) are yours to use, as they would be outside the board: also whenever the task or a skill asks for them.";
 pub const WAIT_RULE: &str = "That command is the only way to say that you are waiting, and it holds for one stop: run it every time you stop for the human's answer, also for each question of an interview or a consultation and also when you ran it before. Their answer arrives as your next message, and then you carry on. A stop without it means you are finished, whatever your last message, your report or your closing note says: the work is then checked and reviewed as it stands. Never run it to put off the review of finished work.";
 /// The board's own rules are fixed. Your own words for the worker (`worker.instructions`) come after them.
 pub fn rules(t: &Obj) -> String {
@@ -24,7 +28,7 @@ pub fn rules(t: &Obj) -> String {
         format!("You are in your own git worktree on branch {}; the human's checkout is elsewhere and untouched. Commit your work on this branch with clear messages. Do not push, merge into the human's branch or switch branches yourself (you may bring the base branch into your own branch to resolve a conflict). When you finish, the board runs the repo's check and opens the pull request.", t.s("branch"))
     } else { String::new() };
     let lines: Vec<String> = vec![
-        if planner { plan::planner_rule(t) } else { "Do all of this task's own work yourself, in this folder. Never hand it to anyone else.".into() },
+        if planner { plan::planner_rule(t) } else { OWN_WORK_RULE.into() },
         if plan::open(t) && !planner { plan::plan_rule(t) } else { String::new() },
         if research && !planner { r::research_rule(t) } else { String::new() },
         tree,
