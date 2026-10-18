@@ -183,3 +183,30 @@ fn merged_with(w: &World, flag: &str) -> Obj {
     assert_eq!(c.s("stage"), "done", "{}", c.at("failure"));
     t
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn real_programs_a_helper_is_wired_to_the_agent_and_a_command_left_running_is_not() {
+    use std::process::{Command, Stdio};
+    let me = std::process::id() as i64;
+    let sleep = |i: Stdio, o: Stdio| Command::new("sleep").arg("30").stdin(i).stdout(o).stderr(Stdio::null()).spawn().unwrap();
+    let wired = |c: &std::process::Child, group: &[i64]| sw::herdr::procs::real_wired_to(c.id() as i64, group);
+    // talks to this process through pipes, as an MCP server does with its agent: a helper
+    let mut piped = sleep(Stdio::piped(), Stdio::piped());
+    assert_eq!(wired(&piped, &[me, piped.id() as i64]), Some(true));
+    assert_eq!(wired(&piped, &[piped.id() as i64]), Some(false), "the other end is held by no process of the group");
+    // through a socket pair, as Claude Code wires its MCP servers
+    let (a, b) = std::os::unix::net::UnixStream::pair().unwrap();
+    let (a2, _b2) = std::os::unix::net::UnixStream::pair().unwrap();
+    let mut socket = sleep(Stdio::from(std::os::fd::OwnedFd::from(a)), Stdio::from(std::os::fd::OwnedFd::from(a2)));
+    assert_eq!(wired(&socket, &[me, socket.id() as i64]), Some(true));
+    drop(b);
+    // a command with its input and output put away, or into a file: no helper, at work
+    let mut null = sleep(Stdio::null(), Stdio::null());
+    assert_eq!(wired(&null, &[me, null.id() as i64]), Some(false));
+    let file = std::fs::File::create(std::env::temp_dir().join(format!("hp-wired-{me}.log"))).unwrap();
+    let mut logged = sleep(Stdio::piped(), Stdio::from(file));
+    assert_eq!(wired(&logged, &[me, logged.id() as i64]), Some(false));
+    for c in [&mut piped, &mut socket, &mut null, &mut logged] { let _ = c.kill(); let _ = c.wait(); }
+    let _ = std::fs::remove_file(std::env::temp_dir().join(format!("hp-wired-{me}.log")));
+}

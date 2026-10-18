@@ -17,7 +17,7 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
             let p = &st["panes"][pi];
             let shell = 4194400;
             // The agent is pid 1, with a process under it. `tool`: a command in a group of its own (not listed); in its own
-            // group: `helper`, one that uses no terminal (an MCP server); `child`, a command on the terminal; `wrapped`, the
+            // group: `helper`, one wired to it (an MCP server); `child`, a command that is not; `wrapped`, the
             // agent's own program under an npm wrapper
             let under = ["tool", "helper", "child", "wrapped"].iter().any(|k| p.b(k));
             let fg = if st.b("pids") && p.at("agent").is_object() { p.at("agent").i("pid") } else if under { 1 } else if p.b("busy") { shell + 1 } else { shell };

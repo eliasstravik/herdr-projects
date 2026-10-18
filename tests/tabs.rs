@@ -45,7 +45,7 @@ impl Fake for Hooked {
         self.inner.run(args, input)
     }
     fn kids(&self, pid: i64) -> Vec<i64> { self.inner.kids(pid) }
-    fn on_terminal(&self, pid: i64) -> Option<bool> { self.inner.on_terminal(pid) }
+    fn wired_to(&self, pid: i64, group: &[i64]) -> Option<bool> { self.inner.wired_to(pid, group) }
     fn kill(&self, pid: i64) { self.inner.kill(pid) }
 }
 

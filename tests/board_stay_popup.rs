@@ -43,7 +43,7 @@ impl Fake for Pop {
         answer(0, json!({ "type": "ok" }))
     }
     fn kids(&self, pid: i64) -> Vec<i64> { self.inner.kids(pid) }
-    fn on_terminal(&self, pid: i64) -> Option<bool> { self.inner.on_terminal(pid) }
+    fn wired_to(&self, pid: i64, group: &[i64]) -> Option<bool> { self.inner.wired_to(pid, group) }
     fn kill(&self, pid: i64) { self.inner.kill(pid) }
     fn ask(&self, method: &str, _params: &Value) -> Result<Value, HerdrError> {
         let mut st = self.inner.st.borrow_mut();

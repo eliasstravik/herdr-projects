@@ -18,7 +18,7 @@ impl Fake for Hooked {
         self.inner.run(args, input)
     }
     fn kids(&self, pid: i64) -> Vec<i64> { self.inner.kids(pid) }
-    fn on_terminal(&self, pid: i64) -> Option<bool> { self.inner.on_terminal(pid) }
+    fn wired_to(&self, pid: i64, group: &[i64]) -> Option<bool> { self.inner.wired_to(pid, group) }
     fn kill(&self, pid: i64) { self.inner.kill(pid) }
 }
 fn hooked(w: &World) -> Rc<Hooked> { let h = Rc::new(Hooked { inner: w.fake.clone(), on: RefCell::new(None), busy: Cell::new(false) }); sw::herdr::cli::set_fake(Some(h.clone())); h }
