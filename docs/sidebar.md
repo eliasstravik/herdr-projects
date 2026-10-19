@@ -76,9 +76,10 @@ when the row has no numbers.
   its attempts has none: its attempts' entries say `pick one`.
 - **Only the task's own pane and space.** herdr hands the id of a closed pane or a removed space out again (after it
   restarts, or once you removed a done task's space yourself), but never a terminal's. A pane under the task's id in a
-  terminal the task never had, outside the task's own folder, is not the task's: the board names nothing there and
+  terminal the task was never seen in is not the task's, even in its own folder: the board names nothing there and
   takes nothing off, and the task's row says its agent is gone. Its space is named only while its pane is in it, and a
-  coordinator's pane or space is never a task's, whatever the task's old link says.
+  coordinator's pane or space is never a task's, whatever the task's old link says. After herdr restarts, the pane is
+  the task's again once herdr shows the task's agent running in its new terminal.
 
 ## With and without the plugin's sidebar rows
 

@@ -33,17 +33,15 @@ pub fn live_of(t: &Task, session: &Session, here: &str) -> Value {
     match agents.get(pane_id) { Some(a) => json!({ "status": a.at("agent_status"), "agent": a, "pane": pane }), None => json!({ "status": null, "pane": pane }) }
 }
 /// Is the pane under the task's pane id still the task's own? herdr hands a closed pane's id (and its space's) out
-/// again, after a restart or once a space was removed, but never a terminal_id: a pane in a terminal the task never
-/// had is another's, unless herdr restarted and kept the task's pane under its id, in the task's own folder.
+/// again, after a restart or once a space was removed, but never a terminal_id: a pane in a terminal the task was never
+/// seen in is another's, wherever it is. After herdr restarted, the task's pane is its own again once the hook has read
+/// its agent in the new terminal and herdr said so (hook.rs: `apply`, which keeps it among the task's `terms`).
 pub fn owns_pane(t: &Task, pane: &Value) -> bool {
     let term = pane.t("terminal_id");
     let mut known = if t.at("terms").is_array() { strings(t.at("terms")) } else { vec![] };
     known.push(t.at("link").t("terminal"));
     known.retain(|s| !s.is_empty());
-    if term.is_empty() || known.is_empty() || known.contains(&term) { return true; }
-    // The folder its agent works in, also once that is gone: never the repo's own, where its Coordinator is.
-    let dir = if t.b("worktree") { std::path::PathBuf::from(t.s("worktree")) } else { crate::store::repos::cwd_of(t) };
-    crate::hook::same_dir(pane.s("cwd"), &dir) || crate::hook::same_dir(pane.s("foreground_cwd"), &dir)
+    term.is_empty() || known.is_empty() || known.contains(&term)
 }
 /// The show's fields, under names that cannot collide with a task's own (a task has its own `review` and `msg`).
 pub fn pick(out: &mut Obj, s: &Show) {

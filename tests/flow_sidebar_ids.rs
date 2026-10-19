@@ -1,9 +1,11 @@
 //! herdr hands a closed pane's id and its space's out again: a task's old link never names another's pane or space in
-//! herdr's sidebar, and never a coordinator's, while a task's own pane, also after herdr restarted, still is written.
+//! herdr's sidebar, and never a coordinator's, while a task's own pane, also after herdr restarted (once the hook has
+//! read its agent in the new terminal), still is written.
 use crate::common;
 use common::*;
 use serde_json::{json, Value};
 use sw::flow::sidebar::{sync_sidebar, tell_sidebar};
+use sw::herdr::Herdr;
 use sw::json::*;
 use sw::store::tasks::{update, Change};
 
@@ -21,7 +23,6 @@ fn a_done_tasks_old_pane_and_space_ids_handed_to_another_space_are_never_renamed
     let id = w.add("Add a greeting");
     delegate(&id);
     settle(&id);
-    update(&id, |t| { t.put("stage", "done"); Ok(Change::Write) }).unwrap();
     let t = task(&id);
     let (pane, ws) = (t.at("link").t("pane"), t.at("link").t("workspace"));
     assert!(t.at("link").b("ownsWorkspace") && t.at("link").b("terminal"), "{}", t.at("link"));
@@ -29,11 +30,19 @@ fn a_done_tasks_old_pane_and_space_ids_handed_to_another_space_are_never_renamed
     retitle(&id, "Say hello");
     sync();
     assert_eq!(label(&w, &ws), "PRJ-1 Say hello");
-    // herdr restarted: the same pane under the same id in the task's own folder, in a new terminal. Still its own.
+    // Another terminal under the task's ids in its own folder is not its pane for all that: nothing is written.
     repane(&w, &pane, json!({ "terminal_id": "term_after_restart" }));
     retitle(&id, "Say hello again");
+    let n = writes(&w, &pane, &ws);
+    sync();
+    tell_sidebar(&task(&id));
+    assert_eq!((label(&w, &ws).as_str(), writes(&w, &pane, &ws)), ("PRJ-1 Say hello", n), "a terminal the task was never seen in");
+    // It was herdr restarting: the hook reads the task's agent in the new terminal, herdr says so, and it is its own.
+    let reading = Herdr::new(Some(w.socket.clone())).agent_get(&pane).unwrap().unwrap();
+    sw::hook::apply(&id, &reading, &Herdr::new(Some(w.socket.clone())));
     sync();
     assert_eq!(label(&w, &ws), "PRJ-1 Say hello again", "its own pane after a restart");
+    update(&id, |t| { t.put("stage", "done"); Ok(Change::Write) }).unwrap();
     // Its space was removed by hand and herdr opened another under the same ids: another terminal in another folder.
     let repo = sw::store::repos::folder_of(&id).display().to_string();
     w.patch(|st| { for x in st["workspaces"].as_array_mut().unwrap() { if x.s("workspace_id") == ws { x["label"] = json!("proj"); } } });
