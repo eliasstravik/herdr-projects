@@ -1,7 +1,10 @@
 # The web board's chat box
 
-**The box you type in at the foot of the [web board](web-ui.md) looks and works like the Herdr web UI's own chat
-input**, so going from the Board to an agent's chat and back feels like one program.
+**The board's own box looks and works like the Herdr web UI's own chat input**, so going from the Board to an agent's
+chat and back feels like one program. Most of the time the chat under the [web board](web-ui.md)'s list *is* the web
+UI's own chat, its box with it ([the web board's chat](web-chat.md)); this box is the one the board's own chat has
+where the web UI has none to show (a Coordinator not started yet, a task with no agent in its pane, another machine's
+Coordinator).
 
 It is not the web UI's code. The web UI's input is part of its bundled app, whose built files change with every
 release, so the Board loads nothing from them. It is the same thing built again in the Board's own page
@@ -77,11 +80,10 @@ Measured against **herdr-web-ui 0.4.8** (see [how](#how-it-was-measured)):
 however long the words get (`crates/web/src/webui/page/room.js`):
 
 - **The board's header, its chips and the list step aside**, as they do for the chat full screen: the chat has the
-  whole of what the keyboard leaves. The line that says who gets your words stays. When the keyboard goes down (or you
+  whole of what the keyboard leaves. The chat's bar, which says who gets your words, stays. When the keyboard goes down (or you
   tap elsewhere), all of it is back.
-- **The conversation takes what the box leaves**, over it. Where that is too little to read (under its Earlier and Later
-  buttons, one over the other), it steps aside for the words, and comes back when they are shorter. Its full screen
-  button steps aside while you type.
+- **The conversation takes what the box leaves**, over it. Where that is too little to read (104 px), it steps aside for
+  the words, and comes back when they are shorter.
 - **The box is never taller than the room left**: as tall as its words, up to ten lines (or the height set with the
   grip), and less where the room is less; then it scrolls, never under one line. The files attached stand above the
   words inside that same room, so they never push the words off the screen.
@@ -89,7 +91,7 @@ however long the words get (`crates/web/src/webui/page/room.js`):
   in that you did not type (a file's path, a dictation). Measuring again (the window's size, the board drawn again
   every two seconds) never moves where the box is scrolled to.
 - **Where not even one line fits** (a phone on its side, the keyboard leaving 200 px), all of the chat but the box steps
-  aside too: the line on who gets your words, the conversation, the grip and the attached files' tiles. The files stay
+  aside too: the chat's bar, the conversation, the grip and the attached files' tiles. The files stay
   attached (their paths are in the words) and come back with the room.
 - **On an iPhone the box also stands clear of the strip iOS floats over the page** while its keyboard is up (its arrows
   and Done): iOS counts it as part of the visible window, so the box keeps 72 px more room at its foot. That strip was
@@ -114,7 +116,7 @@ real phone.
 | the lock that keeps a draft with who it was typed for | a filled chip in the lower left, beside the add button, only while the page shows somebody else: `To: HSW-34 agent · not who is shown above`. Attaching a file locks it as typing does |
 | the box's colour by who you type to ([colours](colours.md)) | the card's border: the plain text colour for the Coordinator, the task's status colour for its agent. The web UI's border is grey and turns to its accent on focus; here the border already says who, so focus draws a ring of that same colour round it |
 | the two ways to send | the round button and enter send. **Send + start** and tab, while there are words and it applies, send and put an agent on what it adds. **Send + start** is a chip of the web UI's (the shape of its one-tap replies). Each says in its tooltip what it does with the words |
-| who you talk to (the Coordinator or the task's agent), and the conversation | over the box, as wide as it: one button that names who gets your words and flips it, Hide and Show, and the conversation in a panel of its own that scrolls back and goes full screen ([the web UI](web-ui.md)) |
+| who you talk to (the Coordinator or the task's agent), and the conversation | the chat's bar over the conversation: the switch of the two you can talk to, Call, Hide and Full screen; the conversation over the box, drawn as the web UI draws its own ([the web board's chat](web-chat.md)) |
 | the notice after sending | above the chat, as before |
 | a draft is never lost | it is kept with who it is for, also over a reload. While a message is on its way the words stay in the box and a second enter does nothing. Words the board could not take stay in the box |
 | a device that may only watch | the box is faded and says so |

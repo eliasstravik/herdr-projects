@@ -1,0 +1,95 @@
+# The web board's chat
+
+**The chat under the [web board](web-ui.md)'s list is the Herdr web UI's own chat**: the same transcript, box, files,
+dictation, Stop and keyboard handling as when you open that agent from the web UI's sidebar. The board docks it under
+its list and puts one bar over it: who you talk to, how they stand, Call, Hide and Full screen.
+
+On a phone, and in a narrow window:
+
+```
+┌──────────────────────────────────┐
+│ ←  Board                   🔍  ⋯ │
+│ ▾ needs you 1                    │
+│   ! HP-5  Write a haiku …        │
+│ ▾ to do 4                        │
+│   ○ HP-4  Fix flaky login test   │
+├────────────── ═══ ───────────────┤  the grip
+│ [● Coordinator│○ HP-4 agent]☎ ⌄ ⤢│  the bar
+│                                  │
+│   the web UI's own transcript    │
+│ ┌──────────────────────────────┐ │
+│ │ the web UI's own box         │ │
+│ └──────────────────────────────┘ │
+└──────────────────────────────────┘
+```
+
+In a wide window the list and the chat stand side by side, the bar at the top of the chat.
+
+## The bar
+
+- **Who you talk to**: the web UI's own switch with the two you can talk to, the Coordinator first and the selected
+  task's agent second (`HP-4 agent`; on a machine's or a repo's heading, its coordinator). The one you talk to is
+  pressed; a tap on the other presses the board's own key, as `space` does on the terminal board. With nobody else to
+  talk to (no task selected, an automation's row) it is only their name.
+- **How they stand**: each choice has its mark in the board's colours (the dot breathes while it works). Beside it the
+  board's words for it (`No agent yet: your message starts one`, a check's progress). On a phone, a word the mark
+  already says (`idle`, `working`) steps aside, and a longer one takes a line of its own under the switch.
+- **Call** starts a [voice call](voice.md) with whoever the chat talks to (on a phone only its icon). While a call rings
+  or is on, its row stands under the bar, and the button steps aside for it.
+- **Hide** (the chevron) keeps only the box: the list gets the screen. **Show** brings the conversation back. It is the
+  board's `alt+c`, so the board remembers which, also over a reload.
+- **Full screen** (the arrows): the board's header and list step aside and the chat has the whole screen under the bar.
+  The arrow at the bar's left, the board's own arrow or Esc go back.
+- **The grip** on the bar's top edge (on a phone, and on a desktop when pointed at) moves where the list ends and the
+  chat begins: from a quarter to four fifths of the screen, kept in this browser. The arrow keys move it a step, Home
+  puts it back.
+
+## Docked on the web UI's chat
+
+The board asks where the chat of whoever it talks to is, and the web UI under the board goes there in place: its
+address names that pane's chat view (`?ws=…&pane=…&view=chat#board`), so Back still closes the board.
+
+- **It only looks.** The Coordinator's pane, a machine's or a repo's coordinator's, or the task's agent's pane while an
+  agent is in it now. Nothing is opened again or started for it: a task whose agent is not in its pane is the board's
+  own chat until you ask for more (**Open this task's agent** opens its space again).
+- **The web UI makes room.** Its pane column leaves the board the room the board covers: at its top on a phone and a
+  narrow window, at its left beside the list on a wide one. Its own header and tabs over the chat step aside (the
+  board's bar stands for them), and the board goes under the web UI's own menus, sheets and drawer.
+- **Another machine.** A task's agent on another machine is docked from that machine's PC in the web UI, while it is
+  connected there; the board stays the board of the PC the page was on.
+- **Closing the board** puts the web UI back on the pane it showed before.
+- **Picking another pane** in the web UI's own sidebar undocks it.
+- Where the web UI cannot show them, or does not show them within four seconds (a Coordinator not started yet, a task
+  with no agent in its pane, another machine's Coordinator, a web UI this was not made for), **the board's own chat
+  stands in**, in the same place and under the same bar: the conversation as the web UI draws its own (your words a
+  card on the right, theirs plain prose) over [the board's own box](web-chat-box.md).
+
+## What you type
+
+- **To a task's agent**: the web UI's box sends it, as it does in the web UI, with its queue, its `/` menus and its Stop.
+- **To a coordinator** (the Coordinator, a machine's or a repo's): the web UI's box, but the board sends the words, as
+  its own box does. So the Coordinator knows where you were (the repo and the task you had open,
+  [the Coordinator](coordinator.md)), and words wait while it is busy.
+  - Enter (or what the web UI's Settings → Chat says sends) and the round Send.
+  - **Tab, or Send + start** (a chip over the box while it holds words): sends and puts an agent on every task it adds.
+  - The words leave the box once the board took them; words it did not take stay.
+  - A message sent with Send + start shows in the web UI's transcript with the line the board adds under it.
+- Escape in the web UI's box and its menus is the web UI's own.
+
+## Above a phone's keyboard
+
+While you type in the web UI's box with a phone's keyboard up, **the board steps aside to its bar**: the header and the
+list go, and the web UI's chat has the room the keyboard leaves, as it handles its own box above the keyboard. When
+the keyboard goes down, the list is back. The keyboard is known by the web UI's own mark on the page
+(`data-keyboard`). The board's own box, where it stands in, keeps its own way: [above a phone's
+keyboard](web-chat-box.md#above-a-phones-keyboard).
+
+## How it was tried
+
+On a copy of Herdr, the web UI (herdr-web-ui 0.4.12) and the board, with a real Coordinator and a real task's agent
+(Claude Code), in Chromium and WebKit at an iPhone's size (440×956) and a desktop's (1440×900): the Coordinator and a
+task's agent docked, a task with no agent (the board's own chat), working, a long answer, a file attached in the web
+UI's box, Hide, Full screen, the More menu over the docked chat, a call ringing, on, muted, ended and failed (with the
+call's service played by the page), Enter and Send + start through the board (one message each, the box emptied),
+closing the board and Back (the web UI back on its pane). The keyboard was played: the web UI's mark set and its
+height made shorter. Not tried on a real phone.

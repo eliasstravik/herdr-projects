@@ -74,9 +74,10 @@ dark and every palette of the web UI by itself.
 
 - The web UI does not read Herdr's theme, so there the Board matches Herdr as the web shows it.
 - A status is the web UI's own colour for it; a task nobody started is its dim text colour.
-- The frame of the box you type in says who gets your words, as on the terminal board: the plain text colour for the
-  Coordinator, the task's status colour for its agent ([colours](colours.md)). That box is the web UI's own chat input,
-  built again and measured against it: [the web board's chat box](web-chat-box.md).
+- The chat is the web UI's own chat, docked under the list: [the web board's chat](web-chat.md). Where the board's own box
+  stands in, its frame says who gets your words, as on the terminal board: the plain text colour for the Coordinator,
+  the task's status colour for its agent ([colours](colours.md)). That box is the web UI's own chat input, built again
+  and measured against it: [the web board's chat box](web-chat-box.md).
 
 | On the terminal board | On the web board |
 |---|---|
@@ -87,13 +88,13 @@ dark and every palette of the web UI by itself.
 | the hint line: what can be done to the selected task now | the buttons at the top of the open task, in the same words |
 | the `?` menu | **More…** (and `⋯` in the header): only what applies now and is not a button already, in the buttons' own words (`Remove this task`, `Show every machine's tasks`). A key the page has no button for has no entry |
 | whose board you see (`Alt+M`) | an entry of the sidebar's **Boards** section, or **Other machines** in More… |
-| the chat, and who it talks to (`space` flips it) | one button over the box that names who gets your words, with two arrows that say a tap flips it: `Coordinator` (`Coordinator on vm-a` while one other machine's board shows, `New task` where there is no Coordinator), or the selected task's agent (`#179 agent`; on a machine's or a repo's heading, its coordinator). A tap presses the board's own key, as space does: to the selected task's agent, and back with the next tap. With nothing else to flip to (no task selected, or an automation's row), it only names who gets your words, without the arrows |
-| the line that says who: the mark, the name, where they stand | beside the button (under it on a phone, on up to two lines): the mark, the task's name for its agent (the button already names the Coordinator), and the greyed line on where they stand, with the check's progress |
-| the chat's box: the newest thing said, under a line that names who said it (the reviewer, during a review) | the same words under the same line (`Coordinator:`, `Reviewer:`, `Agent:`, `You:`, `Board:`), never the program's screen, in a panel over the box, as wide as the box. Markdown is read as the terminal reads it: bold is bold, the marks of a headline and of a code block are left out. Another machine's Coordinator too: that machine sends its words with its tasks ([other machines](other-machines.md)). **Full screen** (the arrows in the panel's top right corner) opens the web UI's own chat view of whoever you talk to, the Coordinator or the task's agent, the same view as opening that agent from the web UI's sidebar ([full screen](#the-chat-full-screen)) |
-| `alt+k` `alt+j` and the wheel: earlier in the conversation, and back | the same, by scrolling or swiping in the panel, and with **Earlier** and **Later** (the arrows in its right edge, shown only where there is more that way). It opens on the newest thing said, whoever said it (your words only until the answer comes, as on the terminal board), and holds only that. Earlier, the wheel up, or a swipe down at its top opens it to the rest of the conversation, half a panel at a time with the buttons; Later from its end closes it to the newest again. A new message starts at its beginning. Opened, the conversation stays open while you talk to the same one, on what you were reading or on its end when you were there, until Later from its end, Hide, or talking to another closes it. With the panel focused, page up and page down do what the buttons do |
-| `alt+c`: hide and show the latest message | **Hide** and **Show** beside the switch: the board's own key, so the board remembers which (also over a reload). Hidden, the switch, the line on where they stand, and the box stay |
-| typing, then sending; sending and putting an agent on what is added (`tab`) | the web UI's own chat input, built again ([the chat box](web-chat-box.md)): enter or its round button sends; tab sends and puts an agent on what it adds, where that applies (it moves on as tab does with nothing typed), and **Send + start** stands beside the button while there are words; shift+enter is a new line; pasted words go in |
-| who typed words are for | the switch says it. The words are locked to who it named when the first of them was typed: tapping another task or the switch meanwhile changes what you look at, never who gets the words. While the page shows somebody else, the box says so in its lower left (`To: HSW-1 agent · not who is shown above`) and its frame is the plain colour. Which machine's Coordinator is part of it: words typed for `vm-a`'s go to `vm-a` also after the view moved to another machine, and to nobody when `vm-a` is no longer reachable. The draft is kept with who it is for, so a reload brings both back |
+| the chat, and who it talks to (`space` flips it) | the web UI's own chat of whoever it talks to, docked under the list ([the web board's chat](web-chat.md)), under a bar whose switch has the two you can talk to: `Coordinator` (`Coordinator on vm-a` while one other machine's board shows, `New task` where there is no Coordinator) and the selected task's agent (`#179 agent`; on a machine's or a repo's heading, its coordinator). A tap on the other presses the board's own key, as space does. With nobody else to talk to (no task selected, an automation's row), only their name |
+| the line that says who: the mark, the name, where they stand | each choice of the switch with its mark, and beside it where they stand, with the check's progress (on a phone a word the mark says steps aside, a longer one has a line of its own) |
+| the chat's box: the newest thing said, under a line that names who said it (the reviewer, during a review) | the web UI's own transcript of that agent, whole: its markdown, its tools, its scrolling. Where the web UI has none to show (a Coordinator not started yet, a task with no agent in its pane, another machine's Coordinator), the board's own conversation in the same place, drawn as the web UI draws its own: the words under who said them where that is not you or the one you talk to (`Reviewer`, `Board`), never the program's screen but where its conversation cannot be read. Markdown is read as the terminal reads it. **Full screen** (the arrows in the bar) gives the chat the whole screen |
+| `alt+k` `alt+j` and the wheel: earlier in the conversation, and back | scrolling the chat, as anywhere in the web UI. The bar's grip sets how much of the screen the chat has under the list |
+| `alt+c`: hide and show the latest message | **Hide** and **Show** (the chevron in the bar): the board's own key, so the board remembers which (also over a reload). Hidden, the bar and the box stay and the list has the screen |
+| typing, then sending; sending and putting an agent on what is added (`tab`) | the web UI's own box. A task's agent's words go as the web UI sends them; a coordinator's the board sends, as enter does, so the Coordinator knows where you were; tab, or **Send + start** over the box, sends and puts an agent on what it adds. The board's own box, where it stands in, is the web UI's built again ([the chat box](web-chat-box.md)) |
+| who typed words are for | the switch says it. In the board's own box the words are locked to who it named when the first of them was typed: tapping another task or the switch meanwhile changes what you look at, never who gets the words. While the page shows somebody else, the box says so in its lower left (`To: HSW-1 agent · not who is shown above`) and its frame is the plain colour. Which machine's Coordinator is part of it: words typed for `vm-a`'s go to `vm-a` also after the view moved to another machine, and to nobody when `vm-a` is no longer reachable. The draft is kept with who it is for, so a reload brings both back |
 | a question (approve a merge, remove a task) | a sheet with the same words and answers. For a merge or a remove, neither answer is the filled button, and after a failed review the yes reads **Merge anyway** |
 | the board's message to you | a short notice above the chat. One that says something went wrong stays until dismissed |
 | the automations: a group of each machine's part of the list, one of them whole, on and off, fire now, remove | the same group in the same place (after the machine's task groups; grouped by repo, under the repo), on a phone and on a wide screen, under a heading in the automations' own purple that folds as the others do ([colours](colours.md)). Its rows are in the task rows' places: the mark (`⟳`, an arrow going round, drawn at the size of the round marks; dimmed while off); the word `on` or `off` where a task has its number (on a list too narrow for the numbers it goes with them, so every title still starts at one left edge, and is then the first word under the name: `off · every 2h`); the name; the next or last firing where a task has its time (`next in 4m`); under the name the trigger (and why it was turned off, never clamped to two lines); and the task its last firing made where a task has its tags. A task an automation made has its `[auto]` tag in that purple. A row tapped open is the automation, whole, with the same buttons, each firing a link to its task. Another machine's is named as its tasks are ([automations](automations.md)) |
@@ -111,8 +112,8 @@ dark and every palette of the web UI by itself.
 - The header names the repo, with no folder path.
 - Every [key](keys.md) of the board is a button or a menu entry, except the ones that belong to a terminal: closing the
   board's terminal, the `?` menu itself, the side panel, and the full screen (the page scrolls, and shows the list and the
-  task side by side when it is wide enough). The chat's keys are its own controls (the switch, Hide and Show, Earlier and
-  Later, tab and enter in the box).
+  task side by side when it is wide enough). The chat's keys are its own controls (the switch, Hide and Show, Full
+  screen, tab and enter in the box).
 
 **What the web chat does differently, and why.**
 
@@ -120,8 +121,8 @@ dark and every palette of the web UI by itself.
   bring back there. The terminal's way stays on the terminal.
 - The switch flips also while words are typed: the words stay locked to whom they were for and the box says so. (The
   terminal lets nothing but enter, tab and esc act on a draft.)
-- Scrolling down past the end of an opened conversation by the wheel or a swipe does not close it (a scroll that runs on
-  would close it under your finger): **Later** does.
+- The conversation is the web UI's: it scrolls as a chat does, the whole of it, rather than opening on the newest thing
+  said alone.
 
 **Fresh, and per browser.** While open, it asks every two seconds and redraws only what changed. Each browser has its own
 selection, question and message, so a phone and a desktop do not get in each other's way. What you type stays in that
@@ -132,21 +133,10 @@ machine: the board says so instead of opening it.
 
 ## The chat full screen
 
-**The arrows in the chat's top right corner open the web UI's own chat view** of whoever the chat talks to: the
-Coordinator (or a machine's or a repo's coordinator), or the selected task's agent. It is the view the web UI shows for
-any agent, with its own box, its whole conversation and the whole screen, so reading is the same there as for any agent.
-
-- **A pill at its top left**: a back arrow, and the button that names who it shows. A tap on the name flips to the other
-  one, as the switch over the board's box does (the task's agent, or back to the Coordinator), and shows their chat view
-  in place of this one.
-- **The back arrow** goes back to the board, as Back in the browser does. The pill shows only on the chat view the board
-  opened: going to another pane in the web UI leaves it behind.
-- **The task's agent** is opened as **Open this task's agent** opens it: its space is opened again first, on this machine
-  or on another of the web UI's PCs.
-- **Where the web UI has nobody to show** (a Coordinator not started yet, a task with no agent's pane, another machine's
-  Coordinator, or a device that may only watch), the board's own chat goes full screen instead: the conversation over
-  the box, the whole height of the board, in the web UI's chat type. Its arrow at the top left, the same button or Esc
-  go back.
+**Full screen** (the arrows in the chat's bar) gives the chat the whole screen: the board's header and list step aside,
+the bar stays at the top with its arrow back. It is the web UI's own chat view of whoever the chat talks to, docked
+([the web board's chat](web-chat.md)), so it reads as it does for any agent; where the web UI has none to show, the
+board's own conversation. The bar's arrow, the board's own or Esc go back.
 
 ## The same code decides
 
