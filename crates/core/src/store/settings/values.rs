@@ -102,7 +102,8 @@ pub fn fits(name: &str, value: &str, agent: &str, ask: bool) -> String {
     if e.ty == Ty::Effort { return why_not_effort(a.name, &n.model, value, if ask { Ask::Fresh } else { Ask::Kept }).unwrap_or_default(); }
     if e.ty == Ty::Access {
         let why = crate::agents::access::why_not(a.name, value);
-        if !why.is_empty() { return format!("{why}. Keep {name} at full, or choose another program for {}.agent.", name.split('.').next().unwrap_or("")); }
+        let role = name.split('.').next().unwrap_or("");
+        if !why.is_empty() { return if value == "auto" { format!("{why}. Set {name} to full or ask, or choose another program for {role}.agent.") } else { format!("{why}. Keep {name} at full, or choose another program for {role}.agent.") }; }
     }
     String::new()
 }

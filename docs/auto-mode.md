@@ -71,4 +71,16 @@ Auto mode is not `full`: where its own check will not decide, the program asks, 
 screen like any other. Claude Code shows its prompt again after 3 actions stopped in a row, or 20 in all, and for
 anything your own `permissions.ask` rules name. Nothing about it is new to the board:
 
-PROMPT_FACTS
+- **A step its check stops** does not stop the agent: it is told why and goes on another way. When that leaves it
+  needing you (it wants a script from the internet run, say), it says so as every agent does, with the board's
+  `report … --state blocked --kind permission`, and the task waits for you with its reason: `REPO-8 · Need OK to
+  download and run the install script from example.com`. Answer it in the chat ([an agent that waits for
+  you](waiting-for-you.md)).
+- **A permission prompt on its screen** (after the stops above, or a rule of your own) is a dialog like any other: Herdr
+  says the agent is blocked, the task shows under "needs you", and the chat says `The agent shows a dialog on its screen
+  that waits for your answer: enter opens it.` Press `Enter` to go into the agent and answer it there.
+
+Tried on 2026-10-19 with Claude Code 2.1.303 on Herdr, on a scratch board: a task with `worker.access auto` started
+as `claude --permission-mode auto`, showed `auto mode on` at its foot, did its work and merged; one told by its check
+to run `curl … | sh` had the download stopped (`denied by the Claude Code auto mode classifier … [Code from
+External]`) and waited for an OK through the board, as above.

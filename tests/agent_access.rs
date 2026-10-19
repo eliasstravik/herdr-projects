@@ -88,7 +88,7 @@ fn auto_is_a_value_of_every_role_access_and_is_refused_for_a_program_without_it(
     set_value("reviewer.access", &json!("full"), &you).unwrap();
     set_value("reviewer.agent", &json!("pi"), &you).unwrap();
     let e = set_value("reviewer.access", &json!("auto"), &you).unwrap_err().msg;
-    assert!(e.contains("reviewer.access: pi cannot do \"auto\": it has no auto mode") && e.contains("Keep reviewer.access at full"), "{e}");
+    assert!(e.contains("reviewer.access: pi cannot do \"auto\": it has no auto mode") && e.contains("Set reviewer.access to full or ask, or choose another program for reviewer.agent"), "{e}");
 }
 
 #[test]
