@@ -16,7 +16,7 @@ let allowed = false, floating = null;
 
 function styles() {
   if (document.querySelector("link[data-sw]")) return;
-  for (const name of ["board", "chat", "compose", "files", "voice", "boards", "talk"]) document.head.append(h("link", { rel: "stylesheet", href: `/herdr-projects/page/${name}.css`, "data-sw": true }));
+  for (const name of ["board", "chat", "compose", "files", "voice", "call", "boards", "talk"]) document.head.append(h("link", { rel: "stylesheet", href: `/herdr-projects/page/${name}.css`, "data-sw": true }));
 }
 const entry = (cls) => { const b = h(`button.${cls}`, { type: "button", "data-sw-entry": true, title: "Work board", onclick: () => show(true) }); b.append(icon("board"), "Board"); return b; };
 // A board picked in the sidebar: shown, and on a phone the web UI's drawer closes as it does when you pick a pane there.

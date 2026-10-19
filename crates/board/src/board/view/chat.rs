@@ -18,10 +18,16 @@ const CHAT_STATUS_MIN: usize = 20;
 /// `tint`: the colour of what a machine's or a repo's coordinator belongs to, its heading's (update/coords.rs), on its
 /// name and on who said what; Plain for the Coordinator and a task's agent.
 #[derive(Clone, Debug, Default)]
-pub struct Who { pub mark: Inked, pub tag: String, pub name: String, pub status: String, pub progress: Vec<Inked>, pub text: String, pub parts: Vec<Part>, pub mine: bool, pub raw: bool, pub said: bool, pub turn: String, pub note: String, pub always: bool, pub ink: Ink, pub tint: Ink }
+/// `call`: the lines a voice call on now adds under the line that says who (chat_call.rs).
+pub struct Who { pub mark: Inked, pub tag: String, pub name: String, pub status: String, pub progress: Vec<Inked>, pub text: String, pub parts: Vec<Part>, pub mine: bool, pub raw: bool, pub said: bool, pub turn: String, pub note: String, pub always: bool, pub ink: Ink, pub tint: Ink, pub call: Vec<Inked> }
 fn parts_text(parts: &[Part]) -> String { parts.iter().map(|p| format!("{}{}", if p.by.is_empty() { String::new() } else { format!("{}:\n", p.by) }, p.text)).collect::<Vec<_>>().join("\n\n") }
-/// Who the chat talks to now, as the chat draws it. None in find.
+/// Who the chat talks to now, as the chat draws it, with a voice call on now. None in find.
 pub fn chat_of(s: &mut State, t: &Theme, r: Option<&Obj>) -> Option<Who> {
+    let mut w = who_of(s, t, r)?;
+    w.call = super::chat_call::lines(s);
+    Some(w)
+}
+fn who_of(s: &mut State, t: &Theme, r: Option<&Obj>) -> Option<Who> {
     same_chat(s);
     if s.mode == Mode::Find { return None; }
     if let Some(c) = crate::board::update::coords::talking(s) { return Some(super::coords::sub_who(s, t, &c)); }
@@ -126,6 +132,7 @@ pub fn chat_lines(c: Option<&Who>, width: usize, tight: bool) -> Vec<Inked> {
     let mut out = if tight { vec![] } else { vec![Inked::new()] };
     out.extend(chat_head(c, width, tight));
     if !c.note.is_empty() && !tight { out.push(Inked::plain("   ").add(Inked::of(crate::text::cut(&c.note, width.saturating_sub(3).max(1)), Ink::Muted))); }
+    out.extend(c.call.iter().take(if tight { 1 } else { 3 }).map(|l| l.cut(width.max(1))));
     out
 }
 /// Is the box open on the latest message? A start that failed says why, hidden or not.

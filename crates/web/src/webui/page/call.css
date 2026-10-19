@@ -1,0 +1,32 @@
+/* A voice call: its toggle in the web board's chat and the strip over the conversation while a call is on
+   (callbtn.js), in the web UI's own look; and the page a call from the terminal board opens on your computer
+   (callpage.js), which has no web UI around it and brings its own few colours, light and dark. */
+.sw-call { flex: none; color: var(--sw-dim); display: inline-flex; align-items: center; gap: var(--space-1, 4px); min-height: 40px; }
+.sw-call svg, .sw-call-mute svg { width: 16px; height: 16px; }
+.sw-call.is-live { color: var(--sw-red, #e06c75); font-weight: var(--fw-semibold, 600); }
+.sw-call:focus-visible, .sw-call-mute:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
+.sw-call-strip { display: flex; flex-direction: column; gap: var(--space-1, 4px); padding: var(--space-2, 8px) var(--space-3, 12px); border: var(--hairline, 1px) solid var(--sw-line); border-radius: var(--radius-lg, 12px); background: var(--sw-panel); font-size: var(--fs-sm, 13px); }
+.sw-call-strip[hidden] { display: none; }
+.sw-call-top { display: flex; align-items: center; gap: var(--space-2, 8px); min-width: 0; }
+.sw-call-where { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sw-text); }
+.sw-call-mute { flex: none; display: inline-flex; align-items: center; gap: var(--space-1, 4px); min-height: 40px; color: var(--sw-dim); }
+.sw-call-mute[hidden] { display: none; }
+.sw-call-mute[aria-pressed="true"] { color: var(--sw-yellow, #e5c07b); }
+.sw-call-line { margin: 0; color: var(--sw-dim); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.sw-call-line b { color: var(--sw-text); font-weight: var(--fw-semibold, 600); }
+
+/* The call page of its own. */
+.sw-call-page { --bg: #f7f5f2; --fg: #1d1b19; --dim: #6b655e; --line: #ddd6cc; --red: #c43d3d; --accent: #b86f00; margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+@media (prefers-color-scheme: dark) { .sw-call-page { --bg: #1b1a18; --fg: #ece8e1; --dim: #a39c92; --line: #3a3631; --red: #ef6b6b; --accent: #f0a830; } }
+.sw-callp { box-sizing: border-box; max-width: 520px; margin: 0 auto; padding: 24px 16px max(24px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
+.sw-callp-who { margin: 0; font-size: 20px; font-weight: 600; }
+.sw-callp-state { margin: 0; color: var(--dim); }
+.sw-callp-lines { display: flex; flex-direction: column; gap: 6px; min-height: 4em; }
+.sw-callp-lines p { margin: 0; color: var(--dim); overflow-wrap: anywhere; }
+.sw-callp-lines b { color: var(--fg); }
+.sw-callp-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.sw-callp-buttons button { min-height: 44px; padding: 0 18px; border-radius: 22px; border: 1px solid var(--line); background: transparent; color: var(--fg); font: inherit; cursor: pointer; }
+.sw-callp-buttons button[hidden] { display: none; }
+.sw-callp-start { border-color: var(--accent) !important; color: var(--accent) !important; font-weight: 600 !important; }
+.sw-callp-end { border-color: var(--red) !important; color: var(--red) !important; font-weight: 600 !important; }
+.sw-callp-buttons button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

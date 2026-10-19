@@ -42,10 +42,10 @@ pub fn pairs(v: &Value) -> Result<Vec<(String, String)>, String> {
         _ => Err(x.to_string()),
     }).collect()
 }
-/// The value as kept: `none`, or the pairs with each chord in its one spelling (`chatMessage=ctrl+o, menu=f1`).
+/// The value as kept: `none`, or the pairs with each chord in its one spelling (`chatMessage=ctrl+g, menu=f1`).
 pub fn check(e: &Entry, v: &Value) -> Res<Value> {
     if text(v).trim().to_lowercase() == NONE { return Ok(json!(NONE)); }
-    let like = "name=chord pairs, such as chatMessage=ctrl+o, chatScrollUp=ctrl+up (the names are in docs/keys.md), or none";
+    let like = "name=chord pairs, such as chatMessage=ctrl+g, chatScrollUp=ctrl+up (the names are in docs/keys.md), or none";
     let list = pairs(v).map_err(|bad| Error::refused(format!("{}: \"{bad}\" is not a key's name and a chord. It takes {like}.", e.name)))?;
     if list.is_empty() { return Err(Error::refused(format!("{} takes {like}.", e.name))); }
     let mut out: Vec<String> = vec![];

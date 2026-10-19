@@ -18,7 +18,7 @@ use std::cell::Cell;
 /// The groups, in the order the ? menu and docs/keys.md show them.
 pub const GROUPS: [(&str, &str); 3] = [("plain", "plain keys"), ("ctrl", "ctrl: does something"), ("alt", "alt: only shows or hides")];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum K { Up, Down, PageUp, PageDown, Enter, Newline, Talk, Delegate, Back, Menu, SayYes, SayNo, Yes, SendBack, NextAttempt, Stop, Archive, Pin, Settings, PutBack, Undo, Find, Free, Close, ChatMessage, ChatScrollUp, ChatScrollDown, Side, Panel, ArchiveView, ByRepo, AllDone, Scope }
+pub enum K { Up, Down, PageUp, PageDown, Enter, Newline, Talk, Delegate, Back, Menu, SayYes, SayNo, Yes, SendBack, NextAttempt, Stop, Archive, Pin, Settings, PutBack, Undo, Find, Free, Close, Call, ChatMessage, ChatScrollUp, ChatScrollDown, Side, Panel, ArchiveView, ByRepo, AllDone, Scope }
 pub struct Key {
     pub id: K, pub name: &'static str, pub keys: &'static [&'static str], pub raw: &'static [&'static str], pub show: Option<&'static str>, pub gap: Option<&'static str>,
     pub group: Option<&'static str>, pub with: Option<&'static str>, pub fixed: bool, pub draft: bool, pub web: Option<&'static str>, pub help: Option<&'static str>,
@@ -73,6 +73,8 @@ pub static KEYS: &[Key] = &[
         doc: Some("only while a remote view holds the board's terminal at another size than herdr shows it (the line at the top says so): end that view, so the board has its own size again ([board-size.md](board-size.md))") },
     Key { id: K::Close, name: "close", keys: &["ctrl+c"], raw: &[], show: None, gap: None, group: Some("ctrl"), with: None, fixed: false, draft: false, web: None, help: None, hint: None,
         doc: Some("twice: close the board, with text typed too: the draft is kept and is back when the board reopens") },
+    Key { id: K::Call, name: "call", keys: &["ctrl+o"], raw: &[], show: None, gap: None, group: Some("ctrl"), with: None, fixed: false, draft: false, web: None, help: Some("a voice call with whoever the chat talks to; again: hang up"), hint: None,
+        doc: Some("a voice call with whoever the chat talks to: a live conversation with the board's voice agent, which sends what you ask for to the Coordinator, the task's agent or a coordinator, and reads their answers back in short. The call follows the chat: {talk} and moving between tasks change who it talks to. The microphone and the speaker are the computer you sit at: its call helper opens the call there, or the chat shows a link to Ctrl-click. The key again hangs up. More: [voice calls](voice.md)") },
     Key { id: K::ChatMessage, name: "chatMessage", keys: &["alt+c"], raw: &[], show: None, gap: None, group: Some("alt"), with: None, fixed: false, draft: false, web: None, help: None, hint: None,
         doc: Some("the chat's latest message, the Coordinator's or a task agent's. The one key for it, both ways") },
     Key { id: K::ChatScrollUp, name: "chatScrollUp", keys: &["alt+k"], raw: &[], show: None, gap: None, group: Some("alt"), with: None, fixed: false, draft: true, web: None, help: None, hint: None,

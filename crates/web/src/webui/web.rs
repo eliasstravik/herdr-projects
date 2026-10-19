@@ -13,7 +13,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// `boards_at`: when the sidebar's Boards section last had the other machines asked (boards.rs).
-pub struct Client { pub s: State, pub inbox: Arc<Mutex<Vec<Event>>>, pub at: i64, pub machines_at: i64, pub boards_at: i64 }
+/// `id`: the page's own name for its board (a call it holds is called by it: voice/board.rs).
+pub struct Client { pub s: State, pub inbox: Arc<Mutex<Vec<Event>>>, pub at: i64, pub machines_at: i64, pub boards_at: i64, pub id: String }
 const IDLE: i64 = 10 * 60000;
 /// How long a call waits for what a button started (a merge, an agent started); longer, it answers on a later look.
 const WAIT: u64 = 25;
@@ -44,7 +45,7 @@ fn open() -> Client {
     s.web.own_scope = own.is_some();
     s.scope = own.unwrap_or_else(|| view.t("scope"));
     s.folded = p.arr("folded").iter().filter_map(|x| x.as_str()).map(String::from).collect();
-    Client { s, inbox: Arc::new(Mutex::new(vec![])), at: 0, machines_at: 0, boards_at: 0 }
+    Client { s, inbox: Arc::new(Mutex::new(vec![])), at: 0, machines_at: 0, boards_at: 0, id: String::new() }
 }
 pub fn client(id: &str) -> Arc<Mutex<Client>> {
     let key: String = id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-').take(40).collect();
@@ -55,7 +56,7 @@ pub fn client(id: &str) -> Arc<Mutex<Client>> {
         let map = all.get_or_insert_with(HashMap::new);
         map.retain(|k, c| *k == key || c.try_lock().map(|c| now - c.at <= IDLE).unwrap_or(true));
         let fresh = !map.contains_key(&key);
-        (map.entry(key).or_insert_with(|| Arc::new(Mutex::new(open()))).clone(), fresh)
+        (map.entry(key.clone()).or_insert_with(|| Arc::new(Mutex::new(Client { id: key, ..open() }))).clone(), fresh)
     };
     { let mut g = c.lock().unwrap(); g.at = now; if fresh { reload(&mut g); if g.s.all() { poll(&mut g, true); } } }
     c
@@ -125,6 +126,7 @@ pub fn take_in(c: &mut Client) {
 /// Everything the page shows, and a short mark of it: a page that already has this one is told only that.
 pub fn snapshot(c: &mut Client, have: &str) -> Value {
     let t = theme();
+    let call = super::voice::board::shown(&c.id);
     let s = &mut c.s;
     let r = s.current().cloned().or_else(|| s.job().cloned());
     let a = s.auto().cloned();
@@ -133,7 +135,7 @@ pub fn snapshot(c: &mut Client, have: &str) -> Value {
     let panel = if auto_open { super::model::panel::auto_panel_of(s, t, a.as_ref().unwrap()) } else if s.full { r.as_ref().map(|r| super::model::panel::panel_of(s, t, r)).unwrap_or(Value::Null) } else { Value::Null };
     // With a task or an automation open: every setting of it, to see and to change.
     let settings = if panel.is_null() { Value::Null } else if auto_open { super::model::settings::settings_of(s, a.as_ref().unwrap(), true) } else { r.as_ref().map(|r| super::model::settings::settings_of(s, r, false)).unwrap_or(Value::Null) };
-    let mut data = obj(json!({ "list": super::model::list::list_of(s, t), "panel": panel, "settings": settings }));
+    let mut data = obj(json!({ "list": super::model::list::list_of(s, t), "panel": panel, "settings": settings, "call": call }));
     for (k, v) in super::model::side::side_of(s, t) { data.insert(k, v); }
     let text = serde_json::to_string(&data).unwrap_or_default();
     let mark: String = crate::store::files::base64url(&sha1_smol::Sha1::from(text.as_bytes()).digest().bytes()).chars().take(16).collect();

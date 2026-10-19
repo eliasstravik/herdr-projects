@@ -90,6 +90,7 @@ fn paste(s: &mut State, text: &str) {
 pub mod actions;
 pub mod autos;
 pub mod beat;
+pub mod call;
 pub mod chat;
 pub mod coords;
 pub mod done;

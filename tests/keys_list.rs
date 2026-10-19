@@ -27,7 +27,7 @@ fn the_keys_list_every_place_names_a_key_as_its_entry_does_and_a_chord_not_in_it
     s.press(&[chord("enter")]); assert_eq!(sw::store::tasks::list(Default::default()).len(), 3); assert_eq!(s.s.value(), "");
     // moving in the list: a chord the list does not have moves nothing, the list's own do
     let at = s.s.sel.clone();
-    s.press(&["ctrl+q", "alt+u", "ctrl+o"]); assert_eq!(s.s.sel, at, "no entry has these chords"); assert_eq!(s.s.msg, "");
+    s.press(&["ctrl+q", "alt+u", "ctrl+t"]); assert_eq!(s.s.sel, at, "no entry has these chords"); assert_eq!(s.s.msg, "");
     s.press(&[chord("down")]); let lower = s.s.sel.clone(); assert_ne!(lower, at);
     s.press(&[chord("up")]); assert_eq!(s.s.sel, at);
     // the menu: opened, moved in and closed with the list's keys, and its lines and hints name them as the list does

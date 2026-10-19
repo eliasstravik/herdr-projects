@@ -1,0 +1,120 @@
+// A voice call held in this page: a live conversation with the board's ElevenLabs agent over WebRTC, with the
+// browser's echo cancelling, which talks with you and sends what should go to the agent the chat talks to with its
+// tools (run by the board: the front door's voice calls, voice/api.rs). The front door gives a short-lived token, never
+// the API key. Your words and the voice agent's are told to the board as they are said, so the chats show them; what to
+// read back (an agent's answer, a task that needs you) is asked for every second and a half and said only in a pause:
+// never while you talk, never over the voice agent. One call per page, kept while the board is closed and opened again.
+/* global window, document, navigator, fetch, performance */
+const API = "/herdr-projects/api/voice";
+const TOOLS = ["send_message", "switch_to", "board_status", "latest_reply", "quiet", "end_call"];
+// A pause: nobody spoke for this long (you, by the voice service's own speech detector; the voice agent, by its mode).
+const QUIET_MS = 1400, FEED_MS = 1500, VOICE = 0.5;
+
+const subs = new Set();
+let st = { state: "idle", mode: "", muted: false, target: "", note: "", lines: [] };
+let conv = null, key = "", timer = null, queue = [], heardAt = 0, spokeAt = 0, waiting = false, lock = null;
+const set = (patch) => { st = { ...st, ...patch }; for (const f of subs) { try { f(st); } catch {} } };
+export const state = () => st;
+export const watch = (f) => { subs.add(f); f(st); return () => subs.delete(f); };
+const say = (by, text) => set({ lines: [...st.lines, { by, text }].slice(-6) });
+
+async function send(what, body, method = "POST", k = key) {
+  try {
+    const r = await fetch(`${API}/${what}`, { method, credentials: "same-origin", cache: "no-store", keepalive: what === "end", headers: { "content-type": "application/json", "x-herdr-projects": "1", "x-herdr-call": k }, body: method === "POST" ? JSON.stringify(body || {}) : undefined });
+    const j = await r.json().catch(() => ({}));
+    return { ...j, ok: r.ok && j.ok !== false, status: r.status };
+  } catch { return { ok: false, status: 0, msg: "No connection." }; }
+}
+// Why a call could not start, in plain words.
+function why(e) {
+  const n = e && e.name;
+  if (n === "NotAllowedError" || n === "SecurityError") return "The microphone was not allowed. Allow it for this page, then call again.";
+  if (n === "NotFoundError") return "No microphone was found.";
+  return (e && e.message) || "The call could not start.";
+}
+// Start a call: from the web board (`client`, its page's own board) or from the terminal board (`ticket`).
+export async function start(how) {
+  if (conv || st.state === "starting") return;
+  if (!window.isSecureContext) return set({ state: "idle", note: "A call needs the board's private https link." });
+  set({ state: "starting", note: "Asking for the microphone…", lines: [] });
+  try {
+    const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    for (const t of mic.getTracks()) t.stop();
+    set({ note: "Connecting…" });
+    const r = await fetch(`${API}/start`, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-herdr-projects": "1" }, body: JSON.stringify(how) });
+    const out = await r.json().catch(() => ({}));
+    if (!r.ok || !out.token) throw new Error(out.msg || "The call could not start.");
+    key = out.key;
+    const { Conversation } = await import("./vendor/elevenlabs.js");
+    const clientTools = Object.fromEntries(TOOLS.map((name) => [name, async (args) => {
+      const res = await send("tool", { name, args: args || {} });
+      if (name === "end_call") setTimeout(() => end("said goodbye"), 2500);
+      if (name === "switch_to" || name === "send_message") feed();
+      return res.ok ? String(res.result || "") : res.msg || "The board did not answer.";
+    }]));
+    conv = await Conversation.startSession({
+      conversationToken: out.token, connectionType: "webrtc", workletPaths: { rawAudioProcessor: out.worklet },
+      dynamicVariables: { target: out.target }, clientTools,
+      onConnect: () => set({ state: "live", note: "", target: out.target }),
+      onDisconnect: () => { if (conv) finish("The call ended.", "the voice service ended it"); },
+      onError: (m) => set({ note: typeof m === "string" ? m : "The call had a problem." }),
+      onModeChange: ({ mode }) => { set({ mode }); if (mode === "speaking") spokeAt = performance.now(); },
+      onVadScore: ({ vadScore }) => { if (vadScore > VOICE) heardAt = performance.now(); },
+      onMessage: ({ message, role, source }) => {
+        const by = role === "agent" || source === "ai" ? "agent" : "user";
+        if (by === "user") heardAt = performance.now();
+        if (!message || /^\[board\]/.test(message)) return;
+        say(by === "agent" ? "voice" : "you", message);
+        send("heard", { who: by, text: message });
+      },
+    });
+    set({ state: "live", target: out.target });
+    try { lock = await navigator.wakeLock?.request("screen"); } catch {}
+    timer = setInterval(feed, FEED_MS);
+  } catch (e) {
+    const note = why(e);
+    if (key) send("end", { why: "could not start" });
+    conv = null; key = "";
+    set({ state: "idle", note, mode: "" });
+  }
+}
+// Ask the board what to read back, and read the next of it in a pause.
+async function feed() {
+  if (!conv || waiting) return;
+  waiting = true;
+  const out = await send("feed", null, "GET");
+  waiting = false;
+  if (out.status === 410 || out.ended) { key = ""; return end("ended"); }
+  if (out.ok) { if (out.target && out.target !== st.target) set({ target: out.target }); queue.push(...(out.items || [])); }
+  next();
+}
+function next() {
+  if (!conv || !queue.length) return;
+  const now = performance.now();
+  if (st.mode === "speaking" || now - heardAt < QUIET_MS || now - spokeAt < QUIET_MS) return;
+  const item = queue.shift();
+  const text = `[board] ${item.text}`;
+  try {
+    if (item.kind === "alert") conv.sendContextualUpdate(text);
+    conv.sendUserMessage(text);
+    spokeAt = performance.now();
+  } catch {}
+  say("board", item.text);
+}
+export function mute(on = !st.muted) { if (!conv) return; try { conv.setMicMuted(on); } catch {} set({ muted: on }); }
+// The call is over here: the board is told (unless it said so itself), and the microphone is let go.
+function finish(note, why = "hung up") {
+  const k = key;
+  clearInterval(timer); timer = null; queue = [];
+  try { lock?.release(); } catch {}
+  lock = null; conv = null; key = "";
+  if (k) send("end", { why }, "POST", k);
+  set({ state: "idle", mode: "", muted: false, note });
+}
+export async function end(why = "hung up") {
+  const c = conv;
+  if (!c && !key) return;
+  finish(why === "ended" ? "The call ended." : "You hung up.", why);
+  try { await c?.endSession(); } catch {}
+}
+window.addEventListener("pagehide", () => { if (key) finish("", "the page closed"); });

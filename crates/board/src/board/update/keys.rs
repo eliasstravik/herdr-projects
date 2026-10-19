@@ -132,6 +132,7 @@ pub fn run(s: &mut State, k: K, r: Option<&Obj>, fx: &mut Vec<Effect>) {
         K::Find => { s.mode = Mode::Find; s.full = false; let f = s.filter.clone(); s.input.set_text(&f); }
         K::Free => act::free_size(s, fx),
         K::Close => s.closing = Some((s.now + CLOSE_WAIT, false)),
+        K::Call => super::call::toggle(s, fx),
         K::ChatMessage => super::chat::toggle(s, fx),
         K::ChatScrollUp => { let by = super::chat::page(s); super::chat::scroll(s, -by); }
         K::ChatScrollDown => { let by = super::chat::page(s); super::chat::scroll(s, by); }

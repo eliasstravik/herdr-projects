@@ -12,6 +12,7 @@ pub mod row_wrap;
 pub const WIDE: usize = 90;
 pub mod ask;
 pub mod chat;
+pub mod chat_call;
 pub mod chat_keep;
 pub mod chat_text;
 pub mod coords;

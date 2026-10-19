@@ -37,6 +37,8 @@ pub struct Data {
     pub host: String,
     /// herdr's approve action asked this board to ask about a task; a line the board key left for this board.
     pub approve: String, pub heard: Option<(String, String)>,
+    /// The voice call of this machine, when one is on (voice/call.rs).
+    pub call: Option<Obj>,
     pub loaded: bool,
     /// Which read this is (`reads_started`), counted from the program's start.
     pub seq: u64,
@@ -81,7 +83,7 @@ pub fn load(wants: &Wants) -> Data {
         session: session_name(&socket), notify: setting("board.notify", None).as_str().unwrap_or("").to_string(),
         repo: here.0, repo_root: here.1, host: crate::remote::check::hostname(),
         // herdr's approve action and a line left by the board key are for a board in a terminal, never the web board.
-        approve: if wants.web { String::new() } else { crate::actions::finish_line::take_approve(&socket, &wants.own_pane) }, heard: if wants.web { None } else { crate::board::run::say::heard(&wants.own_pane, &socket) }, loaded: true, seq,
+        approve: if wants.web { String::new() } else { crate::actions::finish_line::take_approve(&socket, &wants.own_pane) }, heard: if wants.web { None } else { crate::board::run::say::heard(&wants.own_pane, &socket) }, call: crate::voice::call::get(), loaded: true, seq,
     }
 }
 /// An automation with what its row and its panel show, read here: its firings, newest first, its own settings, every

@@ -49,7 +49,12 @@ fn relay(client: &mut TcpStream, a: &Answer, body: Option<Vec<u8>>) {
     let skip = ["content-length", "transfer-encoding", "connection"];
     let mut out = format!("HTTP/1.1 {} {}\r\n", a.status, a.reason);
     let changed = body.is_some();
-    for (k, v) in &a.headers { if skip.iter().any(|s| k.eq_ignore_ascii_case(s)) || (changed && ["etag", "last-modified", "accept-ranges"].iter().any(|s| k.eq_ignore_ascii_case(s))) { continue; } out.push_str(&format!("{k}: {v}\r\n")); }
+    for (k, v) in &a.headers {
+        if skip.iter().any(|s| k.eq_ignore_ascii_case(s)) || (changed && ["etag", "last-modified", "accept-ranges"].iter().any(|s| k.eq_ignore_ascii_case(s))) { continue; }
+        // The page the board's script went into may hold a call: it may reach ElevenLabs too (voice/page.rs).
+        let v = if changed && k.to_lowercase().starts_with("content-security-policy") { super::voice::page::widen(v) } else { v.clone() };
+        out.push_str(&format!("{k}: {v}\r\n"));
+    }
     let b = body.unwrap_or_else(|| a.body.clone());
     out.push_str(&format!("Content-Length: {}\r\nConnection: close\r\n\r\n", b.len()));
     let _ = client.write_all(out.as_bytes());
@@ -117,6 +122,9 @@ fn ours(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstream) {
     let path = head.path().to_string();
     let rel = path.get(BASE.len() + 1..).unwrap_or("").to_string();
     if let Some(name) = rel.strip_prefix("page/") { if head.method == "GET" || head.method == "HEAD" { return super::page::send_page(&mut client, name, head.method == "HEAD"); } }
+    // A call: its page and its calls keep to a call's own rules (voice/api.rs), before the web UI is asked.
+    if rel == "call" && (head.method == "GET" || head.method == "HEAD") { return super::voice::page::send(&mut client, head.method == "HEAD"); }
+    if let Some(v) = rel.strip_prefix("api/voice/") { let v = v.to_string(); return super::voice::api::route(client, head, rest, up, &v); }
     let Some(call) = rel.strip_prefix("api/").map(String::from) else { return json_out(&mut client, 404, &json!({ "ok": false, "msg": "Not found" })) };
     let Some(to) = up.to() else { return json_out(&mut client, 503, &json!({ "ok": false, "msg": "The herdr web UI is not answering." })) };
     let role = match who(head, &to) { Ok(r) => r, Err(w) => return json_out(&mut client, if w == "down" { 503 } else { 401 }, &json!({ "ok": false, "msg": if w == "down" { "The herdr web UI is not answering." } else { "Log in to the herdr web UI first." } })) };

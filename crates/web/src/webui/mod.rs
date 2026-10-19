@@ -17,4 +17,5 @@ pub mod ink;
 pub mod model;
 pub mod page;
 pub mod view;
+pub mod voice;
 pub mod web;

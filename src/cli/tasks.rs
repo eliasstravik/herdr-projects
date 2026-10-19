@@ -124,6 +124,7 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
         "automations" | "automation" => crate::automations::command::automations_command(&pos[1..], flags, &here)?,
         "coordinator" => coordinator(a, &here)?,
         "machines" => { let r = crate::remote::check::check(20000); let s = crate::remote::check::say(&r); (r, s) }
+        "voice" => crate::calls::command::main(&pos[1..]),
         "web-ui" => { let r = crate::webui::command::main(&pos[1..]); if !r.b("ok") { crate::fail!("{}", r.s("msg")); } let m = r.t("msg"); (r, m) }
         "remove-extras" => {
             let web = crate::extras::remove_web_ui();

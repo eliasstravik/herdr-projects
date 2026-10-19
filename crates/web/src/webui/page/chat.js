@@ -3,13 +3,15 @@
 // where they stand; the conversation (said.js: the newest thing said, the rest above it; full screen, it is the web
 // UI's own chat view of them, talk.js, or the board's where the web UI cannot show them) with Hide and Show; and what
 // the box you type in (compose.js) does
-// with your words: who they are for, kept with them until they are sent, and who a file attached is for. Who that
+// with your words: who they are for, kept with them until they are sent, and who a file attached is for; and a voice
+// call with whoever it talks to (callbtn.js). Who that
 // is, what the box says while empty and what its buttons do come from the board (webui/model/side.rs).
 /* global sessionStorage */
 import { h, icon, markEl } from "./dom.js";
 import { composeEl } from "./compose.js";
 import { saidEl } from "./said.js";
 import { talkNames, drawTalk } from "./talk.js";
+import { callEl } from "./callbtn.js";
 
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const DRAFT = "sw-draft";
@@ -62,6 +64,8 @@ export function chatEl({ onSend, onPress, onFull }) {
   // The way back while the board's own chat is full screen, where the board's header with its arrow steps aside.
   const back = h("button.icon-button.sw-chat-back", { type: "button", "aria-label": "Back to the board", title: "Back to the board", onclick: () => said.full(false) }, icon("back"));
   const note = h("p.sw-chat-note", { hidden: true });
+  // A voice call with whoever the chat talks to: its toggle beside Hide, its strip over the conversation (callbtn.js).
+  const phone = callEl();
   let labels = { enter: "", delegate: "" };
   // The first word typed (or file attached) locks who the draft is for, as the box then says; an empty box lets it go.
   function sync() {
@@ -79,13 +83,13 @@ export function chatEl({ onSend, onPress, onFull }) {
     chip.hidden = !moved; chip.className = "sw-to is-locked"; chip.textContent = moved ? `To: ${to.label}${to.reply ? " agent" : ""} · not who is shown above` : "";
     send.disabled = !typing || busy || files.busy(); files.refresh(); voice.sync(); send.title = cap(l.enter) || "Send message"; also.hidden = !typing || !l.delegate; also.disabled = busy; also.title = l.delegate ? `${cap(l.delegate)} (Tab)` : "";
   }
-  const el = h("footer.sw-chat", { "aria-label": "Chat" }, h("div.sw-chat-head", back, talk, who, hide), note, said.el, compose);
+  const el = h("footer.sw-chat", { "aria-label": "Chat" }, h("div.sw-chat-head", back, talk, who, hide, phone.btn), note, phone.strip, said.el, compose);
   return {
     el,
     typing: () => !!box.value.trim(),
     // The board closed: dictation stops and lets the microphone go, and nothing this box still hears of (an answer, a
     // file, a dictation) changes the kept draft, which the next board's box shows.
-    destroy() { closed = true; destroy(); },
+    destroy() { closed = true; destroy(); phone.destroy(); },
     // The conversation full screen (said.js): asked, set, or left.
     full: (on) => said.full(on),
     fill(text) { box.value = text; to = null; sync(); keep(text, to); grow(); box.focus(); },
@@ -106,6 +110,7 @@ export function chatEl({ onSend, onPress, onFull }) {
       hide.hidden = !c.text; hide.replaceChildren(icon(c.open ? "eyeOff" : "eye"), c.open ? "Hide" : "Show");
       hide.title = c.open ? "Hide the latest message" : "Show the latest message"; hide.setAttribute("aria-pressed", String(!c.open));
       note.hidden = !c.note; note.textContent = c.note;
+      phone.update(snap);
       // Who it is (hidden and shown again, it is another), then what they said: an opened chat stays open while only that changes.
       const whose = JSON.stringify([c.toAgent ? snap.list.selected : "", c.coord, !!c.open]);
       const key = JSON.stringify([whose, c.text, c.mine]);

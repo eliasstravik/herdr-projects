@@ -1,5 +1,6 @@
 //! The web board's page: its code and styles, built into the program (page/), no task in them, public as the web UI's
-//! own files are. The page is small scripts that turn the board's data into page elements (webui/model/).
+//! own files are. The page is small scripts that turn the board's data into page elements (webui/model/); a voice call
+//! loads the ElevenLabs client, built into it too (page/vendor/, made by scripts/voice-sdk.sh).
 use std::io::Write;
 
 const FILES: &[(&str, &str)] = &[
@@ -7,6 +8,10 @@ const FILES: &[(&str, &str)] = &[
     ("board.js", include_str!("page/board.js")),
     ("boards.css", include_str!("page/boards.css")),
     ("boards.js", include_str!("page/boards.js")),
+    ("call.css", include_str!("page/call.css")),
+    ("call.js", include_str!("page/call.js")),
+    ("callbtn.js", include_str!("page/callbtn.js")),
+    ("callpage.js", include_str!("page/callpage.js")),
     ("chat.css", include_str!("page/chat.css")),
     ("chat.js", include_str!("page/chat.js")),
     ("compose.css", include_str!("page/compose.css")),
@@ -23,6 +28,8 @@ const FILES: &[(&str, &str)] = &[
     ("talk.js", include_str!("page/talk.js")),
     ("voice.css", include_str!("page/voice.css")),
     ("voice.js", include_str!("page/voice.js")),
+    ("vendor/elevenlabs.js", include_str!("page/vendor/elevenlabs.js")),
+    ("vendor/rawAudioProcessor.js", include_str!("page/vendor/rawAudioProcessor.js")),
 ];
 pub fn file(name: &str) -> Option<&'static str> { FILES.iter().find(|(n, _)| *n == name).map(|(_, b)| *b) }
 pub fn send_page(client: &mut std::net::TcpStream, name: &str, head_only: bool) {

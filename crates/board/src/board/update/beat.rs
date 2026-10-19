@@ -35,6 +35,7 @@ pub fn loaded(s: &mut State, d: Data, fx: &mut Vec<Effect>) {
     if !approve.is_empty() { if let Some(r) = s.items.iter().find(|x| x.s("id") == approve && !x.b("archivedAt")).cloned() { s.menu = None; s.sel = r.t("id"); relist(s); super::actions::yes(s, &r, fx); } }
     if let Some((text, kind)) = heard { s.flash(text, ink_of(&kind)); }
     super::chat::sync_coord(s, fx);
+    super::call::follow(s, fx);
     left_chats(s, fx);
     ring(s, first, fx);
     announce(s, fx);

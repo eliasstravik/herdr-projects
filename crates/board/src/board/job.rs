@@ -44,6 +44,8 @@ pub enum Job {
     WebOpen { id: String, far: Option<(crate::remote::Machine, String, String, String)> },
     /// The herdr web UI's link through the board's front door, or left alone for good.
     WebUiLink, WebUiDecline,
+    /// A voice call for whoever the chat talks to (calls/ring.rs), hanging it up, and who it talks to now.
+    CallRing { target: crate::voice::call::Target }, CallEnd, CallTarget { target: crate::voice::call::Target },
     Nothing,
 }
 impl Job {
@@ -98,6 +100,8 @@ pub enum Then {
     /// A setting typed on the settings page was taken: the box it was typed in is emptied. A refused one stays there
     /// to be put right.
     Saved(String),
+    /// A call rang: its id and the link that takes it, shown in the chat while no helper has.
+    CallRang { id: String, link: String },
 }
 /// `about`: the row the job acted on (Job::about), `kind` which job it was (Job::kind); `seen`: how many reads of the tasks had started when it ended, so the
 /// board knows which read shows what it did (update/pending.rs).
@@ -189,6 +193,12 @@ fn run_one(job: Job) -> Done {
             Job::WebOpen { id, far } => super::job_far::web_open(&id, far),
             Job::WebUiLink => { let r = crate::webui::command::link_now(); Done::say(r.t("msg"), if r.b("ok") { Ink::Green } else { Ink::Red }) }
             Job::WebUiDecline => { crate::webui::command::decline(); Done::say("Left as it is. `herdr-projects web-ui link` does it later.", Ink::Muted) }
+            Job::CallRing { target } => match crate::calls::ring::ring(&target) {
+                Ok((id, link)) => Done::say(format!("Calling with {}…", target.name), Ink::Muted).and(Then::CallRang { id, link }),
+                Err(e) => Done::fail(e),
+            },
+            Job::CallEnd => { crate::voice::call::end("hung up on the terminal board"); Done::say("Hung up.", Ink::Muted) }
+            Job::CallTarget { target } => { crate::voice::call::set_target(&target); Done::default() }
             Job::Nothing => Done::default(),
         })
     })();
