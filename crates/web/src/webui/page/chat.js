@@ -69,7 +69,7 @@ export function chatEl({ onSend, onPress, onDock }) {
     const elsewhere = !!to && !!now && (to.id !== now.id || to.reply !== now.reply || (to.scope || "") !== (now.scope || ""));
     if (!showing || showing.raw || elsewhere) return;
     said.set([...showing.parts, { by: "You", text: text.trim(), mine: true }]);
-    state.replaceChildren(showing.toAgent ? "Sending…" : "sending…");
+    state.replaceChildren(showing.toAgent ? "Sending…" : "sending…"); status = ""; // (the board's next answer draws its words again)
   };
   // A file attached is for whoever the words are for: attaching one locks that as typing does (sync).
   const whom = () => { const w = to || now; return w ? { id: w.id, reply: w.reply, scope: w.scope || "" } : null; };

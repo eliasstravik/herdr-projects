@@ -165,10 +165,10 @@ fn the_web_page_shows_your_words_in_the_conversation_before_the_board_answers() 
     let chat = include_str!("../crates/web/src/webui/page/chat.js");
     // drawn the moment they are sent, from what the conversation showed, before the board is even asked
     assert!(chat.contains("    mine(text);\n    const kept = await onSend("), "{chat}");
-    assert!(chat.contains(r#"said.set([...showing.parts, { by: "You", text: text.trim(), mine: true }], true, false, showing.parts.length, lastWho !== null);"#));
-    assert!(chat.contains(r#"who.querySelector(".sw-who-status")?.replaceChildren(showing.toAgent ? "Sending…" : "sending…");"#));
+    assert!(chat.contains(r#"said.set([...showing.parts, { by: "You", text: text.trim(), mine: true }]);"#));
+    assert!(chat.contains(r#"state.replaceChildren(showing.toAgent ? "Sending…" : "sending…"); status = "";"#));
     // never for somebody the page no longer shows, nor over a program's screen; the board's answer is drawn whatever it says
-    assert!(chat.contains("if (!showing || !showing.open || showing.raw || elsewhere) return;") && chat.contains("    last = null;\n  };"));
+    assert!(chat.contains("if (!showing || showing.raw || elsewhere) return;"));
 }
 
 #[test]

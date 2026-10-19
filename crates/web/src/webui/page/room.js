@@ -7,9 +7,8 @@
 // window does not leave out.
 /* global window, document, navigator, getComputedStyle, requestAnimationFrame, ResizeObserver, MutationObserver,
    setTimeout */
-// The least the conversation is shown at: two lines of it and its padding (less is not worth reading). How much
-// The least the conversation is shown at: its Earlier and Later buttons, one over the other (two thumbs and its
-// padding). How much smaller than the window the visible part must be for a keyboard to be up. The strip iOS 26 floats
+// The least the conversation is shown at: about two lines of it and its padding (less is not worth reading). How much
+// smaller than the window the visible part must be for a keyboard to be up. The strip iOS 26 floats
 // over the page: its top stands 73 px over the foot of the visible window (measured on an iPhone's screenshot), so the
 // box, 8 px over that foot, keeps 72 more and stands clear of it.
 const LEAST = 104, KEYBOARD = 120, IOS_BAR = 72;
