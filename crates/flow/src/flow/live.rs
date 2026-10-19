@@ -29,8 +29,19 @@ pub fn live_of(t: &Task, session: &Session, here: &str) -> Value {
     if !sock.is_empty() && sock != here { return json!({ "away": session_name(sock) }); }
     let Session::Up { agents, panes } = session else { return json!({ "down": true }) };
     let pane_id = t.at("link").s("pane");
-    let Some(pane) = panes.get(pane_id) else { return json!({ "gone": true }) };
+    let Some(pane) = panes.get(pane_id).filter(|p| owns_pane(t, p)) else { return json!({ "gone": true }) };
     match agents.get(pane_id) { Some(a) => json!({ "status": a.at("agent_status"), "agent": a, "pane": pane }), None => json!({ "status": null, "pane": pane }) }
+}
+/// Is the pane under the task's pane id still the task's own? herdr hands a closed pane's id (and its space's) out
+/// again, after a restart or once a space was removed, but never a terminal_id: a pane in a terminal the task was never
+/// seen in is another's, wherever it is. After herdr restarted, the task's pane is its own again once the hook has read
+/// its agent in the new terminal and herdr said so (hook.rs: `apply`, which keeps it among the task's `terms`).
+pub fn owns_pane(t: &Task, pane: &Value) -> bool {
+    let term = pane.t("terminal_id");
+    let mut known = if t.at("terms").is_array() { strings(t.at("terms")) } else { vec![] };
+    known.push(t.at("link").t("terminal"));
+    known.retain(|s| !s.is_empty());
+    term.is_empty() || known.is_empty() || known.contains(&term)
 }
 /// The show's fields, under names that cannot collide with a task's own (a task has its own `review` and `msg`).
 pub fn pick(out: &mut Obj, s: &Show) {
