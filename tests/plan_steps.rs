@@ -22,6 +22,24 @@ fn tell(id: &str, words: &str) { sw::actions::talk::tell(id, words, false).unwra
 fn approve(id: &str) { sw::actions::finish_line::approve(id, None, false).unwrap(); }
 
 #[test]
+fn freebuff_and_codebuddy_use_their_plugin_reported_interactive_split_panes() {
+    for kind in ["freebuff", "codebuddy"] {
+        let w = world_with(Opts { repo: true, settings: json!({ "worker.agent": kind, "review.when": "never" }), ..Default::default() });
+        w.script(json!({ "worker": [{ "files": { "a.txt": "done\n" }, "commit": "done", "note": "Read the fixture and finished." }] }));
+        let id = w.add(&format!("Interactive {kind}"));
+        delegate(&id);
+        let t = settle(&id);
+        assert_eq!(t.s("stage"), "approval", "{} {}", kind, t.at("failure"));
+        let pane = w.pane_of(&t);
+        assert_eq!(pane.at("agent").s("kind"), kind);
+        assert_eq!(pane.at("tab_id"), t.at("link").at("tab"));
+        let calls = calls(&w);
+        assert!(calls.iter().any(|c| c.starts_with(&format!("pane run {} ", t.at("link").s("pane"))) && c.contains("HERDR_PROJECTS_AGENT=")), "{kind}: {calls:?}");
+        assert!(!calls.iter().any(|c| c.starts_with("agent start ") && c.contains(&format!("--kind {kind}"))), "{kind}: {calls:?}");
+    }
+}
+
+#[test]
 fn the_settings_are_read_when_their_step_starts_and_a_stop_with_no_plan_is_a_failure_the_agent_can_fix() {
     let w = plan_world(json!({ "worker.agent": "codex", "review.when": "never" }), "bwrap");
     // Asked for at the start, taken off while the plan is being written: nobody is asked, and it builds.

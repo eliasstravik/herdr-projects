@@ -76,6 +76,16 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
             let w = words(&argv[3..].join(" "));
             let at = w.iter().position(|x| x == "sandbox-exec").map(|i| i + 2).or_else(|| w.iter().position(|x| x == "--"));
             let name = w.iter().find_map(|x| x.strip_prefix("HERDR_PROJECTS_AGENT=")).unwrap_or("").to_string();
+            // Freebuff and CodeBuddy report their state through the user's installed Herdr plugins; the real command
+            // is typed in this visible pane instead of passing through `herdr agent start`.
+            if let Some(i) = w.iter().position(|x| x.starts_with("HERDR_PROJECTS_AGENT=")) {
+                let kind = w.get(i + 1).cloned().unwrap_or_default();
+                if ["freebuff", "codebuddy"].contains(&kind.as_str()) && p.at("agent").is_null() {
+                    let seq = st.i("seq") + 1; st["seq"] = json!(seq);
+                    st["panes"][pi]["agent"] = json!({ "kind": kind, "name": name, "status": "idle", "seq": seq, "args": w[i + 2..], "pid": 5000000 + seq });
+                    st["panes"][pi]["screen"] = json!(format!("{} interactive prompt\n❯", kind));
+                }
+            }
             if let (true, Some(at), false) = (w.iter().any(|x| x == "bwrap" || x == "sandbox-exec"), at, p.at("agent").is_object()) {
                 let seq = st.i("seq") + 1; st["seq"] = json!(seq);
                 let kind = w.get(at + 1).cloned().unwrap_or_default();
