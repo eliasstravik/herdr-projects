@@ -55,7 +55,9 @@ pub fn explain(s: &Start, said: &str, screen: &str) -> Why {
     }
     if said.contains("quit as it started") { return why(format!("{k} quit as it started"), format!("Read what it printed (below) and fix that, then {again}.")); }
     if said.contains("pane_busy") || said.contains("not an available shell") || said.contains("not at its shell prompt") {
-        return why("its terminal was not at its shell prompt".into(), format!("End what runs in the task's terminal (or close it), then {again}."));
+        // Tried again while the shell started (shell_ready.rs): it never came up, or a program runs there.
+        let (waited, slow) = if said.contains("(tried ") { (format!("The board waited for the shell's prompt and tried {} times. ", crate::herdr::shell_ready::RETRIES + 1), ", or wait until it shows its prompt") } else { (String::new(), "") };
+        return why("its terminal was not at its shell prompt".into(), format!("{waited}End what runs in the task's terminal (or close it){slow}, then {again}."));
     }
     if said.contains("herdr did not answer") { return why("herdr did not answer in time".into(), format!("Check that herdr is running and answers (`herdr workspace list`), then {again}.")); }
     if said.contains("timed out waiting for agent startup") {

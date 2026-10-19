@@ -1,8 +1,10 @@
-//! A start typed into a pane whose shell is not at its prompt yet, tried again. herdr refuses to type a line longer than
-//! the terminal takes while it is in canonical mode, before the shell's line editor is up (macOS: 1024 bytes, Linux:
-//! 4096): "input contains a 3570-byte line but the terminal is in canonical mode with a 1024-byte limit; wait for the
-//! shell prompt and retry" (herdr 0.9.5, issue #175). Nothing was typed then, so the board waits for the prompt and
-//! tries again, a few times at most, and never starts a second program.
+//! A start typed into a pane whose shell is not at its prompt yet, tried again. herdr refuses it in two ways while the
+//! shell is still starting. It takes no line longer than the terminal takes while it is in canonical mode, before the
+//! shell's line editor is up (macOS: 1024 bytes, Linux: 4096): "input contains a 3570-byte line but the terminal is in
+//! canonical mode with a 1024-byte limit; wait for the shell prompt and retry" (herdr 0.9.5, issue #175). And it does
+//! not see a shell in a pane just made yet (a zsh that takes a second to start): `agent_pane_busy`, "agent target pane
+//! w1:p1 is not an available shell" (issue #202). Nothing was typed then, so the board waits for the prompt and tries
+//! again, a few times at most, and never starts a second program. A pane where an agent already runs is refused at once.
 use super::cli::{HRes, HerdrError};
 use super::Herdr;
 use crate::json::*;
@@ -13,7 +15,9 @@ pub const RETRIES: u32 = 3;
 const LOOKS: u32 = 8;
 
 /// Did herdr refuse the line because the pane's shell is not at its prompt yet?
-pub fn not_at_prompt(e: &HerdrError) -> bool { e.message.contains("canonical mode") }
+pub fn not_at_prompt(e: &HerdrError) -> bool { e.message.contains("canonical mode") || no_shell_yet(e) }
+/// herdr sees no shell in the pane: one still starting, or a program that runs there.
+fn no_shell_yet(e: &HerdrError) -> bool { e.code == "agent_pane_busy" || e.message.contains("not an available shell") }
 fn step_ms() -> u64 { std::env::var("HERDR_PROJECTS_READY_STEP_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(500) }
 
 impl Herdr {
@@ -25,6 +29,8 @@ impl Herdr {
         let mut tries = 0;
         loop {
             match start() {
+                // An agent in the pane before the first try is no shell still starting: no wait makes it free.
+                Err(e) if tries == 0 && no_shell_yet(&e) && matches!(self.agent_get(pane), Ok(Some(_))) => return Err(e),
                 Err(e) if not_at_prompt(&e) && tries < RETRIES => {
                     tries += 1;
                     self.await_prompt(pane, tries);
