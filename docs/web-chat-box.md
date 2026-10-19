@@ -86,7 +86,11 @@ however long the words get (`crates/web/src/webui/page/room.js`):
   grip), and less where the room is less; then it scrolls, never under one line. The files attached stand above the
   words inside that same room, so they never push the words off the screen.
 - **The line with the caret stays in view**: when the box gets shorter, when the keyboard comes up, and when words go
-  in that you did not type (a file's path, a dictation).
+  in that you did not type (a file's path, a dictation). Measuring again (the window's size, the board drawn again
+  every two seconds) never moves where the box is scrolled to.
+- **Where not even one line fits** (a phone on its side, the keyboard leaving 200 px), all of the chat but the box steps
+  aside too: the line on who gets your words, the conversation, the grip and the attached files' tiles. The files stay
+  attached (their paths are in the words) and come back with the room.
 - **On an iPhone the box also stands clear of the strip iOS floats over the page** while its keyboard is up (its arrows
   and Done): iOS counts it as part of the visible window, so the box keeps 72 px more room at its foot. That strip was
   measured on an iPhone's screenshot (iOS 26): its top stands 73 px over the foot of the visible window.
@@ -97,8 +101,10 @@ however long the words get (`crates/web/src/webui/page/room.js`):
 Tried in Chromium and WebKit (Playwright) at an iPhone's size (440×956, the keyboard leaving 627 px) and an iPhone SE's
 (375×667, leaving 380), on a copy of the page with the iPhone's visible window and the web UI's mark played: an empty
 box, twenty lines, twenty lines with a picture attached, the caret in the middle with words typed there, and the
-keyboard going down. The card's foot and the caret's line stayed above the strip in every one; before, the box ran
-120 px (with a picture, 170 px) under the strip and the keyboard. Not tried on a real phone.
+keyboard going down; and at 844×390 on its side (the keyboard leaving 200 and 250 px) with forty lines and a picture.
+In each the card's foot and the caret's line stayed above the strip, also after a resize and after the board drew
+the chat again; before, the box ran 120 px (with a picture, 170 px) under the strip and the keyboard. Not tried on a
+real phone.
 
 ## What is the board's own, in that shape
 

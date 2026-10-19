@@ -43,7 +43,10 @@ export function roomFor({ chat, said, box }) {
     const board = chat.closest(".sw-board");
     if (!board) return;
     const mine = document.activeElement === box, on = mine && keyboard();
-    board.classList.toggle("sw-typing", on);
+    // Measured again from the start: the field is as tall as its words for a moment, so where it was scrolled to is
+    // put back after (or it would end scrolled up from the caret's line).
+    const top = box.scrollTop;
+    board.classList.toggle("sw-typing", on); board.classList.remove("sw-cramped");
     said.classList.remove("is-squeezed"); box.style.removeProperty("--sw-room");
     if (on) {
       // What of the board is under the keyboard (where it was not made as short as what is over it), and the strip.
@@ -54,9 +57,14 @@ export function roomFor({ chat, said, box }) {
     } else board.style.removeProperty("--sw-kb-cover");
     // Still too tall for the board (a short window, or a keyboard the page was not told of): the field is as tall as
     // the room left, and scrolls (never under its one line).
-    const card = box.closest(".sw-card") || box, foot = Math.min(chat.getBoundingClientRect().bottom, board.getBoundingClientRect().bottom) - px(getComputedStyle(chat).paddingBottom);
-    const over = card.getBoundingClientRect().bottom - foot;
-    if (over > 0.5) box.style.setProperty("--sw-room", `${Math.max(px(getComputedStyle(box).minHeight), Math.floor(box.offsetHeight - over))}px`);
+    const card = box.closest(".sw-card") || box;
+    const over = () => card.getBoundingClientRect().bottom - (Math.min(chat.getBoundingClientRect().bottom, board.getBoundingClientRect().bottom) - px(getComputedStyle(chat).paddingBottom));
+    const cap = () => { const o = over(); if (o > 0.5) box.style.setProperty("--sw-room", `${Math.max(px(getComputedStyle(box).minHeight), Math.floor(box.offsetHeight - o))}px`); };
+    cap();
+    // Not even one line fits over the keyboard (a phone on its side): all but the box steps aside, the files' tiles
+    // too (they stay attached: their paths are in the words).
+    if (on && over() > 0.5) { board.classList.add("sw-cramped"); box.style.removeProperty("--sw-room"); cap(); }
+    box.scrollTop = top;
     // The caret's line in view where the field changed under it: its height, or words put in (a file's path, dictation).
     if (!mine) height = 0; else if (box.clientHeight !== height || box.value !== words) { height = box.clientHeight; showCaret(); }
     words = box.value;

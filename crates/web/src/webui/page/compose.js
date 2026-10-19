@@ -41,8 +41,11 @@ export function composeEl({ onSend, onInput, onTab = () => false, whom = () => n
   // As tall as its words, up to ten lines (the styles' limit), then it scrolls; or the height set with the grip.
   const grow = () => {
     box.classList.toggle("is-sized", manual != null); grip.classList.toggle("is-sized", manual != null);
+    // (Measured at "auto", the field is one line for a moment: where it was scrolled to is put back after.)
+    const top = box.scrollTop;
     if (manual != null) box.style.height = `${manual}px`;
     else { box.style.height = "auto"; box.style.height = `${box.scrollHeight}px`; }
+    box.scrollTop = top;
     onGrow();
   };
   const floor = () => Math.round(parseFloat(getComputedStyle(box).minHeight)) || 44;
