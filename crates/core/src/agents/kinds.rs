@@ -7,6 +7,7 @@
 //!   program      the executable                                                 the name
 //!   aliases      other names a setting may give it (herdr's integration name)   none
 //!   access_full / access_ask  the arguments for each `<role>.access` value     no `ask`: the value is refused for it
+//!   access_auto  the arguments of its own auto mode, and its first version     none: `auto` is refused for it (access.rs)
 //!   efforts      the effort levels it accepts, where the program cannot say them none: any word is passed on
 //!   efforts_read where the program says its levels itself (efforts.rs)          its --help, else `efforts`
 //!   effort       the arguments that give it an effort, `{}` the level           none: an effort is refused
@@ -39,6 +40,9 @@ pub struct Kind {
     pub efforts_read: EffortsRead,
     pub access_full: &'static [&'static str],
     pub access_ask: Option<&'static [&'static str]>,
+    /// Its own auto mode, where it checks each action itself and acts on the safe ones without asking: (arguments,
+    /// first version that has it, "" for any).
+    pub access_auto: Option<(&'static [&'static str], &'static str)>,
     pub fast: bool,
     pub tokens: bool,
     pub interrupt: &'static str,
@@ -131,7 +135,7 @@ pub enum EffortsRead {
 pub const NO_MODELS: Models = Models { list: &[], read: Read::None, server: &[], aliases: &[], known: &[], suffix: &[], example: "" };
 /// What an entry has that it does not name.
 pub const BASE: Kind = Kind {
-    name: "", program: "", aliases: &[], min_version: "0", efforts: &[], efforts_read: EffortsRead::Help, access_full: &[], access_ask: Some(&[]), fast: false, tokens: false,
+    name: "", program: "", aliases: &[], min_version: "0", efforts: &[], efforts_read: EffortsRead::Help, access_full: &[], access_ask: Some(&[]), access_auto: None, fast: false, tokens: false,
     interrupt: "esc", rules_file: None, since: &[], reads_turn: false, plan_mode: false, lead: &[], model: &[], models: NO_MODELS, effort: &[], effort_note: "",
     resume: &[], session: &[], fresh: &[], standing: &[], headless: None, integration: "", needs_integration: false, login: None, cannot: &[], checked: "",
 };

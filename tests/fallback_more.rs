@@ -46,13 +46,13 @@ fn the_order_a_cut_off_turn_is_tried_again_by_the_board_first_then_the_fallback(
 #[test]
 fn an_agent_not_installed_here_or_that_cannot_ask_where_the_access_says_ask_is_passed_over() {
     let _w = world();
-    assert_eq!([usable("codex", "full"), usable("pi", "ask"), usable("claude", "ask")], ["".to_string(), "pi cannot ask before it acts, and the access is \"ask\"".into(), "".into()]);
+    assert_eq!([usable("codex", "full"), usable("pi", "ask"), usable("claude", "ask")], ["".to_string(), "pi cannot do \"ask\": it never asks before it acts".into(), "".into()]);
     codex_found(false);
     assert_eq!(usable("codex/gpt-5.5", "full"), "codex is not installed here");
     let list: Vec<String> = ["pi", "codex", "claude/claude-opus-5-5"].map(String::from).to_vec();
     let (next, skipped) = next_fallback(&list, "claude", &[], |a| usable(a, "ask"));
-    assert_eq!((next.as_str(), skipped.clone()), ("claude/claude-opus-5-5", vec!["pi cannot ask before it acts, and the access is \"ask\"".to_string(), "codex is not installed here".into()]));
-    assert_eq!(nobody_left("worker.fallback", &skipped), "worker.fallback: nobody left to take over (pi cannot ask before it acts, and the access is \"ask\"; codex is not installed here)");
+    assert_eq!((next.as_str(), skipped.clone()), ("claude/claude-opus-5-5", vec!["pi cannot do \"ask\": it never asks before it acts".to_string(), "codex is not installed here".into()]));
+    assert_eq!(nobody_left("worker.fallback", &skipped), "worker.fallback: nobody left to take over (pi cannot do \"ask\": it never asks before it acts; codex is not installed here)");
     // the reviewer whose program is not installed here is stood in for by the first on its list that is; without a list nothing changes
     let ch = obj(json!({ "reviewer.agent": "codex", "reviewer.fallback": ["codex/gpt-5.5", "pi"], "reviewer.access": "full" }));
     let s = |a: &str, b: &str| (a.to_string(), b.to_string());

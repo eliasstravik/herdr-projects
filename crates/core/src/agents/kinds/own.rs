@@ -6,6 +6,8 @@ use super::{EffortsRead, Kind, Login, Models, Read, BASE, NO_MODELS};
 
 pub static KINDS: &[Kind] = &[
     Kind { name: "claude", min_version: "2.1.296", efforts: &["low", "medium", "high", "xhigh", "max"], access_full: &["--dangerously-skip-permissions"],
+        // Auto mode: a classifier checks each action, runs the safe ones and stops the risky ones (access.rs).
+        access_auto: Some((&["--permission-mode", "auto"], "2.1.0")),
         tokens: true, rules_file: Some("CLAUDE.md"), reads_turn: true, plan_mode: true, model: &["--model", "{}"],
         // Claude Code has no command that lists its models: its short names (each the newest of its kind) and the
         // full names Claude Code 2.1.301 knows. `[1m]` after one asks for the long context. On a cloud or a gateway
@@ -18,6 +20,8 @@ pub static KINDS: &[Kind] = &[
     // idle, so a prompt would be typed into it. Each agent runs on its own instead. Codex before 0.156.0 has no shared
     // server and no such flag (HP-11).
     Kind { name: "codex", min_version: "0.160.0", efforts: &["low", "medium", "high", "xhigh", "max", "ultra"], efforts_read: EffortsRead::Catalog, access_full: &["--dangerously-bypass-approvals-and-sandbox", "--no-daemon"], access_ask: Some(&["--no-daemon"]),
+        // Auto review: its own reviewer approves or refuses each request for approval, in its workspace-write sandbox.
+        access_auto: Some((&["--approve-for-me", "--no-daemon"], "0.150.0")),
         fast: true, tokens: true, rules_file: Some("AGENTS.md"), since: &[("--no-daemon", "0.156.0")], reads_turn: true, model: &["-m", "{}"],
         models: Models { list: &["debug", "models"], read: Read::Catalog, server: &["app-server"], example: "codex/gpt-6.1-sol", ..NO_MODELS },
         effort: &["-c", "model_reasoning_effort=\"{}\""], resume: &["resume", "{}"], integration: "codex",

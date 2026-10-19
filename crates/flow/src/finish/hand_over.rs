@@ -2,7 +2,7 @@
 //! one on the list takes the task over in the same worktree and the same pane, with the task, what was done so far and
 //! the open findings. Nobody extra runs until then. With the list used up nothing happens here, and the task waits for
 //! you as it did before there was a list.
-use crate::agents::{installed::installed, kinds::kind};
+use crate::agents::installed::installed;
 use crate::clock::now;
 use crate::delegate::{first_prompt, start_agent};
 use crate::err::Res;
@@ -20,7 +20,10 @@ use crate::store::tasks::{one_line, Task};
 pub fn usable(agent: &str, access: &str) -> String {
     let k = agent_of(agent).kind;
     if !installed(&k) { return format!("{k} is not installed here"); }
-    if access != "full" && !(access == "ask" && kind(&k).map(|a| a.access_ask.is_some()).unwrap_or(false)) { return format!("{k} cannot ask before it acts, and the access is \"{access}\""); }
+    let why = crate::agents::access::why_not(&k, access);
+    if !why.is_empty() { return why; }
+    let old = crate::agents::access::too_old(&k, access);
+    if !old.is_empty() { return old; }
     String::new()
 }
 /// What the one before it left: its commits on the branch, and whether changes lie uncommitted.

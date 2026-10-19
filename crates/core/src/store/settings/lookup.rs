@@ -87,12 +87,15 @@ pub fn lookup_at(name: &str, scope: &Scope, at: &Places) -> Res<Found> {
     let list = match entry.kind { Kind::Work => &at.work, Kind::Board => &at.board, Kind::Repo => &at.repo };
     let mut said: Vec<&Place> = list.iter().filter(|p| p.values().contains_key(name)).collect();
     // An effort and an access are right or wrong for one program: an answer that does not fit the program the role has
-    // is not counted, and the next place down is asked (the built-in one fits every program).
+    // is not counted, and the next place down is asked (the built-in one fits every program). Except `auto`: the next
+    // place down could be `full`, so an agent is never let act without asking where its auto mode was asked for. It
+    // stays, and that agent is refused at its start (agents/start.rs).
     let mut skipped = vec![];
     if entry.ty == Ty::Effort || entry.ty == Ty::Access {
         let agent = text(&lookup_at(&format!("{}.agent", name.split('.').next().unwrap_or("")), scope, at)?.value);
         said.retain(|p| {
-            let why = if p.place == "builtin" { String::new() } else { fits(name, &text(&p.values()[name]), &agent, false) };
+            let v = text(&p.values()[name]);
+            let why = if p.place == "builtin" || (entry.ty == Ty::Access && v == "auto") { String::new() } else { fits(name, &v, &agent, false) };
             if !why.is_empty() { skipped.push(format!("{}: {name}: {why}", if p.from == "you" { "your settings" } else { &p.from })); }
             why.is_empty()
         });

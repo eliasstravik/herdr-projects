@@ -11,15 +11,16 @@ pub fn effort_for(k: &str, model: &str, effort: &str) -> String {
     if effort.is_empty() || effort == "default" || kind(k).is_none() { return String::new(); }
     if super::efforts::why_not(k, model, effort, super::efforts::Ask::Kept).is_some() { String::new() } else { effort.to_string() }
 }
-/// The flags of `<role>.access` for this program. A program that cannot ask is never started as if it could.
+/// The flags of `<role>.access` for this program. A program is never started as if it could ask, or had an auto mode,
+/// when it cannot: neither falls back to another access.
 pub fn access_args(k: &str, access: &str) -> Res<Vec<String>> {
-    let a = kind(k);
-    let flags = match (a, access) { (Some(a), "full") => Some(a.access_full), (Some(a), "ask") => a.access_ask, _ => None };
-    match flags {
-        Some(f) => Ok(f.iter().map(|s| s.to_string()).collect()),
-        None if access != "full" => crate::fail!("{k} cannot be started with access \"{access}\": it never asks before it acts. Set the role's access to full, or choose another program."),
-        None => Ok(vec![]),
-    }
+    let Some(a) = kind(k) else { return if access == "full" { Ok(vec![]) } else { crate::fail!("{k} cannot be started with access \"{access}\": the board does not know its flags. Set the role's access to full, or choose another program.") } };
+    let Some(f) = super::access::flags(a, access) else {
+        crate::fail!("{k} cannot be started with access \"{access}\": {}. Set the role's access to {}, or choose another program.", super::access::why_not(k, access), if access == "auto" { "full or ask" } else { "full" })
+    };
+    let old = super::access::too_old(k, access);
+    if !old.is_empty() { crate::fail!("{k} cannot be started with access \"{access}\": {old}."); }
+    Ok(f.iter().map(|s| s.to_string()).collect())
 }
 #[derive(Default, Clone)]
 pub struct StartOpts { pub model: String, pub effort: String, pub fast: Option<bool>, pub access: String, pub plan: Option<Vec<String>>, pub resume: String, pub session: String, pub extra: Vec<String> }

@@ -3,6 +3,7 @@
 //! (agents/models.rs: a value read from a file is not checked when it is read), and every effort, access and
 //! hand-edited value counts (store/settings/show.rs `problems_in`: one that does not falls to the next place down).
 use super::Found;
+use crate::agents::access;
 use crate::agents::kinds::kind;
 use crate::agents::roles::refusal;
 use crate::json::*;
@@ -42,6 +43,22 @@ pub fn agents_at(at: &At) -> Vec<(String, AgentName, String)> {
     out
 }
 
+/// The roles whose access is `auto` where `at` reads it, and why their program cannot start so: it has no auto mode,
+/// or the version here is older than its first (an `auto` is never let fall to the next place down: lookup.rs).
+fn auto_refused(at: &At) -> Vec<(String, String, String)> {
+    let scope = at.scope();
+    let places = places_of(&scope, &yours());
+    let mut out = vec![];
+    for e in SETTINGS.iter().filter(|e| e.ty == Ty::Access) {
+        let Some(f) = lookup_at(&e.name, &scope, &places).ok().filter(|f| f.value == json!("auto")) else { continue };
+        let Ok(a) = lookup_at(&format!("{}.agent", e.name.split('.').next().unwrap_or("")), &scope, &places) else { continue };
+        let from = [&f, &a].iter().map(|x| if ["task", "carried"].contains(&x.place.as_str()) { format!("{}{}", x.from, at.label) } else { x.from.clone() }).collect::<Vec<_>>().join(" + ");
+        let k = agent_of(&text(&a.value)).kind;
+        let why = [access::why_not(&k, "auto"), access::too_old(&k, "auto")].into_iter().find(|w| !w.is_empty());
+        if let Some(why) = why { out.push((e.name.clone(), why, from)); }
+    }
+    out
+}
 pub fn check() -> Vec<Found> {
     let mut out: Vec<Found> = vec![];
     let mut seen: Vec<String> = vec![];
@@ -54,6 +71,10 @@ pub fn check() -> Vec<Found> {
             let Some(why) = why else { continue };
             let fix = format!("Set it again: herdr-projects set {name} <program/model>{}  (or herdr-projects unset {name}{})", at.flag, at.flag);
             add(format!("{from}: {name}: {why}"), Found::bad(format!("{name}{}: {}", at.label, why.trim_end_matches('.')), fix), &mut out);
+        }
+        for (name, why, from) in auto_refused(&at) {
+            let fix = format!("Update the program, or set it again: herdr-projects set {name} full{} (or ask)", at.flag);
+            add(format!("{from}: {name}: {why}"), Found::bad(format!("{name}{}: {why}", at.label), fix), &mut out);
         }
         for p in problems_in(&at.scope()) {
             let fix = format!("Set it again with herdr-projects set …{}, or take it out of that file: until then the value below it counts.", at.flag);

@@ -48,7 +48,7 @@ pub fn settings(k: &mut Kit, c: &Ctx, r: &Obj) -> Drawn {
         let fastn = format!("{name}.fast");
         let fast = if val(&fastn) == json!(true) { if all.get(&fastn).map(|x| x.b("note")).unwrap_or(false) || !has_fast(&k) { format!("no fast mode in {k}") } else { "fast".into() } } else if from(&[&fastn]) && has_fast(&k) { "fast mode off".into() } else { String::new() };
         let accn = format!("{name}.access");
-        let access = if sval(&accn) == "ask" { "asks before acting".to_string() } else if from(&[&accn]) { "acts without asking".into() } else { String::new() };
+        let access = match sval(&accn).as_str() { "ask" => "asks before acting".to_string(), "auto" => "auto mode: acts on what it checks is safe".into(), _ if from(&[&accn]) => "acts without asking".into(), _ => String::new() };
         let instr = format!("{name}.instructions");
         let own_words = if !val(&instr).is_null() && sval(&instr) != "none" { "words of your own".to_string() } else { String::new() };
         let an = format!("{name}.agent"); let en = format!("{name}.effort");

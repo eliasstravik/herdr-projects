@@ -41,14 +41,15 @@ fn row(k: &Kind) -> Vec<String> {
     let model = if k.model.is_empty() { "none at start".into() } else { format!("{}; {}", code(&fill(k.model, "<model>")), names_of(k)) };
     let effort = efforts_of(k);
     let ask = match k.access_ask { None => "cannot ask".into(), Some(a) if a.is_empty() => "its own default".into(), Some(a) => code(&a.iter().map(|s| s.to_string()).collect::<Vec<_>>()) };
+    let auto = match k.access_auto { None => "none".into(), Some((a, first)) => format!("{}{}", code(&fill(a, "")), if first.is_empty() { String::new() } else { format!(", from {first}") }) };
     let rules = if k.name == "codex" { "`-c developer_instructions=…`".into() } else if k.standing.is_empty() { "in its first prompt".into() } else { code(&fill(k.standing, "<file>")) };
     let again = if k.resume.is_empty() { "starts afresh".into() } else { code(&fill(k.resume, "<id>")) };
     let watcher = if !can_one_shot(k.name) { "none".into() } else { one_shot(k.name, "", "", "<prompt>", "", false).map(|o| format!("{}{}", code(&std::iter::once(o.command).chain(o.args).collect::<Vec<_>>()), if o.stdin.is_some() { ", the prompt on its input" } else { "" })).unwrap_or_default() };
     let read = if k.reads_turn { "its conversation file".into() } else { "herdr's state and its closing note".into() };
     let herdr = if k.integration.is_empty() { "none".into() } else if k.needs_integration { format!("`{}`, needed", k.integration) } else { format!("`{}`", k.integration) };
-    vec![name, code(&started), model, effort, ask, rules, again, watcher, read, herdr, roles_out(k), k.checked.into()]
+    vec![name, code(&started), model, effort, ask, auto, rules, again, watcher, read, herdr, roles_out(k), k.checked.into()]
 }
 pub fn agents_table() -> Result<String, String> {
     for k in all() { if k.checked.is_empty() { return Err(format!("crates/core/src/agents/kinds/: the program \"{}\" has no `checked`", k.name)); } }
-    Ok(super::tables::table(&["Program", "Started for work as", "Model", "Effort", "Asking first", "Standing rules", "Reopened by", "Watcher's one-shot", "Turn's end read from", "herdr's integration", "Can do", "Checked"], all().map(row).collect()))
+    Ok(super::tables::table(&["Program", "Started for work as", "Model", "Effort", "Asking first", "Auto mode", "Standing rules", "Reopened by", "Watcher's one-shot", "Turn's end read from", "herdr's integration", "Can do", "Checked"], all().map(row).collect()))
 }

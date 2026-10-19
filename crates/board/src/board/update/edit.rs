@@ -18,7 +18,7 @@ pub fn value_say(v: &Value) -> String { match v { Value::Bool(true) => "on".into
 /// Values that are one of a few words are changed by going to the next one; every other value is typed.
 pub fn words_of(name: &str) -> Option<Vec<Value>> {
     let e = entry_of(name)?;
-    match e.ty { Ty::Switch => Some(vec![json!(true), json!(false)]), Ty::Choice => Some(e.values.iter().map(|v| json!(v)).collect()), Ty::Access => Some(vec![json!("full"), json!("ask")]), _ => None }
+    match e.ty { Ty::Switch => Some(vec![json!(true), json!(false)]), Ty::Choice => Some(e.values.iter().map(|v| json!(v)).collect()), Ty::Access => Some(crate::agents::access::VALUES.iter().map(|v| json!(v)).collect()), _ => None }
 }
 /// The page's rows: a task's work settings (an automation's: what its next task will have). A setting that cannot
 /// apply to it is not offered (fast mode for a program that has none, a repo's setting for a task in no repo); one

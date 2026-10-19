@@ -97,7 +97,7 @@ fn what_a_task_holds_is_checked_too_a_wrong_value_a_board_setting_or_an_effort_i
     use sw::store::settings::values::check;
     for word in ["constructor", "__proto__", "toString", "hasOwnProperty"] {
         refused(check("merge.pr", &json!(word), ""), r"merge\.pr is a switch"); refused(check("worker.agent", &json!(word), ""), "no agent program");
-        refused(set_value("merge.pr", &json!(word), &you()), "is a switch"); refused(set_value("worker.access", &json!(word), &you()), "must be full or ask");
+        refused(set_value("merge.pr", &json!(word), &you()), "is a switch"); refused(set_value("worker.access", &json!(word), &you()), "must be full, ask or auto");
     }
     assert_eq!(setting("merge.pr", None), json!(true));
     // an effort or an access written by hand for a program that does not take it: said, and the next place down is used

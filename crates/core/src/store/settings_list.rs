@@ -47,7 +47,7 @@ fn role(name: &str, who: &str, agent: &str, fast: bool, kind: Kind) -> Vec<Entry
     vec![a,
         e(&format!("{name}.effort"), &format!("{cap} effort"), kind, Ty::Effort, json!("default"), &format!("{who}'s effort level: one its program accepts (checked against `{name}.agent`), or `default` for the program's own")),
         e(&format!("{name}.fast"), &format!("{cap} fast mode"), kind, Ty::Switch, json!(fast), &format!("{who} in its program's fast mode: a faster service tier that uses more of your allowance. Only Codex has one; for another program it does nothing, and `show` says so")),
-        e(&format!("{name}.access"), &format!("{cap} access"), kind, Ty::Access, json!("full"), &format!("what {who} may do without asking: `full` or `ask`. The board turns it into each program's own flags. `ask` is refused for a program that cannot ask ({})", crate::agents::kinds::all().filter(|k| k.access_ask.is_none()).map(|k| k.name).collect::<Vec<_>>().join(", "))),
+        e(&format!("{name}.access"), &format!("{cap} access"), kind, Ty::Access, json!("full"), &format!("what {who} may do without asking: `full` (anything), `ask` (nothing: it asks first) or `auto` (its program's own auto mode, which checks each action and does the safe ones without asking, and stops the risky ones). The board turns it into each program's own flags. `ask` is refused for a program that cannot ask ({}); `auto` for one with no auto mode (all but {}), and for a version older than its first", crate::agents::kinds::all().filter(|k| k.access_ask.is_none()).map(|k| k.name).collect::<Vec<_>>().join(", "), crate::agents::access::with_auto().join(", "))),
         text]
 }
 
