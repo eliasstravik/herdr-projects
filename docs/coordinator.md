@@ -1,5 +1,7 @@
 # The Coordinator
 
+In [Mission Control](mission-control.md), the Coordinator is the visible orchestrator pane to the right of the project sidebar and task input. It follows the global CLI priority and reviews worker results in this same conversation. The separate-tab descriptions below concern the classic board.
+
 **The Coordinator is the agent you talk to in the board's chat.** Type what needs doing and it turns it into tasks.
 It is one long-lived agent chat, not a call per message: everything you type goes into the same conversation, so
 "delegate that one too" works, and it can ask you something back.

@@ -69,7 +69,9 @@ pub fn send(cwd: &Path, text: &str, delegate: bool, about: &str, co: impl Into<C
     let ctx = context(root.as_deref().unwrap_or(cwd), delegate, about)?;
     let c = change(&co, |c| {
         let mut q = c.arr("queue").to_vec();
-        q.push(json!({ "id": crate::util::uuid(), "text": if delegate { format!("{text}\n\n{}", tab_note()) } else { text.to_string() }, "said": text, "where": ctx, "at": now() }));
+        let mut message = json!({ "id": crate::util::uuid(), "text": if delegate { format!("{text}\n\n{}", tab_note()) } else { text.to_string() }, "said": text, "where": ctx, "at": now() });
+        if text.starts_with("[ORCHESTRATOR-REVIEW]") { message["review"] = json!(true); }
+        q.push(message);
         c.put("queue", q); c.put("error", ""); c.put("stopped", false);
         true
     })?;
@@ -96,6 +98,7 @@ fn want(what: &str, pick: Option<Obj>, co: Co) -> Res<Obj> {
     kick(&co);
     Ok(c)
 }
+pub fn handover(pick: Option<Obj>, co: impl Into<Co>) -> Res<Obj> { want("handover", pick, co.into()) }
 pub fn restart(co: impl Into<Co>) -> Res<Obj> { want("restart", None, co.into()) }
 pub fn fresh(pick: Option<Obj>, co: impl Into<Co>) -> Res<Obj> { want("new", pick, co.into()) }
 pub fn stop(co: impl Into<Co>) -> Res<Obj> { want("stop", None, co.into()) }

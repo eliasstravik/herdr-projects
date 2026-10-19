@@ -3,6 +3,7 @@
 //! What the files share is declared once, at the top. Running one area alone: `npm run check board-panel`.
 mod common;
 mod far;
+mod mission_control;
 mod move_home;
 mod review_kit;
 mod takeover_kit;

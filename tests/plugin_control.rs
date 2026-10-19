@@ -21,7 +21,7 @@ fn the_plugin_uses_the_projects_runner_from_its_parent_checkout_and_applies_all_
     let calls = root.join("calls.txt");
     fs::create_dir_all(script.parent().unwrap()).unwrap();
     fs::create_dir_all(runner.parent().unwrap()).unwrap();
-    fs::copy(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("herdr-control/scripts/control.sh"), &script).unwrap();
+    fs::copy(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("herdr-control/scripts/priority.sh"), &script).unwrap();
     fs::write(&runner, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CONTROL_LOG\"\nprintf 'Projects: %s\\n' \"$*\"\n").unwrap();
     #[cfg(unix)] {
         use std::os::unix::fs::PermissionsExt;
@@ -40,5 +40,5 @@ fn the_plugin_uses_the_projects_runner_from_its_parent_checkout_and_applies_all_
     assert!(shown.contains("Gespeichert. Noch nicht auf Herdr Projects angewendet."), "{shown}");
     assert!(shown.contains("Aktiviert: claude/opus → Fallback:"), "{shown}");
     assert_eq!(fs::read_to_string(config.join("priority.txt")).unwrap(), "claude/opus,codex/gpt-6.1-sol,agy,cursor,opencode,kiro,freebuff,codebuddy,cline,qodercli,grok\n");
-    assert_eq!(fs::read_to_string(calls).unwrap(), "set worker.fallback codex/gpt-6.1-sol,agy,cursor,opencode,kiro,freebuff,codebuddy,cline,qodercli,grok\nset worker.agent claude/opus\n");
+    assert_eq!(fs::read_to_string(calls).unwrap(), "set worker.fallback codex/gpt-6.1-sol,agy,cursor,opencode,kiro,freebuff,codebuddy,cline,qodercli,grok\nset worker.agent claude/opus\nset coordinator.agent claude/opus\nset review.by coordinator\nset review.when always\nset watcher.agent none\n");
 }

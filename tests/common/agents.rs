@@ -164,6 +164,12 @@ fn run(f: &F, pi: usize, prompt: &str, step: Value) {
                 write(&m.join("review").join("verdict.json"), &v.to_string());
             }
         }
+    } else if step.at("verdict").is_object() && step.b("reviewTask") {
+        let id = step.s("reviewTask");
+        let task = sw::store::tasks::get(id).unwrap();
+        let mut verdict = step.at("verdict").clone();
+        verdict["commit"] = json!(git(&sw::store::repos::cwd_of(&task), &["rev-parse", "HEAD"]).unwrap_or_default());
+        write(&task_dir(id).join("review/verdict.json"), &verdict.to_string());
     } else if step.b("said") {
         let st = f.st.borrow();
         let args: Vec<String> = st["panes"][pi]["agent"].arr("args").iter().map(text).collect();

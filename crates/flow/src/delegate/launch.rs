@@ -55,6 +55,7 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
     let level = start::effort_for(&kind, &model, &who.effort);
     let root = if t.b("root") { PathBuf::from(t.s("root")) } else { folder_of(t.s("id")) };
     installed::pre_trust(&kind, &root, &who.access);
+    if kind == "agy" { installed::pre_trust(&kind, &cwd_of(&t), &who.access); }
     // Keep the task's anchor terminal available for Mission Control and put every first agent in a real tiled pane.
     // Subsequent resumes reuse their existing pane; retrying a failed start must not leave orphan splits behind.
     let t = if !t.at("link").b("agentPaneCreated") && !t.b("attemptOf") {

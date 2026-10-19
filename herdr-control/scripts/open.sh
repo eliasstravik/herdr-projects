@@ -1,5 +1,5 @@
 #!/bin/sh
-# Open Herdr Control's declared split-pane entrypoint.
+# Open or focus the single Mission Control workspace, with project list, task input, and visible CLI panes.
 set -eu
-HERDR_BIN=${HERDR_BIN_PATH:-herdr}
-exec "$HERDR_BIN" plugin pane open --plugin herdr-control --entrypoint control --placement split --direction right
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec sh "$SCRIPT_DIR/../../bin/run.sh" "${1:-control-open}"

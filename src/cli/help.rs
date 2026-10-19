@@ -2,6 +2,8 @@
 pub const HELP: &str = r#"herdr-projects: a work board for herdr
 
   herdr-projects                     open the board here (in herdr: bind a key to the plugin action "open")
+  herdr-projects control-open            Mission Control öffnen: Projektordner, Task-Eingabe und sichtbare CLI-Panes
+  herdr-projects board-open              das klassische Board öffnen
   herdr-projects add <title> [--desc TEXT] [--repo NAME|PATH] [--delegate] [--after ID[,ID…]] [--<setting> VALUE ...] [--research|--no-research]
                                       (--research: research only, short for --research.only true. Its agent changes
                                        nothing in the repo; the result is a report. --no-research: not research only,

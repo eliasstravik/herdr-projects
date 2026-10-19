@@ -34,6 +34,7 @@ pub struct Reviewed { pub review: Option<Obj>, pub error: String, pub auth: bool
 pub fn run_review(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, to_land: bool, ch: &Obj, check: &str) -> Res<Reviewed> { run_review_with(id, g, text, change, to_land, ch, check, None) }
 #[allow(clippy::too_many_arguments)]
 pub fn run_review_with(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, to_land: bool, ch: &Obj, check: &str, plan: Option<&Plan>) -> Res<Reviewed> {
+    if plan.is_none() && ch.s("review.by") == "coordinator" { return super::coordinator_review::run(id, g, text, change, to_land, ch, check); }
     let waits = retry_waits();
     let mut tried: Vec<String> = vec![];
     let mut tries: i64 = 0;

@@ -58,7 +58,7 @@ fn begun(t: &Task) -> bool { t.at("handled").b("at") || t.s("turnBy") == "typed"
 fn sleep(ms: i64) { std::thread::sleep(std::time::Duration::from_millis(ms.max(0) as u64)); }
 /// Interactive CLIs without a transcript reader still expose a finished provider error in Herdr's idle pane.
 /// Restrict this fallback to unmistakable error language in the last screen lines; ordinary task text is not enough.
-fn screen_error(api: &crate::herdr::Herdr, pane: &str, a: Option<&Value>) -> Option<Turn> {
+pub fn screen_error(api: &crate::herdr::Herdr, pane: &str, a: Option<&Value>) -> Option<Turn> {
     let status = a.map(|x| x.s("agent_status"));
     if !matches!(status.as_deref(), Some("idle" | "done")) { return None; }
     let screen = crate::agents::screen_text::screen_text(&read_screen(api, pane, status.as_deref(), 60));

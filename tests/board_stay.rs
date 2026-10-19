@@ -154,7 +154,7 @@ fn opening_the_board_from_anywhere_in_herdr_goes_back_to_the_one_that_is_running
     assert!(has(&toml, "\\[\\[panes\\]\\]\nid = \"board\"\n[^\\[]*\nplacement = \"tab\"\n"), "{toml}");
     // No board is running: one is opened in a tab of its own, named, and herdr goes to it.
     set_env(&[]);
-    let main = || sw::cli::main(vec!["open".into()]);
+    let main = || sw::cli::main(vec!["board-open".into()]);
     assert_eq!(main(), 0);
     assert_eq!(w.state().s("boardPlacement"), "tab");
     let made = w.state().arr("panes").iter().find(|x| x.s("label") == "Work board").cloned().expect("a board's pane");

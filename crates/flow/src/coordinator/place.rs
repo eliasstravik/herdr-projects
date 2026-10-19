@@ -1,4 +1,5 @@
-//! Where a coordinator lives in herdr: a tab of its own, named after it. The top-level Coordinator's (`Coordinator`)
+//! Where a coordinator lives: a visible tiled pane beside Mission Control, or a named tab in the classic board.
+//! In the classic board, the top-level Coordinator's (`Coordinator`)
 //! and the machine coordinator's are in the home space (`~`); a project coordinator's is in its repo's own space. A
 //! top-level one still in the space of its own it had before is moved over. Checked on herdr 0.9.3: a space is labelled after the folder of
 //! its first tab's pane, so the space the tab was last put in is remembered; `pane move --new-tab` carries a running
@@ -46,6 +47,12 @@ fn put(c: &mut Obj, co: &Co, space: Value, pane: &Value, was: Value) {
 }
 /// Its tab, found or opened: one pane, in its own folder. Returns the pane.
 pub fn open_tab(api: &Herdr, co: &Co, env: &[(String, String)]) -> Res<Value> {
+    if co.is_top() {
+        if let Some(pane) = crate::mission_layout::split(api, &home(co).display().to_string(), env)? {
+            change(co, |c| { put(c, co, pane.at("workspace_id").clone(), &pane, Value::Null); c.put("tiled", true); true })?;
+            return Ok(pane);
+        }
+    }
     let mut pane = adopt(api, co);
     let mut old = None;
     if let Some(p) = pane.as_ref().filter(|_| co.is_top()) { if let Some(w) = api.workspace_get(p.s("workspace_id")) { if w.s("label") == COORDINATOR_TAB && !w.at("worktree").is_object() && w.i("pane_count") == 1 { old = Some(w.t("workspace_id")); } } }
@@ -84,7 +91,23 @@ pub fn move_over(api: &Herdr, co: &Co, quiet: bool) -> Res<Option<Value>> {
 }
 /// Close it: its tab, never the home space around it.
 pub fn close_place(api: &Herdr, c: &Obj) {
+    if c.b("tiled") { if c.b("pane") { api.pane_close(c.s("pane")); } return; }
     if c.b("workspace") { if c.b("pane") { api.pane_close(c.s("pane")); } return; }
     if c.b("tab") && c.b("pane") && api.pane_get(c.s("pane")).map(|p| p.s("tab_id") == c.s("tab")).unwrap_or(false) { api.tab_close(c.s("tab")); }
     else if c.b("pane") { api.pane_close(c.s("pane")); }
+}
+
+/// A surviving coordinator follows a reopened Mission Control without losing its conversation.
+pub fn follow_mission(api: &Herdr, co: &Co, pane: Value) -> Res<Value> {
+    if !co.is_top() { return Ok(pane); }
+    let Some(root) = crate::mission_layout::anchor(&co.socket).and_then(|id| api.pane_get(&id)) else { return Ok(pane) };
+    if pane.s("tab_id") == root.s("tab_id") { return Ok(pane); }
+    let moved = api.call(crate::herdr::cli::args(&["pane", "move", pane.s("pane_id"), "--tab", root.s("tab_id"), "--split", "right", "--target-pane", root.s("pane_id"), "--no-focus"]))?;
+    let next = moved.at("move_result").at("pane").clone();
+    if !next.b("pane_id") { crate::fail!("Der Orchestrator konnte nicht neben Mission Control verschoben werden.") }
+    change(co, |c| { put(c, co, next.at("workspace_id").clone(), &next, pane.at("pane_id").clone()); c.put("tiled", true); true })?;
+    let mut layout = crate::mission_layout::state(&co.socket);
+    let mut children = layout.arr("children").to_vec(); children.push(next.at("pane_id").clone()); layout.put("children", children);
+    crate::store::files::write_json(&crate::mission_layout::file(&co.socket), &Value::Object(layout))?;
+    Ok(next)
 }

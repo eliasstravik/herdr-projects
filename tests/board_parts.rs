@@ -96,7 +96,7 @@ fn the_settings_page_every_work_setting_plain_and_a_mark_on_this_tasks_own() {
     set_value("review.rounds", &json!(5), &Scope::default()).unwrap();
     set_value("merge.by", &json!("itself"), &Scope::repo("proj")).unwrap();
     set_value("reviewer.agent", &json!("claude"), &Scope::task(&task(&id))).unwrap();
-    let mut s = open(&w.root, 60); s.s.sel = id.clone(); s.load();
+    let mut s = open(&w.root, 64); s.s.sel = id.clone(); s.load();
     s.press(&["ctrl+e"]);
     let text = s.screen(120).join("\n");
     assert!(text.starts_with(" Settings  PRJ-1 \"One\""), "{text}");

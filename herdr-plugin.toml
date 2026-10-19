@@ -2,14 +2,14 @@ id = "herdr-projects"
 name = "Projects"
 version = "1.2.6"
 # The oldest herdr this plugin was actually verified on.
-min_herdr_version = "0.9.3"
+min_herdr_version = "0.9.5"
 description = "A work board: one list of tasks, each delegated one an ordinary herdr agent in its own space"
 platforms = ["linux", "macos"]
 
 # Commands go through bin/run.sh: herdr starts them with its server's environment, which may lack the user's PATH. It
-# runs the program built here, or the one downloaded for this platform from this version's GitHub release.
+# runs this branch’s own build; bin/source.sh shares the Cargo cache across GitHub plugin checkouts.
 
-# Gets the program when the plugin is installed: downloads it, or builds it from source when it cannot.
+# Builds this branch when the plugin is installed.
 [[build]]
 command = ["sh", "bin/run.sh", "--fetch"]
 
@@ -18,12 +18,12 @@ command = ["sh", "bin/run.sh", "hook"]
 
 [[actions]]
 id = "open"
-title = "Open the work board"
+title = "Mission Control öffnen"
 command = ["sh", "bin/run.sh", "open"]
 
 [[actions]]
 id = "coordinator"
-title = "Go into the Coordinator's chat"
+title = "Orchestrator anzeigen"
 command = ["sh", "bin/run.sh", "open-coordinator"]
 
 [[actions]]

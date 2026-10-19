@@ -14,6 +14,7 @@
 # HERDR_PROJECTS_RELEASES names another place for the releases (a fork, a mirror, a folder as file:///…).
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(dirname -- "$here")
+if [ -f "$root/herdr-control/mission-control" ]; then exec sh "$here/source.sh" "$@"; fi
 PATH="${PATH:+$PATH:}/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:$HOME/.cargo/bin"; export PATH
 say() { printf 'herdr-projects: %s\n' "$*" >&2; }
 fetch_only=""; [ "$1" = "--fetch" ] && { fetch_only=1; shift; }

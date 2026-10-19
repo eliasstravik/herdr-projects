@@ -78,7 +78,7 @@ pub fn delegate_with(id: &str, asked: Vec<(String, Value)>, w: Wait) -> Res<Task
     let asked: Vec<(String, Value)> = asked.into_iter().filter(|(_, v)| !(v.is_null() || *v == json!(""))).collect();
     let values = checked(&asked, &Scope::task(&cur))?;
     let socket = current_socket();
-    let mission_pane = if crate::herdr::cli::in_herdr() { crate::util::env_val("HERDR_PANE_ID").unwrap_or_default() } else { String::new() };
+    let mission_pane = crate::mission_layout::anchor(&socket).unwrap_or_else(|| if crate::herdr::cli::in_herdr() { crate::util::env_val("HERDR_PANE_ID").unwrap_or_default() } else { String::new() });
     let mut stale: Vec<Task> = vec![];
     let mut old: Option<(String, String)> = None; // the last round's space, when its clean-up had not closed it yet
     let t = update(cur.s("id"), |t| {

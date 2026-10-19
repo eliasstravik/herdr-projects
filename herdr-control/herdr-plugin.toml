@@ -1,8 +1,8 @@
 id = "herdr-control"
 name = "Herdr Control"
-version = "0.1.0"
-min_herdr_version = "0.9.3"
-description = "Globale CLI-Priorität und Provider-Fallbacks für Herdr Projects"
+version = "0.2.0"
+min_herdr_version = "0.9.5"
+description = "Mission Control: Projekte, Task-Eingabe und sichtbare CLI-Orchestrierung"
 platforms = ["macos", "linux"]
 
 [[actions]]
@@ -15,3 +15,6 @@ id = "control"
 title = "Herdr Control"
 placement = "split"
 command = ["sh", "scripts/control.sh"]
+
+[[startup]]
+command = ["sh", "scripts/open.sh", "control-startup"]

@@ -239,6 +239,7 @@ pub fn trust(kind: &str, root: &Path) -> bool {
             let tmp = PathBuf::from(format!("{}.{}.sw.tmp", file.display(), std::process::id()));
             write_private(&tmp, &serde_json::to_string_pretty(&j).unwrap_or_default()).is_ok() && fs::rename(&tmp, &file).is_ok()
         }
+        "agy" => crate::store::files::with_lock_wait("agy-trust", 5000, || Ok(trust_agy(&root_s))).unwrap_or(false),
         "codex" => {
             let file = codex_file();
             let text = match fs::read_to_string(&file) { Ok(t) => t, Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(), Err(_) => return false };
@@ -251,4 +252,16 @@ pub fn trust(kind: &str, root: &Path) -> bool {
         _ => false,
     }
 }
-pub fn can_trust(kind: &str) -> bool { matches!(kind, "claude" | "codex") }
+
+fn trust_agy(root_s: &str) -> bool {
+    let file = crate::store::files::user_home().join(".gemini/antigravity-cli/settings.json");
+    let mut j: Obj = match fs::read_to_string(&file) { Ok(t) => match serde_json::from_str::<Value>(&t) { Ok(Value::Object(o)) => o, _ => return false }, Err(e) if e.kind() == std::io::ErrorKind::NotFound => Obj::new(), Err(_) => return false };
+    if j.has("trustedWorkspaces") && !j.at("trustedWorkspaces").is_array() { return false; }
+    let mut trusted = j.arr("trustedWorkspaces").to_vec();
+    if trusted.iter().any(|p| text(p) == root_s) { return true; }
+    trusted.push(json!(root_s)); j.put("trustedWorkspaces", trusted);
+    if let Some(d) = file.parent() { if fs::create_dir_all(d).is_err() { return false; } }
+    let tmp = PathBuf::from(format!("{}.{}.sw.tmp", file.display(), std::process::id()));
+    write_private(&tmp, &serde_json::to_string_pretty(&j).unwrap_or_default()).is_ok() && fs::rename(&tmp, &file).is_ok()
+}
+pub fn can_trust(kind: &str) -> bool { matches!(kind, "claude" | "codex" | "agy") }

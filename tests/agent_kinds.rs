@@ -64,7 +64,7 @@ fn watcher_one_shots_are_limited_to_programs_outside_the_interactive_pool() {
     assert_eq!(d.args, ["exec", "--append-system-prompt", "Answer in one line.", "How far along?"]);
     assert!(one_shot("cursor", "", "", "How far along?", "", false).is_none());
     let interactive_pool = ["freebuff", "codebuddy", "claude", "codex", "agy", "cursor", "opencode", "kiro", "cline", "qodercli", "grok"];
-    let plugin = include_str!("../herdr-control/scripts/control.sh");
+    let plugin = include_str!("../herdr-control/scripts/priority.sh");
     for k in all() {
         if interactive_pool.contains(&k.name) { assert!(one_shot(k.name, "", "", "p", "", false).is_none(), "{} must stay interactive", k.name); }
     }

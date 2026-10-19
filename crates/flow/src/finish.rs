@@ -16,6 +16,7 @@ pub mod pipeline_end;
 pub mod recover_job;
 pub mod research;
 pub mod review;
+pub mod coordinator_review;
 pub mod review_once;
 pub mod review_brief;
 pub mod review_fallback;

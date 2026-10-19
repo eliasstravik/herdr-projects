@@ -71,7 +71,10 @@ fn run(cmd: &str, a: &Args) -> Res<i32> {
             if a.flags.b("merged") { extra.push("--merged".into()); }
             return Ok(crate::jobs::run_job(&pos(1), &pos(2), &extra));
         }
-        "open" => { crate::board::place::show(None, false); return Ok(0); }
+        "board-open" => { crate::board::place::show(None, false); return Ok(0); }
+        "open" | "control-open" => { crate::mission_control::show(true)?; return Ok(0); }
+        "control-startup" => { crate::mission_control::show(false)?; return Ok(0); }
+        "control" => return crate::mission_ui::open(),
         // Into the Coordinator's chat: herdr moves to its real pane, as for any agent. No board in between.
         "open-coordinator" => { if let Err(e) = crate::coordinator::look::go_in(&crate::herdr::cli::current_socket(), 30000) { eprintln!("{}", e.msg); return Ok(1); } return Ok(0); }
         "approve-current" => { approve_current(); return Ok(0); }
