@@ -25,6 +25,7 @@
 .sw-callp-who { margin: 0; font-size: 20px; font-weight: 600; }
 .sw-callp-state { margin: 0; color: var(--dim); }
 .sw-callp-lines { display: flex; flex-direction: column; gap: 6px; min-height: 4em; }
+.sw-callp-lines:empty { min-height: 0; }
 .sw-callp-lines p { margin: 0; color: var(--dim); overflow-wrap: anywhere; }
 .sw-callp-lines b { color: var(--fg); }
 .sw-callp-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
