@@ -87,11 +87,11 @@ pub fn look(co: impl Into<Co>) -> Look {
 pub fn screen(v: &Look, co: impl Into<Co>) -> String {
     let co = co.into();
     let socket = co.socket.as_str();
-    let Some(status) = &v.status else { return String::new() };
+    let Some(_) = &v.status else { return String::new() };
     if v.pane.is_empty() { return String::new(); }
     let now = crate::clock::now();
     if let Some((p, at, text)) = SCREENS.lock().unwrap().get(&co.key()) { if *p == v.pane && now - at < 2000 { return text.clone(); } }
-    let raw = read_screen(&Herdr::new(Some(socket.into())), &v.pane, Some(if status == "idle" || status == "done" { status } else { "working" }), 60);
+    let raw = read_screen(&Herdr::new(Some(socket.into())), &v.pane);
     let mut text = raw.split('\n').map(|l| l.trim_end()).collect::<Vec<_>>().join("\n");
     while text.contains("\n\n\n") { text = text.replace("\n\n\n", "\n\n"); }
     let text = text.trim().to_string();

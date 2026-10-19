@@ -239,18 +239,7 @@ pub fn shown_of(layout: &Value, pane: &str) -> Option<(u16, u16, bool)> {
     let r = if layout.b("zoomed") && layout.s("focused_pane_id") == pane && layout.at("area").is_object() { layout.at("area") } else { mine.at("rect") };
     (r.i("width") > 0 && r.i("height") > 0).then(|| (r.i("width") as u16, r.i("height") as u16, panes.len() > 1))
 }
-/// Reading a terminal. A deep read is only possible (and only harmless) when the agent is idle or done.
-pub fn read_screen(h: &Herdr, pane: &str, status: Option<&str>, lines: i64) -> String {
-    let r = match status {
-        Some("idle") | Some("done") => h.agent_read(pane, "recent-unwrapped", Some(lines)),
-        None => h.pane_read(pane, "visible", None),
-        _ => h.agent_read(pane, "visible", None),
-    };
-    match r {
-        Ok(s) => s,
-        Err(e) => {
-            if e.code == "agent_not_idle" { if let Ok(s) = h.agent_read(pane, "visible", None) { return s; } }
-            h.pane_read(pane, "visible", None).unwrap_or_default()
-        }
-    }
+/// Automatic screen checks must never scroll a CLI's conversation or send it navigation keys.
+pub fn read_screen(h: &Herdr, pane: &str) -> String {
+    h.pane_read(pane, "visible", None).unwrap_or_default()
 }

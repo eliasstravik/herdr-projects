@@ -21,7 +21,7 @@ pub fn recover_job(id: &str) {
         let terms = t.arr("terms");
         if a.b("terminal_id") && !terms.is_empty() && terms.last().map(text) != Some(a.t("terminal_id")) { return; } // a terminal the hook has not seen yet: it decides first
         if !flow::handled_turn::reopened(&t, a.at("completion_seq")) || !pending_text(id).is_empty() { return; }
-        let screen = last_lines(&read_screen(&api, t.at("link").s("pane"), Some(a.s("agent_status")), 60), 12);
+        let screen = last_lines(&read_screen(&api, t.at("link").s("pane")), 12);
         g.expect(&t, &[]);
         let _ = g.set(|t| { t.put("stage", "nosummary"); t.put("msg", "Stopped without a summary"); t.put("screen", screen.clone()); t.put("turnOpen", false); t.put("since", now()); });
     })();

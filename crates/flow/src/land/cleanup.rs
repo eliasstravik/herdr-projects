@@ -55,7 +55,7 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
     // one, its saved conversation end in a finished turn, and nothing run under it.
     let at_rest = |a: &Value| -> bool {
         let Some(api) = &api else { return false };
-        let screen = read_screen(api, link.s("pane"), Some(a.s("agent_status")), 120);
+        let screen = read_screen(api, link.s("pane"));
         if screen.trim().is_empty() { return false; }
         let sig = format!("{}|{}", text(a.at("state_change_seq")), sha1_smol::Sha1::from(screen.as_bytes()).digest());
         let at = { let q = quiet.borrow(); if q.s("sig") == sig { q.i("at") } else { now() } };

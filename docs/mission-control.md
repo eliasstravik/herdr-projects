@@ -34,3 +34,7 @@ herdr server reload-config
 ```
 
 Der Control-Plugin-Start und die Projects-Hooks müssen aus demselben Quellstand kommen. Die Quellarchive vor größeren Änderungen liegen lokal unter `Archiv/`.
+
+## Ruhige Terminal-Anzeige
+
+Automatische Status-, Fehler- und Ausgabeabfragen lesen ausschließlich das sichtbare Terminalbild. Sie sammeln keinen internen CLI-Gesprächsverlauf und schicken keine Scroll-Tasten. Das gilt auch bei einer als bereit oder fertig gemeldeten CLI, damit Cline und andere Terminals ihre Scrollposition behalten. Gesicherte Terminal-Protokolle enthalten entsprechend den sichtbaren Ausschnitt.

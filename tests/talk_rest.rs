@@ -98,3 +98,22 @@ fn a_working_agents_chat_is_its_words_never_its_tool_calls_or_its_screen_where_i
     assert_eq!(other.parts.iter().map(|p| (p.by.clone(), p.text.clone(), p.raw)).collect::<Vec<_>>(), vec![("Agent, on its screen now".to_string(), "Reading the code".to_string(), true)]);
     assert!(other.raw);
 }
+
+#[test]
+fn automatic_screen_checks_never_scroll_cline_even_when_it_is_idle_or_done() {
+    let w = world();
+    let api = sw::herdr::Herdr::new(Some(w.socket.clone()));
+    let ws = api.workspace_create(&w.root_str(), "Terminal", &[]).unwrap();
+    let pane = ws.at("root_pane").s("pane_id");
+    api.call(sw::herdr::cli::args(&["agent", "start", "screen-probe", "--kind", "cline", "--pane", pane])).unwrap();
+    w.patch(|st| { for p in st["panes"].as_array_mut().unwrap() { if p.s("pane_id") == pane { p["agent"]["screen"] = json!("Sichtbarer Cline-Text"); } } });
+    let start = calls(&w).len();
+    for state in ["working", "idle", "done", "blocked"] {
+        set_status(&w, pane, state);
+        assert_eq!(sw::herdr::api::read_screen(&api, pane), "Sichtbarer Cline-Text");
+    }
+    let log = calls(&w);
+    let reads = &log[start..];
+    assert_eq!(reads.iter().filter(|c| c.starts_with("pane read ") && c.contains("--source visible")).count(), 4);
+    assert!(!reads.iter().any(|c| c.starts_with("agent read ") || c.contains("send-keys") || c.contains("recent-unwrapped")));
+}

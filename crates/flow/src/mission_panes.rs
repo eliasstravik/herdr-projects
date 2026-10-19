@@ -24,7 +24,7 @@ pub fn tidy(socket: &str) -> Res<()> {
         let resting = agent.as_ref().map(|a| ["idle", "done"].contains(&a.s("agent_status"))).unwrap_or_else(|| api.pane_idle(old.s("pane")));
         if !resting { continue; }
         let log = path.with_extension("terminal.txt");
-        let screen = read_screen(&api, old.s("pane"), agent.as_ref().map(|a| a.s("agent_status")), 300);
+        let screen = read_screen(&api, old.s("pane"));
         write_atomic(&log, screen.as_bytes())?;
         api.pane_close(old.s("pane"));
     }

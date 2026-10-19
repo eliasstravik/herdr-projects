@@ -52,6 +52,7 @@ nothing to `npm install`; `package.json` is only there so that every agent finds
   pick lines.
 - **A task's words go in the `docs/` page of its own topic, and only there.** A new topic is a new page. A page that
   grows a second topic is split.
+- Automatic screen checks use only `pane read --source visible`. Never collect application-owned CLI history or send navigation keys, including when the CLI is idle: this moves the user’s scroll position.
 - **Interactive CLI provider errors** without a transcript reader are classified only from explicit error markers in
   the last terminal lines after Herdr reports the agent idle or done. Keep the classifier narrow and route matches
   through the existing retry/fallback path; never inspect or steer a running CLI through ACP or a headless command.
