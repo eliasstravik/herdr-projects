@@ -24,7 +24,7 @@ pub fn hl(t: &Theme, line: &Inked, width: usize) -> Inked {
 /// The header says where you are: whose tasks show (other machines in the accent colour), else the repo new tasks go
 /// to; then how many tasks stand in each group. A filter has a line of its own under it.
 pub fn head_lines(s: &State, w: usize) -> Vec<Inked> {
-    let others: Vec<String> = crate::board::update::remotes::others(s).into_iter().map(|m| if m.ok { m.machine.label.clone() } else { format!("{} (no answer)", m.machine.label) }).collect();
+    let others: Vec<String> = crate::board::update::remotes::others(s).into_iter().map(|m| { let n = crate::board::update::remotes::shown(s, &m.machine.label); if m.ok { n } else { format!("{n} (no answer)") } }).collect();
     let scope = if s.scope == "*" { format!("all machines: {}", if others.is_empty() { "no others found".into() } else { others.join(", ") }) } else if s.all() { format!("only {}{}", s.scope, if s.remotes.get(&s.scope).map(|m| m.ok).unwrap_or(false) { "" } else { " (no answer)" }) } else { String::new() };
     let n = counts(s);
     let c = |k: &str| n.get(k).copied().unwrap_or(0);

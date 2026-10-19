@@ -46,6 +46,12 @@ This machine is the saved machine that connects to one of its names, in its own 
 - an SSH alias, read as the host it stands for in that machine's SSH config (`ssh -G`, which that machine reads before
   it sends its list).
 
+Failing that, it is the saved machine whose name stands for one of those addresses: the other machine looks the names
+in its list up (DNS, Tailscale's MagicDNS) and sends the addresses with them. A Mac mini whose own host name is `Mac`,
+saved on the laptop as `eliass-mac-mini` (its Tailscale name), is found so. A list from a program that sends no
+addresses has its names looked up on the board's side. An address that another of the board's machines connects to is
+never taken for this one.
+
 A sidebar where this machine is not found that way, or is turned off, is not followed. A machine the board does not
 know is never taken for this one.
 
@@ -53,6 +59,13 @@ The other machines are matched to the board's machines by where they connect (sa
 else by name. Host names are compared whole: `build.prod.example` is never `build.dev.example`. Only a bare name
 matches the first part of a whole one (`mac-mini` and `mac-mini.tail1234.ts.net`). This machine's bare names are only
 the ones it really has, never cut from its whole name.
+
+## Names
+
+Where the board follows another machine's sidebar, it names the machines as that sidebar does, with its own name beside
+it where the two differ: `Local (elias-macbook-pro-m1)` for the machine whose window it is, `Mac mini (Mac)` for this
+one. The same names are in the header's `all machines:` line and on the web board. Following this machine's own list,
+the board's names stand. A machine's name in a scope, a message or a coordinator's name is still the board's.
 
 ## Machines the sidebar does not show
 
