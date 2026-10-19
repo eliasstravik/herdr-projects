@@ -5,8 +5,9 @@ use crate::json::*;
 
 pub const PROMPT: &str = include_str!("prompt.md");
 pub const NAME: &str = "herdr-projects voice";
-/// A small, quick model: it only talks and relays; the agents on the board do the thinking.
-pub const LLM: &str = "gemini-2.5-flash";
+/// A small, quick model: it only talks and relays; the agents on the board do the thinking. ElevenLabs' id for
+/// DeepSeek V4.1 Flash (in its API's list of agent models); `voice.llm` puts another in its place.
+pub const LLM: &str = "deepseek-v41-flash";
 /// A model that speaks Swedish and English (reachy-voice's, heard in Swedish).
 pub const TTS_MODEL: &str = "eleven_v4_turbo";
 /// One of ElevenLabs' own voices that agents may use (one with live moderation may not), speaking Swedish and English
@@ -32,20 +33,21 @@ pub fn tools() -> Vec<Tool> {
         Tool { name: "end_call", description: "Hang up, after a short goodbye.", params: || json!({ "type": "object", "properties": {} }) },
     ]
 }
-/// The settings a call is made with: the language (`auto`, `sv` or `en`) and the voice.
+/// The settings a call is made with: the language (`auto`, `sv` or `en`), the voice and the model.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Made { pub language: String, pub voice: String }
+pub struct Made { pub language: String, pub voice: String, pub llm: String }
 pub fn made() -> Made {
     let get = |n: &str| crate::store::settings::lookup::setting_text(n, None);
     let language = match get("voice.language").as_str() { "sv" => "sv", "en" => "en", _ => "auto" }.to_string();
     let voice = get("voice.voice");
-    Made { language, voice: if voice.is_empty() || voice == "none" { VOICE.into() } else { voice } }
+    let llm = get("voice.llm");
+    Made { language, voice: if voice.is_empty() || voice == "none" { VOICE.into() } else { voice }, llm: if llm.is_empty() || llm == "none" { LLM.into() } else { llm } }
 }
 /// The first thing said on a call, in its language.
 pub fn first_message(language: &str) -> &'static str { if language == "sv" { "Hej, jag lyssnar." } else { "Hi, I'm listening." } }
 /// What the agent is made from: when this changes, the agent is updated before the next call.
 pub fn stamp(m: &Made) -> String {
     let tools: Vec<Value> = tools().iter().map(|t| json!([t.name, t.description, (t.params)()])).collect();
-    let all = json!({ "prompt": PROMPT, "llm": LLM, "tts": TTS_MODEL, "voice": m.voice, "language": m.language, "tools": tools, "silence": SILENCE_S, "v": 1 });
+    let all = json!({ "prompt": PROMPT, "llm": m.llm, "tts": TTS_MODEL, "voice": m.voice, "language": m.language, "tools": tools, "silence": SILENCE_S, "v": 1 });
     sha1_smol::Sha1::from(all.to_string()).digest().to_string()
 }

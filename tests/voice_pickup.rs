@@ -1,6 +1,7 @@
 //! Who picks up a call from the terminal board (crates/flow/src/calls/listen.rs, here.rs): the board's own computer
 //! when its herdr window there is in use, and no other; across machines, the computer at its herdr window that shows
-//! the board's machine; a Mac counts as used only with recent input, never for a terminal left in front.
+//! the board's machine; a Mac counts as used only with recent input, never for a terminal left in front. And the voice
+//! agent's model: DeepSeek V4.1 Flash unless voice.llm names another, a refused one said plainly.
 use crate::common;
 use common::*;
 use serde_json::json;
@@ -69,4 +70,23 @@ fn being_at_a_computer_is_recent_input_on_macos_and_herdrs_own_window_is_a_plain
     assert!(local_client_in("/usr/bin/herdr\n", "default") && local_client_in("herdr --session default\n", "default"));
     assert!(!local_client_in("herdr --remote vm-str\n", "default"), "a window attached to another machine is not this computer's board's");
     assert!(!local_client_in("herdr-projects board\n", "default") && !local_client_in("herdr agent list\n", "default"));
+}
+
+#[test]
+fn the_voice_agent_thinks_with_deepseek_v4_1_flash_unless_voice_llm_names_another_and_a_refused_one_is_said() {
+    let _w = world();
+    let log = crate::voice::fake_eleven();
+    sw::voice::eleven::ensure_agent("sk_test").unwrap();
+    let body = |log: &std::rc::Rc<std::cell::RefCell<Vec<(String, String, serde_json::Value)>>>| log.borrow().iter().rev().find(|(_, p, _)| p.starts_with("/v1/convai/agents")).map(|x| x.2.clone()).unwrap();
+    let cc = body(&log).at("conversation_config").clone();
+    assert_eq!((cc.at("agent").at("prompt").s("llm"), cc.at("tts").s("model_id")), ("deepseek-v41-flash", "eleven_v4_turbo"));
+    // another model, set without a release: the agent is updated with it; speech stays the same
+    std::fs::write(sw::store::files::config_dir().join("config.json"), json!({ "voice.llm": "gemini-3.8-flash", "coordinator.agent": "none", "watcher.agent": "none" }).to_string()).unwrap();
+    sw::voice::eleven::ensure_agent("sk_test").unwrap();
+    let cc = body(&log).at("conversation_config").clone();
+    assert_eq!((cc.at("agent").at("prompt").s("llm"), cc.at("tts").s("model_id")), ("gemini-3.8-flash", "eleven_v4_turbo"));
+    // a model ElevenLabs refuses: said plainly, with how to pick another
+    let e = sw::voice::eleven::refused("ElevenLabs answered 422 to PATCH /v1/convai/agents/agent_1: {\"detail\":[{\"loc\":[\"body\",\"conversation_config\",\"agent\",\"prompt\",\"llm\"],\"msg\":\"Input should be ...\"}]}", &sw::voice::agent::made());
+    assert!(e.starts_with("ElevenLabs refused the model gemini-3.8-flash (the one voice.llm names) for the call's agent. Pick another: herdr-projects set voice.llm <model id>") && e.contains("herdr-projects set voice.llm none"), "{e}");
+    sw::voice::eleven::set_fake(None);
 }

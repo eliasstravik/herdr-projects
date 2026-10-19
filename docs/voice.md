@@ -93,6 +93,7 @@ no window.
 | Setting | What it does |
 |---|---|
 | `voice.language` | `auto` (Swedish and English, as you speak), `sv` or `en` |
+| `voice.llm` | the voice agent's language model at ElevenLabs, or `none` for the built-in one, DeepSeek V4.1 Flash (`deepseek-v41-flash`); speech stays `eleven_v4_turbo` |
 | `voice.voice` | an ElevenLabs voice id that agents can use (not one with live moderation), or `none` for the built-in one. A voice ElevenLabs refuses is said in the call, with how to pick another |
 | `voice.helper` | `auto`: the call helper runs on a computer with saved machines; `none`: never |
 

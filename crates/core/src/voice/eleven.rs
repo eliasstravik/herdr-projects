@@ -47,7 +47,7 @@ pub fn agent_body(m: &Made, tool_ids: &[String]) -> Value {
         "name": agent::NAME, "tags": ["herdr-projects"],
         "conversation_config": {
             "agent": { "first_message": agent::first_message(lang), "language": lang, "dynamic_variables": { "dynamic_variable_placeholders": { "target": "the Coordinator" } },
-                "prompt": { "prompt": agent::PROMPT, "llm": agent::LLM, "temperature": 0.4, "tool_ids": tool_ids,
+                "prompt": { "prompt": agent::PROMPT, "llm": m.llm, "temperature": 0.4, "tool_ids": tool_ids,
                     "built_in_tools": if m.language == "auto" { json!({ "language_detection": { "type": "system", "name": "language_detection", "description": "", "params": { "system_tool_type": "language_detection", "only_at_conversation_start": false } } }) } else { json!({}) } } },
             "language_presets": presets,
             "tts": { "voice_id": m.voice, "model_id": agent::TTS_MODEL, "agent_output_audio_format": "pcm_16000" },
@@ -96,6 +96,10 @@ fn make_agent(key: &str) -> Result<String, String> {
 /// says which, and how to pick another.
 pub fn refused(e: &str, m: &Made) -> String {
     let low = e.to_lowercase();
+    if low.contains("llm") && (low.contains(" 400 ") || low.contains(" 422 ")) {
+        let ours = if m.llm == agent::LLM { "the built-in one" } else { "the one voice.llm names" };
+        return format!("ElevenLabs refused the model {} ({ours}) for the call's agent. Pick another: herdr-projects set voice.llm <model id> (one of the LLMs ElevenLabs lists for agents), or herdr-projects set voice.llm none for the built-in one. ElevenLabs said: {}", m.llm, crate::text::cut(e, 300));
+    }
     if !(low.contains("voice") && (low.contains(" 400 ") || low.contains(" 403 ") || low.contains(" 404 ") || low.contains(" 422 "))) { return e.into(); }
     let why = if low.contains("moderat") { "it has live moderation, which agents may not use" } else if low.contains("not_found") || low.contains("not found") || low.contains(" 404 ") { "it is not in your ElevenLabs account" } else { "agents may not use it" };
     let ours = if m.voice == agent::VOICE { "the built-in one" } else { "the one voice.voice names" };
