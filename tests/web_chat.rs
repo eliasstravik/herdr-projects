@@ -112,6 +112,8 @@ fn the_chats_bar_has_a_switch_hide_full_screen_and_a_grip_and_the_boards_own_con
     // the board's own conversation, where the web UI has none: your words a card on the right, theirs plain prose,
     // markdown read as the terminal reads it, a screen as it is; it follows new words while you are at its end
     assert!(SAID.contains("h(\"div.sw-said-text\", p.raw ? p.text : prose(p.text))") && SAID.contains("out.push(i % 2 ? h(\"strong\", bit) : bit)"));
+    // laid out again (full screen, every answer of the board), it stays where you read: only a change of shown moves it
+    assert!(SAID.contains("      if (el.hidden === !on) return;\n      el.hidden = !on;"));
     assert!(SAID.contains("const end = !key || atEnd();") && SAID.contains("if (end) requestAnimationFrame(() => { text.scrollTop = text.scrollHeight; });"));
     assert!(CSS.contains(".sw-turn-said.is-mine .sw-said-text { max-width: 80%;"));
     // its parts are no automation's mark: that one is `.sw-turn`, a 0.72em ring

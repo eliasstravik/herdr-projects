@@ -1,7 +1,8 @@
 // The board's own conversation, where the web UI has no chat to show (dock.js): drawn as the web UI draws its own chat
 // (ChatView.css there): your words as a card on the right, theirs as plain prose on the left, the board's and the
 // reviewer's under their name, and a program's screen (one whose conversation cannot be read) as it is. It opens on its
-// end and follows new words while you are there; scrolled up, it stays where you read.
+// end and follows new words while you are there; scrolled up, it stays where you read, also when the board lays
+// itself out again (full screen, a new answer from the board).
 /* global requestAnimationFrame */
 import { h } from "./dom.js";
 
@@ -41,6 +42,12 @@ export function saidEl() {
       text.replaceChildren(...parts.map(partEl));
       if (end) requestAnimationFrame(() => { text.scrollTop = text.scrollHeight; });
     },
-    show(on) { el.hidden = !on; if (on) requestAnimationFrame(() => { text.scrollTop = text.scrollHeight; }); },
+    // Shown or hidden: only a change does anything (the board's layout asks on every update). Shown again, it opens
+    // on its end, where the new words come.
+    show(on) {
+      if (el.hidden === !on) return;
+      el.hidden = !on;
+      if (on) requestAnimationFrame(() => { text.scrollTop = text.scrollHeight; });
+    },
   };
 }

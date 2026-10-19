@@ -40,6 +40,8 @@ function setBox(box, text) {
   box.dispatchEvent(new Event("input", { bubbles: true }));
 }
 const theBox = () => document.querySelector(`${COMPOSER} ${BOX}`);
+// The web UI's box has its completion menu open: the box says so (aria-expanded), and the menu stands in its card.
+const menuOpen = (box) => box.getAttribute("aria-expanded") === "true" || !!box.closest(COMPOSER)?.querySelector(".composer-menu");
 
 // `boardOf()`: the board's element. `onChange()`: the web UI's chat came or went under the board, or its box changed
 // height. `onTyping(on)`: a phone's keyboard is up for the web UI's box, or no longer. `route()`: how the words in the
@@ -113,6 +115,8 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
     if (!on) return;
     const box = e.target, tab = e.key === "Tab" && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && !e.isComposing;
     if (!(tab || sendsOn(e)) || !box?.matches?.(BOX) || !box.closest(COMPOSER) || !box.value.trim()) return;
+    // The web UI's own menu (its `/` commands, its `@` files) is open: Enter and Tab pick from it, as they do there.
+    if (menuOpen(box)) return;
     const r = route();
     if (!r || (tab && !r.delegate)) return;
     e.preventDefault(); e.stopPropagation();

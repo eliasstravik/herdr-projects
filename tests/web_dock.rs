@@ -88,6 +88,9 @@ fn the_page_docks_that_chat_in_place_and_puts_the_web_ui_back_when_the_board_clo
 fn a_coordinators_words_in_the_web_uis_box_go_through_the_board_and_tab_puts_an_agent_on_what_it_adds() {
     // enter (as the web UI's Settings say) and its Send, before the web UI's own handlers; tab where it applies
     assert!(DOCK.contains(r#"import { sendsOn } from "./compose.js";"#) && DOCK.contains("if (!(tab || sendsOn(e)) || !box?.matches?.(BOX) || !box.closest(COMPOSER) || !box.value.trim()) return;"));
+    // the web UI's own menu (its `/` commands, its `@` files) open: Enter and Tab pick from it, as they do there
+    assert!(DOCK.contains("    if (menuOpen(box)) return;\n    const r = route();"));
+    assert!(DOCK.contains(r#"const menuOpen = (box) => box.getAttribute("aria-expanded") === "true" || !!box.closest(COMPOSER)?.querySelector(".composer-menu");"#));
     assert!(DOCK.contains("if (!r || (tab && !r.delegate)) return;") && DOCK.contains(r#"document.addEventListener("keydown", onKey, true);"#) && DOCK.contains(r#"document.addEventListener("click", onSend, true);"#));
     // the words leave the web UI's box only once the board took them, as its framework reads an input event
     assert!(DOCK.contains("if (!kept && box.value === text) setBox(box, \"\");") && DOCK.contains(r#"box.dispatchEvent(new Event("input", { bubbles: true }));"#));

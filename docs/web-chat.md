@@ -70,7 +70,8 @@ address names that pane's chat view (`?ws=…&pane=…&view=chat#board`), so Bac
 - **To a coordinator** (the Coordinator, a machine's or a repo's): the web UI's box, but the board sends the words, as
   its own box does. So the Coordinator knows where you were (the repo and the task you had open,
   [the Coordinator](coordinator.md)), and words wait while it is busy.
-  - Enter (or what the web UI's Settings → Chat says sends) and the round Send.
+  - Enter (or what the web UI's Settings → Chat says sends) and the round Send. While the web UI's own menu is open (its
+    `/` commands, its `@` files), Enter and Tab pick from it, as they do there.
   - **Tab, or Send + start** (a chip over the box while it holds words): sends and puts an agent on every task it adds.
   - The words leave the box once the board took them; words it did not take stay.
   - A message sent with Send + start shows in the web UI's transcript with the line the board adds under it.
