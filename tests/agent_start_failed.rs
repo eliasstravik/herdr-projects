@@ -132,6 +132,7 @@ fn each_reason_is_said_in_plain_words() {
         (said, "  Unsupported model", "codex does not know the model it was given", "Choose a model it has in worker.agent (written as codex/<model>; `herdr-projects models codex` lists the ones it can use), or leave the model out, then delegate again."),
         ("codex quit as it started: error: unexpected argument '--frob' found", "", "codex 9.9.9 does not take one of the board's start arguments", "Update codex to its latest version, then delegate again."),
         ("agent target pane w1:p1 is not an available shell", "", "its terminal was not at its shell prompt", "End what runs in the task's terminal (or close it), then delegate again."),
+        ("agent target pane w1:p1 is not an available shell (tried 4 times in 9 s)", "", "its terminal was not at its shell prompt", "The board waited for the shell's prompt and tried 4 times. End what runs in the task's terminal (or close it), or wait until it shows its prompt, then delegate again."),
         ("herdr did not answer in time", "", "herdr did not answer in time", "Check that herdr is running and answers (`herdr workspace list`), then delegate again."),
         (said, "  Updating codex…", "codex did not come up within a minute", "Look at its terminal: whatever it shows (an update, a question, an error) is in the way. Deal with that, then delegate again."),
         ("worktree create failed: branch exists.", "", "worktree create failed: branch exists", "Fix what herdr reports, then delegate again."),
