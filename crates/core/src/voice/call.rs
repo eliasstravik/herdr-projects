@@ -11,6 +11,9 @@ use std::path::PathBuf;
 
 /// A ticket is good for this long, once; a call nobody picked up after that is let go.
 pub const TICKET_MS: i64 = 120_000;
+/// A live call whose page has not asked the board anything for this long is over: the page went without hanging up
+/// (a phone that died, a tab that was killed). A page asks every second or two while its call is on.
+pub const STALE_MS: i64 = 60_000;
 /// The lines kept for the chat, and your own words kept until something is sent.
 const LINES: usize = 40;
 const HEARD: usize = 6;
@@ -37,6 +40,7 @@ pub fn get() -> Option<Obj> {
     let c = read_obj(&file())?;
     if c.s("state") == "ended" || c.s("id").is_empty() { return None; }
     if c.s("state") == "ringing" && now() - c.i("at") > TICKET_MS { return None; }
+    if c.s("state") == "live" && now() - c.i("at").max(c.i("answered")).max(c.i("seen")) > STALE_MS { return None; }
     Some(c)
 }
 /// Change the call under its lock; None when there is none.
@@ -72,6 +76,8 @@ pub fn take_ticket(ticket: &str) -> Option<Obj> {
         Some(c.clone())
     }).flatten()
 }
+/// The page holding the call asked the board something: it is still there.
+pub fn seen() { change(|c| c.put("seen", now())); }
 /// The call this key holds, when it is the call on now.
 pub fn by_key(key: &str) -> Option<Obj> { get().filter(|c| !key.is_empty() && c.s("key") == hash(key)) }
 pub fn end(why: &str) {

@@ -88,6 +88,11 @@ fn the_call_record_keeps_its_secrets_as_hashes_and_its_ticket_works_once() {
     assert!(call::get().is_none() && call::take_ticket(&ticket).is_none());
     let (a, _, _) = call::start("web:p1", &t);
     assert_eq!(a.s("state"), "live", "a call from the web board is live at once: its page holds it");
+    // a page that goes without hanging up: a minute without a word from it, and the call is over
+    sw::clock::advance(call::STALE_MS - 1); call::seen();
+    sw::clock::advance(call::STALE_MS - 1); assert!(call::get().is_some(), "it asked a moment ago");
+    sw::clock::advance(2); assert!(call::get().is_none());
+    let (a, _, _) = call::start("web:p1", &t);
     let (b, _, _) = call::start("terminal", &t);
     assert_eq!(call::get().unwrap().s("id"), b.s("id"));
 }

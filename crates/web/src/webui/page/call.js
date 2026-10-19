@@ -52,11 +52,12 @@ export async function start(how) {
       if (name === "switch_to" || name === "send_message") feed();
       return res.ok ? String(res.result || "") : res.msg || "The board did not answer.";
     }]));
-    conv = await Conversation.startSession({
+    let dropped = false; // the voice service let go before the call was set up here
+    const started = await Conversation.startSession({
       conversationToken: out.token, connectionType: "webrtc", workletPaths: { rawAudioProcessor: out.worklet },
       dynamicVariables: { target: out.target }, clientTools,
       onConnect: () => set({ state: "live", note: "", target: out.target }),
-      onDisconnect: () => { if (conv) finish("The call ended.", "the voice service ended it"); },
+      onDisconnect: () => { if (conv) finish("The call ended.", "the voice service ended it"); else dropped = true; },
       onError: (m) => set({ note: typeof m === "string" ? m : "The call had a problem." }),
       onModeChange: ({ mode }) => { set({ mode }); if (mode === "speaking") spokeAt = performance.now(); },
       onVadScore: ({ vadScore }) => { if (vadScore > VOICE) heardAt = performance.now(); },
@@ -68,6 +69,8 @@ export async function start(how) {
         send("heard", { who: by, text: message });
       },
     });
+    conv = started;
+    if (dropped) return finish("The call ended.", "the voice service ended it");
     set({ state: "live", target: out.target });
     try { lock = await navigator.wakeLock?.request("screen"); } catch {}
     timer = setInterval(feed, FEED_MS);

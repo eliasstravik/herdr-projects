@@ -36,6 +36,7 @@ pub fn route(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstrea
         return json_out(&mut client, 200, &json!({ "ok": true }));
     }
     let Some(c) = held else { return no(&mut client, 410, "This call has ended.") };
+    call::seen();
     let args = if head.method == "POST" { match body(&mut client, head, rest) { Some(a) => a, None => return no(&mut client, 400, "The request could not be read.") } } else { json!({}) };
     let out = match (head.method.as_str(), what) {
         ("POST", "heard") => { call::line(if args.s("who") == "agent" { "voice" } else { "you" }, args.s("text")); json!({ "ok": true }) }
