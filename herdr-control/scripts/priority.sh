@@ -34,6 +34,8 @@ allowed = {"freebuff", "codebuddy", "claude", "codex", "agy", "cursor", "opencod
 items = [part.strip() for part in sys.argv[1].split(",") if part.strip()]
 if not items:
     raise SystemExit("Bitte mindestens eine CLI angeben.")
+if len({item.split("/", 1)[0] for item in items}) < 2:
+    raise SystemExit("Orchestrator und Worker brauchen mindestens zwei unterschiedliche CLIs.")
 seen = set()
 for item in items:
     name = item.split("/", 1)[0]
@@ -51,10 +53,13 @@ PY
 apply_order() {
   order=$(cat "$PRIORITY_FILE")
   primary=${order%%,*}
-  fallback=${order#*,}
-  if [ "$fallback" = "$order" ]; then fallback=none; fi
+  workers=$(python3 -c 'import sys; a=sys.argv[1].split(","); print(",".join(x for x in a[1:] if x.split("/",1)[0] != a[0].split("/",1)[0]))' "$order")
+  [ -n "$workers" ] || { printf '%s\n' 'Mindestens zwei unterschiedliche CLIs erforderlich.' >&2; return 1; }
+  worker=${workers%%,*}
+  fallback=${workers#*,}
+  if [ "$fallback" = "$workers" ]; then fallback=none; fi
   projects set worker.fallback "$fallback"
-  projects set worker.agent "$primary"
+  projects set worker.agent "$worker"
   projects set coordinator.agent "$primary"
   projects set review.by coordinator
   projects set review.when always

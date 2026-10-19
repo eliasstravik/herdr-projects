@@ -32,9 +32,11 @@ pub fn parse_priority(text: &str) -> Res<Vec<String>> {
 pub fn apply_priority(text: &str) -> Res<String> {
     let order = parse_priority(text)?;
     let primary = &order[0];
-    let fallback = if order.len() > 1 { order[1..].join(",") } else { "none".into() };
+    let workers: Vec<_> = order.iter().filter(|a| crate::store::settings::values::agent_of(a).kind != crate::store::settings::values::agent_of(primary).kind).collect();
+    let Some(worker) = workers.first() else { crate::fail!("Orchestrator und Worker brauchen mindestens zwei unterschiedliche CLIs.") };
+    let fallback = if workers.len() > 1 { workers[1..].iter().map(|a| a.as_str()).collect::<Vec<_>>().join(",") } else { "none".into() };
     set_many(&[
-        ("worker.agent".into(), json!(primary)), ("worker.fallback".into(), json!(fallback)),
+        ("worker.agent".into(), json!(worker)), ("worker.fallback".into(), json!(fallback)),
         ("coordinator.agent".into(), json!(primary)), ("watcher.agent".into(), json!("none")),
         ("review.by".into(), json!("coordinator")), ("review.when".into(), json!("always")),
     ], &Scope::you())?;
@@ -65,7 +67,12 @@ pub fn submit(folder: &Path, text: &str, socket: &str) -> Res<()> {
     if let (Some(run), Some(desired)) = (actual.o("run"), crate::mission_fallback::target(socket)) {
         if !who::same_choice(run, &desired) { crate::fail!("Der Wechsel zur gewählten CLI ist noch offen. Der Task bleibt im Eingabefeld.") }
     }
-    requests::send(folder, text, true, "", &co)?;
+    let folder = std::fs::canonicalize(folder)?;
+    let tasks: Vec<_> = crate::store::tasks::list(Default::default()).iter()
+        .filter(|t| crate::store::repos::folder_of(t.s("id")) == folder && !t.b("archivedAt"))
+        .map(|t| format!("{}: {} ({})", t.s("id"), t.s("title"), t.s("stage"))).collect();
+    let prompt = format!("[MISSION-CONTROL-PROJEKT]\nProjekt: {}\nOrdner: {}\nTasks dieses Projekts: {}\nDiese Nachricht gilt ausschließlich diesem Projekt. Beziehe Pronomen und Statusfragen nur darauf; Tasks anderer Projekte aus der bisherigen Unterhaltung sind hier kein Bezug. Prüfe bei fehlendem Task den Stand dieses Projekts.\nDu koordinierst und reviewst ausschließlich. Implementiere keine Änderungen selbst. Delegiere jede Umsetzung mit `board add ... --repo {} --delegate` an einen Worker mit anderer CLI; der Workflow wählt diese aus der Prioritätenliste.\n\nNachricht des Menschen:\n{text}", folder.file_name().unwrap_or_default().to_string_lossy(), folder.display(), if tasks.is_empty() { "keine".into() } else { tasks.join("; ") }, shq(&folder.display().to_string()));
+    requests::send(&folder, &prompt, true, "", &co)?;
     Ok(())
 }
 /// One persistent workspace, one root control pane; every CLI later splits that tab.
@@ -100,5 +107,37 @@ fn show_once(focus: bool) -> Res<()> {
 }
 pub fn rules(socket: &str) -> String {
     if crate::mission_layout::anchor(socket).is_none() { return String::new() }
-    "\n\nMISSION CONTROL: Du bist der dauerhaft sichtbare Orchestrator. Antworte auf Deutsch. Der Mensch wählt links einen lokalen Projektordner und schickt unten einen Task. `board coordinator where` enthält den ausgewählten Ordner für jede Nachricht. Zerlege den Auftrag bei Bedarf in unabhängige Teilaufgaben, lege sie mit `board add ... --repo <vollständiger Ordner> --delegate` an und nutze `--after` für Abhängigkeiten. Lies die AGENTS.md des Projekts und die übergeordnete Developer/AGENTS.md. Prüfe vor Code-Arbeit den Git-Remote; wenn er fehlt, kläre das GitHub-Ziel sichtbar vor dem Start. Ersetze keinen vorhandenen Remote. Verwende für jede Aufgabe die globale worker.agent/worker.fallback-Reihenfolge; wähle keine anderen Rollen-Modelle. Alle Arbeit läuft in den von Herdr geöffneten echten interaktiven Terminal-Panes. Starte keine unsichtbaren Subagenten, keine ACP-Verbindungen und keine headless/print/exec-Modi. Verstecke Fehler nicht: nenne die Task-ID und die Ursache; die Terminal-Panes bleiben sichtbar. Die Ergebnisse der Teilaufgaben werden dir automatisch in dieser Sitzung zur Prüfung vorgelegt. Wenn eine Nachricht mit [ORCHESTRATOR-REVIEW] beginnt, prüfe selbst den genannten Arbeitsstand und schreibe das verlangte Urteil an den angegebenen Pfad; delegiere dieses Review nicht. Der Workflow verarbeitet dein Urteil und schickt notwendige Korrekturen an den Worker zurück. Berichte dem Menschen Fortschritt, Blockaden und Review-Ergebnisse. Änderungen werden nach erfolgreichen Prüfungen vom Workflow committed und auf den GitHub-Remote gepusht; ein Merge braucht weiterhin die Freigabe des Menschen.\n".into()
+    "\n\nMISSION CONTROL: Du bist der dauerhaft sichtbare Orchestrator. Antworte auf Deutsch. Der Mensch wählt links einen lokalen Projektordner und schickt unten einen Task. `board coordinator where` enthält den ausgewählten Ordner für jede Nachricht. Implementiere niemals selbst, editiere keine Projektdateien und übernimm keine Worker-Aufgabe. Du koordinierst und reviewst ausschließlich. Jede MISSION-CONTROL-PROJEKT-Nachricht trägt ihren verbindlichen Projektordner; verwende niemals Tasks anderer Projekte als Bezug. Zerlege den Auftrag in unabhängige Teilaufgaben, lege sie mit `board add ... --repo <vollständiger Ordner> --delegate` an und nutze `--after` für Abhängigkeiten. Lies die AGENTS.md des Projekts und die übergeordnete Developer/AGENTS.md. Prüfe vor Code-Arbeit den Git-Remote; wenn er fehlt, kläre das GitHub-Ziel sichtbar vor dem Start. Ersetze keinen vorhandenen Remote. Verwende für jede Aufgabe die globale worker.agent/worker.fallback-Reihenfolge, wobei die laufende Orchestrator-CLI ausgeschlossen ist; wähle keine anderen Rollen-Modelle. Alle Arbeit läuft in den von Herdr geöffneten echten interaktiven Terminal-Panes. Starte keine unsichtbaren Subagenten, keine ACP-Verbindungen und keine headless/print/exec-Modi. Verstecke Fehler nicht: nenne die Task-ID und die Ursache; die Terminal-Panes bleiben sichtbar. Die Ergebnisse der Teilaufgaben werden dir automatisch in dieser Sitzung zur Prüfung vorgelegt. Wenn eine Nachricht mit [ORCHESTRATOR-REVIEW] beginnt, prüfe selbst den genannten Arbeitsstand und schreibe das verlangte Urteil an den angegebenen Pfad; delegiere dieses Review nicht. Der Workflow verarbeitet dein Urteil und schickt notwendige Korrekturen an den Worker zurück. Berichte dem Menschen Fortschritt, Blockaden und Review-Ergebnisse. Änderungen werden nach erfolgreichen Prüfungen vom Workflow committed und auf den GitHub-Remote gepusht; ein Merge braucht weiterhin die Freigabe des Menschen.\n".into()
+}
+
+/// The running coordinator's CLI is reserved for coordination, including after a provider handover.
+pub fn worker_allowed(socket: &str, agent: &str) -> bool {
+    if crate::mission_layout::anchor(socket).is_none() { return true; }
+    let coordinator = state::get(socket).unwrap_or_default();
+    let kind = if coordinator.at("run").b("kind") { coordinator.at("run").t("kind") }
+        else { crate::mission_fallback::target(socket).map(|r| r.t("kind")).unwrap_or_default() };
+    crate::store::settings::values::agent_of(agent).kind != kind
+}
+pub fn worker_choice(t: &crate::store::tasks::Task, socket: &str) -> Res<String> {
+    let w = crate::store::settings::lookup::work(Some(t));
+    let mut order = vec![if t.b("on") { t.t("on") } else { w.t("worker.agent") }];
+    order.extend(crate::store::settings::values::list_of(w.at("worker.fallback")));
+    // The global list still supplies a candidate when the coordinator falls back onto the worker's first CLI.
+    order.extend(parse_priority(&priority())?);
+    order.into_iter().find(|a| worker_allowed(socket, a) && crate::finish::hand_over::usable(a, w.s("worker.access")).is_empty())
+        .ok_or_else(|| crate::err::Error::new("Keine andere verfügbare Worker-CLI. Bitte die CLI-Reihenfolge ergänzen."))
+}
+
+/// Tasks added from the coordinator inherit the message's project; a conflicting explicit repo is refused.
+pub fn task_folder(folder: &Path, repo: &str, pane: &str, socket: &str) -> Res<PathBuf> {
+    let requested = crate::store::repos::folder_for(repo, folder)?;
+    if pane.is_empty() || crate::mission_layout::anchor(socket).is_none() { return Ok(requested); }
+    let co = state::get(socket).unwrap_or_default();
+    if co.s("pane") != pane { return Ok(requested); }
+    let Some(message) = co.arr("where").last().filter(|m| m.s("said").starts_with("[MISSION-CONTROL-PROJEKT]")) else { return Ok(requested) };
+    let root = PathBuf::from(message.s("root"));
+    if !repo.is_empty() && crate::store::repos::primary_root(&requested) != crate::store::repos::primary_root(&root) {
+        crate::fail!("Dieser Auftrag gehört zu {}. Ein Task in {} wurde nicht angelegt. Verwende --repo {}.", root.display(), requested.display(), shq(&root.display().to_string()));
+    }
+    Ok(root)
 }

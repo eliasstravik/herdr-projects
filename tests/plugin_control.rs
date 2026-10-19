@@ -1,4 +1,4 @@
-//! The Herdr Control plugin saves one global CLI order and applies its first entry as the worker, the rest as fallback.
+//! The Herdr Control plugin saves one global CLI order and reserves the first CLI for coordination and uses a different CLI for workers.
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
@@ -40,5 +40,5 @@ fn the_plugin_uses_the_projects_runner_from_its_parent_checkout_and_applies_all_
     assert!(shown.contains("Gespeichert. Noch nicht auf Herdr Projects angewendet."), "{shown}");
     assert!(shown.contains("Aktiviert: claude/opus → Fallback:"), "{shown}");
     assert_eq!(fs::read_to_string(config.join("priority.txt")).unwrap(), "claude/opus,codex/gpt-6.1-sol,agy,cursor,opencode,kiro,freebuff,codebuddy,cline,qodercli,grok\n");
-    assert_eq!(fs::read_to_string(calls).unwrap(), "set worker.fallback codex/gpt-6.1-sol,agy,cursor,opencode,kiro,freebuff,codebuddy,cline,qodercli,grok\nset worker.agent claude/opus\nset coordinator.agent claude/opus\nset review.by coordinator\nset review.when always\nset watcher.agent none\n");
+    assert_eq!(fs::read_to_string(calls).unwrap(), "set worker.fallback agy,cursor,opencode,kiro,freebuff,codebuddy,cline,qodercli,grok\nset worker.agent codex/gpt-6.1-sol\nset coordinator.agent claude/opus\nset review.by coordinator\nset review.when always\nset watcher.agent none\n");
 }

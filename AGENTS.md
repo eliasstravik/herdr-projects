@@ -7,7 +7,7 @@ holds what, so that two tasks do not edit the same file.
   through the build cache every worktree shares). It is then `./target/quick/herdr-projects`.
 - `./target/quick/herdr-projects docs --where` prints all of the map; `… docs --where crates/board/src/board/view` only
   that folder.
-- Mission Control uses `mission_ui/` (screen), `mission_control.rs` (priority and submission), `mission_layout.rs` (owned panes), and `finish/coordinator_review.rs` (return to the same orchestrator). Open actions must run this branch’s source build, never a stock release.
+- Mission Control uses `mission_ui/` (screen), `mission_control.rs` (priority and submission), `mission_layout.rs` (owned panes), and `finish/coordinator_review.rs` (return to the same orchestrator). Every submitted message must include its selected project explicitly. The coordinator only delegates and reviews; workers and their fallbacks must use a different CLI kind from the running coordinator. Open actions must run this branch’s source build, never a stock release.
 - Agent terminals belong in tiled Herdr panes. Lifecycle cleanup must close only the owned pane; closing a tab can
   close Mission Control and every sibling agent terminal.
 - It is also a page in your own folder, `docs/where-things-live.md`, written by the workspace setup and by

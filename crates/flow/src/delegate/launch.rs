@@ -121,7 +121,10 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
 /// a conversation that is reopened keeps its program, which is the one that holds it.
 pub fn agent_now(g: &mut Guard, t: Task) -> Res<Task> {
     if (t.b("startedAgentAt") && resumable(&t)) || plan::planner(&t) { return Ok(t); }
-    let k = agent_of(&if t.b("on") { t.t("on") } else { setting_text("worker.agent", Some(&t)) }).kind;
+    let choice = if t.at("link").b("missionPane") { crate::mission_control::worker_choice(&t, t.at("link").s("socket"))? }
+        else if t.b("on") { t.t("on") } else { setting_text("worker.agent", Some(&t)) };
+    let k = agent_of(&choice).kind;
+    let t = if t.at("link").b("missionPane") { g.set(|t| { t.put("on", choice.clone()); })? } else { t };
     if !k.is_empty() && k != t.s("agent") { return g.set(|t| { t.put("agent", k.clone()); t.put("app", k.clone()); t.put("session", Value::Null); t.put("transcript", Value::Null); }); }
     Ok(t)
 }

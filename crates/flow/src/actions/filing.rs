@@ -8,7 +8,6 @@ use crate::research::RESEARCH;
 use crate::runner::{runner_alive, spawn_runner};
 use crate::store::failures::failure_patch;
 use crate::store::files::KINDS;
-use crate::store::repos::folder_for;
 use crate::store::settings::{change::set_many, lookup::Scope};
 use crate::store::tasks::{assert_unarchived, create, find, get, minutes, one_line, remove, update, Change, Task};
 use crate::store::titles::titled;
@@ -21,7 +20,8 @@ pub struct AddOpts { pub description: String, pub repo: String, pub research: Op
 pub fn add(folder: &Path, title: &str, o: AddOpts) -> Res<Task> {
     let mut own = o.settings.clone();
     if let Some(r) = o.research { own.push((RESEARCH.into(), json!(r))); }
-    let t = create(&folder_for(&o.repo, folder)?, title, &o.description, None)?;
+    let folder = crate::mission_control::task_folder(folder, &o.repo, &crate::util::env_val("HERDR_PANE_ID").unwrap_or_default(), &crate::herdr::cli::current_socket())?;
+    let t = create(&folder, title, &o.description, None)?;
     // A refused setting adds nothing: the task is taken away again.
     if !own.is_empty() { if let Err(e) = set_many(&own, &Scope::task(&t)) { remove(t.s("id")); return Err(e); } }
     if let Some(a) = crate::automations::told::inherited(&o.from) { update(t.s("id"), |t| { t.put("automation", a); Ok(Change::Write) })?; }

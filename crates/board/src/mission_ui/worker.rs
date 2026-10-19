@@ -31,7 +31,13 @@ pub fn start(socket: String, commands: Receiver<Command>, updates: Sender<Update
             if let Err(e) = crate::mission_control::ensure(&socket) { let _ = updates.send(Update::Error(e.msg)); }
             crate::mission_keeper::ensure();
             if !crate::keeper::keeper_alive() { crate::keeper::tick_once(&socket, false); }
-            let coordinator = crate::coordinator::look::summary(socket.as_str());
+            let mut coordinator = crate::coordinator::look::summary(socket.as_str());
+            if !coordinator.b("said") {
+                let view = crate::coordinator::look::look(socket.as_str());
+                let screen = crate::coordinator::look::screen(&view, socket.as_str());
+                let tail = screen.lines().rev().filter(|l| !l.trim().is_empty()).take(16).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
+                coordinator["screen"] = json!(tail);
+            }
             let tasks = crate::store::tasks::list(Default::default());
             if updates.send(Update::Snapshot(coordinator, tasks)).is_err() { break; }
         }

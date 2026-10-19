@@ -64,6 +64,7 @@ pub fn hand_over_to(id: &str, g: &mut Guard, why: &str, findings: &str, first: O
     let w = work(Some(&t));
     let mut list = list_of(w.at("worker.fallback"));
     if let Some(f) = first { list.insert(0, f.to_string()); }
+    list.retain(|a| crate::mission_control::worker_allowed(t.at("link").s("socket"), a));
     if list.is_empty() || !t.at("link").b("pane") { return Ok(false); }
     let api = flow::task::h(&t);
     let from = on_now(&t, &w.t("worker.agent"));

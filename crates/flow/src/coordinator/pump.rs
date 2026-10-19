@@ -177,7 +177,8 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
             let run = get(co).map(|c| c.i("startedAt")).unwrap_or(0);
             let seq = ag.as_ref().map(|a| a.at("completion_seq").clone()).unwrap_or(Value::Null);
             let at_rest = ag.as_ref().map(|a| ["idle", "done"].contains(&a.s("agent_status"))).unwrap_or(false);
-            if m.b("review") && (!at_rest || get(co).map(|c| c.b("typed")).unwrap_or(false)) { stuck = true; break; }
+            let scoped = m.s("text").starts_with("[MISSION-CONTROL-PROJEKT]");
+            if (m.b("review") || scoped) && (!at_rest || get(co).map(|c| c.b("typed")).unwrap_or(false)) { stuck = true; break; }
             // Has this run of the program finished a turn since the last words went in, and is it at rest? Then
             // whatever went in a while ago has been dealt with.
             if at_rest && !seq.is_null() {
@@ -221,7 +222,7 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
             change(co, |c| { c.put("typed", if busy { let mut t = typed.as_ref().and_then(|t| t.as_object().cloned()).unwrap_or_default(); t.put("text", words.clone()); Value::Object(t) } else { Value::Null }); true })?;
             let mark = typed.clone().unwrap_or(Value::Null);
             if !confirm(&api, c.s("pane"), typed, Some(&|| said_in(co, &mark, &words))) { crate::fail!("{UNSENT}"); }
-            if m.b("review") { stuck = true; break; }
+            if m.b("review") || scoped { stuck = true; break; }
         }
         if stuck { break; }
     }
