@@ -130,7 +130,7 @@ pub fn set_target(t: &Target) { change(|c| if target(c) != *t { c.put("target", 
 pub fn ask_switch(to: &str) -> i64 { change(|c| { let n = c.at("switch").i("n") + 1; c.put("switch", json!({ "to": to, "n": n, "at": now() })); n }).unwrap_or(0) }
 /// How the call page heard the call (hear.js): kept with the call, also after it ended, for `herdr-projects voice`.
 pub fn heard_audio(a: &Value) {
-    let keep = ["elements", "playing", "peak", "ctx", "blocked", "via", "activated", "agent", "aec", "how"];
+    let keep = ["elements", "playing", "peak", "ctx", "blocked", "via", "activated", "agent", "aec", "how", "mic", "secs"];
     let o: Obj = keep.iter().filter_map(|k| a.as_object()?.get(*k).map(|v| (k.to_string(), if v.is_string() { json!(crate::text::cut(v.as_str().unwrap_or(""), 200)) } else { v.clone() }))).collect();
     let o = Value::Object(o);
     let _ = with_lock("voice-call", || { let Some(mut c) = read_obj(&file()) else { return Ok(()) }; c.put("audio", o.clone()); c.put("audioAt", now()); write_json(&file(), &Value::Object(c)) });

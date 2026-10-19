@@ -1,8 +1,10 @@
 //! The call's sound on this computer: your microphone as 16 kHz 16-bit mono chunks, and the voice agent's sound played
 //! as it comes, stopped at once when you talk over it (`flush`). On Linux the sound server's own tools do it (PipeWire's
 //! `pw-record`/`pw-play`, or PulseAudio's `parec`/`pacat`, which PipeWire also answers), through the sound server's
-//! WebRTC echo cancelling where it can load it for the call (`module-echo-cancel`, unloaded after); without it you need
-//! headphones, and the chat says so. On macOS: mac.rs.
+//! WebRTC echo cancelling where it can load it for the call (`module-echo-cancel`, unloaded after): mono at 16 kHz on
+//! the very microphone and speaker in use (a mono microphone fed to a stereo canceller came out at a third of its
+//! level, measured on PipeWire), with its gain control on. Without it you need headphones, and the chat says so. On
+//! macOS: mac.rs.
 use std::io::{Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
@@ -31,6 +33,27 @@ pub fn open() -> Result<Box<dyn Audio>, String> {
 pub struct Linux { rec: Child, mic: mpsc::Receiver<Vec<u8>>, player: Option<Child>, play_cmd: (String, Vec<String>), module: Option<String>, tools: String }
 const SOURCE: &str = "herdr_call_mic";
 const SINK: &str = "herdr_call_out";
+/// The microphone and the speaker in use now.
+fn defaults() -> (String, String) {
+    let get = |what: &str, info: &str| quiet("pactl", &[&format!("get-default-{what}")]).filter(|x| !x.is_empty() && !x.starts_with('@'))
+        .or_else(|| quiet("pactl", &["info"]).and_then(|i| i.lines().find_map(|l| l.strip_prefix(info).map(|x| x.trim().to_string())))).unwrap_or_default();
+    (get("source", "Default Source:"), get("sink", "Default Sink:"))
+}
+/// The sound server's echo cancelling for this call: mono at 16 kHz on the microphone and speaker in use, its gain
+/// control on (PipeWire's words for it, else PulseAudio's, else none). Its module's id, or None where it cannot load.
+pub fn load_echo_cancel() -> Option<String> {
+    let (source, sink) = defaults();
+    let mut base: Vec<String> = vec!["load-module".into(), "module-echo-cancel".into(), "aec_method=webrtc".into(), format!("source_name={SOURCE}"), format!("sink_name={SINK}"), "channels=1".into(), "rate=16000".into()];
+    if !source.is_empty() { base.push(format!("source_master={source}")); }
+    if !sink.is_empty() { base.push(format!("sink_master={sink}")); }
+    for gain in ["aec_args=webrtc.gain_control=true", "aec_args=analog_gain_control=0 digital_gain_control=1", ""] {
+        let mut a = base.clone();
+        if !gain.is_empty() { a.push(gain.into()); }
+        let args: Vec<&str> = a.iter().map(|s| s.as_str()).collect();
+        if let Some(id) = quiet("pactl", &args).filter(|m| !m.is_empty() && m.chars().all(|c| c.is_ascii_digit())) { return Some(id); }
+    }
+    None
+}
 impl Linux {
     pub fn open() -> Result<Linux, String> {
         let pulse = has("parec") && has("pacat");
@@ -39,7 +62,7 @@ impl Linux {
         // The sound server's own echo cancelling, for this call: a microphone and a speaker of its own (one left from a
         // call that did not end cleanly is taken away first).
         if has("pactl") { for l in quiet("pactl", &["list", "short", "modules"]).unwrap_or_default().lines().filter(|l| l.contains(SOURCE)) { if let Some(id) = l.split_whitespace().next() { let _ = quiet("pactl", &["unload-module", id]); } } }
-        let module = if has("pactl") { quiet("pactl", &["load-module", "module-echo-cancel", "aec_method=webrtc", "use_master_format=1", &format!("source_name={SOURCE}"), &format!("sink_name={SINK}")]).filter(|m| !m.is_empty() && m.chars().all(|c| c.is_ascii_digit())) } else { None };
+        let module = if has("pactl") { load_echo_cancel() } else { None };
         let (src, sink) = if module.is_some() { (Some(SOURCE), Some(SINK)) } else { (None, None) };
         let fmt = |dev: Option<&str>, flag: &str, mut base: Vec<String>| { if let Some(d) = dev { base.push(format!("{flag}={d}")); } base };
         let (rec_cmd, play_cmd) = if pulse {

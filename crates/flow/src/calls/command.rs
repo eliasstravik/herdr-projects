@@ -11,12 +11,12 @@ pub fn test_sound() -> (Value, String) {
     let mut a = match super::native::audio::open() { Ok(a) => a, Err(e) => return (json!({ "ok": false, "msg": e }), format!("No sound for a call here: {e}")) };
     let tone: Vec<u8> = (0..8000).flat_map(|i| ((((i as f64) * 440.0 * std::f64::consts::TAU / 16000.0).sin() * 8000.0) as i16).to_le_bytes()).collect();
     a.play(&tone);
-    let mut peak = 0u16;
+    let mut peak = 0u16; let mut loud = 0f64;
     let until = std::time::Instant::now() + std::time::Duration::from_millis(1500);
-    while std::time::Instant::now() < until { for c in a.mic() { for s in c.chunks(2) { if s.len() == 2 { peak = peak.max(i16::from_le_bytes([s[0], s[1]]).unsigned_abs()); } } } std::thread::sleep(std::time::Duration::from_millis(20)); }
+    while std::time::Instant::now() < until { for c in a.mic() { loud = loud.max(super::native::level::rms(&c)); for s in c.chunks(2) { if s.len() == 2 { peak = peak.max(i16::from_le_bytes([s[0], s[1]]).unsigned_abs()); } } } std::thread::sleep(std::time::Duration::from_millis(20)); }
     let (how, aec) = (a.how(), a.aec());
     a.stop();
-    let mic = if peak > 300 { format!("it hears sound (peak {peak})") } else { "it heard nothing in a second and a half (no microphone, or no permission: on macOS, Privacy & Security, Microphone, the terminal herdr runs in)".to_string() };
+    let mic = if peak > 300 { format!("it hears sound (peak {peak}, loudest {:.0} rms{})", loud, if loud < 300.0 { ": quiet, speak up or move closer" } else { "" }) } else { "it heard nothing in a second and a half (no microphone, or no permission: on macOS, Privacy & Security, Microphone, the terminal herdr runs in)".to_string() };
     (json!({ "ok": true, "how": how, "aec": aec, "peak": peak }), format!("Sound for a call here: {how}.\nA tone was played: did you hear it?\nMicrophone: {mic}.\n{}", if aec { "Echo cancelling: on (speakers are fine)." } else { "Echo cancelling: none here, so use headphones on a call." }))
 }
 pub fn main(args: &[String]) -> (Value, String) {

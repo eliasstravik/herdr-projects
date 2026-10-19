@@ -35,7 +35,7 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     assert!(!ticket.is_empty() && c.s("session") == "default");
     s.load();
     let t = s.text();
-    assert!(t.contains(&format!("☎ Calling with {}'s agent (Make the greeting)…  ctrl+o hangs up", short(&a))), "{t}");
+    assert!(t.contains(&format!("\n ● Calling with {}'s agent (Make the greeting)…  ctrl+o hangs up", short(&a))), "{t}");
     assert!(!t.contains("No call helper"), "a helper has a few seconds first");
     // nobody picked it up: the chat says so, and what to look at; never a browser or a link
     sw::clock::advance(sw::board::view::chat_call::LINK_AFTER_MS);
@@ -53,7 +53,23 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": false, "how": "parec and pacat, no echo cancelling", "agent": "elias-m1", "peak": 0.2 }), &key);
     s.load();
     let t = s.text();
-    assert!(t.contains("☎ On a call with") && t.contains("You: hur går det?") && t.contains("on elias-m1 · headphones needed: no echo cancelling there"), "{t}");
+    assert!(t.contains(" ● On a call with") && t.contains("You: hur går det?") && t.contains("on elias-m1 · headphones needed: no echo cancelling there"), "{t}");
+    // lined up with the chat's line that says who: the mark in the mark's column, the words in the name's column, and
+    // the lines under it indented as the chat's other lines (a mark one cell wide, as every mark of the board)
+    let lines: Vec<String> = t.lines().map(String::from).collect();
+    let at = lines.iter().position(|l| l.contains("On a call with")).unwrap();
+    let who = &lines[at - 1];
+    let col = |l: &str, w: &str| sw::text::width(&l[..l.find(w).unwrap()]);
+    assert_eq!((col(&lines[at], "●"), col(&lines[at], "On a call")), (1, 3), "{}", lines[at]);
+    assert_eq!(sw::text::width(&who[..who.find(|c: char| c.is_alphabetic()).unwrap()]), 3, "the line that says who starts its name there too: {who}");
+    assert!(lines[at + 1].starts_with("   on elias-m1") && lines[at + 2].starts_with("   You: "), "{t}");
+    // a microphone that stayed near silent for ten seconds: the call's line says the voice may not hear you
+    sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": true, "agent": "elias-m1", "mic": 0.002, "secs": 12 }), &key);
+    s.load();
+    assert!(s.text().contains("on elias-m1 · your microphone is very quiet: the voice may not hear you"), "{}", s.text());
+    sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": true, "agent": "elias-m1", "mic": 0.2, "secs": 12 }), &key);
+    s.load();
+    assert!(!s.text().contains("very quiet"));
     sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": true, "agent": "elias-m1" }), &key);
     s.load();
     assert!(s.text().contains("on elias-m1") && !s.text().contains("headphones"));
@@ -72,7 +88,7 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     assert_eq!(call::target(&call::get().unwrap()).id, a);
     // the key again hangs up
     s.press(&["ctrl+o"]); s.load();
-    assert!(call::get().is_none() && !s.text().contains("☎"));
+    assert!(call::get().is_none() && !s.text().contains("On a call"));
     // a second call on the same board: its first switch asked by voice is made too (each call counts from one)
     s.press(&["ctrl+o"]);
     let ticket = call::get().unwrap().t("pickup");

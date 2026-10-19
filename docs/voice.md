@@ -63,12 +63,14 @@ no window.
   address for one conversation over ElevenLabs' WebSocket; the voice agent's tools, what was heard and what to read
   back go between the helper and the board over the helper's SSH connection.
 - **The sound.** On Linux the sound server's own tools (PipeWire's `pw-record` and `pw-play`, or `parec` and `pacat`,
-  which PipeWire also answers), through its WebRTC echo cancelling (`module-echo-cancel`, loaded for the call and
-  taken away after; it needs `pactl`). On macOS a small program of Apple's voice processing, which cancels the echo;
+  which PipeWire also answers), through its WebRTC echo cancelling (`module-echo-cancel`, loaded for the call on the
+  microphone and speaker in use, mono at 16 kHz with its gain control, and taken away after; it needs `pactl`). A quiet
+  microphone is lifted a little, by your speech, never by the room's hum. On macOS a small program of Apple's voice processing, which cancels the echo;
   it is compiled once, the first time, with the Xcode Command Line Tools (`xcode-select --install`), and macOS asks
   once whether the terminal herdr runs in may use the microphone (System Settings, Privacy & Security, Microphone).
 - **Headphones** are needed where nothing cancels the echo (no `pactl` on Linux, voice processing not available on
-  macOS): the chat says so on the call's line (`on m1 · headphones needed: no echo cancelling there`).
+  macOS): the chat says so on the call's line (`on m1 · headphones needed: no echo cancelling there`). So does a
+  microphone that stayed near silent for ten seconds (`your microphone is very quiet: the voice may not hear you`).
 - `herdr-projects voice test`, on the computer you sit at, tries its sound for a call: it plays a short tone, listens
   to the microphone for a moment, and says whether the echo is cancelled.
 - **No helper picked it up** after a few seconds: the chat says so. A call the helper could not hold (no sound tools,

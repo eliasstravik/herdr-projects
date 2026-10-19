@@ -82,7 +82,7 @@ fn your_words_reach_the_board_before_the_tool_that_follows_them_and_the_sound_pl
     // your microphone goes out as it comes
     c.sound.lock().unwrap().mic.push(vec![0, 1]);
     c.e.step(1_000_000);
-    assert!(c.sent().iter().any(|m| m.s("user_audio_chunk") == "AAE="));
+    assert!(c.sent().iter().any(|m| sw::util::unbase64(m.s("user_audio_chunk")).map(|p| p.len()) == Some(2)));
     // you said something, then the voice agent runs a tool: the board has your words first
     c.hear(json!({ "type": "user_transcript", "user_transcription_event": { "user_transcript": "ask how HP-52 is doing" } }));
     c.hear(json!({ "type": "client_tool_call", "client_tool_call": { "tool_call_id": "t1", "tool_name": "send_message", "parameters": { "message": "How is HP-52 doing?" } } }));
@@ -163,4 +163,43 @@ fn words_that_never_reached_the_board_stop_a_message_until_you_said_it_again_and
     c.e.step(3_000_100);
     assert_eq!(c.e.ended.as_deref(), Some("hung up"));
     assert!(!c.asked().iter().any(|a| a.starts_with("end")));
+}
+
+#[test]
+fn a_quiet_microphone_is_lifted_by_its_speech_never_by_the_rooms_hum_and_its_loudest_is_kept() {
+    use sw::calls::native::level::{rms, Gain};
+    let chunk = |amp: i16| -> Vec<u8> { (0..320).flat_map(|i| (if i % 2 == 0 { amp } else { -amp }).to_le_bytes()).collect() };
+    let mut g = Gain::default();
+    // the room's hum alone: nothing is lifted
+    for _ in 0..50 { let mut c = chunk(40); g.apply(&mut c); }
+    assert!((g.g - 1.0).abs() < 1e-9);
+    // quiet speech (rms 300): lifted toward the target, at most six times, a little at a time
+    let mut c = chunk(300); g.apply(&mut c);
+    assert!(g.g > 1.0 && g.g < 2.0, "a little at a time: {}", g.g);
+    for _ in 0..200 { let mut c = chunk(300); g.apply(&mut c); }
+    assert!((g.g - 6.0).abs() < 0.01, "{}", g.g);
+    let mut c = chunk(300); let out = g.apply(&mut c);
+    assert!((rms(&c) - 1800.0).abs() < 2.0 && (out - 1800.0).abs() < 2.0);
+    assert!(g.loudest >= 1799.0, "its loudest is kept for the call's line");
+    // loud speech is never lifted past its own level, and nothing clips past 16 bits
+    let mut g = Gain::default();
+    for _ in 0..200 { let mut c = chunk(20000); g.apply(&mut c); }
+    assert!((g.g - 1.0).abs() < 1e-6);
+}
+
+#[test]
+fn your_microphone_goes_out_also_while_the_voice_agent_speaks_lifted_and_measured_for_the_board() {
+    sw::clock::set(Some(4_000_000));
+    let mut c = call(true);
+    c.hear(audio(1, &[1; 3200]));
+    c.e.step(4_000_000);
+    c.sound.lock().unwrap().mic.push((0..320).flat_map(|i| (if i % 2 == 0 { 400i16 } else { -400 }).to_le_bytes()).collect());
+    c.e.step(4_000_010);
+    let sent: Vec<Value> = c.sent().into_iter().filter(|m| m.has("user_audio_chunk")).collect();
+    assert_eq!(sent.len(), 1, "never muted while the agent speaks");
+    let pcm = sw::util::unbase64(sent[0].s("user_audio_chunk")).unwrap();
+    assert_eq!(pcm.len(), 640, "16-bit little-endian, as it came");
+    assert!(sw::calls::native::level::rms(&pcm) > 400.0, "a quiet microphone is lifted");
+    let r = c.e.report();
+    assert!(r.f("mic") > 0.0 && r.has("secs") && r.s("via") == "native");
 }

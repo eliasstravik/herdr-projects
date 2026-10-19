@@ -15,12 +15,12 @@ use std::sync::{mpsc, Arc, Mutex};
 /// A pause: nobody spoke for this long. The feed is asked this often, and how the sound stands told this often.
 pub const QUIET_MS: i64 = 1400;
 const FEED_MS: i64 = 1500;
-const REPORT_MS: i64 = 7500;
+const REPORT_MS: i64 = 3000;
 pub struct Engine {
     wire: Box<dyn Wire>, audio: Box<dyn Audio>, board: Arc<dyn Board>, gate: Gate,
     said: mpsc::Sender<(String, String, u64)>, told: Arc<AtomicU64>, said_n: u64, lost: Arc<Mutex<&'static str>>,
     results: (mpsc::Sender<(String, String)>, mpsc::Receiver<(String, String)>), fed: (mpsc::Sender<Value>, mpsc::Receiver<Value>),
-    queue: Vec<String>, feeding: Arc<AtomicBool>, heard_at: i64, play_until: i64, fed_at: i64, report_at: i64, end_at: Option<i64>, peak: u16,
+    queue: Vec<String>, feeding: Arc<AtomicBool>, heard_at: i64, play_until: i64, fed_at: i64, report_at: i64, end_at: Option<i64>, peak: u16, gain: super::level::Gain, started: i64,
     pub hangup: Arc<AtomicBool>, pub ended: Option<String>,
 }
 fn now() -> i64 { crate::clock::now() }
@@ -37,7 +37,7 @@ impl Engine {
             t.store(n, Ordering::SeqCst);
         });
         let mut e = Engine { wire, audio, board, gate: Gate::default(), said, told, said_n: 0, lost, results: mpsc::channel(), fed: mpsc::channel(), queue: vec![], feeding: Arc::new(AtomicBool::new(false)),
-            heard_at: 0, play_until: 0, fed_at: now(), report_at: now() - REPORT_MS, end_at: None, peak: 0, hangup: Arc::new(AtomicBool::new(false)), ended: None };
+            heard_at: 0, play_until: 0, fed_at: now(), report_at: now() - REPORT_MS, end_at: None, peak: 0, gain: Default::default(), started: now(), hangup: Arc::new(AtomicBool::new(false)), ended: None };
         if let Err(err) = e.wire.send(wire::hello(target)) { e.ended = Some(err); }
         e
     }
@@ -79,7 +79,8 @@ impl Engine {
         let r = (|| -> Result<bool, String> {
             let mut busy = false;
             for _ in 0..20 { match self.wire.recv()? { Some(text) => { busy = true; self.event(wire::parse(&text), t)?; } None => break } }
-            for chunk in self.audio.mic() { busy = true; self.wire.send(wire::audio(&chunk))?; }
+            // your microphone, always (also while the voice agent speaks: that is how you talk over it), lifted if quiet
+            for mut chunk in self.audio.mic() { busy = true; self.gain.apply(&mut chunk); self.wire.send(wire::audio(&chunk))?; }
             while let Ok((call, result)) = self.results.1.try_recv() { self.wire.send(wire::tool_result(&call, &result))?; }
             while let Ok(f) = self.fed.1.try_recv() {
                 if f.b("ended") { return Err("ended".into()); }
@@ -111,7 +112,8 @@ impl Engine {
     /// The updates waiting for a pause.
     pub fn queued(&self) -> usize { self.queue.len() }
     /// How the sound stood, for the board (`herdr-projects voice`).
-    pub fn report(&self) -> Value { json!({ "via": "native", "aec": self.audio.aec(), "how": self.audio.how(), "peak": (self.peak as f64 / 32768.0 * 1000.0).round() / 1000.0, "elements": 1, "playing": 1, "agent": crate::remote::check::hostname() }) }
+    /// `mic`: the loudest speech of yours so far (0 to 1), and for how long the call has run (`secs`).
+    pub fn report(&self) -> Value { json!({ "via": "native", "aec": self.audio.aec(), "how": self.audio.how(), "peak": (self.peak as f64 / 32768.0 * 1000.0).round() / 1000.0, "mic": (self.gain.loudest / 32768.0 * 1000.0).round() / 1000.0, "secs": (now() - self.started) / 1000, "elements": 1, "playing": 1, "agent": crate::remote::check::hostname() }) }
     /// Run until the call ends; answers why.
     pub fn run(mut self) -> String {
         while self.ended.is_none() { if !self.step(now()) { std::thread::sleep(std::time::Duration::from_millis(5)); } }
