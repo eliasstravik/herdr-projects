@@ -57,6 +57,7 @@ pub fn ensure(socket: &str) -> Res<String> {
         }
         if !state::pumping(&old) && !old.b("want") { requests::fresh(crate::mission_fallback::target(socket), &co)?; }
     } else if live.is_none() && !state::pumping(&old) && !old.b("want") && !old.b("error") { requests::open(&co)?; }
+    crate::mission_panes::tidy(socket)?;
     Ok(format!("Orchestrator: {}", desired.s("kind")))
 }
 pub fn submit(folder: &Path, text: &str, socket: &str) -> Res<()> {

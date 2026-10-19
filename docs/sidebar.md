@@ -15,6 +15,14 @@ space that stays has a reason, and the task's line says it (`Kept: … (uncommit
 
 To get all three rows, let the board add its sidebar rows to Herdr's config on its first screen ([installing](install.md)).
 
+## Mission Control
+
+Mission Control nutzt ausschließlich die native Agentenliste für offene Agenten-Tasks. Die erste Zeile nennt Task-ID und Titel statt des gemeinsamen Arbeitsbereichs. Der aktuelle Orchestrator heißt `Orchestrator (<CLI>)`. Projektwahl und Eingabe bleiben in Mission Control; es gibt dort keine zweite Taskliste und keine zweite Ausgabeansicht.
+
+Ein gestoppter Task mit erhaltenem Terminal bleibt als wartender Eintrag sichtbar. Der dafür gemeldete Agent `herdr-task` ist ausschließlich ein Anzeigeeintrag: die internen Agentenabfragen filtern ihn aus, und vor einem echten Worker-Start wird seine Anzeigeautorität freigegeben. Backlog-Tasks ohne Terminal bleiben im klassischen Projects-Board.
+
+Nach einem Providerwechsel wird die Ausgabe eines früheren Orchestrators unter `coordinator/<session>/handover-*.terminal.txt` im Datenordner gesichert. Sein Pane schließt erst, wenn er ruht und der neue Orchestrator läuft. Task-Panes und fremde Terminals werden dabei nicht geschlossen.
+
 ## The three rows of an entry
 
 ```

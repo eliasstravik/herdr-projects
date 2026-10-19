@@ -106,6 +106,18 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
             arr(st, "typed").push(json!({ "pane": arg2, "text": argv.get(3) }));
             ok(json!({ "type": "ok" }))
         }
+        "report-agent" => {
+            if !p.at("agent").is_object() {
+                st["panes"][pi]["agent"] = json!({"kind":flag("--agent").unwrap_or_default(),"status":flag("--state").unwrap_or_default(),"source":flag("--source").unwrap_or_default()});
+            }
+            ok(json!({"type":"ok"}))
+        }
+        "release-agent" => {
+            if p.at("agent").s("source") == flag("--source").unwrap_or_default() && p.at("agent").s("kind") == flag("--agent").unwrap_or_default() {
+                st["panes"][pi]["agent"] = Value::Null;
+            }
+            ok(json!({"type":"ok"}))
+        }
         "report-metadata" => {
             arr(st, "metadata").push(json!({ "pane": arg2, "args": argv[3..] }));
             if let Some(d) = flag("--display-agent") { st["panes"][pi]["display_agent"] = json!(d); }

@@ -49,7 +49,7 @@ fn the_finish_lines_sidebar_entries_are_written_once_again_only_when_a_word_chan
     let n = calls().len(); sync(&[with(&live, json!({ "live": { "down": true } }))]); assert_eq!(calls().len(), n);
     let archived = with(&live, json!({ "archivedAt": sw::clock::now() }));
     sync(&[archived.clone()]);
-    assert!(has(&last(), r"--clear-state-labels --clear-display-agent --clear-title --clear-token summary --clear-token progress --clear-token eta$"), "{}", last());
+    assert!(has(&last(), r"--clear-state-labels --clear-display-agent --clear-title --clear-token summary --clear-token progress --clear-token eta --clear-token task$"), "{}", last());
     let n = calls().len(); sync(&[archived]); assert_eq!(calls().len(), n, "taken off once");
     tell_sidebar(&t); assert!(last().contains("--display-agent ready to approve · R#1 "), "as it was: it waits for its yes: {}", last());
     // A review under way: the agent's pane and the reviewer's each name their own agent.

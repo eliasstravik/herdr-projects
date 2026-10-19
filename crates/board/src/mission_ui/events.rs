@@ -1,6 +1,5 @@
 //! Keyboard and mouse actions in Mission Control, using the board's existing key definitions and editor.
 use super::{State, worker::Command};
-use crate::json::*;
 use crate::board::keys::{self, K};
 use crossterm::event::{Event, MouseEventKind, MouseButton};
 use std::time::{Duration, Instant};
@@ -35,8 +34,6 @@ pub fn handle(s: &mut State, event: Event) -> bool {
                     else if s.priority_rect.contains(point) { priority(s); }
                     else if s.refresh_rect.contains(point) { let _ = s.tx.send(Command::Refresh); }
                     else if s.folders_rect.contains(point) { let index = s.project.offset() + m.row.saturating_sub(s.folders_rect.y) as usize; s.choose(index); s.sidebar = false; }
-                    else if s.tasks_rect.contains(point) { s.open_task(s.task.offset() + m.row.saturating_sub(s.tasks_rect.y) as usize / 3); }
-                    else if s.feedback_rect.contains(point) { s.focus_pane(&s.coordinator.t("pane")); }
                     else if s.input_rect.contains(point) { s.sidebar = false; }
                 }
                 MouseEventKind::ScrollDown if s.folders_rect.contains(point) => s.choose(s.project.selected().unwrap_or(0) + 1),

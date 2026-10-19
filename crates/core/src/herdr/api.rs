@@ -7,6 +7,9 @@ use crate::json::*;
 pub struct Herdr { pub socket: Option<String> }
 fn envs(env: &[(String, String)]) -> Vec<String> { env.iter().flat_map(|(k, v)| ["--env".to_string(), format!("{k}={v}")]).collect() }
 
+/// Sidebar-only task rows never count as a running coding CLI.
+pub const TASK_AGENT: &str = "herdr-task";
+
 impl Herdr {
     pub fn new(socket: Option<String>) -> Self { Herdr { socket } }
     pub fn socket_path(&self) -> String { self.socket.clone().unwrap_or_else(super::cli::current_socket) }
@@ -139,11 +142,11 @@ impl Herdr {
         self.call(a).ok()
     }
     // ---- agents
-    pub fn agents(&self) -> HRes<Vec<Value>> { Ok(self.call(args(&["agent", "list"]))?.arr("agents").to_vec()) }
+    pub fn agents(&self) -> HRes<Vec<Value>> { Ok(self.call(args(&["agent", "list"]))?.arr("agents").iter().filter(|a| a.s("agent") != TASK_AGENT).cloned().collect()) }
     /// The agent in a pane (or by name), or None when no agent is there.
     pub fn agent_get(&self, target: &str) -> HRes<Option<Value>> {
         match self.call(args(&["agent", "get", target])) {
-            Ok(r) => Ok(Some(r.at("agent").clone()).filter(|v| !v.is_null())),
+            Ok(r) => Ok(Some(r.at("agent").clone()).filter(|v| !v.is_null() && v.s("agent") != TASK_AGENT)),
             Err(e) if ["agent_not_found", "not_found", "agent_not_running", "pane_not_found"].contains(&e.code.as_str()) => Ok(None),
             Err(e) => Err(e),
         }

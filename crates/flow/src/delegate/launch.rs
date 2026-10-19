@@ -45,6 +45,7 @@ pub fn launch_extras(t: &Task, role: &str, kind: &str, round: i64, standing: &st
 pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) -> Res<&'static str> {
     let t = get(id).ok_or("the task is gone")?;
     let api = flow::task::h(&t);
+    if t.at("link").b("missionPane") { crate::mission_agents::release(&api, t.at("link").s("pane")); }
     let kind = t.t("agent");
     // The worker's settings, read now, as it starts. A planner of its own runs on its own program and model.
     let w = work(Some(&t));

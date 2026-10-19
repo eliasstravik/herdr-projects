@@ -7,10 +7,11 @@ use std::sync::mpsc::{Receiver, Sender, RecvTimeoutError};
 use std::time::Duration;
 
 pub enum Command { Refresh, Submit(PathBuf, String), Priority(String) }
-pub enum Update { Folders(Vec<Project>), Snapshot(Value, Vec<Obj>), Sent(PathBuf, String), Applied(String), Error(String) }
+pub enum Update { Folders(Vec<Project>), Snapshot(Value), Sent(PathBuf, String), Applied(String), Error(String) }
 pub fn start(socket: String, commands: Receiver<Command>, updates: Sender<Update>) {
     std::thread::spawn(move || {
         crate::flow::send::shim();
+        crate::extras::refresh_sidebar();
         crate::mission_keeper::ensure();
         if let Err(e) = crate::mission_control::apply_priority(&crate::mission_control::priority()) { let _ = updates.send(Update::Error(e.msg)); }
         refresh(&updates);
@@ -31,15 +32,10 @@ pub fn start(socket: String, commands: Receiver<Command>, updates: Sender<Update
             if let Err(e) = crate::mission_control::ensure(&socket) { let _ = updates.send(Update::Error(e.msg)); }
             crate::mission_keeper::ensure();
             if !crate::keeper::keeper_alive() { crate::keeper::tick_once(&socket, false); }
-            let mut coordinator = crate::coordinator::look::summary(socket.as_str());
-            if !coordinator.b("said") {
-                let view = crate::coordinator::look::look(socket.as_str());
-                let screen = crate::coordinator::look::screen(&view, socket.as_str());
-                let tail = screen.lines().rev().filter(|l| !l.trim().is_empty()).take(16).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
-                coordinator["screen"] = json!(tail);
-            }
             let tasks = crate::store::tasks::list(Default::default());
-            if updates.send(Update::Snapshot(coordinator, tasks)).is_err() { break; }
+            crate::mission_agents::sync(&tasks, &socket);
+            let coordinator = crate::coordinator::look::summary(socket.as_str());
+            if updates.send(Update::Snapshot(coordinator)).is_err() { break; }
         }
     });
 }
@@ -59,7 +55,7 @@ pub fn receive(s: &mut State, update: Update) {
             s.project.select(None); s.choose(index);
             s.notice = format!("{} Projektordner · auswählen, Task eingeben, senden", s.projects.len());
         }
-        Update::Snapshot(coordinator, tasks) => { s.coordinator = coordinator; s.tasks = tasks; }
+        Update::Snapshot(coordinator) => { s.coordinator = coordinator; }
         Update::Sent(folder, text) => {
             s.sending = false;
             let path = folder.display().to_string();

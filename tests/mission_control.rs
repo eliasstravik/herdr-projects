@@ -180,36 +180,26 @@ fn a_project_message_waits_for_the_previous_turn_and_refuses_tasks_in_another_re
 }
 
 #[test]
-fn mission_status_boxes_show_live_output_and_clicks_focus_the_owned_terminals() {
-    use sw::mission_ui::{State, draw, events};
-    use crossterm::event::{Event, MouseEvent, MouseEventKind, MouseButton, KeyModifiers};
-    let w = world(); apply_priority("agy,codex").unwrap(); mission(&w);
-    sw::mission_control::ensure(&w.socket).unwrap(); drain();
-    let co = sw::coordinator::state::get(&w.socket).unwrap();
-    let id = w.add("Suchseite");
-    let pane = Herdr::new(Some(w.socket.clone())).pane_split(co.s("pane"), &w.root_str(), "down", &[]).unwrap();
-    sw::store::tasks::set(&id, json!({"link":{"pane":pane.s("pane_id")}})).unwrap();
-    w.patch(|st| { st["layouts"] = json!({}); for id in [pane.s("pane_id"), co.s("pane")] { st["layouts"][id] = json!({"focused_pane_id":"control","zoomed":false}); } });
+fn mission_control_only_draws_projects_and_input_with_tasks_in_the_native_sidebar() {
+    use sw::mission_ui::{State, draw};
+    let w = world();
     let (tx, _) = std::sync::mpsc::channel();
     let mut s = State {
         projects: vec![sw::mission_projects::Project {name: "proj".into(), path: w.root.clone(), remote: String::new()}],
-        project: Default::default(), tasks: vec![task(&id)], task: Default::default(),
-        draft: Default::default(), order: Default::default(), priority: false, sidebar: false, sending: false,
-        notice: String::new(), error: String::new(), coordinator: json!({"pane":co.s("pane"),"agent":"agy","screen":format!("{}\nPrüfe die Suchseite", "ältere Ausgabe\n".repeat(30))}), drafts: Default::default(),
-        folders_rect: Default::default(), tasks_rect: Default::default(), feedback_rect: Default::default(), input_rect: Default::default(), send_rect: Default::default(), priority_rect: Default::default(), refresh_rect: Default::default(),
+        project: Default::default(), draft: Default::default(), order: Default::default(), priority: false, sidebar: false, sending: false,
+        notice: String::new(), error: String::new(), coordinator: json!({"agent":"agy"}), drafts: Default::default(),
+        folders_rect: Default::default(), input_rect: Default::default(), send_rect: Default::default(), priority_rect: Default::default(), refresh_rect: Default::default(),
         socket: w.socket.clone(), tx, closed_at: None,
     };
     s.project.select(Some(0));
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(104, 60)).unwrap();
     terminal.draw(|f| draw::draw(f, &mut s)).unwrap();
     let text: String = terminal.backend().buffer().content.iter().map(|cell| cell.symbol()).collect();
-    assert!(text.contains("Prüfe die Suchseite"));
-    let click = |r: ratatui::layout::Rect| Event::Mouse(MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column:r.x, row:r.y, modifiers:KeyModifiers::empty() });
-    let area = s.tasks_rect; events::handle(&mut s, click(area));
-    assert_eq!(s.task.selected(), Some(0));
-    assert!(calls(&w).iter().any(|c| c.starts_with(&format!("pane zoom {}", task(&id).at("link").s("pane")))));
-    let area = s.feedback_rect; events::handle(&mut s, click(area));
-    assert!(calls(&w).iter().any(|c| c.starts_with(&format!("pane zoom {}", co.s("pane")))));
+    assert!(text.contains("offene Tasks ganz links unter agents"));
+    assert!(text.contains("Task für proj"));
+    assert!(!text.contains("Orchestrator · Live-Ausgabe"));
+    assert!(!text.contains("Noch keine Tasks"));
+    assert!(s.folders_rect.width > 90);
 }
 
 #[test]
@@ -226,4 +216,49 @@ fn antigravity_individual_quota_marker_starts_the_next_coordinator_and_keeps_pro
     assert!(messages.last().unwrap().contains(&w.root_str()));
     assert!(messages.last().unwrap().contains("Ist die Startseite umgestellt?"));
     assert!(Herdr::new(Some(w.socket.clone())).pane_get(&old).is_some());
+}
+
+#[test]
+fn resting_old_coordinators_are_saved_and_closed_after_handover_while_workers_stay() {
+    let w = world(); apply_priority("agy,codex").unwrap(); mission(&w);
+    sw::mission_control::ensure(&w.socket).unwrap(); drain();
+    let api = Herdr::new(Some(w.socket.clone()));
+    let old = sw::coordinator::state::get(&w.socket).unwrap();
+    let record = sw::coordinator::state::dir_of(&w.socket).join("handover-test.json");
+    sw::store::files::write_json(&record, &json!(old)).unwrap();
+    let worker = api.pane_split(old.s("pane"), &w.root_str(), "down", &[]).unwrap();
+    let next = api.pane_split(old.s("pane"), old.s("cwd"), "down", &[]).unwrap();
+    sw::coordinator::state::change(&w.socket, |c| {c.put("pane", next.at("pane_id").clone());true}).unwrap();
+    api.call(sw::herdr::cli::args(&["agent","start","next","--kind","codex","--pane",next.s("pane_id")])).unwrap();
+    set_status(&w, old.s("pane"), "working");
+    sw::mission_panes::tidy(&w.socket).unwrap();
+    assert!(api.pane_get(old.s("pane")).is_some());
+    set_status(&w, old.s("pane"), "idle");
+    w.patch(|st| { for p in st["panes"].as_array_mut().unwrap() { if p.s("pane_id") == old.s("pane") { p["terminal_id"] = json!("reused-terminal"); } } });
+    sw::mission_panes::tidy(&w.socket).unwrap();
+    assert!(api.pane_get(old.s("pane")).is_some(), "never close a reused pane ID");
+    w.patch(|st| { for p in st["panes"].as_array_mut().unwrap() { if p.s("pane_id") == old.s("pane") { p["terminal_id"] = old.at("terminal").clone(); } } });
+    sw::mission_panes::tidy(&w.socket).unwrap();
+    assert!(api.pane_get(old.s("pane")).is_none());
+    assert!(record.with_extension("terminal.txt").exists());
+    assert!(api.pane_get(worker.s("pane_id")).is_some());
+    assert!(api.pane_get(next.s("pane_id")).is_some());
+}
+
+#[test]
+fn stopped_tasks_stay_in_the_native_agent_list_without_becoming_running_coding_agents() {
+    let w = world(); apply_priority("agy,codex").unwrap(); let root = mission(&w);
+    let api = Herdr::new(Some(w.socket.clone()));
+    let pane = api.pane_split(&root, &w.root_str(), "right", &[]).unwrap();
+    let id = w.add("Suchseite");
+    sw::store::tasks::set(&id, json!({"stage":"failed","link":{"socket":w.socket,"pane":pane.s("pane_id"),"terminal":pane.s("terminal_id"),"missionPane":root}})).unwrap();
+    w.patch(|st| { for p in st["panes"].as_array_mut().unwrap() { if p.s("pane_id") == pane.s("pane_id") { p["busy"] = json!(true); } } });
+    sw::mission_agents::sync(&[task(&id)], &w.socket);
+    let raw = api.call(sw::herdr::cli::args(&["agent","get",pane.s("pane_id")])).unwrap();
+    assert_eq!(raw.at("agent").s("agent"), sw::herdr::api::TASK_AGENT);
+    assert!(api.agent_get(pane.s("pane_id")).unwrap().is_none());
+    assert!(api.agents().unwrap().is_empty());
+    assert!(w.state().arr("metadata").iter().any(|m| m.s("pane") == pane.s("pane_id") && m.to_string().contains("task=PRJ-1 Suchseite")));
+    sw::mission_agents::sync(&[], &w.socket);
+    assert!(api.call(sw::herdr::cli::args(&["agent","get",pane.s("pane_id")])).is_err());
 }

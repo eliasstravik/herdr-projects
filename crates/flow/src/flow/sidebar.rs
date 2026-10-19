@@ -28,7 +28,7 @@ fn pane_args(e: &Entry, title: &str) -> Vec<String> {
     a.extend(token("summary", &e.line)); a.extend(token("progress", &e.progress)); a.extend(args(&["--clear-token", "eta"]));
     a
 }
-fn clear_args() -> Vec<String> { args(&["--clear-state-labels", "--clear-display-agent", "--clear-title", "--clear-token", "summary", "--clear-token", "progress", "--clear-token", "eta"]) }
+fn clear_args() -> Vec<String> { args(&["--clear-state-labels", "--clear-display-agent", "--clear-title", "--clear-token", "summary", "--clear-token", "progress", "--clear-token", "eta", "--clear-token", "task"]) }
 type Write = (String, Value, Box<dyn Fn() -> bool>);
 /// What a task's panes and space are to say: [key, what is written there, how].
 fn wanted(t: &Obj, now: i64) -> Vec<Write> {

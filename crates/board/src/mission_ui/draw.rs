@@ -1,9 +1,9 @@
-//! Mission Control's project sidebar, task overview, orchestrator status, and bottom task input with clickable actions.
+//! Mission Control's project list, orchestrator status, and bottom task input with clickable actions.
 use super::State;
 use crate::board::keys::key_name;
 use crate::board::textbox::TextBox;
 use crate::json::*;
-use ratatui::{Frame, layout::{Constraint, Direction, Layout, Rect}, style::{Color, Modifier, Style}, text::{Line, Span}, widgets::{Block, Borders, List, ListItem, Paragraph, Wrap}};
+use ratatui::{Frame, layout::{Constraint, Direction, Layout, Rect}, style::{Color, Modifier, Style}, text::{Line, Span}, widgets::{Block, Borders, List, ListItem, Paragraph}};
 
 fn block(title: impl Into<String>) -> Block<'static> { Block::default().borders(Borders::ALL).title(title.into()).border_style(Style::default().fg(Color::DarkGray)) }
 pub fn draw(f: &mut Frame, s: &mut State) {
@@ -21,32 +21,13 @@ pub fn draw(f: &mut Frame, s: &mut State) {
         Line::from("Projekt links auswählen · Task unten senden · Live-Terminals rechts"),
     ];
     f.render_widget(Paragraph::new(header), chunks[0]);
-    let columns = Layout::default().direction(Direction::Horizontal).constraints([Constraint::Percentage(40), Constraint::Percentage(60)]).split(chunks[1]);
-    let folders = block("Developer · Projekte");
-    s.folders_rect = folders.inner(columns[0]);
+    let folders = block("Developer · Projekte · offene Tasks ganz links unter agents");
+    s.folders_rect = folders.inner(chunks[1]);
     let items: Vec<ListItem> = s.projects.iter().map(|p| {
         ListItem::new(format!("{} {}", if p.remote.is_empty() { "·" } else { "↑" }, p.name))
     }).collect();
-    f.render_stateful_widget(List::new(items).block(folders).highlight_style(Style::default().bg(Color::Blue).fg(Color::White)).highlight_symbol("› "), columns[0], &mut s.project);
+    f.render_stateful_widget(List::new(items).block(folders).highlight_style(Style::default().bg(Color::Blue).fg(Color::White)).highlight_symbol("› "), chunks[1], &mut s.project);
     let project = s.folder().cloned();
-    let rows: Vec<ListItem> = s.project_tasks().into_iter().map(|t| {
-        let color = match t.s("stage") { "failed" | "blocked" | "reviewneeds" => Color::Red, "done" => Color::Green, "approval" => Color::Yellow, _ => Color::Cyan };
-        ListItem::new(vec![Line::from(vec![Span::styled(format!("{} · {}", t.s("id"), t.s("stage")), Style::default().fg(color))]),
-            Line::from(t.t("title")), Line::from(Span::styled(t.t("msg"), Style::default().fg(Color::Gray)))])
-    }).collect();
-    let task_parts = Layout::default().direction(Direction::Vertical).constraints([Constraint::Percentage(65), Constraint::Percentage(35)]).split(columns[1]);
-    s.tasks_rect = block("").inner(task_parts[0]);
-    s.feedback_rect = task_parts[1];
-    if rows.is_empty() {
-        f.render_widget(Paragraph::new("Noch keine Tasks in diesem Projekt.\n\nTask unten eingeben. Der Orchestrator verteilt Teilaufgaben und prüft die Ergebnisse.").wrap(Wrap { trim: false }).block(block("Tasks")), task_parts[0]);
-    } else { f.render_stateful_widget(List::new(rows).block(block("Tasks · Klick öffnet Terminal")).highlight_style(Style::default().bg(Color::Blue)), task_parts[0], &mut s.task); }
-    let said = if s.coordinator.b("error") { s.coordinator.t("error") } else if s.coordinator.b("said") { s.coordinator.t("said") } else if s.coordinator.b("screen") { s.coordinator.t("screen") } else { "Orchestrator wird gestartet. Seine Ausgabe erscheint hier automatisch.".into() };
-    let feedback = block("Orchestrator · Live-Ausgabe · Klick öffnet Terminal");
-    let inner = feedback.inner(task_parts[1]);
-    let lines = crate::text::wrap(&said, inner.width as usize);
-    let skip = lines.len().saturating_sub(inner.height as usize);
-    let tail: Vec<Line> = lines.into_iter().skip(skip).map(Line::from).collect();
-    f.render_widget(Paragraph::new(tail).block(feedback), task_parts[1]);
     let title = if s.priority { "Globale CLI-Reihenfolge · erste CLI = Orchestrator".into() } else { format!("Task für {}", project.as_ref().map(|p| p.name.as_str()).unwrap_or("Projekt auswählen")) };
     let input_block = block(title).border_style(Style::default().fg(if s.sidebar && !s.priority { Color::DarkGray } else { Color::Cyan }));
     s.input_rect = input_block.inner(chunks[2]);

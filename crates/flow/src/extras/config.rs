@@ -23,7 +23,7 @@ fn block(what: &str, arg: &str) -> String {
         // Row 1: herdr's dot, the machine where there is more than one, and the space's name, which for a task is its
         // number and title (flow/sidebar.rs); the tab's name too, but not a task's own tabs. Row 2: who is on it and
         // where it stands. Row 3: what it says, its percent and time left.
-        _ => format!("[ui.sidebar.agents]\nrows = [[\"state_icon\", \"machine\", \"workspace\", {{ token = \"tab\", rules = [{{ equals = \"{AGENT_TAB}\", hide = true }}, {{ starts_with = \"Reviewer #\", hide = true }}] }}], [\"agent\"], [{{ token = \"$summary\", dim = true }}, \"$progress\"]]\n\n[ui.sidebar.spaces]\nrows = [[\"state_icon\", \"workspace\"], [\"branch\", \"git_status\"], [{{ token = \"$summary\", dim = true }}, \"$progress\"]]"),
+        _ => format!("[ui.sidebar.agents]\nrows = [[\"state_icon\", \"machine\", \"$task\", {{ token = \"workspace\", rules = [{{ equals = \"Mission Control\", hide = true }}] }}, {{ token = \"tab\", rules = [{{ starts_with = \"{AGENT_TAB}\", hide = true }}, {{ starts_with = \"Reviewer #\", hide = true }}] }}], [\"agent\"], [{{ token = \"$summary\", dim = true }}, \"$progress\"]]\n\n[ui.sidebar.spaces]\nrows = [[\"state_icon\", \"workspace\"], [\"branch\", \"git_status\"], [{{ token = \"$summary\", dim = true }}, \"$progress\"]]"),
     }
 }
 pub fn block_text(what: &str, arg: &str) -> String { format!("{}\n{}\n{}", begin(what), block(what, arg), end(what)) }

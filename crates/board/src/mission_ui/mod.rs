@@ -1,4 +1,4 @@
-//! Mission Control: project sidebar, persistent task composer, live task state, and visible interactive CLI panes.
+//! Mission Control: project list, persistent task composer, and visible interactive CLI panes.
 pub mod draw;
 pub mod events;
 pub mod worker;
@@ -12,26 +12,14 @@ use std::sync::mpsc::{channel, Sender};
 use std::time::{Duration, Instant};
 
 pub struct State {
-    pub projects: Vec<Project>, pub project: ListState, pub tasks: Vec<Obj>, pub task: ListState,
+    pub projects: Vec<Project>, pub project: ListState,
     pub draft: TextBox, pub order: TextBox, pub priority: bool, pub sidebar: bool, pub sending: bool,
     pub notice: String, pub error: String, pub coordinator: Value, pub drafts: HashMap<String, String>,
-    pub folders_rect: Rect, pub tasks_rect: Rect, pub feedback_rect: Rect, pub input_rect: Rect, pub send_rect: Rect, pub priority_rect: Rect, pub refresh_rect: Rect,
+    pub folders_rect: Rect, pub input_rect: Rect, pub send_rect: Rect, pub priority_rect: Rect, pub refresh_rect: Rect,
     pub socket: String, pub tx: Sender<worker::Command>, pub closed_at: Option<Instant>,
 }
 impl State {
     pub fn folder(&self) -> Option<&Project> { self.projects.get(self.project.selected().unwrap_or(0)) }
-    pub fn project_tasks(&self) -> Vec<&Obj> {
-        self.tasks.iter().filter(|t| self.folder().map(|p| crate::store::repos::folder_of(t.s("id")) == p.path).unwrap_or(false) && !t.b("archivedAt")).collect()
-    }
-    pub fn focus_pane(&mut self, pane: &str) {
-        let api = crate::herdr::Herdr::new(Some(self.socket.clone()));
-        if pane.is_empty() || api.pane_get(pane).is_none() { self.notice = "Für diesen Task läuft noch kein Terminal. Der Status steht in der Task-Zeile.".into(); return; }
-        if let Err(e) = api.pane_focus(pane) { self.error = e.message; }
-    }
-    pub fn open_task(&mut self, index: usize) {
-        let pane = self.project_tasks().get(index).map(|t| t.at("link").t("pane"));
-        if let Some(pane) = pane { self.task.select(Some(index)); self.focus_pane(&pane); }
-    }
     pub fn save_draft(&mut self) {
         if let Some(p) = self.project.selected().and_then(|i| self.projects.get(i)) { self.drafts.insert(p.path.display().to_string(), self.draft.text()); }
         let _ = crate::store::files::write_json(&draft_file(), &json!(self.drafts));
@@ -44,7 +32,6 @@ impl State {
             self.draft.set_text(self.drafts.get(&path).map(String::as_str).unwrap_or(""));
             let _ = crate::mission_layout::selected(&self.socket, &path);
         }
-        self.task.select(None);
     }
     pub fn send(&mut self) {
         if self.sending || self.draft.is_empty() { return; }
@@ -70,9 +57,9 @@ pub fn open() -> crate::err::Res<i32> {
     let _screen = Screen;
     let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
     let mut s = State {
-        projects: vec![], project: ListState::default(), tasks: vec![], task: ListState::default(), draft: TextBox::default(), order: TextBox::default(),
+        projects: vec![], project: ListState::default(), draft: TextBox::default(), order: TextBox::default(),
         priority: false, sidebar: true, sending: false, notice: "Projektordner werden geladen …".into(), error: String::new(), coordinator: Value::Null, drafts,
-        folders_rect: Rect::default(), tasks_rect: Rect::default(), feedback_rect: Rect::default(), input_rect: Rect::default(), send_rect: Rect::default(), priority_rect: Rect::default(), refresh_rect: Rect::default(),
+        folders_rect: Rect::default(), input_rect: Rect::default(), send_rect: Rect::default(), priority_rect: Rect::default(), refresh_rect: Rect::default(),
         socket, tx, closed_at: None,
     };
     loop {

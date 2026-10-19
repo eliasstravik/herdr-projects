@@ -59,7 +59,7 @@ fn no_notifications_a_task_that_needs_you_raises_nothing_and_the_popup_block_an_
     rejects.set(false);
     assert!(sw::extras::refresh_sidebar());
     assert_eq!(read(&file), format!("[keys]\nx = \"prefix+x\"\n\n{side}\n\n[ui]\nmouse_capture = true\n"));
-    assert!(side.contains(r#"{ token = "tab", rules = [{ equals = "Agent", hide = true }, { starts_with = "Reviewer #", hide = true }] }], ["agent"], [{ token = "$summary", dim = true }, "$progress"]]"#), "{side}");
+    assert!(side.contains(r#"{ token = "tab", rules = [{ starts_with = "Agent", hide = true }, { starts_with = "Reviewer #", hide = true }] }], ["agent"], [{ token = "$summary", dim = true }, "$progress"]]"#), "{side}");
     assert!(!sw::extras::refresh_sidebar(), "up to date: nothing written");
     std::fs::write(&file, "[ui.sidebar.agents]\nrows = [[\"agent\"]]\n").unwrap();
     assert!(!sw::extras::refresh_sidebar(), "rows of your own: not the plugin's to change");
