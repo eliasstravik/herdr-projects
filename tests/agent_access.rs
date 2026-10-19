@@ -26,6 +26,11 @@ fn auto_starts_claude_and_codex_in_their_own_auto_mode_and_full_and_ask_are_as_t
     let _w = world();
     assert_eq!(args("claude", "auto"), ["--permission-mode", "auto"]);
     assert_eq!(args("codex", "auto"), ["--approve-for-me", "--no-daemon"]);
+    // herdr's others that have a classifier of their own (not one whose `auto` approves everything).
+    version("cursor", "2026.10.01"); // its versions are dates
+    assert_eq!(args("cursor", "auto"), ["--auto-review"]);
+    assert_eq!(args("qwen", "auto"), ["--approval-mode", "auto"]);
+    assert_eq!(args("qodercli", "auto"), ["--permission-mode", "auto"]);
     // full and ask: unchanged.
     assert_eq!(args("claude", "full"), ["--dangerously-skip-permissions"]);
     assert!(args("claude", "ask").is_empty());
@@ -40,14 +45,19 @@ fn auto_starts_claude_and_codex_in_their_own_auto_mode_and_full_and_ask_are_as_t
 #[test]
 fn a_program_with_no_auto_mode_is_refused_at_its_start_and_never_started_with_full_or_ask_instead() {
     let _w = world();
-    for k in ["pi", "copilot", "droid", "qwen", "omp"] {
+    for k in ["pi", "agy", "copilot", "devin", "droid", "hermes", "kilo", "opencode", "omp"] {
         let e = refused_start(k, "auto");
-        assert!(e.contains(&format!("{k} cannot be started with access \"auto\": it has no auto mode (only claude, codex have one)")), "{e}");
+        assert!(e.contains(&format!("{k} cannot be started with access \"auto\": it has no auto mode (only claude, codex, cursor, qodercli, qwen have one)")), "{e}");
         assert!(e.contains("Set the role's access to full or ask"), "{e}");
     }
     assert!(why_not("claude", "auto").is_empty() && why_not("codex", "auto").is_empty());
     assert!(why_not("pi", "ask").contains("pi cannot do \"ask\": it never asks before it acts"));
     assert!(refused_start("pi", "ask").contains("never asks before it acts"), "ask as before");
+    // In plan mode the access flags give way to the plan's, but an auto that cannot be is refused before the plan.
+    let plan = |k: &str, access: &str| start_args(k, &StartOpts { access: access.into(), plan: Some(vec!["--plan".into()]), ..Default::default() });
+    assert!(plan("pi", "auto").unwrap_err().msg.contains("it has no auto mode"));
+    assert_eq!(plan("pi", "ask").unwrap(), ["--plan"], "ask in plan mode as before");
+    assert_eq!(plan("claude", "auto").unwrap(), ["--plan"]);
 }
 
 #[test]
@@ -109,7 +119,7 @@ fn an_auto_written_by_hand_for_a_program_without_it_stays_auto_and_its_start_is_
 #[test]
 fn a_fallback_with_no_auto_mode_is_passed_over_for_one_that_has_it() {
     let _w = world();
-    assert_eq!(usable("pi", "auto"), "pi cannot do \"auto\": it has no auto mode (only claude, codex have one)");
+    assert_eq!(usable("pi", "auto"), "pi cannot do \"auto\": it has no auto mode (only claude, codex, cursor, qodercli, qwen have one)");
     assert_eq!([usable("claude", "auto"), usable("codex", "auto")], [String::new(), String::new()]);
     let list: Vec<String> = ["pi", "codex"].map(String::from).to_vec();
     let (next, skipped) = next_fallback(&list, "claude", &[], |a| usable(a, "auto"));
@@ -129,4 +139,25 @@ fn the_settings_page_goes_full_ask_auto_and_the_task_panel_says_auto_mode() {
     b.s.sel = id; b.load();
     let text = b.screen(140).join("\n");
     assert!(regex::Regex::new(r"│ {15}default effort · auto mode \* *\n").unwrap().is_match(&text), "{text}");
+    // A program with none: the panel says it will not start.
+    sw::store::tasks::patch(&task(&b.s.sel).t("id"), |t| { t.put("settings", json!({ "worker.agent": "pi", "worker.access": "auto" })); }).unwrap();
+    b.load();
+    let text = b.screen(140).join("\n");
+    assert!(text.contains("no auto mode in pi: it will not start"), "{text}");
+}
+
+#[test]
+fn on_the_settings_page_the_access_row_passes_over_a_value_its_program_cannot_do() {
+    let w = world();
+    let id = w.add("Pi here");
+    sw::store::tasks::patch(&id, |t| { t.put("settings", json!({ "worker.agent": "opencode", "worker.access": "ask" })); }).unwrap();
+    let mut b = common::board::open(&w.root, 44);
+    b.s.sel = id.clone(); b.load();
+    let r = b.s.current().unwrap().clone();
+    sw::board::update::edit::open(&mut b.s, Some(&r));
+    let at = sw::board::update::edit::rows(&b.s).iter().position(|r| r.s("name") == "worker.access").unwrap();
+    b.s.editing.as_mut().unwrap().at = at;
+    b.press(&["enter"]);
+    // opencode can ask but has no auto mode: from ask it goes on to full, never stuck on ask.
+    assert_eq!(sw::store::settings::lookup::setting("worker.access", Some(&task(&id))), json!("full"));
 }

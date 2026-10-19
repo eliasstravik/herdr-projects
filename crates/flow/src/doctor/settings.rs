@@ -73,7 +73,7 @@ pub fn check() -> Vec<Found> {
             add(format!("{from}: {name}: {why}"), Found::bad(format!("{name}{}: {}", at.label, why.trim_end_matches('.')), fix), &mut out);
         }
         for (name, why, from) in auto_refused(&at) {
-            let fix = format!("Update the program, or set it again: herdr-projects set {name} full{} (or ask)", at.flag);
+            let fix = format!("{}set it again: herdr-projects set {name} full{} (or ask)", if why.contains("has no auto mode: it came in") { "Update the program, or " } else { "Choose a program that has one, or " }, at.flag);
             add(format!("{from}: {name}: {why}"), Found::bad(format!("{name}{}: {why}", at.label), fix), &mut out);
         }
         for p in problems_in(&at.scope()) {

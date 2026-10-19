@@ -69,7 +69,8 @@ pub fn said_to(k: &str, file: Option<&Path>, session: &str, cwd: &Path, text: &s
     let f = file_for(k, file, session, cwd)?;
     holds(&f, &super::hand_limits::as_typed(text), since).ok() // a long one went in as a line naming its file
 }
-/// A program that cannot ask has full access whatever was asked for.
+/// It acts without asking first, so nobody would answer a trust dialog: `full`, `auto`, and any access of a program that
+/// cannot ask.
 pub fn full_access(k: &str, access: &str) -> bool { access != "ask" || kind(k).map(|a| a.access_ask.is_none()).unwrap_or(true) }
 pub fn interrupt_key(k: &str) -> &'static str { kind(k).map(|a| a.interrupt).unwrap_or("esc") }
 /// Best effort: a failure here only means the agent's own trust dialog shows, which the inbox handles.

@@ -44,8 +44,8 @@ did. They can run anything as you, without asking: the rules and the review brie
 - `worker.access ask` (and `reviewer.access`, `coordinator.access`) starts a program without those flags, so it asks
   before it acts. pi cannot ask, and the value is refused for it.
 - `worker.access auto` starts it in its program's own auto mode, which does the safe actions without asking and stops
-  the risky ones: `claude --permission-mode auto`, `codex --approve-for-me`. Refused for every other program
-  ([auto mode](auto-mode.md)).
+  the risky ones: `claude --permission-mode auto`, `codex --approve-for-me` (and Cursor's, Qwen Code's, Qoder's).
+  Refused for every other program ([auto mode](auto-mode.md)).
 - So a new task does not wait behind a "trust this folder?" dialog, the plugin marks the task's repo as trusted in the
   agent's own settings (`~/.claude.json`, `~/.codex/config.toml`) before starting it. Only for a role with full or auto
   access.

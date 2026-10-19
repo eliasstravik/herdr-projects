@@ -68,7 +68,7 @@ The first on the list that:
 - was not on it since you last stepped in;
 - is installed on this machine;
 - can work under the task's access (`pi` cannot ask before it acts, so it is passed over while `worker.access` is
-  `ask`; only Claude Code and Codex have an auto mode, so every other is passed over while it is `auto`).
+  `ask`; one with no auto mode of its own, or too old for it, is passed over while it is `auto`).
 
 One that cannot be started is passed over too. When nobody could be started, the task is exactly as it was: the same
 agent, its failure, the rounds it used.

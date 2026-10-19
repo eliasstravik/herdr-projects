@@ -31,7 +31,12 @@ pub fn start_args(k: &str, o: &StartOpts) -> Res<Vec<String>> {
     let mut out: Vec<String> = kind(k).map(|a| super::kinds::fill(a.lead, "")).unwrap_or_default(); // `hermes chat`
     if !o.resume.is_empty() { out.extend(resume_args(k, &o.resume)); } // first: Codex's `resume` is a subcommand
     if o.resume.is_empty() { out.extend(session_args(k, &o.session)); out.extend(fresh_args(k)); }
-    match &o.plan { Some(p) => out.extend(p.iter().cloned()), None => out.extend(access_args(k, if o.access.is_empty() { "full" } else { &o.access })?) }
+    let access = access_args(k, if o.access.is_empty() { "full" } else { &o.access });
+    match &o.plan {
+        // An auto that cannot be is refused before the plan, not when the plan is built.
+        Some(p) => { if o.access == "auto" { access?; } out.extend(p.iter().cloned()) }
+        None => out.extend(access?),
+    }
     if !o.model.is_empty() { out.extend(model_args(k, &o.model)); }
     let level = effort_for(k, &o.model, &o.effort);
     if !level.is_empty() { out.extend(effort_args(k, &level)); }
