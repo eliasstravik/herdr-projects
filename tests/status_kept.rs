@@ -19,11 +19,11 @@ fn with(t: &Obj, extra: Value) -> Obj { let mut o = t.clone(); for (k, v) in ext
 fn said(t: &Obj, mins: i64) -> String { show(t, &json!({ "status": "working" }), T0 + mins * MIN).msg }
 /// Whether there is a Watcher is your setting (`watcher.agent`, or `none`).
 fn watcher(agent: &str) { set_value("watcher.agent", &json!(agent), &Scope::you()).unwrap(); }
-fn off<R>(f: impl FnOnce() -> R) -> R { watcher("none"); let r = f(); watcher("claude"); r }
+fn off<R>(f: impl FnOnce() -> R) -> R { watcher("none"); let r = f(); watcher("pi"); r }
 
 #[test]
 fn first_run_a_task_whose_agent_has_just_started_says_so_until_the_watcher_s_first_sentence_and_then_says_that() {
-    let _w = world(); watcher("claude");
+    let _w = world(); watcher("pi");
     let task = base();
     assert_eq!(said(&task, 0), "Just started"); assert_eq!(said(&task, 1), "Just started");
     assert_eq!(said(&with(&task, json!({ "watch": { "msg": "Reading the code", "progress": 10, "role": "agent", "at": T0 + MIN } })), 2), "Reading the code");
@@ -40,7 +40,7 @@ fn first_run_a_task_whose_agent_has_just_started_says_so_until_the_watcher_s_fir
 
 #[test]
 fn working_again_the_last_sentence_stays_said_with_its_age_until_a_new_one_arrives() {
-    let _w = world(); watcher("claude");
+    let _w = world(); watcher("pi");
     // A new turn, sent back after a review, a conflict, a retry: each drops the guess (`watch`), none the kept sentence.
     let again = with(&base(), json!({ "watch": null, "lastLine": { "msg": "Running the check", "at": T0 - 12 * MIN } }));
     assert_eq!(said(&again, 0), "12m ago: Running the check");
@@ -59,7 +59,7 @@ fn working_again_the_last_sentence_stays_said_with_its_age_until_a_new_one_arriv
 
 #[test]
 fn what_the_watcher_or_an_agent_wrote_is_on_the_row_exactly_as_written_only_the_board_s_own_plain_word_is_left_out() {
-    let _w = world(); watcher("claude");
+    let _w = world(); watcher("pi");
     sw::clock::set(Some(T0));
     let (mut s, theme) = (State::new(Default::default(), Default::default()), Theme::default_dark(false));
     let mut row_of = |t: &Obj, live: Value| -> String {
@@ -84,6 +84,6 @@ fn what_the_watcher_or_an_agent_wrote_is_on_the_row_exactly_as_written_only_the_
     watcher("none");
     let r = row_of(&base(), json!({ "status": "working" })); assert!(ends(&r, " +Working"), "{r}");
     let r = row_of(&with(&base(), json!({ "stage": "reviewing", "msg": "Under review", "reviewAt": T0 })), json!({ "status": "working" })); assert!(ends(&r, " +Under review"), "{r}");
-    watcher("claude");
+    watcher("pi");
     let r = row_of(&base(), json!({ "status": "blocked" })); assert!(ends(&r, " +Needs you"), "{r}");
 }
