@@ -15,7 +15,8 @@ pub fn run(c: &Obj, name: &str, args: &Value) -> String {
         "board_status" => status(c),
         "latest_reply" => latest(c),
         "quiet" => { let on = args.b("on"); call::change(|x| x.put("quiet", on)); if on { "Updates about other tasks are off for this call.".into() } else { "Updates about other tasks are on again.".into() } }
-        "end_call" => { call::end("said goodbye"); "The call ends now.".into() }
+        // The page hangs up after the goodbye; the board lets the call go a moment later in any case.
+        "end_call" => { call::end_soon(6000); "The call ends in a moment: say a short goodbye.".into() }
         other => format!("There is no tool called {other}."),
     }
 }
@@ -40,6 +41,8 @@ fn switch(c: &Obj, who: &str) -> String {
     let b = board::of(c);
     let mut g = b.lock().unwrap();
     let f = match find(&g.s, who) { Ok(f) => f, Err(e) => return e };
+    // What you said to the one before is not sent to the next one.
+    call::change(|x| x.put("heard", json!([])));
     if board::page_of(c).is_some() {
         g.s.reply = !f.id.is_empty(); g.s.reply_id = f.id.clone();
         if g.s.reply { g.s.sel = f.id.clone(); }

@@ -35,7 +35,8 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     sw::clock::set(Some(sw::clock::now()));
     s.press(&["ctrl+o"]);
     let c = call::get().expect("it rings");
-    assert_eq!((c.s("state"), c.s("owner"), call::target(&c).id.as_str()), ("ringing", "terminal", a.as_str()));
+    assert_eq!((c.s("state"), call::from_terminal(&c), call::target(&c).id.as_str()), ("ringing", true, a.as_str()));
+    assert_eq!(c.s("owner"), sw::board::update::call::owner(&s.s), "this board's own call");
     let link = c.t("link");
     assert!(link.starts_with(&format!("{LINK}/herdr-projects/call#")), "{link}");
     s.load();

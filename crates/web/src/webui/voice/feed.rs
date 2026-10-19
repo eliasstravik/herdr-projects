@@ -72,6 +72,7 @@ pub fn feed(c: &Obj) -> Value {
     });
     match items {
         Some(items) => json!({ "items": items, "ended": false, "target": t.name, "quiet": call::get().map(|x| x.b("quiet")).unwrap_or(false) }),
-        None => json!({ "items": [], "ended": true, "target": t.name }),
+        // Not changed: either the call is over, or its file could not be written this once (it is asked again soon).
+        None => json!({ "items": [], "ended": call::get().is_none(), "target": t.name }),
     }
 }

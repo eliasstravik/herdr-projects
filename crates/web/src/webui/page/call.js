@@ -12,7 +12,7 @@ const QUIET_MS = 1400, FEED_MS = 1500, VOICE = 0.5;
 
 const subs = new Set();
 let st = { state: "idle", mode: "", muted: false, target: "", note: "", lines: [] };
-let conv = null, key = "", timer = null, queue = [], heardAt = 0, spokeAt = 0, waiting = false, lock = null;
+let conv = null, key = "", timer = null, queue = [], heardAt = 0, spokeAt = 0, waiting = false, lock = null, cancelled = false;
 const set = (patch) => { st = { ...st, ...patch }; for (const f of subs) { try { f(st); } catch {} } };
 export const state = () => st;
 export const watch = (f) => { subs.add(f); f(st); return () => subs.delete(f); };
@@ -37,14 +37,19 @@ export async function start(how) {
   if (conv || st.state === "starting") return;
   if (!window.isSecureContext) return set({ state: "idle", note: "A call needs the board's private https link." });
   set({ state: "starting", note: "Asking for the microphone…", lines: [] });
+  cancelled = false;
+  // Hung up while it was still connecting: it stops at the next step, and the board is told.
+  const stop = () => { if (!cancelled) return false; if (key) send("end", { why: "hung up while connecting" }); key = ""; set({ state: "idle", note: "You hung up.", mode: "" }); return true; };
   try {
     const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     for (const t of mic.getTracks()) t.stop();
+    if (stop()) return;
     set({ note: "Connecting…" });
     const r = await fetch(`${API}/start`, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-herdr-projects": "1" }, body: JSON.stringify(how) });
     const out = await r.json().catch(() => ({}));
     if (!r.ok || !out.token) throw new Error(out.msg || "The call could not start.");
     key = out.key;
+    if (stop()) return;
     const { Conversation } = await import("./vendor/elevenlabs.js");
     const clientTools = Object.fromEntries(TOOLS.map((name) => [name, async (args) => {
       const res = await send("tool", { name, args: args || {} });
@@ -71,6 +76,7 @@ export async function start(how) {
     });
     conv = started;
     if (dropped) return finish("The call ended.", "the voice service ended it");
+    if (cancelled) return end();
     set({ state: "live", target: out.target });
     try { lock = await navigator.wakeLock?.request("screen"); } catch {}
     timer = setInterval(feed, FEED_MS);
@@ -98,7 +104,6 @@ function next() {
   const item = queue.shift();
   const text = `[board] ${item.text}`;
   try {
-    if (item.kind === "alert") conv.sendContextualUpdate(text);
     conv.sendUserMessage(text);
     spokeAt = performance.now();
   } catch {}
@@ -116,6 +121,7 @@ function finish(note, why = "hung up") {
 }
 export async function end(why = "hung up") {
   const c = conv;
+  if (st.state === "starting" && !c) { cancelled = true; return; }
   if (!c && !key) return;
   finish(why === "ended" ? "The call ended." : "You hung up.", why);
   try { await c?.endSession(); } catch {}

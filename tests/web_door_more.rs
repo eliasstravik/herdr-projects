@@ -64,7 +64,9 @@ fn the_web_uis_page_gets_one_script_line_and_nothing_else_changes_and_what_is_no
     let (st, head, body) = ask(&up, get("/?pane=w1%3Ap1", "accept: text/html\r\naccept-encoding: gzip\r\n"));
     let html = ok(&body);
     assert_eq!(st, 200); assert_eq!(html, SHELL.replace("</body>", &format!("{}</body>", tag())));
-    assert_eq!((header(&head, "content-security-policy"), header(&head, "cache-control")), (Some(CSP), Some("no-cache")));
+    // its policy changes in one way only: a call in the board's chat may also reach ElevenLabs (voice/page.rs)
+    assert_eq!((header(&head, "content-security-policy"), header(&head, "cache-control")), (Some(sw::webui::voice::page::widen(CSP).as_str()), Some("no-cache")));
+    assert!(sw::webui::voice::page::widen(CSP).starts_with(CSP));
     assert_eq!(header(&head, "content-length"), Some(html.len().to_string().as_str())); assert_eq!(header(&head, "etag"), None, "its length changed, and so did what a saved copy is compared with");
     assert!(!seen.lock().unwrap().last().unwrap().to_lowercase().contains("accept-encoding"), "the page is asked for unpacked, since it is read here");
     // a page that arrives packed after all, and one with no place for the line, go on exactly as sent

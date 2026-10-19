@@ -42,7 +42,7 @@ pub fn route(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstrea
         ("POST", "heard") => { call::line(if args.s("who") == "agent" { "voice" } else { "you" }, args.s("text")); json!({ "ok": true }) }
         ("POST", "tool") => json!({ "ok": true, "result": super::tools::run(&c, args.s("name"), args.at("args")) }),
         ("GET", "feed") => { let mut f = super::feed::feed(&c); f["ok"] = json!(true); f }
-        ("POST", "end") => { call::end(if args.s("why").is_empty() { "hung up" } else { args.s("why") }); json!({ "ok": true }) }
+        ("POST", "end") => { call::end_of(c.s("id"), if args.s("why").is_empty() { "hung up" } else { args.s("why") }); json!({ "ok": true }) }
         _ => return no(&mut client, 404, "Not found"),
     };
     json_out(&mut client, 200, &out)
@@ -51,10 +51,7 @@ pub fn route(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstrea
 pub fn start(args: &Value, role: impl FnOnce() -> Result<String, String>) -> (u16, Value) {
     let ticket = args.s("ticket");
     let (c, key_secret) = if !ticket.is_empty() {
-        let Some(c) = call::take_ticket(ticket) else { return (410, json!({ "ok": false, "msg": "This call link was used already or is too old. Press the call key on the board again." })) };
-        // The page that brings the ticket gets a fresh key for the call: the first one was never said to anyone.
-        let k = call::secret();
-        call::change(|x| x.put("key", call_hash(&k)));
+        let Some((c, k)) = call::take_ticket(ticket) else { return (410, json!({ "ok": false, "msg": "This call link was used already or is too old. Press the call key on the board again." })) };
         (c, k)
     } else {
         match role() { Ok(r) if r == "drive" => {}, Ok(_) => return (403, json!({ "ok": false, "msg": "This device can only watch." })), Err(_) => return (401, json!({ "ok": false, "msg": "Log in to the herdr web UI first." })) }
@@ -65,12 +62,17 @@ pub fn start(args: &Value, role: impl FnOnce() -> Result<String, String>) -> (u1
         let (c, _, k) = call::start(&format!("web:{page}"), &t);
         (c, k)
     };
-    let fail = |msg: String| { call::end("could not start"); (503, json!({ "ok": false, "msg": msg })) };
+    let id = c.t("id");
+    let fail = |msg: String| { call::end_of(&id, "could not start"); (503, json!({ "ok": false, "msg": msg })) };
     let Some(k) = key::find() else { return fail(key::missing()) };
     let agent = match eleven::ensure_agent(&k.key) { Ok(a) => a, Err(e) => return fail(e) };
-    let token = match eleven::token(&k.key, &agent) { Ok(t) => t, Err(e) => return fail(e) };
+    // An agent deleted in ElevenLabs (or another account's key): made again, once.
+    let token = match eleven::token(&k.key, &agent) {
+        Ok(t) => t,
+        Err(e) if e.contains(" 404 ") || e.contains(" 403 ") => { eleven::forget_agent(); match eleven::ensure_agent(&k.key).and_then(|a| eleven::token(&k.key, &a)) { Ok(t) => t, Err(e) => return fail(e) } }
+        Err(e) => return fail(e),
+    };
     let m = crate::voice::agent::made();
     let target = call::target(&c).name;
     (200, json!({ "ok": true, "token": token, "call": c.s("id"), "key": key_secret, "language": m.language, "target": if target.is_empty() { "the Coordinator".to_string() } else { target }, "worklet": "/herdr-projects/page/vendor/rawAudioProcessor.js" }))
 }
-fn call_hash(k: &str) -> String { call::key_hash(k) }

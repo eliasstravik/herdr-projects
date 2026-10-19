@@ -60,8 +60,14 @@ pub fn agent_body(m: &Made, tool_ids: &[String]) -> Value {
 }
 /// The agent, made or updated to match agent.rs, only when its stamp changed. Answers its id.
 pub fn ensure_agent(key: &str) -> Result<String, String> {
+    crate::store::files::with_lock_wait("voice-agent", 60_000, || make_agent(key).map_err(crate::err::Error::from)).map_err(|e| e.msg)
+}
+/// Forget the agent made before (it was deleted in ElevenLabs, or the key is another account's): the next call makes it.
+pub fn forget_agent() { let _ = std::fs::remove_file(state_file()); }
+fn make_agent(key: &str) -> Result<String, String> {
     let m = agent::made();
-    let stamp = agent::stamp(&m);
+    // Everything the agent is made of, its whole configuration too.
+    let stamp = sha1_smol::Sha1::from(format!("{}{}", agent::stamp(&m), agent_body(&m, &[]))).digest().to_string();
     let was = read_obj(&state_file()).unwrap_or_default();
     if was.s("stamp") == stamp && !was.s("agent").is_empty() { return Ok(was.t("agent")); }
     let mut ids: Vec<String> = vec![];

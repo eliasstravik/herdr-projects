@@ -21,6 +21,6 @@ pub fn main(args: &[String]) -> (Value, String) {
         match &link { Some(l) => format!("Call page: {l}/herdr-projects/call (a call from the terminal board opens it, with its ticket)"), None => "Call page: none here (the board's front door has no private link: herdr-projects web-ui link). The web board can still call when its page is open.".into() },
         if machines.is_empty() { "Call helper: not needed here (herdr has no saved machines: this is where the board runs, or you sit here)".into() } else { format!("Call helper: {} for {}", if helper { "running" } else if super::helper::wanted() { "not running (the keeper starts it)" } else { "off (voice.helper is none)" }, machines.join(", ")) },
     ];
-    lines.push(match &c { Some(c) => format!("Call: {} with {} ({})", c.s("state"), call::target(c).name, if c.s("owner") == "terminal" { "from the terminal board" } else { "from the web board" }), None => "Call: none on now".into() });
+    lines.push(match &c { Some(c) => format!("Call: {} with {} ({})", c.s("state"), call::target(c).name, if call::from_terminal(c) { "from the terminal board" } else { "from the web board" }), None => "Call: none on now".into() });
     (json!({ "key": k.map(|k| k.from), "link": link, "helper": helper, "machines": machines, "call": c.map(|c| json!({ "id": c.s("id"), "state": c.s("state"), "owner": c.s("owner") })) }), lines.join("\n"))
 }

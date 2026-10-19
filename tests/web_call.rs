@@ -74,7 +74,10 @@ fn the_voice_agents_message_goes_to_whoever_the_chat_talks_to_with_your_words_fi
     // quiet, and the end of the call
     assert!(tool("quiet", json!({ "on": true })).contains("off"));
     assert!(call::get().unwrap().b("quiet"));
-    tool("end_call", json!({})); assert!(call::get().is_none());
+    sw::clock::set(Some(sw::clock::now()));
+    assert!(tool("end_call", json!({})).contains("goodbye"));
+    assert!(call::get().is_some(), "the goodbye is heard first");
+    sw::clock::advance(6000); assert!(call::get().is_none());
     sw::voice::eleven::set_fake(None);
 }
 

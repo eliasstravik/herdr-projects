@@ -26,6 +26,13 @@ pub fn send(client: &mut std::net::TcpStream, head_only: bool) {
 /// chat can hold a call too. Nothing else in it changes.
 pub fn widen(policy: &str) -> String {
     if policy.contains("livekit.rtc.elevenlabs.io") { return policy.into(); }
-    if !policy.contains("connect-src") { return policy.into(); }
-    policy.split(';').map(|d| { let t = d.trim(); if t.starts_with("connect-src") { format!(" {t} {HOSTS}") } else { d.to_string() } }).collect::<Vec<_>>().join(";").trim().to_string()
+    let parts: Vec<String> = policy.split(';').map(|d| d.trim().to_string()).filter(|d| !d.is_empty()).collect();
+    if parts.iter().any(|d| d.starts_with("connect-src")) {
+        return parts.iter().map(|d| if d.starts_with("connect-src") { format!("{d} {HOSTS}") } else { d.clone() }).collect::<Vec<_>>().join("; ");
+    }
+    // No word on connecting: it follows default-src, so connect-src is that, and the call's hosts.
+    match parts.iter().find(|d| d.starts_with("default-src")) {
+        Some(d) => { let mut out = parts.clone(); out.push(format!("connect-src{} {HOSTS}", &d["default-src".len()..])); out.join("; ") }
+        None => policy.into(),
+    }
 }

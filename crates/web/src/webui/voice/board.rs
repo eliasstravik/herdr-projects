@@ -42,5 +42,5 @@ pub fn name_of(w: &Who) -> String {
 pub fn shown(page: &str) -> Value {
     let Some(c) = call::get() else { return Value::Null };
     let lines: Vec<Value> = c.arr("lines").iter().rev().take(3).rev().map(|l| json!({ "by": l.s("by"), "text": crate::text::cut(l.s("text"), 300) })).collect();
-    json!({ "on": true, "mine": !page.is_empty() && page_of(&c).as_deref() == Some(page), "from": if page_of(&c).is_some() { "web" } else { "terminal" }, "state": c.s("state"), "target": call::target(&c).name, "lines": lines })
+    json!({ "on": true, "mine": !page.is_empty() && page_of(&c).as_deref() == Some(page), "from": if call::from_terminal(&c) { "terminal" } else { "web" }, "state": c.s("state"), "target": call::target(&c).name, "lines": lines })
 }

@@ -10,7 +10,7 @@ use crate::voice::call;
 use std::collections::HashMap;
 
 /// How long the helpers have to answer a ring before the best one is told to open it; and how long the best one has
-/// to take it before another may.
+/// to claim it before another may (one that claimed it and could not open it leaves the board's link to you).
 pub const BID_MS: i64 = 900;
 pub const LATE_MS: i64 = 4000;
 fn bids_dir(id: &str) -> std::path::PathBuf { call::dir().join("bids").join(id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect::<String>()) }
@@ -31,11 +31,11 @@ impl Listener {
         let mut out = vec![];
         let t = now();
         if let Some(v) = line.and_then(|l| serde_json::from_str::<Value>(l).ok()) { if v.b("bid") { bid(v.s("bid"), &self.from, v.i("score")); } }
-        if let Some((id, link)) = ringing() {
+        if let Some((id, link, offered)) = ringing() {
             if !self.seen.contains_key(&id) { self.seen.insert(id.clone(), t); bid(&id, &self.from, 0); out.push(json!({ "ring": id })); }
             let at = self.seen[&id];
             let mine = best(&id).as_deref() == Some(self.from.as_str());
-            if t - at >= BID_MS && (mine || t - at >= LATE_MS) && call::change(|c| if c.has("offered") { false } else { c.put("offered", self.from.clone()); true }).unwrap_or(false) {
+            if !offered && t - at >= BID_MS && (mine || t - at >= LATE_MS) && call::change(|c| if c.has("offered") { false } else { c.put("offered", self.from.clone()); true }).unwrap_or(false) {
                 self.opened = Some(id.clone());
                 out.push(json!({ "open": link, "id": id }));
             }

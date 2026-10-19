@@ -15,8 +15,10 @@ pub fn toggle(s: &mut State, fx: &mut Vec<Effect>) {
     if s.ctx.web { return; } // the web board has a call button of its own, on the page
     let target = target(s);
     s.flash(format!("Calling with {}…", target.name), Ink::Muted);
-    fx.push(Effect::Run(Job::CallRing { target }));
+    fx.push(Effect::Run(Job::CallRing { owner: owner(s), target }));
 }
+/// This board's name as the owner of a call: two terminal boards on one machine each follow only their own.
+pub fn owner(s: &State) -> String { format!("terminal:{}", if s.ctx.own_pane.is_empty() { std::process::id().to_string() } else { s.ctx.own_pane.clone() }) }
 /// Who the chat talks to now, as the call record keeps it.
 pub fn target(s: &State) -> Target {
     let reply = s.reply && !s.sel.is_empty() && (s.current().is_some() || super::coords::talking(s).is_some());
@@ -28,7 +30,7 @@ pub fn target(s: &State) -> Target {
 /// On every read: a call of this board's follows its chat, and a switch asked for by voice is made here.
 pub fn follow(s: &mut State, fx: &mut Vec<Effect>) {
     let Some(c) = s.data.call.clone() else { s.call_link = None; return };
-    if c.s("owner") != "terminal" || s.ctx.web { return; }
+    if c.s("owner") != owner(s) || s.ctx.web { return; }
     if c.s("state") != "ringing" { s.call_link = None; }
     let sw = c.at("switch");
     if sw.i("n") > s.call_switch {

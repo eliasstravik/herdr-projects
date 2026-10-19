@@ -42,6 +42,8 @@ fn the_words_sent_are_yours_first_and_no_action_you_did_not_ask_for_goes() {
     assert!(matches!(check("Merge HP-52", &heard(&["how is HP-52 doing?"]), true), Verdict::Refuse(m) if m.contains("did not ask")));
     // asked for, it needs a yes first; with the yes it goes; a plain question goes at once
     assert!(matches!(check("Merge HP-52", &heard(&["merge HP-52"]), false), Verdict::Ask(m) if m.contains("confirmed true")));
+    assert!(matches!(check("Merge HP-52", &heard(&["merge HP-52"]), true), Verdict::Ask(_)), "the voice agent's word that you said yes is not enough");
+    assert!(matches!(check("Merge HP-52", &heard(&["merge HP-52", "hmm, wait"]), true), Verdict::Ask(_)));
     assert_eq!(check("Merge HP-52", &heard(&["merge HP-52", "yes"]), true), Verdict::Send);
     assert_eq!(check("Approve HP-52", &heard(&["godkänn HP-52", "ja"]), true), Verdict::Send, "asked in Swedish, sent in English");
     assert_eq!(check("What is HP-52 doing?", &heard(&["vad gör HP-52?"]), false), Verdict::Send);
@@ -53,6 +55,9 @@ fn the_words_sent_are_yours_first_and_no_action_you_did_not_ask_for_goes() {
     let m = message("also say goodbye", &heard(&["also say goodbye"]));
     assert_eq!(m.lines().next().unwrap(), "also say goodbye"); assert!(!m.contains("took it as"));
     assert!(message("Status?", &[]).starts_with("Status?\n\n(Sent from a voice call."));
+    // what you said that names an action this message does not carry stays out of it
+    let m = message("How is HP-53 doing?", &heard(&["merge HP-52", "no wait", "how is HP-53 doing?"]));
+    assert!(m.starts_with("no wait how is HP-53 doing?\n"), "{m}");
     // only the last three things said go with it
     let m = message("x", &heard(&["one", "two", "three", "four"]));
     assert!(m.starts_with("two three four\n"), "{m}");
@@ -68,9 +73,11 @@ fn the_call_record_keeps_its_secrets_as_hashes_and_its_ticket_works_once() {
     let kept = std::fs::read_to_string(call::file()).unwrap();
     assert!(!kept.contains(&ticket) && !kept.contains(&key), "secrets are kept only as hashes");
     assert!(call::take_ticket("wrong").is_none());
-    let live = call::take_ticket(&ticket).expect("the ticket takes the call");
+    let (live, key2) = call::take_ticket(&ticket).expect("the ticket takes the call");
     assert_eq!(live.s("state"), "live");
     assert!(call::take_ticket(&ticket).is_none(), "once");
+    assert!(call::by_key(&key).is_none(), "the page that took it has a key of its own: the first was never said");
+    let key = key2;
     assert!(call::by_key(&key).is_some() && call::by_key("nope").is_none() && call::by_key("").is_none());
     // what was said: kept for the chat; your own words also until something is sent
     call::line("you", "Hej, vad väntar på mig?"); call::line("voice", "Två uppgifter väntar."); call::line("you", "  ");
@@ -92,7 +99,7 @@ fn the_call_record_keeps_its_secrets_as_hashes_and_its_ticket_works_once() {
     sw::clock::advance(call::STALE_MS - 1); call::seen();
     sw::clock::advance(call::STALE_MS - 1); assert!(call::get().is_some(), "it asked a moment ago");
     sw::clock::advance(2); assert!(call::get().is_none());
-    let (a, _, _) = call::start("web:p1", &t);
+    call::start("web:p1", &t);
     let (b, _, _) = call::start("terminal", &t);
     assert_eq!(call::get().unwrap().s("id"), b.s("id"));
 }

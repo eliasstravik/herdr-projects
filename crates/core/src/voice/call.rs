@@ -3,7 +3,8 @@
 //! the board that owns the call, as the chat's switch stands), what was said (`lines`, the last ones, shown in the
 //! chat), your own words since the last thing sent (`heard`), a switch asked for by voice (`switch`), what was already
 //! read back (`fed`), and the secrets that let a page hold this call: a ticket (once, for a short while) and the call's
-//! key, both kept only as hashes.
+//! key, both kept as hashes. A call from the terminal board also keeps the link that picks it up (with its ticket, for
+//! the call helper) until a page took it.
 use crate::clock::now;
 use crate::json::*;
 use crate::store::files::{data_dir, read_obj, with_lock, write_json};
@@ -41,6 +42,7 @@ pub fn get() -> Option<Obj> {
     if c.s("state") == "ended" || c.s("id").is_empty() { return None; }
     if c.s("state") == "ringing" && now() - c.i("at") > TICKET_MS { return None; }
     if c.s("state") == "live" && now() - c.i("at").max(c.i("answered")).max(c.i("seen")) > STALE_MS { return None; }
+    if c.b("endAt") && now() >= c.i("endAt") { return None; }
     Some(c)
 }
 /// Change the call under its lock; None when there is none.
@@ -52,8 +54,8 @@ pub fn change<T>(f: impl FnOnce(&mut Obj) -> T) -> Option<T> {
         Ok(Some(out))
     }).ok().flatten()
 }
-/// A new call, in place of any other. `owner`: "terminal" (the terminal board; a helper on your computer, or a link,
-/// picks it up with the ticket) or "web:<page>" (the web board's page that holds it). Answers (the call, its ticket,
+/// A new call, in place of any other. `owner`: "terminal:<board>" (a terminal board; a helper on your computer, or a
+/// link, picks it up with the ticket) or "web:<page>" (the web board's page that holds it). Answers (the call, its ticket,
 /// its key): the two secrets are said once, here, and kept only as hashes.
 pub fn start(owner: &str, target: &Target) -> (Obj, String, String) {
     let (ticket, key) = (secret(), secret());
@@ -67,23 +69,28 @@ pub fn start(owner: &str, target: &Target) -> (Obj, String, String) {
     let _ = with_lock("voice-call", || write_json(&file(), &Value::Object(c.clone())));
     (c, ticket, key)
 }
-/// The ticket a page brought: right, and not used yet. It is used up now, and the call is answered.
-pub fn take_ticket(ticket: &str) -> Option<Obj> {
+/// The ticket a page brought: right, and not used yet. It is used up now, the call is answered, and the page gets a
+/// key of its own for it (the first one was never said to anyone): the call and that key.
+pub fn take_ticket(ticket: &str) -> Option<(Obj, String)> {
     if ticket.is_empty() { return None; }
+    let key = secret();
     change(|c| {
         if c.s("ticket") != hash(ticket) || now() - c.i("at") > TICKET_MS { return None; }
-        c.put("ticket", Value::Null); c.put("link", Value::Null); c.put("state", "live"); c.put("answered", now());
-        Some(c.clone())
+        c.put("ticket", Value::Null); c.put("link", Value::Null); c.put("state", "live"); c.put("answered", now()); c.put("key", hash(&key));
+        Some((c.clone(), key.clone()))
     }).flatten()
 }
 /// The page holding the call asked the board something: it is still there.
 pub fn seen() { change(|c| c.put("seen", now())); }
 /// The call this key holds, when it is the call on now.
 pub fn by_key(key: &str) -> Option<Obj> { get().filter(|c| !key.is_empty() && c.s("key") == hash(key)) }
-pub fn end(why: &str) {
+pub fn end(why: &str) { end_of("", why) }
+/// The call `id` ended (any call: ""), and not a newer one that took its place meanwhile.
+pub fn end_of(id: &str, why: &str) {
+    let _ = std::fs::remove_dir_all(dir().join("bids"));
     let _ = with_lock("voice-call", || {
         let Some(mut c) = read_obj(&file()) else { return Ok(()) };
-        if c.s("state") == "ended" { return Ok(()); }
+        if c.s("state") == "ended" || (!id.is_empty() && c.s("id") != id) { return Ok(()); }
         c.put("state", "ended"); c.put("ended", now()); c.put("why", why);
         write_json(&file(), &Value::Object(c))
     });
@@ -113,5 +120,7 @@ pub fn target(c: &Obj) -> Target { Target::of(c.at("target")) }
 pub fn set_target(t: &Target) { change(|c| if target(c) != *t { c.put("target", t.value()); }); }
 /// A switch asked for by voice, for the board that owns the call to make, as its own switch: `to` as said.
 pub fn ask_switch(to: &str) -> i64 { change(|c| { let n = c.at("switch").i("n") + 1; c.put("switch", json!({ "to": to, "n": n, "at": now() })); n }).unwrap_or(0) }
-/// Is this call this board's own? The terminal board owns "terminal"; a web page "web:<its id>".
-pub fn owned_by(c: &Obj, owner: &str) -> bool { c.s("owner") == owner }
+/// The voice agent said goodbye: the call ends a moment later, so the goodbye is heard.
+pub fn end_soon(ms: i64) { change(|c| c.put("endAt", now() + ms)); }
+/// Was the call started from a terminal board (any)?
+pub fn from_terminal(c: &Obj) -> bool { c.s("owner").starts_with("terminal") }

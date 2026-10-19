@@ -32,8 +32,10 @@ fn an_update_is_read_only_in_a_pause_never_while_you_talk_or_over_the_voice() {
     assert!(CALL.contains("const QUIET_MS = 1400, FEED_MS = 1500, VOICE = 0.5;"));
     assert!(CALL.contains(r#"if (st.mode === "speaking" || now - heardAt < QUIET_MS || now - spokeAt < QUIET_MS) return;"#));
     assert!(CALL.contains("onVadScore: ({ vadScore }) => { if (vadScore > VOICE) heardAt = performance.now(); }"));
-    // one at a time; an alert is context first, then read
-    assert!(CALL.contains("const item = queue.shift();") && CALL.contains(r#"if (item.kind === "alert") conv.sendContextualUpdate(text);"#) && CALL.contains("conv.sendUserMessage(text);"));
+    // one at a time, read once
+    assert!(CALL.contains("const item = queue.shift();") && CALL.contains("conv.sendUserMessage(text);") && !CALL.contains("sendContextualUpdate"));
+    // hung up while it still connects: it stops there
+    assert!(CALL.contains(r#"if (st.state === "starting" && !c) { cancelled = true; return; }"#) && CALL.matches("if (stop()) return;").count() == 2);
     assert!(CALL.contains("const text = `[board] ${item.text}`;"));
     // the call ends cleanly: the board is told, the microphone and the screen's wake lock let go
     assert!(CALL.contains(r#"if (k) send("end", { why }, "POST", k);"#) && CALL.contains("try { lock?.release(); } catch {}"));
@@ -60,7 +62,8 @@ fn the_policies_let_a_call_reach_elevenlabs_and_nothing_else() {
     let wide = widen(web);
     assert_eq!(wide, format!("default-src 'self'; script-src 'self'; connect-src 'self' {HOSTS}; media-src 'self'; frame-ancestors 'none'"));
     assert_eq!(widen(&wide), wide, "once");
-    assert_eq!(widen("default-src 'self'"), "default-src 'self'", "a policy that says nothing of connecting is left as it is");
+    assert_eq!(widen("default-src 'self'; img-src 'self'"), format!("default-src 'self'; img-src 'self'; connect-src 'self' {HOSTS}"), "connecting follows default-src: that, and the call's hosts");
+    assert_eq!(widen("img-src 'self'"), "img-src 'self'", "no limit on connecting: nothing to add");
     assert!(HOSTS.split(' ').all(|h| h.ends_with(".elevenlabs.io")));
     let p = policy();
     assert!(p.contains("script-src 'self';") && p.contains(&format!("connect-src 'self' {HOSTS};")) && p.contains("frame-ancestors 'none'"));
