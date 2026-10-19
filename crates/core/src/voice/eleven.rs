@@ -10,6 +10,8 @@ use std::io::Write;
 use std::rc::Rc;
 
 const API: &str = "https://api.elevenlabs.io";
+/// Where the API is: ElevenLabs, or a stand-in (`HERDR_PROJECTS_ELEVENLABS_API`, for a scripted call in a browser).
+fn api() -> String { std::env::var("HERDR_PROJECTS_ELEVENLABS_API").ok().filter(|x| !x.is_empty()).unwrap_or_else(|| API.into()) }
 /// A test's ElevenLabs: (method, path, body) → (status, body).
 pub type Fake = dyn Fn(&str, &str, &Value) -> (u16, Value);
 thread_local! { static FAKE: RefCell<Option<Rc<Fake>>> = const { RefCell::new(None) }; }
@@ -20,7 +22,7 @@ fn state_file() -> std::path::PathBuf { super::call::dir().join("agent.json") }
 pub fn request(key: &str, method: &str, path: &str, body: &Value) -> Result<Value, String> {
     if let Some(f) = FAKE.with(|x| x.borrow().clone()) { let (st, v) = f(method, path, body); return if (200..300).contains(&st) { Ok(v) } else { Err(format!("ElevenLabs answered {st} to {method} {}: {}", path.split('?').next().unwrap_or(""), crate::text::cut(&v.to_string(), 300))) }; }
     let q = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
-    let mut config = format!("url = \"{}{}\"\nrequest = \"{method}\"\nheader = \"xi-api-key: {}\"\nheader = \"Accept: application/json\"\nsilent\nshow-error\nmax-time = 25\nwrite-out = \"\\n%{{http_code}}\"\n", API, q(path), q(key));
+    let mut config = format!("url = \"{}{}\"\nrequest = \"{method}\"\nheader = \"xi-api-key: {}\"\nheader = \"Accept: application/json\"\nsilent\nshow-error\nmax-time = 25\nwrite-out = \"\\n%{{http_code}}\"\n", api(), q(path), q(key));
     if !body.is_null() { config.push_str(&format!("header = \"Content-Type: application/json\"\ndata-binary = \"{}\"\n", q(&body.to_string()))); }
     let mut child = std::process::Command::new("curl").args(["--config", "-"]).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn().map_err(|e| format!("curl did not start: {e}"))?;
     if let Some(mut i) = child.stdin.take() { let _ = i.write_all(config.as_bytes()); }

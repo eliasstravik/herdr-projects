@@ -1,7 +1,10 @@
 /* A voice call: its toggle in the web board's chat and the strip over the conversation while a call is on
    (callbtn.js), in the web UI's own look; and the page a call from the terminal board opens on your computer
    (callpage.js), which has no web UI around it and brings its own few colours, light and dark. */
-.sw-call { flex: none; color: var(--sw-dim); display: inline-flex; align-items: center; gap: var(--space-1, 4px); min-height: 40px; }
+.sw-call { flex: none; margin-left: auto; color: var(--sw-dim); display: inline-flex; align-items: center; gap: var(--space-1, 4px); min-height: 40px; }
+/* Beside Hide when Hide shows (Hide then takes the right edge), else at the right edge itself. */
+.sw-hide:not([hidden]) + .sw-call { margin-left: 0; }
+.sw-call[hidden] { display: none; }
 .sw-call svg, .sw-call-mute svg { width: 16px; height: 16px; }
 .sw-call.is-live { color: var(--sw-red, #e06c75); font-weight: var(--fw-semibold, 600); }
 .sw-call:focus-visible, .sw-call-mute:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }

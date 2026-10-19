@@ -245,6 +245,7 @@ mod web_autos;
 mod web_board;
 mod web_boards;
 mod web_call;
+mod web_call_page;
 mod web_chat;
 mod web_chat_box;
 mod web_door;
