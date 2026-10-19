@@ -8,6 +8,7 @@
 //! `board.machines` setting names them by hand instead. The order the board lists them in is herdr's sidebar's
 //! (remote/sidebar.rs).
 pub mod automations;
+pub mod carry;
 pub mod check;
 pub mod lookup;
 pub mod own_names;
