@@ -78,8 +78,9 @@ fn run(cmd: &str, a: &Args) -> Res<i32> {
         "serve" => return Ok(crate::review_page::serve_main(crate::webui::door_loop::run_door)),
         "remote" => return Ok(crate::remote::remote_main(&a.pos[1..])),
         // A voice call's helper on the computer you sit at, and its ear on this machine: both run until they are let go.
-        "voice" if pos(1) == "helper" => return Ok(crate::calls::helper::helper_main()),
-        "voice" if pos(1) == "listen" => return Ok(crate::calls::listen::listen_main(&flag("from"))),
+        // Both answer a call's requests with the board's own code, in this process (webui/voice/api.rs: local).
+        "voice" if pos(1) == "helper" => return Ok(crate::calls::helper::helper_main(std::sync::Arc::new(crate::webui::voice::api::local))),
+        "voice" if pos(1) == "listen" => return Ok(crate::calls::listen::listen_main(&flag("from"), std::sync::Arc::new(crate::webui::voice::api::local))),
         "--skill" | "skill" => { print!("{}", crate::extras::skill_text::skill_text(&crate::flow::send::shim().display().to_string())); return Ok(0); }
         "help" => { print!("{}", help::HELP); return Ok(0); }
         _ if a.flags.b("help") => { print!("{}", help::HELP); return Ok(0); }

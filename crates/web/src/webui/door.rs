@@ -123,7 +123,6 @@ fn ours(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstream) {
     let rel = path.get(BASE.len() + 1..).unwrap_or("").to_string();
     if let Some(name) = rel.strip_prefix("page/") { if head.method == "GET" || head.method == "HEAD" { return super::page::send_page(&mut client, name, head.method == "HEAD"); } }
     // A call: its page and its calls keep to a call's own rules (voice/api.rs), before the web UI is asked.
-    if rel == "call" && (head.method == "GET" || head.method == "HEAD") { return super::voice::page::send(&mut client, head.method == "HEAD"); }
     if let Some(v) = rel.strip_prefix("api/voice/") { let v = v.to_string(); return super::voice::api::route(client, head, rest, up, &v); }
     let Some(call) = rel.strip_prefix("api/").map(String::from) else { return json_out(&mut client, 404, &json!({ "ok": false, "msg": "Not found" })) };
     let Some(to) = up.to() else { return json_out(&mut client, 503, &json!({ "ok": false, "msg": "The herdr web UI is not answering." })) };

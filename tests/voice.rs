@@ -23,6 +23,7 @@ pub fn fake_eleven() -> Rc<RefCell<Vec<(String, String, Value)>>> {
             ("POST", "/v1/convai/tools") => (200, json!({ "id": format!("tool_{n}") })),
             ("POST", "/v1/convai/agents/create") => (200, json!({ "agent_id": "agent_1" })),
             ("GET", "/v1/convai/conversation/token") => (200, json!({ "token": "tok-short-lived", "conversation_id": "conv_1" })),
+            ("GET", "/v1/convai/conversation/get-signed-url") => (200, json!({ "signed_url": "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=agent_1&conversation_signature=sig" })),
             _ => (200, json!({})),
         }
     })));
@@ -224,34 +225,61 @@ fn the_agent_is_made_once_and_updated_only_when_it_changed() {
     sw::voice::eleven::set_fake(None);
 }
 
+/// The board's code as a listener runs it, played: a call starts with a signed address and a key; any other request
+/// answers which key it came with.
+pub fn door() -> sw::calls::listen::Door {
+    std::sync::Arc::new(|what: &str, body: &Value, key: &str| match what {
+        "start" => (200, json!({ "ok": true, "url": "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=a&conversation_signature=s", "key": "key-of-the-call", "target": "the Coordinator", "language": "auto", "ticket": body.s("ticket") })),
+        _ => (200, json!({ "ok": true, "what": what, "key": key })),
+    })
+}
+/// One request of the helper's, and the listener's answer to it (which may come in the very same step).
+pub fn request(l: &mut sw::calls::listen::Listener, n: i64, what: &str, body: Value) -> Value {
+    let out = l.step(Some(&json!({ "req": n, "what": what, "body": body }).to_string()));
+    out.into_iter().find(|v| v.i("res") == n).unwrap_or_else(|| until(l, |v| v.i("res") == n))
+}
+/// Steps a listener until it says something `f` wants (a thread of its own answers in a moment).
+pub fn until(l: &mut sw::calls::listen::Listener, f: impl Fn(&Value) -> bool) -> Value {
+    let mut said = vec![];
+    for _ in 0..200_000 { let out = l.step(None); if let Some(v) = out.iter().find(|v| f(v)) { return v.clone(); } said.extend(out); std::thread::yield_now(); }
+    panic!("the listener never said it; it said {said:?}")
+}
+
 #[test]
-fn of_the_computers_listening_the_one_you_are_at_opens_the_call_and_hears_when_it_ends() {
+fn of_the_computers_listening_the_one_you_are_at_holds_the_call_and_the_key_stays_on_the_board() {
     let _w = world();
     sw::clock::set(Some(5_000_000));
     let t = Target { name: "the Coordinator".into(), ..Default::default() };
-    let (c, ticket, _) = call::start("terminal", &t);
-    call::change(|x| x.put("link", format!("https://vm.example.ts.net/herdr-projects/call#{ticket}")));
+    assert!(sw::calls::ring::ring("terminal:w1:p1", &t, "default").unwrap_err().contains("elevenlabs.json"), "no key: nothing rings");
+    put_key();
+    let id = sw::calls::ring::ring("terminal:w1:p1", &t, "default").unwrap();
+    let c = call::get().unwrap();
+    assert_eq!((c.s("id"), c.s("state"), c.s("session")), (id.as_str(), "ringing", "default"));
     // the board runs on "vm", where nobody sits at a herdr window of its own
     let nobody = || -> Box<dyn Fn(&str) -> bool> { Box::new(|_| false) };
-    let mut mac = sw::calls::listen::Listener::with("macbook", "vm", nobody());
-    let mut m1 = sw::calls::listen::Listener::with("m1", "vm", nobody());
-    let rang = |out: &[Value]| out.iter().any(|v| v.s("ring") == c.s("id"));
+    let mut mac = sw::calls::listen::Listener::with("macbook", "vm", nobody(), door());
+    let mut m1 = sw::calls::listen::Listener::with("m1", "vm", nobody(), door());
+    let rang = |out: &[Value]| out.iter().any(|v| v.s("ring") == id);
     assert!(rang(&mac.step(None)) && rang(&m1.step(None)), "each listener hears the ring once");
     assert!(!rang(&mac.step(None)));
-    // the M1 has herdr's window in front: it answers best, and it alone is told to open the call, after a moment
-    mac.step(Some(&json!({ "bid": c.s("id"), "score": 1 }).to_string()));
-    m1.step(Some(&json!({ "bid": c.s("id"), "score": 3 }).to_string()));
-    assert!(!m1.step(None).iter().any(|v| v.b("open")), "the others still have a moment to answer");
+    // the M1 has herdr's window in front: it answers best, and it alone gets the call, after a moment
+    mac.step(Some(&json!({ "bid": id, "score": 1 }).to_string()));
+    m1.step(Some(&json!({ "bid": id, "score": 3 }).to_string()));
+    assert!(!m1.step(None).iter().any(|v| v.has("call")), "the others still have a moment to answer");
     sw::clock::advance(sw::calls::listen::BID_MS);
-    assert!(!mac.step(None).iter().any(|v| v.b("open")));
-    let open: Vec<Value> = m1.step(None).into_iter().filter(|v| v.b("open")).collect();
-    assert_eq!(open.len(), 1); assert!(open[0].s("open").ends_with(&ticket));
+    assert!(!mac.step(None).iter().any(|v| v.has("call")));
+    let got = until(&mut m1, |v| v.has("call"));
+    // the helper gets the call's signed address and who it talks to; never the ticket or the call's key
+    assert!(got.at("call").s("url").starts_with("wss://") && got.at("call").s("target") == "the Coordinator");
+    assert!(!got.to_string().contains("key-of-the-call") && !got.to_string().contains("ticket"));
     assert_eq!(call::get().unwrap().s("offered"), "m1");
     sw::clock::advance(sw::calls::listen::LATE_MS);
-    assert!(!mac.step(None).iter().any(|v| v.b("open")), "taken: nobody else opens it");
-    // picked up, it rings no more; hung up, the computer that opened it closes its window
-    call::take_ticket(&ticket).unwrap();
-    assert!(sw::calls::ring::ringing().is_none());
+    assert!(!mac.step(None).iter().any(|v| v.has("call")), "taken: nobody else gets it");
+    // the helper's requests are answered by the board's code, with the key kept here
+    let res = request(&mut m1, 7, "tool", json!({ "name": "board_status" }));
+    assert_eq!((res.i("status"), res.at("body").s("what"), res.at("body").s("key")), (200, "tool", "key-of-the-call"));
+    // hung up on the board: the helper hears it, and the call's requests are answered no more
     call::end("test");
-    assert!(m1.step(None).iter().any(|v| v.s("ended") == c.s("id")));
+    assert!(m1.step(None).iter().any(|v| v.s("ended") == id));
+    assert_eq!(request(&mut m1, 8, "feed", json!({})).i("status"), 410);
 }

@@ -1,15 +1,14 @@
-//! The call's page code, read as text (crates/web/src/webui/page/call.js, callbtn.js, callpage.js, call.css) and the
+//! The call's page code, read as text (crates/web/src/webui/page/call.js, callbtn.js, hear.js, call.css) and the
 //! front door's policies for it (voice/page.rs): WebRTC with the board's own audio worklet, the voice agent's tools
 //! asked of the board, an update read only in a pause and never over anybody, the ticket taken out of the address, the
-//! toggle beside Hide in the chat, and a policy that lets the page reach ElevenLabs and nothing else.
+//! toggle beside Hide in the chat, and the web UI's policy widened to let the page reach ElevenLabs and nothing else.
 const CALL: &str = include_str!("../crates/web/src/webui/page/call.js");
 const BTN: &str = include_str!("../crates/web/src/webui/page/callbtn.js");
-const PAGE: &str = include_str!("../crates/web/src/webui/page/callpage.js");
 const CSS: &str = include_str!("../crates/web/src/webui/page/call.css");
 const CHAT: &str = include_str!("../crates/web/src/webui/page/chat.js");
 const SDK: &str = include_str!("../crates/web/src/webui/page/vendor/elevenlabs.js");
 const HEAR: &str = include_str!("../crates/web/src/webui/page/hear.js");
-use sw::webui::voice::page::{policy, widen, HOSTS};
+use sw::webui::voice::page::{widen, HOSTS};
 
 #[test]
 fn the_call_runs_over_webrtc_with_the_boards_own_worklet_and_asks_the_board_for_every_tool() {
@@ -63,11 +62,8 @@ fn the_toggle_stands_beside_hide_and_the_call_page_takes_its_ticket_out_of_the_a
     assert!(BTN.contains(r#"if (other) { const out = await post("voice/end""#), "a call from the terminal board is hung up from the web too");
     assert!(BTN.contains("call.start({ client });"));
     assert!(CSS.contains(".sw-call { flex: none; margin-left: auto;") && CSS.contains("min-height: 40px"), "a thumb's size");
-    assert!(PAGE.contains(r#"return [h.split("&")[0], /&auto$/.test(h)];"#) && PAGE.contains(r#"history.replaceState(null, "", location.pathname);"#));
-    assert!(PAGE.contains("call.start({ ticket })"));
-    // the helper's window starts the call at once; your own browser, opened from the link, asks for a tap first
-    assert!(PAGE.contains("else if (auto) go();") && PAGE.contains(r#"$("start").hidden = false; }"#));
-    for f in ["call.js", "callbtn.js", "callpage.js", "call.css", "vendor/elevenlabs.js", "vendor/rawAudioProcessor.js"] { assert!(sw::webui::page::file(f).is_some(), "{f} is served"); }
+    assert!(sw::webui::page::file("callpage.js").is_none(), "no page of its own: a terminal call has no browser");
+    for f in ["call.js", "callbtn.js", "hear.js", "call.css", "vendor/elevenlabs.js", "vendor/rawAudioProcessor.js"] { assert!(sw::webui::page::file(f).is_some(), "{f} is served"); }
 }
 
 #[test]
@@ -79,9 +75,6 @@ fn the_policies_let_a_call_reach_elevenlabs_and_nothing_else() {
     assert_eq!(widen("default-src 'self'; img-src 'self'"), format!("default-src 'self'; img-src 'self'; connect-src 'self' {HOSTS}"), "connecting follows default-src: that, and the call's hosts");
     assert_eq!(widen("img-src 'self'"), "img-src 'self'", "no limit on connecting: nothing to add");
     assert!(HOSTS.split(' ').all(|h| h.ends_with(".elevenlabs.io")));
-    let p = policy();
-    assert!(p.contains("script-src 'self';") && p.contains(&format!("connect-src 'self' {HOSTS};")) && p.contains("frame-ancestors 'none'"));
-    assert!(!p.contains("unsafe-eval") && !p.contains("'unsafe-inline'"));
 }
 
 #[test]
@@ -92,12 +85,9 @@ fn the_call_is_heard_or_the_page_asks_for_a_tap_and_says_what_it_saw() {
     assert!(HEAR.contains("(c && c.state !== \"running\" && !navigator.userActivation?.hasBeenActive)") && HEAR.contains("for (const [el] of seen) { el.muted = via === \"webaudio\"; el.volume = 1; try { await el.play(); } catch {} }"));
     // the second way out: the page's own audio context plays it, the element silent
     assert!(HEAR.contains("for (const [el, e] of seen) { el.muted = true; try { e.src?.connect(c.destination); } catch {} }"));
-    // the call page: one big Tap to hear, and Can't hear the voice?; the chat's strip the same
-    let html = { let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap(); let p = l.local_addr().unwrap().port(); let t = std::thread::spawn(move || { let (mut c, _) = l.accept().unwrap(); sw::webui::voice::page::send(&mut c, false); }); let mut s = std::net::TcpStream::connect(("127.0.0.1", p)).unwrap(); let mut out = String::new(); std::io::Read::read_to_string(&mut s, &mut out).unwrap(); t.join().unwrap(); out };
-    assert!(html.contains(r#"<button type="button" class="sw-callp-hear" data-hear hidden>Tap to hear</button>"#) && html.contains("Can't hear the voice? Tap here"));
-    assert!(PAGE.contains(r#"$("hear").addEventListener("click", () => hear.unlock());"#) && PAGE.contains("hear.webAudio();"));
+    // the chat's strip: Tap to hear, and Can't hear?
     assert!(BTN.contains(r#""Tap to hear")"#) && BTN.contains(r#""Can't hear?")"#));
-    assert!(CSS.contains(".sw-callp-hear { min-height: 96px;"));
+    assert!(CSS.contains(".sw-call-hear { min-height: 48px;"));
     // what the page saw goes to the board every fifth question, and with the end of the call
     assert!(CALL.contains(r#"if (asks++ % 5 === 0) send("audio", hear.report());"#));
     assert!(sw::webui::page::file("hear.js").is_some());

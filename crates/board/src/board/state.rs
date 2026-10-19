@@ -134,9 +134,9 @@ pub struct State {
     pub now: i64, pub ticks: u64,
     /// The tasks as last told to the terminal (OSC 7501), by id.
     pub osc_sent: HashMap<String, String>,
-    /// A call this board rang: its id, the link that takes it, when (update/call.rs); the last switch asked by voice
-    /// that this board made, and on which call (each call counts its switches from one).
-    pub call_link: Option<(String, String, i64)>, pub call_switch: (String, i64),
+    /// A call this board rang: its id and when (update/call.rs); the last switch asked by voice that this board made,
+    /// and on which call (each call counts its switches from one).
+    pub call_link: Option<(String, i64)>, pub call_switch: (String, i64),
 }
 impl State {
     pub fn new(ctx: Ctx, data: Data) -> State {

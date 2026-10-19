@@ -2,7 +2,8 @@
 //! page the web UI lets drive; from the terminal board, for a page that brings the call's ticket (once, for two
 //! minutes). It answers a short-lived ElevenLabs token and the call's key; the API key stays here. With that key in
 //! `x-herdr-call`, the page then says what was heard (`heard`), runs the voice agent's tools (`tool`), asks what to
-//! read back (`feed`) and hangs up (`end`). Every call that changes something comes from the board's own page.
+//! read back (`feed`) and hangs up (`end`). Every call that changes something comes from the board's own page. The
+//! terminal board's call runs the same calls in-process (`local`), for its helper.
 use super::board;
 use crate::json::*;
 use crate::voice::{call, eleven, key};
@@ -68,12 +69,33 @@ pub fn start(args: &Value, role: impl FnOnce() -> Result<String, String>) -> (u1
     let Some(k) = key::find() else { return fail(key::missing()) };
     let agent = match eleven::ensure_agent(&k.key) { Ok(a) => a, Err(e) => return fail(e) };
     // An agent deleted in ElevenLabs (or another account's key): made again, once.
-    let token = match eleven::token(&k.key, &agent) {
+    // The web board's page talks over WebRTC (a token); the terminal board's helper over a WebSocket (a signed address).
+    let ws = args.b("ws");
+    let mint = |a: &str| if ws { eleven::signed_url(&k.key, a) } else { eleven::token(&k.key, a) };
+    let token = match mint(&agent) {
         Ok(t) => t,
-        Err(e) if e.contains(" 404 ") || e.contains(" 403 ") => { eleven::forget_agent(); match eleven::ensure_agent(&k.key).and_then(|a| eleven::token(&k.key, &a)) { Ok(t) => t, Err(e) => return fail(e) } }
+        Err(e) if e.contains(" 404 ") || e.contains(" 403 ") => { eleven::forget_agent(); match eleven::ensure_agent(&k.key).and_then(|a| mint(&a)) { Ok(t) => t, Err(e) => return fail(e) } }
         Err(e) => return fail(e),
     };
     let m = crate::voice::agent::made();
     let target = call::target(&c).name;
-    (200, json!({ "ok": true, "token": token, "call": c.s("id"), "key": key_secret, "language": m.language, "target": if target.is_empty() { "the Coordinator".to_string() } else { target }, "worklet": "/herdr-projects/page/vendor/rawAudioProcessor.js" }))
+    let target = if target.is_empty() { "the Coordinator".to_string() } else { target };
+    if ws { return (200, json!({ "ok": true, "url": token, "call": c.s("id"), "key": key_secret, "language": m.language, "target": target })); }
+    (200, json!({ "ok": true, "token": token, "call": c.s("id"), "key": key_secret, "language": m.language, "target": target, "worklet": "/herdr-projects/page/vendor/rawAudioProcessor.js" }))
+}
+/// The same calls, in this process and with no HTTP, for the terminal board's call (its helper's listener: calls/listen.rs
+/// runs them for the helper over SSH, or in the helper itself for a board of its own computer). `start` takes the
+/// ticket; the rest the call's key.
+pub fn local(what: &str, args: &Value, key: &str) -> (u16, Value) {
+    if what == "start" { return start(args, || Err("no web UI here".into())); }
+    let Some(c) = call::by_key(key) else { return (410, json!({ "ok": false, "msg": "This call has ended." })) };
+    call::seen();
+    match what {
+        "heard" => { call::line(if args.s("who") == "agent" { "voice" } else { "you" }, args.s("text")); (200, json!({ "ok": true })) }
+        "tool" => (200, json!({ "ok": true, "result": super::tools::run(&c, args.s("name"), args.at("args")) })),
+        "feed" => { let mut f = super::feed::feed(&c); f["ok"] = json!(true); (200, f) }
+        "audio" => { call::heard_audio(args); (200, json!({ "ok": true })) }
+        "end" => { if args.has("audio") { call::heard_audio(args.at("audio")); } call::end_of(c.s("id"), if args.s("why").is_empty() { "hung up" } else { args.s("why") }); (200, json!({ "ok": true })) }
+        _ => (404, json!({ "ok": false, "msg": "Not found" })),
+    }
 }

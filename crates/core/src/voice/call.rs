@@ -3,8 +3,8 @@
 //! the board that owns the call, as the chat's switch stands), what was said (`lines`, the last ones, shown in the
 //! chat), your own words since the last thing sent (`heard`), a switch asked for by voice (`switch`), what was already
 //! read back (`fed`), and the secrets that let a page hold this call: a ticket (once, for a short while) and the call's
-//! key, both kept as hashes. A call from the terminal board also keeps the link that picks it up (with its ticket, for
-//! the call helper) until a page took it.
+//! key, both kept as hashes. A call from the terminal board also keeps its ticket (`pickup`, on this machine only)
+//! until the listener of the helper that took it started the call with it.
 use crate::clock::now;
 use crate::json::*;
 use crate::store::files::{data_dir, read_obj, with_lock, write_json};
@@ -78,7 +78,7 @@ pub fn take_ticket(ticket: &str) -> Option<(Obj, String)> {
     let key = secret();
     change(|c| {
         if c.s("ticket") != hash(ticket) || now() - c.i("at") > TICKET_MS { return None; }
-        c.put("ticket", Value::Null); c.put("link", Value::Null); c.put("state", "live"); c.put("answered", now()); c.put("key", hash(&key));
+        c.put("ticket", Value::Null); c.put("pickup", Value::Null); c.put("state", "live"); c.put("answered", now()); c.put("key", hash(&key));
         Some((c.clone(), key.clone()))
     }).flatten()
 }
@@ -130,7 +130,7 @@ pub fn set_target(t: &Target) { change(|c| if target(c) != *t { c.put("target", 
 pub fn ask_switch(to: &str) -> i64 { change(|c| { let n = c.at("switch").i("n") + 1; c.put("switch", json!({ "to": to, "n": n, "at": now() })); n }).unwrap_or(0) }
 /// How the call page heard the call (hear.js): kept with the call, also after it ended, for `herdr-projects voice`.
 pub fn heard_audio(a: &Value) {
-    let keep = ["elements", "playing", "peak", "ctx", "blocked", "via", "activated", "agent"];
+    let keep = ["elements", "playing", "peak", "ctx", "blocked", "via", "activated", "agent", "aec", "how"];
     let o: Obj = keep.iter().filter_map(|k| a.as_object()?.get(*k).map(|v| (k.to_string(), if v.is_string() { json!(crate::text::cut(v.as_str().unwrap_or(""), 200)) } else { v.clone() }))).collect();
     let o = Value::Object(o);
     let _ = with_lock("voice-call", || { let Some(mut c) = read_obj(&file()) else { return Ok(()) }; c.put("audio", o.clone()); c.put("audioAt", now()); write_json(&file(), &Value::Object(c)) });

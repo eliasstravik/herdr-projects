@@ -29,7 +29,11 @@ pub fn target(s: &State) -> Target {
 }
 /// On every read: a call of this board's follows its chat, and a switch asked for by voice is made here.
 pub fn follow(s: &mut State, fx: &mut Vec<Effect>) {
-    let Some(c) = s.data.call.clone() else { s.call_link = None; return };
+    let Some(c) = s.data.call.clone() else {
+        // A call this board rang that ended by itself before or as it began: why, said once.
+        if let (Some((id, _)), Some((ended, why))) = (s.call_link.clone(), s.data.call_ended.clone()) { if id == ended && why.starts_with("The call could not") { s.flash(why, Ink::Red); } }
+        s.call_link = None; return
+    };
     if c.s("owner") != owner(s) || s.ctx.web { return; }
     if c.s("state") != "ringing" { s.call_link = None; }
     // A new call counts its switches from one again: what the last call's count was says nothing about this one.

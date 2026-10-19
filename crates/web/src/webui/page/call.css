@@ -1,6 +1,5 @@
 /* A voice call: its toggle in the web board's chat and the strip over the conversation while a call is on
-   (callbtn.js), in the web UI's own look; and the page a call from the terminal board opens on your computer
-   (callpage.js), which has no web UI around it and brings its own few colours, light and dark. */
+   (callbtn.js), in the web UI's own look. */
 .sw-call { flex: none; margin-left: auto; color: var(--sw-dim); display: inline-flex; align-items: center; gap: var(--space-1, 4px); min-height: 40px; }
 /* Beside Hide when Hide shows (Hide then takes the right edge), else at the right edge itself. */
 .sw-hide:not([hidden]) + .sw-call { margin-left: 0; }
@@ -20,23 +19,3 @@
 .sw-call-fix { flex: none; min-height: 40px; color: var(--sw-dim); }
 .sw-call-line { margin: 0; color: var(--sw-dim); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .sw-call-line b { color: var(--sw-text); font-weight: var(--fw-semibold, 600); }
-
-/* The call page of its own. */
-.sw-call-page { --bg: #f7f5f2; --fg: #1d1b19; --dim: #6b655e; --line: #ddd6cc; --red: #c43d3d; --accent: #b86f00; margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-@media (prefers-color-scheme: dark) { .sw-call-page { --bg: #1b1a18; --fg: #ece8e1; --dim: #a39c92; --line: #3a3631; --red: #ef6b6b; --accent: #f0a830; } }
-.sw-callp { box-sizing: border-box; max-width: 520px; margin: 0 auto; padding: 24px 16px max(24px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
-.sw-callp-who { margin: 0; font-size: 20px; font-weight: 600; }
-.sw-callp-state { margin: 0; color: var(--dim); }
-.sw-callp-lines { display: flex; flex-direction: column; gap: 6px; min-height: 4em; }
-.sw-callp-lines:empty { min-height: 0; }
-.sw-callp-lines p { margin: 0; color: var(--dim); overflow-wrap: anywhere; }
-.sw-callp-lines b { color: var(--fg); }
-.sw-callp-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
-.sw-callp-buttons button { min-height: 44px; padding: 0 18px; border-radius: 22px; border: 1px solid var(--line); background: transparent; color: var(--fg); font: inherit; cursor: pointer; }
-.sw-callp-buttons button[hidden] { display: none; }
-.sw-callp-start { border-color: var(--accent) !important; color: var(--accent) !important; font-weight: 600 !important; }
-.sw-callp-end { border-color: var(--red) !important; color: var(--red) !important; font-weight: 600 !important; }
-.sw-callp-hear { min-height: 96px; border-radius: 20px; border: 2px solid var(--accent); background: transparent; color: var(--accent); font: 600 26px/1.2 system-ui, -apple-system, sans-serif; cursor: pointer; }
-.sw-callp-fix { align-self: flex-start; min-height: 44px; padding: 0 4px; border: 0; background: transparent; color: var(--dim); font: inherit; text-decoration: underline; cursor: pointer; }
-.sw-callp-hear[hidden], .sw-callp-fix[hidden] { display: none; }
-.sw-callp-hear:focus-visible, .sw-callp-fix:focus-visible, .sw-callp-buttons button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

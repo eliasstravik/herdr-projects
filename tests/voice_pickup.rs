@@ -3,7 +3,7 @@
 //! the board's machine; a Mac counts as used only with recent input, never for a terminal left in front.
 use crate::common;
 use common::*;
-use serde_json::{json, Value};
+use serde_json::json;
 use sw::json::*;
 use sw::voice::call::{self, Target};
 
@@ -13,19 +13,19 @@ fn a_call_from_a_board_whose_herdr_window_is_on_this_computer_is_taken_here_and_
     sw::clock::set(Some(9_000_000));
     let t = Target { name: "the Coordinator".into(), ..Default::default() };
     let (c, ticket, _) = call::start("terminal:w1:p1", &t);
-    call::change(|x| { x.put("link", format!("https://m1.example.ts.net/herdr-projects/call#{ticket}")); x.put("session", "default"); });
+    call::change(|x| { x.put("pickup", ticket.clone()); x.put("session", "default"); });
     // on the M1, whose own herdr window for the default session is in use: the Mac mini listens there over SSH, and the
     // M1's own helper listens there in its own process
     let at_m1 = || -> Box<dyn Fn(&str) -> bool> { Box::new(|session| session == "default") };
-    let mut mac = sw::calls::listen::Listener::with("mac", "m1", at_m1());
-    let mut here = sw::calls::listen::Listener::with("m1", "m1", at_m1());
+    let mut mac = sw::calls::listen::Listener::with("mac", "m1", at_m1(), crate::voice::door());
+    let mut here = sw::calls::listen::Listener::with("m1", "m1", at_m1(), crate::voice::door());
     let mac_saw = mac.step(Some(&json!({ "bid": c.s("id"), "score": 3 }).to_string()));
-    assert!(mac_saw.iter().all(|v| !v.b("ring") && !v.b("open")), "the Mac never hears of it: {mac_saw:?}");
-    let opened: Vec<Value> = here.step(None).into_iter().filter(|v| v.b("open")).collect();
-    assert_eq!(opened.len(), 1, "taken at once, with no bids to wait for");
+    assert!(mac_saw.iter().all(|v| !v.b("ring") && !v.has("call")), "the Mac never hears of it: {mac_saw:?}");
+    let got = crate::voice::until(&mut here, |v| v.has("call"));
+    assert!(got.at("call").s("url").starts_with("wss://"), "taken at once, with no bids to wait for");
     assert_eq!(call::get().unwrap().s("offered"), "m1");
     sw::clock::advance(sw::calls::listen::LATE_MS * 2);
-    assert!(!mac.step(None).iter().any(|v| v.b("open")), "and never later either");
+    assert!(!mac.step(None).iter().any(|v| v.has("call") || v.b("ring")), "and never later either");
 }
 
 #[test]
@@ -34,11 +34,11 @@ fn across_machines_the_computer_at_its_herdr_window_wins_and_an_idle_mac_does_no
     sw::clock::set(Some(9_500_000));
     let t = Target { name: "the Coordinator".into(), ..Default::default() };
     let (c, ticket, _) = call::start("terminal:w2:p1", &t);
-    call::change(|x| { x.put("link", format!("https://mini.example.ts.net/herdr-projects/call#{ticket}")); x.put("session", "default"); });
+    call::change(|x| { x.put("pickup", ticket.clone()); x.put("session", "default"); });
     // on the Mac mini, left on with herdr open and nobody at it: its own window does not count
     let idle = || -> Box<dyn Fn(&str) -> bool> { Box::new(|_| false) };
-    let mut mini = sw::calls::listen::Listener::with("mini", "mini", idle());
-    let mut m1 = sw::calls::listen::Listener::with("m1", "mini", idle());
+    let mut mini = sw::calls::listen::Listener::with("mini", "mini", idle(), crate::voice::door());
+    let mut m1 = sw::calls::listen::Listener::with("m1", "mini", idle(), crate::voice::door());
     assert!(mini.step(None).iter().any(|v| v.b("ring")) && m1.step(None).iter().any(|v| v.b("ring")));
     // the scores as each computer works them out: the Mac's input was ten minutes ago with a terminal in front; the
     // M1 shows the Mac mini in herdr's window, in front
@@ -48,8 +48,8 @@ fn across_machines_the_computer_at_its_herdr_window_wins_and_an_idle_mac_does_no
     mini.step(Some(&json!({ "bid": c.s("id"), "score": mini_score }).to_string()));
     m1.step(Some(&json!({ "bid": c.s("id"), "score": m1_score }).to_string()));
     sw::clock::advance(sw::calls::listen::BID_MS);
-    assert!(!mini.step(None).iter().any(|v| v.b("open")));
-    assert!(m1.step(None).iter().any(|v| v.b("open")));
+    assert!(!mini.step(None).iter().any(|v| v.has("call")));
+    assert!(crate::voice::until(&mut m1, |v| v.has("call")).at("call").b("url"));
     assert_eq!(call::get().unwrap().s("offered"), "m1");
 }
 

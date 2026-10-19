@@ -45,35 +45,34 @@ The first call asks the browser for the microphone once. A call is private: it n
 
 ## From the terminal board
 
-The terminal board often runs on another machine than the one you sit at (you see it through herdr's own window). The
-call's sound has to be on your computer, so `Ctrl+O` rings it:
+The terminal board often runs on another machine than the one you sit at (you see it through herdr's own window), and
+sometimes on the same one. Either way the call's sound is the computer you sit at: `Ctrl+O` rings it, and the **call
+helper** there holds the call right in the terminal's computer, with its microphone and speaker. No browser, no link,
+no window.
 
-- **The call helper** on your computer picks it up and opens the call in a small browser window of its own (a Chrome,
-  Chromium, Brave or Edge window, with a profile of its own that may use the microphone; without one, your default
-  browser). The window closes when the call ends. It has Mute and Hang up too.
 - The helper is part of herdr-projects. It runs by itself on a computer where herdr-projects is installed and herdr has
   saved machines (the ones in herdr's sidebar), and listens on each of them over SSH, as the board reaches other
-  machines ([other machines](other-machines.md)). `voice.helper none` turns it off.
+  machines ([other machines](other-machines.md)), and on this computer itself. `voice.helper none` turns it off.
 - **Which computer takes it.** A board whose herdr window is on the same computer (herdr's Local, in use: on macOS
   input in the last two minutes, on Hyprland a terminal in front) is answered there, by that computer's own helper,
   and no other computer hears of the call. Otherwise every computer listening says how surely you are at it, and the
   best one takes it: herdr's window showing the board's machine in front on Hyprland, then a terminal in front with
   recent input, then recent input. A Mac counts only with input in the last two minutes, never for a terminal left in
   front.
-- **No helper picked it up** after a few seconds (or the one that took it could not open it): the chat shows a line to
-  Ctrl-click. herdr opens it in the browser of the computer its window runs on, and a tap starts the call there.
-- That link holds the call's ticket: good once, for two minutes, and seen by whoever sees the terminal board (also a
-  device the web UI lets only watch, in its terminal view). Hang up with the key if a call you did not take goes live.
-
-**Not hearing the voice?** The call watches its own sound. Where the browser does not let the page play sound, one big
-**Tap to hear** button asks for the tap. **Can't hear the voice? Tap here** (the chat's **Can't hear?**) plays the voice
-another way, through the page's own audio context, for a browser whose usual way stays silent. `herdr-projects voice`
-says what the page that held the last call saw: whether the voice agent's sound reached it, whether it played, and
-which browser it was. A call does not need a tap to be heard in the helper's window: Chromium plays the sound of a page
-that uses the microphone.
-
-The browser's echo cancelling works with the computer's own speakers. In a loud room, or where the voice agent seems
-to hear itself, use headphones.
+- **The API key stays on the board's machine.** The board's machine starts the call and hands the helper a signed
+  address for one conversation over ElevenLabs' WebSocket; the voice agent's tools, what was heard and what to read
+  back go between the helper and the board over the helper's SSH connection.
+- **The sound.** On Linux the sound server's own tools (PipeWire's `pw-record` and `pw-play`, or `parec` and `pacat`,
+  which PipeWire also answers), through its WebRTC echo cancelling (`module-echo-cancel`, loaded for the call and
+  taken away after; it needs `pactl`). On macOS a small program of Apple's voice processing, which cancels the echo;
+  it is compiled once, the first time, with the Xcode Command Line Tools (`xcode-select --install`), and macOS asks
+  once whether the terminal herdr runs in may use the microphone (System Settings, Privacy & Security, Microphone).
+- **Headphones** are needed where nothing cancels the echo (no `pactl` on Linux, voice processing not available on
+  macOS): the chat says so on the call's line (`on m1 · headphones needed: no echo cancelling there`).
+- `herdr-projects voice test`, on the computer you sit at, tries its sound for a call: it plays a short tone, listens
+  to the microphone for a moment, and says whether the echo is cancelled.
+- **No helper picked it up** after a few seconds: the chat says so. A call the helper could not hold (no sound tools,
+  no connection) ends, and the board says why.
 
 ## Setting it up
 
@@ -82,10 +81,10 @@ to hear itself, use headphones.
   herdr-call's own config, your agent-tokens file, a reachy-voice `.env`. The key needs the ElevenAgents write
   permission. Nothing else is set up by hand: the voice agent, its prompt and its tools are made in your ElevenLabs
   account before the first call and kept in step with this program after that.
-- **The terminal board's calls** open their page from the board's front door, at the herdr web UI's private link
-  ([the board in the web UI](web-ui.md)).
-- `herdr-projects voice` says how it stands: where the key was found (never the key), the call page, the helper, a call
-  that is on. `herdr-projects voice end` hangs up.
+- **The terminal board's calls** need herdr-projects on the computer you sit at (its call helper), and SSH from there
+  to the board's machine with `herdr-projects` on its path, as other machines need.
+- `herdr-projects voice` says how it stands: where the key was found (never the key), the helper, how the last call
+  sounded, a call that is on. `herdr-projects voice end` hangs up.
 
 | Setting | What it does |
 |---|---|
@@ -95,12 +94,15 @@ to hear itself, use headphones.
 
 ## How it fits together
 
-- **The page** holds the call: the ElevenLabs client in the browser over WebRTC, built into the program
+- **The web board's page** holds its call: the ElevenLabs client in the browser over WebRTC, built into the program
   (`crates/web/src/webui/page/vendor/`, made by `scripts/voice-sdk.sh`), with its own audio worklet so the web UI's
   rules on scripts stay as they are. The web UI's page may connect to ElevenLabs' call servers and nothing else new.
-- **The front door** (`/herdr-projects/api/voice/`) starts a call (a token for a page the web UI lets drive, or for the
-  page that brings the terminal board's one-time ticket), runs the voice agent's tools on the board the call belongs
-  to, and says what to read back.
+- **The front door** (`/herdr-projects/api/voice/`) starts the web board's call (a token for a page the web UI lets
+  drive), runs the voice agent's tools on the board the call belongs to, and says what to read back. The terminal
+  board's call runs the same code in the listener on the board's machine (`herdr-projects voice listen`, which the
+  helper starts over SSH): it starts the call with its one-time ticket and keeps the call's key.
+- **The helper** (`herdr-projects voice helper`) holds the terminal board's call: its sound, its WebSocket to
+  ElevenLabs (TLS in Rust, nothing to install), its requests to the board.
 - **The call record** (`data/voice/call.json`): one call at a time on a machine, who it talks to, what was said. Its
   ticket and its key are kept only as hashes.
 - Cost: ElevenLabs bills the minutes a call is open, on your plan.

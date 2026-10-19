@@ -55,6 +55,11 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 sha1_smol = "1"
 # GitHub's workflow files, read as GitHub reads them, to know which checks a pull request is to get (land/triggers.rs).
 yaml-rust2 = { version = "0.10", default-features = false }
+# A voice call from the terminal board: ElevenLabs' conversation over a WebSocket, with TLS in Rust only (ring), so
+# the musl release builds need no system library (crates/flow/src/calls/native/).
+tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1"
 
 [dependencies]
 sw-web.workspace = true

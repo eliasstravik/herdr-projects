@@ -50,10 +50,10 @@ pub fn agent_body(m: &Made, tool_ids: &[String]) -> Value {
                 "prompt": { "prompt": agent::PROMPT, "llm": agent::LLM, "temperature": 0.4, "tool_ids": tool_ids,
                     "built_in_tools": if m.language == "auto" { json!({ "language_detection": { "type": "system", "name": "language_detection", "description": "", "params": { "system_tool_type": "language_detection", "only_at_conversation_start": false } } }) } else { json!({}) } } },
             "language_presets": presets,
-            "tts": { "voice_id": m.voice, "model_id": agent::TTS_MODEL },
-            "asr": { "keywords": ["Coordinator", "herdr", "merge", "approve", "godkänn"] },
+            "tts": { "voice_id": m.voice, "model_id": agent::TTS_MODEL, "agent_output_audio_format": "pcm_16000" },
+            "asr": { "keywords": ["Coordinator", "herdr", "merge", "approve", "godkänn"], "user_input_audio_format": "pcm_16000" },
             "turn": { "turn_eagerness": "patient", "turn_timeout": 10, "silence_end_call_timeout": agent::SILENCE_S },
-            "conversation": { "max_duration_seconds": agent::LONGEST_S, "client_events": ["audio", "interruption", "user_transcript", "agent_response", "agent_response_correction", "client_tool_call", "vad_score"] },
+            "conversation": { "max_duration_seconds": agent::LONGEST_S, "client_events": ["conversation_initiation_metadata", "ping", "audio", "interruption", "user_transcript", "agent_response", "agent_response_correction", "client_tool_call", "vad_score"] },
         },
         "platform_settings": { "auth": { "enable_auth": true }, "overrides": { "conversation_config_override": { "agent": { "language": true, "first_message": true } } } },
     })
@@ -100,6 +100,13 @@ pub fn refused(e: &str, m: &Made) -> String {
     let why = if low.contains("moderat") { "it has live moderation, which agents may not use" } else if low.contains("not_found") || low.contains("not found") || low.contains(" 404 ") { "it is not in your ElevenLabs account" } else { "agents may not use it" };
     let ours = if m.voice == agent::VOICE { "the built-in one" } else { "the one voice.voice names" };
     format!("ElevenLabs refused the voice {} ({ours}) for the call's agent: {why}. Pick another: herdr-projects set voice.voice <voice id> (one from your ElevenLabs account, Voices, that agents can use and that speaks Swedish), or herdr-projects set voice.voice none for the built-in one. ElevenLabs said: {}", m.voice, crate::text::cut(e, 300))
+}
+/// A signed address for one call over ElevenLabs' WebSocket (the terminal board's call, which the helper on your
+/// computer holds): good for a quarter of an hour to start with, and all the helper gets.
+pub fn signed_url(key: &str, agent: &str) -> Result<String, String> {
+    let v = request(key, "GET", &format!("/v1/convai/conversation/get-signed-url?agent_id={}", crate::util::url_encode(agent)), &Value::Null)?;
+    let u = v.t("signed_url");
+    if u.starts_with("wss://") { Ok(u) } else { Err("ElevenLabs gave no address for the call".into()) }
 }
 /// A token for one call over WebRTC, short-lived: the one thing the page gets.
 pub fn token(key: &str, agent: &str) -> Result<String, String> {

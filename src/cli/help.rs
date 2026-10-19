@@ -62,8 +62,9 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
   herdr-projects machines                      other machines: whether each answers, its version, or why not and what to do;
                                                 and whether another machine could ask this one
   herdr-projects web-ui [link|unlink]          the board inside the herdr web UI: how it stands; point the web UI's shared link at it, or back
-  herdr-projects voice [end]                   voice calls here: where the ElevenLabs key is found, the call page, the
-                                                call helper on this computer, a call on now; end hangs it up
+  herdr-projects voice [end|test]              voice calls here: where the ElevenLabs key is found, the call helper on
+                                                this computer, how the last call sounded, a call on now; end hangs it
+                                                up; test tries this computer's sound for a call (a tone, the microphone)
   herdr-projects version                       this program's version, and where it is
   herdr-projects install                       write the launcher in the data folder (agents and hooks run it) for this program
   herdr-projects doctor                        the health check: the program and its launcher, the plugin in herdr, the
