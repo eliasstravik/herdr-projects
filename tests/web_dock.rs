@@ -91,9 +91,14 @@ fn a_coordinators_words_in_the_web_uis_box_go_through_the_board_and_tab_puts_an_
     // the web UI's own menu (its `/` commands, its `@` files) open: Enter and Tab pick from it, as they do there
     assert!(DOCK.contains("    if (menuOpen(box)) return;\n    const r = route();"));
     assert!(DOCK.contains(r#"const menuOpen = (box) => box.getAttribute("aria-expanded") === "true" || !!box.closest(COMPOSER)?.querySelector(".composer-menu");"#));
+    // a file still on its way: nothing goes (its path is not in the words yet), Send + start waits too
+    assert!(DOCK.contains(r#"const uploading = (box) => !!box.closest(COMPOSER)?.querySelector(".composer-attachment.is-uploading");"#));
+    assert!(DOCK.contains("    if (!uploading(box)) sendVia(box, r, tab);") && DOCK.contains("    if (!uploading(box)) sendVia(box, r, false);") && DOCK.contains("if (sending || uploading(box)) return;") && DOCK.contains("also.disabled = uploading(b);"));
+    // the files the words carried go with them: their tiles let go by the web UI's own remove, once the board took them
+    assert!(DOCK.contains(r#"tiles = [...(box.closest(COMPOSER)?.querySelectorAll(".composer-attachment.is-ready") || [])];"#) && DOCK.contains(r#"for (const t of tiles) if (t.isConnected) t.querySelector("button")?.click();"#));
     assert!(DOCK.contains("if (!r || (tab && !r.delegate)) return;") && DOCK.contains(r#"document.addEventListener("keydown", onKey, true);"#) && DOCK.contains(r#"document.addEventListener("click", onSend, true);"#));
     // the words leave the web UI's box only once the board took them, as its framework reads an input event
-    assert!(DOCK.contains("if (!kept && box.value === text) setBox(box, \"\");") && DOCK.contains(r#"box.dispatchEvent(new Event("input", { bubbles: true }));"#));
+    assert!(DOCK.contains("if (box.value === text) setBox(box, \"\"); // kept: the board did not take them, so they stay") && DOCK.contains(r#"box.dispatchEvent(new Event("input", { bubbles: true }));"#));
     // Send + start stands over the web UI's box while it holds a coordinator's words, and never takes its focus
     assert!(DOCK.contains(r#"const also = h("button.sw-also.sw-also-float", { type: "button", hidden: true }, "Send + start");"#) && DOCK.contains(r#"also.addEventListener("pointerdown", (e) => e.preventDefault());"#));
     // a coordinator's (the Coordinator, a machine's or a repo's); a task's agent's go as the web UI sends them

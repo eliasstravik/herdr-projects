@@ -42,6 +42,8 @@ function setBox(box, text) {
 const theBox = () => document.querySelector(`${COMPOSER} ${BOX}`);
 // The web UI's box has its completion menu open: the box says so (aria-expanded), and the menu stands in its card.
 const menuOpen = (box) => box.getAttribute("aria-expanded") === "true" || !!box.closest(COMPOSER)?.querySelector(".composer-menu");
+// A file in the web UI's box is still on its way (its tile says Uploading): its path is not in the words yet.
+const uploading = (box) => !!box.closest(COMPOSER)?.querySelector(".composer-attachment.is-uploading");
 
 // `boardOf()`: the board's element. `onChange()`: the web UI's chat came or went under the board, or its box changed
 // height. `onTyping(on)`: a phone's keyboard is up for the web UI's box, or no longer. `route()`: how the words in the
@@ -84,6 +86,7 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
     const b = on ? theBox() : null, d = b && b.value.trim() ? route()?.delegate : "", surface = b?.closest(".composer-surface") || b;
     also.hidden = !d;
     if (!d) return;
+    also.disabled = uploading(b);
     const r = surface.getBoundingClientRect();
     also.title = `${d[0].toUpperCase()}${d.slice(1)} (Tab)`;
     also.style.right = `${Math.max(8, Math.round(window.innerWidth - r.right + 12))}px`;
@@ -119,27 +122,33 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
     if (menuOpen(box)) return;
     const r = route();
     if (!r || (tab && !r.delegate)) return;
+    // Nothing goes while a file is on its way, as the web UI's own Send waits: the keys do nothing until it is there.
     e.preventDefault(); e.stopPropagation();
-    sendVia(box, r, tab);
+    if (!uploading(box)) sendVia(box, r, tab);
   };
   const onSend = (e) => {
     if (!on || !e.target?.closest?.(`${COMPOSER} .composer-send`)) return;
     const box = theBox(), r = route();
     if (!box || !r || !box.value.trim()) return;
     e.preventDefault(); e.stopPropagation();
-    sendVia(box, r, false);
+    if (!uploading(box)) sendVia(box, r, false);
   };
   document.addEventListener("keydown", onKey, true);
   document.addEventListener("click", onSend, true);
-  // Sent by the board, as its own box sends: the words leave the web UI's box once the board took them.
+  // Sent by the board, as its own box sends: the words leave the web UI's box once the board took them, and with them
+  // the files they carried (their tiles, by the web UI's own remove, as its own Send lets them go). Files attached
+  // while they were on their way stay, for the next words.
   let sending = false;
   async function sendVia(box, r, delegate) {
-    if (sending) return;
-    const text = box.value;
+    if (sending || uploading(box)) return;
+    const text = box.value, tiles = [...(box.closest(COMPOSER)?.querySelectorAll(".composer-attachment.is-ready") || [])];
     sending = true;
     const kept = await r.send(text, delegate);
     sending = false;
-    if (!kept && box.value === text) setBox(box, ""); // kept: the board did not take them, so they stay
+    if (!kept) {
+      if (box.value === text) setBox(box, ""); // kept: the board did not take them, so they stay
+      for (const t of tiles) if (t.isConnected) t.querySelector("button")?.click();
+    }
     soon();
   }
   return {
