@@ -11,7 +11,15 @@ use util::*;
 
 fn hold(f: &Path) -> std::fs::File { use std::os::fd::AsRawFd; let h = std::fs::File::open(f).unwrap(); assert_eq!(unsafe { libc::flock(h.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) }, 0); h }
 /// Whether another program finds the file locked.
-fn taken(f: &Path) -> bool { Command::new("flock").args(["--exclusive", "--nonblock"]).arg(f).arg("true").status().unwrap().code() == Some(1) }
+fn taken(f: &Path) -> bool {
+    use std::os::fd::AsRawFd;
+    let Ok(h) = std::fs::OpenOptions::new().read(true).write(true).open(f) else { return false };
+    let rc = unsafe { libc::flock(h.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if rc == 0 { unsafe { libc::flock(h.as_raw_fd(), libc::LOCK_UN) }; false } else { true }
+}
+fn lock_process(path: &Path, body: &str) -> std::process::Child {
+    Command::new("python3").args(["-c", body]).arg(path).spawn().unwrap()
+}
 
 #[test]
 fn the_lock_file_in_the_place_in_use_is_never_replaced_or_removed_and_the_new_places_copy_goes_only_while_nobody_holds_it() {
@@ -74,8 +82,8 @@ fn real_programs_a_lock_file_that_was_replaced_between_opening_it_and_locking_it
     put(&file, "", None);
     // Someone holds the file; while this process waits for it (the file open, not yet locked), another file takes its
     // place at the path, and then the holder lets go of the old one.
-    let f = file.display().to_string();
-    let mut holder = Command::new("flock").arg("--exclusive").arg(&file).args(["sh", "-c", &format!("sleep 0.25; : > '{f}.new'; mv '{f}.new' '{f}'; sleep 0.1")]).spawn().unwrap();
+    let body = "import fcntl, os, sys, time; path=sys.argv[1]; held=open(path, 'r+'); fcntl.flock(held, fcntl.LOCK_EX); time.sleep(0.25); tmp=path+'.new'; open(tmp, 'w').close(); os.replace(tmp, path); time.sleep(0.1)";
+    let mut holder = lock_process(&file, body);
     for _ in 0..200 { if taken(&file) { break; } std::thread::sleep(std::time::Duration::from_millis(5)); }
     let was = ino(&file);
     let (seen, held) = sw::store::files::with_lock_wait("x", 5000, || Ok((ino(&file), taken(&file)))).unwrap();
@@ -93,7 +101,8 @@ fn real_programs_the_old_command_runs_at_every_moment_of_a_real_move_and_a_lock_
     put(&launcher, "#!/bin/sh\necho ran\n", None);
     use std::os::unix::fs::PermissionsExt; std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755)).unwrap();
     let lock = h.data.join("locks/dGFzaw.lock");
-    let mut holder = Command::new("flock").arg("--exclusive").arg(&lock).args(["sleep", "30"]).spawn().unwrap();
+    let body = "import fcntl, sys, time; held=open(sys.argv[1], 'a'); fcntl.flock(held, fcntl.LOCK_EX); time.sleep(30)";
+    let mut holder = lock_process(&lock, body);
     for _ in 0..200 { if taken(&lock) { break; } std::thread::sleep(std::time::Duration::from_millis(10)); }
     // At each of the two steps in which paths change places, before and after it, the old command is started.
     let ran = std::cell::RefCell::new(vec![]);
