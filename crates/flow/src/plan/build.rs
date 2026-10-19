@@ -137,7 +137,7 @@ fn fan_out(g: &mut Guard, agents: &[String]) -> Res<Task> {
         let k = agent_of(agent).kind;
         let mut extra = obj(json!({ "queuedAt": now() + n as i64, "agent": k, "app": k }));
         if n > 0 { extra.put("link", json!({ "socket": l.at("socket") })); }
-        else { for (a, b) in &place { extra.insert(a.clone(), b.clone()); } extra.put("startedOnce", true); extra.put("link", json!({ "socket": l.at("socket"), "workspace": l.at("workspace"), "tab": l.at("tab"), "pane": l.at("pane"), "terminal": l.at("terminal"), "ownsWorkspace": false, "reviewer": null })); }
+        else { for (a, b) in &place { extra.insert(a.clone(), b.clone()); } extra.put("startedOnce", true); extra.put("link", json!({ "socket": l.at("socket"), "workspace": l.at("workspace"), "tab": l.at("tab"), "pane": l.at("pane"), "terminal": l.at("terminal"), "missionPane": l.at("missionPane"), "agentPaneCreated": l.at("agentPaneCreated"), "ownsWorkspace": l.b("ownsWorkspace"), "reviewer": null })); }
         made.push(create_attempt(&t, LETTERS[n], agent, extra)?);
     }
     let t = g.set(|t| {
@@ -147,7 +147,7 @@ fn fan_out(g: &mut Guard, agents: &[String]) -> Res<Task> {
         let parent = std::path::Path::new(t.s("worktree")).parent().map(|p| p.display().to_string()).unwrap_or_default();
         t.put("spaceDir", parent);
         let l = t.at("link").clone();
-        t.put("link", json!({ "socket": l.at("socket"), "workspace": l.at("workspace"), "ownsWorkspace": true, "attemptAnchorPane": l.at("pane") }));
+        t.put("link", json!({ "socket": l.at("socket"), "workspace": l.at("workspace"), "missionPane": l.at("missionPane"), "agentPaneCreated": l.at("agentPaneCreated"), "ownsWorkspace": l.b("ownsWorkspace"), "attemptAnchorPane": l.at("pane") }));
         let p = t.obj_mut("plan"); p.put("built", now()); p.put("locked", false); p.del("ignored");
         for k in FORGET.iter().chain(["worktree", "branch", "from", "baseSha", "startedOnce"].iter()) { t.del(k); }
     })?;

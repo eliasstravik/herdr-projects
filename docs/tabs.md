@@ -1,7 +1,8 @@
 # A task's tiled panes in Herdr
 
-Every task with an agent gets its own Herdr space. The first agent is started in a split pane beside the task's anchor
-terminal. Reviewers and planners also open as split panes, never as new tabs:
+Every task with an agent gets its own Git worktree and a real Herdr terminal pane. When Mission Control runs in a Herdr
+pane, the worker is split beside it in the same workspace and tab. Starting an agent without a Mission Control pane is
+refused; it never creates a separate task tab. Reviewers and planners also open as split panes:
 
 | Pane | Who is in it |
 |---|---|
@@ -13,8 +14,8 @@ terminal. Reviewers and planners also open as split panes, never as new tabs:
 
 When a [fallback agent](fallback.md) takes over, the board shows which program is on the pane.
 
-The `Coordinator` and the `herdr-projects` board remain their own Mission Control surfaces ([the Coordinator](coordinator.md),
-[the board](board.md)).
+The `Coordinator` remains a separate surface ([the Coordinator](coordinator.md)). The board pane is Mission Control;
+worker panes tile beside it.
 
 ## When panes open and close
 
@@ -24,12 +25,13 @@ The `Coordinator` and the `herdr-projects` board remain their own Mission Contro
 - **Planner panes** (set by `plan.agent`) close after you say yes to the plan. `Plan review` is used when
   `plan.approve` is `reviewer`.
 - **Attempts:** when one attempt is picked, the other attempts' panes close.
-- **Done:** when the task is merged or archived, its whole space closes.
+- **Done:** after safe cleanup, the task's own pane closes and its Git worktree is removed. Mission Control's workspace
+  remains open.
 
 ## Nothing jumps
 
-A new helper pane does not take your focus. The board remains available as Mission Control, while Herdr tiles each
-interactive CLI terminal into the task's workspace.
+A new helper pane does not take your focus. Herdr tiles each interactive CLI terminal into the Mission Control workspace;
+the task's source checkout stays unchanged because the agent works in its own Git worktree.
 
 ## Details
 

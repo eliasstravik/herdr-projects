@@ -3,11 +3,24 @@
 use crate::flow::task::RULE_DIR;
 use crate::json::*;
 use crate::store::keys::repo_keys;
-use crate::store::repos::git_out;
+use crate::store::files::data_dir;
+use crate::store::repos::{git_out, git_slow};
 use crate::store::settings::branch::{branch_of, git_takes};
 use crate::store::settings::lookup::setting_text;
 use crate::store::settings_list::entry_of;
 use std::path::Path;
+
+/// A task's checkout for a tiled pane in Mission Control's workspace. Herdr 0.9.3 can split a pane in place but
+/// cannot move a worktree pane into an existing tab, so make the linked worktree directly and let Herdr own its pane.
+pub fn add_tiled_worktree(root: &Path, task: &Obj, branch: &str, from: &str) -> crate::err::Res<std::path::PathBuf> {
+    let name: String = branch.chars().map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '-' }).collect();
+    let dir = data_dir().join("worktrees").join(task.s("repo")).join(name);
+    if !dir.exists() {
+        if let Some(parent) = dir.parent() { std::fs::create_dir_all(parent)?; }
+        git_slow(root, &["worktree", "add", "--no-track", "-b", branch, &dir.display().to_string(), from], 120000)?;
+    }
+    Ok(dir)
+}
 
 pub fn slug_of(title: &str) -> String {
     let mut s = String::new();

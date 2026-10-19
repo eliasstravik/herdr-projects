@@ -78,6 +78,7 @@ pub fn delegate_with(id: &str, asked: Vec<(String, Value)>, w: Wait) -> Res<Task
     let asked: Vec<(String, Value)> = asked.into_iter().filter(|(_, v)| !(v.is_null() || *v == json!(""))).collect();
     let values = checked(&asked, &Scope::task(&cur))?;
     let socket = current_socket();
+    let mission_pane = if crate::herdr::cli::in_herdr() { crate::util::env_val("HERDR_PANE_ID").unwrap_or_default() } else { String::new() };
     let mut stale: Vec<Task> = vec![];
     let mut old: Option<(String, String)> = None; // the last round's space, when its clean-up had not closed it yet
     let t = update(cur.s("id"), |t| {
@@ -111,6 +112,7 @@ pub fn delegate_with(id: &str, asked: Vec<(String, Value)>, w: Wait) -> Res<Task
         t.put("agent", agent.clone()); t.put("app", agent);
         t.put("stage", "queued"); t.put("queuedAt", now()); t.put("msg", ""); t.del("kind"); t.put("since", now()); t.put("watch", Value::Null);
         t.obj_mut("link").put("socket", socket.clone());
+        if !mission_pane.is_empty() { t.obj_mut("link").put("missionPane", mission_pane.clone()); }
         let ra = t.b("requireApproval") || t.at("review").is_object();
         t.put("mergeIntent", Value::Null); t.put("requireApproval", ra); t.put("failure", Value::Null); t.put("expectedWake", Value::Null); t.put("turnOpen", false); t.put("waiting", Value::Null);
         if t.at("review").is_object() { t.obj_mut("review").put("stale", true); }

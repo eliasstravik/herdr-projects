@@ -34,7 +34,7 @@ pub fn adopt(id: &str, letter: &str, by: &str) -> Res<Task> {
         t.put("app", kid.at("agent").clone()); t.put("as", kid.at("id").clone()); t.put("startedOnce", true);
         if kid.b("root") { t.put("root", kid.at("root").clone()); }
         let (tl, kl) = (t.at("link").clone(), kid.at("link").clone());
-        t.put("link", json!({ "socket": if tl.b("socket") { tl.at("socket").clone() } else { kl.at("socket").clone() }, "workspace": if tl.b("workspace") { tl.at("workspace").clone() } else { kl.at("workspace").clone() }, "ownsWorkspace": true, "tab": kl.at("tab"), "pane": kl.at("pane"), "terminal": kl.at("terminal"), "agent": kl.at("agent"), "agentPaneCreated": true, "reviewer": null }));
+        t.put("link", json!({ "socket": if tl.b("socket") { tl.at("socket").clone() } else { kl.at("socket").clone() }, "workspace": if tl.b("workspace") { tl.at("workspace").clone() } else { kl.at("workspace").clone() }, "ownsWorkspace": tl.b("ownsWorkspace") || kl.b("ownsWorkspace"), "missionPane": if kl.b("missionPane") { kl.at("missionPane").clone() } else { tl.at("missionPane").clone() }, "tab": kl.at("tab"), "pane": kl.at("pane"), "terminal": kl.at("terminal"), "agent": kl.at("agent"), "agentPaneCreated": true, "reviewer": null }));
         // Its program, and its model, are this task's own from now on. Where another agent took the attempt over, that one did the work.
         let w = if kid.b("on") { kid.t("on") } else if kid.at("settings").b("worker.agent") { kid.at("settings").t("worker.agent") } else { kid.t("agent") };
         t.obj_mut("settings").put("worker.agent", w);

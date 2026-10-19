@@ -136,6 +136,9 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
         if in_use() { return used(); }
         if !flow::git::dirty(Path::new(wt)).is_empty() { return keep(format!("{wt_short} (uncommitted changes)")); }
         if moved() { return keep(format!("{wt_short} (new work arrived during clean-up)")); }
+        if !link.b("ownsWorkspace") && link.b("agentPaneCreated") {
+            if let Some(api) = &api { if api.pane_get(link.s("pane")).is_some() && api.pane_close(link.s("pane")).is_none() { return keep(format!("{wt_short} (its agent pane could not be closed)")); } }
+        }
         let removed = (|| -> crate::err::Res<()> {
             match (&api, link.b("ownsWorkspace")) {
                 (Some(api), true) => {
