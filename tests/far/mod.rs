@@ -19,6 +19,7 @@ log="$D/asked"
 case "$cmd" in *"herdr machine list"*) what="herdr-machines"; log="$D/asked-herdr" ;; esac
 [ -n "$arg" ] && act=$(printf %s "$arg" | base64 -d 2>/dev/null | sed -n 's/.*"action":"\([^"]*\)".*/\1/p')
 printf '%s %s %s\n' "$h" "$what" "$arg" >> "$log"
+[ "$what" = keep ] && cat > "$D/$h.$what.in"
 f="$D/$h.$what"
 [ -n "$act" ] && [ -e "$D/$h.$what.$act.code" ] && f="$D/$h.$what.$act"
 [ -e "$f.sleep" ] && sleep "$(cat "$f.sleep")"
@@ -28,6 +29,8 @@ f="$D/$h.$what"
 exit 0
 "#;
 impl Far {
+    /// What the last call of `what` to `label` was handed on its stdin (only `keep` reads it: a file sent with words).
+    pub fn fed(&self, label: &str, what: &str) -> Vec<u8> { std::fs::read(self.dir.join(format!("{label}.{what}.in"))).unwrap_or_default() }
     pub fn new(base: &Path) -> Far {
         let dir = base.join("far");
         std::fs::create_dir_all(&dir).unwrap();

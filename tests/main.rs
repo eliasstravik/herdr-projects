@@ -195,6 +195,7 @@ mod rearm_stuck;
 mod remerge;
 mod remote;
 mod remote_board;
+mod remote_files;
 mod remote_more;
 mod remote_open;
 mod remote_why;
