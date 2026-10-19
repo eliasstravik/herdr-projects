@@ -25,8 +25,9 @@ The first call asks the browser for the microphone once. A call is private: it n
 - **Clear messages.** The voice agent writes each message for the coding agent itself: one self-contained
   instruction or question with just what you asked of that agent, in your intent and key wording, with names,
   numbers, file names and task tags kept exactly. Small talk, thinking aloud, what you said to the voice itself and
-  what was meant for another agent are left out. One short line says it came from a voice call, and that the agent
-  should answer in one or two short sentences first.
+  what was meant for another agent are left out. Nothing is added to it: the agent gets, and the chat shows, only
+  that instruction, as if you had typed it. The voice's expression tags ("[neutral]") are only in what it speaks,
+  never in the chat or in a message.
 - **No action you did not ask for.** The voice agent says what each message asks for: approving, merging, stopping
   or removing a task, or none of those. One of those goes out only when you asked for it, the voice agent asked you
   back, naming the action and the task ("Merge HP-52, right?"), and the last thing you said is a plain yes. The board
@@ -34,13 +35,12 @@ The first call asks the browser for the microphone once. A call is private: it n
   a yes to something else ("yes, explain it") or a yes about another task is not enough, and neither is the voice
   agent's word that you said yes. A no takes back what you asked before it, and a question that offers something
   else ("would you like an explanation of merge?") does not count.
-- **Everything else goes as asked, and authorizes nothing.** The board does not try to read a sentence for what it
-  orders (a question may name an action, an order may hide in many words). Every message says it plainly under it:
-  one with no action, that no approve, merge, stop or delete was asked for and confirmed with it, so the agent does
-  none because of it; a confirmed one, that this action was asked for and confirmed, for the task the question named,
-  and no other. What was said is kept on the board for these checks, never pasted into the message. And nothing goes
-  out on the voice agent's word alone: when none of your words since the last message reached the board, the message
-  is not sent.
+- **Everything else goes as asked.** The board does not try to read a sentence for what it orders (a question may
+  name an action, an order may hide in many words): a message the voice agent sends with no action goes as written,
+  and one with an action goes only after the checks above. The board does these checks itself, so nothing about
+  them is written into the message. What was said is kept on the board for them, never pasted into the message. And
+  nothing goes out on the voice agent's word alone: when none of your words since the last message reached the
+  board, the message is not sent.
 - **Answers are read back.** When the agent the call talks to has answered and its words stood still for a moment, the
   voice agent says the gist. Code, paths and links are left out.
 - **Updates in pauses only.** A task that came to need you, became ready to approve or failed since the call began is

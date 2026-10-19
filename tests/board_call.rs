@@ -35,7 +35,7 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     assert!(!ticket.is_empty() && c.s("session") == "default");
     s.load();
     let t = s.text();
-    assert!(t.contains(&format!("\n ● Calling with {}'s agent (Make the greeting)…  ctrl+t hangs up", short(&a))), "{t}");
+    assert!(t.contains(&format!("\n ● Voice call  calling {}'s agent (Make the greeting)… · ctrl+t hangs up", short(&a))), "{t}");
     assert!(!t.contains("No call helper"), "a helper has a few seconds first");
     // nobody picked it up: the chat says so, and what to look at; never a browser or a link
     sw::clock::advance(sw::board::view::chat_call::LINK_AFTER_MS);
@@ -49,24 +49,28 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     assert_eq!(sw::webui::voice::api::local("start", &json!({ "ticket": ticket, "ws": true }), "").0, 410, "once");
     let key = out.t("key");
     sw::webui::voice::api::local("heard", &json!({ "who": "user", "text": "hur går det?" }), &key);
+    // the voice's expression tags are for how it speaks: never in the chat
+    sw::webui::voice::api::local("heard", &json!({ "who": "agent", "text": "[neutral] Det går bra." }), &key);
     // held on the M1, with no echo cancelling there: the chat says headphones
     sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": false, "how": "parec and pacat, no echo cancelling", "agent": "elias-m1", "peak": 0.2 }), &key);
     s.load();
     let t = s.text();
-    assert!(t.contains(" ● On a call with") && t.contains("You: hur går det?") && t.contains("on elias-m1 · headphones needed: no echo cancelling there"), "{t}");
+    // one row as the line that says who: "Voice call", then with whom, the computer that holds it and the key
+    assert!(t.contains(&format!(" ● Voice call  {}'s agent (Make the greeting) · on elias-m1 · ctrl+t hangs up", short(&a))), "{t}");
+    assert!(t.contains("Voice: Det går bra.") && !t.contains("[neutral]") && t.contains("   headphones needed: no echo cancelling there"), "{t}");
     // lined up with the chat's line that says who: the mark in the mark's column, the words in the name's column, and
     // the lines under it indented as the chat's other lines (a mark one cell wide, as every mark of the board)
     let lines: Vec<String> = t.lines().map(String::from).collect();
-    let at = lines.iter().position(|l| l.contains("On a call with")).unwrap();
+    let at = lines.iter().position(|l| l.contains("Voice call")).unwrap();
     let who = &lines[at - 1];
     let col = |l: &str, w: &str| sw::text::width(&l[..l.find(w).unwrap()]);
-    assert_eq!((col(&lines[at], "●"), col(&lines[at], "On a call")), (1, 3), "{}", lines[at]);
+    assert_eq!((col(&lines[at], "●"), col(&lines[at], "Voice call")), (1, 3), "{}", lines[at]);
     assert_eq!(sw::text::width(&who[..who.find(|c: char| c.is_alphabetic()).unwrap()]), 3, "the line that says who starts its name there too: {who}");
-    assert!(lines[at + 1].starts_with("   on elias-m1") && lines[at + 2].starts_with("   You: "), "{t}");
+    assert!(lines[at + 1].starts_with("   headphones") && lines[at + 2].starts_with("   Voice: "), "{t}");
     // a microphone that stayed near silent for ten seconds: the call's line says the voice may not hear you
     sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": true, "agent": "elias-m1", "mic": 0.002, "secs": 12 }), &key);
     s.load();
-    assert!(s.text().contains("on elias-m1 · your microphone is very quiet: the voice may not hear you"), "{}", s.text());
+    assert!(s.text().contains("\n   your microphone is very quiet: the voice may not hear you"), "{}", s.text());
     sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": true, "agent": "elias-m1", "mic": 0.2, "secs": 12 }), &key);
     s.load();
     assert!(!s.text().contains("very quiet"));
@@ -88,7 +92,7 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     assert_eq!(call::target(&call::get().unwrap()).id, a);
     // the key again hangs up
     s.press(&["ctrl+t"]); s.load();
-    assert!(call::get().is_none() && !s.text().contains("On a call"));
+    assert!(call::get().is_none() && !s.text().contains("Voice call"));
     // a second call on the same board: its first switch asked by voice is made too (each call counts from one)
     s.press(&["ctrl+t"]);
     let ticket = call::get().unwrap().t("pickup");
@@ -121,7 +125,7 @@ fn with_words_in_the_box_the_call_key_is_not_pressed_and_a_web_call_shows_on_the
     assert_eq!(sw::webui::voice::api::start(&json!({ "client": "test" }), || Ok("drive".into())).0, 200);
     sw::board::keys::name_as_buttons(false); // (the web board's calls name keys as its buttons, in this thread)
     s.load();
-    assert!(s.text().contains("(from the web board)"), "{}", s.text());
+    assert!(s.text().contains(" · from the web board · "), "{}", s.text());
     s.press(&["?"]);
     assert!(regex::Regex::new(r"ctrl\+t +hang up the call").unwrap().is_match(&s.text()), "{}", s.text());
     s.press(&["esc"]);

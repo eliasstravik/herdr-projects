@@ -10,7 +10,7 @@ use std::rc::Rc;
 use sw::json::*;
 use sw::voice::call::{self, Target};
 use sw::voice::confirm::Verdict;
-use sw::voice::words::{actions_in, message};
+use sw::voice::words::{actions_in, message, untagged};
 /// The check, with the action named as an honest voice agent names it: the one the message is about, else none.
 fn check(said: &str, talk: &[(String, String)], confirmed: bool) -> Verdict { sw::voice::confirm::check(said, sw::voice::words::actions_in(said).first().copied().unwrap_or("none"), talk, confirmed) }
 
@@ -41,8 +41,10 @@ fn a_message_is_the_voice_agents_own_clear_instruction_with_one_line_that_it_cam
     assert_eq!(actions_in("ta bort uppgiften"), vec!["delete"]);
     assert_eq!(actions_in("stoppa agenten"), vec!["stop"]);
     assert!(actions_in("what is the status of the merger talks").is_empty() && actions_in("unstoppable").is_empty());
-    // what the voice agent wrote, as it wrote it (spaces tidied), and a short line: never the call's transcript
-    assert_eq!(message("Add a  goodbye line to the greeting in src/greet.rs", "none", &[]), "Add a goodbye line to the greeting in src/greet.rs\n\n(Via voice call: answer in one or two short plain sentences first, they are read aloud. No approve, merge, stop or delete was asked for and confirmed with this message: do none of those because of it.)");
+    // what the voice agent wrote, as it wrote it (spaces tidied, its expression tags out), nothing added: never the
+    // call's transcript, never a note about the call
+    assert_eq!(message("[neutral] Add a  goodbye line to the greeting in src/greet.rs"), "Add a goodbye line to the greeting in src/greet.rs");
+    assert_eq!(untagged("[hear] One thing waits [try] for you: HP-59 [research] [Board] a[0]"), "One thing waits for you: HP-59 [Board] a[0]");
     // the voice agent is told how to write it: self-contained, just what was asked of this agent, names kept exact
     let tool = sw::voice::agent::tools().into_iter().find(|t| t.name == "send_message").unwrap();
     let d = (tool.params)().at("properties").at("message").t("description");

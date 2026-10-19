@@ -98,9 +98,11 @@ pub fn end_of(id: &str, why: &str) {
     });
 }
 /// A line of the call, for the chat: `by` "you" (your words), "voice" (the voice agent's), "sent" (what went to the agent
-/// you talk to) or "board" (an update read to you). Your words are also kept until something is sent.
+/// you talk to) or "board" (an update read to you). Your words are also kept until something is sent. The voice's
+/// expression tags ("[neutral]") are for how it speaks: its lines and what it sent are kept without them.
 pub fn line(by: &str, text: &str) {
-    let text: String = crate::text::clean(text).trim().chars().take(LONGEST).collect();
+    let text = if by == "voice" || by == "sent" { super::words::untagged(text) } else { text.to_string() };
+    let text: String = crate::text::clean(&text).trim().chars().take(LONGEST).collect();
     if text.is_empty() { return; }
     change(|c| {
         let mut lines = c.arr("lines").to_vec();

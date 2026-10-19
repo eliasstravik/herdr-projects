@@ -76,9 +76,3 @@ pub fn check(said: &str, action: &str, talk: &[(String, String)], confirmed: boo
     if wanted.iter().any(|a| !asked_at(a).iter().any(|&i| i < q)) { return ask; }
     Verdict::Send
 }
-/// The tasks the question you said yes to named ("HP52"), for the line under a confirmed action.
-pub fn confirmed_tasks(talk: &[(String, String)]) -> Vec<String> {
-    let Some(yes) = (0..talk.len()).rev().find(|&i| talk[i].0 == "you") else { return vec![] };
-    let dash = |t: String| { let at = t.find(|c: char| c.is_ascii_digit()).unwrap_or(t.len()); format!("{}-{}", &t[..at], &t[at..]) };
-    (0..yes).rev().find(|&i| talk[i].0 != "you").map(|q| tags_in(&talk[q].1).into_iter().map(dash).collect()).unwrap_or_default()
-}
