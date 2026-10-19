@@ -1,0 +1,18 @@
+/* The web UI's own chat docked under the board (dock.js): its pane column leaves the board the room it covers, at its
+   top (under the list and the bar) or at its left (a wide screen, the list beside the chat), so its transcript and its
+   box lay out whole beside the board, never under it. Its glass header over the chat and its tab strip step aside (the
+   board's bar stands for them), and the board goes under the web UI's own menus, sheets and drawer. Each selector is
+   the web UI's (styles.css there, herdr-web-ui 0.4.12); where one is gone the page still works, the board's own chat
+   standing in. */
+html.sw-dock .app { --header-over: 0px !important; }
+html.sw-dock .app > .app-header { margin-bottom: 0 !important; }
+html.sw-dock .pane-column { box-sizing: border-box; padding-top: var(--sw-dock-top, 0px); padding-left: var(--sw-dock-left, 0px); }
+html.sw-dock .pane-slot .tab-strip-row, html.sw-dock .pane-slot .tab-strip { display: none !important; }
+/* Under the web UI's menus and popovers (10 and up), over its page. */
+html.sw-dock .sw-board { z-index: 9; }
+/* Send + start over the web UI's box, for the Coordinator (dock.js places it): a chip of the web UI's one-tap replies. */
+.sw-also-float { position: fixed; z-index: 9; box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, .25)); }
+.sw-also-float[hidden] { display: none; }
+.sw-also-float { --sw-text: var(--text, #d8d0c3); font: var(--fw-regular, 400) var(--fs-sm, 13px)/1.2 var(--font-ui, system-ui, sans-serif); }
+/* The board's question, its More menu and its machine picker cover the whole page, the web UI's chat too. */
+html.sw-dock .sw-board .sw-scrim { position: fixed; }

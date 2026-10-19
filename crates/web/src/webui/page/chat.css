@@ -1,79 +1,97 @@
-/* The chat at the foot of the web board (chat.js, said.js): the button that says who you talk to and flips it, the
-   line on where they stand, Hide and Show, and the conversation over the box, all as wide as the box (compose.css) and
-   centred on it; the conversation full screen when asked. The buttons are the web UI's `.btn` and `.icon-button`:
-   their looks are the web UI's, sized here for a thumb. */
-.sw-chat { flex: none; display: flex; flex-direction: column; gap: var(--space-2, 8px); padding: var(--space-2, 8px) var(--space-4, 16px) max(var(--space-4, 16px), calc(env(safe-area-inset-bottom, 0px) - var(--space-4, 16px))); border-top: var(--hairline, 1px) solid var(--sw-line); background: var(--sw-bg); }
-@media (max-width: 480px) { .sw-chat { padding-inline: var(--space-3, 12px); } }
-.sw-chat > :not(.sw-composer) { width: min(100%, var(--chat-w, 820px)); margin-inline: auto; box-sizing: border-box; }
-.sw-chat-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1, 4px) var(--space-3, 12px); min-width: 0; }
-/* Who you talk to: one button with their name, and the arrows that say a tap flips it. With nobody else to flip to it
-   only names them, as plainly as ever (it is not a control that is off). */
-.sw-talk { flex: 0 1 auto; min-width: 0; max-width: 100%; display: inline-flex; align-items: center; gap: var(--space-2, 8px); font-weight: var(--fw-semibold, 600); color: var(--sw-strong); }
-.sw-talk svg { flex: none; width: 16px; height: 16px; color: var(--sw-dim); }
-.sw-talk-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sw-talk:disabled { cursor: default; opacity: 1; background: none; border-color: transparent; padding-left: 0; }
-.sw-talk:focus-visible, .sw-hide:focus-visible, .sw-said-nav .icon-button:focus-visible, .sw-said:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
-/* Where they stand: the mark, the task's name, what it does now, greyed; one line, cut with … */
-.sw-who { flex: 1 1 5em; display: flex; align-items: baseline; gap: var(--space-2, 8px); min-width: 0; white-space: nowrap; }
-.sw-who .sw-mark { width: auto; }
-.sw-who-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: var(--fw-semibold, 600); color: var(--sw-strong); }
-.sw-who-status { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--sw-dim); font-size: var(--fs-sm, 13px); }
-.sw-hide { flex: none; margin-left: auto; color: var(--sw-dim); }
-.sw-hide[aria-pressed="true"] { color: var(--sw-text); }
-/* On a phone the switch and Hide share the first line, where they stand on the second, whole. */
-@media (max-width: 640px) {
-  .sw-who { order: 3; flex-basis: 100%; }
-  /* There the line may take two lines: what they do now is often a sentence (`no agent on it: …`). */
-  .sw-who { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
-  .sw-who > * + * { margin-left: var(--space-2, 8px); }
+/* The chat under the board's list (chat.js): its bar (who you talk to, as the web UI's segmented switch, how they
+   stand, Call, Hide and Full screen, and the grip that sets the chat's share of the screen), the call's row under it,
+   and under that the web UI's own chat docked there (dock.js, dock.css) or the board's own conversation and box. How
+   the board lays out around it: docked or not, its share of the screen, full screen, hidden, side by side on a wide
+   screen, and stepped aside to the bar while a phone's keyboard is up. The controls are the web UI's `.icon-button` and
+   its colours, type and sizes, sized here for a thumb. */
+.sw-chat { flex: none; container-type: inline-size; display: flex; flex-direction: column; min-height: 0; border-top: var(--hairline, 1px) solid var(--sw-line); background: var(--sw-bg); }
+/* The bar: one row, the switch at the left, the buttons at the right. */
+.sw-chatbar { position: relative; width: 100%; display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-1, 4px) var(--space-2, 8px); min-height: 52px; box-sizing: border-box; padding: var(--space-2, 8px) var(--space-2, 8px) var(--space-2, 8px) var(--space-3, 12px); }
+.sw-chatbar-space { flex: 1 1 0; min-width: 0; }
+.sw-chatbar .icon-button { flex: none; color: var(--sw-dim); }
+.sw-chatbar .icon-button svg { width: 18px; height: 18px; }
+.sw-chatbar .icon-button:focus-visible, .sw-who-pick:focus-visible, .sw-split:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
+/* Who you talk to: the web UI's segmented switch (styles.css there: .segmented), the one you talk to pressed, each
+   with how it stands. With nobody else to talk to, only their name, plainly. */
+.sw-who { flex: 0 0 auto; max-width: 75%; min-width: 0; display: inline-flex; align-items: center; gap: 2px; }
+.sw-who.segmented { padding: 2px; background: var(--bg-elevated, #211e1a); border: var(--hairline, 1px) solid var(--sw-line); border-radius: var(--radius-md, 8px); }
+.sw-who-pick { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--space-2, 8px); height: 32px; padding: 0 var(--space-3, 12px); border: 0; border-radius: calc(var(--radius-md, 8px) - 2px); background: transparent; color: var(--sw-dim); font: inherit; font-size: var(--fs-md, 14px); font-weight: var(--fw-medium, 500); cursor: pointer; }
+.sw-who-pick.is-on { background: var(--bg-hover, #2a2621); color: var(--sw-strong); }
+@media (hover: hover) { .sw-who-pick:not(.is-on):hover { color: var(--sw-text); } }
+.sw-who.is-one .sw-who-pick { padding-left: 0; background: none; cursor: default; font-weight: var(--fw-semibold, 600); }
+.sw-who-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sw-who .sw-mark { width: auto; font-size: var(--fs-sm, 13px); line-height: 1; }
+/* A machine's or a repo's coordinator: its name in its heading's colour (board.css: .sw-c-*). */
+.sw-chat[data-tint="accent"] .sw-who-pick.is-on .sw-who-name { color: var(--accent, #f0a830); }
+.sw-chat[data-tint="subtext0"] .sw-who-pick.is-on .sw-who-name { color: var(--sw-dim); }
+/* How they stand, in words, beside the switch; on a narrow bar a word the dot already says (idle, working) steps aside,
+   and anything more (no agent yet, a check's progress) takes a line of its own under the switch. */
+.sw-who-status { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sw-dim); font-size: var(--fs-sm, 13px); }
+.sw-who-status:empty { display: none; }
+@container (max-width: 520px) {
+  .sw-chatbar { flex-wrap: wrap; }
+  .sw-who-status { order: 9; flex-basis: 100%; padding-left: 2px; }
+  .sw-who-status.is-plain { display: none; }
 }
-.sw-chat-note { margin: 0; color: var(--sw-dim); font-size: var(--fs-xs, 12px); }
-/* The conversation: the newest thing said, the rest above it, and Earlier and Later in a gutter of their own. */
-.sw-said-box { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-1, 4px); padding: var(--space-2, 8px) var(--space-1, 4px) var(--space-2, 8px) var(--space-4, 16px); border: var(--hairline, 1px) solid var(--sw-line); border-radius: var(--radius-lg, 12px); background: var(--sw-panel); }
-.sw-said { max-height: calc(var(--app-height, 100vh) * 0.25); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: var(--border-strong, #3e3830) transparent; color: var(--sw-dim); font-size: var(--fs-sm, 13px); white-space: pre-wrap; overflow-wrap: anywhere; }
-/* (Full screen is there for reading more: the list keeps most of the window.) */
-.sw-said-box.is-open .sw-said { max-height: calc(var(--app-height, 100vh) * 0.35); }
-/* A phone's window is short: the list keeps the most of it. */
-@media (max-width: 640px) { .sw-said { max-height: calc(var(--app-height, 100vh) * 0.22); } .sw-said-box.is-open .sw-said { max-height: calc(var(--app-height, 100vh) * 0.25); } }
-.sw-said a { color: var(--accent, #f0a830); text-underline-offset: 0.2em; }
-.sw-said-nav { display: flex; flex-direction: column; gap: var(--space-1, 4px); }
-.sw-said-nav .sw-said-down { margin-top: auto; }
-.sw-said-nav .icon-button { color: var(--sw-dim); }
-.sw-said-turn + .sw-said-turn { margin-top: var(--space-3, 12px); }
-.sw-by { color: var(--sw-text); font-weight: var(--fw-semibold, 600); }
-/* A machine's or a repo's coordinator: its name over the box in its heading's colour (board.css: .sw-c-*); who said
-   what in the conversation keeps the Coordinator's look, as the terminal board's chat does. */
-.sw-chat[data-tint="accent"] .sw-who-name { color: var(--accent, #f0a830); }
-.sw-chat[data-tint="subtext0"] .sw-who-name { color: var(--sw-dim); }
-.sw-said-turn.is-mine { color: var(--sw-text); }
-.sw-said strong { color: var(--sw-text); font-weight: var(--fw-semibold, 600); }
-.sw-said .sw-code { font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-xs, 12px); }
-.sw-said-turn.is-raw .sw-said-text { font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-xs, 12px); white-space: pre; overflow-x: auto; }
-/* A thumb's size, as everything tapped on the board. */
-@media (pointer: coarse) {
-  .sw-talk { min-height: var(--touch-target, 40px); }
-  .sw-hide, .sw-said-nav .icon-button { min-height: var(--touch-target, 40px); min-width: var(--touch-target, 40px); }
-}
-/* Full screen, where the web UI cannot show them in its own chat view (talk.js): the conversation takes the board's
-   whole height over the box, the board's header too, and reads as the web UI's chat does (its type, no card round it);
-   the list and the open task step aside (they are still there when it goes back, with its button or Esc). Last here,
-   so it wins over every height above. */
-.sw-board.sw-chat-full > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }
-.sw-board.sw-chat-full .sw-chat { flex: 1; min-height: 0; border-top: 0; padding-top: max(var(--space-2, 8px), env(safe-area-inset-top, 0px)); }
-.sw-board.sw-chat-full .sw-said-box { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); border-color: transparent; background: none; padding-left: 0; }
-.sw-board.sw-chat-full .sw-said { max-height: none; height: 100%; color: var(--sw-text); font-size: var(--chat-fs-body, 15px); line-height: var(--lh-prose, 1.65); }
-/* There the chat's own back arrow stands first, for the header's: one back arrow at a time. */
-.sw-chat-back { display: none; flex: none; color: var(--sw-dim); }
+.sw-chat-back { display: none; }
 .sw-board.sw-chat-full .sw-chat-back { display: inline-flex; }
-/* Typing with a phone's keyboard up (room.js): the board's header, chips and list step aside as for the full screen,
-   the conversation takes what is left over the box (under its least it steps aside, and its full screen button with
-   it), and the box stays whole above the keyboard and above the strip iOS floats over it (--sw-kb-cover). */
+/* The grip on the bar's top edge: dragged, it moves where the list ends and the chat begins. */
+.sw-split { position: absolute; top: -9px; left: 50%; z-index: 2; display: grid; place-items: center; width: 56px; height: 18px; transform: translateX(-50%); cursor: ns-resize; touch-action: none; }
+.sw-split::before { content: ""; width: var(--space-8, 32px); height: 4px; border-radius: var(--radius-pill, 999px); background: var(--border-strong, #3e3830); }
+.sw-split:hover::before, .sw-split:active::before { background: var(--accent, #f0a830); }
+@media (hover: hover) and (pointer: fine) { .sw-split::before { opacity: 0; } .sw-chat:hover .sw-split::before, .sw-split:focus-visible::before { opacity: 1; } }
+.sw-split[hidden] { display: none; }
+.sw-chat-note { margin: 0; padding: 0 var(--space-4, 16px) var(--space-2, 8px); color: var(--sw-dim); font-size: var(--fs-sm, 13px); }
+@media (pointer: coarse) { .sw-chatbar .icon-button { min-width: var(--touch-target, 40px); min-height: var(--touch-target, 40px); } .sw-who-pick { height: 36px; } }
+
+/* The board's own chat, where the web UI has none to show: the conversation over the box, read as the web UI's chat
+   reads (ChatView.css there: your words a card on the right, theirs plain prose), then the box (compose.css). */
+.sw-own { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 0 var(--space-4, 16px) max(var(--space-4, 16px), calc(env(safe-area-inset-bottom, 0px) - var(--space-4, 16px))); }
+@media (max-width: 480px) { .sw-own { padding-inline: var(--space-3, 12px); } }
+.sw-said-box { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: min(100%, var(--chat-w, 820px)); margin-inline: auto; }
+.sw-said-box[hidden] { display: none; }
+.sw-said { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: var(--border-strong, #3e3830) transparent; padding: var(--space-2, 8px) 0 var(--space-3, 12px); color: var(--sw-text); font-size: var(--chat-fs-body, 15px); line-height: var(--lh-prose, 1.65); white-space: pre-wrap; overflow-wrap: anywhere; }
+.sw-said:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: -2px; }
+.sw-turn-said + .sw-turn-said { margin-top: var(--space-4, 16px); }
+.sw-turn-said.is-mine { display: flex; justify-content: flex-end; }
+.sw-turn-said.is-mine .sw-said-text { max-width: 80%; padding: var(--space-2, 8px) var(--space-4, 16px); border: var(--hairline, 1px) solid var(--bubble-border, var(--sw-line)); border-radius: var(--radius-lg, 12px); background: var(--bg-elevated, #211e1a); }
+.sw-by { margin-bottom: 2px; color: var(--sw-dim); font-size: var(--fs-xs, 12px); font-weight: var(--fw-semibold, 600); }
+.sw-said a { color: var(--accent, #f0a830); text-underline-offset: 0.2em; }
+.sw-said strong { color: var(--sw-strong); font-weight: var(--fw-semibold, 600); }
+.sw-said .sw-code { font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-sm, 13px); }
+.sw-turn-said.is-raw .sw-said-text { font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-xs, 12px); white-space: pre; overflow-x: auto; }
+
+/* How the board lays out around the chat. Docked: the board ends where the web UI's chat begins (chat.js measures it:
+   --sw-top-h), the bar its foot. */
+.sw-board.is-docked { bottom: auto; height: var(--sw-top-h, var(--app-height, 100%)); }
+.sw-board.is-docked .sw-chat { border-bottom: var(--hairline, 1px) solid var(--sw-line); }
+/* With its own chat: the chat has its share of the screen under the list; hidden, only the bar and the box. */
+.sw-board:not(.is-docked):not(.sw-chat-full):not(.is-side) .sw-chat { height: var(--sw-chat-share, 46%); max-height: 80%; }
+.sw-board.sw-chat-hidden:not(.is-docked) .sw-chat { height: auto; }
+/* Full screen, and typing in the web UI's box with a phone's keyboard up: the board's header and list step aside (they
+   are still there when it goes back). Docked, the board is then only its bar, over the web UI's chat. */
+.sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }
+.sw-board.sw-chat-full:not(.is-docked) .sw-chat { flex: 1; height: auto; border-top: 0; }
+.sw-board.is-docked:is(.sw-chat-full, .sw-web-typing) { height: auto; padding-top: env(safe-area-inset-top, 0px); }
+.sw-board:is(.sw-chat-full, .sw-web-typing) .sw-chat { border-top: 0; }
+/* Side by side on a wide screen: the list (or the open task) in a column of its own at the left, the chat beside it
+   from top to foot, its bar at its top. */
+.sw-board.is-side { right: auto; width: clamp(360px, 40%, 540px); width: clamp(360px, calc((100vw - var(--sw-left, 0px)) * 0.4), 540px); border-right: var(--hairline, 1px) solid var(--sw-line); }
+.sw-board.is-side .sw-chat { position: fixed; top: 0; right: 0; left: calc(var(--sw-left, 0px) + clamp(360px, calc((100vw - var(--sw-left, 0px)) * 0.4), 540px)); border-top: 0; padding-top: env(safe-area-inset-top, 0px); }
+.sw-board.is-side:not(.is-docked) .sw-chat { bottom: 0; }
+.sw-board.is-side .sw-chatbar { min-height: var(--header-h, 52px); padding-block: var(--space-1, 4px); }
+.sw-board.is-side.has-task .sw-list-host { display: none; }
+.sw-board.is-side .sw-split { display: none; }
+
+/* Typing in the board's own box with a phone's keyboard up (room.js): the board's header, chips and list step aside,
+   the conversation takes what is left over the box (under its least it steps aside), and the box stays whole above
+   the keyboard and above the strip iOS floats over it (--sw-kb-cover). */
 .sw-board.sw-typing > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }
-.sw-board.sw-typing .sw-chat { flex: 1; min-height: 0; overflow: hidden; border-top: 0; padding-top: max(var(--space-2, 8px), env(safe-area-inset-top, 0px)); padding-bottom: calc(var(--space-2, 8px) + var(--sw-kb-cover, 0px)); }
-.sw-board.sw-typing .sw-said-box { flex: 1 1 0; min-height: 0; overflow: hidden; grid-template-rows: minmax(0, 1fr); }
-.sw-board.sw-typing .sw-said { max-height: none; height: 100%; }
-.sw-board.sw-typing .sw-said-box.is-squeezed, .sw-board.sw-typing .sw-said-full { display: none; }
+.sw-board.sw-typing .sw-chat { flex: 1; height: auto; min-height: 0; overflow: hidden; border-top: 0; padding-top: env(safe-area-inset-top, 0px); }
+.sw-board.sw-typing .sw-own { padding-bottom: calc(var(--space-2, 8px) + var(--sw-kb-cover, 0px)); }
+.sw-board.sw-typing .sw-said-box { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.sw-board.sw-typing .sw-said-box.is-squeezed { display: none; }
 .sw-board.sw-typing .sw-composer { margin-top: auto; }
 /* Where not even one line fits so (a phone on its side): all but the box steps aside, its grip and files' tiles too. */
-.sw-board.sw-typing.sw-cramped .sw-chat > :not(.sw-composer), .sw-board.sw-typing.sw-cramped .sw-files, .sw-board.sw-typing.sw-cramped .sw-grip { display: none; }
+.sw-board.sw-typing.sw-cramped .sw-chat > :not(.sw-own), .sw-board.sw-typing.sw-cramped .sw-said-box, .sw-board.sw-typing.sw-cramped .sw-files, .sw-board.sw-typing.sw-cramped .sw-grip { display: none; }
 .sw-board.sw-typing.sw-cramped .sw-composer { --sw-grip-h: 0px; }

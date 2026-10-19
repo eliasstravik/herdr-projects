@@ -70,8 +70,11 @@ export const client = (() => {
 })();
 const BASE = "/herdr-projects/api";
 // The PC the web UI's page is on (its address says: `?machine=<pc>`, left out for this machine). Sent with every
-// call, so the board is the board of that machine.
-const machine = () => { try { return new URLSearchParams(location.search).get("machine") || ""; } catch { return ""; } };
+// call, so the board is the board of that machine. While the board's chat is docked on an agent's chat view (dock.js),
+// the page is on that agent's PC only for the chat: the board stays the board of the PC the page was on (`setHome`).
+let home = null;
+export const setHome = (pc) => { home = pc; };
+const machine = () => { if (home !== null) return home; try { return new URLSearchParams(location.search).get("machine") || ""; } catch { return ""; } };
 // A read. Answers { ok, status, … }; never throws.
 export async function get(what, params = {}) {
   try {

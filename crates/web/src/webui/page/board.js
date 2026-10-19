@@ -8,12 +8,10 @@ import { listEl } from "./list.js";
 import { panelEl, settingsEl } from "./panel.js";
 import { chatEl } from "./chat.js";
 import { askEl, menuEl, pickerEl, toast, trapEscape } from "./sheets.js";
-import { goTo, goFull } from "./talk.js";
+import { goTo } from "./talk.js";
 
 let root = null, timer = null, closing = null, snap = null, mark = "", busy = false;
 let menuOpen = false, picking = false, finding = false, seenMsg = -1, seenGo = null, chat = null, untrap = null, wentTo = 0;
-// The chat full screen: asked of the board (its link is the next one it gives), or wanted as soon as the board shows.
-let fullAsked = false, wantFull = false;
 const drawn = { list: "", panel: "", settings: "", ask: "", menu: "", chips: "", pick: "" };
 const part = (name) => root.querySelector(`.sw-${name}`);
 
@@ -27,6 +25,7 @@ function fit() {
   const side = document.querySelector(".sidebar") || document.querySelector(".sidebar-shell"), box = side?.getBoundingClientRect();
   const beside = box && box.width > 0 && box.left >= 0 && box.right < window.innerWidth - 400 && window.innerWidth > 768;
   root.style.left = beside ? `${Math.round(box.right)}px` : "0";
+  root.style.setProperty("--sw-left", root.style.left === "0" ? "0px" : root.style.left);
 }
 function note(text) { const n = part("note"); n.textContent = text || ""; n.hidden = !text; }
 // What the board shows beyond its plain view, each a chip whose × puts the plain view back. Whose tasks show (every
@@ -72,10 +71,9 @@ function draw() {
   once("pick", picking ? [snap.flags.scope] : null, () => { if (picking) pickerEl(snap.flags.scope, { onPick: scopeTo, onClose: () => { picking = false; draw(); } }).then((el) => { if (picking && root) part("pick-host").replaceChildren(el); }); else part("pick-host").replaceChildren(); });
   part("find-row").hidden = !finding;
   chat.update(snap);
-  if (wantFull) { wantFull = false; chat.full(true); } // (only where the chat has something to show)
   if (snap.msg && snap.msg.n !== seenMsg) { seenMsg = snap.msg.n; toast(part("toast-host"), snap.msg, () => press("back")); }
-  // Into a task's agent (Open agent), or the chat full screen: the web UI's own view of that pane (talk.js).
-  if (snap.go && seenGo !== null && snap.go.n !== seenGo) { seenGo = snap.go.n; const full = fullAsked; fullAsked = false; return full ? goFull(snap.go, snap) : goTo(snap.go); }
+  // Into a task's agent (Open agent): the web UI's own view of that pane (talk.js).
+  if (snap.go && seenGo !== null && snap.go.n !== seenGo) { seenGo = snap.go.n; return goTo(snap.go); }
   seenGo = snap.go ? snap.go.n : 0;
 }
 function take(out) {
@@ -101,20 +99,20 @@ async function call(what, body) {
   return out;
 }
 // A key that brings words back (a draft that was put away, words taken back to change) puts them in the text box.
-const press = async (id) => { fullAsked = false; const out = await call("press", { id }); if (out.draft) chat?.fill(out.draft); return out; };
-// The chat full screen: the web UI's own chat view of whoever it talks to, which the board links to; where it has no
-// link (nobody's pane to show), the board's own chat goes full screen.
-async function full() {
-  fullAsked = true;
-  const out = await call("full");
-  if (root && !(out.ok && out.full)) { fullAsked = false; chat?.full(true); }
+const press = async (id) => { const out = await call("press", { id }); if (out.draft) chat?.fill(out.draft); return out; };
+// Where the web UI's own chat of whoever the chat talks to is, to dock it under the list (dock.js); none: the board's own.
+let docking = 0;
+async function dock() {
+  const n = ++docking;
+  const out = await call("dock");
+  if (root && chat && n === docking && out.ok) chat.native(out.dock || null);
 }
 
-export function openBoard({ onClose, full: fullNow = false }) {
+export function openBoard({ onClose }) {
   if (root) return;
-  closing = onClose; snap = null; mark = ""; seenGo = null; seenMsg = -1; menuOpen = false; picking = false; finding = false; fullAsked = false; wantFull = fullNow;
+  closing = onClose; snap = null; mark = ""; seenGo = null; seenMsg = -1; menuOpen = false; picking = false; finding = false;
   for (const k of Object.keys(drawn)) drawn[k] = "";
-  chat = chatEl({ onSend: async (text, delegate, to) => { const out = await call("send", { text, delegate, to }); return !out.ok || !!out.kept; }, onPress: press, onFull: full });
+  chat = chatEl({ onSend: async (text, delegate, to) => { const out = await call("send", { text, delegate, to }); return !out.ok || !!out.kept; }, onPress: press, onDock: dock });
   let wait = null;
   const find = h("input.sw-find", { type: "search", placeholder: "Type to filter, archived tasks too", "aria-label": "Find tasks", oninput: (e) => { clearTimeout(wait); const text = e.target.value; wait = setTimeout(() => call("find", { text }), 200); } });
   root = h("section.sw-board", { role: "region", "aria-label": "Work board" },
@@ -135,13 +133,14 @@ export function openBoard({ onClose, full: fullNow = false }) {
   // On a phone the Board entry is in the web UI's drawer: the drawer closes as it does when you pick a pane there.
   try { document.querySelector(".scrim.is-open")?.click(); } catch {}
   // Escape goes one step back, as it does on the terminal board: the menu, the open task, the chat's latest message
-  // (hidden as its Hide button hides it, while nothing is typed or searched), then the board itself.
+  // (hidden as its Hide button hides it, while nothing is typed or searched), then the board itself. In the web UI's own
+  // chat docked under the board (its box, its menus), Escape is the web UI's.
   untrap = trapEscape(() => {
     if (snap?.ask) return press("back"); if (menuOpen || picking) { menuOpen = picking = false; return draw(); } if (chat.full()) return chat.full(false);
     if (snap?.panel) return call("pick", { id: snap.list.selected, open: false });
     if (snap?.chat?.open && snap.chat.text && !finding && !chat.typing()) return press("chatMessage");
     closing?.();
-  });
+  }, (e) => !!e.target?.closest && !e.target.closest(".sw-board") && e.target !== document.body);
   fit();
   window.addEventListener("resize", fit);
   refresh();

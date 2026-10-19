@@ -46,4 +46,5 @@ export function toast(host, msg, onDismiss) {
   host.append(el);
   if (!bad) setTimeout(() => el.remove(), 6000);
 }
-export const trapEscape = (fn) => { const on = (e) => { if (e.key === "Escape") { e.stopPropagation(); fn(); } }; document.addEventListener("keydown", on, true); return () => document.removeEventListener("keydown", on, true); };
+// `theirs(e)`: an Escape that is the web UI's own (in its chat's box or its menus under a docked chat): left to it.
+export const trapEscape = (fn, theirs = () => false) => { const on = (e) => { if (e.key === "Escape" && !theirs(e)) { e.stopPropagation(); fn(); } }; document.addEventListener("keydown", on, true); return () => document.removeEventListener("keydown", on, true); };

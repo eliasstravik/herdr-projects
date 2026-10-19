@@ -1,4 +1,4 @@
-// The call in the web board's chat: the Call button beside Hide and Show, which starts a voice call with whoever the
+// The call in the web board's chat: the Call button in the chat's bar, which starts a voice call with whoever the
 // chat talks to (call.js; the call follows the chat's switch from then on), and the call's own row under that line while
 // it rings or is on. The row is one design with the button, which steps aside for it: a dot that says it is live, who
 // it is with, where it is held, how long it has run, Mute and End (the way to hang up), and the last thing said. A
@@ -24,7 +24,7 @@ export function callEl({ onEnded } = {}) {
   let other = null, role = "drive", otherSince = 0;
   // The call that ended last, as one line: { text, at, secs, failed }; shown until its time is up.
   let ended = null, seenEnd = 0, fadeT = 0, goneT = 0, tick = 0;
-  const btn = h("button.btn.btn-ghost.sw-call", { type: "button", onclick: () => tap() });
+  const btn = h("button.icon-button.sw-call", { type: "button", onclick: () => tap() });
   const mute = h("button.btn.btn-ghost.sw-call-mute", { type: "button", onclick: () => call.mute() });
   const hang = h("button.btn.sw-call-end", { type: "button", title: "Hang up the call", onclick: () => tap() }, icon("phoneOff"), "End");
   const dot = h("span.sw-call-dot", { "aria-hidden": "true" });
@@ -63,8 +63,8 @@ export function callEl({ onEnded } = {}) {
     const ringing = mine ? s.state === "starting" : other?.state === "ringing";
     // The button starts a call; while one rings or is on, the row's End hangs it up and the button steps aside.
     btn.hidden = on;
-    btn.replaceChildren(icon("phone"), "Call");
-    btn.title = "Call: talk with whoever the chat talks to";
+    btn.replaceChildren(icon("phone"), h("span.sw-call-label", "Call"));
+    btn.title = "Call: talk with whoever the chat talks to"; btn.setAttribute("aria-label", "Call");
     btn.disabled = role !== "drive";
     hang.disabled = role !== "drive" && !mine;
     hang.replaceChildren(icon("phoneOff"), ringing ? "Cancel" : "End");

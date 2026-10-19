@@ -163,8 +163,8 @@ pub fn call(client_id: &str, call: &str, args: Value, machine: &str, pcs: Option
             let kept = super::view::send(c, args.s("text"), args.b("delegate"), to);
             let mut o = snapshot(c, ""); o.as_object_mut().unwrap().insert("kept".into(), json!(kept)); Ok(o)
         }
-        // The chat full screen: the web UI's own chat view of whoever it talks to, where it can show them.
-        "full" => { let full = super::full::full(c, drive); let mut o = snapshot(c, ""); o.as_object_mut().unwrap().insert("full".into(), json!(full)); Ok(o) }
+        // Where the web UI's own chat of whoever the chat talks to is, to dock it under the list (null: the board's own).
+        "dock" => { let d = super::dock::dock(c); let mut o = snapshot(c, ""); o.as_object_mut().unwrap().insert("dock".into(), d); Ok(o) }
         "attach" => { if !drive { return watch(); } super::attach::attach(c, &args) }
         "set" => {
             if !drive { return watch(); }

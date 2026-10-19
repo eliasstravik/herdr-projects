@@ -9,10 +9,10 @@
 pub use sw_flow::webui::{command, find, keep, link, pcs, proxy};
 pub mod attach;
 pub mod boards;
+pub mod dock;
 pub mod door;
 pub mod door_loop;
 pub mod follow;
-pub mod full;
 pub mod ink;
 pub mod model;
 pub mod page;
