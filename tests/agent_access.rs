@@ -118,3 +118,15 @@ fn a_fallback_with_no_auto_mode_is_passed_over_for_one_that_has_it() {
     version("codex", "0.1.0");
     assert!(usable("codex", "auto").contains("codex 0.1.0 has no auto mode"));
 }
+
+#[test]
+fn the_settings_page_goes_full_ask_auto_and_the_task_panel_says_auto_mode() {
+    let w = world();
+    assert_eq!(sw::board::update::edit::words_of("worker.access"), Some(vec![json!("full"), json!("ask"), json!("auto")]));
+    let id = w.add("Auto here");
+    set_value("worker.access", &json!("auto"), &Scope::task(&task(&id))).unwrap();
+    let mut b = common::board::open(&w.root, 44);
+    b.s.sel = id; b.load();
+    let text = b.screen(140).join("\n");
+    assert!(regex::Regex::new(r"│ {15}default effort · auto mode \* *\n").unwrap().is_match(&text), "{text}");
+}

@@ -12,7 +12,7 @@ the safe ones without asking and stops the risky ones. It sits between the two v
 The same value is there for every role that has an access: `worker.access`, `reviewer.access` and `coordinator.access`.
 A research task is a worker's, and takes `worker.access`. Set it as any setting: `herdr-projects set worker.access auto`,
 for one task `herdr-projects delegate <id> --worker.access auto`, or on the task panel's settings page, where the access
-row goes `full`, `ask`, `auto` in turn. The panel's agent line says `auto mode: acts on what it checks is safe`.
+row goes `full`, `ask`, `auto` in turn. The task panel says `auto mode` under the agent.
 
 ## Which programs have one
 
