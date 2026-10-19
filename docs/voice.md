@@ -51,8 +51,10 @@ call's sound has to be on your computer, so `Ctrl+O` rings it:
   machines ([other machines](other-machines.md)). `voice.helper none` turns it off.
 - **Several computers listening:** the one you are at takes the call (herdr's window, or a terminal, in front; on
   macOS also the last input).
-- **No helper picked it up** after a few seconds: the chat shows a line to Ctrl-click. herdr opens it in the browser of
-  the computer its window runs on, and the call starts there.
+- **No helper picked it up** after a few seconds (or the one that took it could not open it): the chat shows a line to
+  Ctrl-click. herdr opens it in the browser of the computer its window runs on, and a tap starts the call there.
+- That link holds the call's ticket: good once, for two minutes, and seen by whoever sees the terminal board (also a
+  device the web UI lets only watch, in its terminal view). Hang up with the key if a call you did not take goes live.
 
 The browser's echo cancelling works with the computer's own speakers. In a loud room, or where the voice agent seems
 to hear itself, use headphones.
