@@ -1,7 +1,8 @@
 //! A file attached in the web board's chat box, as in the herdr web UI's own: kept where whoever gets the words can
 //! read it (the Coordinator's folder, a task's working folder out of git's way, the board's folder with no
-//! Coordinator), under a name of its own, its path answered for the box to put in the message; never for another
-//! machine, never over the web UI's limit, never from a device that may only watch. And the page's code, read as text:
+//! Coordinator; a heading's coordinator's own folder), under a name of its own, its path answered for the box to put in
+//! the message; never for a machine the board cannot reach, never over the web UI's limit, never from a device that may
+//! only watch (another machine's: web_attach_far.rs). And the page's code, read as text:
 //! the add button, the tiles, paste and drop, and the path at the start of the words.
 use crate::common;
 use common::board::{web, web_as};
@@ -50,6 +51,14 @@ fn a_file_for_the_coordinator_is_kept_in_its_own_folder() {
     let out = sw::webui::attach::attach(&g, &file("shot.png", "image/png", PNG, json!({ "id": "", "reply": false }))).unwrap();
     let home = sw::coordinator::state::home(&sw::herdr::cli::current_socket());
     assert!(kept(&out).starts_with(home.join(".herdr-projects").join("files")), "{}", out.s("path"));
+    // this machine's heading: its machine coordinator, in its own folder
+    let out = sw::webui::attach::attach(&g, &file("shot.png", "image/png", PNG, json!({ "id": "head:machine\t", "reply": true, "scope": "" }))).unwrap();
+    let home = sw::coordinator::state::home(sw::coordinator::co::Co::of(&sw::herdr::cli::current_socket(), "machine"));
+    assert!(kept(&out).starts_with(home.join(".herdr-projects").join("files")), "{}", out.s("path"));
+    // where no coordinator can run, a heading's gets none: its words would not be sent either
+    g.s.data.can_dispatch = false;
+    let err = sw::webui::attach::attach(&g, &file("shot.png", "image/png", PNG, json!({ "id": "head:machine\t", "reply": true }))).unwrap_err();
+    assert!(err.starts_with("No coordinator can run here"), "{err}");
 }
 
 #[test]
@@ -66,10 +75,11 @@ fn a_file_for_a_tasks_agent_is_kept_in_its_working_folder_where_git_does_not_see
 }
 
 #[test]
-fn no_file_for_another_machine_a_task_that_is_gone_an_empty_or_too_big_one_or_a_device_that_only_watches() {
+fn no_file_for_a_machine_out_of_reach_a_task_that_is_gone_an_empty_or_too_big_one_or_a_device_that_only_watches() {
     let w = world();
     let err = |args: Value| web_as(&w, "test", "attach", args).unwrap_err();
-    assert!(err(file("a.png", "image/png", PNG, json!({ "id": "", "reply": false, "scope": "vm-a" }))).contains("not to vm-a's"));
+    assert_eq!(err(file("a.png", "image/png", PNG, json!({ "id": "", "reply": false, "scope": "vm-a" }))), "vm-a is not among the machines you can reach now.");
+    assert_eq!(err(file("a.png", "image/png", PNG, json!({ "id": "head:machine\tvm-a", "reply": true }))), "vm-a is not among the machines you can reach now.");
     assert_eq!(err(file("a.png", "image/png", PNG, json!({ "id": "proj/99", "reply": true }))), "The task those words are for is gone.");
     assert_eq!(err(file("a.png", "image/png", b"", json!({}))), "That file is empty.");
     let big = vec![0u8; sw::webui::attach::MOST + 1];

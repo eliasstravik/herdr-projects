@@ -114,13 +114,18 @@ pub fn pass(mut client: TcpStream, head: &Head, rest: &[u8], host: &str, port: u
     true
 }
 /// A small request of the board's own to the web UI, answered whole; None when it does not answer.
-pub fn ask(host: &str, port: u16, method: &str, path: &str, headers: &[(String, String)], max: usize, ms: u64) -> Option<Answer> {
+pub fn ask(host: &str, port: u16, method: &str, path: &str, headers: &[(String, String)], max: usize, ms: u64) -> Option<Answer> { ask_with(host, port, method, path, headers, &[], max, ms) }
+/// The same with a body (a file attached for another machine's agent, webui/attach/far.rs).
+#[allow(clippy::too_many_arguments)]
+pub fn ask_with(host: &str, port: u16, method: &str, path: &str, headers: &[(String, String)], body: &[u8], max: usize, ms: u64) -> Option<Answer> {
     let mut s = connect(host, port)?;
     let _ = s.set_read_timeout(Some(Duration::from_millis(ms)));
     let mut h: Vec<(String, String)> = headers.iter().filter(|(k, _)| !["connection", "content-length"].iter().any(|n| k.eq_ignore_ascii_case(n))).cloned().collect();
     if !h.iter().any(|(k, _)| k.eq_ignore_ascii_case("host")) { h.push(("Host".into(), format!("{host}:{port}"))); }
+    if !body.is_empty() { h.push(("Content-Length".into(), body.len().to_string())); }
     h.push(("Connection".into(), "close".into()));
     let head = Head { method: method.into(), target: path.into(), version: "HTTP/1.1".into(), headers: h };
     s.write_all(&head.bytes(&head.headers)).ok()?;
+    if !body.is_empty() { s.write_all(body).ok()?; }
     read_answer(&mut s, max)
 }
