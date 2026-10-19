@@ -33,17 +33,16 @@ fn an_agent_its_reviewer_and_the_coordinator_start_and_end_out_of_sight() {
     {
         let w = world_with(Opts { repo: true, settings: json!({ "reviewer.agent": "codex", "review.when": "always" }), ..Default::default() });
         board_pane(&w);
-        // A task's whole life: its agent starts in a space of its own, the reviewer in a tab of that space, both end,
+        // A task's whole life: its agent and reviewer start in tiled panes in the task's space, both end,
         // the work is merged and the space is closed.
         w.script(json!({ "reviewer": [{ "verdict": { "meets": true, "findings": [], "text": "Fine." } }] }));
         let id = to_approval(&w, "Work");
         let opened = out_of_sight(&w);
         assert!(opened.iter().any(|c| c.starts_with("worktree create ")), "the agent's space: {opened:?}");
-        // The reviewer: a tab of its own in the task's space, opened behind the agent's. No pane is split off anything.
-        let tabs: Vec<&String> = opened.iter().filter(|c| c.starts_with("tab create ")).collect();
-        assert_eq!(tabs.len(), 1, "the reviewer's tab: {opened:?}");
-        assert!(tabs[0].contains(&format!("--workspace {} ", task(&id).at("link").s("workspace"))), "in the task's own space: {}", tabs[0]);
-        assert!(!opened.iter().any(|c| c.starts_with("pane split ")));
+        // The reviewer gets its own visible pane in the task's workspace; it never takes the board's pane.
+        let splits: Vec<&String> = opened.iter().filter(|c| c.starts_with("pane split ")).collect();
+        assert_eq!(splits.len(), 2, "worker and reviewer panes: {opened:?}");
+        assert!(!opened.iter().any(|c| c.starts_with("tab create ")), "agents stay in tiled panes: {opened:?}");
         sw::actions::finish_line::approve(&id, None, false).unwrap();
         settle(&id);
         out_of_sight(&w);

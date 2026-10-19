@@ -71,14 +71,14 @@ fn a_program_with_its_own_plan_mode_is_started_in_it_its_plan_taken_by_the_hook_
 }
 
 #[test]
-fn plan_agent_a_planner_in_a_tab_of_its_own_and_after_the_yes_the_worker_builds_in_its_own_tab() {
+fn plan_agent_a_planner_in_its_own_pane_and_after_the_yes_the_worker_builds_in_its_own_pane() {
     let w = plan_world(json!({ "plan.approve": "you", "plan.agent": "codex/gpt-5.5", "worker.agent": "claude", "review.when": "never" }));
     w.script(json!({ "worker": [{ "plan": PLAN, "note": "Planned." }, { "status": "working" }] }));
     let id = w.add("Work");
     delegate(&id);
     let t = settle(&id);
     assert_eq!(t.s("stage"), "plan", "{}", t.at("failure"));
-    assert_eq!(tabs(&w, &t), vec!["Agent", "Planner"], "the working agent's tab waits beside the planner's");
+    assert_eq!(tabs(&w, &t), vec!["Agent"], "the planner and worker share the task's tiled terminal tab");
     let planner = w.pane_of(&t);
     assert_eq!(planner.at("agent").s("kind"), "codex");
     let pargs = args_of(&w, &t).join(" ");
@@ -99,7 +99,7 @@ fn plan_agent_a_planner_in_a_tab_of_its_own_and_after_the_yes_the_worker_builds_
     assert!(t.at("plan").b("built"));
     assert_eq!((t.at("link").s("pane"), t.s("agent")), (home.as_str(), "claude"));
     assert!(t.at("plan").at("home").is_null() && t.at("plan").at("took").is_number(), "{}", t.at("plan"));
-    assert!(!w.state().arr("panes").iter().any(|p| p.s("pane_id") == planner_pane), "the planner's tab is closed");
+    assert!(!w.state().arr("panes").iter().any(|p| p.s("pane_id") == planner_pane), "only the planner's pane is closed");
     assert_eq!(tabs(&w, &t), vec!["Agent"]);
     assert_eq!(w.pane_of(&t).at("agent").s("kind"), "claude");
     assert!(args_of(&w, &t).iter().any(|a| a == "--dangerously-skip-permissions"));

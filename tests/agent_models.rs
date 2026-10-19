@@ -65,7 +65,7 @@ fn a_model_the_program_does_not_take_is_refused_with_the_ones_it_does() {
     // Every setting that names an agent, and a choice for one Coordinator only.
     refused("worker.fallback", "claude, codex/gpt-5.5", r"^worker\.fallback: codex has no model");
     refused("attempts.by", "codex/gpt-5.5, pi", r"^attempts\.by: codex has no model");
-    refused("watcher.agent", "codex/o3", r"^watcher\.agent: codex has no model");
+    refused("watcher.agent", "codex/o3", r"^watcher\.agent: codex has no headless one-shot mode, so it cannot be the Watcher");
     assert!(sw::coordinator::who::pick_of("codex/gpt-5.5", "").unwrap_err().msg.contains("codex has no model \"gpt-5.5\""));
     // A refused value changed nothing.
     assert_eq!(setting_text("worker.agent", None), "cursor/claude-opus-4-8[effort=high]");

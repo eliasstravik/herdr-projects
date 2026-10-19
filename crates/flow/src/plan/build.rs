@@ -91,7 +91,8 @@ pub fn start_build_by(id: &str, g: &mut Guard, by: &str) -> Res<()> {
             let (usage, model, asked) = (t.at("usage").clone(), if t.b("model") { t.t("model") } else { t.at("plan").at("writer").t("model") }, t.at("plan").i("asked"));
             let p = t.obj_mut("plan"); p.put("home", Value::Null); p.put("usage", usage); p.put("model", model); p.put("took", now() - if asked > 0 { asked } else { now() });
             let l = t.obj_mut("link"); l.put("tab", home.at("tab").clone()); l.put("pane", home.at("pane").clone()); l.put("terminal", home.at("terminal").clone());
-            l.put("agentPaneCreated", false);
+            // The task's original pane is the worker's reserved pane after the planner leaves.
+            l.put("agentPaneCreated", true);
             t.put("agent", worker.clone()); t.put("app", worker);
             for k in FORGET { t.del(k); } // another program in another pane: nothing the board knew of the planner's is the worker's
         })?;

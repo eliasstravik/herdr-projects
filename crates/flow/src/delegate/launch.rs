@@ -68,7 +68,8 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
     } else { t };
     let taken: Vec<String> = api.agents().unwrap_or_default().iter().filter(|a| a.s("pane_id") != t.at("link").s("pane")).map(|a| a.t("name")).filter(|n| !n.is_empty()).collect();
     let name = agent_name(&t, &taken);
-    if plan::planner(&t) { flow::tabs::name_tab(&api, t.at("link").s("tab"), flow::tabs::PLANNER_TAB); } else { flow::tabs::name_agent_tab(&api, t.at("link").s("tab"), Some(&t)); }
+    // Pane labels identify the shared task workspace; planner identity is already shown in task state.
+    flow::tabs::name_agent_tab(&api, t.at("link").s("tab"), Some(&t));
     let x = launch_extras(&t, "agent", &kind, 0, &rules(&t), resume)?;
     let fast = if plan::planner(&t) { None } else { Some(who.fast) };
     let args = |hooked: bool| -> Res<Vec<String>> {
