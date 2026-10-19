@@ -9,8 +9,9 @@ pub const NAME: &str = "herdr-projects voice";
 pub const LLM: &str = "gemini-2.5-flash";
 /// A model that speaks Swedish and English (reachy-voice's, heard in Swedish).
 pub const TTS_MODEL: &str = "eleven_v4_turbo";
-/// A voice that speaks both; `voice.voice` puts another in its place.
-pub const VOICE: &str = "JSWO6cw2AyFE324d5kEr";
+/// One of ElevenLabs' own voices that agents may use (one with live moderation may not), speaking Swedish and English
+/// with the model above: reachy-voice's agent speaks with it. `voice.voice` puts another in its place.
+pub const VOICE: &str = "bIHbv24MWmeRgasZH58o";
 /// A call with nobody saying anything for this long hangs up by itself; none is longer than this.
 pub const SILENCE_S: i64 = 120;
 pub const LONGEST_S: i64 = 3600;

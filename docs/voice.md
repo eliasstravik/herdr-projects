@@ -79,7 +79,7 @@ to hear itself, use headphones.
 | Setting | What it does |
 |---|---|
 | `voice.language` | `auto` (Swedish and English, as you speak), `sv` or `en` |
-| `voice.voice` | an ElevenLabs voice id, or `none` for the built-in one |
+| `voice.voice` | an ElevenLabs voice id that agents can use (not one with live moderation), or `none` for the built-in one. A voice ElevenLabs refuses is said in the call, with how to pick another |
 | `voice.helper` | `auto`: the call helper runs on a computer with saved machines; `none`: never |
 
 ## How it fits together

@@ -194,6 +194,22 @@ fn the_agent_is_made_once_and_updated_only_when_it_changed() {
     assert_eq!(after.last().unwrap(), &("PATCH".to_string(), "/v1/convai/agents/agent_1".to_string()));
     let sv = log.borrow().last().unwrap().2.clone();
     assert_eq!((sv.at("conversation_config").at("agent").s("language"), sv.at("conversation_config").at("agent").s("first_message")), ("sv", "Hej, jag lyssnar."));
+    // ElevenLabs refuses a voice (one with live moderation): said plainly, with how to pick another; nothing is kept
+    let n = log.borrow().len();
+    sw::voice::eleven::set_fake(Some(Rc::new(|m: &str, p: &str, _b: &Value| match (m, p) {
+        ("PATCH", p) if p.starts_with("/v1/convai/agents/") => (400, json!({ "detail": { "status": "voice_live_moderated_not_allowed", "message": "Voice XYZ has live moderation enabled and cannot be used for agents" } })),
+        _ => (200, json!({ "id": "tool_x" })),
+    })));
+    std::fs::write(sw::store::files::config_dir().join("config.json"), json!({ "voice.voice": "XYZ", "coordinator.agent": "none", "watcher.agent": "none" }).to_string()).unwrap();
+    let e = sw::voice::eleven::ensure_agent("sk_test").unwrap_err();
+    assert!(e.starts_with("ElevenLabs refused the voice XYZ (the one voice.voice names) for the call's agent: it has live moderation, which agents may not use. Pick another: herdr-projects set voice.voice <voice id>"), "{e}");
+    assert!(e.contains("herdr-projects set voice.voice none") && e.contains("voice_live_moderated_not_allowed"));
+    assert_eq!(n, log.borrow().len(), "the logging fake was swapped out");
+    // other refusals are said as they came; the built-in voice is one agents may use
+    assert_eq!(sw::voice::eleven::refused("ElevenLabs answered 500 to POST /x: oops", &sw::voice::agent::made()), "ElevenLabs answered 500 to POST /x: oops");
+    assert_eq!(sw::voice::agent::VOICE, "bIHbv24MWmeRgasZH58o");
+    let log = fake_eleven();
+    std::fs::write(sw::store::files::config_dir().join("config.json"), json!({ "voice.language": "sv", "coordinator.agent": "none", "watcher.agent": "none" }).to_string()).unwrap();
     // a token for one call
     assert_eq!(sw::voice::eleven::token("sk_test", "agent_1").unwrap(), "tok-short-lived");
     assert_eq!(log.borrow().last().unwrap().1, "/v1/convai/conversation/token?agent_id=agent_1");

@@ -81,10 +81,25 @@ fn make_agent(key: &str) -> Result<String, String> {
     }
     let body = agent_body(&m, &ids);
     let old = was.t("agent");
-    let agent = if !old.is_empty() && request(key, "PATCH", &format!("/v1/convai/agents/{old}"), &body).is_ok() { old } else { request(key, "POST", "/v1/convai/agents/create", &body)?.t("agent_id") };
+    // The agent made before is updated; one ElevenLabs no longer has is made again. Any other refusal is said.
+    let patched = if old.is_empty() { None } else { Some(request(key, "PATCH", &format!("/v1/convai/agents/{old}"), &body)) };
+    let agent = match patched {
+        Some(Ok(_)) => old,
+        Some(Err(e)) if !e.contains(" 404 ") => return Err(refused(&e, &m)),
+        _ => request(key, "POST", "/v1/convai/agents/create", &body).map_err(|e| refused(&e, &m))?.t("agent_id"),
+    };
     if agent.is_empty() { return Err("ElevenLabs made the agent but gave no id for it".into()); }
     let _ = write_json(&state_file(), &json!({ "stamp": stamp, "agent": agent, "tools": kept }));
     Ok(agent)
+}
+/// ElevenLabs' refusal in plain words: a voice agents may not use (one with live moderation, one not in your account)
+/// says which, and how to pick another.
+pub fn refused(e: &str, m: &Made) -> String {
+    let low = e.to_lowercase();
+    if !(low.contains("voice") && (low.contains(" 400 ") || low.contains(" 403 ") || low.contains(" 404 ") || low.contains(" 422 "))) { return e.into(); }
+    let why = if low.contains("moderat") { "it has live moderation, which agents may not use" } else if low.contains("not_found") || low.contains("not found") || low.contains(" 404 ") { "it is not in your ElevenLabs account" } else { "agents may not use it" };
+    let ours = if m.voice == agent::VOICE { "the built-in one" } else { "the one voice.voice names" };
+    format!("ElevenLabs refused the voice {} ({ours}) for the call's agent: {why}. Pick another: herdr-projects set voice.voice <voice id> (one from your ElevenLabs account, Voices, that agents can use and that speaks Swedish), or herdr-projects set voice.voice none for the built-in one. ElevenLabs said: {}", m.voice, crate::text::cut(e, 300))
 }
 /// A token for one call over WebRTC, short-lived: the one thing the page gets.
 pub fn token(key: &str, agent: &str) -> Result<String, String> {
