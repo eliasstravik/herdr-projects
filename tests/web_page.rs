@@ -58,10 +58,10 @@ fn the_pages_styles_nothing_under_13px_targets_a_thumb_can_hit_and_a_draft_kept_
     assert!(!has(CSS, r"min-height: (2\d|3\d)px"), "no tap target under 40px");
     for part in ["full", "right", "dotted"] { assert!(CSS.contains(&format!(".sw-dot-{part} {{")), "{part}"); }
     assert!(CSS.contains(".sw-board.has-task .sw-back { display: none; }"), "one back arrow at a time on a phone");
-    // the board's own chat full screen hides the header with the open task and their arrows: the chat's own shows
-    // then, so there is always one
+    // the chat full screen hides the header with the open task and their arrows: the full screen button, in its place,
+    // goes back then (chat.js), so there is always a way back
     let full = include_str!("../crates/web/src/webui/page/chat.css");
-    assert!(full.contains(".sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-body,") && full.contains(".sw-board.sw-chat-full .sw-chat-back { display: inline-flex; }"));
+    assert!(full.contains(".sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-body,") && !full.contains("sw-chat-back"));
     // the chat's switch is a thumb's size to tap, though drawn smaller (the web UI's own expander)
     assert!(full.contains("@media (pointer: coarse) { .sw-chatbar .icon-button { min-width: var(--touch-target, 40px); min-height: var(--touch-target, 40px); } .sw-who-pick::before { content: \"\"; position: absolute; inset: -4px 0; } }"));
     assert!(has(CSS, r"\.sw-row\.is-selected \{[^}]*box-shadow: inset 3px 0 0 var\(--accent"), "the selected row has a bar in its gutter, not a tint alone");

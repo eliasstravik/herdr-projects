@@ -102,7 +102,11 @@ fn the_chats_bar_has_a_switch_hide_full_screen_and_a_grip_and_the_boards_own_con
     assert!(CHAT.contains(r#"const hide = h("button.icon-button.sw-hide", { type: "button", onclick: () => onPress("chatMessage") });"#) && CHAT.contains(r#"hide.title = open ? "Hide the chat" : "Show the chat";"#));
     // full screen: the board's header and list step aside; its own arrow, Esc or the board's arrow go back
     assert!(CSS.contains(".sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }"));
-    assert!(CHAT.contains("hide.hidden = full; grow2.hidden = full;") && BOARD_JS.contains("if (chat.full()) return chat.full(false);") && BOARD_JS.contains("chat.full() ? chat.full(false) : closing?.()"));
+    assert!(CHAT.contains("hide.hidden = full;\n") && !CHAT.contains("grow2.hidden") && CHAT.contains(r#"grow2.replaceChildren(icon(full ? "shrink" : "expand"));"#) && CHAT.contains(r#"grow2.title = full ? "Exit full screen" : "Full screen";"#));
+    assert!(!CHAT.contains("sw-chat-back") && BOARD_JS.contains("if (chat.full()) return chat.full(false);") && BOARD_JS.contains("chat.full() ? chat.full(false) : closing?.()"));
+    // a step in the browser's history: a phone's back gesture leaves it; left by its button or Esc, the step is taken back
+    assert!(CHAT.contains(r#"if (on) history.pushState({ ...(history.state || {}), swFull: 1 }, "", location.href);"#) && CHAT.contains("else if (history.state?.swFull) history.back();"));
+    assert!(CHAT.contains("const popped = () => { if (full && !history.state?.swFull) { full = false; layout(); } };") && CHAT.contains(r#"window.removeEventListener("popstate", popped);"#));
     // the grip on the bar sets the chat's share of the screen, kept in this browser, a quarter to four fifths
     assert!(CHAT.contains(r#"const SPLIT = "sw-chat-split", LEAST = 0.25, MOST = 0.8, START = 0.46, STEP = 0.05;"#) && CHAT.contains("const end = () => { for (const [n, fn] of [[\"pointermove\", move], [\"pointerup\", end], [\"pointercancel\", end]]) grip.removeEventListener(n, fn); keepSplit(split); };"));
     // docked, the board ends where the web UI's chat begins: its share under the list, or hidden only the web UI's box

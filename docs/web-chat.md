@@ -39,7 +39,8 @@ In a wide window the list and the chat stand side by side, the bar at the top of
 - **Hide** (the chevron) keeps only the box: the list gets the screen. **Show** brings the conversation back. It is the
   board's `alt+c`, so the board remembers which, also over a reload.
 - **Full screen** (the arrows): the board's header and list step aside and the chat has the whole screen under the bar.
-  The arrow at the bar's left, the board's own arrow or Esc go back.
+  The same button, in the same place, then shows the arrows going in and goes back; so do Esc and a phone's back
+  gesture (or the browser's Back), as full screen is a step in the browser's history.
 - **The grip** on the bar's top edge (on a phone, and on a desktop when pointed at) moves where the list ends and the
   chat begins: from a quarter to four fifths of the screen, kept in this browser. The arrow keys move it a step, Home
   puts it back.

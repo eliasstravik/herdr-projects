@@ -58,7 +58,7 @@ fn an_update_is_read_only_in_a_pause_never_while_you_talk_or_over_the_voice() {
 #[test]
 fn the_toggle_stands_in_the_chats_bar_and_the_call_page_takes_its_ticket_out_of_the_address() {
     // in the bar beside Hide and Full screen, the call's row under the bar; its word where the bar has room
-    assert!(CHAT.contains(r#"const bar = h("div.sw-chatbar", grip, back, who, state, h("span.sw-chatbar-space"), phone.btn, hide, grow2);"#));
+    assert!(CHAT.contains(r#"const bar = h("div.sw-chatbar", grip, who, state, h("span.sw-chatbar-space"), phone.btn, hide, grow2);"#));
     assert!(CHAT.contains(r#"const el = h("footer.sw-chat", { "aria-label": "Chat" }, bar, phone.strip, note, own);"#));
     assert!(BTN.contains(r#"btn.replaceChildren(icon("phone"), h("span.sw-call-label", "Call"));"#) && BTN.contains(r#"btn.setAttribute("aria-label", "Call");"#));
     assert!(CSS.contains("@container (min-width: 521px) { .sw-call-label { display: inline; } }"));

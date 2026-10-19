@@ -5,7 +5,7 @@
 // box (compose.js), with what the box does with your words: who they are for, kept with them until they are sent, and
 // who a file attached is for. The bar's grip sets how much of the screen the chat has. Who it is, what the box says
 // while empty and what its buttons do come from the board (webui/model/side.rs).
-/* global document, window, sessionStorage, localStorage, getComputedStyle */
+/* global document, window, history, location, sessionStorage, localStorage, getComputedStyle */
 import { h, icon, markEl } from "./dom.js";
 import { composeEl } from "./compose.js";
 import { saidEl } from "./said.js";
@@ -82,14 +82,13 @@ export function chatEl({ onSend, onPress, onDock }) {
   const who = h("div.sw-who", { role: "group", "aria-label": "Talk to" });
   const state = h("span.sw-who-status");
   const hide = h("button.icon-button.sw-hide", { type: "button", onclick: () => onPress("chatMessage") });
+  // Full screen and back: one button in one place, its icon saying which it does now.
   const grow2 = h("button.icon-button.sw-grow", { type: "button", onclick: () => setFull(!full) });
-  // The way back to the list while the chat is full screen, where the board's header steps aside.
-  const back = h("button.icon-button.sw-chat-back", { type: "button", "aria-label": "Back to the board", title: "Back to the board", onclick: () => setFull(false) }, icon("back"));
   const grip = h("div.sw-split", { tabIndex: 0, role: "separator", "aria-orientation": "horizontal", "aria-label": "Resize the chat", title: "Drag to give the chat more or less room" });
   const note = h("p.sw-chat-note", { hidden: true });
   // A voice call with whoever the chat talks to: its button in the bar, its row under it (callbtn.js).
   const phone = callEl();
-  const bar = h("div.sw-chatbar", grip, back, who, state, h("span.sw-chatbar-space"), phone.btn, hide, grow2);
+  const bar = h("div.sw-chatbar", grip, who, state, h("span.sw-chatbar-space"), phone.btn, hide, grow2);
   const said = saidEl();
   const own = h("div.sw-own", said.el, compose);
   let labels = { enter: "", delegate: "" };
@@ -137,13 +136,24 @@ export function chatEl({ onSend, onPress, onDock }) {
     grip.hidden = !sized || !open;
     hide.replaceChildren(icon(open ? "down" : "up"));
     hide.title = open ? "Hide the chat" : "Show the chat"; hide.setAttribute("aria-label", hide.title); hide.setAttribute("aria-pressed", String(!open));
-    // Full screen, its own arrow at the left goes back: one way back at a time.
-    hide.hidden = full; grow2.hidden = full;
+    // Full screen, the same button in the same place goes back (Hide has nothing to hide then).
+    hide.hidden = full;
     grow2.replaceChildren(icon(full ? "shrink" : "expand"));
-    grow2.title = full ? "Back to the board" : "Full screen"; grow2.setAttribute("aria-label", grow2.title); grow2.setAttribute("aria-pressed", String(full));
+    grow2.title = full ? "Exit full screen" : "Full screen"; grow2.setAttribute("aria-label", grow2.title); grow2.setAttribute("aria-pressed", String(full));
     dock?.fit();
   }
-  function setFull(on) { if (full === on) return; full = on; layout(); }
+  // Full screen is a step in the browser's history too, so a phone's back gesture (or Back) leaves it, as it left the
+  // web UI's own full screen chat before. Left any other way (its button, Esc), that step is taken back.
+  function setFull(on) {
+    if (full === on) return;
+    full = on; layout();
+    try {
+      if (on) history.pushState({ ...(history.state || {}), swFull: 1 }, "", location.href);
+      else if (history.state?.swFull) history.back();
+    } catch {}
+  }
+  const popped = () => { if (full && !history.state?.swFull) { full = false; layout(); } };
+  window.addEventListener("popstate", popped);
   // Dragging the grip moves where the list ends and the chat begins; the keys move it a step.
   grip.addEventListener("pointerdown", (e) => {
     if (e.button > 0) return;
@@ -189,7 +199,7 @@ export function chatEl({ onSend, onPress, onDock }) {
     typing: () => !!box.value.trim(),
     // The board closed: dictation stops and lets the microphone go, the web UI goes back to what it showed, and nothing
     // this box still hears of (an answer, a file, a dictation) changes the kept draft, which the next board's box shows.
-    destroy() { closed = true; destroy(); phone.destroy(); room.destroy(); dock.destroy(); window.removeEventListener("resize", layout); },
+    destroy() { closed = true; destroy(); phone.destroy(); room.destroy(); dock.destroy(); window.removeEventListener("resize", layout); window.removeEventListener("popstate", popped); },
     // The chat full screen: asked, set, or left.
     full: (on) => { if (on === undefined) return full; setFull(!!on); return full; },
     // Where the web UI's chat of whoever it talks to is (null: none, the board's own chat).

@@ -33,8 +33,6 @@
   .sw-who-status { order: 9; flex-basis: 100%; padding-left: 2px; }
   .sw-who-status.is-plain { display: none; }
 }
-.sw-chat-back { display: none; }
-.sw-board.sw-chat-full .sw-chat-back { display: inline-flex; }
 /* The grip on the bar's top edge: dragged, it moves where the list ends and the chat begins. */
 .sw-split { position: absolute; top: -9px; left: 50%; z-index: 2; display: grid; place-items: center; width: 56px; height: 18px; transform: translateX(-50%); cursor: ns-resize; touch-action: none; }
 .sw-split::before { content: ""; width: var(--space-8, 32px); height: 4px; border-radius: var(--radius-pill, 999px); background: var(--border-strong, #3e3830); }

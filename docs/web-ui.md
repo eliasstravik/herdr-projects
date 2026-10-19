@@ -134,9 +134,9 @@ machine: the board says so instead of opening it.
 ## The chat full screen
 
 **Full screen** (the arrows in the chat's bar) gives the chat the whole screen: the board's header and list step aside,
-the bar stays at the top with its arrow back. It is the web UI's own chat view of whoever the chat talks to, docked
+the bar stays at the top. It is the web UI's own chat view of whoever the chat talks to, docked
 ([the web board's chat](web-chat.md)), so it reads as it does for any agent; where the web UI has none to show, the
-board's own conversation. The bar's arrow, the board's own or Esc go back.
+board's own conversation. The same button (its arrows now going in), Esc or a phone's back gesture go back.
 
 ## The same code decides
 
