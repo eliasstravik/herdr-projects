@@ -22,6 +22,10 @@ herdr plugin link /absoluter/pfad/zu/herdr-control
 
 Danach in Herdr die Aktion **Herdr Control öffnen** ausführen. Das Control-Fenster öffnet sich als Split-Pane. Für die Projects-Integration muss `herdr-projects` über die Shell-PATH erreichbar sein; alternativ kann `HERDR_PROJECTS_BIN` auf das Programm zeigen.
 
+### Benötigte Herdr-Projects-Erweiterung
+
+Die CLI-Auswahl und der interaktive Provider-Fallback benötigen auch die Herdr-Projects-Änderungen aus demselben Feature-Branch. Ein älterer Herdr-Projects-Stand kennt nicht alle hier aufgeführten Agenten und kann neue Namen beim Anwenden zurückweisen. Für lokale Tests den Fork-Branch bauen und `HERDR_PROJECTS_BIN` auf dessen `target/quick/herdr-projects` setzen. Nach Integration der Erweiterung in die verwendete Herdr-Projects-Version genügt der normale PATH-Eintrag.
+
 ## Herdr-Tastenkürzel
 
 Die globale Herdr-Konfiguration verwendet den Prefix `§`, Kurzbefehle zum Wechseln zwischen Tabs, Workspaces und Panes sowie einen Lazygit-Popup im fokussierten Pane. Neue Agenten werden davon unabhängig als Split-Panes im bestehenden Tab gestartet.
