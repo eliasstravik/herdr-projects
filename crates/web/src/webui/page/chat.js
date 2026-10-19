@@ -79,7 +79,7 @@ export function chatEl({ onSend, onPress, onFull }) {
   // The way back while the board's own chat is full screen, where the board's header with its arrow steps aside.
   const back = h("button.icon-button.sw-chat-back", { type: "button", "aria-label": "Back to the board", title: "Back to the board", onclick: () => said.full(false) }, icon("back"));
   const note = h("p.sw-chat-note", { hidden: true });
-  // A voice call with whoever the chat talks to: its toggle beside Hide, its strip over the conversation (callbtn.js).
+  // A voice call with whoever the chat talks to: its button beside Hide, its row over the conversation (callbtn.js).
   const phone = callEl();
   let labels = { enter: "", delegate: "" };
   // The first word typed (or file attached) locks who the draft is for, as the box then says; an empty box lets it go.

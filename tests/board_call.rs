@@ -130,5 +130,15 @@ fn with_words_in_the_box_the_call_key_is_not_pressed_and_a_web_call_shows_on_the
     assert!(regex::Regex::new(r"ctrl\+t +hang up the call").unwrap().is_match(&s.text()), "{}", s.text());
     s.press(&["esc"]);
     s.press(&["ctrl+t"]); assert!(call::get().is_none());
+    s.load();
+    assert!(!s.text().contains("Voice call"), "{}", s.text());
+    // a call hung up elsewhere (the web board's End): its row goes at the next read, and nothing stays in its place
+    assert_eq!(sw::webui::voice::api::start(&json!({ "client": "test" }), || Ok("drive".into())).0, 200);
+    sw::board::keys::name_as_buttons(false);
+    s.load();
+    assert!(s.text().contains("Voice call"));
+    call::end("hung up on the web board");
+    s.load();
+    assert!(!s.text().contains("Voice call") && !s.text().contains("hung up"), "{}", s.text());
     sw::voice::eleven::set_fake(None);
 }

@@ -10,8 +10,9 @@ the board's own agents, as if you had typed it in the chat.
 
 ## Starting a call
 
-- **The web board:** the **Call** button in the chat, beside Hide. Tap it again (**Hang up**) to end the call. It uses
-  the microphone and speaker of the phone or computer the page is open on, with the browser's echo cancelling.
+- **The web board:** the **Call** button in the chat, beside Hide. While the call rings or is on, the button gives way
+  to the call's row, whose **End** (**Cancel** while it rings) hangs up. It uses the microphone and speaker of the
+  phone or computer the page is open on, with the browser's echo cancelling.
 - **The terminal board:** `Ctrl+T` (t for talk). The key again hangs up. The call runs on the computer you sit at, not on the
   machine the board runs on ([below](#from-the-terminal-board)).
 
@@ -54,8 +55,14 @@ The first call asks the browser for the microphone once. A call is private: it n
   said once, the way `board.notify` tells you. Never while you talk, never over the voice agent: the next pause.
   "Be quiet" stops those updates for the rest of the call; answers to what you sent still come.
 - **Quick questions** ("what needs me?") are answered from the board at once, without asking an agent.
-- **The chat shows the call:** a line under who you talk to says the call is on, with the last thing said. What was
-  sent is in the agent's chat, as if you had typed it.
+- **The chat shows the call:** a row under who you talk to says the call is on, with the last thing said. What was
+  sent is in the agent's chat, as if you had typed it. On the web board the row has a live dot, how long the call has
+  run, who it is with, how it stands (Listening, Speaking, Muted), the computer that holds it when that is not the
+  page's own browser, Mute and End. A call that rings shows "Calling…" with a yellow dot and Cancel.
+- **Nothing stays when it ended.** The row goes the moment a call ends, on both boards. The web board says so in one
+  small line, "You hung up · 2 min · 19:20" (or "Call ended" when the other side ended it), which fades out after a
+  few seconds; why a call could not start (no microphone, not allowed) is said the same way, in red, for longer. The
+  terminal board says "Hung up." once at its foot, as it says everything that just happened.
 - A call with nobody saying anything for two minutes hangs up by itself. None is longer than an hour.
 
 ## From the terminal board

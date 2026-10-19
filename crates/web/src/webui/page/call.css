@@ -1,21 +1,46 @@
-/* A voice call: its toggle in the web board's chat and the strip over the conversation while a call is on
-   (callbtn.js), in the web UI's own look. */
+/* A voice call in the web board's chat (callbtn.js): the Call button beside Hide, the call's row under the line that
+   says who the chat talks to while it rings or is on, and the short line that fades out when it ended, in the web UI's
+   own look. */
 .sw-call { flex: none; margin-left: auto; color: var(--sw-dim); display: inline-flex; align-items: center; gap: var(--space-1, 4px); min-height: 40px; }
 /* Beside Hide when Hide shows (Hide then takes the right edge), else at the right edge itself. */
 .sw-hide:not([hidden]) + .sw-call { margin-left: 0; }
 .sw-call[hidden] { display: none; }
-.sw-call svg, .sw-call-mute svg { width: 16px; height: 16px; }
-.sw-call.is-live { color: var(--sw-red, #e06c75); font-weight: var(--fw-semibold, 600); }
-.sw-call:focus-visible, .sw-call-mute:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
-.sw-call-strip { display: flex; flex-direction: column; gap: var(--space-1, 4px); padding: var(--space-2, 8px) var(--space-3, 12px); border: var(--hairline, 1px) solid var(--sw-line); border-radius: var(--radius-lg, 12px); background: var(--sw-panel); font-size: var(--fs-sm, 13px); }
-.sw-call-strip[hidden] { display: none; }
+.sw-call svg, .sw-call-mute svg, .sw-call-end svg { width: 16px; height: 16px; }
+.sw-call:focus-visible, .sw-call-mute:focus-visible, .sw-call-end:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
+.sw-call-strip { display: flex; flex-direction: column; }
+.sw-call-strip[hidden], .sw-call-row[hidden], .sw-call-ended[hidden], .sw-call-time[hidden] { display: none; }
+/* The row: live is the board's green, ringing its yellow, as a faint wash and its edge; one line where it fits. */
+.sw-call-row { --sw-call-c: var(--sw-green); display: flex; flex-direction: column; gap: var(--space-1, 4px); padding: var(--space-1, 4px) var(--space-1, 4px) var(--space-1, 4px) var(--space-3, 12px); border: var(--hairline, 1px) solid color-mix(in srgb, var(--sw-call-c) 35%, var(--sw-line)); border-radius: var(--radius-lg, 12px); background: color-mix(in srgb, var(--sw-call-c) 8%, var(--sw-panel)); font-size: var(--fs-sm, 13px); }
+.sw-call-row[data-state="ringing"] { --sw-call-c: var(--sw-yellow); }
 .sw-call-top { display: flex; align-items: center; gap: var(--space-2, 8px); min-width: 0; }
-.sw-call-where { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sw-text); }
-.sw-call-mute { flex: none; display: inline-flex; align-items: center; gap: var(--space-1, 4px); min-height: 40px; color: var(--sw-dim); }
+.sw-call-dot { flex: none; align-self: flex-start; margin-top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--sw-call-c); box-shadow: 0 0 0 0 color-mix(in srgb, var(--sw-call-c) 60%, transparent); animation: sw-call-pulse 1.6s ease-out infinite; }
+.sw-call-row[data-state="ringing"] .sw-call-dot { animation-duration: 0.9s; }
+@keyframes sw-call-pulse { to { box-shadow: 0 0 0 6px color-mix(in srgb, var(--sw-call-c) 0%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .sw-call-dot { animation: none; } }
+.sw-call-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.sw-call-name { display: flex; align-items: baseline; gap: var(--space-2, 8px); min-width: 0; }
+.sw-call-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sw-strong); font-weight: var(--fw-semibold, 600); }
+.sw-call-time { flex: none; color: var(--sw-call-c); font-variant-numeric: tabular-nums; }
+.sw-call-sub { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2, 8px); min-width: 0; }
+.sw-call-where { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sw-dim); font-size: var(--fs-xs, 12px); }
+.sw-call-where:empty { display: none; }
+.sw-call-acts { flex: none; display: flex; align-items: center; gap: var(--space-1, 4px); }
+.sw-call-mute, .sw-call-end { flex: none; display: inline-flex; align-items: center; gap: var(--space-1, 4px); min-height: 40px; }
+.sw-call-mute { color: var(--sw-dim); }
 .sw-call-mute[hidden] { display: none; }
 .sw-call-mute[aria-pressed="true"] { color: var(--sw-yellow, #e5c07b); }
+/* End: the way to hang up, red as a call's always is, quiet enough to sit beside Mute. */
+.sw-call-end { color: var(--sw-red, #e06c75); background: color-mix(in srgb, var(--sw-red, #e06c75) 14%, transparent); border-color: transparent; font-weight: var(--fw-semibold, 600); }
+.sw-call-end:hover:not(:disabled) { background: color-mix(in srgb, var(--sw-red, #e06c75) 24%, transparent); }
 .sw-call-hear { min-height: 48px; font-weight: var(--fw-semibold, 600); }
 .sw-call-hear[hidden], .sw-call-fix[hidden] { display: none; }
-.sw-call-fix { flex: none; min-height: 40px; color: var(--sw-dim); }
+/* (a link at the end of the line under it, so that Mute and End keep their room on a phone) */
+.sw-call-fix { flex: none; min-height: 0; padding: 0; border: 0; background: none; color: var(--sw-dim); font-size: var(--fs-xs, 12px); text-decoration: underline; text-underline-offset: 0.2em; }
+.sw-call-lines:empty { display: none; }
+.sw-call-lines { padding: 0 var(--space-2, 8px) var(--space-1, 4px) calc(8px + var(--space-2, 8px)); }
 .sw-call-line { margin: 0; color: var(--sw-dim); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .sw-call-line b { color: var(--sw-text); font-weight: var(--fw-semibold, 600); }
+/* A call that ended: one small line, no box, gone after a few seconds (callbtn.js); one that could not start, red. */
+.sw-call-ended { margin: 0; padding-inline: var(--space-1, 4px); color: var(--sw-dim); font-size: var(--fs-xs, 12px); font-variant-numeric: tabular-nums; transition: opacity 600ms ease-in; }
+.sw-call-ended.is-failed { color: var(--sw-red, #e06c75); }
+.sw-call-ended.is-fading { opacity: 0; }
