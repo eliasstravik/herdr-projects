@@ -1,7 +1,10 @@
 //! The chat at the bottom, from the board's side: showing and hiding the latest message, scrolling one longer than its
-//! box, and what you just sent to a task's agent, which stands in the box until that agent says something new.
+//! box, and what you just sent to a task's agent or a heading's coordinator, which stands in the box as yours from the
+//! moment you send it until their own conversation has it or they say something new.
 use super::Effect;
+use super::coords::Target;
 use crate::board::state::{Sent, State};
+use crate::coordinator::look::Look;
 use crate::json::*;
 
 /// The one key for the latest message, both ways. A start that failed says why even while the chat is hidden, so
@@ -17,9 +20,36 @@ pub fn toggle(s: &mut State, fx: &mut Vec<Effect>) {
 pub fn shown(s: &State) -> bool { s.chat_fit.is_some() }
 /// A task's last words and the turn they were said in.
 pub fn turn_mark(r: &Obj) -> (String, Value, Value) { let h = r.at("handled"); (r.t("said"), h.at("msg").clone(), h.at("comp").clone()) }
+/// Your words to a task's agent, the moment you send them: they stand in its chat as yours at once.
 pub fn note_sent(s: &mut State, id: &str, text: &str) {
     let r = s.items.iter().find(|x| x.s("id") == id).cloned().unwrap_or_default();
-    s.just_sent.insert(id.into(), Sent { text: text.into(), over: turn_mark(&r) });
+    s.just_sent.insert(id.into(), Sent { text: text.into(), over: turn_mark(&r), at: s.now });
+}
+/// Where a coordinator's last words stand: something new said, or an error, moves it.
+fn talk_mark(v: &Look) -> String { format!("{:?}|{}|{}", v.talk.last().map(|m| (m.you, &m.text)), v.said, v.error) }
+/// Your words to a coordinator the chat shows (a heading's, or another machine's Coordinator), the moment you send them.
+pub fn note_coord(s: &mut State, t: &Target, text: &str) {
+    let v = super::coords::look_of(s, t).unwrap_or_default();
+    s.just_sent.insert(t.key(), Sent { text: text.into(), over: (talk_mark(&v), Value::Null, Value::Null), at: s.now });
+}
+/// Another machine's dispatch that carries the words you just sent the coordinator kept under `key`.
+fn carries(j: &Obj, key: &str, sent: &Sent) -> bool {
+    let host = key.strip_prefix("co:").and_then(|k| k.split('\t').next()).unwrap_or_default();
+    !host.is_empty() && j.s("remote") == host && j.s("text") == format!("@{host} {}", sent.text)
+}
+/// A dispatch on its way that the chat shows as your words: no row of its own over the chat. One that failed has one.
+pub fn in_chat(s: &State, j: &Obj) -> bool { j.s("state") != "error" && s.just_sent.iter().any(|(k, x)| carries(j, k, x)) }
+/// What you just sent this coordinator, while its own conversation does not show it yet (`v`: the coordinator as the
+/// chat reads it now). It goes when that conversation has your words, says something new once they are there, or the
+/// words did not get there.
+pub fn coord_sent(s: &mut State, t: &Target, v: &Look) -> String {
+    let key = t.key();
+    let Some(sent) = s.just_sent.get(&key).cloned() else { return String::new() };
+    let head: String = sent.text.chars().take(200).collect(); // as much as a queued message keeps of them
+    let on_way = s.data.jobs.iter().any(|j| carries(j, &key, &sent) && j.s("state") != "error");
+    let failed = s.data.jobs.iter().any(|j| carries(j, &key, &sent) && j.s("state") == "error" && j.f("created") as i64 >= sent.at);
+    if failed || v.sent.contains(&head) || (!on_way && talk_mark(v) != sent.over.0) { s.just_sent.remove(&key); return String::new(); }
+    sent.text
 }
 /// What you just sent this task's agent, while it has said nothing new since.
 pub fn sent_to(s: &mut State, r: &Obj) -> String {

@@ -46,7 +46,7 @@ pub fn relist(s: &mut State) {
     let mine = &s.data.items;
     s.items = if s.scope.is_empty() { mine.clone() } else if s.scope == "*" { mine.iter().cloned().chain(super::remotes::others(s).into_iter().flat_map(|m| m.items.iter().cloned())).collect() } else { s.remotes.get(&s.scope).map(|m| m.items.clone()).unwrap_or_default() };
     super::pending::overlay(s);
-    s.jobs = if s.archive_view { vec![] } else { s.data.jobs.clone() };
+    s.jobs = if s.archive_view { vec![] } else { s.data.jobs.iter().filter(|j| !super::chat::in_chat(s, j)).cloned().collect() };
     let f = filter_now(s);
     s.autos = autos_shown(s, &f);
     super::pending::overlay_autos(s);

@@ -9,6 +9,10 @@ use crate::shown::ink::Ink;
 
 pub fn apply(s: &mut State, d: Done, fx: &mut Vec<Effect>) {
     super::pending::answered(s, &d, fx);
+    // Words that did not get there no longer stand in the chat as yours.
+    if !d.ok && ["Tell", "far:tell"].contains(&d.kind.as_str()) { s.just_sent.remove(&d.about); }
+    // Words that went to another machine's coordinator: that machine is asked at once for what its chat shows now.
+    if d.kind == "Dispatch" { fx.push(Effect::Poll(true)); }
     if let Some((text, ink)) = d.flash {
         // Plainly sent to the agent: the box shows your words; said only while the chat is hidden.
         if ink == Ink::Plain { if !s.chat_open { s.flash(text, Ink::Green); } } else { s.flash(text, ink); }
@@ -16,11 +20,11 @@ pub fn apply(s: &mut State, d: Done, fx: &mut Vec<Effect>) {
     for t in d.then {
         match t {
             Then::Sel(id) => { s.sel = id; }
-            Then::NoteSent { id, text } => super::chat::note_sent(s, &id, &text),
             Then::Archived(id) => { if let Some(r) = s.items.iter().find(|r| r.s("id") == id) { let mut r = (**r).clone(); r.remove("pending"); s.archive_undo = Some(r); } s.left = id; }
             Then::Left(id) => s.left = id,
             Then::AutoGone => { s.auto_open = false; s.editing = None; }
             Then::Unsent { text, to } => {
+                s.just_sent.retain(|_, x| x.text != text.trim());
                 if s.input.is_empty() { s.input.set_text(&text); } else { s.draft_away = Some(Away { text, to, cwd: s.ctx.cwd.clone(), warned: false }); }
             }
             Then::Leave => leave(s, fx),

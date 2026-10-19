@@ -599,6 +599,13 @@ over an empty line to type on. It stays until the answer comes; then the answer 
 grey, for the Coordinator and a task's agent alike (also when it answers in the very same words as before). The old
 message is never shown under your words: it is above, with the rest of the conversation.
 
+"The moment you send it" means before the words have reached anyone, whoever the chat talks to: the Coordinator, a
+task's agent here or on another machine, a machine's or a repo's coordinator, another machine's Coordinator. Until
+their own conversation has the words, the line over the box says so (`Sending…` for a task's agent, `sending…` for a
+coordinator), and nothing else of them stands over the chat: a send to another machine has no row "on its way" over the
+box, only one that failed, with why. Words that did not get there leave the box; on this machine they go back to the
+line you type on.
+
 That holds also for words you send while the agent works: Claude Code queues them and they go in during its turn, and the
 board reads them there. For the Coordinator this holds when the board is closed and opened again; for a task's agent, for
 as long as the board stays open.

@@ -71,8 +71,6 @@ impl Job {
 pub enum Then {
     /// Select this task (one that was just added).
     Sel(String),
-    /// What was sent to a task's agent: it stands in the box until the agent says something new.
-    NoteSent { id: String, text: String },
     /// A task was archived: the undo key brings it back.
     Archived(String),
     /// A task left the list (archived, or restored out of the archive): the message says where the selection went.
@@ -137,7 +135,7 @@ fn run_one(job: Job) -> Done {
             Job::Tell { id, text, fresh } => {
                 let out = talk::reply(&id, &text, crate::status_words::who::YOU)?;
                 let ink = if out.msg.starts_with("queued") { Ink::Yellow } else { Ink::Green };
-                let mut d = Done::say(out.msg.clone(), ink).and(Then::NoteSent { id, text });
+                let mut d = Done::say(out.msg.clone(), ink);
                 if !fresh && out.msg == "Sent to the agent" { d.flash = Some((out.msg, Ink::Plain)); } // plainly sent: the box shows your words (said only with the chat hidden)
                 d
             }

@@ -48,7 +48,10 @@ pub fn enter(s: &mut State, text: &str, r: Option<&Obj>, fx: &mut Vec<Effect>) {
     match &reply_to {
         // A reply to one of this machine's tasks that never had an agent starts one with that message.
         Some(r) if !r.b("host") && !is_agent(r) && ["todo", "progress"].contains(&r.s("stage")) => fx.push(Effect::Run(Job::Tell { id: r.t("id"), text: words.trim().to_string(), fresh: true })),
-        Some(r) if has_agent(r) => if r.b("host") { fx.push(Effect::Run(far(s, r, "tell", json!({ "text": words.trim() }), false))); } else { fx.push(Effect::Run(Job::Tell { id: r.t("id"), text: words.trim().to_string(), fresh: false })); },
+        Some(r) if has_agent(r) => {
+            if r.b("host") { fx.push(Effect::Run(far(s, r, "tell", json!({ "text": words.trim() }), false))); } else { fx.push(Effect::Run(Job::Tell { id: r.t("id"), text: words.trim().to_string(), fresh: false })); }
+            super::chat::note_sent(s, r.s("id"), words.trim()); // yours in its chat at once, not when it got there
+        }
         _ => dispatch(s, words.trim(), false, reply_to.as_ref(), fx),
     }
     s.input.set_text("");
@@ -78,6 +81,8 @@ pub fn dispatch(s: &mut State, text: &str, delegate: bool, about: Option<&Obj>, 
         let named_here = named.as_ref().map(|(m, _)| *m == label).unwrap_or(false);
         let words = if about.map(|a| a.b("host")).unwrap_or(false) || !named_here { text.to_string() } else { named.unwrap().1 };
         let m = s.remotes[&label].machine.clone();
+        // To the Coordinator of the machine whose board shows: the chat shows it as yours at once.
+        if about.is_none() { if let Some(t) = super::coords::far_top(s).filter(|t| t.host == label) { super::chat::note_coord(s, &t, &words); } }
         fx.push(Effect::Run(Job::Dispatch { machine: m, text: words, delegate, about: about.filter(|a| a.b("host")).map(|a| a.t("rid")).unwrap_or_default(), to: String::new() }));
         fx.push(Effect::Load);
         return;

@@ -20,7 +20,7 @@ const CHAT_STATUS_MIN: usize = 20;
 #[derive(Clone, Debug, Default)]
 /// `call`: the lines a voice call on now adds under the line that says who (chat_call.rs).
 pub struct Who { pub mark: Inked, pub tag: String, pub name: String, pub status: String, pub progress: Vec<Inked>, pub text: String, pub parts: Vec<Part>, pub mine: bool, pub raw: bool, pub said: bool, pub turn: String, pub note: String, pub always: bool, pub ink: Ink, pub tint: Ink, pub call: Vec<Inked> }
-fn parts_text(parts: &[Part]) -> String { parts.iter().map(|p| format!("{}{}", if p.by.is_empty() { String::new() } else { format!("{}:\n", p.by) }, p.text)).collect::<Vec<_>>().join("\n\n") }
+pub fn parts_text(parts: &[Part]) -> String { parts.iter().map(|p| format!("{}{}", if p.by.is_empty() { String::new() } else { format!("{}:\n", p.by) }, p.text)).collect::<Vec<_>>().join("\n\n") }
 /// Who the chat talks to now, as the chat draws it, with a voice call on now. None in find.
 pub fn chat_of(s: &mut State, t: &Theme, r: Option<&Obj>) -> Option<Who> {
     let mut w = who_of(s, t, r)?;
@@ -82,13 +82,14 @@ pub fn coord_who(t: &Theme, v: &crate::coordinator::look::Look, screen: &str, fr
         turn: v.turn.as_ref().map(|x| x.id.clone()).unwrap_or_default(), ink: if err { Ink::Red } else { color }, ..Default::default() }
 }
 /// The Coordinator of the machine whose board shows: what that machine sent of it with its tasks (coordinator/far.rs).
-fn far_who(s: &State, t: &Theme, far: &str) -> Who {
-    let m = &s.remotes[far];
+fn far_who(s: &mut State, t: &Theme, far: &str) -> Who {
     let name = format!("Coordinator on {far}");
-    if let Some(v) = crate::coordinator::far::read(&m.coord) {
+    if let Some(v) = crate::coordinator::far::read(&s.remotes[far].coord) {
         let turn = v.talk.last().map(|x| x.text.clone()).unwrap_or_default();
-        return Who { name, turn, ..coord_who(t, &v, "", false) };
+        let target = crate::board::update::coords::Target { host: far.into(), to: String::new(), name: name.clone() };
+        return super::coords::with_sent(s, &target, &v, Who { name, turn, ..coord_who(t, &v, "", false) });
     }
+    let m = &s.remotes[far];
     // An older version there sends nothing of it; a machine with none adds what you type as a task.
     let old = m.ok && m.coord.is_null();
     let parts = if old { vec![Part { text: format!("{far} runs an older herdr-projects, which does not send what its Coordinator says: update it there."), note: "old".into(), ..Default::default() }] } else { vec![] };
