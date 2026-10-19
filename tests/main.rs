@@ -253,6 +253,7 @@ mod warm_start;
 mod watcher;
 mod watcher_pace;
 mod web_attach;
+mod web_attach_far;
 mod web_autos;
 mod web_board;
 mod web_boards;
