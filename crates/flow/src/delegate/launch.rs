@@ -55,6 +55,17 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
     let level = start::effort_for(&kind, &model, &who.effort);
     let root = if t.b("root") { PathBuf::from(t.s("root")) } else { folder_of(t.s("id")) };
     installed::pre_trust(&kind, &root, &who.access);
+    // Keep the task's anchor terminal available for Mission Control and put every first agent in a real tiled pane.
+    // Subsequent resumes reuse their existing pane; retrying a failed start must not leave orphan splits behind.
+    let t = if !t.at("link").b("agentPaneCreated") && !t.b("attemptOf") {
+        let anchor = t.at("link").t("pane");
+        let split = api.pane_split(&anchor, &cwd_of(&t).display().to_string(), "right", &crate::store::files::board_env())?;
+        g.set(|t| {
+            let l = t.obj_mut("link");
+            l.put("tab", split.at("tab_id").clone()); l.put("pane", split.at("pane_id").clone()); l.put("terminal", split.at("terminal_id").clone());
+            l.put("agentPaneCreated", true);
+        })?
+    } else { t };
     let taken: Vec<String> = api.agents().unwrap_or_default().iter().filter(|a| a.s("pane_id") != t.at("link").s("pane")).map(|a| a.t("name")).filter(|n| !n.is_empty()).collect();
     let name = agent_name(&t, &taken);
     if plan::planner(&t) { flow::tabs::name_tab(&api, t.at("link").s("tab"), flow::tabs::PLANNER_TAB); } else { flow::tabs::name_agent_tab(&api, t.at("link").s("tab"), Some(&t)); }

@@ -1,6 +1,6 @@
 //! A plan before the build, the rest of the old suite's checks: "plan ready" as the row, herdr's sidebar, the
 //! notification, the panel and the web board say it, the read-only worktree and its mount, the yes and the review of
-//! the work against the plan; and the reviewer's look at a plan in tabs of its own, which is no round of the task's.
+//! the work against the plan; and the reviewer's look at a plan in tiled panes, which is no round of the task's.
 use crate::common;
 use common::board::{open, web};
 use common::*;
@@ -83,7 +83,7 @@ fn plan_ready_is_said_everywhere_the_worktree_stays_untouched_and_the_work_is_re
 }
 
 #[test]
-fn the_reviewers_look_at_a_plan_is_shown_runs_in_tabs_of_its_own_and_is_no_round_of_the_tasks_reviews() {
+fn the_reviewers_look_at_a_plan_runs_in_tiled_panes_and_is_no_round_of_the_tasks_reviews() {
     let w = plan_world(json!({ "plan.approve": "reviewer", "worker.agent": "codex", "review.rounds": 1, "review.when": "never" }));
     let bad = |subject: &str| json!({ "verdict": { "meets": true, "findings": [{ "severity": "major", "subject": subject, "where": "step 1", "proof": "read the plan" }], "text": "Not yet." } });
     w.script(json!({ "worker": [{ "plan": PLAN, "note": "Written." }, { "plan": PLAN, "note": "The same." }, { "plan": "# Plan with tests\n", "note": "Again." }, { "status": "working" }],
@@ -104,7 +104,8 @@ fn the_reviewers_look_at_a_plan_is_shown_runs_in_tabs_of_its_own_and_is_no_round
     assert!(P::go_words(&t).starts_with("Your plan is approved (the reviewer checked it against the task)"));
     // The look at a plan is no round of the task's reviews (the work itself is not reviewed here: review.when never).
     assert_eq!(review_history(&t).len(), 0);
-    let made: Vec<String> = calls(&w).iter().filter(|c| c.starts_with("tab create")).filter_map(|c| regex::Regex::new(r"--label (.+?) --env").unwrap().captures(c).map(|m| m[1].to_string())).collect();
-    assert_eq!(made, vec!["Plan review"; 3], "{:?}", calls(&w));
+    let made: Vec<String> = calls(&w).into_iter().filter(|c| c.starts_with(&format!("pane split {} ", t.at("link").s("pane")))).collect();
+    assert_eq!(made.len(), 3, "{:?}", calls(&w));
+    assert!(made.iter().all(|c| c.contains("--direction ") && c.ends_with("--no-focus")), "{made:?}");
     assert!(calls(&w).iter().any(|c| c.starts_with("agent prompt") && c.contains("role: reviewer.") && c.contains("adversarial reviewer of a plan")));
 }

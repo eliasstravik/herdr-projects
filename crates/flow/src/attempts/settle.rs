@@ -38,8 +38,8 @@ pub fn settle(id: &str, now: i64) -> Res<Option<Task>> {
             if t.s("stage") != "attempts" { return Ok(Change::Keep); }
             t.put("stage", "failed"); t.put("msg", format!("No attempt passed: {}", lines.join(" · ")));
             for (k, v) in failure_patch(&obj(json!({ "stage": "attempts", "auth": false, "agentCanFix": false, "title": "No attempt passed",
-                "detail": format!("All {} attempts are out:\n{}\n\nEach one's worktree, branch and tab are kept, to look at.", kids.len(), lines.iter().map(|l| format!("- {l}")).collect::<Vec<_>>().join("\n")),
-                "next": format!("Look at what each attempt did in its tab. Delegate the task again to start over with fresh attempts ({}); the old ones are removed then.", key_name("delegate")) }))) { t.insert(k, v); }
+                "detail": format!("All {} attempts are out:\n{}\n\nEach one's worktree, branch and pane are kept, to look at.", kids.len(), lines.iter().map(|l| format!("- {l}")).collect::<Vec<_>>().join("\n")),
+                "next": format!("Look at what each attempt did in its pane. Delegate the task again to start over with fresh attempts ({}); the old ones are removed then.", key_name("delegate")) }))) { t.insert(k, v); }
             Ok(Change::Write)
         })?));
     }
@@ -86,5 +86,5 @@ pub fn pick(id: &str, letter: &str) -> Res<Said> {
     };
     let word = agent_word(kid);
     let task = adopt(&tid, &want, "you")?;
-    Ok(say(task, format!("{tid}: attempt {want} ({word}) chosen. It goes on to review; the other attempts' tabs close.")))
+    Ok(say(task, format!("{tid}: attempt {want} ({word}) chosen. It goes on to review; the other attempts' panes close.")))
 }

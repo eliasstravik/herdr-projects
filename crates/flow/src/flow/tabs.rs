@@ -1,8 +1,5 @@
-//! A task's tabs in its herdr space: the agent's tab is named `Agent`, and each reviewer has a tab of its own, named
-//! after its review round. A task done several times at once has a tab per attempt: `Agent A`, `Agent B`. Once an
-//! agent took over from another, its tab names the one that is on it now: `Agent (codex)`, `Reviewer #2 (claude)`. A
-//! planner of its own (`plan.agent`) has the tab `Planner`. Checked on herdr 0.9.3: `tab create --no-focus` leaves the
-//! focus where it is; closing a tab's last pane closes the tab; a tab's id is not given out again.
+//! Task terminals are tiled panes in their task workspace. The board remains the Mission Control surface; opening an
+//! agent, reviewer, or planner never creates a terminal tab. Herdr's pane split is used so the CLI stays interactive.
 use crate::err::Res;
 use crate::herdr::Herdr;
 use crate::json::*;
@@ -25,15 +22,17 @@ pub fn agent_tab(t: Option<&Obj>) -> String {
 pub fn name_agent_tab(api: &Herdr, tab: &str, t: Option<&Obj>) { name_tab(api, tab, &agent_tab(t)); }
 /// A tab's ids: { tab, pane, terminal }.
 pub struct Opened { pub tab: String, pub pane: String, pub terminal: String }
-/// A tab of its own in the task's space, with one pane at its shell.
-pub fn open_tab(api: &Herdr, t: &Obj, label: &str, cwd: &str, env: &[(String, String)], who: &str) -> Res<Opened> {
+/// A terminal pane split from the task's existing anchor pane.
+pub fn open_tab(api: &Herdr, t: &Obj, _label: &str, cwd: &str, env: &[(String, String)], who: &str) -> Res<Opened> {
     let workspace = if t.at("link").b("workspace") { t.at("link").t("workspace") } else { api.pane_get(t.at("link").s("pane")).map(|p| p.t("workspace_id")).unwrap_or_default() };
     if workspace.is_empty() { crate::fail!("the task's space is gone"); }
-    let r = api.tab_create(&workspace, cwd, label, env)?;
-    let tab = if r.at("tab").b("tab_id") { r.at("tab").t("tab_id") } else { r.at("root_pane").t("tab_id") };
-    let pane = if r.at("root_pane").is_object() { Some(r.at("root_pane").clone()) } else { api.panes(Some(&workspace))?.into_iter().find(|p| p.s("tab_id") == tab) };
-    let Some(pane) = pane else { if !tab.is_empty() { api.tab_close(&tab); } crate::fail!("herdr opened no terminal for {who}") };
-    Ok(Opened { tab: if tab.is_empty() { pane.t("tab_id") } else { tab }, pane: pane.t("pane_id"), terminal: pane.t("terminal_id") })
+    let anchor = t.at("link").t("pane");
+    let Some(anchor_pane) = api.pane_get(&anchor) else { crate::fail!("the task's terminal anchor is gone") };
+    if anchor_pane.t("workspace_id") != workspace { crate::fail!("the task's terminal anchor is in another workspace") }
+    let direction = if api.pane_layout(&anchor).map(|l| l.arr("panes").len() > 1).unwrap_or(false) { "down" } else { "right" };
+    let pane = api.pane_split(&anchor, cwd, direction, env)?;
+    if !pane.b("pane_id") { crate::fail!("herdr opened no terminal pane for {who}") }
+    Ok(Opened { tab: pane.t("tab_id"), pane: pane.t("pane_id"), terminal: pane.t("terminal_id") })
 }
 /// The reviewer's own tab: `label` names another one than its round's (the look at a plan).
 pub fn open_reviewer_tab(api: &Herdr, t: &Obj, round: i64, by: &str, cwd: &str, env: &[(String, String)], label: Option<&str>) -> Res<Opened> {
@@ -43,6 +42,5 @@ pub fn open_reviewer_tab(api: &Herdr, t: &Obj, round: i64, by: &str, cwd: &str, 
 /// `reviewer`: what the task keeps of it (link.reviewer). One from before reviewers had tabs has only a pane.
 pub fn close_reviewer_tab(api: &Herdr, reviewer: &Value) {
     if !reviewer.is_object() { return; }
-    if reviewer.b("tab") { api.tab_close(reviewer.s("tab")); }
     if reviewer.b("pane") { api.pane_close(reviewer.s("pane")); }
 }

@@ -44,6 +44,7 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
         "get" => ok(json!({ "type": "pane_info", "pane": F::pane_out(&p) })),
         "zoom" => { let on = argv.iter().any(|a| a == "--on"); if on { arr(st, "focus").push(json!(format!("pane {arg2}"))); } ok(json!({ "type": "pane_zoom", "zoom": { "pane_id": arg2, "zoomed": on, "focused_pane_id": arg2 } })) }
         "split" => {
+            if st.b("paneFails") { return fail("timeout", "timed out"); }
             let wid = p.t("workspace_id");
             let n = st.arr("panes").iter().filter(|x| x.s("workspace_id") == wid).count() + 1;
             let mut id = format!("{wid}:p{n}"); while find(st, &id).is_some() { id.push('x'); }

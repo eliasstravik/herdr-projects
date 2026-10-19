@@ -1,6 +1,6 @@
 //! The plan step's two ends: it begins when the agent would first start, and after the yes the build starts. `begin`:
 //! with `plan.approve` on, the task gets its plan step, and with `plan.agent` naming a program, a planner of its own,
-//! which takes the task's place in herdr while it writes (its tab `Planner` and pane become the task's). `start_build`:
+//! which takes the task's place in herdr while it writes (its pane becomes the task's). `start_build`:
 //! the yes is written down, the repo is looked at once more, and the builder is handed the plan. A task done several
 //! times at once is split only now: one plan, approved once, and every attempt is handed it.
 use super::lock::{lock, unlock};
@@ -57,6 +57,7 @@ pub fn begin(g: &mut Guard, t: Task, api: &Herdr) -> Res<Task> {
         f.del("attempts");
         if let Some(m) = &made {
             let l = t.obj_mut("link"); l.put("tab", m.tab.clone()); l.put("pane", m.pane.clone()); l.put("terminal", m.terminal.clone());
+            l.put("agentPaneCreated", true);
             t.put("agent", who.kind.clone()); t.put("app", who.kind.clone()); t.put("session", Value::Null); t.put("transcript", Value::Null);
         }
     })
@@ -83,17 +84,18 @@ pub fn start_build_by(id: &str, g: &mut Guard, by: &str) -> Res<()> {
     t = g.check()?;
     let planner = t.at("plan").b("home");
     if planner {
-        let was = (t.at("link").t("tab"), t.at("link").t("pane"));
+        let was = t.at("link").t("pane");
         t = g.set(|t| {
             let home = t.at("plan").at("home").clone();
             let worker = { let k = agent_of(&setting_text("worker.agent", Some(t))).kind; if k.is_empty() { home.t("agent") } else { k } };
             let (usage, model, asked) = (t.at("usage").clone(), if t.b("model") { t.t("model") } else { t.at("plan").at("writer").t("model") }, t.at("plan").i("asked"));
             let p = t.obj_mut("plan"); p.put("home", Value::Null); p.put("usage", usage); p.put("model", model); p.put("took", now() - if asked > 0 { asked } else { now() });
             let l = t.obj_mut("link"); l.put("tab", home.at("tab").clone()); l.put("pane", home.at("pane").clone()); l.put("terminal", home.at("terminal").clone());
+            l.put("agentPaneCreated", false);
             t.put("agent", worker.clone()); t.put("app", worker);
             for k in FORGET { t.del(k); } // another program in another pane: nothing the board knew of the planner's is the worker's
         })?;
-        api.tab_close(&was.0); api.pane_close(&was.1);
+        api.pane_close(&was);
     }
     let many = attempts_now(&t);
     if many.len() > 1 {
@@ -124,7 +126,7 @@ pub fn start_build_by(id: &str, g: &mut Guard, by: &str) -> Res<()> {
     Ok(())
 }
 /// The plan has its yes and the task is done several times at once: its attempts are made now, each queued for a slot
-/// of its own. The worktree, the branch and the tab the plan was written in are attempt A's.
+/// of its own. The worktree, the branch and the pane the plan was written in are attempt A's.
 fn fan_out(g: &mut Guard, agents: &[String]) -> Res<Task> {
     let t = g.check()?;
     let place: Obj = ["worktree", "branch", "from", "baseSha", "repoFile", "repoRefused", "root", "ownNote"].iter().filter(|k| t.contains_key(**k)).map(|k| (k.to_string(), t.at(k).clone())).collect();
@@ -143,8 +145,8 @@ fn fan_out(g: &mut Guard, agents: &[String]) -> Res<Task> {
         t.put("picked", Value::Null); t.put("comparison", Value::Null); t.del("as");
         let parent = std::path::Path::new(t.s("worktree")).parent().map(|p| p.display().to_string()).unwrap_or_default();
         t.put("spaceDir", parent);
-        let s = t.at("link").at("socket").clone(); let w = t.at("link").at("workspace").clone();
-        t.put("link", json!({ "socket": s, "workspace": w, "ownsWorkspace": true }));
+        let l = t.at("link").clone();
+        t.put("link", json!({ "socket": l.at("socket"), "workspace": l.at("workspace"), "ownsWorkspace": true, "attemptAnchorPane": l.at("pane") }));
         let p = t.obj_mut("plan"); p.put("built", now()); p.put("locked", false); p.del("ignored");
         for k in FORGET.iter().chain(["worktree", "branch", "from", "baseSha", "startedOnce"].iter()) { t.del(k); }
     })?;

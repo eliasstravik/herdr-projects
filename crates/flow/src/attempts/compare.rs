@@ -1,5 +1,5 @@
 //! The reviewer's comparison of the attempts that passed the check: it reads each one's change, says what is good and
-//! bad about each, names one and says why. A visible herdr agent in a tab of its own (`Picker`) in the task's space. With
+//! bad about each, names one and says why. A visible herdr agent in a tiled pane (`Picker`) in the task's space. With
 //! `attempts.pick reviewer` the one it names goes on by itself; with `you` its comparison stands on top of the attempts
 //! you choose from. For a research-only task it reads the reports instead, and, when it picks, writes one report from all.
 use super::adopt::adopt;
@@ -98,10 +98,11 @@ fn compare(id: &str, g: &mut Guard, t: &Task) -> Res<Obj> {
     let ws = t.at("link").t("workspace");
     let err = |e: &str| Ok(obj(json!({ "error": e, "by": k })));
     if ws.is_empty() || api.workspace_get(&ws).is_none() { return Ok(obj(json!({ "error": "the task's space is gone, so nobody compared the attempts" }))); }
-    let made = api.tab_create(&ws, &cwd.display().to_string(), flow::tabs::PICKER_TAB, &board_env())?;
-    let tab = if made.at("tab").b("tab_id") { made.at("tab").t("tab_id") } else { made.at("root_pane").t("tab_id") };
-    let pane = if made.at("root_pane").is_object() { made.at("root_pane").t("pane_id") } else { api.panes(Some(&ws))?.into_iter().find(|p| p.s("tab_id") == tab).map(|p| p.t("pane_id")).unwrap_or_default() };
-    if pane.is_empty() { if !tab.is_empty() { api.tab_close(&tab); } return Ok(obj(json!({ "error": "herdr opened no terminal for the comparison" }))); }
+    let anchor = if t.at("link").b("attemptAnchorPane") { t.at("link").t("attemptAnchorPane") } else { t.at("link").t("pane") };
+    let made = api.pane_split(&anchor, &cwd.display().to_string(), "down", &board_env())?;
+    let tab = made.t("tab_id");
+    let pane = made.t("pane_id");
+    if pane.is_empty() { return Ok(obj(json!({ "error": "herdr opened no terminal pane for the comparison" }))); }
     let taken: Vec<String> = api.agents().unwrap_or_default().iter().map(|a| a.t("name")).collect();
     let repo: String = t.s("repo").to_lowercase().chars().map(|c| if c.is_ascii_lowercase() || c.is_ascii_digit() { c } else { '-' }).take(16).collect();
     let mut name: String = format!("sw-{repo}-{}-pick", t.t("n")).chars().take(32).collect();

@@ -10,6 +10,7 @@ use super::review::close_reviewer;
 use super::shared::{fail, failure, last_lines, ms, FailHow};
 use super::waiting::{stay, waits};
 use crate::agents::{adapter, helpers::still_at_work, installed, kinds::kind, read_turn::Turn};
+use crate::agents::provider_error::provider_error;
 use crate::board::keys::key_name;
 use crate::clock::now;
 use crate::err::Res;
@@ -55,6 +56,24 @@ fn human_turn(t: &mut Task) {
 /// Has this task's agent begun on anything since its program was started?
 fn begun(t: &Task) -> bool { t.at("handled").b("at") || t.s("turnBy") == "typed" || t.i("workedAt") >= t.i("startedAgentAt").max(1) }
 fn sleep(ms: i64) { std::thread::sleep(std::time::Duration::from_millis(ms.max(0) as u64)); }
+/// Interactive CLIs without a transcript reader still expose a finished provider error in Herdr's idle pane.
+/// Restrict this fallback to unmistakable error language in the last screen lines; ordinary task text is not enough.
+fn screen_error(api: &crate::herdr::Herdr, pane: &str, a: Option<&Value>) -> Option<Turn> {
+    let status = a.map(|x| x.s("agent_status"));
+    if !matches!(status.as_deref(), Some("idle" | "done")) { return None; }
+    let screen = crate::agents::screen_text::screen_text(&read_screen(api, pane, status.as_deref(), 60));
+    let words = last_lines(&screen, 12);
+    let lower = words.to_lowercase();
+    let marker = ["quota", "usage limit", "rate limit", "too many requests", "429", "529", "at capacity",
+        "overloaded", "billing", "credit balance", "out of credits", "401 unauthorized", "403 forbidden",
+        "authentication failed", "logged out", "model not found", "unknown model", "unsupported model",
+        "service unavailable", "internal server error", "connection dropped", "fetch failed"];
+    if !marker.iter().any(|needle| lower.contains(needle)) { return None; }
+    let classified = provider_error(&words, "", 0);
+    Some(Turn { id: format!("screen-error-{}", now()), pos: now(), error: words,
+        auth: classified.auth || is_auth_failure(&screen), passing: classified.passing,
+        reason: classified.reason, ..Default::default() })
+}
 fn finish_once(id: &str, force: bool) -> bool {
     let Some(t) = get(id) else { return false };
     if !flow::task::is_agent_task(&t) { return false; }
@@ -112,6 +131,7 @@ fn finish_steps(id: &str, g: &mut Guard, mut t: Task, ev: Option<Value>, force: 
             if now() >= until { break; }
             sleep(400);
         }
+        if turn.is_none() && !reads { turn = screen_error(&api, &pane, a.as_ref()); }
         if reads { let _ = count_mark(&format!("reader:{k}"), &ver, turn.is_some()); }
         let _ = count_mark(&format!("hook:{k}"), &ver, true);
         if let Some(x) = &turn { if !(newer(Some(x), &t) && ((x.finished && x.id != t.at("handled").s("msg")) || !x.error.is_empty())) { return Ok(()); } } // a repeat, or an earlier turn
@@ -129,6 +149,7 @@ fn finish_steps(id: &str, g: &mut Guard, mut t: Task, ev: Option<Value>, force: 
             if let Some(s) = adapter::find_session(&k, &cwd_of(&t), if t.b("startedAgentAt") { t.i("startedAgentAt") } else { t.i("armedAt") }, &crate::delegate::task_line(&t)) { session = s.clone(); let _ = update_wait(id, 10000, |t| { t.put("session", s.clone()); Ok(Change::Write) }); }
         }
         turn = installed::read_turn_of(&k, t.so("transcript").map(Path::new), &session, &cwd_of(&t), false);
+        if turn.is_none() && !reads { turn = screen_error(&api, &pane, a.as_ref()); }
         let says = newer(turn.as_ref(), &t) && turn.as_ref().map(|x| x.pos > t.i("armedAt") && ((x.finished && x.id != t.at("handled").s("msg")) || !x.error.is_empty())).unwrap_or(false);
         match &a {
             None => { if !(says && turn.as_ref().map(|x| !x.error.is_empty()).unwrap_or(false)) { return Ok(()); } } // the agent exited: a crash still shows its real last error

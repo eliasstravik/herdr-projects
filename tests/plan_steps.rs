@@ -121,13 +121,16 @@ fn a_plan_and_several_attempts_the_plan_is_approved_once_then_every_attempt_is_h
     let (a, b) = (&all[0], &all[1]);
     assert_eq!(t.arr("attempts").iter().map(|x| (x.t("letter"), x.t("agent"))).collect::<Vec<_>>(), vec![("A".to_string(), "codex".to_string()), ("B".into(), "claude".into())]);
     assert_eq!((a.s("worktree"), a.at("link").s("pane")), (tree.as_str(), pane.as_str()));
-    assert!(b.b("worktree") && b.s("worktree") != tree && std::path::Path::new(b.s("worktree")).exists());
+    assert!(b.b("worktree") && b.s("worktree") != tree && std::path::Path::new(b.s("worktree")).exists(), "{b:?}");
     assert_eq!(b.at("link").s("workspace"), space);
     assert!(!is_locked(a));
     assert!(a.at("plan").is_null() && b.at("plan").is_null(), "an attempt has no plan step of its own");
-    let mut tabs: Vec<String> = w.state().arr("tabs").iter().filter(|x| x.s("workspace_id") == space).map(|x| x.t("label")).collect();
-    tabs.sort();
-    assert_eq!(tabs, vec!["Agent A", "Agent B"]);
+    let state = w.state();
+    let tabs: Vec<_> = state.arr("tabs").iter().filter(|x| x.s("workspace_id") == space).collect();
+    assert_eq!(tabs.len(), 1, "attempts share the task's tab");
+    let panes: Vec<_> = state.arr("panes").iter().filter(|x| x.s("workspace_id") == space).collect();
+    assert!(panes.iter().any(|p| p.t("pane_id") == a.at("link").t("pane")));
+    assert!(panes.iter().any(|p| p.t("pane_id") == b.at("link").t("pane")));
     for c in [a, b] {
         let p = w.pane_of(c);
         assert!(!p.at("agent").b("boxed"));

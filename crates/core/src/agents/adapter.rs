@@ -191,25 +191,11 @@ pub fn fast_args(kind: &str, on: bool) -> Vec<String> {
 pub fn plan_mode_args(kind: &str) -> Option<Vec<String>> { (kind == "claude").then(|| vec!["--permission-mode".into(), "plan".into()]) }
 /// A headless command for the Watcher: the program, its arguments, and what goes in on its stdin.
 pub struct OneShot { pub command: String, pub args: Vec<String>, pub stdin: Option<String> }
-pub fn one_shot(kind: &str, model: &str, effort: &str, prompt: &str, system: &str, lean: bool) -> Option<OneShot> {
+/// The user's CLI pool is always launched in a real Herdr terminal pane, never as a Watcher one-shot.
+const INTERACTIVE_ONLY: &[&str] = &["freebuff", "codebuddy", "claude", "codex", "gemini", "cursor", "opencode", "kiro", "cline", "qodercli", "grok"];
+pub fn one_shot(kind: &str, model: &str, _effort: &str, prompt: &str, system: &str, _lean: bool) -> Option<OneShot> {
+    if INTERACTIVE_ONLY.contains(&kind) { return None; }
     match kind {
-        // The prompt goes in on stdin: --tools takes a list and would swallow a trailing prompt. `lean` starts it with
-        // nothing of yours loaded and the helper's few words in place of Claude Code's own long instructions.
-        "claude" => {
-            let mut a: Vec<String> = vec!["-p".into()];
-            if !model.is_empty() { a.extend(["--model".into(), model.into()]); }
-            if !effort.is_empty() { a.extend(["--effort".into(), effort.into()]); }
-            if lean { a.extend(["--safe-mode", "--strict-mcp-config", "--disable-slash-commands"].map(String::from)); }
-            if !system.is_empty() { a.extend([if lean { "--system-prompt" } else { "--append-system-prompt" }.to_string(), system.into()]); }
-            a.extend(["--no-session-persistence", "--tools", ""].map(String::from));
-            Some(OneShot { command: "claude".into(), args: a, stdin: Some(prompt.into()) })
-        }
-        "codex" => {
-            let mut a: Vec<String> = ["exec", "--skip-git-repo-check", "--ephemeral", "--color", "never"].map(String::from).to_vec();
-            if !model.is_empty() { a.extend(["-m".into(), model.into()]); }
-            a.push(prompt.into());
-            Some(OneShot { command: "codex".into(), args: a, stdin: None })
-        }
         "pi" => {
             let mut a: Vec<String> = ["-p", "--no-session", "--no-tools", "--no-skills", "--no-context-files"].map(String::from).to_vec();
             if !model.is_empty() { a.extend(model_args("pi", model)); }

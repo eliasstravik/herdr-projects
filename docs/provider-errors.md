@@ -19,6 +19,11 @@ The agent's own saved conversation records the error for the turn, and the board
 The program's own code for the error decides whether it passes (Codex's `codex_error_info`, Claude Code's `error` and HTTP
 status). Where there is none, its words do.
 
+For an interactive CLI without a conversation reader, Herdr Projects checks the last lines of its terminal when Herdr
+reports the pane idle or done. It accepts only explicit error markers (for example `429`, `rate limit`, `quota`,
+`usage limit`, `overloaded`, or an authentication error), then sends the text through the same retry and fallback
+logic. It does not infer a provider error from ordinary progress text or inspect a pane while its agent is working.
+
 ## The reviewer
 
 The board closes the review, waits, and starts it again.

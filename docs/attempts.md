@@ -47,19 +47,19 @@ attempts fan out (attempts.by)
 ```
 
 1. **Each attempt works on its own.** It has its own git worktree, its own branch (`work/12a-…`, `work/12b-…`) and its
-   own tab in the task's Herdr space (`Agent A`, `Agent B`; [a task's tabs](tabs.md)). Its agent is told the task and
+   own tiled pane in the task's Herdr space (`Agent A`, `Agent B`; [a task's panes](tabs.md)). Its agent is told the task and
    nothing about the other attempts. Each uses a slot of `board.agents`: with three attempts and two free slots, the
    third waits and the row says so (`C claude waits for a slot`).
 2. **The check filters.** Each attempt goes through the usual first steps: its work is committed, main is brought in,
    and the repo's check runs, going back to its agent up to `review.rounds` times when it fails. An attempt is out if its
    check still fails after that, or it stopped without a summary, was stopped, or its agent is gone. An attempt that asks
-   you something waits for your answer like any agent, in its own tab.
+   you something waits for your answer like any agent, in its own pane.
 3. **The picker chooses** among those that passed:
-   - **None left:** the task failed (`No attempt passed`). Every attempt's worktree, branch and tab are kept to look at.
+   - **None left:** the task failed (`No attempt passed`). Every attempt's worktree, branch and pane are kept to look at.
      Delegating it again starts over with fresh attempts and removes the old ones.
    - **One left:** it wins, and nobody is asked.
    - **Several, `attempts.pick you`:** the task waits in the state **pick one**. If there is a reviewer (`review.when` is
-     not `never`), it first compares the attempts in a tab named `Picker`: it reads each change, tries each one, says
+     not `never`), it first compares the attempts in a tiled pane named `Picker`: it reads each change, tries each one, says
      what is good and bad about each, and recommends one. You choose.
    - **Several, `attempts.pick reviewer`:** the reviewer compares them the same way, and the one it names goes on by
      itself. If it names none (it failed or timed out), or there is no reviewer, the task waits for your pick and says
@@ -69,7 +69,7 @@ attempts fan out (attempts.by)
    done once ([how work gets done](how-work-gets-done.md)). Its check does not run again on the same commit, unless
    `check.command` changed in between. Reviewing every attempt in full would multiply the most expensive step for work
    that is thrown away.
-5. **After the pick,** the other attempts' tabs close. Their worktrees and branches stay until the task is done, then go
+5. **After the pick,** the other attempts' panes close. Their worktrees and branches stay until the task is done, then go
    with it (`workspace.cleanup`). What a losing attempt committed goes with it. A worktree with any file that was never
    committed is kept, with its branch, and the task says where. That counts ignored files too (a draft, but also
    `node_modules` or a build's output): git cannot tell them apart, so nothing of the kind is removed.
@@ -95,7 +95,7 @@ kept, not the first.
 - **Keys.**
   - `Ctrl+N` moves to the next attempt.
   - `Ctrl+L`, the approve key, keeps the selected one. It asks first.
-  - `Enter` goes into the selected attempt's tab.
+  - `Enter` goes into the selected attempt's pane.
   - A reply to the task while its attempts work goes to every attempt still in it. `Ctrl+X` stops them all.
 - **The web Board** shows the same row and part, with the same keys as buttons (`Next attempt`, `Yes`).
 - `herdr-projects show <id>` names each attempt's agent and the one chosen. `details <id>` has the attempts and the

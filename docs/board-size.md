@@ -19,14 +19,14 @@ Nothing the board starts opens on the board's screen, takes its focus, or takes 
 | Helper | Where it runs |
 |---|---|
 | A task's agent | a Herdr space of its own (`herdr worktree create`, or `workspace create` outside git), opened with `--no-focus` |
-| Its reviewer | a tab of its own in the task's space (`tab create --no-focus`, see [a task's tabs](tabs.md)); closed when the review ends |
+| Its reviewer | a tiled pane in the task's space (`pane split --no-focus`, see [a task's panes](tabs.md)); closed when the review ends |
 | The Coordinator | a tab of its own in your home space, opened without focus ([the Coordinator](coordinator.md)); closed when it is stopped |
 | The Watcher | a hidden model call: no pane at all |
 
 Measured on Herdr 0.9.3 with a real board, agent, reviewer, Watcher and Coordinator: through a task's whole life (start,
 review, approval, merge, its space closed) and a Coordinator started and stopped, the board's terminal kept its size,
-Herdr's layout for its pane did not change, and no row of the board moved. (The reviewer was then still a pane split off
-the agent's pane; it has since moved to a tab of its own, which the same test covers.)
+Herdr's layout for its pane did not change, and no row of the board moved. The reviewer now uses a split pane beside
+the task's agent.
 
 On Herdr, a space opened without focus, a pane split off a pane in another space, an agent starting there, and a space
 closing do nothing to a pane in the space you look at.

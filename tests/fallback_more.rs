@@ -173,7 +173,7 @@ fn the_reviewer_the_boards_own_tries_first_then_the_next_on_reviewer_fallback_an
     assert_eq!(t.s("stage"), "approval", "{}", t.at("failure"));
     assert_eq!(reviewer_starts(&w), vec!["codex", "codex", "claude", "pi"]);
     assert_eq!(handovers(&t).iter().map(|h| (h.t("role"), handover_line(h))).collect::<Vec<_>>(), vec![("reviewer".to_string(), "claude took over the review from codex: its model is at capacity, still after 2 tries".to_string()), ("reviewer".into(), "pi took over the review from claude: its model is not available".into())]);
-    assert!(calls(&w).iter().any(|c| regex::Regex::new(r"^tab create .*Reviewer #1 \(claude\)").unwrap().is_match(c)), "{:?}", calls(&w).iter().filter(|c| c.starts_with("tab create")).collect::<Vec<_>>());
+    assert!(calls(&w).iter().any(|c| c.starts_with(&format!("pane split {} ", t.at("link").s("pane")))), "{:?}", calls(&w).iter().filter(|c| c.starts_with("pane split")).collect::<Vec<_>>());
     // the three that were cut off reviewed nothing: the one that took over last made review 1
     assert_eq!(sw::store::reviews::review_history(&t).iter().map(|e| (e.i("round"), e.t("by"), e.at("pass").clone())).collect::<Vec<_>>(), vec![(1, "pi".to_string(), json!(true))]);
     assert_eq!(t.s("reviewerOn"), "pi");

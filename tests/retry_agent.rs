@@ -15,6 +15,23 @@ fn pass() -> Value { json!({ "verdict": { "meets": true, "findings": [], "text":
 fn elapse(id: &str) { patch(id, |t| { let at = sw::clock::now() - 1; t.obj_mut("waiting").put("until", at); }).unwrap(); }
 fn sent(w: &World, id: &str) -> Vec<String> { prompts(w, task(id).at("link").s("pane")) }
 fn tries(t: &Obj) -> i64 { waiting_of(t).map(|w| w.i("tries")).unwrap_or(-1) }
+
+#[test]
+fn an_interactive_cli_quota_error_read_from_its_idle_pane_hands_over_to_the_worker_fallback() {
+    let w = cut_world("60000", json!({ "worker.agent": "gemini", "worker.fallback": "codex" }));
+    w.script(json!({ "worker": [
+        { "screen": "API Error: usage limit reached. Your quota resets at 9:00 PM.", "status": "done" },
+        work()
+    ], "reviewer": [pass()] }));
+    let id = w.add("Quota on an interactive CLI");
+    delegate(&id);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure"));
+    assert_eq!(t.s("on"), "codex");
+    assert_eq!(t.arr("handovers").last().unwrap().s("why"), "out of allowance until 21:00");
+    assert_eq!(starts(&w), ["gemini", "codex"]);
+}
+
 /// The working agent's own turn-end report, as the hook the board installed runs it (pi: the conversation file on stdin).
 fn report_end(id: &str) {
     let t = task(id);

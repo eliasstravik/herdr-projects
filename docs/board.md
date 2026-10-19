@@ -578,7 +578,7 @@ screen or logo.
   One that has said nothing yet says so: `The agent has just started: nothing to show yet.`
 - **A dialog that is only on its screen** (a permission prompt, a question with choices) is said in a line of its own,
   with the way to it: `The agent shows a dialog on its screen that waits for your answer: enter opens it.` The
-  Coordinator's is in Herdr's `Coordinator` tab, a reviewer's in its `Reviewer #2` tab in the task's space.
+  Coordinator's is in Herdr's `Coordinator` tab, a reviewer's is in its tiled pane in the task's space.
 - **Going into the agent** (`Enter`) is its real terminal, untouched.
 
 ### While a task is under review, the chat is its reviewer's

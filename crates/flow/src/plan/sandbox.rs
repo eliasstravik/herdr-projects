@@ -57,6 +57,24 @@ fn herr(code: &str, msg: String) -> HerdrError { HerdrError { code: code.into(),
 /// Answers and fails as `agent start` does: a program whose start-up dialog is in the way is "agent_not_ready".
 pub fn start_program(api: &Herdr, t: &Obj, name: &str, kind: &str, pane: &str, args: &[String]) -> Result<(), HerdrError> {
     if open(t) && guarded(t).is_some() && !sandbox_ok() { return Err(herr("failed", no_mount(t.s("id")))); } // never a plan writer in a repo without it
+    // These CLIs report live state through the user's installed Herdr plugins; launch them in the real pane TTY.
+    // They do not use ACP, stdin prompt piping, or a one-shot/headless mode.
+    if matches!(kind, "freebuff" | "codebuddy") {
+        let command = if boxed(t) {
+            boxed_command(t, name, kind, args)
+        } else {
+            let mut all = vec!["env".to_string(), format!("HERDR_PROJECTS_AGENT={name}"), crate::agents::kinds::program(kind).into()];
+            all.extend(args.iter().cloned());
+            all.iter().map(|s| q(s)).collect::<Vec<_>>().join(" ")
+        };
+        api.pane_run(pane, &command)?;
+        let until = crate::clock::now() + 60000;
+        loop {
+            if api.agent_get(pane)?.is_some() { return Ok(()); }
+            if crate::clock::now() >= until { return Err(herr("failed", format!("{kind} did not report its state in the pane; check that its Herdr plugin is installed and enabled."))); }
+            std::thread::sleep(std::time::Duration::from_millis(250));
+        }
+    }
     if !boxed(t) { return api.agent_start(name, kind, pane, args, 60000).map(|_| ()); }
     api.integration_ready(kind)?;
     api.pane_run(pane, &boxed_command(t, name, kind, args))?;
