@@ -1,6 +1,7 @@
 //! A start while the pane's shell is not at its prompt yet (issue #175): herdr refuses a line longer than the terminal
 //! takes then (macOS: 1024 bytes). The board waits for the prompt and tries again a few times, never starts a second
 //! program, and says in plain words what happened when it still could not. A start command stays under 1024 bytes.
+//! The same for a pane whose shell herdr does not see yet (issue #202): `agent_pane_busy`, "not an available shell".
 use crate::common;
 use common::*;
 use serde_json::{json, Value};
@@ -73,6 +74,47 @@ fn the_coordinator_waits_for_the_prompt_too() {
     flush(); sw::runner::drain_jobs(&|job, id, extra| { sw::jobs::run_job(job, id, extra); flush(); });
     let c = sw::coordinator::state::get(&cw.socket).unwrap_or_default();
     assert!(!c.b("error"), "{c:?}");
+    assert_eq!(cw.state().arr("panes").iter().flat_map(|p| p.at("agent").arr("prompts").iter().map(text).collect::<Vec<_>>()).collect::<Vec<_>>(), vec!["hello".to_string()]);
+}
+
+#[test]
+fn a_shell_herdr_does_not_see_yet_is_waited_for_and_the_agent_starts() {
+    let w = world_with(Opts { repo: true, settings: json!({ "worker.agent": "claude", "review.when": "never" }), ..Default::default() });
+    w.patch(|s| s["noShell"] = json!(1));
+    w.script(json!({ "worker": [work()] }));
+    let id = w.add("Slow shell");
+    delegate(&id);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "approval", "{} {}", t.s("msg"), t.at("failure"));
+    assert_eq!(starts(&w).len(), 2, "tried once more");
+    assert_eq!(agents(&w), 1);
+}
+
+#[test]
+fn a_shell_herdr_never_sees_fails_after_a_few_tries_and_says_why() {
+    let w = world_with(Opts { repo: true, settings: json!({ "worker.agent": "claude" }), ..Default::default() });
+    w.patch(|s| s["noShell"] = json!(99));
+    let id = w.add("No shell");
+    delegate(&id);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "failed");
+    assert_eq!(starts(&w).len(), 1 + sw::herdr::shell_ready::RETRIES as usize, "a bounded number of tries");
+    assert_eq!(agents(&w), 0);
+    assert_eq!(t.s("msg"), "Could not start: its terminal was not at its shell prompt");
+    let f = t.at("failure");
+    assert!(f.s("next").starts_with("The board waited for the shell's prompt and tried 4 times. End what runs in the task's terminal (or close it), or wait until it shows its prompt, then delegate again"), "{}", f.s("next"));
+    assert!(f.s("detail").contains("is not an available shell (tried 4 times in"), "{}", f.s("detail"));
+}
+
+#[test]
+fn the_coordinator_waits_for_a_shell_herdr_does_not_see_yet() {
+    let cw = crate::coordinator::coord_world();
+    cw.patch(|s| s["noShell"] = json!(1));
+    sw::coordinator::requests::send(&cw.root, "hello", false, "", &cw.socket).unwrap();
+    flush(); sw::runner::drain_jobs(&|job, id, extra| { sw::jobs::run_job(job, id, extra); flush(); });
+    let c = sw::coordinator::state::get(&cw.socket).unwrap_or_default();
+    assert!(!c.b("error"), "{c:?}");
+    assert_eq!(starts(&cw).len(), 2, "tried once more");
     assert_eq!(cw.state().arr("panes").iter().flat_map(|p| p.at("agent").arr("prompts").iter().map(text).collect::<Vec<_>>()).collect::<Vec<_>>(), vec!["hello".to_string()]);
 }
 

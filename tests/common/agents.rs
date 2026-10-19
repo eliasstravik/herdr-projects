@@ -16,7 +16,11 @@ pub fn agent(f: &F, verb: &str, arg2: &str, argv: &[String], flag: &dyn Fn(&str)
         "list" => { let a: Vec<Value> = st.arr("panes").iter().filter(|p| p.at("agent").is_object()).map(F::agent_out).collect(); return ok(json!({ "type": "agent_list", "agents": a })); }
         "start" => {
             let Some(pi) = flag("--pane").and_then(|id| st.arr("panes").iter().position(|p| p.s("pane_id") == id)) else { return fail("pane_not_found", "pane not found") };
-            if st["panes"][pi].at("agent").is_object() { return fail("pane_busy", "the pane is not at its shell prompt"); }
+            // A pane where an agent runs, and `noShell`: that many starts find the pane's shell still starting. herdr sees
+            // no shell in it either way and types nothing (herdr 0.9.5).
+            let busy = format!("agent target pane {} is not an available shell", st["panes"][pi].s("pane_id"));
+            if st["panes"][pi].at("agent").is_object() { return fail("agent_pane_busy", &busy); }
+            if st.i("noShell") > 0 { st["noShell"] = json!(st.i("noShell") - 1); return fail("agent_pane_busy", &busy); }
             let kind = flag("--kind").unwrap_or_default();
             let rest: Vec<Value> = argv.iter().position(|a| a == "--").map(|i| argv[i + 1..].iter().map(|x| json!(x)).collect()).unwrap_or_default();
             // `refuses`: per kind, the arguments its installed version does not know. It quits at once, as real

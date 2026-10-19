@@ -13,7 +13,7 @@ again (or reply, for an agent that is started again).
 | `Could not start: codex did not come up within a minute` | Look at its terminal: whatever it shows (an update, a question, an error) is in the way. |
 | `Could not start: its start command was cut off: the terminal's shell was still starting` | Delegate again: the board has cleared the half-typed command. |
 | `Could not start: its terminal's shell was not ready for the start command` | Wait until the task's terminal shows its prompt, then delegate again. The board already waited and tried 4 times; a shell that is slow to start (its `.zshrc`) causes this. |
-| `Could not start: its terminal was not at its shell prompt` | End what runs in the task's terminal, or close it. |
+| `Could not start: its terminal was not at its shell prompt` | End what runs in the task's terminal, or close it. When the board says it already waited and tried 4 times, the shell may also be very slow to start: wait until it shows its prompt. |
 | `Could not start: herdr did not answer in time` | Check that Herdr runs and answers (`herdr workspace list`). |
 
 ## Where to look further
@@ -45,6 +45,11 @@ Two limits once made long text fail to start an agent, with no reason given. Bot
   a new task's first start failed that way on macOS. The board now waits for the pane to show its prompt and tries again,
   up to 3 more times within about 15 seconds, for every start (a task's agent, a reviewer, the Coordinator, a
   comparison's picker). It looks for an agent in the pane first, so it never starts a second one.
+- **A shell herdr does not see yet is waited for too.** Herdr 0.9.5 also refuses a start in a pane it has just made while
+  its shell is still starting (a `.zshrc` that takes a second): "agent target pane … is not an available shell"
+  (`agent_pane_busy`). The Coordinator's start after an update failed that way. The board now waits and tries again the
+  same way. A pane where a program really runs still fails, after those tries, with "its terminal was not at its shell
+  prompt"; one where an agent already runs fails at once.
 - **Very long messages go in a file.** A message is one argument of `herdr agent prompt`, and Linux passes at most 128 KiB
   in one argument. A message longer than 100,000 bytes (a task's first prompt, a reply, a message to the Coordinator) is
   written to a file in the board's folder (`messages/`), and a line naming that file is typed in instead. Anything shorter
