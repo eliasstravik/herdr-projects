@@ -9,20 +9,19 @@ use sw::watcher::prompt::{read_answer, watcher_prompt, Look};
 
 fn has(text: &str, re: &str) -> bool { regex::Regex::new(re).unwrap().is_match(text) }
 fn rows() -> Vec<Obj> { sw::flow::live::board(true) }
-/// What the old tests' stand-in helper answered: one entry for every numbered agent, 42 percent with the watcher's own
-/// auto-compact window (1 without it).
-fn helper_answer(prompt: &str, env: &[(String, String)]) -> String {
-    let progress = if env.iter().any(|(k, v)| k == "CLAUDE_CODE_AUTO_COMPACT_WINDOW" && v == "100000") { 42 } else { 1 };
+/// What the stand-in helper answered: one entry for every numbered agent.
+fn helper_answer(prompt: &str, _env: &[(String, String)]) -> String {
+    let progress = 42;
     let ns: Vec<serde_json::Value> = regex::Regex::new(r"(?m)^--- (\d+) ---$").unwrap().captures_iter(prompt).map(|c| json!({ "n": c[1].parse::<i64>().unwrap(), "msg": "editing the greeting file", "progress": progress })).collect();
     serde_json::Value::Array(ns).to_string()
 }
 /// One tick with the helper answered at once, as its program would; what it was told is kept in `seen`.
 fn tick(now: i64, seen: &RefCell<String>) {
     sw::watcher::watch_tick_with(&rows(), now, Some(0.0), &|cmd, env, done| {
-        let prompt = cmd.stdin.clone().unwrap_or_default();
+        let prompt = cmd.stdin.clone().unwrap_or_else(|| cmd.args.last().cloned().unwrap_or_default());
         let env: Vec<(String, String)> = env.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         // the program's own long instructions are replaced by the helper's few words, ahead of the prompt
-        let system = cmd.args.iter().position(|a| a == "--system-prompt").map(|i| cmd.args[i + 1].clone()).unwrap_or_default();
+        let system = cmd.args.iter().position(|a| a == "--system-prompt" || a == "--append-system-prompt").map(|i| cmd.args[i + 1].clone()).unwrap_or_default();
         *seen.borrow_mut() = format!("{system}\n\n{prompt}");
         done(0, helper_answer(&prompt, &env), String::new());
     });
@@ -38,10 +37,11 @@ fn the_watcher_is_shown_how_a_status_text_is_written_and_what_it_writes_is_kept_
 
 #[test]
 fn the_hidden_helper_the_watcher_writes_a_line_and_a_guess() {
-    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never", "watcher.agent": "claude" }), ..Default::default() });
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never", "watcher.agent": "pi" }), ..Default::default() });
+    assert!(sw::watcher::helpers_ready(), "{}", sw::store::settings::lookup::setting_text("watcher.agent", None));
     let seen = RefCell::new(String::new());
     sw::actions::filing::add(&w.root, "build a login page", sw::actions::filing::AddOpts { description: format!("It needs a password field.\n{}", "x".repeat(3000)), ..Default::default() }).unwrap();
-    // the watcher: only while herdr says working; 100k auto-compact on the watcher only
+    // the watcher: only while herdr says working
     w.script(json!({ "worker": [{ "status": "working", "screen": "● Writing greet.sh\n" }] }));
     delegate("proj/1"); settle("proj/1");
     let put = |f: &dyn Fn(&mut Obj)| sw::store::tasks::update("proj/1", |t| { f(t); Ok(sw::store::tasks::Change::Write) }).unwrap();

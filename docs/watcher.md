@@ -60,23 +60,17 @@ The Watcher's prompt shows it a few example sentences (`Fixing the two failing t
 `Waiting for the PR review on GitHub`), and so do the agents' instructions for reporting. What they write is shown
 exactly as written. The list, the task panel, the whole-task page and Herdr's sidebar all say the same words.
 
-## A lighter start
+## Default: off
 
-With Claude as the Watcher (the default):
-
-- It starts with nothing of yours loaded: no MCP servers, plugins, hooks, skills or `CLAUDE.md`
-  (`--safe-mode --strict-mcp-config --disable-slash-commands`), and a two-line instruction instead of Claude Code's own
-  long one. Logging in works as always.
-- A Claude too old to know these options is started the plain way from then on.
-- The prompt is smaller: the last 30 screen lines (3000 characters) instead of 40 (5000), and 800 characters of the
-  task's description instead of 1500.
-
-Codex and pi start as before: pi's options for loading less saved nothing when measured.
+The Watcher is off by default. The configured coding CLI pool runs in visible Herdr panes; none of those CLIs is
+started as a hidden one-shot to produce status text. To opt into the existing helper, choose a compatible program
+outside that pool explicitly, for example `herdr-projects set watcher.agent pi`. The supported helper programs and
+their one-shot commands are listed in [agents](agents.md).
 
 ## Measured
 
-On the 8-core machine this was built on (Claude Code 2.1.296, `claude-haiku-5-5`, load average about 9.5 while
-measuring), processor time of the program itself:
+Historical measurement from the earlier Claude-default version, on the 8-core machine used for that measurement
+(Claude Code 2.1.296, `claude-haiku-5-5`, load average about 9.5), processor time of the program itself:
 
 | | One call | Six working agents, a minute |
 |---|---|---|

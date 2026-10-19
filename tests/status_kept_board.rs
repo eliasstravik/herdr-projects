@@ -19,7 +19,7 @@ fn sidebar(w: &World) -> Vec<String> { sw::flow::sidebar::sync_sidebar(&sw::flow
 
 #[test]
 fn no_bare_ellipsis_as_a_status_line_the_list_the_panel_the_whole_task_page_and_herdr_s_sidebar_say_the_words() {
-    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never", "watcher.agent": "claude" }), ..Default::default() });
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never", "watcher.agent": "pi" }), ..Default::default() });
     w.add("build a login page");
     w.script(json!({ "worker": [{ "status": "working", "screen": "● Writing greet.sh\n" }] }));
     delegate("proj/1"); settle("proj/1");

@@ -14,7 +14,7 @@ pub struct Call { pub cmd: OneShot, pub done: Option<Done>, pub text: String }
 /// A board with `n` agents at work, and a stand-in for the helper's program.
 pub struct Watched { pub w: World, pub calls: RefCell<Vec<Call>>, pub t0: i64 }
 pub fn watched(n: usize, settings: serde_json::Value) -> Watched {
-    let mut s = json!({ "review.when": "never", "watcher.agent": "claude", "board.agents": 8 });
+    let mut s = json!({ "review.when": "never", "watcher.agent": "pi", "board.agents": 8 });
     for (k, v) in settings.as_object().cloned().unwrap_or_default() { s[k] = v; }
     let w = world_with(Opts { repo: true, settings: s, ..Default::default() });
     sw::watcher::watcher_reset();
@@ -178,17 +178,13 @@ fn the_pace_is_a_setting_and_herdrs_sidebar_keeps_the_minutes_left_between_looks
 }
 
 #[test]
-fn a_light_start_of_its_program_and_the_plain_one_when_the_program_is_too_old_for_it() {
+fn an_optional_helper_stays_outside_the_interactive_pool() {
     let x = watched(1, json!({}));
     x.tick(0);
-    let lean = ["--safe-mode", "--strict-mcp-config", "--disable-slash-commands", "--system-prompt"];
-    assert_eq!(x.calls.borrow()[0].cmd.args.iter().filter(|a| lean.contains(&a.as_str())).count(), 4);
-    x.answer(0, "", 1, "error: unknown option '--safe-mode'");
-    x.tick(16); // not counted as a failure: tried again the plain way after the usual gap
-    assert_eq!(x.n(), 2);
-    let args = x.calls.borrow()[1].cmd.args.clone();
-    assert!(!args.contains(&"--safe-mode".to_string()) && args.contains(&"--append-system-prompt".to_string()), "{args:?}");
-    assert_eq!(sw::agents::adapter::one_shot("claude", "m", "", "p", "", false).unwrap().args, vec!["-p", "--model", "m", "--no-session-persistence", "--tools", ""]);
+    assert_eq!(x.calls.borrow()[0].cmd.command, "pi");
+    assert!(x.calls.borrow()[0].cmd.args.contains(&"-p".to_string()));
+    assert!(sw::agents::adapter::one_shot("claude", "m", "", "p", "", false).is_none());
+    x.answer(0, "[]", 0, "");
 }
 
 #[test]
