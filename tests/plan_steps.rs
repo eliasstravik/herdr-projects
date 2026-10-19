@@ -84,12 +84,12 @@ fn without_a_read_only_mount_no_plan_is_written_in_a_repo_and_a_plan_said_not_sa
     delegate(&none);
     let t = settle(&none);
     assert_eq!((t.s("stage"), t.at("plan").is_null(), t.at("failure").s("title")), ("failed", true, "Could not start the agent"));
-    assert!(t.at("failure").s("detail").contains("needs bubblewrap") && t.at("failure").s("detail").contains("set plan.approve none --task proj/1"), "{}", t.at("failure"));
+    assert!(t.at("failure").s("detail").contains("Nothing was started") && t.at("failure").s("detail").contains("set plan.approve none --task proj/1"), "{}", t.at("failure"));
     assert!(!w.state().arr("panes").iter().any(|p| p.at("agent").is_object()), "no program was started");
     assert!(!is_locked(&t));
     let mut open = t.clone(); open.put("plan", json!({ "asked": 1, "by": "you" }));
     let api = sw::herdr::Herdr::new(Some(w.socket.clone()));
-    assert!(sw::plan::sandbox::start_program(&api, &open, "x", "codex", "p", &[]).unwrap_err().message.contains("needs bubblewrap"), "nor an open plan step's writer, started again later");
+    assert!(sw::plan::sandbox::start_program(&api, &open, "x", "codex", "p", &[]).unwrap_err().message.contains("Nothing was started"), "nor an open plan step's writer, started again later");
     // With the plan taken off it starts as any task does.
     delegate_with(&none, json!({ "plan.approve": "none" }));
     w.script(json!({ "worker": [{ "status": "working" }] }));
