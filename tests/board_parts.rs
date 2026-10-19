@@ -111,7 +111,7 @@ fn the_settings_page_every_work_setting_plain_and_a_mark_on_this_tasks_own() {
     assert!(has(&row_of(&text, "check.command"), r"^     Check command +npm test +check\.command *$"));
     assert!(has(&row_of(&text, "workspace.cleanup"), r"^     Clean up when done +on +workspace\.cleanup *$"));
     assert!(has(&text, r"\n Agent's program: a program \(claude, codex, pi, agy, …\), with a model after a slash if you like *\n"));
-    s.press(&["down", "down"]); assert!(has(&s.screen(120).join("\n"), r"\n Agent's access: \[full\] · ask *\n")); s.press(&["up", "up"]);
+    s.press(&["down", "down"]); assert!(has(&s.screen(120).join("\n"), r"\n Agent's access: \[full\] · ask · auto *\n")); s.press(&["up", "up"]);
     assert!(text.contains("\n * this task only\n") && text.contains("Board settings are yours only: herdr-projects show"));
     assert!(!has(&text, "built in|your entry for|the repo's file"), "no row says where its value comes from: {text}");
     s.press(&["esc"]); assert!(s.s.editing.is_none() && s.s.full, "back to the whole task, one step");
