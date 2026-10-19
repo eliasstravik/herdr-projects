@@ -20,6 +20,17 @@ pub fn detach(c: &mut Command) {
     use std::os::unix::process::CommandExt;
     unsafe { c.pre_exec(|| { libc::setsid(); Ok(()) }); }
 }
+/// Start a detached command and leave it to run: a small thread of this process waits for its end. `setsid` does not
+/// change a process's parent, so one nobody waits for stays a zombie of a long-lived starter (the keeper, the board)
+/// until that ends: thousands a day, until the user's process limit fails everything (#212). Only this one pid is
+/// waited for, never any child (that would take the end of the commands others wait for themselves). Returns its pid,
+/// 0 when it did not start.
+pub fn start_reaped(c: &mut Command) -> u32 {
+    let Ok(mut ch) = c.spawn() else { return 0 };
+    let pid = ch.id();
+    let _ = std::thread::Builder::new().name("reap".into()).stack_size(64 << 10).spawn(move || { let _ = ch.wait(); });
+    pid
+}
 /// Start a detached runner for one job on one task. Returns at once.
 pub fn spawn_runner(job: &str, id: &str, extra: &[&str]) -> u32 {
     if inline() { JOBS.with(|j| j.borrow_mut().push((job.into(), id.into(), extra.iter().map(|s| s.to_string()).collect()))); return 0; }
@@ -32,7 +43,7 @@ pub fn spawn_runner(job: &str, id: &str, extra: &[&str]) -> u32 {
     for k in DROP_ENV { c.env_remove(k); }
     match log { Ok(f) => { let f2 = f.try_clone().ok(); c.stdout(f); if let Some(f2) = f2 { c.stderr(f2); } } Err(_) => { c.stdout(Stdio::null()).stderr(Stdio::null()); } }
     detach(&mut c);
-    c.spawn().map(|ch| ch.id()).unwrap_or(0)
+    start_reaped(&mut c)
 }
 /// Tests drain the jobs that would have been detached.
 pub fn drain_jobs(run: &dyn Fn(&str, &str, &[String])) {
@@ -42,15 +53,16 @@ pub fn drain_jobs(run: &dyn Fn(&str, &str, &[String])) {
         run(&job, &id, &extra);
     }
 }
-/// A shell command of the user's, started and left to run (`board.notify`).
-pub fn detached_sh(cmd: &str, env: &[(&str, String)]) {
-    if inline() { JOBS.with(|j| j.borrow_mut().push(("notify".into(), cmd.into(), env.iter().map(|(k, v)| format!("{k}={v}")).collect()))); return; }
+/// A shell command of the user's, started and left to run (`board.notify`). Returns its pid (0: kept for the test, or
+/// it did not start).
+pub fn detached_sh(cmd: &str, env: &[(&str, String)]) -> u32 {
+    if inline() { JOBS.with(|j| j.borrow_mut().push(("notify".into(), cmd.into(), env.iter().map(|(k, v)| format!("{k}={v}")).collect()))); return 0; }
     user_env();
     let mut c = Command::new("sh");
     c.args(["-c", cmd]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     for (k, v) in env { c.env(k, v); }
     detach(&mut c);
-    let _ = c.spawn();
+    start_reaped(&mut c)
 }
 pub fn runner_alive(t: &Task) -> bool { marker_alive(t.at("runner")) }
 fn mine(m: &Value) -> bool { m.i("pid") == std::process::id() as i64 }

@@ -12,7 +12,7 @@ use crate::finish::{auto_merge::{auto_merge_pass, green}, line::line_pass};
 use crate::flow::{send::resume_cut, spaces::{sweep_closing, sweep_repo_spaces}, task::is_agent_task};
 use crate::herdr::{cli::socket_exists, Herdr};
 use crate::json::*;
-use crate::runner::{inline, runner_alive, spawn_runner, user_env, detach, JOBS};
+use crate::runner::{inline, runner_alive, spawn_runner, start_reaped, user_env, detach, JOBS};
 use crate::store::{files::{bin, data_dir, has_tasks}, marks::due, old_suggestions::save_old_suggestions, repos::folder_of, retries::waiting_of, settings::lookup::setting, tasks::{get, list, ListOpts, Task}};
 use crate::sync::{fetch_main, known_target, main_branch, resyncable, tree_of, via_remote};
 use std::collections::HashMap;
@@ -96,8 +96,9 @@ pub fn fetch_mains() {
     }
 }
 /// A detached job that belongs to no single task.
-pub fn spawn_loose(a: &[&str]) -> u32 { loose(a).spawn().map(|ch| ch.id()).unwrap_or(0) }
-/// The command `spawn_loose` starts, for a caller that follows what became of it (the keeper's successor).
+pub fn spawn_loose(a: &[&str]) -> u32 { start_reaped(&mut loose(a)) }
+/// The command `spawn_loose` starts, for a caller that follows what became of it (the keeper's successor): that caller
+/// keeps the `Child` and waits for it itself.
 pub fn loose(a: &[&str]) -> std::process::Command {
     use std::process::{Command, Stdio};
     user_env();
