@@ -148,7 +148,8 @@ fn ours(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstream) {
     let Ok(Value::Object(mut args)) = serde_json::from_slice::<Value>(if body.is_empty() { b"{}" } else { &body }) else { return json_out(&mut client, 400, &json!({ "ok": false, "msg": "The request could not be read." })) };
     args.put("role", role.clone());
     let pcs = if needs_pcs(&call) { super::pcs::ask_pcs(head, &to) } else { None };
-    let out = super::web::call(&client_id, &call, Value::Object(args), &machine, pcs);
+    let ui = super::attach::far::Door { head, to: to.clone() };
+    let out = super::web::call_with(&client_id, &call, Value::Object(args), &machine, pcs, Some(&ui));
     answer(&mut client, out, &role)
 }
 fn answer(client: &mut TcpStream, out: Result<Value, String>, role: &str) {

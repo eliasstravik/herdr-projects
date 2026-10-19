@@ -144,7 +144,9 @@ pub fn snapshot(c: &mut Client, have: &str) -> Value {
     Value::Object(data)
 }
 /// One call of the page. `role`: "drive" may change things, "watch" may only look (door.rs).
-pub fn call(client_id: &str, call: &str, args: Value, machine: &str, pcs: Option<Vec<super::pcs::Pc>>) -> Result<Value, String> {
+pub fn call(client_id: &str, call: &str, args: Value, machine: &str, pcs: Option<Vec<super::pcs::Pc>>) -> Result<Value, String> { call_with(client_id, call, args, machine, pcs, None) }
+/// The same, with the web UI as the front door reaches it (a file attached for another machine goes through it).
+pub fn call_with(client_id: &str, call: &str, args: Value, machine: &str, pcs: Option<Vec<super::pcs::Pc>>, ui: Option<&dyn super::attach::far::WebUi>) -> Result<Value, String> {
     // From here on the board's words name a key as its button on the page.
     crate::board::keys::name_as_buttons(true);
     let c = client(client_id);
@@ -165,7 +167,7 @@ pub fn call(client_id: &str, call: &str, args: Value, machine: &str, pcs: Option
         }
         // Where the web UI's own chat of whoever the chat talks to is, to dock it under the list (null: the board's own).
         "dock" => { let d = super::dock::dock(c); let mut o = snapshot(c, ""); o.as_object_mut().unwrap().insert("dock".into(), d); Ok(o) }
-        "attach" => { if !drive { return watch(); } super::attach::attach(c, &args) }
+        "attach" => { if !drive { return watch(); } super::attach::attach_with(c, &args, ui) }
         "set" => {
             if !drive { return watch(); }
             let v = args.at("value");

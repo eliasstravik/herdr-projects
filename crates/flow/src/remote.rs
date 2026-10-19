@@ -1,5 +1,5 @@
 //! Other machines. Every machine keeps its own tasks; a home board asks each machine for its list and sends each
-//! action to the machine that owns the task, through one entry point there: `herdr-projects remote list|do|dispatch`,
+//! action to the machine that owns the task, through one entry point there: `herdr-projects remote list|do|dispatch|keep`,
 //! run over SSH with a login shell so PATH is set. Work never moves between machines. Why a machine did not answer is
 //! remote/why.rs; the check you can run (`herdr-projects machines`) is remote/check.rs.
 //!
@@ -8,6 +8,7 @@
 //! `board.machines` setting names them by hand instead. The order the board lists them in is herdr's sidebar's
 //! (remote/sidebar.rs).
 pub mod automations;
+pub mod carry;
 pub mod check;
 pub mod lookup;
 pub mod own_names;
@@ -129,7 +130,9 @@ pub fn remote_list() -> Value {
 pub fn remote_main(a: &[String]) -> i32 {
     let what = a.first().cloned().unwrap_or_default();
     let req: Value = a.get(1).and_then(|p| crate::util::unbase64(p)).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(json!({}));
-    let answer = match door(&what, &req) { Ok(v) => v, Err(e) => json!({ "ok": false, "msg": e.msg }) };
+    // Only `keep` reads its stdin: the file that goes with words (remote/carry.rs).
+    let bytes = if what == "keep" { carry::stdin_bytes() } else { vec![] };
+    let answer = match door_with(&what, &req, &bytes) { Ok(v) => v, Err(e) => json!({ "ok": false, "msg": e.msg }) };
     println!("{}", serde_json::to_string(&answer).unwrap_or_default());
     0
 }
@@ -142,11 +145,14 @@ fn carried(id: &str, req: &Value) -> Res<()> {
     Ok(())
 }
 /// One request of another machine, answered here (`remote_main` prints it as its one line).
-pub fn door(what: &str, req: &Value) -> Res<Value> {
+pub fn door(what: &str, req: &Value) -> Res<Value> { door_with(what, req, &[]) }
+/// The same, with what came on its stdin: the file `keep` keeps.
+pub fn door_with(what: &str, req: &Value, bytes: &[u8]) -> Res<Value> {
     let ok = |msg: String| Ok(json!({ "ok": true, "msg": msg }));
     match what {
         "list" => Ok(remote_list()),
         "after" => Ok(crate::after::far_ask::door(req)), // the tasks a task of the asking machine waits for (after/far_ask.rs)
+        "keep" => carry::kept(req, bytes), // a file that goes with words from the asking machine (remote/carry.rs)
         "hello" => Ok(json!({ "ok": true, "host": check::hostname(), "version": VERSION })), // the check a machine runs on itself (remote/check.rs)
         "do" if automations::is_automation_action(req.s("action")) => automations::automation_do(req), // an automation of this machine, not a task
         "do" => {

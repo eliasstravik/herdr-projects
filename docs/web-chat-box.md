@@ -51,10 +51,14 @@ Measured against **herdr-web-ui 0.4.8** (see [how](#how-it-was-measured)):
     agent reads it. Send waits while one is on its way.
   - The web UI's limits: 8 MB a file (a bigger one says so in a band over the box), three on their way at a time, and as
     many at once as its Settings → Chat → Files at once says.
-  - The file is kept where whoever gets the words can read it: in the Coordinator's own folder, in a task's working
-    folder under `.herdr-projects/files/` (git is told to leave it alone), or, with no Coordinator, in the board's own
-    folder (`files/` in its data folder).
-  - Only on this machine: a file for another machine's Coordinator or agent is refused, and the box says so.
+  - The file is kept where whoever gets the words can read it: in the Coordinator's own folder (a heading's
+    coordinator's, for words to it), in a task's working folder under `.herdr-projects/files/` (git is told to leave it
+    alone), or, with no Coordinator, in the board's own folder (`files/` in its data folder).
+  - For another machine's agent or Coordinator (a task of that machine, its heading, or its board shown) the file goes
+    to that machine, and the path is where it landed there. First the web UI's own way, as its chat box sends a file
+    for a pane on another PC: kept beside that agent's pane, in `.herdr-web-ui/` (a task's worktree leaves it out of
+    git too). Where the web UI cannot (no PC for that machine in it, not connected, or the agent has no pane yet) it
+    goes over the board's own link to that machine. If neither works the box says why, and nothing is attached.
 - **Dictation**, as in the web UI, with the mic beside the add button:
   - Tap it to start and tap again to finish, or hold it and let go (or hold ctrl+shift+space, cmd on a Mac).
   - While it listens, a pill over the box shows Cancel, where it stands (Ready, Recording, Transcribing, or No

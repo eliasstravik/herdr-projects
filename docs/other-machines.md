@@ -132,6 +132,22 @@ settings and above the repo's file. `show <id>` there says `sent from <your mach
 
 Board settings (how many agents at once, the Watcher, the Coordinator) stay with each machine ([settings](settings.md)).
 
+## Files you attach go with your words
+
+Words for another machine's agent or Coordinator may name a file of this machine: one you attached (`@<path>`), or one
+you dropped in the terminal (`/Users/you/Desktop/Screen\ Shot.png`, or in quotes). Before the words go, the board sends
+each such file over its own SSH link to that machine, and the words name it where it landed there. You copy nothing.
+
+- **Where it lands:** for a task's agent, in that task's working folder there, under `.herdr-projects/files/`. For a
+  Coordinator, in its own folder there, the same way. With no Coordinator there (the words become a task), in that
+  machine's board folder, under `files/`. Git leaves the folder alone. A file kept there goes after 30 days.
+- **What goes:** only a file that is on this machine. A folder, a path that is no file here, and a bare path into a
+  system folder or a hidden one (`/etc/hosts`, `~/.zshrc`) are left as you typed them: they mean that machine's own.
+- **Up to 8 MB a file.** A larger one is not sent.
+- **When a file cannot go** (too large, the machine does not answer, it refuses), the board says why and sends none of
+  your words: never a path the agent there cannot open.
+- **A machine on an older version** cannot take files: the board says so. Update `herdr-projects` there.
+
 ## In the Herdr web UI
 
 The web Board shows other machines as `Alt+M` does, acts on their tasks, and opens their agents in the web UI's own view
