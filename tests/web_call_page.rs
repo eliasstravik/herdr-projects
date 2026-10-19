@@ -8,6 +8,7 @@ const PAGE: &str = include_str!("../crates/web/src/webui/page/callpage.js");
 const CSS: &str = include_str!("../crates/web/src/webui/page/call.css");
 const CHAT: &str = include_str!("../crates/web/src/webui/page/chat.js");
 const SDK: &str = include_str!("../crates/web/src/webui/page/vendor/elevenlabs.js");
+const HEAR: &str = include_str!("../crates/web/src/webui/page/hear.js");
 use sw::webui::voice::page::{policy, widen, HOSTS};
 
 #[test]
@@ -24,10 +25,12 @@ fn the_call_runs_over_webrtc_with_the_boards_own_worklet_and_asks_the_board_for_
     assert!(CALL.contains(r#"if (!message || /^\[board\]/.test(message)) return;"#) && CALL.contains("tell(by, message);"));
     // a tool waits until what was said before it is stored (tried three times): your words are there when it sends,
     // and words that never got there keep a message from going
-    assert!(CALL.contains("for (let n = 0; n < 3; n++) { if ((await send(\"heard\", { who, text })).ok) return; }"));
+    assert!(CALL.contains("for (let n = 0; n < 3; n++) { if ((await send(\"heard\", { who, text })).ok) {"));
     // a loss stays until the message after it was refused and the human asked to say it all again; the chat says so
-    assert!(CALL.contains("if (who === \"user\") { lost = true; say(\"board\", \"Those words did not reach the board: say the whole request again.\"); }"));
-    assert!(CALL.contains("if (name === \"send_message\" && lost) { lost = false; return \"Not sent: some of the human's words did not reach the board."));
+    assert!(CALL.contains("if (who === \"user\") { lost = \"lost\"; say(\"board\", \"Those words did not reach the board: say the whole request again.\"); }"));
+    assert!(CALL.contains("if (name === \"send_message\" && lost) { lost = \"asked\"; return \"Not sent: some of the human's words did not reach the board."));
+    // only words of yours that reached the board after you were asked again clear it: a retry alone does not
+    assert!(CALL.contains("if (who === \"user\" && lost === \"asked\") lost = \"\"; return;"));
     // the ElevenLabs client is built in, and is an ES module with Conversation
     assert!(SDK.lines().nth(1).unwrap().contains("Do not edit: run the script scripts/voice-sdk.sh."));
     assert!(SDK.contains("export{") && SDK.contains("Conversation"));
@@ -44,7 +47,7 @@ fn an_update_is_read_only_in_a_pause_never_while_you_talk_or_over_the_voice() {
     assert!(CALL.contains(r#"if (st.state === "starting" && !c) { cancelled = true; return; }"#) && CALL.matches("if (stop()) return;").count() == 2);
     assert!(CALL.contains("const text = `[board] ${item.text}`;"));
     // the call ends cleanly: the board is told, the microphone and the screen's wake lock let go
-    assert!(CALL.contains(r#"if (k) send("end", { why }, "POST", k);"#) && CALL.contains("try { lock?.release(); } catch {}"));
+    assert!(CALL.contains(r#"if (k) send("end", { why, audio: hear.report() }, "POST", k);"#) && CALL.contains("try { lock?.release(); } catch {}"));
     assert!(CALL.contains(r#"window.addEventListener("pagehide", () => { if (key) finish("", "the page closed"); });"#));
 }
 
@@ -74,4 +77,23 @@ fn the_policies_let_a_call_reach_elevenlabs_and_nothing_else() {
     let p = policy();
     assert!(p.contains("script-src 'self';") && p.contains(&format!("connect-src 'self' {HOSTS};")) && p.contains("frame-ancestors 'none'"));
     assert!(!p.contains("unsafe-eval") && !p.contains("'unsafe-inline'"));
+}
+
+#[test]
+fn the_call_is_heard_or_the_page_asks_for_a_tap_and_says_what_it_saw() {
+    // the client's hidden <audio> elements are watched, asked to play, and their sound measured
+    assert!(HEAR.contains(r#"for (const el of document.querySelectorAll("audio")) adopt(el);"#) && HEAR.contains("try { await el.play(); } catch (e) { if (e && e.name === \"NotAllowedError\") set({ blocked: true }); }"));
+    // not allowed to play sound (no tap, the browser's rule): blocked, and a tap makes every element play again
+    assert!(HEAR.contains("(c && c.state !== \"running\" && !navigator.userActivation?.hasBeenActive)") && HEAR.contains("for (const [el] of seen) { el.muted = via === \"webaudio\"; el.volume = 1; try { await el.play(); } catch {} }"));
+    // the second way out: the page's own audio context plays it, the element silent
+    assert!(HEAR.contains("for (const [el, e] of seen) { el.muted = true; try { e.src?.connect(c.destination); } catch {} }"));
+    // the call page: one big Tap to hear, and Can't hear the voice?; the chat's strip the same
+    let html = { let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap(); let p = l.local_addr().unwrap().port(); let t = std::thread::spawn(move || { let (mut c, _) = l.accept().unwrap(); sw::webui::voice::page::send(&mut c, false); }); let mut s = std::net::TcpStream::connect(("127.0.0.1", p)).unwrap(); let mut out = String::new(); std::io::Read::read_to_string(&mut s, &mut out).unwrap(); t.join().unwrap(); out };
+    assert!(html.contains(r#"<button type="button" class="sw-callp-hear" data-hear hidden>Tap to hear</button>"#) && html.contains("Can't hear the voice? Tap here"));
+    assert!(PAGE.contains(r#"$("hear").addEventListener("click", () => hear.unlock());"#) && PAGE.contains("hear.webAudio();"));
+    assert!(BTN.contains(r#""Tap to hear")"#) && BTN.contains(r#""Can't hear?")"#));
+    assert!(CSS.contains(".sw-callp-hear { min-height: 96px;"));
+    // what the page saw goes to the board every fifth question, and with the end of the call
+    assert!(CALL.contains(r#"if (asks++ % 5 === 0) send("audio", hear.report());"#));
+    assert!(sw::webui::page::file("hear.js").is_some());
 }

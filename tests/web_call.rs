@@ -38,7 +38,16 @@ fn a_call_from_the_web_board_gets_a_short_lived_token_and_never_the_key() {
     assert_eq!((s.at("call").at("mine"), s.at("call").s("from")), (&json!(true), "web"));
     let other = common::board::web_as(&w, "phone", "board", json!({})).unwrap();
     assert_eq!(other.at("call").at("mine"), &json!(false));
-    call::end("test"); sw::voice::eleven::set_fake(None);
+    // what the page saw of the sound, kept with the call also after it ended, and said by `herdr-projects voice`
+    call::heard_audio(&json!({ "elements": 1, "playing": 1, "peak": 0.0, "ctx": "running", "blocked": false, "via": "element", "agent": "X11; Linux aarch64 Chrome/141", "secret": "no" }));
+    call::end("test");
+    let a = call::last().unwrap().at("audio").clone();
+    assert!(a.has("peak") && !a.has("secret"));
+    let said = sw::calls::command::main(&[]).1;
+    assert!(said.contains("Sound, last call (") && said.contains("the voice agent's sound reached the page but was silent (1 playing); audio context running; X11; Linux aarch64 Chrome/141"), "{said}");
+    call::heard_audio(&json!({ "elements": 1, "playing": 0, "blocked": true, "ctx": "suspended" }));
+    assert!(sw::calls::command::main(&[]).1.contains("the browser did not let it play sound (a tap on Tap to hear fixes that)"));
+    sw::voice::eleven::set_fake(None);
 }
 
 #[test]

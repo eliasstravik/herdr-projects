@@ -61,6 +61,13 @@ call's sound has to be on your computer, so `Ctrl+O` rings it:
 - That link holds the call's ticket: good once, for two minutes, and seen by whoever sees the terminal board (also a
   device the web UI lets only watch, in its terminal view). Hang up with the key if a call you did not take goes live.
 
+**Not hearing the voice?** The call watches its own sound. Where the browser does not let the page play sound, one big
+**Tap to hear** button asks for the tap. **Can't hear the voice? Tap here** (the chat's **Can't hear?**) plays the voice
+another way, through the page's own audio context, for a browser whose usual way stays silent. `herdr-projects voice`
+says what the page that held the last call saw: whether the voice agent's sound reached it, whether it played, and
+which browser it was. A call does not need a tap to be heard in the helper's window: Chromium plays the sound of a page
+that uses the microphone.
+
 The browser's echo cancelling works with the computer's own speakers. In a loud room, or where the voice agent seems
 to hear itself, use headphones.
 

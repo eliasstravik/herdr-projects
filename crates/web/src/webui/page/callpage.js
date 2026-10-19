@@ -2,10 +2,13 @@
 // from after the `#` (and takes it out of the address at once), starts the call (call.js) and shows how it stands, the
 // last things said, Mute and Hang up. Opened by the call helper (`&auto`: its window may use the microphone and play
 // sound without a tap) the call starts at once; opened from the board's link in your own browser, which wants a tap
-// before it plays sound, a Start button asks for one. When the call ends it says so, and closes itself where it may.
+// before it plays sound, a Start button asks for one. Where the browser still does not let the call be heard, one big
+// Tap to hear button asks for the tap; "Can't hear the voice?" plays it another way (hear.js). When the call ends it
+// says so, and closes itself where it may.
 /* global document, location, history, window */
 import { h } from "./dom.js";
 import * as call from "./call.js";
+import * as hear from "./hear.js";
 
 const [ticket, auto] = (() => { const h = location.hash.slice(1); return [h.split("&")[0], /&auto$/.test(h)]; })();
 try { history.replaceState(null, "", location.pathname); } catch {}
@@ -16,12 +19,16 @@ const go = () => { began = true; $("start").hidden = true; call.start({ ticket }
 $("start").addEventListener("click", go);
 $("mute").addEventListener("click", () => call.mute());
 $("end").addEventListener("click", () => call.end());
+$("hear").addEventListener("click", () => hear.unlock());
+$("fix").addEventListener("click", () => { hear.webAudio(); $("fix").textContent = "Playing it another way now"; $("fix").disabled = true; });
+hear.watch((h) => { const live = call.state().state === "live"; $("hear").hidden = !(live && h.blocked); $("fix").hidden = !live || h.blocked; });
 call.watch((s) => {
   const live = s.state === "live";
   $("who").textContent = live || s.state === "starting" ? (s.target ? `On a call with ${s.target}` : "Calling…") : began ? "Call ended" : "Call";
   $("state").textContent = s.state === "starting" ? s.note || "Connecting…" : live ? (s.muted ? "Muted" : s.mode === "speaking" ? "Speaking" : "Listening") : s.note || "";
   $("mute").hidden = !live; $("mute").textContent = s.muted ? "Unmute" : "Mute";
   $("end").hidden = !live && s.state !== "starting";
+  { const h = hear.state(); $("hear").hidden = !(live && h.blocked); $("fix").hidden = !live || h.blocked; }
   $("lines").replaceChildren(...s.lines.slice(-4).map((l) => h("p", h("b", `${WHO[l.by] || l.by}: `), l.text)));
   // The microphone or the sound wanted a tap: the button asks for it, with the same ticket (it was not used yet).
   if (s.state === "idle" && began && /microphone was not allowed/.test(s.note || "")) $("start").hidden = false;

@@ -58,8 +58,14 @@ pub fn check(said: &str, talk: &[(String, String)], confirmed: bool) -> Verdict 
     if let Some(t) = in_said.iter().find(|t| !in_q.contains(t)) {
         return Verdict::Refuse(format!("Not sent: the human said yes to \"{question}\", which is not about {t}. Ask again about the task they mean."));
     }
-    // the yes itself: a task or an action it names must be the ones asked about
+    // the yes itself: a task or an action it names must be the ones asked about. Any number counts as a task's
+    // ("#99", "99", "HP 99"): every number the yes or the message says must be one the question said.
     let yes_words = &talk[yes].1;
+    let numbers = |s: &str| crate::re!(r"\d+").find_iter(s).map(|m| m.as_str().trim_start_matches('0').to_string()).collect::<Vec<_>>();
+    let in_question = numbers(question);
+    if let Some(n) = numbers(yes_words).into_iter().chain(numbers(said)).find(|n| !in_question.contains(n)) {
+        return Verdict::Ask(format!("Not sent: {n} was not in the question the human said yes to. Ask again which task they mean."));
+    }
     if let Some(t) = tags_in(yes_words).into_iter().find(|t| !in_q.contains(t) || !in_said.contains(t)) {
         return Verdict::Ask(format!("Not sent: the human's yes names {t}, and the question was not about that. Ask again which task they mean."));
     }

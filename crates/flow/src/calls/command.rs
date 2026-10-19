@@ -21,6 +21,15 @@ pub fn main(args: &[String]) -> (Value, String) {
         match &link { Some(l) => format!("Call page: {l}/herdr-projects/call (a call from the terminal board opens it, with its ticket)"), None => "Call page: none here (the board's front door has no private link: herdr-projects web-ui link). The web board can still call when its page is open.".into() },
         if machines.is_empty() { "Call helper: not needed here (herdr has no saved machines: this is where the board runs, or you sit here)".into() } else { format!("Call helper: {} for {}", if helper { "running" } else if super::helper::wanted() { "not running (the keeper starts it)" } else { "off (voice.helper is none)" }, machines.join(", ")) },
     ];
+    // How the page holding the last call heard it (hear.js): whether sound arrived, played, or was not allowed.
+    if let Some(l) = call::last().filter(|l| l.has("audio")) {
+        let a = l.at("audio");
+        let how = if a.b("blocked") { "the browser did not let it play sound (a tap on Tap to hear fixes that)".to_string() }
+            else if a.i("elements") == 0 { "no sound of the voice agent reached the page".into() }
+            else if a.f("peak") < 0.001 { format!("the voice agent's sound reached the page but was silent ({} playing)", a.i("playing")) }
+            else { format!("sound reached the page (peak {}) and played through {}", a.t("peak"), if a.s("via") == "webaudio" { "the page's audio context" } else { "an audio element" }) };
+        lines.push(format!("Sound, last call ({}): {how}; audio context {}; {}", l.s("id"), a.s("ctx"), a.s("agent")));
+    }
     lines.push(match &c { Some(c) => format!("Call: {} with {} ({})", c.s("state"), call::target(c).name, if call::from_terminal(c) { "from the terminal board" } else { "from the web board" }), None => "Call: none on now".into() });
     (json!({ "key": k.map(|k| k.from), "link": link, "helper": helper, "machines": machines, "call": c.map(|c| json!({ "id": c.s("id"), "state": c.s("state"), "owner": c.s("owner") })) }), lines.join("\n"))
 }

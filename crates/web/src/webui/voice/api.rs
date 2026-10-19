@@ -41,8 +41,9 @@ pub fn route(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstrea
     let out = match (head.method.as_str(), what) {
         ("POST", "heard") => { call::line(if args.s("who") == "agent" { "voice" } else { "you" }, args.s("text")); json!({ "ok": true }) }
         ("POST", "tool") => json!({ "ok": true, "result": super::tools::run(&c, args.s("name"), args.at("args")) }),
+        ("POST", "audio") => { call::heard_audio(&args); json!({ "ok": true }) }
         ("GET", "feed") => { let mut f = super::feed::feed(&c); f["ok"] = json!(true); f }
-        ("POST", "end") => { call::end_of(c.s("id"), if args.s("why").is_empty() { "hung up" } else { args.s("why") }); json!({ "ok": true }) }
+        ("POST", "end") => { if args.has("audio") { call::heard_audio(args.at("audio")); } call::end_of(c.s("id"), if args.s("why").is_empty() { "hung up" } else { args.s("why") }); json!({ "ok": true }) }
         _ => return no(&mut client, 404, "Not found"),
     };
     json_out(&mut client, 200, &out)

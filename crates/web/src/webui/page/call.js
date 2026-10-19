@@ -4,7 +4,9 @@
 // the API key. Your words and the voice agent's are told to the board as they are said, so the chats show them; what to
 // read back (an agent's answer, a task that needs you) is asked for every second and a half and said only in a pause:
 // never while you talk, never over the voice agent. One call per page, kept while the board is closed and opened again.
+// Whether the voice agent can be heard is hear.js's: it is reported to the board with each fifth question.
 /* global window, document, navigator, fetch, performance */
+import * as hear from "./hear.js";
 const API = "/herdr-projects/api/voice";
 const TOOLS = ["send_message", "switch_to", "board_status", "latest_reply", "quiet", "end_call"];
 // A pause: nobody spoke for this long (you, by the voice service's own speech detector; the voice agent, by its mode).
@@ -14,10 +16,13 @@ const subs = new Set();
 let st = { state: "idle", mode: "", muted: false, target: "", note: "", lines: [] };
 let conv = null, key = "", timer = null, queue = [], heardAt = 0, spokeAt = 0, waiting = false, lock = null, cancelled = false;
 // What was said, told to the board one after the other (tried three times): a tool waits for it, so your words are
-// there before it sends. Words of yours that never got there stop the next message from going (`lost`): the voice
-// agent is told to ask you to say the whole request again, and the chat says they did not reach the board.
-let told = Promise.resolve(), lost = false;
-const tell = (who, text) => { told = told.then(async () => { for (let n = 0; n < 3; n++) { if ((await send("heard", { who, text })).ok) return; } if (who === "user") { lost = true; say("board", "Those words did not reach the board: say the whole request again."); } }); };
+// there before it sends. Words of yours that never got there stop every message (`lost`) until the voice agent was
+// told to ask you to say the whole request again ("asked") and words of yours spoken after that reached the board.
+let told = Promise.resolve(), lost = "";
+const tell = (who, text) => { told = told.then(async () => {
+  for (let n = 0; n < 3; n++) { if ((await send("heard", { who, text })).ok) { if (who === "user" && lost === "asked") lost = ""; return; } }
+  if (who === "user") { lost = "lost"; say("board", "Those words did not reach the board: say the whole request again."); }
+}); };
 const set = (patch) => { st = { ...st, ...patch }; for (const f of subs) { try { f(st); } catch {} } };
 export const state = () => st;
 export const watch = (f) => { subs.add(f); f(st); return () => subs.delete(f); };
@@ -59,7 +64,7 @@ export async function start(how) {
     const clientTools = Object.fromEntries(TOOLS.map((name) => [name, async (args) => {
       await told;
       // Lost words: this message does not go, and the human is asked to say all of it again; their next words count.
-      if (name === "send_message" && lost) { lost = false; return "Not sent: some of the human's words did not reach the board. Ask them to say their whole request again, then send it."; }
+      if (name === "send_message" && lost) { lost = "asked"; return "Not sent: some of the human's words did not reach the board. Ask them to say their whole request again, then send it."; }
       const res = await send("tool", { name, args: args || {} });
       if (name === "end_call") setTimeout(() => end("said goodbye"), 2500);
       if (name === "switch_to" || name === "send_message") feed();
@@ -69,7 +74,7 @@ export async function start(how) {
     const started = await Conversation.startSession({
       conversationToken: out.token, connectionType: "webrtc", workletPaths: { rawAudioProcessor: out.worklet },
       dynamicVariables: { target: out.target }, clientTools,
-      onConnect: () => set({ state: "live", note: "", target: out.target }),
+      onConnect: () => { set({ state: "live", note: "", target: out.target }); hear.start(); },
       onDisconnect: () => { if (conv) finish("The call ended.", "the voice service ended it"); else dropped = true; },
       onError: (m) => set({ note: typeof m === "string" ? m : "The call had a problem." }),
       onModeChange: ({ mode }) => { set({ mode }); if (mode === "speaking") spokeAt = performance.now(); },
@@ -96,9 +101,11 @@ export async function start(how) {
   }
 }
 // Ask the board what to read back, and read the next of it in a pause.
+let asks = 0;
 async function feed() {
   if (!conv || waiting) return;
   waiting = true;
+  if (asks++ % 5 === 0) send("audio", hear.report());
   const out = await send("feed", null, "GET");
   waiting = false;
   if (out.status === 410 || out.ended) { key = ""; return end("ended"); }
@@ -123,8 +130,9 @@ function finish(note, why = "hung up") {
   const k = key;
   clearInterval(timer); timer = null; queue = [];
   try { lock?.release(); } catch {}
-  lock = null; conv = null; key = "";
-  if (k) send("end", { why }, "POST", k);
+  lock = null; conv = null;
+  if (k) send("end", { why, audio: hear.report() }, "POST", k);
+  key = ""; hear.stop();
   set({ state: "idle", mode: "", muted: false, note });
 }
 export async function end(why = "hung up") {

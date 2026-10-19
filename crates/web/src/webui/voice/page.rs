@@ -13,9 +13,11 @@ const HTML: &str = r#"<!doctype html>
 <link rel="stylesheet" href="/herdr-projects/page/call.css"></head>
 <body class="sw-call-page"><main class="sw-callp">
 <p class="sw-callp-who" data-who>Calling…</p><p class="sw-callp-state" data-state>Starting the call</p>
+<button type="button" class="sw-callp-hear" data-hear hidden>Tap to hear</button>
 <div class="sw-callp-lines" data-lines aria-live="polite"></div>
 <div class="sw-callp-buttons"><button type="button" class="sw-callp-start" data-start hidden>Start the call</button>
 <button type="button" class="sw-callp-mute" data-mute hidden>Mute</button><button type="button" class="sw-callp-end" data-end hidden>Hang up</button></div>
+<button type="button" class="sw-callp-fix" data-fix hidden>Can't hear the voice? Tap here</button>
 </main><script type="module" src="/herdr-projects/page/callpage.js"></script></body></html>
 "#;
 pub fn send(client: &mut std::net::TcpStream, head_only: bool) {

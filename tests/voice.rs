@@ -85,6 +85,10 @@ fn an_action_goes_only_on_your_request_the_voice_agents_question_and_your_plain_
     assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "yes merge HP-99")]), true)));
     assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "yes, delete it")]), true)));
     assert_eq!(check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "yes, merge HP-52")]), true), Verdict::Send);
+    for other in ["yes, merge #99", "yes 99", "yes, merge HP 99", "yes, number ninety-nine, 99"] {
+        assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", other)]), true)), "{other}");
+    }
+    assert!(asked(&check("Merge #99", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "yes")]), true)), "the message's number must be the question's too");
     // a yes to HP-52 is no yes to HP-99
     assert!(matches!(check("Merge HP-99", &t(&[("you", "please merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "yes")]), true), Verdict::Refuse(m) if m.contains("HP99")));
     // the voice agent's word that you said yes is not enough: no question asked, or not confirmed
