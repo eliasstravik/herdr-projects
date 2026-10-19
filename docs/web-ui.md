@@ -40,10 +40,11 @@ In the sidebar, under **Agents** and above its foot (Install app, Settings), the
 
 Under it, one entry per machine that has a board, drawn as an agent's entry is:
 
-- **This machine** and **each other machine the board knows** (the ones its Other machines goes round: Herdr's saved
-  machines, or `board.machines`), in the order of Herdr's sidebar, this machine where that sidebar puts it
-  ([machine order](machine-order.md)). Then **All machines** (also while this machine is the only one: it then shows this
-  machine's tasks, and stays picked).
+- **All machines** first, at the top (also while this machine is the only one: it then shows this machine's tasks, and
+  stays picked).
+- Under it, **this machine** and **each other machine the board knows** (the ones its Other machines goes round: Herdr's
+  saved machines, or `board.machines`), in the order of Herdr's sidebar, this machine where that sidebar puts it
+  ([machine order](machine-order.md)).
 - **Names:** each as the web UI names that machine (`Mac`, `elias-macbook-pro-m1`, `vm-str`), matched to its PCs as below
   ([other machines](#other-machines)). One the web UI has no PC for keeps the board's name for it. A web UI that names
   this machine by no name of its own gives `This machine`.

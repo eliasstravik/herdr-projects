@@ -1,6 +1,7 @@
-//! The Boards section of the web UI's sidebar: one entry per machine with a board, named as the web UI names it, and one
-//! for all machines, each with a dot in the board's status colours and a short line of how it stands; a machine that
-//! cannot be reached says so; picking an entry shows that machine's board, and the board and the section stay in step.
+//! The Boards section of the web UI's sidebar: one entry for all machines at the top, then one per machine with a board,
+//! named as the web UI names it, each with a dot in the board's status colours and a short line of how it stands; a
+//! machine that cannot be reached says so; picking an entry shows that machine's board, and the board and the section
+//! stay in step.
 use crate::common;
 use crate::far;
 use common::*;
@@ -34,13 +35,13 @@ fn each_machine_has_its_board_in_the_section_named_as_the_web_ui_names_it_with_h
     far.tasks("vm-a", "0.2.0", json!([busy, far::theirs(2), stuck]));
     // asked before the other machine answered: it is being asked, and there is nothing to add up yet
     let first = boards(pcs());
-    assert_eq!(first.arr("boards")[0].s("name"), "Mac", "this machine as the web UI names it");
+    assert_eq!(first.arr("boards")[1].s("name"), "Mac", "this machine as the web UI names it");
     far::answered("t", 1);
     let b = boards(None);
     assert_eq!(entries(&b), vec![
+        e("*", "All machines", "red", "1 needs you · 2 working · 2 to do"),
         e("", "Mac", "yellow", "1 working · 1 to do"),
         e("vm-a", "vm-box", "red", "1 needs you · 1 working · 1 to do"),
-        e("*", "All machines", "red", "1 needs you · 2 working · 2 to do"),
     ]);
     assert_eq!(b.s("scope"), "", "the board shows this machine");
 }
@@ -53,8 +54,8 @@ fn a_board_with_nothing_going_on_is_all_quiet_its_archive_left_out_and_all_machi
     // a web UI that names this machine only by its id, or none: the board's own words for it
     let b = boards(Some(vec![pc("local", "local", "", true)]));
     assert_eq!(b.at("boards"), &json!([
-        { "scope": "", "name": "This machine", "dot": "quiet", "line": "all quiet", "title": "This machine's board: all quiet" },
         { "scope": "*", "name": "All machines", "dot": "quiet", "line": "all quiet", "title": "Every machine's board: all quiet" },
+        { "scope": "", "name": "This machine", "dot": "quiet", "line": "all quiet", "title": "This machine's board: all quiet" },
     ]));
     // picked, it stays picked when the board learns again that there is no other machine
     assert_eq!(call("scope", json!({ "to": "*" }), None).unwrap().at("flags").s("scope"), "*");
@@ -69,14 +70,14 @@ fn a_machine_that_cannot_be_reached_says_so_on_its_entry_and_a_machine_without_a
     boards(Some(vec![pc("local", "Mac", "", true)]));
     far::answered("t", 1);
     let b = boards(None);
-    let them = &b.arr("boards")[1];
+    let them = &b.arr("boards")[2];
     assert_eq!((them.s("name"), them.s("line"), them.at("off"), them.s("dot")), ("vm-a", "not reachable", &json!(true), ""));
     assert!(them.s("title").starts_with("vm-a is not reachable: "), "{}", them.s("title"));
-    assert_eq!(b.arr("boards")[2].s("line"), "all quiet · 1 not reachable");
+    assert_eq!(b.arr("boards")[0].s("line"), "all quiet · 1 not reachable");
 }
 
 #[test]
-fn the_entries_stand_in_the_order_of_herdrs_sidebar_this_machine_where_it_puts_it_not_in_the_web_uis_order_of_its_pcs() {
+fn all_machines_stands_first_then_the_machines_in_the_order_of_herdrs_sidebar_not_in_the_web_uis_order_of_its_pcs() {
     let w = world_with(Opts { repo: true, settings: json!({ "board.machines": "vm-a, vm-b" }), ..Default::default() });
     let far = Far::new(&w.base);
     std::fs::write(sw::store::files::data_dir().join("view.json"), json!({ "cwd": w.root_str() }).to_string()).unwrap();
@@ -88,7 +89,7 @@ fn the_entries_stand_in_the_order_of_herdrs_sidebar_this_machine_where_it_puts_i
     boards(them.clone());
     far::answered("t", 2);
     let order: Vec<String> = boards(them).arr("boards").iter().map(|e| e.t("name")).collect();
-    assert_eq!(order, vec!["box-b", "box-a", "Mac", "All machines"]);
+    assert_eq!(order, vec!["All machines", "box-b", "box-a", "Mac"], "this machine where herdr's sidebar puts it");
 }
 
 #[test]

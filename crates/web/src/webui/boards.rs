@@ -1,8 +1,8 @@
-//! The Boards section of the web UI's sidebar: one entry per machine that has a board (this one and every other machine
-//! the board knows), and one for all of them, each named as the web UI names that machine (pcs.rs) and saying at a
-//! glance how its board stands: a dot in the board's status colours and a short line (`1 working · 2 to do`). Picking
-//! one is the choice the scope key makes (whose board you see), made at once: the section and the board are the same
-//! browser's board (web.rs), so the two stay in step.
+//! The Boards section of the web UI's sidebar: one entry for all machines, first, then one per machine that has a board
+//! (this one and every other machine the board knows), each named as the web UI names that machine (pcs.rs) and saying
+//! at a glance how its board stands: a dot in the board's status colours and a short line (`1 working · 2 to do`).
+//! Picking one is the choice the scope key makes (whose board you see), made at once: the section and the board are the
+//! same browser's board (web.rs), so the two stay in step.
 use super::pcs::{pc_of, Pc};
 use super::web::{effects, poll, reload, Client};
 use crate::board::data::Remote;
@@ -38,8 +38,8 @@ fn far(label: &str, m: &Remote, pcs: &[Pc]) -> (Value, Option<[usize; 5]>) {
     let detail: Vec<String> = std::iter::once(why.t("line")).chain(why.arr("detail").iter().map(|d| d.as_str().unwrap_or("").to_string())).filter(|d| !d.is_empty()).collect();
     (json!({ "scope": label, "name": name, "dot": "", "line": "not reachable", "off": true, "title": format!("{name} is not reachable: {}", detail.join("\n")) }), None)
 }
-/// Every entry, in the order of herdr's sidebar (machine-order.md; this machine first when there is none), each named
-/// as the web UI names it, then all machines together.
+/// Every entry: all machines together first, then each machine in the order of herdr's sidebar (machine-order.md; this
+/// machine first when there is none), named as the web UI names it.
 pub fn boards(c: &mut Client) -> Value {
     let now = crate::clock::now();
     if now - c.boards_at >= ASK { c.boards_at = now; poll(c, false); }
@@ -57,10 +57,10 @@ pub fn boards(c: &mut Client) -> Value {
         if let Some(n) = n { add(&mut all, &n); } else if e.b("off") { away += 1; }
         out.push(e);
     }
-    // All machines is always there, also with no other machine yet: it then shows this one's tasks.
+    // All machines is always there, at the top, also with no other machine yet: it then shows this one's tasks.
     let mut e = entry("*", "All machines", &all, format!("Every machine's board: {}", line(&all)));
     if away > 0 { e["line"] = json!(format!("{} · {away} not reachable", line(&all))); }
-    out.push(e);
+    out.insert(0, e);
     json!({ "boards": out, "scope": c.s.scope })
 }
 /// The board of one machine (`""` this one, `"*"` all of them, else the machine's name on the board), as the scope key
