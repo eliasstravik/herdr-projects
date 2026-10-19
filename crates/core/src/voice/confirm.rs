@@ -6,7 +6,7 @@
 //! HP-99, also when the yes names HP-99 itself ("yes, merge HP-99"), and a yes that names another action is no yes to
 //! this one. A no takes back every request before it, and a question that offers something else ("would you like an
 //! explanation of merge?") is no question to do it.
-use super::words::{actions_in, words_of, ACTIONS};
+use super::words::{actions_in, orders_in, words_of, ACTIONS};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Verdict { Send, Ask(String), Refuse(String) }
@@ -35,10 +35,13 @@ fn plain_yes(s: &str) -> bool {
 }
 /// May `said` go to the agent? `action`: the action the voice agent says it carries ("none", or approve, merge, stop,
 /// delete). `talk`: (who, words) since the last message, "you" for you and "voice" for the voice agent. A message with
-/// none always goes: the line under it tells the agent it authorizes none of the four (words.rs: message). A named one
-/// goes only as checked here, and authorizes that one alone.
+/// none always goes, with one line under it when its words may order one of the four (words.rs: message). A named one
+/// goes only as checked here, and holds no order of another: one action per message.
 pub fn check(said: &str, action: &str, talk: &[(String, String)], confirmed: bool) -> Verdict {
     let Some(named) = ACTIONS.iter().map(|(a, _)| *a).find(|a| *a == action) else { return Verdict::Send };
+    if let Some(other) = orders_in(said).into_iter().find(|a| *a != named) {
+        return Verdict::Refuse(format!("Not sent: one action per message. Send only the {named}, as the human confirmed it; the {other} is not confirmed: ask about it on its own."));
+    }
     let wanted = vec![named];
     let you = |i: usize| talk[i].0 == "you";
     // A no of yours takes back every request before it.

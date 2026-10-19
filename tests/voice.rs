@@ -43,8 +43,10 @@ fn a_message_is_the_voice_agents_own_clear_instruction_with_one_line_that_it_cam
     assert!(actions_in("what is the status of the merger talks").is_empty() && actions_in("unstoppable").is_empty());
     // what the voice agent wrote, as it wrote it (spaces tidied, its expression tags out), nothing added: never the
     // call's transcript, never a note about the call
-    assert_eq!(message("[neutral] Add a  goodbye line to the greeting in src/greet.rs"), "Add a goodbye line to the greeting in src/greet.rs");
-    assert_eq!(untagged("[hear] One thing waits [try] for you: HP-59 [research] [Board] a[0]"), "One thing waits for you: HP-59 [Board] a[0]");
+    assert_eq!(message("[neutral] Add a  goodbye line to the greeting in src/greet.rs", "none"), "Add a goodbye line to the greeting in src/greet.rs");
+    // tags lead a sentence, alone; brackets in the words themselves stay (the reviewer's case)
+    assert_eq!(untagged("[hear] One thing waits. [try] [sighs] For you: HP-59. Done. [laughs]"), "One thing waits. For you: HP-59. Done.");
+    assert_eq!(untagged("[neutral] Please fix items[index] in app.py and the [voice] settings section."), "Please fix items[index] in app.py and the [voice] settings section.");
     // the voice agent is told how to write it: self-contained, just what was asked of this agent, names kept exact
     let tool = sw::voice::agent::tools().into_iter().find(|t| t.name == "send_message").unwrap();
     let d = (tool.params)().at("properties").at("message").t("description");

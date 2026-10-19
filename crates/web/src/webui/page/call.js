@@ -30,8 +30,9 @@ const fresh = () => { told = Promise.resolve(); lost = ""; };
 const set = (patch) => { st = { ...st, ...patch }; for (const f of subs) { try { f(st); } catch {} } };
 export const state = () => st;
 export const watch = (f) => { subs.add(f); f(st); return () => subs.delete(f); };
-// The voice's expression tags ("[neutral]") are for how it speaks, never shown (the board keeps its lines without them).
-const untag = (t) => t.replace(/\[[\p{Ll} -]{1,40}\]/gu, " ").replace(/\s+/g, " ").trim();
+// The voice's expression tags ("[neutral]") are for how it speaks, never shown (the board keeps its lines without them):
+// a short run of lower-case words in square brackets at the start of a sentence, alone, as voice/words.rs reads them.
+const untag = (t) => t.split(/(?<=[.!?…:]\s+)/).map((p) => p.replace(/^(\s*\[\p{Ll}[\p{Ll} -]{0,39}\](\s+|$))+/u, "")).join("").replace(/\s+/g, " ").trim();
 const say = (by, text) => set({ lines: [...st.lines, { by, text: by === "voice" ? untag(text) : text }].slice(-6) });
 
 async function send(what, body, method = "POST", k = key) {
