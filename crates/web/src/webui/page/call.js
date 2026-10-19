@@ -18,11 +18,14 @@ let conv = null, key = "", timer = null, queue = [], heardAt = 0, spokeAt = 0, w
 // What was said, told to the board one after the other (tried three times): a tool waits for it, so your words are
 // there before it sends. Words of yours that never got there stop every message (`lost`) until the voice agent was
 // told to ask you to say the whole request again ("asked") and words of yours spoken after that reached the board.
+// Words belong to the call they were said on: they go with that call's key only, and a call that ended takes its
+// words, its tries and its losses with it (a new call starts with none).
 let told = Promise.resolve(), lost = "";
-const tell = (who, text) => { told = told.then(async () => {
-  for (let n = 0; n < 3; n++) { if ((await send("heard", { who, text })).ok) { if (who === "user" && lost === "asked") lost = ""; return; } }
-  if (who === "user") { lost = "lost"; say("board", "Those words did not reach the board: say the whole request again."); }
+const tell = (who, text) => { const k = key; told = told.then(async () => {
+  for (let n = 0; n < 3; n++) { if (key !== k || !k) return; if ((await send("heard", { who, text }, "POST", k)).ok) { if (key === k && who === "user" && lost === "asked") lost = ""; return; } }
+  if (key === k && who === "user") { lost = "lost"; say("board", "Those words did not reach the board: say the whole request again."); }
 }); };
+const fresh = () => { told = Promise.resolve(); lost = ""; };
 const set = (patch) => { st = { ...st, ...patch }; for (const f of subs) { try { f(st); } catch {} } };
 export const state = () => st;
 export const watch = (f) => { subs.add(f); f(st); return () => subs.delete(f); };
@@ -47,7 +50,7 @@ export async function start(how) {
   if (conv || st.state === "starting") return;
   if (!window.isSecureContext) return set({ state: "idle", note: "A call needs the board's private https link." });
   set({ state: "starting", note: "Asking for the microphone…", lines: [] });
-  cancelled = false;
+  cancelled = false; fresh();
   // Hung up while it was still connecting: it stops at the next step, and the board is told.
   const stop = () => { if (!cancelled) return false; if (key) send("end", { why: "hung up while connecting" }); key = ""; set({ state: "idle", note: "You hung up.", mode: "" }); return true; };
   try {
@@ -132,7 +135,7 @@ function finish(note, why = "hung up") {
   try { lock?.release(); } catch {}
   lock = null; conv = null;
   if (k) send("end", { why, audio: hear.report() }, "POST", k);
-  key = ""; hear.stop();
+  key = ""; hear.stop(); fresh();
   set({ state: "idle", mode: "", muted: false, note });
 }
 export async function end(why = "hung up") {

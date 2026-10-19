@@ -9,7 +9,8 @@ let ctx = null, observer = null, timer = null, via = "element";
 const seen = new Map(); // element → { analyser, peak }
 let st = { blocked: false, elements: 0, playing: 0, peak: 0, ctx: "", via };
 const subs = new Set();
-const set = (patch) => { st = { ...st, ...patch }; for (const f of subs) { try { f(st); } catch {} } };
+// Told only when something changed: a page that redraws on it must not wake this again for nothing.
+const set = (patch) => { const next = { ...st, ...patch }; if (JSON.stringify(next) === JSON.stringify(st)) return; st = next; for (const f of subs) { try { f(st); } catch {} } };
 export const watch = (f) => { subs.add(f); f(st); return () => subs.delete(f); };
 export const state = () => st;
 
@@ -42,7 +43,8 @@ export async function start() {
   stop();
   const c = context();
   try { await c?.resume(); } catch {}
-  observer = new MutationObserver(look);
+  // Only an <audio> element added to the page is news here (the page's own redraws are not).
+  observer = new MutationObserver((records) => { if (records.some((m) => [...m.addedNodes].some((n) => n.nodeName === "AUDIO" || n.querySelector?.("audio")))) look(); });
   observer.observe(document.body, { childList: true, subtree: true });
   timer = window.setInterval(look, 500);
   look();

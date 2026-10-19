@@ -25,12 +25,15 @@ fn the_call_runs_over_webrtc_with_the_boards_own_worklet_and_asks_the_board_for_
     assert!(CALL.contains(r#"if (!message || /^\[board\]/.test(message)) return;"#) && CALL.contains("tell(by, message);"));
     // a tool waits until what was said before it is stored (tried three times): your words are there when it sends,
     // and words that never got there keep a message from going
-    assert!(CALL.contains("for (let n = 0; n < 3; n++) { if ((await send(\"heard\", { who, text })).ok) {"));
+    assert!(CALL.contains("for (let n = 0; n < 3; n++) { if (key !== k || !k) return;"));
     // a loss stays until the message after it was refused and the human asked to say it all again; the chat says so
-    assert!(CALL.contains("if (who === \"user\") { lost = \"lost\"; say(\"board\", \"Those words did not reach the board: say the whole request again.\"); }"));
+    assert!(CALL.contains("if (key === k && who === \"user\") { lost = \"lost\"; say(\"board\", \"Those words did not reach the board: say the whole request again.\"); }"));
     assert!(CALL.contains("if (name === \"send_message\" && lost) { lost = \"asked\"; return \"Not sent: some of the human's words did not reach the board."));
+    // words go with the key of the call they were said on, and stop when that call ended; a call starts clean
+    assert!(CALL.contains("const tell = (who, text) => { const k = key; told = told.then(async () => {") && CALL.contains("if (key !== k || !k) return; if ((await send(\"heard\", { who, text }, \"POST\", k)).ok)"));
+    assert!(CALL.contains("const fresh = () => { told = Promise.resolve(); lost = \"\"; };") && CALL.contains("cancelled = false; fresh();") && CALL.contains("key = \"\"; hear.stop(); fresh();"));
     // only words of yours that reached the board after you were asked again clear it: a retry alone does not
-    assert!(CALL.contains("if (who === \"user\" && lost === \"asked\") lost = \"\"; return;"));
+    assert!(CALL.contains("if (key === k && who === \"user\" && lost === \"asked\") lost = \"\"; return;"));
     // the ElevenLabs client is built in, and is an ES module with Conversation
     assert!(SDK.lines().nth(1).unwrap().contains("Do not edit: run the script scripts/voice-sdk.sh."));
     assert!(SDK.contains("export{") && SDK.contains("Conversation"));
@@ -96,4 +99,11 @@ fn the_call_is_heard_or_the_page_asks_for_a_tap_and_says_what_it_saw() {
     // what the page saw goes to the board every fifth question, and with the end of the call
     assert!(CALL.contains(r#"if (asks++ % 5 === 0) send("audio", hear.report());"#));
     assert!(sw::webui::page::file("hear.js").is_some());
+}
+
+#[test]
+fn watching_the_sound_never_wakes_itself_up() {
+    // the board's chat redraws when the sound's state changes: that redraw must not set the watcher off again
+    assert!(HEAR.contains("if (JSON.stringify(next) === JSON.stringify(st)) return;"));
+    assert!(HEAR.contains(r#"if (records.some((m) => [...m.addedNodes].some((n) => n.nodeName === "AUDIO" || n.querySelector?.("audio")))) look();"#));
 }
