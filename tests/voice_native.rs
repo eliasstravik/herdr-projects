@@ -203,3 +203,19 @@ fn your_microphone_goes_out_also_while_the_voice_agent_speaks_lifted_and_measure
     let r = c.e.report();
     assert!(r.f("mic") > 0.0 && r.has("secs") && r.s("via") == "native");
 }
+
+#[test]
+fn being_told_to_be_quiet_drops_the_updates_already_waiting_for_a_pause() {
+    sw::clock::set(Some(5_000_000));
+    let mut c = call(true);
+    c.desk.lock().unwrap().feed = vec![json!({ "kind": "alert", "text": "HP-52 needs you" }), json!({ "kind": "answer", "text": "The Coordinator answered: done." })];
+    c.hear(audio(1, &[1; 32000]));
+    c.until(5_000_000 + 1600, |c| c.e.queued() == 2);
+    // "be quiet": the voice agent calls quiet; the alert waiting is dropped, the answer to what was sent stays
+    c.hear(json!({ "type": "client_tool_call", "client_tool_call": { "tool_call_id": "q", "tool_name": "quiet", "parameters": { "on": true } } }));
+    c.e.step(5_000_000 + 1700);
+    assert_eq!(c.e.queued(), 1);
+    c.e.step(5_000_000 + 1700 + 1000 + QUIET_MS + 1);
+    let said: Vec<String> = c.sent().into_iter().filter(|m| m.s("type") == "user_message").map(|m| m.t("text")).collect();
+    assert_eq!(said, vec!["[board] The Coordinator answered: done.".to_string()]);
+}

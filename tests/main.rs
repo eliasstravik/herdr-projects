@@ -235,6 +235,7 @@ mod theme_paint;
 mod titles;
 mod turns;
 mod voice;
+mod voice_commands;
 mod voice_native;
 mod voice_pickup;
 mod waiting;

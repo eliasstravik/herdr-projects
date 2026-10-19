@@ -74,6 +74,8 @@ export async function start(how) {
       if (name === "send_message" && lost) { lost = "asked"; return "Not sent: some of the human's words did not reach the board. Ask them to say their whole request again, then send it."; }
       const res = await send("tool", { name, args: args || {} }, "POST", mine);
       if (name === "end_call") setTimeout(() => end("said goodbye"), 2500);
+      // quiet: updates about other tasks waiting for a pause are dropped too, not only the ones to come
+      if (name === "quiet" && res.ok && args?.on) queue = queue.filter((i) => i.kind !== "alert");
       if (name === "switch_to" || name === "send_message") feed();
       return res.ok ? String(res.result || "") : res.msg || "The board did not answer.";
     }]));
@@ -112,9 +114,11 @@ let asks = 0;
 async function feed() {
   if (!conv || waiting) return;
   waiting = true;
+  const k = key; // what comes back is this call's, and nothing of the next one's
   if (asks++ % 5 === 0) send("audio", hear.report());
-  const out = await send("feed", null, "GET");
+  const out = await send("feed", null, "GET", k);
   waiting = false;
+  if (key !== k) return;
   if (out.status === 410 || out.ended) { key = ""; return end("ended"); }
   if (out.ok) { if (out.target && out.target !== st.target) set({ target: out.target }); queue.push(...(out.items || [])); }
   next();

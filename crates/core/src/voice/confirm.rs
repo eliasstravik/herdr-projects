@@ -6,7 +6,7 @@
 //! HP-99, also when the yes names HP-99 itself ("yes, merge HP-99"), and a yes that names another action is no yes to
 //! this one. A no takes back every request before it, and a question that offers something else ("would you like an
 //! explanation of merge?") is no question to do it.
-use super::words::{actions_in, words_of, ACTIONS};
+use super::words::{actions_in, commands_in, words_of, ACTIONS};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Verdict { Send, Ask(String), Refuse(String) }
@@ -35,13 +35,14 @@ fn plain_yes(s: &str) -> bool {
 }
 /// May `said` go to the agent? `talk`: (who, words) since the last message, "you" for you and "voice" for the voice agent.
 pub fn check(said: &str, talk: &[(String, String)], confirmed: bool) -> Verdict {
-    let wanted = actions_in(said);
+    // what the message orders done: a question or a mention of one ("why did the merge fail?") orders nothing
+    let wanted = commands_in(said);
     if wanted.is_empty() { return Verdict::Send; }
     let you = |i: usize| talk[i].0 == "you";
     // A no of yours takes back every request before it.
     let after_no = (0..talk.len()).rev().find(|&i| you(i) && negated(&talk[i].1)).map(|i| i + 1).unwrap_or(0);
     // your request: words of yours since your last no that name it, and are no question and no no
-    let asked_at = |a: &str| (after_no..talk.len()).filter(|&i| you(i) && actions_in(&talk[i].1).contains(&a) && !is_question(&talk[i].1) && !negated(&talk[i].1)).collect::<Vec<_>>();
+    let asked_at = |a: &str| (after_no..talk.len()).filter(|&i| you(i) && commands_in(&talk[i].1).contains(&a) && !is_question(&talk[i].1) && !negated(&talk[i].1)).collect::<Vec<_>>();
     if let Some(a) = wanted.iter().find(|a| asked_at(a).is_empty()) {
         return Verdict::Refuse(format!("Not sent: it asks to {a}, and the human did not ask for that. Send only what they asked for."));
     }

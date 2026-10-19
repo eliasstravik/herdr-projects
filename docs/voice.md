@@ -27,8 +27,9 @@ The first call asks the browser for the microphone once. A call is private: it n
   numbers, file names and task tags kept exactly. Small talk, thinking aloud, what you said to the voice itself and
   what was meant for another agent are left out. One short line says it came from a voice call, and that the agent
   should answer in one or two short sentences first.
-- **No action you did not ask for.** Approving, merging, stopping and removing go out only when you asked for them,
-  the voice agent asked you back, naming the action and the task ("Merge HP-52, right?"), and the last thing you said
+- **No action you did not ask for.** A message that orders approving, merging, stopping or removing (a question
+  about one, "why did the merge of HP-52 fail?", or a mention, "the approval failed", orders nothing and goes as any
+  question does) goes out only when you asked for it, the voice agent asked you back, naming the action and the task ("Merge HP-52, right?"), and the last thing you said
   is a plain yes. The board checks this itself, from what was said on the call: a question ("what does merge mean?"),
   a no ("no, don't do it"), a yes to something else ("yes, explain it") or a yes about another task is not enough, and
   neither is the voice agent's word that you said yes. What was said is kept on the board for this check, never pasted

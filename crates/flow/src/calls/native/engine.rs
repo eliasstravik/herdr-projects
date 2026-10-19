@@ -20,7 +20,7 @@ pub struct Engine {
     wire: Box<dyn Wire>, audio: Box<dyn Audio>, board: Arc<dyn Board>, gate: Gate,
     said: mpsc::Sender<(String, String, u64)>, told: Arc<AtomicU64>, said_n: u64, lost: Arc<Mutex<&'static str>>,
     results: (mpsc::Sender<(String, String)>, mpsc::Receiver<(String, String)>), fed: (mpsc::Sender<Value>, mpsc::Receiver<Value>),
-    queue: Vec<String>, feeding: Arc<AtomicBool>, heard_at: i64, play_until: i64, fed_at: i64, report_at: i64, end_at: Option<i64>, peak: u16, gain: super::level::Gain, started: i64,
+    queue: Vec<(String, String)>, feeding: Arc<AtomicBool>, heard_at: i64, play_until: i64, fed_at: i64, report_at: i64, end_at: Option<i64>, peak: u16, gain: super::level::Gain, started: i64,
     pub hangup: Arc<AtomicBool>, pub ended: Option<String>,
 }
 fn now() -> i64 { crate::clock::now() }
@@ -46,6 +46,8 @@ impl Engine {
     fn tool(&mut self, call: String, name: String, args: Value) {
         let (board, told, upto, lost, tx) = (self.board.clone(), self.told.clone(), self.said_n, self.lost.clone(), self.results.0.clone());
         if name == "end_call" { self.end_at = Some(now() + 2500); }
+        // quiet: updates about other tasks waiting for a pause are dropped too, not only the ones to come
+        if name == "quiet" && args.b("on") { self.queue.retain(|(kind, _)| kind != "alert"); }
         std::thread::spawn(move || {
             for _ in 0..1000 { if told.load(Ordering::SeqCst) >= upto { break; } std::thread::sleep(std::time::Duration::from_millis(10)); }
             let refused = name == "send_message" && { let mut l = lost.lock().unwrap(); if l.is_empty() { false } else { *l = "asked"; true } };
@@ -84,7 +86,7 @@ impl Engine {
             while let Ok((call, result)) = self.results.1.try_recv() { self.wire.send(wire::tool_result(&call, &result))?; }
             while let Ok(f) = self.fed.1.try_recv() {
                 if f.b("ended") { return Err("ended".into()); }
-                self.queue.extend(f.arr("items").iter().map(|i| i.t("text")).filter(|x| !x.is_empty()));
+                self.queue.extend(f.arr("items").iter().map(|i| (i.t("kind"), i.t("text"))).filter(|x| !x.1.is_empty()));
             }
             if t - self.fed_at >= FEED_MS && !self.feeding.swap(true, Ordering::SeqCst) {
                 self.fed_at = t;
@@ -92,7 +94,7 @@ impl Engine {
                 std::thread::spawn(move || { let (st, v) = b.ask("feed", json!({})); if st == 410 { let _ = tx.send(json!({ "ended": true })); } else if st == 200 { let _ = tx.send(v); } flag.store(false, Ordering::SeqCst); });
             }
             if !self.queue.is_empty() && t > self.play_until + QUIET_MS && t - self.heard_at > QUIET_MS {
-                let item = self.queue.remove(0);
+                let (_, item) = self.queue.remove(0);
                 self.wire.send(wire::board_says(&item))?;
                 self.play_until = t;
             }

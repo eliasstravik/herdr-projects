@@ -99,3 +99,9 @@ fn watching_the_sound_never_wakes_itself_up() {
     assert!(HEAR.contains("if (JSON.stringify(next) === JSON.stringify(st)) return;"));
     assert!(HEAR.contains(r#"if (records.some((m) => [...m.addedNodes].some((n) => n.nodeName === "AUDIO" || n.querySelector?.("audio")))) look();"#));
 }
+
+#[test]
+fn an_ended_calls_late_answer_never_touches_the_next_call_and_quiet_drops_waiting_alerts() {
+    assert!(CALL.contains("const k = key; // what comes back is this call's") && CALL.contains(r#"const out = await send("feed", null, "GET", k);"#) && CALL.contains("waiting = false;\n  if (key !== k) return;"));
+    assert!(CALL.contains(r#"if (name === "quiet" && res.ok && args?.on) queue = queue.filter((i) => i.kind !== "alert");"#));
+}
