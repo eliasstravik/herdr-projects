@@ -28,7 +28,8 @@ fn delegate_makes_a_worktree_space_with_the_agent_in_its_root_pane_and_the_rules
     assert!(prompt.contains("\n\nAdd a greeting\n\nSay hello."));
     let rules = read(std::path::Path::new(&args[args.iter().position(|x| x == "--append-system-prompt-file").unwrap() + 1]));
     assert!(rules.contains("closing-note.md") && rules.contains("report proj/1 --state blocked") && rules.contains("Do not push"), "{rules}");
-    assert!(read(&w.root.join(".git/info/exclude")).contains(".herdr-projects/"));
+    let exclude = read(&w.root.join(".git/info/exclude"));
+    assert!(exclude.contains(".herdr-projects/\n") && exclude.contains(".herdr-web-ui/\n"), "the board's files and the web UI's stay out of git: {exclude}");
     let trusted: serde_json::Value = serde_json::from_str(&read(&w.base.join("claude.json"))).unwrap();
     assert_eq!(trusted.at("projects").at(&w.root_str()).at("hasTrustDialogAccepted"), &json!(true));
     assert_eq!(row(&id).s("state"), "working");
