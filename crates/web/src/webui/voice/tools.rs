@@ -5,7 +5,7 @@ use super::board::{self, name_of};
 use super::find::find;
 use crate::json::*;
 use crate::voice::call::{self, Target};
-use crate::voice::confirm::{check, Verdict};
+use crate::voice::confirm::{check, confirmed_tasks, Verdict};
 use crate::voice::words;
 
 /// Run one tool for this call; the answer the voice agent reads.
@@ -26,8 +26,10 @@ fn send(c: &Obj, said: &str, action: &str, confirmed: bool) -> String {
     let heard = call::heard(c);
     // Nothing of what the human said reached the board since the last message: nothing goes on the voice agent's word.
     if heard.is_empty() { return "Not sent: none of the human's words since the last message reached the board. Ask them to say what they want again.".into(); }
-    match check(said, action, &call::talk(c), confirmed) { Verdict::Refuse(m) | Verdict::Ask(m) => return m, Verdict::Send => {} }
-    let text = words::message(said, action);
+    let talk = call::talk(c);
+    match check(said, action, &talk, confirmed) { Verdict::Refuse(m) | Verdict::Ask(m) => return m, Verdict::Send => {} }
+    let tasks = if action.is_empty() || action == "none" { vec![] } else { confirmed_tasks(&talk) };
+    let text = words::message(said, action, &tasks);
     let b = board::of(c);
     let mut g = b.lock().unwrap();
     let t = board::target_of(&mut g);

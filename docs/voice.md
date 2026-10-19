@@ -34,13 +34,13 @@ The first call asks the browser for the microphone once. A call is private: it n
   a yes to something else ("yes, explain it") or a yes about another task is not enough, and neither is the voice
   agent's word that you said yes. A no takes back what you asked before it, and a question that offers something
   else ("would you like an explanation of merge?") does not count.
-- **Everything else goes as asked, and confirms nothing.** A question about an action ("why did the merge of HP-52
-  fail?") goes at once; the agent is told that no approve, merge, stop or delete was confirmed with it, and to do none
-  because of it. A message that names no action but still orders one in so many words, in any of its sentences
-  ("Merge HP-52", "Do merge HP-52", "Can you approve HP-52?"), is sent back to the voice agent to be asked about first.
-  What was said is kept on the board for these checks, never pasted into the message. And nothing goes out on the
-  voice agent's word alone: when none of your words since the last message reached the board, the message is not
-  sent.
+- **Everything else goes as asked, and authorizes nothing.** The board does not try to read a sentence for what it
+  orders (a question may name an action, an order may hide in many words). Every message says it plainly under it:
+  one with no action, that no approve, merge, stop or delete was asked for and confirmed with it, so the agent does
+  none because of it; a confirmed one, that this action was asked for and confirmed, for the task the question named,
+  and no other. What was said is kept on the board for these checks, never pasted into the message. And nothing goes
+  out on the voice agent's word alone: when none of your words since the last message reached the board, the message
+  is not sent.
 - **Answers are read back.** When the agent the call talks to has answered and its words stood still for a moment, the
   voice agent says the gist. Code, paths and links are left out.
 - **Updates in pauses only.** A task that came to need you, became ready to approve or failed since the call began is

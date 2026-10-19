@@ -6,7 +6,7 @@
 //! HP-99, also when the yes names HP-99 itself ("yes, merge HP-99"), and a yes that names another action is no yes to
 //! this one. A no takes back every request before it, and a question that offers something else ("would you like an
 //! explanation of merge?") is no question to do it.
-use super::words::{actions_in, commands_in, words_of, ACTIONS};
+use super::words::{actions_in, words_of, ACTIONS};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Verdict { Send, Ask(String), Refuse(String) }
@@ -34,17 +34,12 @@ fn plain_yes(s: &str) -> bool {
     w.split_whitespace().all(|x| YES.contains(&x) || ALSO.contains(&x) || action_words.contains(&x) || x.chars().all(|c| c.is_ascii_digit()) || tags.iter().any(|t| t.starts_with(x)))
 }
 /// May `said` go to the agent? `action`: the action the voice agent says it carries ("none", or approve, merge, stop,
-/// delete). `talk`: (who, words) since the last message, "you" for you and "voice" for the voice agent.
+/// delete). `talk`: (who, words) since the last message, "you" for you and "voice" for the voice agent. A message with
+/// none always goes: the line under it tells the agent it authorizes none of the four (words.rs: message). A named one
+/// goes only as checked here, and authorizes that one alone.
 pub fn check(said: &str, action: &str, talk: &[(String, String)], confirmed: bool) -> Verdict {
-    let named = ACTIONS.iter().map(|(a, _)| *a).find(|a| *a == action);
-    let ordered = commands_in(said);
-    // a message with no action that still orders one in so many words is sent back to be sent as what it is
-    if named.is_none() {
-        if let Some(a) = ordered.first() { return Verdict::Ask(format!("Not sent: this message orders a {a}. If the human asked for that, ask them a short question that names it and the task, and after their yes send it again with action {a} and confirmed true; else send it without that order.")); }
-        return Verdict::Send;
-    }
-    let mut wanted: Vec<&str> = named.into_iter().collect();
-    for a in ordered { if !wanted.contains(&a) { wanted.push(a); } }
+    let Some(named) = ACTIONS.iter().map(|(a, _)| *a).find(|a| *a == action) else { return Verdict::Send };
+    let wanted = vec![named];
     let you = |i: usize| talk[i].0 == "you";
     // A no of yours takes back every request before it.
     let after_no = (0..talk.len()).rev().find(|&i| you(i) && negated(&talk[i].1)).map(|i| i + 1).unwrap_or(0);
@@ -80,4 +75,10 @@ pub fn check(said: &str, action: &str, talk: &[(String, String)], confirmed: boo
     if actions_in(yes_words).iter().any(|a| !wanted.contains(a)) { return ask; }
     if wanted.iter().any(|a| !asked_at(a).iter().any(|&i| i < q)) { return ask; }
     Verdict::Send
+}
+/// The tasks the question you said yes to named ("HP52"), for the line under a confirmed action.
+pub fn confirmed_tasks(talk: &[(String, String)]) -> Vec<String> {
+    let Some(yes) = (0..talk.len()).rev().find(|&i| talk[i].0 == "you") else { return vec![] };
+    let dash = |t: String| { let at = t.find(|c: char| c.is_ascii_digit()).unwrap_or(t.len()); format!("{}-{}", &t[..at], &t[at..]) };
+    (0..yes).rev().find(|&i| talk[i].0 != "you").map(|q| tags_in(&talk[q].1).into_iter().map(dash).collect()).unwrap_or_default()
 }

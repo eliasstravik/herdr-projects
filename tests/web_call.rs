@@ -70,7 +70,7 @@ fn the_voice_agents_message_goes_to_whoever_the_chat_talks_to_with_your_words_fi
     assert!(said.starts_with("Sent to PRJ-") && said.contains("Add a greeting"), "{said}");
     let p = prompts(&w, task(&id).at("link").s("pane")).last().cloned().unwrap();
     // the voice agent's own instruction, and one line that it came from a call; what was said stays on the board
-    assert_eq!(p, "Add a goodbye line to the greeting\n\n(Via voice call: answer in one or two short plain sentences first, they are read aloud. No approve, merge, stop or delete was confirmed with it: do none of those because of it.)");
+    assert_eq!(p, "Add a goodbye line to the greeting\n\n(Via voice call: answer in one or two short plain sentences first, they are read aloud. No approve, merge, stop or delete was asked for and confirmed with this message: do none of those because of it.)");
     assert!(!p.contains("tell it to also say goodbye please"));
     let c = call::get().unwrap();
     assert!(call::heard(&c).is_empty(), "sent: your words are not sent twice");
@@ -88,7 +88,7 @@ fn the_voice_agents_message_goes_to_whoever_the_chat_talks_to_with_your_words_fi
     call::line("you", "actually yes, merge it"); call::line("voice", "Merge it now, right?"); call::line("you", "yes");
     assert!(tool("send_message", json!({ "message": "Merge it", "action": "merge", "confirmed": true })).starts_with("Sent to"));
     let p = prompts(&w, task(&id).at("link").s("pane")).last().cloned().unwrap();
-    assert!(p.starts_with("Merge it\n\n(Via voice call") && p.ends_with("The human asked for this merge on the call and confirmed it.)") && !p.contains("how is it going"), "the transcript is checked, never pasted in: {p}");
+    assert!(p.starts_with("Merge it\n\n(Via voice call") && p.contains("The human asked for this merge on the call and confirmed it; only that") && !p.contains("how is it going"), "the transcript is checked, never pasted in: {p}");
     // what was said before the send is no yes for the next one
     assert!(tool("send_message", json!({ "message": "Merge it", "action": "merge", "confirmed": true })).starts_with("Not sent: none of the human's words"));
     // the board's status, read-only and short
