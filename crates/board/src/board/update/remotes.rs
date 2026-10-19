@@ -57,12 +57,16 @@ pub fn answered(s: &mut State, label: &str, answer: Result<Value, Value>) {
 pub fn reorder(s: &mut State) {
     let far: Vec<(Machine, Option<Vec<sidebar::Entry>>)> = s.remotes.values().map(|m| (m.machine.clone(), m.sidebar.clone())).collect();
     let here = sidebar::Here { names: crate::remote::own_names::own_names(), session: s.data.session.clone() };
-    let (from, order) = sidebar::order(s.own_order.as_deref(), &far, &here, s.sidebar_from.as_deref());
-    if let Some(f) = from.filter(|f| !f.is_empty()) { s.sidebar_from = Some(f); }
-    s.order = order;
+    let f = sidebar::followed(s.own_order.as_deref(), &far, &here, s.sidebar_from.as_deref());
+    if let Some(from) = f.from.filter(|f| !f.is_empty()) { s.sidebar_from = Some(from); }
+    s.order = f.order;
+    s.sidebar_names = f.names;
 }
 /// Where a machine ("" this one) stands in that order.
 pub fn place(s: &State, host: &str) -> usize { s.order.iter().position(|h| h == host).unwrap_or(usize::MAX) }
+/// A machine ("" this one) as the lists of machines name it: as that sidebar shows it, with the board's name beside it
+/// when the two differ (`Mac mini (Mac)`).
+pub fn shown(s: &State, host: &str) -> String { sidebar::shown_as(&super::heads::label(s, host), s.sidebar_names.get(host).map(|n| n.as_str()).unwrap_or("")) }
 /// The other machines in that order.
 pub fn others(s: &State) -> Vec<&Remote> { let mut v: Vec<&Remote> = s.remotes.values().collect(); v.sort_by_key(|m| place(s, &m.machine.label)); v }
 /// The machines in view: all the others with every machine shown, else the one shown.

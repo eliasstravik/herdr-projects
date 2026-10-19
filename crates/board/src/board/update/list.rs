@@ -168,7 +168,7 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
             if p.heading && (n > 0 || super::heads::empty_shown(s)) {
                 let id = machine_id(&p.host);
                 let shut = super::heads::folded(s, &id);
-                rows.push(Row::Head { name: super::heads::label(s, &p.host), autos: false, id, machine: true, folded: if shut { n } else { 0 }, folded_autos: if shut { n_autos } else { 0 }, empty: n == 0 });
+                rows.push(Row::Head { name: super::remotes::shown(s, &p.host), autos: false, id, machine: true, folded: if shut { n } else { 0 }, folded_autos: if shut { n_autos } else { 0 }, empty: n == 0 });
                 if shut { continue; }
             }
             if n == 0 { continue; }

@@ -9,6 +9,7 @@
 //! (remote/sidebar.rs).
 pub mod automations;
 pub mod check;
+pub mod lookup;
 pub mod own_names;
 pub mod sidebar;
 pub mod why;
@@ -75,10 +76,14 @@ pub fn ask(m: &Machine, what: &str, arg: Option<&Value>, ms: u64) -> Result<Valu
     j.ok_or_else(|| why_not(&end, &m.label, &m.target))
 }
 /// Ask a machine for its tasks. An answer that came without its herdr list (an older program there) gets it from
-/// that machine's herdr itself, so the board follows its sidebar all the same (remote/sidebar.rs).
+/// that machine's herdr itself, so the board follows its sidebar all the same; one whose list came without the
+/// addresses of its machines has them looked up here (remote/sidebar.rs).
 pub fn ask_list(m: &Machine, ms: u64) -> Result<Value, Value> {
     let mut answer = ask(m, "list", None, ms);
-    if let Ok(j) = &mut answer { if j.at("tasks").is_array() && j.get("sidebar").is_none() { if let Some(l) = sidebar::asked(m) { j["sidebar"] = l; } } }
+    if let Ok(j) = &mut answer {
+        if j.at("tasks").is_array() && j.get("sidebar").is_none() { if let Some(l) = sidebar::asked(m) { j["sidebar"] = l; } }
+        if let Some(l) = j.get_mut("sidebar") { sidebar::looked_up(l); }
+    }
     answer
 }
 /// Entering a remote task's agent: SSH to that machine and `herdr agent attach <pane id>` there, in the board's own

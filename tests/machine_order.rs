@@ -143,12 +143,13 @@ fn every_list_of_machines_on_the_board_is_in_the_sidebars_order_and_follows_it_w
     let mine = json!({ "label": "this one", "target": format!("me@{}", sw::remote::check::hostname()), "session": "default", "enabled": true, "selected": true });
     answer(&mut b, "vm-b", 2, json!([saved("vm-a", false), mine.clone(), saved("vm-c", false)]));
     assert_eq!(b.s.sidebar_from.as_deref(), Some("vm-b"));
-    assert_eq!(headings(&mut b), vec!["vm-b".to_string(), "vm-a".into(), here.clone(), "vm-c".into()]);
-    assert!(b.text().contains("all machines: vm-b, vm-a, vm-c"), "{}", b.text());
+    // each named as that sidebar names it: vm-b its Local, this machine "this one"
+    assert_eq!(headings(&mut b), vec!["Local (vm-b)".to_string(), "vm-a".into(), format!("this one ({here})"), "vm-c".into()]);
+    assert!(b.text().contains("all machines: Local (vm-b), vm-a, vm-c"), "{}", b.text());
     // reordered there: followed at its next answer, and still when that window shows another machine meanwhile
     let mut later = mine.clone(); later["selected"] = json!(false);
     answer(&mut b, "vm-b", 2, json!([later, saved("vm-c", true), saved("vm-a", false)]));
-    assert_eq!(headings(&mut b), vec!["vm-b".to_string(), here.clone(), "vm-c".into(), "vm-a".into()]);
+    assert_eq!(headings(&mut b), vec!["Local (vm-b)".to_string(), format!("this one ({here})"), "vm-c".into(), "vm-a".into()]);
     // whose sidebar it was is kept with the view
     sw::board::run::prefs::save(&b.s);
     assert_eq!(sw::board::run::prefs::read(false).s("sidebarFrom"), "vm-b");
@@ -221,10 +222,12 @@ fn a_machine_on_an_older_program_still_has_its_sidebar_followed_through_its_herd
     b.press(&["alt+m"]);
     assert_eq!(b.s.sidebar_from.as_deref(), Some("elias-macbook-pro-m1"));
     let here = sw::board::update::heads::label(&b.s, "");
-    // what the user saw was the Mac mini's own list: elias-macbook-pro-m1, vm-str, vm-not, vm-kil, vm-demo, vm-ssa
-    assert_eq!(headings(&mut b), vec!["elias-macbook-pro-m1".to_string(), here.clone(), "vm-str".into(), "vm-ssa".into(), "vm-not".into(), "vm-kil".into(), "vm-demo".into()]);
-    assert!(b.text().contains("all machines: elias-macbook-pro-m1, vm-str, vm-ssa, vm-not, vm-kil, vm-demo"), "{}", b.text());
-    assert_eq!(sw::webui::model::list::list_of(&b.s, &b.theme).at("head").s("machines"), "elias-macbook-pro-m1, vm-str, vm-ssa, vm-not, vm-kil, vm-demo");
+    // what the user saw was the Mac mini's own list: elias-macbook-pro-m1, vm-str, vm-not, vm-kil, vm-demo, vm-ssa;
+    // each is named as the M1's sidebar names it, the board's name beside it where that is another
+    let local = "Local (elias-macbook-pro-m1)".to_string();
+    assert_eq!(headings(&mut b), vec![local.clone(), format!("Mac mini ({here})"), "vm-str".into(), "vm-ssa".into(), "vm-not".into(), "vm-kil".into(), "vm-demo".into()]);
+    assert!(b.text().contains("all machines: Local (elias-macbook-pro-m1), vm-str, vm-ssa, vm-not, vm-kil, vm-demo"), "{}", b.text());
+    assert_eq!(sw::webui::model::list::list_of(&b.s, &b.theme).at("head").s("machines"), "Local (elias-macbook-pro-m1), vm-str, vm-ssa, vm-not, vm-kil, vm-demo");
     // the user moves vm-demo up in the MacBook's herdr: followed at the M1's next answer
     m1_answers(&far, &["vm-demo", "vm-str", "vm-ssa", "vm-not", "vm-kil"]);
     ask_all(&mut b);

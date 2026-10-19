@@ -90,7 +90,7 @@ pub fn list_of(s: &State, t: &Theme) -> Value {
             "where": if s.archive_view || s.data.repo_root == home { String::new() } else { s.data.repo.clone() },
             "whereKey": if s.archive_view || s.data.repo_root == home { String::new() } else { s.data.keys.get(&s.data.repo).cloned().unwrap_or_default() },
             "session": if s.data.session == "default" { String::new() } else { s.data.session.clone() },
-            "machines": if s.scope == "*" { let l: Vec<String> = crate::board::update::remotes::others(s).into_iter().map(|m| if m.ok { m.machine.label.clone() } else { format!("{} (no answer)", m.machine.label) }).collect(); if l.is_empty() { "no others found".to_string() } else { l.join(", ") } } else { String::new() },
+            "machines": if s.scope == "*" { let l: Vec<String> = crate::board::update::remotes::others(s).into_iter().map(|m| { let n = crate::board::update::remotes::shown(s, &m.machine.label); if m.ok { n } else { format!("{n} (no answer)") } }).collect(); if l.is_empty() { "no others found".to_string() } else { l.join(", ") } } else { String::new() },
             "only": if s.all() && s.scope != "*" { s.scope.clone() } else { String::new() }, "filter": s.filter, "host": crate::remote::check::hostname(), "version": crate::store::files::VERSION,
         },
         "groups": groups, "selected": s.sel,
