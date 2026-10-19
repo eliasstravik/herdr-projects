@@ -67,7 +67,16 @@ fn the_voice_agents_message_goes_to_whoever_the_chat_talks_to_with_your_words_fi
     assert!(tool("send_message", json!({ "message": "Merge it now" })).contains("did not ask"));
     call::line("you", "merge it");
     assert!(tool("send_message", json!({ "message": "Merge it", "confirmed": false })).starts_with("Not sent yet"));
+    // a no, even one that holds "do it", is no yes; asked again, a plain yes sends it, your words with it
+    call::line("voice", "Merge it, right?"); call::line("you", "no, do not do it");
+    assert!(tool("send_message", json!({ "message": "Merge it", "confirmed": true })).starts_with("Not sent yet"));
     assert_eq!(prompts(&w, task(&id).at("link").s("pane")).len(), before);
+    call::line("you", "actually yes, merge it"); call::line("voice", "Merge it now, right?"); call::line("you", "yes");
+    assert!(tool("send_message", json!({ "message": "Merge it", "confirmed": true })).starts_with("Sent to"));
+    let p = prompts(&w, task(&id).at("link").s("pane")).last().cloned().unwrap();
+    assert!(p.starts_with("merge it no, do not do it actually yes, merge it yes\n\n(Spoken on a voice call") && !p.contains("not a request"), "{p}");
+    // what was said before the send is no yes for the next one
+    assert!(tool("send_message", json!({ "message": "Merge it", "confirmed": true })).contains("did not ask"));
     // the board's status, read-only and short
     let status = tool("board_status", json!({}));
     assert!(status.contains("working") && status.ends_with("Answer in one or two sentences."), "{status}");

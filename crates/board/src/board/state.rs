@@ -135,8 +135,8 @@ pub struct State {
     /// The tasks as last told to the terminal (OSC 7501), by id.
     pub osc_sent: HashMap<String, String>,
     /// A call this board rang: its id, the link that takes it, when (update/call.rs); the last switch asked by voice
-    /// that this board made.
-    pub call_link: Option<(String, String, i64)>, pub call_switch: i64,
+    /// that this board made, and on which call (each call counts its switches from one).
+    pub call_link: Option<(String, String, i64)>, pub call_switch: (String, i64),
 }
 impl State {
     pub fn new(ctx: Ctx, data: Data) -> State {
@@ -150,7 +150,7 @@ impl State {
             input: TextBox::default(), editing: None, edit_line: 0, setup: None, paste_text: String::new(), paste_at: 0, paste_more: 0, paste_room: 1, closing: None, leaving: false, leave_at: 0,
             attempt_at: HashMap::new(), pending: HashMap::new(), list_room: 0, list_tall: false, list_width: 0, fold_sel: String::new(), unread_top: 0, unread_max: 0, list_at: None, list_ids: vec![],
             told: 0, rang: 0, err_hid: String::new(), told_reply: String::new(), lone_at: 0, prefixed: 0, stale: String::new(), left: String::new(),
-            held: None, guest: false, viewed: false, off_note: String::new(), size: Default::default(), chat_key_shown: false, web_ui_asked: false, tags_gone: false, now: crate::clock::now(), ticks: 0, osc_sent: HashMap::new(), call_link: None, call_switch: 0,
+            held: None, guest: false, viewed: false, off_note: String::new(), size: Default::default(), chat_key_shown: false, web_ui_asked: false, tags_gone: false, now: crate::clock::now(), ticks: 0, osc_sent: HashMap::new(), call_link: None, call_switch: (String::new(), 0),
         }
     }
     /// The selected task, when a task is selected.

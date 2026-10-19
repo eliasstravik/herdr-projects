@@ -73,6 +73,18 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     // the key again hangs up
     s.press(&["ctrl+o"]); s.load();
     assert!(call::get().is_none() && !s.text().contains("☎"));
+    // a second call on the same board: its first switch asked by voice is made too (each call counts from one)
+    s.press(&["ctrl+o"]);
+    let link = call::get().unwrap().t("link");
+    sw::webui::voice::api::start(&json!({ "ticket": link.rsplit('#').next().unwrap() }), || Err("x".into()));
+    let said = sw::webui::voice::tools::run(&call::get().unwrap(), "switch_to", &json!({ "who": short(&b) }));
+    assert!(said.contains("Write the notes"), "{said}");
+    assert_eq!(call::get().unwrap().at("switch").i("n"), 1);
+    s.load();
+    assert!(s.s.reply && s.s.sel == b, "the second call's first switch is made");
+    s.load();
+    assert_eq!(call::target(&call::get().unwrap()).id, b);
+    s.press(&["ctrl+o"]);
     unsafe { std::env::remove_var("HERDR_PROJECTS_CALL_LINK") };
     sw::voice::eleven::set_fake(None);
 }

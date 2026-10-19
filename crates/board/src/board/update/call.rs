@@ -32,9 +32,11 @@ pub fn follow(s: &mut State, fx: &mut Vec<Effect>) {
     let Some(c) = s.data.call.clone() else { s.call_link = None; return };
     if c.s("owner") != owner(s) || s.ctx.web { return; }
     if c.s("state") != "ringing" { s.call_link = None; }
+    // A new call counts its switches from one again: what the last call's count was says nothing about this one.
+    if s.call_switch.0 != c.s("id") { s.call_switch = (c.t("id"), 0); }
     let sw = c.at("switch");
-    if sw.i("n") > s.call_switch {
-        s.call_switch = sw.i("n");
+    if sw.i("n") > s.call_switch.1 {
+        s.call_switch.1 = sw.i("n");
         let to = sw.t("to");
         if to == "coordinator" { s.reply = false; s.reply_id.clear(); }
         else if super::coords::exists(s, &to) { s.sel = to.clone(); s.reply = true; s.reply_id = to; super::list::relist(s); }

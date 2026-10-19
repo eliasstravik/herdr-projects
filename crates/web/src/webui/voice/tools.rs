@@ -5,7 +5,8 @@ use super::board::{self, name_of};
 use super::find::find;
 use crate::json::*;
 use crate::voice::call::{self, Target};
-use crate::voice::words::{self, Verdict};
+use crate::voice::confirm::{check, Verdict};
+use crate::voice::words;
 
 /// Run one tool for this call; the answer the voice agent reads.
 pub fn run(c: &Obj, name: &str, args: &Value) -> String {
@@ -23,7 +24,7 @@ pub fn run(c: &Obj, name: &str, args: &Value) -> String {
 fn send(c: &Obj, said: &str, confirmed: bool) -> String {
     if said.trim().is_empty() { return "Not sent: there was nothing to send.".into(); }
     let heard = call::heard(c);
-    match words::check(said, &heard, confirmed) { Verdict::Refuse(m) | Verdict::Ask(m) => return m, Verdict::Send => {} }
+    match check(said, &call::talk(c), confirmed) { Verdict::Refuse(m) | Verdict::Ask(m) => return m, Verdict::Send => {} }
     let text = words::message(said, &heard);
     let b = board::of(c);
     let mut g = b.lock().unwrap();
@@ -41,7 +42,7 @@ fn switch(c: &Obj, who: &str) -> String {
     let b = board::of(c);
     let mut g = b.lock().unwrap();
     let f = match find(&g.s, who) { Ok(f) => f, Err(e) => return e };
-    // What you said to the one before is not sent to the next one.
+    // What you said to the one before is not sent to the next one, and a yes before the switch is no yes after it.
     call::change(|x| x.put("heard", json!([])));
     if board::page_of(c).is_some() {
         g.s.reply = !f.id.is_empty(); g.s.reply_id = f.id.clone();
@@ -55,6 +56,7 @@ fn switch(c: &Obj, who: &str) -> String {
     }
     let t = board::target_of(&mut g);
     call::set_target(&t);
+    call::line("switch", &format!("Now talking to {}", t.name));
     format!("The chat talks to {} now. Say so in a few words.", t.name)
 }
 /// What waits for the human: the board's own events (board.notify's), then how many are working.

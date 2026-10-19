@@ -6,7 +6,7 @@ import { h, icon, client, post } from "./dom.js";
 import * as call from "./call.js";
 
 const STATES = { speaking: "Speaking", listening: "Listening" };
-const WHO = { you: "You", voice: "Voice", board: "Board", sent: "Sent" };
+const WHO = { you: "You", voice: "Voice", board: "Board", sent: "Sent", switch: "Board" };
 export function callEl({ onEnded } = {}) {
   let other = null, role = "drive";
   const btn = h("button.btn.btn-ghost.sw-call", { type: "button", onclick: () => tap() });

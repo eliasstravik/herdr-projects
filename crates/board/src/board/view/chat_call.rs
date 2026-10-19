@@ -10,7 +10,7 @@ use crate::voice::call;
 
 /// How long a helper has to pick a call up before the link shows.
 pub const LINK_AFTER_MS: i64 = 4000;
-const WHO: [(&str, &str); 4] = [("you", "You"), ("voice", "Voice"), ("sent", "Sent"), ("board", "Board")];
+const WHO: [(&str, &str); 5] = [("you", "You"), ("voice", "Voice"), ("sent", "Sent"), ("board", "Board"), ("switch", "Board")];
 pub fn lines(s: &State) -> Vec<Inked> {
     let Some(c) = s.data.call.as_ref() else { return vec![] };
     let ringing = c.s("state") == "ringing";

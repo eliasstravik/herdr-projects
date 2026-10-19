@@ -17,7 +17,7 @@ pub const TICKET_MS: i64 = 120_000;
 pub const STALE_MS: i64 = 60_000;
 /// The lines kept for the chat, and your own words kept until something is sent.
 const LINES: usize = 40;
-const HEARD: usize = 6;
+const HEARD: usize = 12;
 
 pub fn dir() -> PathBuf { data_dir().join("voice") }
 pub fn file() -> PathBuf { dir().join("call.json") }
@@ -115,6 +115,12 @@ pub fn line(by: &str, text: &str) {
 }
 /// Your own words since the last thing sent, oldest first; they are cleared once sent.
 pub fn heard(c: &Obj) -> Vec<String> { c.arr("heard").iter().map(text).collect() }
+/// The call as it was said since the last thing sent or the last switch: (who, words), "you" and "voice", in order.
+pub fn talk(c: &Obj) -> Vec<(String, String)> {
+    let lines = c.arr("lines");
+    let from = lines.iter().rposition(|l| ["sent", "switch"].contains(&l.s("by"))).map(|i| i + 1).unwrap_or(0);
+    lines[from..].iter().filter(|l| ["you", "voice"].contains(&l.s("by"))).map(|l| (l.t("by"), l.t("text"))).collect()
+}
 pub fn target(c: &Obj) -> Target { Target::of(c.at("target")) }
 /// The board that owns the call says who it talks to now.
 pub fn set_target(t: &Target) { change(|c| if target(c) != *t { c.put("target", t.value()); }); }

@@ -9,7 +9,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use sw::json::*;
 use sw::voice::call::{self, Target};
-use sw::voice::words::{actions_in, check, message, Verdict};
+use sw::voice::confirm::{check, Verdict};
+use sw::voice::words::{actions_in, message};
 
 /// A fake ElevenLabs: what was asked of it, and its answers (a new id for each thing made, a token).
 pub fn fake_eleven() -> Rc<RefCell<Vec<(String, String, Value)>>> {
@@ -30,7 +31,7 @@ pub fn fake_eleven() -> Rc<RefCell<Vec<(String, String, Value)>>> {
 pub fn put_key() { std::fs::write(sw::voice::key::own_file(), json!({ "api_key": "sk_test_0123456789abcdef" }).to_string()).unwrap(); }
 
 #[test]
-fn the_words_sent_are_yours_first_and_no_action_you_did_not_ask_for_goes() {
+fn the_words_sent_are_yours_whole_and_first() {
     let heard = |w: &[&str]| w.iter().map(|x| x.to_string()).collect::<Vec<_>>();
     // the four actions, by their English and Swedish words; not inside other words
     assert_eq!(actions_in("Please merge HP-52 and approve it"), vec!["approve", "merge"]);
@@ -38,15 +39,6 @@ fn the_words_sent_are_yours_first_and_no_action_you_did_not_ask_for_goes() {
     assert_eq!(actions_in("ta bort uppgiften"), vec!["delete"]);
     assert_eq!(actions_in("stoppa agenten"), vec!["stop"]);
     assert!(actions_in("what is the status of the merger talks").is_empty() && actions_in("unstoppable").is_empty());
-    // an action the human did not ask for is never sent
-    assert!(matches!(check("Merge HP-52", &heard(&["how is HP-52 doing?"]), true), Verdict::Refuse(m) if m.contains("did not ask")));
-    // asked for, it needs a yes first; with the yes it goes; a plain question goes at once
-    assert!(matches!(check("Merge HP-52", &heard(&["merge HP-52"]), false), Verdict::Ask(m) if m.contains("confirmed true")));
-    assert!(matches!(check("Merge HP-52", &heard(&["merge HP-52"]), true), Verdict::Ask(_)), "the voice agent's word that you said yes is not enough");
-    assert!(matches!(check("Merge HP-52", &heard(&["merge HP-52", "hmm, wait"]), true), Verdict::Ask(_)));
-    assert_eq!(check("Merge HP-52", &heard(&["merge HP-52", "yes"]), true), Verdict::Send);
-    assert_eq!(check("Approve HP-52", &heard(&["godkänn HP-52", "ja"]), true), Verdict::Send, "asked in Swedish, sent in English");
-    assert_eq!(check("What is HP-52 doing?", &heard(&["vad gör HP-52?"]), false), Verdict::Send);
     // the message: your own words first, as said, then one line that says they were spoken (and what the voice took
     // them as, when that says something else)
     let m = message("Add a goodbye message to the greeting", &heard(&["uh, hi", "can you tell it to also say goodbye"]));
@@ -55,12 +47,43 @@ fn the_words_sent_are_yours_first_and_no_action_you_did_not_ask_for_goes() {
     let m = message("also say goodbye", &heard(&["also say goodbye"]));
     assert_eq!(m.lines().next().unwrap(), "also say goodbye"); assert!(!m.contains("took it as"));
     assert!(message("Status?", &[]).starts_with("Status?\n\n(Sent from a voice call."));
-    // what you said that names an action this message does not carry stays out of it
-    let m = message("How is HP-53 doing?", &heard(&["merge HP-52", "no wait", "how is HP-53 doing?"]));
-    assert!(m.starts_with("no wait how is HP-53 doing?\n"), "{m}");
-    // only the last three things said go with it
-    let m = message("x", &heard(&["one", "two", "three", "four"]));
-    assert!(m.starts_with("two three four\n"), "{m}");
+    // nothing you said is left out: a question that names an action goes whole, with a line that it is no request
+    let m = message("Explain the failure", &heard(&["Can you explain why the merge failed?"]));
+    assert!(m.starts_with("Can you explain why the merge failed?\n\n(Spoken on a voice call, word for word; the voice assistant took it as: \"Explain the failure\". Where these words name merge, that is not a request to do it: nothing of the kind was confirmed."), "{m}");
+    let m = message("Do the four things", &heard(&["first add a test", "then fix the typo", "then update the docs", "and last tell me when done"]));
+    assert!(m.starts_with("first add a test then fix the typo then update the docs and last tell me when done\n"), "{m}");
+    // a message that carries the action it was confirmed for says nothing more of it
+    assert!(!message("Merge HP-52", &heard(&["merge HP-52", "yes"])).contains("not a request"));
+}
+
+#[test]
+fn an_action_goes_only_on_your_request_the_voice_agents_question_and_your_plain_yes() {
+    let t = |l: &[(&str, &str)]| l.iter().map(|(b, x)| (b.to_string(), x.to_string())).collect::<Vec<_>>();
+    let asked = |m: &Verdict| matches!(m, Verdict::Ask(_));
+    let refused = |m: &Verdict| matches!(m, Verdict::Refuse(_));
+    // asked, asked back, a plain yes: it goes (in Swedish too); a plain question needs nothing
+    assert_eq!(check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "yes")]), true), Verdict::Send);
+    assert_eq!(check("Merge HP-52", &t(&[("you", "can you merge HP-52?"), ("voice", "Merge HP-52, right?"), ("you", "yes please, merge it")]), true), Verdict::Send, "a request may be put as a question");
+    assert_eq!(check("Approve HP-52", &t(&[("you", "godkänn HP-52"), ("voice", "Ska jag godkänna HP-52?"), ("you", "ja, kör")]), true), Verdict::Send);
+    assert_eq!(check("What is HP-52 doing?", &t(&[("you", "vad gör HP-52?")]), false), Verdict::Send);
+    // never asked: refused
+    assert!(matches!(check("Merge HP-52", &t(&[("you", "how is HP-52 doing?")]), true), Verdict::Refuse(m) if m.contains("did not ask")));
+    // a question about the word, and a yes to something else (the reviewer's cases)
+    assert!(refused(&check("Merge HP-52", &t(&[("you", "what does merge mean?"), ("voice", "Shall I explain merging?"), ("you", "yes, explain it")]), true)));
+    assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Do you want an explanation first?"), ("you", "yes, explain it")]), true)));
+    // a no is no yes, also one with "do it" in it
+    assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "no, do not do it")]), true)));
+    assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "yes, but wait")]), true)));
+    assert!(refused(&check("Merge HP-52", &t(&[("you", "don't merge HP-52 yet"), ("voice", "Merge HP-52, right?"), ("you", "yes")]), true)), "\"don't merge\" is no request");
+    // a yes to HP-52 is no yes to HP-99
+    assert!(matches!(check("Merge HP-99", &t(&[("you", "please merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "yes")]), true), Verdict::Refuse(m) if m.contains("HP99")));
+    // the voice agent's word that you said yes is not enough: no question asked, or not confirmed
+    assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("you", "yes")]), true)));
+    assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "yes")]), false)));
+    assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52")]), true)));
+    // the question must name the action, and the request must come before it
+    assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "HP-52, right?"), ("you", "yes")]), true)));
+    assert!(asked(&check("Stop HP-52", &t(&[("voice", "Stop HP-52?"), ("you", "stop HP-52"), ("voice", "Okay."), ("you", "yes")]), true)));
 }
 
 #[test]
