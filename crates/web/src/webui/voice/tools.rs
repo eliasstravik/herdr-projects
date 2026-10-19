@@ -27,7 +27,7 @@ fn send(c: &Obj, said: &str, confirmed: bool) -> String {
     // Nothing of what the human said reached the board since the last message: nothing goes on the voice agent's word.
     if heard.is_empty() { return "Not sent: none of the human's words since the last message reached the board. Ask them to say what they want again.".into(); }
     match check(said, &call::talk(c), confirmed) { Verdict::Refuse(m) | Verdict::Ask(m) => return m, Verdict::Send => {} }
-    let text = words::message(said, &heard);
+    let text = words::message(said);
     let b = board::of(c);
     let mut g = b.lock().unwrap();
     let t = board::target_of(&mut g);

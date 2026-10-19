@@ -19,15 +19,15 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     let _log = fake_eleven();
     let a = w.add("Make the greeting"); let b = w.add("Write the notes");
     let mut s = open(&w.root, 34);
-    assert_eq!(key_name("call"), "ctrl+o");
+    assert_eq!(key_name("call"), "ctrl+t");
     // no key: nothing rings, and the board says where the key goes
-    s.press(&["ctrl+o"]);
+    s.press(&["ctrl+t"]);
     assert!(call::get().is_none() && s.s.msg.contains("elevenlabs.json"), "{}", s.s.msg);
     put_key();
     // on a task, after space: the call is for its agent
     s.s.sel = a.clone(); s.load(); s.press(&["space"]);
     sw::clock::set(Some(sw::clock::now()));
-    s.press(&["ctrl+o"]);
+    s.press(&["ctrl+t"]);
     let c = call::get().expect("it rings");
     assert_eq!((c.s("state"), call::from_terminal(&c), call::target(&c).id.as_str()), ("ringing", true, a.as_str()));
     assert_eq!(c.s("owner"), sw::board::update::call::owner(&s.s), "this board's own call");
@@ -35,7 +35,7 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     assert!(!ticket.is_empty() && c.s("session") == "default");
     s.load();
     let t = s.text();
-    assert!(t.contains(&format!("\n ● Calling with {}'s agent (Make the greeting)…  ctrl+o hangs up", short(&a))), "{t}");
+    assert!(t.contains(&format!("\n ● Calling with {}'s agent (Make the greeting)…  ctrl+t hangs up", short(&a))), "{t}");
     assert!(!t.contains("No call helper"), "a helper has a few seconds first");
     // nobody picked it up: the chat says so, and what to look at; never a browser or a link
     sw::clock::advance(sw::board::view::chat_call::LINK_AFTER_MS);
@@ -87,10 +87,10 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     s.load();
     assert_eq!(call::target(&call::get().unwrap()).id, a);
     // the key again hangs up
-    s.press(&["ctrl+o"]); s.load();
+    s.press(&["ctrl+t"]); s.load();
     assert!(call::get().is_none() && !s.text().contains("On a call"));
     // a second call on the same board: its first switch asked by voice is made too (each call counts from one)
-    s.press(&["ctrl+o"]);
+    s.press(&["ctrl+t"]);
     let ticket = call::get().unwrap().t("pickup");
     sw::webui::voice::api::local("start", &json!({ "ticket": ticket, "ws": true }), "");
     let said = sw::webui::voice::tools::run(&call::get().unwrap(), "switch_to", &json!({ "who": short(&b) }));
@@ -100,7 +100,7 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     assert!(s.s.reply && s.s.sel == b, "the second call's first switch is made");
     s.load();
     assert_eq!(call::target(&call::get().unwrap()).id, b);
-    s.press(&["ctrl+o"]);
+    s.press(&["ctrl+t"]);
     sw::voice::eleven::set_fake(None);
 }
 
@@ -110,10 +110,10 @@ fn with_words_in_the_box_the_call_key_is_not_pressed_and_a_web_call_shows_on_the
     let _log = fake_eleven(); put_key();
     let mut s = open(&w.root, 34);
     s.press(&["?"]);
-    assert!(regex::Regex::new(r"ctrl\+o +a voice call with whoever the chat talks to").unwrap().is_match(&s.text()), "{}", s.text());
+    assert!(regex::Regex::new(r"ctrl\+t +a voice call with whoever the chat talks to").unwrap().is_match(&s.text()), "{}", s.text());
     s.press(&["esc"]);
     s.typed("half a thought");
-    s.press(&["ctrl+o"]);
+    s.press(&["ctrl+t"]);
     assert!(call::get().is_none() && s.s.value().contains("half a thought"));
     s.press(&["esc"]);
     // a call started on the web board shows here, and this board's key hangs it up
@@ -123,8 +123,8 @@ fn with_words_in_the_box_the_call_key_is_not_pressed_and_a_web_call_shows_on_the
     s.load();
     assert!(s.text().contains("(from the web board)"), "{}", s.text());
     s.press(&["?"]);
-    assert!(regex::Regex::new(r"ctrl\+o +hang up the call").unwrap().is_match(&s.text()), "{}", s.text());
+    assert!(regex::Regex::new(r"ctrl\+t +hang up the call").unwrap().is_match(&s.text()), "{}", s.text());
     s.press(&["esc"]);
-    s.press(&["ctrl+o"]); assert!(call::get().is_none());
+    s.press(&["ctrl+t"]); assert!(call::get().is_none());
     sw::voice::eleven::set_fake(None);
 }

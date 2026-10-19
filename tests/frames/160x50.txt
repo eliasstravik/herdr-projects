@@ -173,7 +173,7 @@
    ctrl+z       undo
    ctrl+f       find: show only the tasks that match
    ctrl+c       twice: close the board
-   ctrl+o       a voice call with whoever the chat talks to
+   ctrl+t       a voice call with whoever the chat talks to
 
  alt: only shows or hides
    alt+c        hide the chat's latest message

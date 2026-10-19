@@ -20,8 +20,8 @@ pub const LONGEST_S: i64 = 3600;
 pub struct Tool { pub name: &'static str, pub description: &'static str, pub params: fn() -> Value }
 pub fn tools() -> Vec<Tool> {
     vec![
-        Tool { name: "send_message", description: "Send the human's request or question to the agent the chat is pointed at (the Coordinator, a task's agent, or a coordinator). Their exact words go with it. Answers whether it was sent; 'Not sent' says why and what to do.", params: || json!({ "type": "object", "properties": {
-            "message": { "type": "string", "description": "What to send, faithful to what the human asked, in their words as far as possible." },
+        Tool { name: "send_message", description: "Send an instruction or a question to the agent the chat is pointed at (the Coordinator, a task's agent, or a coordinator), written by you from what the human asked of that agent. Answers whether it was sent; 'Not sent' says why and what to do.", params: || json!({ "type": "object", "properties": {
+            "message": { "type": "string", "description": "A clear, self-contained instruction or question for the coding agent: just what the human asked of this agent, in their intent and key wording, with names, numbers, file names and task tags exactly as said. Leave out small talk, thinking aloud, what was said to you, and anything meant for another agent." },
             "confirmed": { "type": "boolean", "description": "True only after the human clearly said yes to approving, merging, stopping or deleting." } }, "required": ["message"] }) },
         Tool { name: "switch_to", description: "Point the chat (and this call) at someone else, as the human's own switch does: the Coordinator, a task's agent by its tag or by words of its title, or a machine's or a project's coordinator.", params: || json!({ "type": "object", "properties": {
             "who": { "type": "string", "description": "'coordinator', a task's tag such as 'HP-52', or words of the task's title." } }, "required": ["who"] }) },

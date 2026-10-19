@@ -113,7 +113,7 @@
    ctrl+z       undo
    ctrl+f       find: show only the tasks that match
    ctrl+c       twice: close the board
-   ctrl+o       a voice call with whoever the chat talks to
+   ctrl+t       a voice call with whoever the chat talks to
 
  ↓ 30 more
 

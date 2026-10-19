@@ -12,7 +12,7 @@ the board's own agents, as if you had typed it in the chat.
 
 - **The web board:** the **Call** button in the chat, beside Hide. Tap it again (**Hang up**) to end the call. It uses
   the microphone and speaker of the phone or computer the page is open on, with the browser's echo cancelling.
-- **The terminal board:** `Ctrl+O`. The key again hangs up. The call runs on the computer you sit at, not on the
+- **The terminal board:** `Ctrl+T` (t for talk). The key again hangs up. The call runs on the computer you sit at, not on the
   machine the board runs on ([below](#from-the-terminal-board)).
 
 The first call asks the browser for the microphone once. A call is private: it needs the board's private link
@@ -22,15 +22,17 @@ The first call asks the browser for the microphone once. A call is private: it n
 
 - **It follows the chat.** Space, moving between tasks, or a tap on the chat's switch changes who the call talks to.
   You can also say it: "talk to HP-52", "the voice task", "back to the Coordinator".
-- **Your own words go along.** A message it sends starts with everything you said since the last message, word for
-  word (the last 40 things said, if a call runs that long without sending), then one line that says it was spoken, what the voice agent made of it, and that the agent should answer in one
-  or two short sentences first. Where your words name an action that was not confirmed ("why did the merge fail?"),
-  that line says they are no request to do it.
+- **Clear messages.** The voice agent writes each message for the coding agent itself: one self-contained
+  instruction or question with just what you asked of that agent, in your intent and key wording, with names,
+  numbers, file names and task tags kept exactly. Small talk, thinking aloud, what you said to the voice itself and
+  what was meant for another agent are left out. One short line says it came from a voice call, and that the agent
+  should answer in one or two short sentences first.
 - **No action you did not ask for.** Approving, merging, stopping and removing go out only when you asked for them,
   the voice agent asked you back, naming the action and the task ("Merge HP-52, right?"), and the last thing you said
   is a plain yes. The board checks this itself, from what was said on the call: a question ("what does merge mean?"),
   a no ("no, don't do it"), a yes to something else ("yes, explain it") or a yes about another task is not enough, and
-  neither is the voice agent's word that you said yes. A no takes back what you asked before it, and a question that
+  neither is the voice agent's word that you said yes. What was said is kept on the board for this check, never pasted
+  into the message. A no takes back what you asked before it, and a question that
   offers something else ("would you like an explanation of merge?") does not count. And nothing goes out on the voice
   agent's word alone: when none of your words since the last message reached the board, the message is not sent.
 - **Answers are read back.** When the agent the call talks to has answered and its words stood still for a moment, the
@@ -46,7 +48,7 @@ The first call asks the browser for the microphone once. A call is private: it n
 ## From the terminal board
 
 The terminal board often runs on another machine than the one you sit at (you see it through herdr's own window), and
-sometimes on the same one. Either way the call's sound is the computer you sit at: `Ctrl+O` rings it, and the **call
+sometimes on the same one. Either way the call's sound is the computer you sit at: `Ctrl+T` (t for talk) rings it, and the **call
 helper** there holds the call right in the terminal's computer, with its microphone and speaker. No browser, no link,
 no window.
 

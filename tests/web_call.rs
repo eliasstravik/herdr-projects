@@ -69,7 +69,9 @@ fn the_voice_agents_message_goes_to_whoever_the_chat_talks_to_with_your_words_fi
     let said = tool("send_message", json!({ "message": "Add a goodbye line to the greeting" }));
     assert!(said.starts_with("Sent to PRJ-") && said.contains("Add a greeting"), "{said}");
     let p = prompts(&w, task(&id).at("link").s("pane")).last().cloned().unwrap();
-    assert!(p.starts_with("tell it to also say goodbye please\n\n(Spoken on a voice call, word for word; the voice assistant took it as: \"Add a goodbye line to the greeting\"."), "{p}");
+    // the voice agent's own instruction, and one line that it came from a call; what was said stays on the board
+    assert_eq!(p, "Add a goodbye line to the greeting\n\n(Via voice call: answer in one or two short plain sentences first, they are read aloud.)");
+    assert!(!p.contains("tell it to also say goodbye please"));
     let c = call::get().unwrap();
     assert!(call::heard(&c).is_empty(), "sent: your words are not sent twice");
     assert_eq!(c.arr("lines").last().unwrap().s("by"), "sent");
@@ -86,7 +88,7 @@ fn the_voice_agents_message_goes_to_whoever_the_chat_talks_to_with_your_words_fi
     call::line("you", "actually yes, merge it"); call::line("voice", "Merge it now, right?"); call::line("you", "yes");
     assert!(tool("send_message", json!({ "message": "Merge it", "confirmed": true })).starts_with("Sent to"));
     let p = prompts(&w, task(&id).at("link").s("pane")).last().cloned().unwrap();
-    assert!(p.starts_with("how is it going? merge it no, do not do it actually yes, merge it yes\n\n(Spoken on a voice call") && !p.contains("not a request"), "{p}");
+    assert!(p.starts_with("Merge it\n\n(Via voice call") && !p.contains("how is it going"), "the transcript is checked, never pasted in: {p}");
     // what was said before the send is no yes for the next one
     assert!(tool("send_message", json!({ "message": "Merge it", "confirmed": true })).starts_with("Not sent: none of the human's words"));
     // the board's status, read-only and short

@@ -32,35 +32,20 @@ pub fn fake_eleven() -> Rc<RefCell<Vec<(String, String, Value)>>> {
 pub fn put_key() { std::fs::write(sw::voice::key::own_file(), json!({ "api_key": "sk_test_0123456789abcdef" }).to_string()).unwrap(); }
 
 #[test]
-fn the_words_sent_are_yours_whole_and_first() {
-    let heard = |w: &[&str]| w.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+fn a_message_is_the_voice_agents_own_clear_instruction_with_one_line_that_it_came_from_a_call() {
     // the four actions, by their English and Swedish words; not inside other words
     assert_eq!(actions_in("Please merge HP-52 and approve it"), vec!["approve", "merge"]);
     assert_eq!(actions_in("godkänn HP femtiotvå"), vec!["approve"]);
     assert_eq!(actions_in("ta bort uppgiften"), vec!["delete"]);
     assert_eq!(actions_in("stoppa agenten"), vec!["stop"]);
     assert!(actions_in("what is the status of the merger talks").is_empty() && actions_in("unstoppable").is_empty());
-    // the message: your own words first, as said, then one line that says they were spoken (and what the voice took
-    // them as, when that says something else)
-    let m = message("Add a goodbye message to the greeting", &heard(&["uh, hi", "can you tell it to also say goodbye"]));
-    assert!(m.starts_with("uh, hi can you tell it to also say goodbye\n\n(Spoken on a voice call, word for word; the voice assistant took it as: \"Add a goodbye message to the greeting\"."), "{m}");
-    assert!(m.ends_with("Answer in one or two short plain sentences first: they are read aloud on the call.)"));
-    let m = message("also say goodbye", &heard(&["also say goodbye"]));
-    assert_eq!(m.lines().next().unwrap(), "also say goodbye"); assert!(!m.contains("took it as"));
-    assert!(message("Status?", &[]).starts_with("Status?\n\n(Sent from a voice call."));
-    // nothing you said is left out: a question that names an action goes whole, with a line that it is no request
-    let m = message("Explain the failure", &heard(&["Can you explain why the merge failed?"]));
-    assert!(m.starts_with("Can you explain why the merge failed?\n\n(Spoken on a voice call, word for word; the voice assistant took it as: \"Explain the failure\". Where these words name merge, that is not a request to do it: nothing of the kind was confirmed."), "{m}");
-    let m = message("Do the four things", &heard(&["first add a test", "then fix the typo", "then update the docs", "and last tell me when done"]));
-    assert!(m.starts_with("first add a test then fix the typo then update the docs and last tell me when done\n"), "{m}");
-    // a long request goes whole: its opening words too
-    let long = format!("First, only investigate; do not change anything. {}", "Then look at every log line and tell me what you see. ".repeat(40));
-    assert!(long.len() > 1800);
-    let m = message("Investigate", &heard(&[&long]));
-    assert!(m.starts_with("First, only investigate; do not change anything. Then look"), "{}", &m[..80]);
-    assert!(m.contains(long.trim_end()));
-    // a message that carries the action it was confirmed for says nothing more of it
-    assert!(!message("Merge HP-52", &heard(&["merge HP-52", "yes"])).contains("not a request"));
+    // what the voice agent wrote, as it wrote it (spaces tidied), and a short line: never the call's transcript
+    assert_eq!(message("Add a  goodbye line to the greeting in src/greet.rs"), "Add a goodbye line to the greeting in src/greet.rs\n\n(Via voice call: answer in one or two short plain sentences first, they are read aloud.)");
+    // the voice agent is told how to write it: self-contained, just what was asked of this agent, names kept exact
+    let tool = sw::voice::agent::tools().into_iter().find(|t| t.name == "send_message").unwrap();
+    let d = (tool.params)().at("properties").at("message").t("description");
+    assert!(d.contains("self-contained") && d.contains("exactly as said") && d.contains("Leave out small talk, thinking aloud, what was said to you, and anything meant for another agent"), "{d}");
+    assert!(sw::voice::agent::PROMPT.contains("Write each message yourself, for the coding agent") && !sw::voice::agent::PROMPT.contains("Their exact words travel with your message"));
 }
 
 #[test]
