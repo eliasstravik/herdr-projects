@@ -62,6 +62,7 @@ mod board_layout_rest;
 mod board_list;
 mod board_list_carets;
 mod board_list_empty_machines;
+mod board_list_empty_repos;
 mod board_list_headings;
 mod board_list_rest;
 mod board_more;
