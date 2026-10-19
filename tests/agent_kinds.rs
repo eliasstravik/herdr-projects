@@ -65,10 +65,16 @@ fn watcher_one_shots_are_limited_to_programs_outside_the_interactive_pool() {
     assert_eq!(d.args, ["exec", "--append-system-prompt", "Answer in one line.", "How far along?"]);
     assert!(one_shot("cursor", "", "", "How far along?", "", false).is_none());
     let interactive_pool = ["freebuff", "codebuddy", "claude", "codex", "gemini", "cursor", "opencode", "kiro", "cline", "qodercli", "grok"];
+    let plugin = include_str!("../herdr-control/scripts/control.sh");
     for k in all() {
         if interactive_pool.contains(&k.name) { assert!(one_shot(k.name, "", "", "p", "", false).is_none(), "{} must stay interactive", k.name); }
         else { assert!(one_shot(k.name, "", "", "p", "", false).is_some(), "{} has a one-shot", k.name); }
     }
+    let mut plugin_pool: Vec<String> = plugin.split("allowed = {").nth(1).unwrap().split('}').next().unwrap()
+        .split(',').map(|name| name.trim().trim_matches('"').to_string()).collect();
+    let mut expected: Vec<String> = interactive_pool.iter().map(|name| name.to_string()).collect();
+    plugin_pool.sort(); expected.sort();
+    assert_eq!(plugin_pool, expected, "Herdr Control and the interactive CLI pool must match exactly");
 }
 
 #[test]

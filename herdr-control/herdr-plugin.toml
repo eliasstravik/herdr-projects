@@ -1,0 +1,17 @@
+id = "herdr-control"
+name = "Herdr Control"
+version = "0.1.0"
+min_herdr_version = "0.9.3"
+description = "Globale CLI-Priorität und Provider-Fallbacks für Herdr Projects"
+platforms = ["macos", "linux"]
+
+[[actions]]
+id = "open"
+title = "Herdr Control öffnen"
+command = ["sh", "scripts/open.sh"]
+
+[[panes]]
+id = "control"
+title = "Herdr Control"
+placement = "split"
+command = ["sh", "scripts/control.sh"]
