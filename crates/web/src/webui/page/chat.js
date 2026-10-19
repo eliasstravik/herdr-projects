@@ -29,6 +29,7 @@ export function chatEl({ onSend, onPress, onFull }) {
   // cleared: { id, reply, label, enter, delegate }. Tapping another task meanwhile changes what you look at, not this.
   let last = null, lastWho = null, to = null, now = null, tone = "text";
   let busy = false, closed = false; // closed: the board was closed, and this box writes nothing more
+  let showing = null; // what the conversation shows now, as the board last sent it: { parts, open, raw, toAgent }
   const go = async (delegate) => {
     const text = box.value;
     if (!text.trim() || busy || files.busy()) return; // a file on its way: its path is not in the words yet
@@ -36,6 +37,7 @@ export function chatEl({ onSend, onPress, onFull }) {
     // Only what was sent leaves the box: files attached while it is on its way wait (their paths go in after) and stay.
     const sent = files.ids();
     voice.forget(); // sent as it is: a tidied version of dictated words that comes later is not put in
+    mine(text);
     const kept = await onSend(text, delegate, to ? { id: to.id, reply: to.reply, scope: to.scope || "" } : null);
     busy = false;
     if (closed) return; // the board closed while it was on its way: a new box has the draft now
@@ -48,6 +50,17 @@ export function chatEl({ onSend, onPress, onFull }) {
       keep(box.value, to); grow();
     }
     files.place(); sync();
+  };
+  // Your words stand in the conversation the moment they are sent, as on the terminal board, and the line over it says
+  // they are on their way: the board's answer, when it comes, is drawn whatever it says (`last` forgotten). Not for
+  // somebody the page no longer shows, nor over a program's screen.
+  const mine = (text) => {
+    const elsewhere = !!to && !!now && (to.id !== now.id || to.reply !== now.reply || (to.scope || "") !== (now.scope || ""));
+    if (!showing || !showing.open || showing.raw || elsewhere) return;
+    said.set([...showing.parts, { by: "You", text: text.trim(), mine: true }], true, false, showing.parts.length, lastWho !== null);
+    said.show(true);
+    who.querySelector(".sw-who-status")?.replaceChildren(showing.toAgent ? "Sending…" : "sending…");
+    last = null;
   };
   // Tab sends as the terminal's does, and puts an agent on what it adds, where that applies to the words typed.
   // A file attached is for whoever the words are for: attaching one locks that as typing does (sync).
@@ -116,7 +129,9 @@ export function chatEl({ onSend, onPress, onFull }) {
       const key = JSON.stringify([whose, c.text, c.mine]);
       const fresh = key !== last, same = whose === lastWho;
       if (fresh) { last = key; lastWho = whose; }
-      said.set(c.parts && c.parts.length ? c.parts : c.text ? [{ by: "", text: c.text, mine: c.mine, raw: c.raw, tone: c.tone }] : [], fresh, !!c.raw, c.parts && c.parts.length ? c.from : 0, same);
+      const parts = c.parts && c.parts.length ? c.parts : c.text ? [{ by: "", text: c.text, mine: c.mine, raw: c.raw, tone: c.tone }] : [];
+      showing = { parts, open: !!c.open, raw: !!c.raw, toAgent: !!c.toAgent };
+      said.set(parts, fresh, !!c.raw, c.parts && c.parts.length ? c.from : 0, same);
       said.show(shown);
       // The box's frame says who gets your words, as on the terminal board: the plain text colour for the Coordinator,
       // the task's status colour for its agent, a heading's colour for its coordinator.

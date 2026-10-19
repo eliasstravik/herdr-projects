@@ -99,6 +99,16 @@ fn another_machines_coordinators_show_your_words_at_once_with_no_row_on_its_way_
     s.load();
     let t = s.text();
     assert_eq!(t.matches("anything to do?").count(), 1, "{t}");
+    // a second message before the first got there: neither has a row over the chat, the box has the newest
+    s.typed("and the build?");
+    let _ = s.hold("enter");
+    sw::store::inbox::new_dispatch("@otherbox and the build?", obj(json!({ "remote": "otherbox" }))).unwrap();
+    s.load();
+    let t = s.text();
+    assert!(!t.contains("anything to do?") && t.matches("and the build?").count() == 1, "{t}");
+    assert_eq!(s.chat(120).boxed[..2].to_vec(), v(&["You:", "and the build?"]));
+    sw::store::inbox::clear_dispatch("dispatch/2");
+    s.typed("anything to do?"); let _ = s.hold("enter"); s.load();
     // otherbox has it queued: its own words now, and nothing left of the board's
     sw::store::inbox::clear_dispatch("dispatch/1");
     let mut queued = otherbox("Done.", quiet()).unwrap();
@@ -139,10 +149,26 @@ fn a_task_agent_on_another_machine_shows_your_words_at_once_until_it_answers() {
     let c = s.chat(120);
     assert_eq!(c.boxed[..2].to_vec(), v(&["You:", "g too"]), "{}", c.lines.join("\n"));
     assert!(c.who.contains("Sending…"), "{}", c.who);
-    // its answer takes their place
+    // its earlier turn ends while your words are still on their way: they stay
+    update(&mut s.s, Event::Remote { label: "otherbox".into(), answer: otherbox("Made f, and checked it.", quiet()) });
+    assert_eq!(s.chat(120).boxed[..2].to_vec(), v(&["You:", "g too"]), "{}", s.text());
+    // there now: they stay until the agent says something after them, which then takes their place
+    let _ = update(&mut s.s, Event::Done(Done { about: "otherbox:proj/1".into(), kind: "far:tell".into(), ..Done::default() }));
+    assert_eq!(s.chat(120).boxed[..2].to_vec(), v(&["You:", "g too"]), "{}", s.text());
     update(&mut s.s, Event::Remote { label: "otherbox".into(), answer: otherbox("Made g.", quiet()) });
     let c = s.chat(120);
     assert_eq!(c.boxed[..2].to_vec(), v(&["Agent:", "Made g."]), "{}", c.lines.join("\n"));
+}
+
+#[test]
+fn the_web_page_shows_your_words_in_the_conversation_before_the_board_answers() {
+    let chat = include_str!("../crates/web/src/webui/page/chat.js");
+    // drawn the moment they are sent, from what the conversation showed, before the board is even asked
+    assert!(chat.contains("    mine(text);\n    const kept = await onSend("), "{chat}");
+    assert!(chat.contains(r#"said.set([...showing.parts, { by: "You", text: text.trim(), mine: true }], true, false, showing.parts.length, lastWho !== null);"#));
+    assert!(chat.contains(r#"who.querySelector(".sw-who-status")?.replaceChildren(showing.toAgent ? "Sending…" : "sending…");"#));
+    // never for somebody the page no longer shows, nor over a program's screen; the board's answer is drawn whatever it says
+    assert!(chat.contains("if (!showing || !showing.open || showing.raw || elsewhere) return;") && chat.contains("    last = null;\n  };"));
 }
 
 #[test]

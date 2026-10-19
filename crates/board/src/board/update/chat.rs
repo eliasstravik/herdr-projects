@@ -23,22 +23,26 @@ pub fn turn_mark(r: &Obj) -> (String, Value, Value) { let h = r.at("handled"); (
 /// Your words to a task's agent, the moment you send them: they stand in its chat as yours at once.
 pub fn note_sent(s: &mut State, id: &str, text: &str) {
     let r = s.items.iter().find(|x| x.s("id") == id).cloned().unwrap_or_default();
-    s.just_sent.insert(id.into(), Sent { text: text.into(), over: turn_mark(&r), at: s.now });
+    s.just_sent.insert(id.into(), Sent { text: text.into(), over: turn_mark(&r), at: s.now, ..Default::default() });
 }
 /// Where a coordinator's last words stand: something new said, or an error, moves it.
 fn talk_mark(v: &Look) -> String { format!("{:?}|{}|{}", v.talk.last().map(|m| (m.you, &m.text)), v.said, v.error) }
 /// Your words to a coordinator the chat shows (a heading's, or another machine's Coordinator), the moment you send them.
 pub fn note_coord(s: &mut State, t: &Target, text: &str) {
     let v = super::coords::look_of(s, t).unwrap_or_default();
-    s.just_sent.insert(t.key(), Sent { text: text.into(), over: (talk_mark(&v), Value::Null, Value::Null), at: s.now });
+    // Words sent it just before, which may still be on their way: they keep no row over the chat either.
+    let before = s.just_sent.get(&t.key()).map(|x| x.before.iter().cloned().chain([x.text.clone()]).collect::<Vec<_>>()).unwrap_or_default();
+    let before = before[before.len().saturating_sub(8)..].to_vec();
+    s.just_sent.insert(t.key(), Sent { text: text.into(), over: (talk_mark(&v), Value::Null, Value::Null), at: s.now, before });
 }
-/// Another machine's dispatch that carries the words you just sent the coordinator kept under `key`.
-fn carries(j: &Obj, key: &str, sent: &Sent) -> bool {
+/// Another machine's dispatch that carries `text`, sent the coordinator kept under `key`.
+fn carries(j: &Obj, key: &str, text: &str) -> bool {
     let host = key.strip_prefix("co:").and_then(|k| k.split('\t').next()).unwrap_or_default();
-    !host.is_empty() && j.s("remote") == host && j.s("text") == format!("@{host} {}", sent.text)
+    !host.is_empty() && j.s("remote") == host && j.s("text") == format!("@{host} {text}")
 }
-/// A dispatch on its way that the chat shows as your words: no row of its own over the chat. One that failed has one.
-pub fn in_chat(s: &State, j: &Obj) -> bool { j.s("state") != "error" && s.just_sent.iter().any(|(k, x)| carries(j, k, x)) }
+/// A dispatch on its way that the chat shows as your words (or that went just before them): no row of its own over the
+/// chat. One that failed has one.
+pub fn in_chat(s: &State, j: &Obj) -> bool { j.s("state") != "error" && s.just_sent.iter().any(|(k, x)| x.before.iter().chain([&x.text]).any(|t| carries(j, k, t))) }
 /// What you just sent this coordinator, while its own conversation does not show it yet (`v`: the coordinator as the
 /// chat reads it now). It goes when that conversation has your words, says something new once they are there, or the
 /// words did not get there.
@@ -46,8 +50,8 @@ pub fn coord_sent(s: &mut State, t: &Target, v: &Look) -> String {
     let key = t.key();
     let Some(sent) = s.just_sent.get(&key).cloned() else { return String::new() };
     let head: String = sent.text.chars().take(200).collect(); // as much as a queued message keeps of them
-    let on_way = s.data.jobs.iter().any(|j| carries(j, &key, &sent) && j.s("state") != "error");
-    let failed = s.data.jobs.iter().any(|j| carries(j, &key, &sent) && j.s("state") == "error" && j.f("created") as i64 >= sent.at);
+    let on_way = s.data.jobs.iter().any(|j| carries(j, &key, &sent.text) && j.s("state") != "error");
+    let failed = s.data.jobs.iter().any(|j| carries(j, &key, &sent.text) && j.s("state") == "error" && j.f("created") as i64 >= sent.at);
     if failed || v.sent.contains(&head) || (!on_way && talk_mark(v) != sent.over.0) { s.just_sent.remove(&key); return String::new(); }
     sent.text
 }
@@ -55,10 +59,13 @@ pub fn coord_sent(s: &mut State, t: &Target, v: &Look) -> String {
 pub fn sent_to(s: &mut State, r: &Obj) -> String {
     let Some(sent) = s.just_sent.get(r.s("id")).cloned() else { return String::new() };
     let now = turn_mark(r);
+    // Still on its way: what the agent finishes meanwhile is its earlier turn, so your words stay and wait from there.
+    let reads = { let kind = if r.b("agent") { r.t("agent") } else { r.t("app") }; crate::agents::kinds::kind(&kind).map(|k| k.reads_turn).unwrap_or(false) };
+    let going = reads && s.pending.get(r.s("id")).map(|p| ["Tell", "far:tell"].contains(&p.kind.as_str()) && p.answered.is_none() && p.failed.is_none()).unwrap_or(false);
+    if going { if let Some(x) = s.just_sent.get_mut(r.s("id")) { x.over = now; } return sent.text; }
     let moved = |a: &Value, b: &Value| !a.is_null() && !b.is_null() && a != b;
-    let kind = if r.b("agent") { r.t("agent") } else { r.t("app") };
     // A program whose conversation cannot be read never says something new here: its screen shows instead.
-    if now.0 != sent.over.0 || moved(&now.1, &sent.over.1) || moved(&now.2, &sent.over.2) || !crate::agents::kinds::kind(&kind).map(|k| k.reads_turn).unwrap_or(false) { s.just_sent.remove(r.s("id")); return String::new(); }
+    if now.0 != sent.over.0 || moved(&now.1, &sent.over.1) || moved(&now.2, &sent.over.2) || !reads { s.just_sent.remove(r.s("id")); return String::new(); }
     sent.text
 }
 /// Called on every beat and after every change: a Coordinator reply you can see counts as seen.

@@ -42,9 +42,10 @@ pub struct Editing { pub id: String, pub at: usize, pub typing: String, pub auto
 #[derive(Clone, Debug, Default)]
 pub struct Setup { pub file: String, pub typing: bool, pub key: Option<(bool, String, String)>, pub sidebar: Option<bool> }
 /// What you sent a task's agent or a coordinator, from the moment you sent it until its own conversation shows it or it
-/// says something new: `over` what it had said then, `at` when.
+/// says something new: `over` what it had said then, `at` when; `before` the words sent it just before these, maybe still
+/// on their way to another machine.
 #[derive(Clone, Debug, Default)]
-pub struct Sent { pub text: String, pub over: (String, Value, Value), pub at: i64 }
+pub struct Sent { pub text: String, pub over: (String, Value, Value), pub at: i64, pub before: Vec<String> }
 /// A chat message longer than its box: where you scrolled to, in which chat (`key`). Opened (`top`), it stays open while
 /// its conversation changes: `lines` its lines as last drawn, to find the place again, `end` whether it showed the end.
 #[derive(Clone, Debug, Default)]

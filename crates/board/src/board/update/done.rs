@@ -11,6 +11,11 @@ pub fn apply(s: &mut State, d: Done, fx: &mut Vec<Effect>) {
     super::pending::answered(s, &d, fx);
     // Words that did not get there no longer stand in the chat as yours.
     if !d.ok && ["Tell", "far:tell"].contains(&d.kind.as_str()) { s.just_sent.remove(&d.about); }
+    // Delivered: your words stand in the chat until the agent says something after this.
+    if d.ok && ["Tell", "far:tell"].contains(&d.kind.as_str()) {
+        let mark = s.items.iter().find(|r| r.s("id") == d.about).map(|r| super::chat::turn_mark(r));
+        if let (Some(m), Some(x)) = (mark, s.just_sent.get_mut(&d.about)) { x.over = m; }
+    }
     // Words that went to another machine's coordinator: that machine is asked at once for what its chat shows now.
     if d.kind == "Dispatch" { fx.push(Effect::Poll(true)); }
     if let Some((text, ink)) = d.flash {
