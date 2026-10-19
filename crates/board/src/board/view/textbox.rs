@@ -1,7 +1,8 @@
 //! The text box you type in, as the board draws it. Its prompt is only ❯: who gets your words is said by its grey words
 //! while it is empty, by the hint line under it while it holds any (`enter send to #34's agent`), and by the colour of
-//! its frame and prompt: a task's agent's in that task's status colour (the very one its mark has), a machine's or a
-//! repo's coordinator's in its heading's colour, the Coordinator's in plain text. Its edge names no one.
+//! its frame: a task's agent's in that task's status colour (the very one its mark has), a machine's or a repo's
+//! coordinator's in its heading's colour, the Coordinator's in plain text. Inside the frame, the prompt too, all looks
+//! as with the Coordinator. Its edge names no one.
 use super::chat::more_word;
 use crate::board::state::{Mode, State};
 use crate::board::tags::number_tag;
@@ -30,7 +31,7 @@ pub fn box_ink(s: &State, r: Option<&Obj>) -> Ink {
 pub fn box_lines(s: &mut State, width: usize, max_rows: usize, r: Option<&Obj>) -> (Vec<Inked>, Option<(usize, usize)>) {
     let replying = s.mode != Mode::Find && s.reply && r.is_some();
     let tone = box_ink(s, r);
-    let label = if s.mode == Mode::Find { Inked::of("find", Ink::Soft).add(Inked::plain(" ")).add(Inked::of("❯", tone)) } else { Inked::of("❯", tone) };
+    let label = if s.mode == Mode::Find { Inked::of("find", Ink::Soft).add(Inked::plain(" ")).add(Inked::of("❯", Ink::Text)) } else { Inked::of("❯", Ink::Text) };
     let focused = s.ask.is_none();
     let d = s.input.render_within(width, max_rows, &label, tone, focused);
     if !s.value().is_empty() { return (d.lines, d.cursor); }

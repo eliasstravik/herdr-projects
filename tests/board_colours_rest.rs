@@ -1,6 +1,7 @@
 //! What the old box-colour tests checked that tests/board_colours.rs does not: a task's mark in the list is its status
-//! colour too (a finished one's made quieter) and its group's; the colour follows the status while words are typed; an
-//! agent whose pane is gone takes no message; and the grey words inside the box name who gets the message.
+//! colour too (a finished one's made quieter) and its group's; the frame's colour follows the status while words are
+//! typed (the prompt stays plain); an agent whose pane is gone takes no message; and the grey words inside the box name
+//! who gets the message.
 use crate::common;
 use common::*;
 use serde_json::json;
@@ -46,10 +47,11 @@ fn the_mark_is_the_status_colour_too_and_the_colour_follows_the_status_while_typ
     // the colour follows the status while something is typed: the same words, three colours
     let mut s = State::new(Default::default(), Default::default());
     s.input.set_text("still typing"); s.reply = true;
-    let seen: Vec<_> = ["working", "needs you", "ready to approve"].iter().map(|n| { let f = statuses().into_iter().find(|x| x.0 == *n).unwrap().1; box_lines(&mut s, 60, 3, Some(&with(&base, &f))).0[1].clone() }).collect();
-    assert_eq!(seen.iter().map(|l| l.text().trim_end().to_string()).collect::<Vec<_>>(), vec!["❯ still typing"; 3]);
-    let inks: std::collections::BTreeSet<String> = seen.iter().map(|l| format!("{:?}", l.0.iter().map(|p| p.c).collect::<Vec<_>>())).collect();
-    assert_eq!(inks.len(), 3, "{seen:?}");
+    let seen: Vec<_> = ["working", "needs you", "ready to approve"].iter().map(|n| { let f = statuses().into_iter().find(|x| x.0 == *n).unwrap().1; box_lines(&mut s, 60, 3, Some(&with(&base, &f))).0 }).collect();
+    assert_eq!(seen.iter().map(|l| l[1].text().trim_end().to_string()).collect::<Vec<_>>(), vec!["❯ still typing"; 3]);
+    let inks = |row: usize| seen.iter().map(|l| format!("{:?}", l[row].0.iter().map(|p| p.c).collect::<Vec<_>>())).collect::<std::collections::BTreeSet<String>>();
+    assert_eq!(inks(0).len(), 3, "the rule: three colours {seen:?}");
+    assert_eq!(inks(1).len(), 1, "the line typed on: one look {seen:?}");
     // an agent whose pane is gone takes no message: enter sends to the Coordinator, in its colour
     s.input.set_text("");
     assert_eq!(box_ink(&s, Some(&with(&base, &json!({ "state": "working", "stage": "working", "agent": "claude" })))), Ink::Text);

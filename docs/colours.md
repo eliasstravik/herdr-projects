@@ -199,20 +199,21 @@ The web Board uses the web UI's own colours. Its "to do" and its greyed-out word
 ## The box says who you type to
 
 The text box sends either to the Coordinator or to the selected task's agent. Its frame (the rounded box, or the two
-rules of the plain one) and its prompt mark `❯` say which, at a glance:
+rules of the plain one) says which, at a glance. Only the frame: inside it, who said what, what they said and the
+prompt mark `❯` look the same whoever the box talks to, as they do with the Coordinator.
 
-| The box sends to | Colour of its frame and `❯` |
+| The box sends to | Colour of its frame |
 |---|---|
 | the Coordinator (also: a new task, find, a task whose message goes to the Coordinator or into its description) | the theme's plain text colour |
 | a task's agent, or a task your message starts an agent on | that task's status colour, the very one its mark has in the list |
 | a machine's coordinator ([machine and project coordinators](machine-and-project-coordinators.md)) | its machine's heading's colour: the theme's accent (blue in most themes) |
 | a repo's coordinator | its repo's heading's colour: the brighter grey (Herdr's `subtext0`) |
 
-A machine's or a repo's coordinator is in its heading's colour beyond the frame too: its name on the line above the box
-(`vm-str coordinator  working`: the name in its colour, where it stands still grey), who said what in the chat (`You:`,
-`vm-str coordinator:`), and its name in the hints (`space talk to the vm-str coordinator`, `enter send to the vm-str
-coordinator`). On the web Board the same: the text field's frame, the name over it and who said what, in the colours
-its headings have there. The Coordinator keeps its plain look, so the three are told apart at a glance.
+A machine's or a repo's coordinator is in its heading's colour outside the frame too: its name on the line above the box
+(`vm-str coordinator  working`: the name in its colour, where it stands still grey) and its name in the hints (`space
+talk to the vm-str coordinator`, `enter send to the vm-str coordinator`). Never inside the box: `You:` and
+`vm-str coordinator:` there are as grey as `Coordinator:` is. On the web Board the same: the text field's frame and the
+name over it in the colours its headings have there, the conversation as the Coordinator's. The Coordinator keeps its plain look, so the three are told apart at a glance.
 
 So an agent's box also says how its task is doing: amber while the agent works, red when it needs you, green when ready
 to approve, blue under review, pink while queued (for a free slot, or after other tasks), teal when done, dim grey for a

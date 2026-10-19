@@ -1,6 +1,6 @@
-//! Who you type to is said by colour, and colour is never the only clue: the text box (its rules, its frame and its
-//! prompt) is the task's status colour when it sends to that task's agent and herdr's plain text colour for the
-//! Coordinator; each status has a colour of its own ("to do" a readable grey of its own); with NO_COLOR the same words
+//! Who you type to is said by colour, and colour is never the only clue: the text box (its rules and its frame, never
+//! the prompt or anything else inside it) is the task's status colour when it sends to that task's agent and herdr's
+//! plain text colour for the Coordinator; each status has a colour of its own ("to do" a readable grey of its own); with NO_COLOR the same words
 //! stand there with no colour at all.
 use crate::common;
 use common::*;
@@ -48,10 +48,15 @@ fn the_box_is_the_tasks_status_colour_for_its_agent_and_plain_text_for_the_coord
                 s.reply = true;
                 assert_eq!(box_ink(&s, Some(&r)), want, "{what}");
                 let (lines, _) = box_lines(&mut s, 60, 3, Some(&r));
-                starts(&lines[0], want, &what); starts(lines.last().unwrap(), want, &what); starts(&lines[1], want, &what);
+                starts(&lines[0], want, &what); starts(lines.last().unwrap(), want, &what); starts(&lines[1], Ink::Text, &format!("{what}: the prompt, as the Coordinator's"));
                 assert!(lines[1].text().starts_with("❯ "), "{what}");
                 let (framed, _) = chat_box(&mut s, 60, 3, Some(&r), &[Inked::plain("hello")]);
                 for l in &framed { starts(l, want, &what); ends(l, want, &what); }
+                // inside the frame, as with the Coordinator: the prompt in plain text, the words as they came
+                let inside = |l: &Inked| Inked(l.0.iter().skip(1).take(l.0.len().saturating_sub(2)).cloned().collect());
+                let prompt = framed.iter().find(|l| l.text().contains('❯')).unwrap();
+                starts(&inside(prompt), Ink::Text, &format!("{what}: the prompt inside the frame"));
+                starts(&inside(&framed[1]), Ink::Plain, &format!("{what}: the message inside the frame"));
                 s.reply = false;
                 assert_eq!(box_ink(&s, Some(&r)), Ink::Text, "{what}: to the Coordinator");
                 let (lines, _) = box_lines(&mut s, 60, 3, Some(&r));

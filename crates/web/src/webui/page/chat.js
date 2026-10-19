@@ -97,7 +97,7 @@ export function chatEl({ onSend, onPress, onFull }) {
       const c = snap.chat;
       el.hidden = !c;
       if (!c) return;
-      // A machine's or a repo's coordinator is drawn in its heading's colour: its name, who said what (chat.css).
+      // A machine's or a repo's coordinator is drawn in its heading's colour: its name over the box, not what is said (chat.css).
       if (c.tint) el.dataset.tint = c.tint; else delete el.dataset.tint;
       // The switch: the Coordinator (or, with none, a new task), and the selected task's agent (talk.js).
       drawTalk(talk, talkNames(snap));

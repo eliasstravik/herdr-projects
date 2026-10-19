@@ -16,7 +16,7 @@ use crate::status_words::{coordinator_stands, coordinator_status, COORDINATOR_UN
 /// The fewest cells the status keeps when the progress stands beside it.
 const CHAT_STATUS_MIN: usize = 20;
 /// `tint`: the colour of what a machine's or a repo's coordinator belongs to, its heading's (update/coords.rs), on its
-/// name and on who said what; Plain for the Coordinator and a task's agent.
+/// name over the box (never inside it); Plain for the Coordinator and a task's agent.
 #[derive(Clone, Debug, Default)]
 /// `call`: the lines a voice call on now adds under the line that says who (chat_call.rs).
 pub struct Who { pub mark: Inked, pub tag: String, pub name: String, pub status: String, pub progress: Vec<Inked>, pub text: String, pub parts: Vec<Part>, pub mine: bool, pub raw: bool, pub said: bool, pub turn: String, pub note: String, pub always: bool, pub ink: Ink, pub tint: Ink, pub call: Vec<Inked> }
@@ -141,7 +141,8 @@ pub fn chat_up(s: &State, c: Option<&Who>) -> bool { c.map(|c| s.chat_open || c.
 pub fn chat_message(s: &mut State, c: Option<&Who>, width: usize, max: usize) -> Vec<Inked> {
     let Some(c) = c.filter(|c| !c.text.is_empty()) else { return vec![] };
     if max < 1 { return vec![]; }
-    let paint = |by: bool, l: Inked, p: &Part| if by && c.tint != Ink::Plain { l.recolor(c.tint).bold() } else if by { l.recolor(Ink::Muted) } else if !p.tone.is_empty() { l.recolor(crate::board::update::beat::ink_of(&p.tone)) } else if p.mine { l } else { l.recolor(Ink::Soft) };
+    // Inside the box all looks as with the Coordinator, whoever it talks to: only its frame takes their colour.
+    let paint = |by: bool, l: Inked, p: &Part| if by { l.recolor(Ink::Muted) } else if !p.tone.is_empty() { l.recolor(crate::board::update::beat::ink_of(&p.tone)) } else if p.mine { l } else { l.recolor(Ink::Soft) };
     let (lines, starts) = super::chat_text::part_lines(&c.parts, width.max(1), &paint);
     // The newest thing said alone, whoever said it: the rest of the conversation is above it.
     let latest = starts.get(opens_at(&c.parts)).copied().unwrap_or(0);

@@ -1,6 +1,7 @@
 //! A machine's coordinator is drawn in its machine heading's colour, a repo's coordinator in its repo heading's: the
-//! chat's frame and prompt, its name over the box, who said what in it, its name in the hints, and the web board's
-//! chat. The top-level Coordinator keeps its plain look, so the three are told apart, in a light theme and a dark one.
+//! chat's frame, its name over the box, its name in the hints, and the web board's chat. Inside the box (the prompt,
+//! who said what) all looks as with the top-level Coordinator, which keeps its plain look, so the three are told apart
+//! by their frames, in a light theme and a dark one.
 use crate::common;
 use common::board::{open, Board};
 use common::*;
@@ -55,15 +56,18 @@ fn a_repos_coordinator_is_drawn_in_its_headings_grey_and_a_machines_in_its_headi
         assert_eq!(box_ink(&s.s, None), REPO_INK);
         assert_eq!(inks_on(&s.inked(100), "proj coordinator  not started", "proj coordinator"), vec![(REPO_INK, true)]); // the name, bold
         assert_eq!(inks(&s.inked(100), "not started"), vec![(Ink::Muted, false)]);
-        all(&mut s, "❯", REPO_INK, false);
+        all(&mut s, "❯", Ink::Text, false); // the prompt: the Coordinator's
         if !light {
             s.typed("what is open here?");
             assert_eq!(inks_on(&s.inked(100), "send to the proj coordinator", "proj coordinator"), vec![(REPO_INK, false)]);
             s.press(&["enter"]); drain(); s.load();
-            all(&mut s, "proj coordinator:", REPO_INK, true);
+            // who said what: grey, as with the Coordinator; only the frame is in the heading's colour
+            all(&mut s, "proj coordinator:", Ink::Muted, false);
             s.press(&[&sw::board::keys::key_name("chatScrollUp")]); // the conversation, your words too
-            all(&mut s, "You:", REPO_INK, true);
+            all(&mut s, "You:", Ink::Muted, false);
+            all(&mut s, "what is open here?", Ink::Soft, false);
             all(&mut s, "╭", REPO_INK, false);
+            all(&mut s, "╰", REPO_INK, false);
         }
         // this machine's coordinator: its heading's accent
         s.press(&["space"]); s.press(&["alt+s"]);
@@ -74,7 +78,7 @@ fn a_repos_coordinator_is_drawn_in_its_headings_grey_and_a_machines_in_its_headi
         s.press(&["space"]);
         assert_eq!(box_ink(&s.s, None), MACHINE_INK);
         assert_eq!(inks_on(&s.inked(100), "coordinator  not started", &format!("{host} coordinator")), vec![(MACHINE_INK, true)]);
-        all(&mut s, "❯", MACHINE_INK, false);
+        all(&mut s, "❯", Ink::Text, false);
         // the Coordinator keeps its plain look
         s.press(&["space"]); assert!(!s.s.reply);
         assert_eq!(box_ink(&s.s, None), Ink::Text);
@@ -98,6 +102,10 @@ fn the_web_board_draws_a_headings_coordinator_in_its_headings_colour() {
     assert_eq!((s.at("chat").s("tint"), s.at("chat").s("box")), ("subtext0", "subtext0"), "{}", s.at("chat"));
     // the same colour as its heading on the page
     assert!(s.at("list").arr("groups").iter().any(|g| g.s("id") == head && g.s("color") == "subtext0"), "{}", s.at("list"));
+    // on the page only the name over the box takes it: who said what keeps the Coordinator's look (chat.css)
+    let css = include_str!("../crates/web/src/webui/page/chat.css");
+    let tinted: Vec<&str> = css.lines().filter(|l| l.contains("data-tint")).collect();
+    assert!(!tinted.is_empty() && tinted.iter().all(|l| l.contains(".sw-who-name") && !l.contains(".sw-by")), "{tinted:?}");
 }
 
 #[test]

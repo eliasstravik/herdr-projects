@@ -41,9 +41,10 @@
 .sw-said-nav .icon-button { color: var(--sw-dim); }
 .sw-said-turn + .sw-said-turn { margin-top: var(--space-3, 12px); }
 .sw-by { color: var(--sw-text); font-weight: var(--fw-semibold, 600); }
-/* A machine's or a repo's coordinator: its name and who said what in its heading's colour (board.css: .sw-c-*). */
-.sw-chat[data-tint="accent"] :is(.sw-who-name, .sw-by) { color: var(--accent, #f0a830); }
-.sw-chat[data-tint="subtext0"] :is(.sw-who-name, .sw-by) { color: var(--sw-dim); }
+/* A machine's or a repo's coordinator: its name over the box in its heading's colour (board.css: .sw-c-*); who said
+   what in the conversation keeps the Coordinator's look, as the terminal board's chat does. */
+.sw-chat[data-tint="accent"] .sw-who-name { color: var(--accent, #f0a830); }
+.sw-chat[data-tint="subtext0"] .sw-who-name { color: var(--sw-dim); }
 .sw-said-turn.is-mine { color: var(--sw-text); }
 .sw-said strong { color: var(--sw-text); font-weight: var(--fw-semibold, 600); }
 .sw-said .sw-code { font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-xs, 12px); }
