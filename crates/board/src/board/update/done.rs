@@ -16,8 +16,6 @@ pub fn apply(s: &mut State, d: Done, fx: &mut Vec<Effect>) {
         let mark = s.items.iter().find(|r| r.s("id") == d.about).map(|r| super::chat::turn_mark(r));
         if let (Some(m), Some(x)) = (mark, s.just_sent.get_mut(&d.about)) { x.over = m; }
     }
-    // Words that went to another machine's coordinator: that machine is asked at once for what its chat shows now.
-    if d.kind == "Dispatch" { fx.push(Effect::Poll(true)); }
     if let Some((text, ink)) = d.flash {
         // Plainly sent to the agent: the box shows your words; said only while the chat is hidden.
         if ink == Ink::Plain { if !s.chat_open { s.flash(text, Ink::Green); } } else { s.flash(text, ink); }
