@@ -14,17 +14,25 @@ Direkt aus dem Fork installieren:
 herdr plugin install ysamjo/herdr-projects/herdr-control --ref feature/interactive-cli-pool
 ```
 
-Nach dem Merge in den Standardbranch entfällt `--ref feature/interactive-cli-pool`. Für lokale Entwicklung kann das Verzeichnis verlinkt werden:
+Nach dem Merge in den Upstream-Standardbranch lautet der Installationsbefehl:
 
 ```sh
-herdr plugin link /absoluter/pfad/zu/herdr-control
+herdr plugin install eliasstravik/herdr-projects/herdr-control
 ```
 
-Danach in Herdr die Aktion **Herdr Control öffnen** ausführen. Das Control-Fenster öffnet sich als Split-Pane. Für die Projects-Integration muss `herdr-projects` über die Shell-PATH erreichbar sein; alternativ kann `HERDR_PROJECTS_BIN` auf das Programm zeigen.
+Für lokale Entwicklung zuerst den Projects-Build erzeugen und dann beide Einträge aus demselben Checkout verlinken:
+
+```sh
+cargo build --release
+herdr plugin link /absoluter/pfad/zu/herdr-projects
+herdr plugin link /absoluter/pfad/zu/herdr-projects/herdr-control
+```
+
+Danach in Herdr die Aktion **Herdr Control öffnen** ausführen. Das Control-Fenster öffnet sich als Split-Pane. Wenn beide Plugins aus demselben Repository-Checkout stammen, verwendet Herdr Control dessen `bin/run.sh`; bei einem eigenständigen Control-Checkout wird `herdr-projects` aus der Shell-PATH verwendet. `HERDR_PROJECTS_BIN` kann den Aufruf explizit auf ein Programm umleiten.
 
 ### Benötigte Herdr-Projects-Erweiterung
 
-Die CLI-Auswahl und der interaktive Provider-Fallback benötigen auch die Herdr-Projects-Änderungen aus demselben Feature-Branch. Ein älterer Herdr-Projects-Stand kennt nicht alle hier aufgeführten Agenten und kann neue Namen beim Anwenden zurückweisen. Für lokale Tests den Fork-Branch bauen und `HERDR_PROJECTS_BIN` auf dessen `target/quick/herdr-projects` setzen. Nach Integration der Erweiterung in die verwendete Herdr-Projects-Version genügt der normale PATH-Eintrag.
+Die CLI-Auswahl und der interaktive Provider-Fallback benötigen auch die Herdr-Projects-Änderungen aus demselben Feature-Branch. Ein älterer Herdr-Projects-Stand kennt nicht alle hier aufgeführten Agenten und kann neue Namen beim Anwenden zurückweisen. Nur `HERDR_PROJECTS_BIN` auf `target/quick/herdr-projects` zu setzen ändert die Konfigurationsbefehle des Control-Plugins; für die Board-Erweiterungen muss auch das Herdr-Projects-Plugin selbst aus diesem Checkout geladen werden. Nach Integration der Erweiterung in den Upstream-Standardbranch genügt die offizielle Installation.
 
 ## Herdr-Tastenkürzel
 

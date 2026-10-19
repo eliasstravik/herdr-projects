@@ -4,8 +4,20 @@ set -eu
 
 CONFIG_DIR=${HERDR_PLUGIN_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr/plugins/herdr-control}
 PRIORITY_FILE="$CONFIG_DIR/priority.txt"
-PROJECTS_BIN=${HERDR_PROJECTS_BIN:-herdr-projects}
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PROJECTS_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
+PROJECTS_RUNNER="$PROJECTS_ROOT/bin/run.sh"
 mkdir -p "$CONFIG_DIR"
+
+projects() {
+  if [ -n "${HERDR_PROJECTS_BIN:-}" ]; then
+    "$HERDR_PROJECTS_BIN" "$@"
+  elif [ -x "$PROJECTS_RUNNER" ]; then
+    sh "$PROJECTS_RUNNER" "$@"
+  else
+    herdr-projects "$@"
+  fi
+}
 
 show_order() {
   if [ -s "$PRIORITY_FILE" ]; then
@@ -41,8 +53,8 @@ apply_order() {
   primary=${order%%,*}
   fallback=${order#*,}
   if [ "$fallback" = "$order" ]; then fallback=none; fi
-  "$PROJECTS_BIN" set worker.fallback "$fallback"
-  "$PROJECTS_BIN" set worker.agent "$primary"
+  projects set worker.fallback "$fallback"
+  projects set worker.agent "$primary"
   printf '\nAktiviert: %s → Fallback: %s\n' "$primary" "$fallback"
 }
 
