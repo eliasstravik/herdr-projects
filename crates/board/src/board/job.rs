@@ -120,6 +120,7 @@ pub fn run(job: Job) -> Done {
         Job::CoordSend { text, about, .. } => Some((text.clone(), about.clone())),
         Job::Add { text, .. } => Some((text.clone(), String::new())),
         Job::Describe { id, text } => Some((text.clone(), id.clone())),
+        Job::Far { host, action, req, .. } if action == "tell" => Some((req.t("text"), format!("{host}:{}", req.s("id")))),
         _ => None,
     };
     let (about, kind) = (job.about(), job.kind());

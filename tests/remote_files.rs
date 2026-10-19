@@ -91,6 +91,10 @@ fn a_file_that_cannot_go_stops_the_words_and_says_why() {
     let big = file(&w, "big.mov", &vec![0u8; sw::store::attached::MOST + 1]);
     assert_eq!(said(&tell(&format!("look @{big}"))), "Too large to send to vm-a: big.mov. A file can be up to 8 MB. Nothing was sent.");
     assert!(asked(&far).is_empty());
+    // The words you typed are never lost: the board puts them back, as you typed them.
+    let text = format!("look @{shot}");
+    let d = sw::board::job::run(sw::board::job::Job::Far { machine: vm_a(), host: "vm-a".into(), action: "tell".into(), req: json!({ "id": "far/1", "text": text }), quiet: false });
+    assert!(d.then.iter().any(|t| matches!(t, sw::board::job::Then::Unsent { text: x, to } if *x == text && to == "vm-a:far/1")), "{:?}", d.then);
 }
 
 #[test]
