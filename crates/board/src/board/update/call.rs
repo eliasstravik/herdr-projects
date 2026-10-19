@@ -15,7 +15,7 @@ pub fn toggle(s: &mut State, fx: &mut Vec<Effect>) {
     if s.ctx.web { return; } // the web board has a call button of its own, on the page
     let target = target(s);
     s.flash(format!("Calling with {}…", target.name), Ink::Muted);
-    fx.push(Effect::Run(Job::CallRing { owner: owner(s), target }));
+    fx.push(Effect::Run(Job::CallRing { owner: owner(s), target, session: s.data.session.clone() }));
 }
 /// This board's name as the owner of a call: two terminal boards on one machine each follow only their own.
 pub fn owner(s: &State) -> String { format!("terminal:{}", if s.ctx.own_pane.is_empty() { std::process::id().to_string() } else { s.ctx.own_pane.clone() }) }

@@ -1,7 +1,8 @@
 //! The call helper, on the computer you sit at: `herdr-projects voice helper`. It listens on every machine herdr has
 //! saved (the ones the board reaches over SSH: remote.rs), each over one SSH connection of its own (listen.rs runs at
-//! the other end), says how surely you are here when a call rings, and opens the call's page when this computer is the
-//! one (browser.rs), closing its window when the call ends. One per computer; the keeper starts it while herdr has
+//! the other end), and on this computer itself, for a board that runs here; it says how surely you are here when a call
+//! rings (here.rs), and opens the call's page when this computer is the one (browser.rs), closing its window when the
+//! call ends. One per computer; the keeper starts it while herdr has
 //! saved machines and `voice.helper` is `auto`, and starts it again when it stopped.
 use super::browser;
 use crate::json::*;
@@ -28,7 +29,7 @@ fn listen_to(m: Machine) {
             let mut window = None;
             for line in BufReader::new(ch.stdout.take().unwrap()).lines().map_while(Result::ok) {
                 let v: Value = serde_json::from_str(&line).unwrap_or(Value::Null);
-                if v.b("ring") { let score = browser::score(&m.label); if let Some(i) = input.as_mut() { let _ = writeln!(i, "{}", json!({ "bid": v.s("ring"), "score": score })); let _ = i.flush(); } }
+                if v.b("ring") { let score = super::here::score(&m.label); if let Some(i) = input.as_mut() { let _ = writeln!(i, "{}", json!({ "bid": v.s("ring"), "score": score })); let _ = i.flush(); } }
                 if v.b("open") { browser::close(&mut window); window = browser::open(v.s("open")); }
                 if v.b("ended") { browser::close(&mut window); }
             }
@@ -40,10 +41,26 @@ fn listen_to(m: Machine) {
         std::thread::sleep(std::time::Duration::from_secs(wait));
     }
 }
+/// This computer's own board: listened to in this process, as `voice listen` listens for another computer.
+fn listen_here() {
+    let me = this_computer();
+    let mut l = super::listen::Listener::new(&me);
+    let mut window = None;
+    let mut bid: Option<String> = None;
+    loop {
+        for v in l.step(bid.take().as_deref()) {
+            if v.b("ring") { bid = Some(json!({ "bid": v.s("ring"), "score": super::here::score(&me) }).to_string()); }
+            if v.b("open") { browser::close(&mut window); window = browser::open(v.s("open")); }
+            if v.b("ended") { browser::close(&mut window); }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(300));
+    }
+}
 pub fn helper_main() -> i32 {
     let Ok(_held) = crate::store::files::hold_lock("voice-helper", 0) else { return 0 }; // one per computer
     let mut listening: Vec<String> = vec![];
     let (exe, stamp) = { let e = crate::store::files::bin(); let s = crate::keeper::code_stamp(&e); (e, s) };
+    std::thread::spawn(listen_here);
     loop {
         // Updated, or no longer wanted: it goes (the keeper starts the new one).
         if !wanted() || crate::keeper::code_stamp(&exe) != stamp { let _ = std::fs::remove_file(beat_file()); return 0; }

@@ -45,7 +45,7 @@ pub enum Job {
     /// The herdr web UI's link through the board's front door, or left alone for good.
     WebUiLink, WebUiDecline,
     /// A voice call for whoever the chat talks to (calls/ring.rs), hanging it up, and who it talks to now.
-    CallRing { owner: String, target: crate::voice::call::Target }, CallEnd, CallTarget { target: crate::voice::call::Target },
+    CallRing { owner: String, target: crate::voice::call::Target, session: String }, CallEnd, CallTarget { target: crate::voice::call::Target },
     Nothing,
 }
 impl Job {
@@ -193,7 +193,7 @@ fn run_one(job: Job) -> Done {
             Job::WebOpen { id, far } => super::job_far::web_open(&id, far),
             Job::WebUiLink => { let r = crate::webui::command::link_now(); Done::say(r.t("msg"), if r.b("ok") { Ink::Green } else { Ink::Red }) }
             Job::WebUiDecline => { crate::webui::command::decline(); Done::say("Left as it is. `herdr-projects web-ui link` does it later.", Ink::Muted) }
-            Job::CallRing { owner, target } => match crate::calls::ring::ring(&owner, &target) {
+            Job::CallRing { owner, target, session } => match crate::calls::ring::ring(&owner, &target, &session) {
                 Ok((id, link)) => Done::say(format!("Calling with {}…", target.name), Ink::Muted).and(Then::CallRang { id, link }),
                 Err(e) => Done::fail(e),
             },

@@ -54,8 +54,12 @@ call's sound has to be on your computer, so `Ctrl+O` rings it:
 - The helper is part of herdr-projects. It runs by itself on a computer where herdr-projects is installed and herdr has
   saved machines (the ones in herdr's sidebar), and listens on each of them over SSH, as the board reaches other
   machines ([other machines](other-machines.md)). `voice.helper none` turns it off.
-- **Several computers listening:** the one you are at takes the call (herdr's window, or a terminal, in front; on
-  macOS also the last input).
+- **Which computer takes it.** A board whose herdr window is on the same computer (herdr's Local, in use: on macOS
+  input in the last two minutes, on Hyprland a terminal in front) is answered there, by that computer's own helper,
+  and no other computer hears of the call. Otherwise every computer listening says how surely you are at it, and the
+  best one takes it: herdr's window showing the board's machine in front on Hyprland, then a terminal in front with
+  recent input, then recent input. A Mac counts only with input in the last two minutes, never for a terminal left in
+  front.
 - **No helper picked it up** after a few seconds (or the one that took it could not open it): the chat shows a line to
   Ctrl-click. herdr opens it in the browser of the computer its window runs on, and a tap starts the call there.
 - That link holds the call's ticket: good once, for two minutes, and seen by whoever sees the terminal board (also a

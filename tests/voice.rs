@@ -231,8 +231,10 @@ fn of_the_computers_listening_the_one_you_are_at_opens_the_call_and_hears_when_i
     let t = Target { name: "the Coordinator".into(), ..Default::default() };
     let (c, ticket, _) = call::start("terminal", &t);
     call::change(|x| x.put("link", format!("https://vm.example.ts.net/herdr-projects/call#{ticket}")));
-    let mut mac = sw::calls::listen::Listener::new("macbook");
-    let mut m1 = sw::calls::listen::Listener::new("m1");
+    // the board runs on "vm", where nobody sits at a herdr window of its own
+    let nobody = || -> Box<dyn Fn(&str) -> bool> { Box::new(|_| false) };
+    let mut mac = sw::calls::listen::Listener::with("macbook", "vm", nobody());
+    let mut m1 = sw::calls::listen::Listener::with("m1", "vm", nobody());
     let rang = |out: &[Value]| out.iter().any(|v| v.s("ring") == c.s("id"));
     assert!(rang(&mac.step(None)) && rang(&m1.step(None)), "each listener hears the ring once");
     assert!(!rang(&mac.step(None)));
