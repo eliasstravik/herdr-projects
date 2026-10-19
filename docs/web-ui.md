@@ -381,3 +381,8 @@ In a real browser at a desktop's size (1280×800) and a phone's (390×800):
 
 Not checked: a web UI that serves real other PCs (the PCs' names were checked by a test), and the section through the web
 UI's own restart and update (the script and the place it goes are the ones the Board entry had).
+
+**All machines first**, checked on 2026-10-19 the same way (herdr-web-ui 0.4.12, Herdr 0.9.3, one other machine that
+answered and one that refused), at a phone's size (390×844) and a desktop's (1280×800): All machines stood at the top of
+the Boards section and of the board's **Whose tasks to show**, and the machines under it kept their order. The terminal
+board was the same as before: it lists no boards, and `Alt+M` still goes this machine, every machine, then each other one.
