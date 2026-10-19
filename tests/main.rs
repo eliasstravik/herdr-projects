@@ -141,6 +141,7 @@ mod first_run;
 mod flow;
 mod flow_more;
 mod flow_rest;
+mod flow_sidebar_ids;
 mod gate;
 mod gate_more;
 mod gate_rest;
