@@ -38,9 +38,15 @@ fn a_call_from_the_web_board_gets_a_short_lived_token_and_never_the_key() {
     assert_eq!((s.at("call").at("mine"), s.at("call").s("from")), (&json!(true), "web"));
     let other = common::board::web_as(&w, "phone", "board", json!({})).unwrap();
     assert_eq!(other.at("call").at("mine"), &json!(false));
+    // how long it has run, counted by the board's clock (the page's may be off); no computer named for a browser's call
+    sw::clock::advance(30_000);
+    let s = web(&w, "board", json!({}));
+    assert_eq!((s.at("call").i("secs"), s.at("call").s("held")), (30, ""), "{}", s.at("call"));
     // what the page saw of the sound, kept with the call also after it ended, and said by `herdr-projects voice`
     call::heard_audio(&json!({ "elements": 1, "playing": 1, "peak": 0.0, "ctx": "running", "blocked": false, "via": "element", "agent": "X11; Linux aarch64 Chrome/141", "secret": "no" }));
     call::end("test");
+    // an ended call leaves nothing on the page: what it says about the end is the page's own, for a few seconds
+    assert!(web(&w, "board", json!({})).at("call").is_null());
     let a = call::last().unwrap().at("audio").clone();
     assert!(a.has("peak") && !a.has("secret"));
     let said = sw::calls::command::main(&[]).1;

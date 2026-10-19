@@ -13,7 +13,9 @@ const TOOLS = ["send_message", "switch_to", "board_status", "latest_reply", "qui
 const QUIET_MS = 1400, FEED_MS = 1500, VOICE = 0.5;
 
 const subs = new Set();
-let st = { state: "idle", mode: "", muted: false, target: "", note: "", lines: [] };
+// `since`: when the call was answered here; `endedAt`, `secs`, `error`: when the last one ended, how long it ran and
+// whether it never started (its `note` says why). How long that note shows is callbtn.js's.
+let st = { state: "idle", mode: "", muted: false, target: "", note: "", lines: [], since: 0, endedAt: 0, secs: 0, error: false };
 let hush = false; // told to be quiet: updates about other tasks are dropped, also ones already on their way
 let conv = null, key = "", timer = null, queue = [], heardAt = 0, spokeAt = 0, waiting = false, lock = null, cancelled = false;
 // What was said, told to the board one after the other (tried three times): a tool waits for it, so your words are
@@ -58,11 +60,11 @@ function why(e) {
 // Start a call: from the web board (`client`, its page's own board) or from the terminal board (`ticket`).
 export async function start(how) {
   if (conv || st.state === "starting") return;
-  if (!window.isSecureContext) return set({ state: "idle", note: "A call needs the board's private https link." });
-  set({ state: "starting", note: "Asking for the microphone…", lines: [] });
+  if (!window.isSecureContext) return set({ state: "idle", note: "A call needs the board's private https link.", endedAt: Date.now(), secs: 0, error: true });
+  set({ state: "starting", note: "Asking for the microphone…", lines: [], since: 0, endedAt: 0, secs: 0, error: false });
   cancelled = false; fresh(); hush = false;
   // Hung up while it was still connecting: it stops at the next step, and the board is told.
-  const stop = () => { if (!cancelled) return false; if (key) send("end", { why: "hung up while connecting" }); key = ""; set({ state: "idle", note: "You hung up.", mode: "" }); return true; };
+  const stop = () => { if (!cancelled) return false; if (key) send("end", { why: "hung up while connecting" }); key = ""; set({ state: "idle", note: "Call cancelled", mode: "", endedAt: Date.now(), secs: 0 }); return true; };
   try {
     const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     for (const t of mic.getTracks()) t.stop();
@@ -93,8 +95,8 @@ export async function start(how) {
     const started = await Conversation.startSession({
       conversationToken: out.token, connectionType: "webrtc", workletPaths: { rawAudioProcessor: out.worklet },
       dynamicVariables: { target: out.target }, clientTools,
-      onConnect: () => { set({ state: "live", note: "", target: out.target }); hear.start(); },
-      onDisconnect: () => { if (conv) finish("The call ended.", "the voice service ended it"); else dropped = true; },
+      onConnect: () => { set({ state: "live", note: "", target: out.target, since: Date.now() }); hear.start(); },
+      onDisconnect: () => { if (conv) finish("Call ended", "the voice service ended it"); else dropped = true; },
       onError: (m) => set({ note: typeof m === "string" ? m : "The call had a problem." }),
       onModeChange: ({ mode }) => { set({ mode }); if (mode === "speaking") spokeAt = performance.now(); },
       onVadScore: ({ vadScore }) => { if (vadScore > VOICE) heardAt = performance.now(); },
@@ -107,7 +109,7 @@ export async function start(how) {
       },
     });
     conv = started;
-    if (dropped) return finish("The call ended.", "the voice service ended it");
+    if (dropped) return finish("Call ended", "the voice service ended it");
     if (cancelled) return end();
     set({ state: "live", target: out.target });
     try { lock = await navigator.wakeLock?.request("screen"); } catch {}
@@ -116,7 +118,7 @@ export async function start(how) {
     const note = why(e);
     if (key) send("end", { why: "could not start" });
     conv = null; key = "";
-    set({ state: "idle", note, mode: "" });
+    set({ state: "idle", note, mode: "", endedAt: Date.now(), secs: 0, error: true });
   }
 }
 // Ask the board what to read back, and read the next of it in a pause.
@@ -154,13 +156,14 @@ function finish(note, why = "hung up") {
   lock = null; conv = null;
   if (k) send("end", { why, audio: hear.report() }, "POST", k);
   key = ""; hear.stop(); fresh();
-  set({ state: "idle", mode: "", muted: false, note });
+  const secs = st.since ? Math.round((Date.now() - st.since) / 1000) : 0;
+  set({ state: "idle", mode: "", muted: false, note, since: 0, endedAt: Date.now(), secs });
 }
 export async function end(why = "hung up") {
   const c = conv;
   if (st.state === "starting" && !c) { cancelled = true; return; }
   if (!c && !key) return;
-  finish(why === "ended" ? "The call ended." : "You hung up.", why);
+  finish(why === "hung up" ? "You hung up" : "Call ended", why);
   try { await c?.endSession(); } catch {}
 }
 window.addEventListener("pagehide", () => { if (key) finish("", "the page closed"); });

@@ -38,9 +38,14 @@ pub fn name_of(w: &Who) -> String {
     match w.name.as_str() { "Coordinator" => "the Coordinator".into(), "New task" => "the board (no Coordinator here: it adds tasks)".into(), n if n.starts_with("Coordinator on ") => format!("the {n}"), n => n.to_string() }
 }
 /// The call of this machine as a web board's page shows it: none, or whether it is this page's own, where it was
-/// started, who it talks to and the last things said.
+/// started, who it talks to, the computer that holds it (`on`, a call helper's), how long it has run (`secs`, counted
+/// here so that the page's clock does not matter) and the last things said.
 pub fn shown(page: &str) -> Value {
     let Some(c) = call::get() else { return Value::Null };
     let lines: Vec<Value> = c.arr("lines").iter().rev().take(3).rev().map(|l| json!({ "by": l.s("by"), "text": crate::text::cut(l.s("text"), 300) })).collect();
-    json!({ "on": true, "mine": !page.is_empty() && page_of(&c).as_deref() == Some(page), "from": if call::from_terminal(&c) { "terminal" } else { "web" }, "state": c.s("state"), "target": call::target(&c).name, "lines": lines })
+    let live = c.s("state") == "live";
+    let secs = if live { (crate::clock::now() - c.i("at").max(c.i("answered"))).max(0) / 1000 } else { 0 };
+    let a = c.at("audio");
+    let held = if live && a.s("via") == "native" { a.t("agent") } else { String::new() };
+    json!({ "on": true, "mine": !page.is_empty() && page_of(&c).as_deref() == Some(page), "from": if call::from_terminal(&c) { "terminal" } else { "web" }, "state": c.s("state"), "target": call::target(&c).name, "held": held, "secs": secs, "lines": lines })
 }

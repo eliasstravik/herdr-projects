@@ -58,12 +58,30 @@ fn an_update_is_read_only_in_a_pause_never_while_you_talk_or_over_the_voice() {
 #[test]
 fn the_toggle_stands_beside_hide_and_the_call_page_takes_its_ticket_out_of_the_address() {
     assert!(CHAT.contains(r#"h("div.sw-chat-head", back, talk, who, hide, phone.btn), note, phone.strip, said.el, compose)"#));
-    assert!(BTN.contains(r#"btn.replaceChildren(icon(on ? "phoneOff" : "phone"), s.state === "starting" ? "Calling…" : on ? "Hang up" : "Call");"#));
+    assert!(BTN.contains(r#"btn.replaceChildren(icon("phone"), "Call");"#));
     assert!(BTN.contains(r#"if (other) { const out = await post("voice/end""#), "a call from the terminal board is hung up from the web too");
     assert!(BTN.contains("call.start({ client });"));
     assert!(CSS.contains(".sw-call { flex: none; margin-left: auto;") && CSS.contains("min-height: 40px"), "a thumb's size");
     assert!(sw::webui::page::file("callpage.js").is_none(), "no page of its own: a terminal call has no browser");
     for f in ["call.js", "callbtn.js", "hear.js", "call.css", "vendor/elevenlabs.js", "vendor/rawAudioProcessor.js"] { assert!(sw::webui::page::file(f).is_some(), "{f} is served"); }
+}
+
+#[test]
+fn a_call_on_is_one_row_with_its_way_to_hang_up_and_a_call_over_leaves_only_a_line_that_fades() {
+    // while it rings or is on, the Call button steps aside for the row, whose End (Cancel while it rings) hangs up
+    assert!(BTN.contains("btn.hidden = on;") && BTN.contains(r#"hang.replaceChildren(icon("phoneOff"), ringing ? "Cancel" : "End");"#));
+    assert!(BTN.contains(r#"const hang = h("button.btn.sw-call-end", { type: "button", title: "Hang up the call", onclick: () => tap() }"#));
+    assert!(BTN.contains(r#"who.textContent = ringing ? "Calling…" : "On call";"#) && BTN.contains("time.textContent = clock("));
+    // where it is held, when that is not this browser: the call helper's computer the board names
+    assert!(BTN.contains(r#"other?.from === "terminal" ? (other.held ? `on ${other.held}` : "from the terminal board")"#));
+    // over: one line ("You hung up · 2 min · 19:20"), gone after a few seconds, also for a call of another board's
+    assert!(BTN.contains("const ENDED_MS = 6000, FAILED_MS = 15000, FADE_MS = 600"));
+    assert!(BTN.contains("goneT = setTimeout(() => { ended = null; draw(call.state()); }, left);"));
+    assert!(BTN.contains("strip.hidden = !on && !showEnd;") && !BTN.contains("!s.note"), "a note of the page's own call never keeps the strip by itself");
+    assert!(BTN.contains(r#"if (other && !next) over({ text: "Call ended", secs: secsOf(), at: Date.now() });"#));
+    // the page's own call says when it was answered and when it ended, and how long it ran
+    assert!(CALL.contains("since: Date.now() }); hear.start();") && CALL.contains("set({ state: \"idle\", mode: \"\", muted: false, note, since: 0, endedAt: Date.now(), secs });"));
+    assert!(CSS.contains(".sw-call-ended.is-fading { opacity: 0; }") && CSS.contains("@media (prefers-reduced-motion: reduce) { .sw-call-dot { animation: none; } }"));
 }
 
 #[test]
