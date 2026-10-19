@@ -71,7 +71,7 @@ ws_keep() {
   fi
   ws_new="$ws_root/new.$$"
   rm -rf "$ws_new" && mkdir -p "$ws_new/target" || return 0
-  if ws_copy target/quick "$ws_new/target/quick" && echo "$ws_clean" > "$ws_new/commit" && pwd > "$ws_new/folder" \
+  if ws_copy target/quick "$ws_new/target/quick" && echo "$ws_clean" > "$ws_new/commit" && pwd -P > "$ws_new/folder" \
     && ws_rustc > "$ws_new/rustc" && mv "$ws_new" "$ws_root/seed-$ws_clean-$$" \
     && echo "seed-$ws_clean-$$" > "$ws_root/current.$$" && mv "$ws_root/current.$$" "$ws_root/current"; then
     [ -z "$ws_name" ] || touch "$ws_root/$ws_name/retired" 2>/dev/null || true

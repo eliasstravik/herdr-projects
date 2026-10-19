@@ -42,7 +42,7 @@ impl Bench {
     /// A build as cargo leaves it: the program, built with this folder's path written into it, and a library whose
     /// generated code is in its own target/.
     fn build(&self, wt: &str) {
-        let here = self.dir(wt).display().to_string();
+        let here = std::fs::canonicalize(self.dir(wt)).unwrap().display().to_string();
         self.write(wt, "target/quick/herdr-projects", &format!("built in {wt}"));
         self.write(wt, "target/quick/deps/sw-1a.d", &format!("# env-dep:CARGO_MANIFEST_DIR={here}\n"));
         self.write(wt, "target/quick/.fingerprint/herdr-projects-1a/lib-sw", "1");
@@ -112,8 +112,8 @@ fn real_programs_what_was_built_with_the_other_folders_path_in_it_is_built_again
     std::fs::remove_dir_all(&kept).unwrap();
     assert!(Command::new("cp").arg("-pR").arg(b.dir("one").join("target")).arg(warm.join(name.trim())).status().unwrap().success());
     b.worktree("two", "main");
-    b.setup("two", false);
-    assert!(!b.has("two", "target/quick/.fingerprint/herdr-projects-1a"), "the program said where it was built: built again");
+    let said = b.setup("two", false);
+    assert!(!b.has("two", "target/quick/.fingerprint/herdr-projects-1a"), "the program said where it was built: built again; setup said {said:?}; target files: {:?}", std::fs::read_dir(b.dir("two").join("target/quick")).unwrap().map(|e| e.unwrap().path()).collect::<Vec<_>>());
     assert!(b.has("two", "target/quick/.fingerprint/serde-2b"), "a path into its own target/ cargo moves itself");
 }
 

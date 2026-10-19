@@ -16,9 +16,15 @@ fn old_program(pid: i64) -> bool {
     let prog = args.split_whitespace().next().unwrap_or("");
     Path::new(prog).file_name().map(|n| n.to_string_lossy().starts_with(OLD_ID)).unwrap_or(false)
 }
+/// A process which has ended but awaits its parent is no longer running; `kill(pid, 0)` still sees it until reaped.
+fn running(pid: i64) -> bool {
+    if !pid_alive(pid) { return false; }
+    let Ok(o) = std::process::Command::new("ps").args(["-p", &pid.to_string(), "-o", "stat="]).output() else { return true };
+    !String::from_utf8_lossy(&o.stdout).trim_start().starts_with('Z')
+}
 fn stop(pid: i64) {
     unsafe { libc::kill(pid as i32, libc::SIGTERM); }
-    for n in 0..60 { if !pid_alive(pid) { return; } if n == 40 { unsafe { libc::kill(pid as i32, libc::SIGKILL); } } crate::clock::sleep_ms(50); }
+    for n in 0..60 { if !running(pid) { return; } if n == 40 { unsafe { libc::kill(pid as i32, libc::SIGKILL); } } crate::clock::sleep_ms(50); }
 }
 impl Sys for Live {
     fn launcher(&self) -> Option<String> { std::fs::read_to_string(crate::flow::send::shim()).ok() }
