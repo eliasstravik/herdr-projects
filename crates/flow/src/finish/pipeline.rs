@@ -3,6 +3,7 @@
 use super::already;
 use super::check_again::{choose, passed_patch, CHECKED_ENV};
 use super::check_run::run_check;
+use super::commit::commit_left;
 use super::hand_over::hand_over;
 use super::pipeline_end::{after_review, Ctx};
 use super::research::{kept_report, research_only};
@@ -45,7 +46,8 @@ pub fn pipeline_job(id: &str) {
 pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: &str, synced: Option<&sync::Synced>) -> Res<()> {
     // A task that starts with a plan, and the build has not started: this turn was the plan's (plan/written.rs).
     if crate::plan::pending(&g.check()?) { return crate::plan::written::plan_written(id, g, text); }
-    let mut t = g.set(|t| { t.del("chat"); t.del("chatKept"); t.put("stage", "checking"); t.put("syncBlocked", Value::Null); t.put("msg", if synced.is_some() { "Checking the branch updated with main" } else { "Checking the result" }); t.put("watch", Value::Null); t.put("check", Value::Null); t.put("summary", text.trim()); })?;
+    // A new round: what failed in the one before is not this one's, so the row and its details never show it meanwhile.
+    let mut t = g.set(|t| { t.del("chat"); t.del("chatKept"); t.put("stage", "checking"); t.put("failure", Value::Null); t.put("syncBlocked", Value::Null); t.put("msg", if synced.is_some() { "Checking the branch updated with main" } else { "Checking the result" }); t.put("watch", Value::Null); t.put("check", Value::Null); t.put("summary", text.trim()); })?;
     let (folder, root) = (cwd_of(&t), folder_of(t.s("id")));
     let prev_main = t.t("syncedTo"); // main as it was brought in before this turn's sync
     let tree = if flow::task::is_agent_task(&t) && t.b("worktree") && Path::new(t.s("worktree")).exists() { t.t("worktree") } else { String::new() };
@@ -59,10 +61,7 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
     // Commit leftovers. A plain folder has nothing to commit.
     if !tree.is_empty() && !research && !flow::git::dirty(Path::new(&tree)).is_empty() {
         let msg = format!("{}\n\nTask: {}", if t.b("title") { t.t("title") } else { id.into() }, task_ref(id, &repo_keys()));
-        if let Err(e) = git_out(Path::new(&tree), &["add", "-A"]).and_then(|_| git_out(Path::new(&tree), &["commit", "-m", &msg])) {
-            fail(g, failure("commit", "Could not commit the work", &e.msg, "Fix the Git error in your own worktree, commit the work and finish again."), FailHow::default())?;
-            return Ok(());
-        }
+        if let Err(f) = commit_left(Path::new(&tree), &msg) { fail(g, f, FailHow::default())?; return Ok(()); }
     }
     t = g.check()?;
     // Bring the branch up to date with main before anything is checked or reviewed, so the reviewer sees the work as it

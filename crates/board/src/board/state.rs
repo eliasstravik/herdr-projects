@@ -53,11 +53,11 @@ pub struct ChatFit { pub total: usize, pub rows: usize, pub top: usize, pub abov
 /// One row of the folded list: a heading, a task, a note ("↓ 3 more done"), or an automation. A heading is a machine's
 /// (`machine`, with every machine shown) or a group's (a repo, a status, a machine's automations: `autos`), selectable
 /// by its `id` (update/heads.rs). `folded` holds how many rows it hides, tasks and automations (0: open), `folded_autos`
-/// how many of those are automations. `empty`: a machine's with nothing in view, which shows folded (`0 tasks`).
+/// how many of those are automations. `empty`: a machine's with nothing in view, or a repo's used lately with no task in view, which shows folded (`0 tasks`).
 #[derive(Clone, Debug)]
 pub enum Row { Head { name: String, autos: bool, id: String, machine: bool, folded: usize, folded_autos: usize, empty: bool }, Rec(Rec), Note(String), Auto(Obj) }
 impl Row {
-    /// A heading that shows folded: one that hides rows, or an empty machine's.
+    /// A heading that shows folded: one that hides rows, or an empty machine's or repo's.
     pub fn shut(&self) -> bool { matches!(self, Row::Head { folded, empty, .. } if *folded > 0 || *empty) }
 }
 /// The selection's row in the list as last laid out, to keep the selection steady when rows move: `group` is the

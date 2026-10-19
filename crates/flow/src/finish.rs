@@ -6,6 +6,7 @@ pub mod auto_merge;
 pub mod chat;
 pub mod check_again;
 pub mod check_run;
+pub mod commit;
 pub mod hand_over;
 pub mod line;
 pub mod model_refused;
