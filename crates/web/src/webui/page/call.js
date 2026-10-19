@@ -14,6 +14,7 @@ const QUIET_MS = 1400, FEED_MS = 1500, VOICE = 0.5;
 
 const subs = new Set();
 let st = { state: "idle", mode: "", muted: false, target: "", note: "", lines: [] };
+let hush = false; // told to be quiet: updates about other tasks are dropped, also ones already on their way
 let conv = null, key = "", timer = null, queue = [], heardAt = 0, spokeAt = 0, waiting = false, lock = null, cancelled = false;
 // What was said, told to the board one after the other (tried three times): a tool waits for it, so your words are
 // there before it sends. Words of yours that never got there stop every message (`lost`) until the voice agent was
@@ -50,7 +51,7 @@ export async function start(how) {
   if (conv || st.state === "starting") return;
   if (!window.isSecureContext) return set({ state: "idle", note: "A call needs the board's private https link." });
   set({ state: "starting", note: "Asking for the microphone…", lines: [] });
-  cancelled = false; fresh();
+  cancelled = false; fresh(); hush = false;
   // Hung up while it was still connecting: it stops at the next step, and the board is told.
   const stop = () => { if (!cancelled) return false; if (key) send("end", { why: "hung up while connecting" }); key = ""; set({ state: "idle", note: "You hung up.", mode: "" }); return true; };
   try {
@@ -75,7 +76,7 @@ export async function start(how) {
       const res = await send("tool", { name, args: args || {} }, "POST", mine);
       if (name === "end_call") setTimeout(() => end("said goodbye"), 2500);
       // quiet: updates about other tasks waiting for a pause are dropped too, not only the ones to come
-      if (name === "quiet" && res.ok && args?.on) queue = queue.filter((i) => i.kind !== "alert");
+      if (name === "quiet" && res.ok) { hush = !!args?.on; if (hush) queue = queue.filter((i) => i.kind !== "alert"); }
       if (name === "switch_to" || name === "send_message") feed();
       return res.ok ? String(res.result || "") : res.msg || "The board did not answer.";
     }]));
@@ -120,7 +121,7 @@ async function feed() {
   waiting = false;
   if (key !== k) return;
   if (out.status === 410 || out.ended) { key = ""; return end("ended"); }
-  if (out.ok) { if (out.target && out.target !== st.target) set({ target: out.target }); queue.push(...(out.items || [])); }
+  if (out.ok) { if (out.target && out.target !== st.target) set({ target: out.target }); queue.push(...(out.items || []).filter((i) => !(hush && i.kind === "alert"))); }
   next();
 }
 function next() {

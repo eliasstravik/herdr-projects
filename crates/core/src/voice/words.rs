@@ -24,28 +24,27 @@ const COMMANDS: [(&str, &[&str]); 4] = [
     ("stop", &["stop", "stoppa", "avbryt", "avbryta", "cancel", "kill", "abort"]),
     ("delete", &["delete", "remove", "archive", "radera", "ta bort", "arkivera", "släng", "kasta"]),
 ];
-/// Words a question starts with; words that join a second sentence to it; words that make a command word a thing
-/// ("the merge", "a failed merge") before it, or after it ("merge conflict", "stop button").
-const ASKS: [&str; 23] = ["what", "why", "how", "when", "where", "who", "which", "does", "did", "do", "is", "are", "was", "has", "have", "vad", "varför", "hur", "när", "vem", "vilken", "vilket", "har"];
-const JOINS: [&str; 7] = ["and", "then", "also", "och", "sen", "sedan", "också"];
-const BEFORE: [&str; 22] = ["the", "a", "an", "this", "that", "its", "their", "his", "her", "my", "your", "our", "of", "last", "first", "next", "failed", "den", "det", "en", "ett", "sista"];
-const AFTER: [&str; 20] = ["failed", "fail", "fails", "failure", "conflict", "conflicts", "error", "errors", "status", "request", "requests", "check", "checks", "log", "logs", "step", "button", "misslyckades", "konflikt", "problem"];
-/// The actions these words order done: a command ("merge HP-52", "can you approve it?"), not a question about one
-/// ("why did the merge of HP-52 fail?") or a mention ("the approval failed", "look into the failed merge"). A
-/// question that goes on into a second sentence ("why did it fail, and then merge it") is read for commands too.
+/// Words that may stand before an order in its sentence ("please merge", "do merge", "can you merge", "go ahead and
+/// merge", "kan du godkänna").
+const LEAD: [&str; 26] = ["please", "do", "now", "then", "just", "also", "so", "ok", "okay", "and", "go", "ahead", "kindly", "can", "could", "would", "will", "you", "kan", "du", "snälla", "och", "sen", "gärna", "nu", "bara"];
+/// The actions these words order done, sentence by sentence (and clause by clause): an order starts its sentence,
+/// after at most a few words of politeness ("Merge HP-52", "Do merge HP-52", "Why did it fail? Merge HP-52.", "Can
+/// you approve it?"). A question about one or a mention ("why did the merge fail?", "explain whether we should merge")
+/// orders nothing.
 pub fn commands_in(s: &str) -> Vec<&'static str> {
-    let w: Vec<String> = words_of(s).split_whitespace().map(String::from).collect();
-    let joined = w.iter().any(|x| JOINS.contains(&x.as_str()));
-    if w.first().map(|f| ASKS.contains(&f.as_str())).unwrap_or(false) && !joined { return vec![]; }
-    COMMANDS.iter().filter(|(_, forms)| forms.iter().any(|form| {
-        let f: Vec<&str> = form.split(' ').collect();
-        (0..w.len()).any(|i| w.len() >= i + f.len() && f.iter().enumerate().all(|(k, x)| w[i + k] == *x)
-            && !(i > 0 && BEFORE.contains(&w[i - 1].as_str())) && !w.get(i + f.len()).map(|n| AFTER.contains(&n.as_str())).unwrap_or(false))
+    let low = s.to_lowercase();
+    let clauses: Vec<String> = crate::re!(r"[.?!;:,\n]|\band then\b|\bthen\b|\boch sen\b").split(&low).map(|c| words_of(c)).collect();
+    COMMANDS.iter().filter(|(_, forms)| clauses.iter().any(|c| {
+        let w: Vec<&str> = c.split_whitespace().collect();
+        let start = w.iter().take_while(|x| LEAD.contains(x)).count();
+        forms.iter().any(|form| { let f: Vec<&str> = form.split(' ').collect(); w.len() >= start + f.len() && f.iter().enumerate().all(|(k, x)| w[start + k] == *x) })
     })).map(|(a, _)| *a).collect()
 }
 /// The message as it goes to the agent: the voice agent's own instruction or question for that agent (written from
-/// what you asked of it, in your intent and key wording), and one short line that says it came from a voice call.
-/// What you said is not pasted in: the board keeps it to check an action against (confirm.rs).
-pub fn message(said: &str) -> String {
-    format!("{}\n\n(Via voice call: answer in one or two short plain sentences first, they are read aloud.)", squash(said))
+/// what you asked of it, in your intent and key wording), and one short line that says it came from a voice call, and
+/// whether it carries an action you asked for and confirmed (`action`) or none: then the agent is told to do none
+/// because of it. What you said is not pasted in: the board keeps it to check an action against (confirm.rs).
+pub fn message(said: &str, action: &str) -> String {
+    let what = if action.is_empty() || action == "none" { "No approve, merge, stop or delete was confirmed with it: do none of those because of it.".to_string() } else { format!("The human asked for this {action} on the call and confirmed it.") };
+    format!("{}\n\n(Via voice call: answer in one or two short plain sentences first, they are read aloud. {what})", squash(said))
 }

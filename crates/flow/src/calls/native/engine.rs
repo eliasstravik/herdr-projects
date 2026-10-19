@@ -20,7 +20,7 @@ pub struct Engine {
     wire: Box<dyn Wire>, audio: Box<dyn Audio>, board: Arc<dyn Board>, gate: Gate,
     said: mpsc::Sender<(String, String, u64)>, told: Arc<AtomicU64>, said_n: u64, lost: Arc<Mutex<&'static str>>,
     results: (mpsc::Sender<(String, String)>, mpsc::Receiver<(String, String)>), fed: (mpsc::Sender<Value>, mpsc::Receiver<Value>),
-    queue: Vec<(String, String)>, feeding: Arc<AtomicBool>, heard_at: i64, play_until: i64, fed_at: i64, report_at: i64, end_at: Option<i64>, peak: u16, gain: super::level::Gain, started: i64,
+    queue: Vec<(String, String)>, feeding: Arc<AtomicBool>, heard_at: i64, play_until: i64, fed_at: i64, report_at: i64, end_at: Option<i64>, peak: u16, gain: super::level::Gain, started: i64, hush: bool,
     pub hangup: Arc<AtomicBool>, pub ended: Option<String>,
 }
 fn now() -> i64 { crate::clock::now() }
@@ -37,7 +37,7 @@ impl Engine {
             t.store(n, Ordering::SeqCst);
         });
         let mut e = Engine { wire, audio, board, gate: Gate::default(), said, told, said_n: 0, lost, results: mpsc::channel(), fed: mpsc::channel(), queue: vec![], feeding: Arc::new(AtomicBool::new(false)),
-            heard_at: 0, play_until: 0, fed_at: now(), report_at: now() - REPORT_MS, end_at: None, peak: 0, gain: Default::default(), started: now(), hangup: Arc::new(AtomicBool::new(false)), ended: None };
+            heard_at: 0, play_until: 0, fed_at: now(), report_at: now() - REPORT_MS, end_at: None, peak: 0, gain: Default::default(), started: now(), hush: false, hangup: Arc::new(AtomicBool::new(false)), ended: None };
         if let Err(err) = e.wire.send(wire::hello(target)) { e.ended = Some(err); }
         e
     }
@@ -47,7 +47,7 @@ impl Engine {
         let (board, told, upto, lost, tx) = (self.board.clone(), self.told.clone(), self.said_n, self.lost.clone(), self.results.0.clone());
         if name == "end_call" { self.end_at = Some(now() + 2500); }
         // quiet: updates about other tasks waiting for a pause are dropped too, not only the ones to come
-        if name == "quiet" && args.b("on") { self.queue.retain(|(kind, _)| kind != "alert"); }
+        if name == "quiet" { self.hush = args.b("on"); if self.hush { self.queue.retain(|(kind, _)| kind != "alert"); } }
         std::thread::spawn(move || {
             for _ in 0..1000 { if told.load(Ordering::SeqCst) >= upto { break; } std::thread::sleep(std::time::Duration::from_millis(10)); }
             let refused = name == "send_message" && { let mut l = lost.lock().unwrap(); if l.is_empty() { false } else { *l = "asked"; true } };
@@ -86,7 +86,9 @@ impl Engine {
             while let Ok((call, result)) = self.results.1.try_recv() { self.wire.send(wire::tool_result(&call, &result))?; }
             while let Ok(f) = self.fed.1.try_recv() {
                 if f.b("ended") { return Err("ended".into()); }
-                self.queue.extend(f.arr("items").iter().map(|i| (i.t("kind"), i.t("text"))).filter(|x| !x.1.is_empty()));
+                // told to be quiet: updates about other tasks are dropped, also ones already on their way
+                let hush = self.hush;
+                self.queue.extend(f.arr("items").iter().map(|i| (i.t("kind"), i.t("text"))).filter(|x| !x.1.is_empty() && !(hush && x.0 == "alert")));
             }
             if t - self.fed_at >= FEED_MS && !self.feeding.swap(true, Ordering::SeqCst) {
                 self.fed_at = t;

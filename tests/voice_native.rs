@@ -219,3 +219,17 @@ fn being_told_to_be_quiet_drops_the_updates_already_waiting_for_a_pause() {
     let said: Vec<String> = c.sent().into_iter().filter(|m| m.s("type") == "user_message").map(|m| m.t("text")).collect();
     assert_eq!(said, vec!["[board] The Coordinator answered: done.".to_string()]);
 }
+
+#[test]
+fn an_alert_on_its_way_when_you_said_be_quiet_is_dropped_too() {
+    sw::clock::set(Some(6_000_000));
+    let mut c = call(true);
+    c.hear(json!({ "type": "client_tool_call", "client_tool_call": { "tool_call_id": "q", "tool_name": "quiet", "parameters": { "on": true } } }));
+    c.e.step(6_000_000);
+    // the board's answer to a feed asked before: it comes after quiet
+    c.desk.lock().unwrap().feed = vec![json!({ "kind": "alert", "text": "HP-52 needs you" }), json!({ "kind": "answer", "text": "The Coordinator answered: done." })];
+    c.until(6_000_000 + 1600 + QUIET_MS + 1, |c| c.sent().iter().any(|m| m.s("type") == "user_message"));
+    for _ in 0..50 { c.e.step(6_000_000 + 1600 + 2 * QUIET_MS + 2); }
+    let said: Vec<String> = c.sent().into_iter().filter(|m| m.s("type") == "user_message").map(|m| m.t("text")).collect();
+    assert_eq!(said, vec!["[board] The Coordinator answered: done.".to_string()]);
+}

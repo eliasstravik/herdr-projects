@@ -11,7 +11,7 @@ use crate::voice::words;
 /// Run one tool for this call; the answer the voice agent reads.
 pub fn run(c: &Obj, name: &str, args: &Value) -> String {
     match name {
-        "send_message" => send(c, args.s("message"), args.b("confirmed")),
+        "send_message" => send(c, args.s("message"), args.s("action"), args.b("confirmed")),
         "switch_to" => switch(c, args.s("who")),
         "board_status" => status(c),
         "latest_reply" => latest(c),
@@ -21,13 +21,13 @@ pub fn run(c: &Obj, name: &str, args: &Value) -> String {
         other => format!("There is no tool called {other}."),
     }
 }
-fn send(c: &Obj, said: &str, confirmed: bool) -> String {
+fn send(c: &Obj, said: &str, action: &str, confirmed: bool) -> String {
     if said.trim().is_empty() { return "Not sent: there was nothing to send.".into(); }
     let heard = call::heard(c);
     // Nothing of what the human said reached the board since the last message: nothing goes on the voice agent's word.
     if heard.is_empty() { return "Not sent: none of the human's words since the last message reached the board. Ask them to say what they want again.".into(); }
-    match check(said, &call::talk(c), confirmed) { Verdict::Refuse(m) | Verdict::Ask(m) => return m, Verdict::Send => {} }
-    let text = words::message(said);
+    match check(said, action, &call::talk(c), confirmed) { Verdict::Refuse(m) | Verdict::Ask(m) => return m, Verdict::Send => {} }
+    let text = words::message(said, action);
     let b = board::of(c);
     let mut g = b.lock().unwrap();
     let t = board::target_of(&mut g);

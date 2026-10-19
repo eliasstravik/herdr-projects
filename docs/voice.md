@@ -27,15 +27,20 @@ The first call asks the browser for the microphone once. A call is private: it n
   numbers, file names and task tags kept exactly. Small talk, thinking aloud, what you said to the voice itself and
   what was meant for another agent are left out. One short line says it came from a voice call, and that the agent
   should answer in one or two short sentences first.
-- **No action you did not ask for.** A message that orders approving, merging, stopping or removing (a question
-  about one, "why did the merge of HP-52 fail?", or a mention, "the approval failed", orders nothing and goes as any
-  question does) goes out only when you asked for it, the voice agent asked you back, naming the action and the task ("Merge HP-52, right?"), and the last thing you said
-  is a plain yes. The board checks this itself, from what was said on the call: a question ("what does merge mean?"),
-  a no ("no, don't do it"), a yes to something else ("yes, explain it") or a yes about another task is not enough, and
-  neither is the voice agent's word that you said yes. What was said is kept on the board for this check, never pasted
-  into the message. A no takes back what you asked before it, and a question that
-  offers something else ("would you like an explanation of merge?") does not count. And nothing goes out on the voice
-  agent's word alone: when none of your words since the last message reached the board, the message is not sent.
+- **No action you did not ask for.** The voice agent says what each message asks for: approving, merging, stopping
+  or removing a task, or none of those. One of those goes out only when you asked for it, the voice agent asked you
+  back, naming the action and the task ("Merge HP-52, right?"), and the last thing you said is a plain yes. The board
+  checks this itself, from what was said on the call: a question ("what does merge mean?"), a no ("no, don't do it"),
+  a yes to something else ("yes, explain it") or a yes about another task is not enough, and neither is the voice
+  agent's word that you said yes. A no takes back what you asked before it, and a question that offers something
+  else ("would you like an explanation of merge?") does not count.
+- **Everything else goes as asked, and confirms nothing.** A question about an action ("why did the merge of HP-52
+  fail?") goes at once; the agent is told that no approve, merge, stop or delete was confirmed with it, and to do none
+  because of it. A message that names no action but still orders one in so many words, in any of its sentences
+  ("Merge HP-52", "Do merge HP-52", "Can you approve HP-52?"), is sent back to the voice agent to be asked about first.
+  What was said is kept on the board for these checks, never pasted into the message. And nothing goes out on the
+  voice agent's word alone: when none of your words since the last message reached the board, the message is not
+  sent.
 - **Answers are read back.** When the agent the call talks to has answered and its words stood still for a moment, the
   voice agent says the gist. Code, paths and links are left out.
 - **Updates in pauses only.** A task that came to need you, became ready to approve or failed since the call began is

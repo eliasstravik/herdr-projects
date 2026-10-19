@@ -9,8 +9,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use sw::json::*;
 use sw::voice::call::{self, Target};
-use sw::voice::confirm::{check, Verdict};
+use sw::voice::confirm::Verdict;
 use sw::voice::words::{actions_in, message};
+/// The check, with the action named as an honest voice agent names it: what the message orders, else none.
+fn check(said: &str, talk: &[(String, String)], confirmed: bool) -> Verdict { sw::voice::confirm::check(said, sw::voice::words::commands_in(said).first().copied().unwrap_or("none"), talk, confirmed) }
 
 /// A fake ElevenLabs: what was asked of it, and its answers (a new id for each thing made, a token).
 pub fn fake_eleven() -> Rc<RefCell<Vec<(String, String, Value)>>> {
@@ -40,7 +42,8 @@ fn a_message_is_the_voice_agents_own_clear_instruction_with_one_line_that_it_cam
     assert_eq!(actions_in("stoppa agenten"), vec!["stop"]);
     assert!(actions_in("what is the status of the merger talks").is_empty() && actions_in("unstoppable").is_empty());
     // what the voice agent wrote, as it wrote it (spaces tidied), and a short line: never the call's transcript
-    assert_eq!(message("Add a  goodbye line to the greeting in src/greet.rs"), "Add a goodbye line to the greeting in src/greet.rs\n\n(Via voice call: answer in one or two short plain sentences first, they are read aloud.)");
+    assert_eq!(message("Add a  goodbye line to the greeting in src/greet.rs", "none"), "Add a goodbye line to the greeting in src/greet.rs\n\n(Via voice call: answer in one or two short plain sentences first, they are read aloud. No approve, merge, stop or delete was confirmed with it: do none of those because of it.)");
+    assert!(message("Merge HP-52", "merge").ends_with("The human asked for this merge on the call and confirmed it.)"));
     // the voice agent is told how to write it: self-contained, just what was asked of this agent, names kept exact
     let tool = sw::voice::agent::tools().into_iter().find(|t| t.name == "send_message").unwrap();
     let d = (tool.params)().at("properties").at("message").t("description");

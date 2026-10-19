@@ -33,16 +33,23 @@ fn plain_yes(s: &str) -> bool {
     let tags: Vec<String> = tags_in(s).iter().map(|t| t.to_lowercase()).collect();
     w.split_whitespace().all(|x| YES.contains(&x) || ALSO.contains(&x) || action_words.contains(&x) || x.chars().all(|c| c.is_ascii_digit()) || tags.iter().any(|t| t.starts_with(x)))
 }
-/// May `said` go to the agent? `talk`: (who, words) since the last message, "you" for you and "voice" for the voice agent.
-pub fn check(said: &str, talk: &[(String, String)], confirmed: bool) -> Verdict {
-    // what the message orders done: a question or a mention of one ("why did the merge fail?") orders nothing
-    let wanted = commands_in(said);
-    if wanted.is_empty() { return Verdict::Send; }
+/// May `said` go to the agent? `action`: the action the voice agent says it carries ("none", or approve, merge, stop,
+/// delete). `talk`: (who, words) since the last message, "you" for you and "voice" for the voice agent.
+pub fn check(said: &str, action: &str, talk: &[(String, String)], confirmed: bool) -> Verdict {
+    let named = ACTIONS.iter().map(|(a, _)| *a).find(|a| *a == action);
+    let ordered = commands_in(said);
+    // a message with no action that still orders one in so many words is sent back to be sent as what it is
+    if named.is_none() {
+        if let Some(a) = ordered.first() { return Verdict::Ask(format!("Not sent: this message orders a {a}. If the human asked for that, ask them a short question that names it and the task, and after their yes send it again with action {a} and confirmed true; else send it without that order.")); }
+        return Verdict::Send;
+    }
+    let mut wanted: Vec<&str> = named.into_iter().collect();
+    for a in ordered { if !wanted.contains(&a) { wanted.push(a); } }
     let you = |i: usize| talk[i].0 == "you";
     // A no of yours takes back every request before it.
     let after_no = (0..talk.len()).rev().find(|&i| you(i) && negated(&talk[i].1)).map(|i| i + 1).unwrap_or(0);
     // your request: words of yours since your last no that name it, and are no question and no no
-    let asked_at = |a: &str| (after_no..talk.len()).filter(|&i| you(i) && commands_in(&talk[i].1).contains(&a) && !is_question(&talk[i].1) && !negated(&talk[i].1)).collect::<Vec<_>>();
+    let asked_at = |a: &str| (after_no..talk.len()).filter(|&i| you(i) && actions_in(&talk[i].1).contains(&a) && !is_question(&talk[i].1) && !negated(&talk[i].1)).collect::<Vec<_>>();
     if let Some(a) = wanted.iter().find(|a| asked_at(a).is_empty()) {
         return Verdict::Refuse(format!("Not sent: it asks to {a}, and the human did not ask for that. Send only what they asked for."));
     }
