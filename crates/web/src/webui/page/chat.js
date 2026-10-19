@@ -12,6 +12,7 @@ import { composeEl } from "./compose.js";
 import { saidEl } from "./said.js";
 import { talkNames, drawTalk } from "./talk.js";
 import { callEl } from "./callbtn.js";
+import { roomFor } from "./room.js";
 
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const DRAFT = "sw-draft";
@@ -30,6 +31,7 @@ export function chatEl({ onSend, onPress, onFull }) {
   let last = null, lastWho = null, to = null, now = null, tone = "text";
   let busy = false, closed = false; // closed: the board was closed, and this box writes nothing more
   let showing = null; // what the conversation shows now, as the board last sent it: { parts, open, raw, toAgent }
+  let room = null; // the room over a phone's keyboard (below)
   const go = async (delegate) => {
     const text = box.value;
     if (!text.trim() || busy || files.busy()) return; // a file on its way: its path is not in the words yet
@@ -65,7 +67,7 @@ export function chatEl({ onSend, onPress, onFull }) {
   // Tab sends as the terminal's does, and puts an agent on what it adds, where that applies to the words typed.
   // A file attached is for whoever the words are for: attaching one locks that as typing does (sync).
   const whom = () => { const w = to || now; return w ? { id: w.id, reply: w.reply, scope: w.scope || "" } : null; };
-  const { el: compose, card, box, to: chip, send, also, grow, files, voice, say, destroy } = composeEl({ onSend: go, onInput: () => { if (closed) return; sync(); keep(box.value, to); }, onTab: () => { if (also.hidden || busy) return false; go(true); return true; }, whom, hold: () => busy });
+  const { el: compose, card, box, to: chip, send, also, grow, files, voice, say, destroy } = composeEl({ onSend: go, onInput: () => { if (closed) return; sync(); keep(box.value, to); }, onTab: () => { if (also.hidden || busy) return false; go(true); return true; }, whom, hold: () => busy, onGrow: () => room?.fit() });
   box.value = saved();
   if (box.value.trim()) to = savedTo(); // a reload brings the words back with who they were for
   // Who you talk to: one button, as space on the terminal board. It names who gets your words; a tap presses the
@@ -97,12 +99,14 @@ export function chatEl({ onSend, onPress, onFull }) {
     send.disabled = !typing || busy || files.busy(); files.refresh(); voice.sync(); send.title = cap(l.enter) || "Send message"; also.hidden = !typing || !l.delegate; also.disabled = busy; also.title = l.delegate ? `${cap(l.delegate)} (Tab)` : "";
   }
   const el = h("footer.sw-chat", { "aria-label": "Chat" }, h("div.sw-chat-head", back, talk, who, hide, phone.btn), note, phone.strip, said.el, compose);
+  // Above a phone's keyboard the box stays whole, and the line you type on in view (room.js).
+  room = roomFor({ chat: el, said: said.el, box });
   return {
     el,
     typing: () => !!box.value.trim(),
     // The board closed: dictation stops and lets the microphone go, and nothing this box still hears of (an answer, a
     // file, a dictation) changes the kept draft, which the next board's box shows.
-    destroy() { closed = true; destroy(); phone.destroy(); },
+    destroy() { closed = true; destroy(); phone.destroy(); room.destroy(); },
     // The conversation full screen (said.js): asked, set, or left.
     full: (on) => said.full(on),
     fill(text) { box.value = text; to = null; sync(); keep(text, to); grow(); box.focus(); },

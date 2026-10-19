@@ -35,7 +35,7 @@
    scroll arrows: a thin bar of the web UI's, and only once the text is taller than the box). */
 .sw-input {
   grid-area: text; display: block; box-sizing: border-box; width: 100%; min-width: 0; margin: 0;
-  min-height: calc(1lh + var(--space-5, 20px)); max-height: 10lh; padding: var(--space-4, 16px) var(--space-5, 20px) var(--space-1, 4px);
+  min-height: calc(1lh + var(--space-5, 20px)); max-height: 10lh; max-height: min(10lh, var(--sw-room, 10lh)); padding: var(--space-4, 16px) var(--space-5, 20px) var(--space-1, 4px);
   resize: none; overflow-x: hidden; overflow-y: auto; overflow-wrap: anywhere; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--border-strong, #3e3830) transparent;
   -webkit-appearance: none; -moz-appearance: none; appearance: none; background: transparent; border: 0; border-radius: 0; outline: 0; box-shadow: none; -webkit-tap-highlight-color: transparent;
   color: var(--text-strong, #f2ebdf); font-family: var(--font-ui, system-ui, sans-serif); font-weight: var(--fw-regular, 400); letter-spacing: normal;
@@ -48,7 +48,7 @@
 .sw-input::-webkit-scrollbar-thumb { background: var(--border-strong, #3e3830); border-radius: var(--radius-pill, 999px); }
 .sw-input::-webkit-scrollbar-button, .sw-input::-webkit-resizer, .sw-input::-webkit-scrollbar-corner { display: none; width: 0; height: 0; }
 .sw-input:focus, .sw-input:focus-visible { outline: 0; box-shadow: none; }
-.sw-input.is-sized { max-height: min(50vh, 480px); max-height: min(calc(var(--app-height, 100dvh) / 2), 480px); }
+.sw-input.is-sized { max-height: min(50vh, 480px); max-height: min(calc(var(--app-height, 100dvh) / 2), 480px, var(--sw-room, 480px)); }
 .sw-input::placeholder { color: var(--text-dim, #9b9183); opacity: 1; }
 .sw-input:disabled { opacity: 0.7; cursor: not-allowed; }
 

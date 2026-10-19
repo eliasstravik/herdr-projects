@@ -65,3 +65,12 @@
 /* There the chat's own back arrow stands first, for the header's: one back arrow at a time. */
 .sw-chat-back { display: none; flex: none; color: var(--sw-dim); }
 .sw-board.sw-chat-full .sw-chat-back { display: inline-flex; }
+/* Typing with a phone's keyboard up (room.js): the board's header, chips and list step aside as for the full screen,
+   the conversation takes what is left over the box (under its least it steps aside, and its full screen button with
+   it), and the box stays whole above the keyboard and above the strip iOS floats over it (--sw-kb-cover). */
+.sw-board.sw-typing > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }
+.sw-board.sw-typing .sw-chat { flex: 1; min-height: 0; overflow: hidden; border-top: 0; padding-top: max(var(--space-2, 8px), env(safe-area-inset-top, 0px)); padding-bottom: calc(var(--space-2, 8px) + var(--sw-kb-cover, 0px)); }
+.sw-board.sw-typing .sw-said-box { flex: 1 1 0; min-height: 0; overflow: hidden; grid-template-rows: minmax(0, 1fr); }
+.sw-board.sw-typing .sw-said { max-height: none; height: 100%; }
+.sw-board.sw-typing .sw-said-box.is-squeezed, .sw-board.sw-typing .sw-said-full { display: none; }
+.sw-board.sw-typing .sw-composer { margin-top: auto; }

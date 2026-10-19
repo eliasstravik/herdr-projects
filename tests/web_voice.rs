@@ -47,7 +47,7 @@ fn the_words_go_in_at_the_caret_by_the_web_uis_engines_and_settings_and_a_watche
 fn closing_the_board_stops_dictation_lets_the_microphone_go_and_leaves_the_kept_draft_alone() {
     const BOARD: &str = include_str!("../crates/web/src/webui/page/board.js");
     assert!(BOARD.contains("chat?.destroy(); chat = null;"), "closing the board lets its box go");
-    assert!(CHAT.contains("destroy() { closed = true; destroy(); phone.destroy(); },") && CHAT.contains("onInput: () => { if (closed) return; sync(); keep(box.value, to); }"));
+    assert!(CHAT.contains("destroy() { closed = true; destroy(); phone.destroy(); room.destroy(); },") && CHAT.contains("onInput: () => { if (closed) return; sync(); keep(box.value, to); }"));
     assert!(CHAT.contains("if (closed) return; // the board closed while it was on its way"));
     assert!(COMPOSE.contains("const destroy = () => { window.removeEventListener?.(\"resize\", fit); voice.destroy(); };"));
     // dictation: cancelled (the microphone's tracks stopped, a transcript on its way aborted), every page listener let

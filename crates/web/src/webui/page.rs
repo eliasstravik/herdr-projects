@@ -21,6 +21,7 @@ const FILES: &[(&str, &str)] = &[
     ("hear.js", include_str!("page/hear.js")),
     ("list.js", include_str!("page/list.js")),
     ("panel.js", include_str!("page/panel.js")),
+    ("room.js", include_str!("page/room.js")),
     ("said.js", include_str!("page/said.js")),
     ("sheets.js", include_str!("page/sheets.js")),
     ("start.js", include_str!("page/start.js")),

@@ -22,8 +22,9 @@ export const sendsOn = (e, enter = enterSends()) => e.key === "Enter" && !e.isCo
 
 // `onSend(delegate)`: send what the box holds (true: and put an agent on what it adds). `onInput()`: its words changed.
 // `onTab()`: tab was pressed with words in the box; true when it sent them (then the focus stays in the box).
-// `whom()`: who an attached file is for, `hold()`: its path must wait (files.js).
-export function composeEl({ onSend, onInput, onTab = () => false, whom = () => null, hold = () => false }) {
+// `whom()`: who an attached file is for, `hold()`: its path must wait (files.js). `onGrow()`: its height was set again
+// (the room above a phone's keyboard may hold less: room.js).
+export function composeEl({ onSend, onInput, onTab = () => false, whom = () => null, hold = () => false, onGrow = () => {} }) {
   let manual = savedHeight(), tapped = 0;
   const box = h("textarea.sw-input", { rows: 1, maxLength: LONGEST, spellcheck: false, autocapitalize: "off", autocorrect: "off", "aria-label": "Message" });
   const grip = h("div.sw-grip", { tabIndex: 0, role: "separator", "aria-orientation": "horizontal", "aria-label": "Resize message box", title: "Drag to resize · double-click to reset" });
@@ -40,8 +41,9 @@ export function composeEl({ onSend, onInput, onTab = () => false, whom = () => n
   // As tall as its words, up to ten lines (the styles' limit), then it scrolls; or the height set with the grip.
   const grow = () => {
     box.classList.toggle("is-sized", manual != null); grip.classList.toggle("is-sized", manual != null);
-    if (manual != null) { box.style.height = `${manual}px`; return; }
-    box.style.height = "auto"; box.style.height = `${box.scrollHeight}px`;
+    if (manual != null) box.style.height = `${manual}px`;
+    else { box.style.height = "auto"; box.style.height = `${box.scrollHeight}px`; }
+    onGrow();
   };
   const floor = () => Math.round(parseFloat(getComputedStyle(box).minHeight)) || 44;
   const most = () => Math.max(floor(), Math.min(MOST, Math.round((window.visualViewport?.height || window.innerHeight) / 2)));

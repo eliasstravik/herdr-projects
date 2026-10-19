@@ -67,8 +67,38 @@ Measured against **herdr-web-ui 0.4.8** (see [how](#how-it-was-measured)):
 - **Focus is the card's**, never a rectangle on the field inside it.
 - **No browser look** on the field in Chrome, Firefox or Safari: no frame, no focus ring, no inner shadow, no resize
   corner, no scroll arrows.
-- **Above a phone's keyboard**: the Board is as tall as the web UI's own shell, which follows the keyboard.
+- **Above a phone's keyboard**: the Board is as tall as the web UI's own shell, which follows the keyboard. What the
+  Board does there itself: [above a phone's keyboard](#above-a-phones-keyboard).
 - **Light, dark and every palette** of the web UI: they are its variables.
+
+## Above a phone's keyboard
+
+**While you type with a phone's keyboard up, the box stays whole above it and the line you type on stays in view**,
+however long the words get (`crates/web/src/webui/page/room.js`):
+
+- **The board's header, its chips and the list step aside**, as they do for the chat full screen: the chat has the
+  whole of what the keyboard leaves. The line that says who gets your words stays. When the keyboard goes down (or you
+  tap elsewhere), all of it is back.
+- **The conversation takes what the box leaves**, over it. Where that is too little to read (under its Earlier and Later
+  buttons, one over the other), it steps aside for the words, and comes back when they are shorter. Its full screen
+  button steps aside while you type.
+- **The box is never taller than the room left**: as tall as its words, up to ten lines (or the height set with the
+  grip), and less where the room is less; then it scrolls, never under one line. The files attached stand above the
+  words inside that same room, so they never push the words off the screen.
+- **The line with the caret stays in view**: when the box gets shorter, when the keyboard comes up, and when words go
+  in that you did not type (a file's path, a dictation).
+- **On an iPhone the box also stands clear of the strip iOS floats over the page** while its keyboard is up (its arrows
+  and Done): iOS counts it as part of the visible window, so the box keeps 72 px more room at its foot. That strip was
+  measured on an iPhone's screenshot (iOS 26): its top stands 73 px over the foot of the visible window.
+- **The keyboard is known** by the web UI's own mark (its shell marks the page while a keyboard is up, as it writes the
+  height that is left); elsewhere by the visible window being much shorter than the page (and not only zoomed in).
+- **Too tall for the board without a keyboard** (a short window), the box is likewise never taller than the room left.
+
+Tried in Chromium and WebKit (Playwright) at an iPhone's size (440×956, the keyboard leaving 627 px) and an iPhone SE's
+(375×667, leaving 380), on a copy of the page with the iPhone's visible window and the web UI's mark played: an empty
+box, twenty lines, twenty lines with a picture attached, the caret in the middle with words typed there, and the
+keyboard going down. The card's foot and the caret's line stayed above the strip in every one; before, the box ran
+120 px (with a picture, 170 px) under the strip and the keyboard. Not tried on a real phone.
 
 ## What is the board's own, in that shape
 
