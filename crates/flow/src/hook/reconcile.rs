@@ -1,5 +1,6 @@
 //! Reconcile compares a linked task with herdr: pane gone, pane alive with no agent, a finished turn nobody handled,
-//! a runner marker whose process is dead. A task whose pane id no longer matches is linked again.
+//! a runner marker whose process is dead. A task whose pane id no longer matches, or now names another's pane, is
+//! linked again.
 use super::apply;
 use crate::clock::now;
 use crate::flow::task::is_agent_task;
@@ -19,7 +20,7 @@ fn upd(id: &str, f: impl FnOnce(&mut Task) -> bool) { let _ = update_wait(id, 10
 pub fn reconcile(t: &Task, api: &Herdr) {
     if !is_agent_task(t) || t.b("archivedAt") { return; }
     let id = t.s("id");
-    let mut pane = api.pane_get(t.at("link").s("pane"));
+    let mut pane = api.pane_get(t.at("link").s("pane")).filter(|p| crate::flow::live::owns_pane(t, p)); // its id handed to another: gone
     if pane.is_none() { pane = relink(t, api); }
     let agent = pane.as_ref().and_then(|p| api.agent_get(p.s("pane_id")).ok().flatten());
     if agent.is_none() { check_sent(id, None, api); } // gone with typed text not taken: not started, the text kept
