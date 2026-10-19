@@ -52,6 +52,12 @@ fn the_words_sent_are_yours_whole_and_first() {
     assert!(m.starts_with("Can you explain why the merge failed?\n\n(Spoken on a voice call, word for word; the voice assistant took it as: \"Explain the failure\". Where these words name merge, that is not a request to do it: nothing of the kind was confirmed."), "{m}");
     let m = message("Do the four things", &heard(&["first add a test", "then fix the typo", "then update the docs", "and last tell me when done"]));
     assert!(m.starts_with("first add a test then fix the typo then update the docs and last tell me when done\n"), "{m}");
+    // a long request goes whole: its opening words too
+    let long = format!("First, only investigate; do not change anything. {}", "Then look at every log line and tell me what you see. ".repeat(40));
+    assert!(long.len() > 1800);
+    let m = message("Investigate", &heard(&[&long]));
+    assert!(m.starts_with("First, only investigate; do not change anything. Then look"), "{}", &m[..80]);
+    assert!(m.contains(long.trim_end()));
     // a message that carries the action it was confirmed for says nothing more of it
     assert!(!message("Merge HP-52", &heard(&["merge HP-52", "yes"])).contains("not a request"));
 }
@@ -72,8 +78,8 @@ fn an_action_goes_only_on_your_request_the_voice_agents_question_and_your_plain_
     assert!(refused(&check("Merge HP-52", &t(&[("you", "what does merge mean?"), ("voice", "Shall I explain merging?"), ("you", "yes, explain it")]), true)));
     assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Do you want an explanation first?"), ("you", "yes, explain it")]), true)));
     // a no is no yes, also one with "do it" in it
-    assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "no, do not do it")]), true)));
-    assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "yes, but wait")]), true)));
+    assert!(refused(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "no, do not do it")]), true)), "the no takes the request back");
+    assert!(refused(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "yes, but wait")]), true)));
     assert!(refused(&check("Merge HP-52", &t(&[("you", "don't merge HP-52 yet"), ("voice", "Merge HP-52, right?"), ("you", "yes")]), true)), "\"don't merge\" is no request");
     // a yes to HP-52 is no yes to HP-99
     assert!(matches!(check("Merge HP-99", &t(&[("you", "please merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "yes")]), true), Verdict::Refuse(m) if m.contains("HP99")));
@@ -81,6 +87,12 @@ fn an_action_goes_only_on_your_request_the_voice_agents_question_and_your_plain_
     assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("you", "yes")]), true)));
     assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "yes")]), false)));
     assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52")]), true)));
+    // a no takes back the request before it, and a question offering something else is no question to do it
+    // (the reviewer's cases)
+    assert!(refused(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "no, do not do it"), ("voice", "Would you like an explanation of merge for HP-52?"), ("you", "yes")]), true)));
+    assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Would you like an explanation of merge for HP-52?"), ("you", "yes")]), true)));
+    assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Shall I tell you more about merging HP-52?"), ("you", "yes")]), true)));
+    assert_eq!(check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "Merge HP-52, right?"), ("you", "no wait"), ("you", "okay, merge HP-52 after all"), ("voice", "Should I merge HP-52?"), ("you", "yes")]), true), Verdict::Send, "asked again after the no");
     // the question must name the action, and the request must come before it
     assert!(asked(&check("Merge HP-52", &t(&[("you", "merge HP-52"), ("voice", "HP-52, right?"), ("you", "yes")]), true)));
     assert!(asked(&check("Stop HP-52", &t(&[("voice", "Stop HP-52?"), ("you", "stop HP-52"), ("voice", "Okay."), ("you", "yes")]), true)));

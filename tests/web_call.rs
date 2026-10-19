@@ -53,6 +53,8 @@ fn the_voice_agents_message_goes_to_whoever_the_chat_talks_to_with_your_words_fi
     assert_eq!(s.at("chat").at("toAgent"), &json!(true));
     let (st, _) = start_web("test"); assert_eq!(st, 200);
     assert_eq!(call::target(&call::get().unwrap()).id, id, "the call talks to whoever the chat talks to");
+    // nothing goes on the voice agent's word alone: none of your words reached the board, nothing is sent
+    assert!(tool("send_message", json!({ "message": "Add a goodbye line" })).starts_with("Not sent: none of the human's words"));
     // what you said, heard by the page; then the voice agent sends it
     call::line("you", "tell it to also say goodbye please");
     let said = tool("send_message", json!({ "message": "Add a goodbye line to the greeting" }));
@@ -64,19 +66,20 @@ fn the_voice_agents_message_goes_to_whoever_the_chat_talks_to_with_your_words_fi
     assert_eq!(c.arr("lines").last().unwrap().s("by"), "sent");
     // an action nobody asked for is not sent; asked for, it waits for a yes
     let before = prompts(&w, task(&id).at("link").s("pane")).len();
+    call::line("you", "how is it going?");
     assert!(tool("send_message", json!({ "message": "Merge it now" })).contains("did not ask"));
     call::line("you", "merge it");
     assert!(tool("send_message", json!({ "message": "Merge it", "confirmed": false })).starts_with("Not sent yet"));
     // a no, even one that holds "do it", is no yes; asked again, a plain yes sends it, your words with it
     call::line("voice", "Merge it, right?"); call::line("you", "no, do not do it");
-    assert!(tool("send_message", json!({ "message": "Merge it", "confirmed": true })).starts_with("Not sent yet"));
+    assert!(tool("send_message", json!({ "message": "Merge it", "confirmed": true })).contains("did not ask"), "the no took the request back");
     assert_eq!(prompts(&w, task(&id).at("link").s("pane")).len(), before);
     call::line("you", "actually yes, merge it"); call::line("voice", "Merge it now, right?"); call::line("you", "yes");
     assert!(tool("send_message", json!({ "message": "Merge it", "confirmed": true })).starts_with("Sent to"));
     let p = prompts(&w, task(&id).at("link").s("pane")).last().cloned().unwrap();
-    assert!(p.starts_with("merge it no, do not do it actually yes, merge it yes\n\n(Spoken on a voice call") && !p.contains("not a request"), "{p}");
+    assert!(p.starts_with("how is it going? merge it no, do not do it actually yes, merge it yes\n\n(Spoken on a voice call") && !p.contains("not a request"), "{p}");
     // what was said before the send is no yes for the next one
-    assert!(tool("send_message", json!({ "message": "Merge it", "confirmed": true })).contains("did not ask"));
+    assert!(tool("send_message", json!({ "message": "Merge it", "confirmed": true })).starts_with("Not sent: none of the human's words"));
     // the board's status, read-only and short
     let status = tool("board_status", json!({}));
     assert!(status.contains("working") && status.ends_with("Answer in one or two sentences."), "{status}");

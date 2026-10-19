@@ -10,8 +10,6 @@ pub const ACTIONS: [(&str, &[&str]); 4] = [
     ("stop", &["stop", "stopp", "stoppa", "stoppar", "avbryt", "avbryta", "cancel", "kill", "abort"]),
     ("delete", &["delete", "remove", "archive", "radera", "ta bort", "tar bort", "arkivera", "släng", "kasta"]),
 ];
-/// Your words, longest kept with one message (its end: the newest).
-const MOST: usize = 1500;
 /// The words of a text, lower case, one space between, one at each end: " merge hp 52 ".
 pub fn words_of(s: &str) -> String { format!(" {} ", s.to_lowercase().chars().map(|c| if c.is_alphanumeric() { c } else { ' ' }).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ")) }
 /// The actions these words name.
@@ -23,8 +21,7 @@ pub fn actions_in(s: &str) -> Vec<&'static str> {
 /// says it was spoken (and what the voice agent took it as, when that says something else).
 pub fn message(said: &str, heard: &[String]) -> String {
     let said = squash(said);
-    let all = heard.iter().map(|h| squash(h)).filter(|h| !h.is_empty()).collect::<Vec<_>>().join(" ");
-    let words = if all.chars().count() > MOST { format!("…{}", all.chars().skip(all.chars().count() - MOST).collect::<String>()) } else { all };
+    let words = heard.iter().map(|h| squash(h)).filter(|h| !h.is_empty()).collect::<Vec<_>>().join(" ");
     let note = "Answer in one or two short plain sentences first: they are read aloud on the call.";
     if words.is_empty() { return format!("{said}\n\n(Sent from a voice call. {note})"); }
     let carried = actions_in(&said);

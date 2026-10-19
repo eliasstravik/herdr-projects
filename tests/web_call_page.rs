@@ -21,9 +21,11 @@ fn the_call_runs_over_webrtc_with_the_boards_own_worklet_and_asks_the_board_for_
     assert!(CALL.contains("echoCancellation: true, noiseSuppression: true"));
     assert!(CALL.contains(r#""x-herdr-projects": "1", "x-herdr-call": k"#));
     // what was said goes to the board as it is said (not the board's own updates, which it sent)
-    assert!(CALL.contains(r#"if (!message || /^\[board\]/.test(message)) return;"#) && CALL.contains(r#"told = told.then(() => send("heard", { who: by, text: message }));"#));
-    // a tool waits until what was said before it is stored: your words are there when it sends
-    assert!(CALL.contains("      await told;\n      const res = await send(\"tool\", { name, args: args || {} });"));
+    assert!(CALL.contains(r#"if (!message || /^\[board\]/.test(message)) return;"#) && CALL.contains("tell(by, message);"));
+    // a tool waits until what was said before it is stored (tried three times): your words are there when it sends,
+    // and words that never got there keep a message from going
+    assert!(CALL.contains("for (let n = 0; n < 3; n++) { if ((await send(\"heard\", { who, text })).ok)") && CALL.contains("if (who === \"user\") lost = true;"));
+    assert!(CALL.contains("      await told;\n      if (name === \"send_message\" && lost) return \"Not sent: the human's last words did not reach the board. Ask them to say it again.\";"));
     // the ElevenLabs client is built in, and is an ES module with Conversation
     assert!(SDK.lines().nth(1).unwrap().contains("Do not edit: run the script scripts/voice-sdk.sh."));
     assert!(SDK.contains("export{") && SDK.contains("Conversation"));

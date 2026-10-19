@@ -23,14 +23,16 @@ The first call asks the browser for the microphone once. A call is private: it n
 - **It follows the chat.** Space, moving between tasks, or a tap on the chat's switch changes who the call talks to.
   You can also say it: "talk to HP-52", "the voice task", "back to the Coordinator".
 - **Your own words go along.** A message it sends starts with everything you said since the last message, word for
-  word, then one line that says it was spoken, what the voice agent made of it, and that the agent should answer in one
+  word (the last 40 things said, if a call runs that long without sending), then one line that says it was spoken, what the voice agent made of it, and that the agent should answer in one
   or two short sentences first. Where your words name an action that was not confirmed ("why did the merge fail?"),
   that line says they are no request to do it.
 - **No action you did not ask for.** Approving, merging, stopping and removing go out only when you asked for them,
   the voice agent asked you back, naming the action and the task ("Merge HP-52, right?"), and the last thing you said
   is a plain yes. The board checks this itself, from what was said on the call: a question ("what does merge mean?"),
   a no ("no, don't do it"), a yes to something else ("yes, explain it") or a yes about another task is not enough, and
-  neither is the voice agent's word that you said yes.
+  neither is the voice agent's word that you said yes. A no takes back what you asked before it, and a question that
+  offers something else ("would you like an explanation of merge?") does not count. And nothing goes out on the voice
+  agent's word alone: when none of your words since the last message reached the board, the message is not sent.
 - **Answers are read back.** When the agent the call talks to has answered and its words stood still for a moment, the
   voice agent says the gist. Code, paths and links are left out.
 - **Updates in pauses only.** A task that came to need you, became ready to approve or failed since the call began is

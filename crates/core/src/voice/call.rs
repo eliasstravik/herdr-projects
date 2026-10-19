@@ -15,9 +15,11 @@ pub const TICKET_MS: i64 = 120_000;
 /// A live call whose page has not asked the board anything for this long is over: the page went without hanging up
 /// (a phone that died, a tab that was killed). A page asks every second or two while its call is on.
 pub const STALE_MS: i64 = 60_000;
-/// The lines kept for the chat, and your own words kept until something is sent.
+/// The lines kept for the chat; your own words are kept whole until something is sent (at most this many things said,
+/// each at most this long: a call that runs on and on without sending keeps its newest).
 const LINES: usize = 40;
-const HEARD: usize = 12;
+pub const HEARD: usize = 40;
+pub const LONGEST: usize = 20_000;
 
 pub fn dir() -> PathBuf { data_dir().join("voice") }
 pub fn file() -> PathBuf { dir().join("call.json") }
@@ -98,7 +100,7 @@ pub fn end_of(id: &str, why: &str) {
 /// A line of the call, for the chat: `by` "you" (your words), "voice" (the voice agent's), "sent" (what went to the agent
 /// you talk to) or "board" (an update read to you). Your words are also kept until something is sent.
 pub fn line(by: &str, text: &str) {
-    let text: String = crate::text::clean(text).trim().chars().take(2000).collect();
+    let text: String = crate::text::clean(text).trim().chars().take(LONGEST).collect();
     if text.is_empty() { return; }
     change(|c| {
         let mut lines = c.arr("lines").to_vec();

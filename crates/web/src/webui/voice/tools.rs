@@ -24,6 +24,8 @@ pub fn run(c: &Obj, name: &str, args: &Value) -> String {
 fn send(c: &Obj, said: &str, confirmed: bool) -> String {
     if said.trim().is_empty() { return "Not sent: there was nothing to send.".into(); }
     let heard = call::heard(c);
+    // Nothing of what the human said reached the board since the last message: nothing goes on the voice agent's word.
+    if heard.is_empty() { return "Not sent: none of the human's words since the last message reached the board. Ask them to say what they want again.".into(); }
     match check(said, &call::talk(c), confirmed) { Verdict::Refuse(m) | Verdict::Ask(m) => return m, Verdict::Send => {} }
     let text = words::message(said, &heard);
     let b = board::of(c);

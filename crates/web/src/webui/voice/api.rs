@@ -13,7 +13,7 @@ use std::net::TcpStream;
 pub const KEY_HEADER: &str = "x-herdr-call";
 fn body(client: &mut TcpStream, head: &Head, rest: Vec<u8>) -> Option<Value> {
     let len: usize = head.header("content-length").and_then(|v| v.parse().ok()).unwrap_or(0);
-    if len > 64 * 1024 { return None; }
+    if len > 256 * 1024 { return None; }
     let mut b = rest;
     while b.len() < len { let mut chunk = vec![0u8; len - b.len()]; match std::io::Read::read(client, &mut chunk) { Ok(0) | Err(_) => break, Ok(n) => b.extend_from_slice(&chunk[..n]) } }
     serde_json::from_slice(if b.is_empty() { b"{}" } else { &b }).ok().filter(Value::is_object)
