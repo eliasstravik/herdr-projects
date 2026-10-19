@@ -17,7 +17,9 @@ fn the_call_runs_over_webrtc_with_the_boards_own_worklet_and_asks_the_board_for_
     assert!(CALL.contains(r#"const TOOLS = ["send_message", "switch_to", "board_status", "latest_reply", "quiet", "end_call"];"#));
     let names: Vec<String> = sw::voice::agent::tools().iter().map(|t| format!("\"{}\"", t.name)).collect();
     assert!(CALL.contains(&format!("const TOOLS = [{}];", names.join(", "))), "the page offers exactly the agent's tools");
-    assert!(CALL.contains(r#"const res = await send("tool", { name, args: args || {} });"#));
+    assert!(CALL.contains(r#"const res = await send("tool", { name, args: args || {} }, "POST", mine);"#));
+    // a tool still waiting when its call ended does nothing in the next call (it never takes the next call's key)
+    assert!(CALL.contains("const mine = out.key;") && CALL.contains("      await told;\n      if (key !== mine) return \"Not sent: this call has ended.\";"));
     // the echo cancelling of the browser, asked for; the key of the call on every call to the board
     assert!(CALL.contains("echoCancellation: true, noiseSuppression: true"));
     assert!(CALL.contains(r#""x-herdr-projects": "1", "x-herdr-call": k"#));

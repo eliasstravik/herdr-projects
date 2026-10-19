@@ -64,11 +64,15 @@ export async function start(how) {
     key = out.key;
     if (stop()) return;
     const { Conversation } = await import("./vendor/elevenlabs.js");
+    // This call's tools: each runs with this call's key only. One still waiting when the call ended does nothing in
+    // the next call.
+    const mine = out.key;
     const clientTools = Object.fromEntries(TOOLS.map((name) => [name, async (args) => {
       await told;
+      if (key !== mine) return "Not sent: this call has ended.";
       // Lost words: this message does not go, and the human is asked to say all of it again; their next words count.
       if (name === "send_message" && lost) { lost = "asked"; return "Not sent: some of the human's words did not reach the board. Ask them to say their whole request again, then send it."; }
-      const res = await send("tool", { name, args: args || {} });
+      const res = await send("tool", { name, args: args || {} }, "POST", mine);
       if (name === "end_call") setTimeout(() => end("said goodbye"), 2500);
       if (name === "switch_to" || name === "send_message") feed();
       return res.ok ? String(res.result || "") : res.msg || "The board did not answer.";
