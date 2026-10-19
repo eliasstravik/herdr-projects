@@ -46,7 +46,9 @@ fn a_message_is_the_voice_agents_own_clear_instruction_with_one_line_that_it_cam
     assert_eq!(message("[neutral] Add a  goodbye line to the greeting in src/greet.rs", "none"), "Add a goodbye line to the greeting in src/greet.rs");
     // tags lead a sentence, alone; brackets in the words themselves stay (the reviewer's case)
     assert_eq!(untagged("[hear] One thing waits. [try] [sighs] For you: HP-59. Done. [laughs]"), "One thing waits. For you: HP-59. Done.");
-    assert_eq!(untagged("[neutral] Please fix items[index] in app.py and the [voice] settings section."), "Please fix items[index] in app.py and the [voice] settings section.");
+    for kept in ["Please fix items[index] in app.py and the [voice] settings section.", "Change this TOML section: [voice] should become [calls].", "[dependencies] must stay in Cargo.toml."] {
+        assert_eq!(untagged(&format!("[neutral] {kept}")), kept);
+    }
     // the voice agent is told how to write it: self-contained, just what was asked of this agent, names kept exact
     let tool = sw::voice::agent::tools().into_iter().find(|t| t.name == "send_message").unwrap();
     let d = (tool.params)().at("properties").at("message").t("description");

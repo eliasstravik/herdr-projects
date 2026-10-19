@@ -36,7 +36,7 @@ fn plain_yes(s: &str) -> bool {
 /// May `said` go to the agent? `action`: the action the voice agent says it carries ("none", or approve, merge, stop,
 /// delete). `talk`: (who, words) since the last message, "you" for you and "voice" for the voice agent. A message with
 /// none always goes, with one line under it when its words may order one of the four (words.rs: message). A named one
-/// goes only as checked here, and holds no order of another: one action per message.
+/// goes only as checked here, and then not in the voice agent's words: the board writes it (words.rs: confirmed).
 pub fn check(said: &str, action: &str, talk: &[(String, String)], confirmed: bool) -> Verdict {
     let Some(named) = ACTIONS.iter().map(|(a, _)| *a).find(|a| *a == action) else { return Verdict::Send };
     if let Some(other) = orders_in(said).into_iter().find(|a| *a != named) {
@@ -78,4 +78,15 @@ pub fn check(said: &str, action: &str, talk: &[(String, String)], confirmed: boo
     if actions_in(yes_words).iter().any(|a| !wanted.contains(a)) { return ask; }
     if wanted.iter().any(|a| !asked_at(a).iter().any(|&i| i < q)) { return ask; }
     Verdict::Send
+}
+/// The tasks a confirmed action is for: those the message names (each was in the question you said yes to), else
+/// those the question named; as tags ("HP-52").
+pub fn confirmed_tasks(said: &str, talk: &[(String, String)]) -> Vec<String> {
+    let dash = |t: String| { let at = t.find(|c: char| c.is_ascii_digit()).unwrap_or(t.len()); format!("{}-{}", &t[..at], &t[at..]) };
+    let question = (0..talk.len()).rev().find(|&i| talk[i].0 == "you").and_then(|y| (0..y).rev().find(|&i| talk[i].0 != "you")).map(|q| talk[q].1.as_str()).unwrap_or("");
+    let own = tags_in(said);
+    let tags = if own.is_empty() { tags_in(question) } else { own };
+    let mut out: Vec<String> = vec![];
+    for t in tags.into_iter().map(dash) { if !out.contains(&t) { out.push(t); } }
+    out
 }

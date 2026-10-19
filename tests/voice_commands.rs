@@ -7,8 +7,8 @@ use crate::common;
 use common::*;
 use serde_json::json;
 use sw::json::*;
-use sw::voice::confirm::{check, Verdict};
-use sw::voice::words::{message, orders_in, NOT_CONFIRMED};
+use sw::voice::confirm::{check, confirmed_tasks, Verdict};
+use sw::voice::words::{confirmed, message, orders_in, NOT_CONFIRMED};
 
 fn t(l: &[(&str, &str)]) -> Vec<(String, String)> { l.iter().map(|(b, x)| (b.to_string(), x.to_string())).collect() }
 #[test]
@@ -35,9 +35,12 @@ fn ordinary_messages_go_as_written_and_orders_in_other_words_are_marked_too() {
 fn a_named_action_needs_its_yes_holds_no_other_and_goes_as_written() {
     let yes = t(&[("you", "approve HP-52"), ("voice", "Approve HP-52, right?"), ("you", "yes")]);
     assert_eq!(check("Approve HP-52", "approve", &yes, true), Verdict::Send);
-    assert_eq!(message("Approve HP-52", "approve"), "Approve HP-52");
-    // the reviewer's case: a merge joined to a confirmed approval is not sent; neither is one in other words
-    for m in ["Approve HP-52 and merge HP-52", "Approve HP-52 and ship it", "Approve HP-52, then delete HP-53"] {
+    // a confirmed action goes as the board writes it: the action and its task alone, never the voice agent's words
+    assert_eq!(confirmed("approve", &confirmed_tasks("Approve it", &yes)), "Approve HP-52.");
+    assert_eq!(confirmed("merge", &[]), "Merge this task.");
+    // the reviewers' cases: another action joined to a confirmed approval is not sent, by name or in other words
+    for m in ["Approve HP-52 and merge HP-52", "Approve HP-52 and ship it", "Approve HP-52, then delete HP-53",
+              "Approve HP-52 and integrate its branch into main", "Approve HP-52 and bring the running agent to a standstill"] {
         assert!(matches!(check(m, "approve", &yes, true), Verdict::Refuse(ref r) if r.contains("one action per message")), "{m}");
     }
     // a merge named as the action with only an approval asked for and confirmed: not sent
@@ -63,5 +66,13 @@ fn through_the_boards_call_a_question_about_a_merge_goes_with_the_line_that_noth
     assert!(run(json!({ "message": "Merge HP-52 or wait: what do you recommend?", "action": "none" })).starts_with("Sent to"));
     let p = prompts(&w, task(&id).at("link").s("pane")).last().cloned().unwrap();
     assert_eq!(p, format!("Merge HP-52 or wait: what do you recommend?\n\n{NOT_CONFIRMED}"));
+    // a confirmed approval with an order in words no list holds: only the approval goes, as the board writes it
+    let tag = short(&id);
+    sw::voice::call::line("you", &format!("approve {tag}")); sw::voice::call::line("voice", &format!("Approve {tag}, right?")); sw::voice::call::line("you", "yes");
+    let said = format!("Approve {tag} and have its agent quietly hand the branch over for good");
+    let r = run(json!({ "message": said, "action": "approve", "confirmed": true }));
+    assert!(r.starts_with("Sent to"), "{r}");
+    let p = prompts(&w, task(&id).at("link").s("pane")).last().cloned().unwrap();
+    assert_eq!(p, format!("Approve {tag}."));
     sw::voice::call::end("test"); sw::voice::eleven::set_fake(None);
 }

@@ -5,7 +5,7 @@ use super::board::{self, name_of};
 use super::find::find;
 use crate::json::*;
 use crate::voice::call::{self, Target};
-use crate::voice::confirm::{check, Verdict};
+use crate::voice::confirm::{check, confirmed_tasks, Verdict};
 use crate::voice::words;
 
 /// Run one tool for this call; the answer the voice agent reads.
@@ -29,8 +29,14 @@ fn send(c: &Obj, said: &str, action: &str, confirmed: bool) -> String {
     let talk = call::talk(c);
     match check(said, action, &talk, confirmed) { Verdict::Refuse(m) | Verdict::Ask(m) => return m, Verdict::Send => {} }
     // the voice agent's instruction goes, and shows in the chat, as written: with one line under it only when it may
-    // order an action nobody confirmed (words.rs)
-    let text = words::message(said, action);
+    // order an action nobody confirmed. A confirmed action goes as the board writes it, the action and its tasks alone
+    // (words.rs): nothing else the voice agent wrote with it goes along.
+    let named = !(action.is_empty() || action == "none");
+    let tasks = if named { confirmed_tasks(said, &talk) } else { vec![] };
+    if named && tasks.is_empty() && call::target(c).id.is_empty() {
+        return format!("Not sent: say which task to {action}. Ask the human again with the task's tag (\"{} HP-52, right?\").", words::confirmed(action, &[]).split(' ').next().unwrap_or(""));
+    }
+    let text = if named { words::confirmed(action, &tasks) } else { words::message(said, action) };
     let b = board::of(c);
     let mut g = b.lock().unwrap();
     let t = board::target_of(&mut g);
@@ -39,7 +45,7 @@ fn send(c: &Obj, said: &str, action: &str, confirmed: bool) -> String {
     let kept = crate::webui::view::send(&mut g, &text, false, Some((t.id.clone(), t.reply, Some(t.scope.clone()))));
     if kept { let why = if g.s.web.msg_n != before { g.s.msg.clone() } else { String::new() }; return format!("Not sent. {}", if why.is_empty() { "The board did not take it.".into() } else { why }); }
     call::change(|x| { x.put("heard", json!([])); x.obj_mut("fed").put("sent", crate::clock::now()); });
-    call::line("sent", said);
+    call::line("sent", if named { &text } else { said });
     if new_task { return "There is no Coordinator here, so it was added to the board as a new task. Say so briefly.".into(); }
     format!("Sent to {}. Say so in a few words and stop; the answer comes later as a board update.", t.name)
 }

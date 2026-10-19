@@ -26,8 +26,9 @@ The first call asks the browser for the microphone once. A call is private: it n
   instruction or question with just what you asked of that agent, in your intent and key wording, with names,
   numbers, file names and task tags kept exactly. Small talk, thinking aloud, what you said to the voice itself and
   what was meant for another agent are left out. Nothing is added to it: the agent gets, and the chat shows, that
-  instruction as if you had typed it (with one exception, below). The voice's expression tags ("[neutral]" at the
-  start of a sentence) are only in what it speaks, never in the chat or in a message.
+  instruction as if you had typed it (with one exception, below). The voice's expression tags ("[neutral]" before a
+  sentence) are only in what it speaks, never in the chat or in a message; brackets of your own text ("items[index]",
+  "[dependencies] must stay") stay.
 - **No action you did not ask for.** The voice agent says what each message asks for: approving, merging, stopping
   or removing a task, or none of those. One of those goes out only when you asked for it, the voice agent asked you
   back, naming the action and the task ("Merge HP-52, right?"), and the last thing you said is a plain yes. The board
@@ -35,8 +36,10 @@ The first call asks the browser for the microphone once. A call is private: it n
   a yes to something else ("yes, explain it") or a yes about another task is not enough, and neither is the voice
   agent's word that you said yes. A no takes back what you asked before it, and a question that offers something
   else ("would you like an explanation of merge?") does not count.
-- **One action per message.** A confirmed message holds no order of another action, also not in other words ("approve
-  HP-52 and ship it" is not sent; the voice agent sends the approval alone and asks about the merge).
+- **One action per message, in the board's words.** A confirmed action goes as the board writes it, the action and
+  its task alone ("Approve HP-52."), never in the voice agent's words: nothing else it wrote goes along. One that
+  names another action, also in other words ("approve HP-52 and ship it"), is not sent; the voice agent sends the
+  approval alone and asks about the merge.
 - **Everything else goes as asked.** The board does not try to read a sentence for what it orders (a question may
   name an action, an order may hide in many words): a message the voice agent sends with no action goes as written.
   Only when its words name or may order one of the four (merge, ship it, get rid of, kill …) does one short line

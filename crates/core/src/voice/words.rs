@@ -1,7 +1,7 @@
 //! The words a call sends: the voice agent's own clear instruction or question for the agent it talks to, written from
 //! what you asked of that agent, with the voice's expression tags taken out and nothing added but, where its words may
-//! order an action nobody confirmed, one line that says so; and the four actions that need your request and your yes,
-//! by the words that name them (confirm.rs checks them against what was said).
+//! order an action nobody confirmed, one line that says so; a confirmed action as the board writes it ("Merge HP-52.");
+//! and the four actions that need your request and your yes, by the words that name them (confirm.rs checks them).
 use crate::text::squash;
 
 /// The four actions that need your request and your yes, each by the words that name it (English and Swedish).
@@ -23,9 +23,9 @@ pub fn actions_in(s: &str) -> Vec<&'static str> {
 /// another action (confirm.rs). Generous: a word too many only adds that line.
 const ALSO_ORDERS: [(&str, &[&str]); 4] = [
     ("approve", &["lgtm", "sign off", "signed off", "finish", "finish it", "ok it", "okay it", "greenlight", "green light", "godkänd den", "klarmarkera"]),
-    ("merge", &["ship", "ship it", "land", "land it", "release", "go live", "push it", "skeppa", "släpp", "landa"]),
-    ("stop", &["halt", "terminate", "pause", "interrupt", "end it", "shut down", "pausa", "avsluta", "stäng av"]),
-    ("delete", &["erase", "wipe", "discard", "drop", "trash", "close", "get rid of", "throw away", "rensa", "stäng", "töm"]),
+    ("merge", &["ship", "ship it", "land", "land it", "release", "go live", "push it", "integrate", "combine", "fold", "into main", "to main", "skeppa", "släpp", "landa", "integrera"]),
+    ("stop", &["halt", "terminate", "pause", "interrupt", "end it", "shut down", "standstill", "freeze", "suspend", "pausa", "avsluta", "stäng av", "frys"]),
+    ("delete", &["erase", "wipe", "discard", "drop", "trash", "close", "get rid of", "throw away", "destroy", "purge", "rensa", "stäng", "töm", "förstör"]),
 ];
 /// The actions these words name or may order, by the four's own words and the others (ship it, get rid of it).
 pub fn orders_in(s: &str) -> Vec<&'static str> {
@@ -48,15 +48,27 @@ pub fn message(said: &str, action: &str) -> String {
     let none = action.is_empty() || action == "none";
     if none && !orders_in(&text).is_empty() { format!("{text}\n\n{NOT_CONFIRMED}") } else { text }
 }
+/// A confirmed action as the board writes it, the action and its tasks alone ("Merge HP-52."), never the voice agent's
+/// words: whatever else they held (another action, in any words) is not confirmed and does not go with it. With no
+/// task named (`tasks` empty), it is for the task whose agent the call talks to.
+pub fn confirmed(action: &str, tasks: &[String]) -> String {
+    let verb = ACTIONS.iter().find(|(a, _)| *a == action).map(|(a, _)| { let mut c = a.chars(); c.next().map(|f| f.to_uppercase().chain(c).collect::<String>()).unwrap_or_default() }).unwrap_or_default();
+    if tasks.is_empty() { format!("{verb} this task.") } else { format!("{verb} {}.", tasks.join(" and ")) }
+}
 /// Words without the voice's expression tags ("[neutral]", "[laughs softly]"): they are for how it speaks, never shown
-/// or sent. A tag is a short run of lower-case words in square brackets at the start of a sentence, alone (so
-/// "items[index]" and "the [voice] settings" stay as they are).
+/// or sent. Tags are short lower-case words in square brackets that start a sentence; the last of them is one only
+/// when a sentence of its own (a capital letter) or nothing follows: "[neutral] One thing waits." So "items[index]",
+/// "the [voice] settings", "section: [voice] should become [calls]" and "[dependencies] must stay" stay as they are.
 pub fn untagged(s: &str) -> String {
-    let tag = crate::re!(r"^\s*\[\p{Ll}[\p{Ll} -]{0,39}\](?:\s+|$)");
-    let end = crate::re!(r"[.!?…:]\s+");
+    let tag = crate::re!(r"^\s*\[\p{Ll}[\p{Ll} -]{0,39}\]\s*");
+    let end = crate::re!(r"[.!?…]\s+");
     let (mut out, mut rest) = (String::new(), s);
     loop {
-        while let Some(m) = tag.find(rest) { rest = &rest[m.end()..]; }
+        // a tag before text of your own in brackets ("[neutral] [dependencies] must"): only that text stays
+        while let Some(m) = tag.find(rest) {
+            let after = &rest[m.end()..];
+            if after.is_empty() || after.starts_with('[') || after.chars().next().is_some_and(char::is_uppercase) { rest = after; } else { break; }
+        }
         match end.find(rest) { Some(m) => { out.push_str(&rest[..m.end()]); rest = &rest[m.end()..]; } None => { out.push_str(rest); break; } }
     }
     squash(&out)

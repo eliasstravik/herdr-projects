@@ -88,7 +88,7 @@ fn the_voice_agents_message_goes_to_whoever_the_chat_talks_to_with_your_words_fi
     call::line("you", "actually yes, merge it"); call::line("voice", "Merge it now, right?"); call::line("you", "yes");
     assert!(tool("send_message", json!({ "message": "Merge it", "action": "merge", "confirmed": true })).starts_with("Sent to"));
     let p = prompts(&w, task(&id).at("link").s("pane")).last().cloned().unwrap();
-    assert_eq!(p, "Merge it", "the transcript is checked, never pasted in, and nothing is added");
+    assert_eq!(p, "Merge this task.", "a confirmed action goes as the board writes it: the transcript is checked, never pasted in");
     // what was said before the send is no yes for the next one
     assert!(tool("send_message", json!({ "message": "Merge it", "action": "merge", "confirmed": true })).starts_with("Not sent: none of the human's words"));
     // the board's status, read-only and short
