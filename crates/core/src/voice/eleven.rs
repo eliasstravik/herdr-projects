@@ -3,6 +3,7 @@
 //! all a page ever gets. The key goes to `curl` on its standard input, never on a command line. A test answers in
 //! the test's own thread instead (`set_fake`).
 use super::agent::{self, Made};
+use super::builtin;
 use crate::json::*;
 use crate::store::files::{read_obj, write_json};
 use std::cell::RefCell;
@@ -70,7 +71,9 @@ fn make_agent(key: &str) -> Result<String, String> {
     // Everything the agent is made of, its whole configuration too.
     let stamp = sha1_smol::Sha1::from(format!("{}{}", agent::stamp(&m), agent_body(&m, &[]))).digest().to_string();
     let was = read_obj(&state_file()).unwrap_or_default();
-    if was.s("stamp") == stamp && !was.s("agent").is_empty() { return Ok(was.t("agent")); }
+    // speaking with Will in Warren's place (builtin.rs), Warren is tried again a day later
+    let retry = was.s("voice") == builtin::OLD && crate::clock::now() - was.i("at") >= builtin::RETRY_MS;
+    if was.s("stamp") == stamp && !was.s("agent").is_empty() && !retry { return Ok(was.t("agent")); }
     let mut ids: Vec<String> = vec![];
     let mut kept = obj(json!({}));
     for t in agent::tools() {
@@ -80,18 +83,29 @@ fn make_agent(key: &str) -> Result<String, String> {
         kept.put(t.name, id.clone());
         ids.push(id);
     }
-    let body = agent_body(&m, &ids);
     let old = was.t("agent");
-    // The agent made before is updated; one ElevenLabs no longer has is made again. Any other refusal is said.
-    let patched = if old.is_empty() { None } else { Some(request(key, "PATCH", &format!("/v1/convai/agents/{old}"), &body)) };
-    let agent = match patched {
-        Some(Ok(_)) => old,
-        Some(Err(e)) if !e.contains(" 404 ") => return Err(refused(&e, &m)),
-        _ => request(key, "POST", "/v1/convai/agents/create", &body).map_err(|e| refused(&e, &m))?.t("agent_id"),
-    };
+    let mut voice = m.voice.clone();
+    let mut agent = put_agent(key, &old, &agent_body(&m, &ids));
+    // The built-in voice not in the account: added to it, or else Will while the account has it (builtin.rs).
+    if m.voice == agent::VOICE && agent.as_ref().is_err_and(|e| builtin::not_found(e)) {
+        let added = builtin::add(key);
+        if added.is_err() { voice = builtin::OLD.into(); }
+        agent = put_agent(key, &old, &agent_body(&Made { voice: voice.clone(), ..m.clone() }, &ids));
+        if let (Err(e), Err(why)) = (&agent, &added) { if builtin::not_found(e) { return Err(builtin::missing(why)); } }
+    }
+    let agent = agent.map_err(|e| refused(&e, &m))?;
     if agent.is_empty() { return Err("ElevenLabs made the agent but gave no id for it".into()); }
-    let _ = write_json(&state_file(), &json!({ "stamp": stamp, "agent": agent, "tools": kept }));
+    let _ = write_json(&state_file(), &json!({ "stamp": stamp, "agent": agent, "tools": kept, "voice": voice, "at": crate::clock::now() }));
     Ok(agent)
+}
+/// The agent made before, updated; one ElevenLabs no longer has, made again. Answers its id, or ElevenLabs' refusal.
+fn put_agent(key: &str, old: &str, body: &Value) -> Result<String, String> {
+    let patched = if old.is_empty() { None } else { Some(request(key, "PATCH", &format!("/v1/convai/agents/{old}"), body)) };
+    match patched {
+        Some(Ok(_)) => Ok(old.into()),
+        Some(Err(e)) if !e.contains(" 404 ") || builtin::not_found(&e) => Err(e),
+        _ => request(key, "POST", "/v1/convai/agents/create", body).map(|v| v.t("agent_id")),
+    }
 }
 /// ElevenLabs' refusal in plain words: a voice agents may not use (one with live moderation, one not in your account)
 /// says which, and how to pick another.

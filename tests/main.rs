@@ -238,6 +238,7 @@ mod theme_paint;
 mod titles;
 mod turns;
 mod voice;
+mod voice_builtin;
 mod voice_commands;
 mod voice_key;
 mod voice_native;

@@ -95,11 +95,19 @@ no window.
 
 - **The ElevenLabs API key** stays on the machine the board runs on. Make one at ElevenLabs, Developers, API Keys
   (https://elevenlabs.io/app/developers/api-keys), with the **ElevenAgents** permission set to **Write**: it makes the
-  voice agent and its tools, and starts each call. Then put it in one of two places, looked in this order:
+  voice agent and its tools, and starts each call. Give it the **Voices** permission set to **Write** as well, so the
+  call's voice can be added to your account (below). Then put it in one of two places, looked in this order:
   - the `ELEVENLABS_API_KEY` environment variable, where herdr-projects runs;
   - `~/.herdr-projects/settings/elevenlabs.json`, as `{"api_key": "…"}` (readable by you alone: `chmod 600`).
 
-  A call without a key says this, and so does `herdr-projects voice`. Nothing else is set up by hand: the voice agent,
+  A call without a key says this, and so does `herdr-projects voice`.
+- **The voice** is Warren ("Effortless and Cool", `7QN34D2r3hCNwbOYIeK0`) from ElevenLabs' Voice Library, the voice
+  ElevenLabs names in place of its default voice Will, which it retires at the end of 2026 (and which accounts made
+  since March 2026 never had). An agent can speak only with a voice in your account, so the first call adds Warren to
+  your voices, which takes the Voices permission. A key without it speaks with Will, in an account made before March
+  2026, and tries Warren again a day later; in an account with neither, the call says how to add Warren by hand (Voice
+  Library, add to My Voices) or how to pick a voice of your own (`voice.voice`). ElevenLabs may not let a free plan's
+  API use Voice Library voices: pick one of your own voices then. Nothing else is set up by hand: the voice agent,
   its prompt and its tools are made in your ElevenLabs account before the first call and kept in step with this
   program after that.
 - **The terminal board's calls** need herdr-projects on the computer you sit at (its call helper), and SSH from there
@@ -111,7 +119,7 @@ no window.
 |---|---|
 | `voice.language` | `auto`: it starts in English and follows you into any language ElevenLabs' agents speak; or one of their language codes (`en`, `de`, `es`, `fr`, `ja`, `pt-br` …) for that one only, where the voice waits for you to speak first |
 | `voice.llm` | the voice agent's language model at ElevenLabs, or `none` for the built-in one, DeepSeek V4.1 Flash (`deepseek-v41-flash`); speech stays `eleven_v4_turbo` |
-| `voice.voice` | an ElevenLabs voice id that agents can use (not one with live moderation), or `none` for the built-in one, Will (`bIHbv24MWmeRgasZH58o`), a premade voice every ElevenLabs account has. A voice ElevenLabs refuses is said in the call, with how to pick another |
+| `voice.voice` | an ElevenLabs voice id that agents can use (not one with live moderation), or `none` for the built-in one, Warren ([above](#setting-it-up)). A voice ElevenLabs refuses is said in the call, with how to pick another |
 | `voice.helper` | `auto`: the call helper runs on a computer with saved machines; `none`: never |
 
 ## How it fits together

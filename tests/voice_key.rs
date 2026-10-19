@@ -39,7 +39,7 @@ fn the_key_is_found_in_the_environment_then_the_settings_file_and_never_said() {
 fn with_no_key_a_call_says_where_to_make_one_its_permission_and_the_two_places_it_can_go() {
     let _w = world();
     let said = sw::voice::key::missing();
-    assert_eq!(said, format!("No ElevenLabs API key on this machine. Make one at https://elevenlabs.io/app/developers/api-keys (Developers, API Keys) with the ElevenAgents permission set to Write, then put it in {} as {{\"api_key\": \"…\"}}, or set ELEVENLABS_API_KEY in the environment herdr-projects runs in, and call again.", sw::store::marks::tilde(&sw::voice::key::own_file().display().to_string())));
+    assert_eq!(said, format!("No ElevenLabs API key on this machine. Make one at https://elevenlabs.io/app/developers/api-keys (Developers, API Keys) with the ElevenAgents permission set to Write (and Voices set to Write, so the call's built-in voice can be added to your account), then put it in {} as {{\"api_key\": \"…\"}}, or set ELEVENLABS_API_KEY in the environment herdr-projects runs in, and call again.", sw::store::marks::tilde(&sw::voice::key::own_file().display().to_string())));
     assert!(said.contains("settings/elevenlabs.json"));
     // `herdr-projects voice` says it too, and a call from either board refuses with it
     let (v, out) = sw::calls::command::main(&[]);

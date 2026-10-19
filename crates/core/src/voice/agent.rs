@@ -10,9 +10,10 @@ pub const NAME: &str = "herdr-projects voice";
 pub const LLM: &str = "deepseek-v41-flash";
 /// A quick model that speaks every language below.
 pub const TTS_MODEL: &str = "eleven_v4_turbo";
-/// Will, one of ElevenLabs' premade voices, in every account: agents may use it (one with live moderation may not),
-/// and it speaks the languages below with the model above. `voice.voice` puts another in its place.
-pub const VOICE: &str = "bIHbv24MWmeRgasZH58o";
+/// The built-in voice: Warren, from ElevenLabs' Voice Library, the one it names in place of its retired default voice
+/// Will. Agents may use it (one with live moderation may not), once it is in your account: builtin.rs adds it. It
+/// speaks the languages below with the model above. `voice.voice` puts another in its place.
+pub const VOICE: &str = "7QN34D2r3hCNwbOYIeK0";
 /// The languages ElevenLabs' agents speak, by its codes: English first, the one `auto` starts in.
 pub const LANGUAGES: [&str; 33] = ["en", "ar", "bg", "zh", "hr", "cs", "da", "nl", "fil", "fi", "fr", "de", "el", "hi", "hu", "id", "it", "ja", "ko", "ms", "no", "pl", "pt", "pt-br", "ro", "ru", "sk", "es", "sv", "ta", "tr", "uk", "vi"];
 /// A call with nobody saying anything for this long hangs up by itself; none is longer than this.

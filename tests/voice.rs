@@ -194,7 +194,7 @@ fn the_agent_is_made_once_and_updated_only_when_it_changed() {
     assert_eq!(n, log.borrow().len(), "the logging fake was swapped out");
     // other refusals are said as they came; the built-in voice is one agents may use
     assert_eq!(sw::voice::eleven::refused("ElevenLabs answered 500 to POST /x: oops", &sw::voice::agent::made()), "ElevenLabs answered 500 to POST /x: oops");
-    assert_eq!(sw::voice::agent::VOICE, "bIHbv24MWmeRgasZH58o");
+    assert_eq!(sw::voice::agent::VOICE, "7QN34D2r3hCNwbOYIeK0");
     let log = fake_eleven();
     std::fs::write(sw::store::files::config_dir().join("config.json"), json!({ "voice.language": "de", "coordinator.agent": "none", "watcher.agent": "none" }).to_string()).unwrap();
     // a token for one call

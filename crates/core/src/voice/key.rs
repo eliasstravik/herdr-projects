@@ -20,5 +20,5 @@ pub fn find() -> Option<Key> {
 }
 /// What to do when there is no key: where to make one, the permission it needs, and the two places it can go.
 pub fn missing() -> String {
-    format!("No ElevenLabs API key on this machine. Make one at {MAKE_AT} (Developers, API Keys) with the ElevenAgents permission set to Write, then put it in {} as {{\"api_key\": \"…\"}}, or set ELEVENLABS_API_KEY in the environment herdr-projects runs in, and call again.", tilde(&own_file().display().to_string()))
+    format!("No ElevenLabs API key on this machine. Make one at {MAKE_AT} (Developers, API Keys) with the ElevenAgents permission set to Write (and Voices set to Write, so the call's built-in voice can be added to your account), then put it in {} as {{\"api_key\": \"…\"}}, or set ELEVENLABS_API_KEY in the environment herdr-projects runs in, and call again.", tilde(&own_file().display().to_string()))
 }
