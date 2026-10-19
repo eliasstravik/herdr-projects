@@ -16,6 +16,8 @@ The Coordinator stays as it is. The others sit beside it: talking to one never t
   coordinator in the chat.
 - **A repo's heading** shows when the tasks are grouped by repo (`Alt+S`). `Space` on it opens that repo's coordinator.
   The home folder's tasks have one too.
+- **A repo with no tasks in view keeps its heading**, folded (`0 tasks`), when it was used in the last 14 days (a task,
+  archived ones too) or has a project coordinator, so `Space` still reaches it. Older repos, and repos whose folder is gone, have none.
 - The chat names it (`herdr-projects coordinator  idle`), and so does the box: `Send message to herdr-projects
   coordinator`. `Enter` sends, `Tab` sends and starts an agent on every task it adds, as with the Coordinator.
 - **It follows the selection**, as a task's agent does: move to another heading and you talk to that one's

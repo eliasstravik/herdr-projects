@@ -31,6 +31,8 @@ pub struct Data {
     /// "project:<repo>"), how it stands, and its screen (update/coords.rs).
     pub sub: Option<(String, Look, String)>,
     pub keys: Keys, pub repos: Vec<String>, pub roots: BTreeMap<String, String>, pub session: String, pub notify: String,
+    /// The known repos that keep their heading by repo with no task in view (`used_lately`).
+    pub lately: Vec<String>,
     /// The repo the board is in (where it was opened, or where a draft was typed), its folder, and the tasks' file.
     pub repo: String, pub repo_root: String,
     /// This machine's name, for its heading on the board of every machine.
@@ -66,8 +68,10 @@ pub fn load(wants: &Wants) -> Data {
     let socket = current_socket();
     let mut items: Vec<Obj> = board(true).iter().map(as_row).collect();
     for r in items.iter_mut() { if wants.ids.iter().any(|w| w == r.s("id")) { let s = snap(r); r.put("snap", s); } }
-    let items = items.into_iter().map(std::sync::Arc::new).collect();
     let now = crate::clock::now();
+    let roots: BTreeMap<String, String> = known_repos().iter().map(|(k, v)| (k.clone(), text(v))).collect();
+    let lately = used_lately(&items, &roots, &socket, now);
+    let items = items.into_iter().map(std::sync::Arc::new).collect();
     let autos: Vec<Obj> = automations().into_iter().map(|a| shown_auto(a, now)).collect();
     let jobs: Vec<Obj> = dispatches();
     // A finished instruction is forgotten without a word: its row goes, and what it did is on the board.
@@ -77,14 +81,27 @@ pub fn load(wants: &Wants) -> Data {
     let coord_screen = if !coord.readable && coord.status.is_some() { screen_text(&screen(&coord, &socket)) } else { String::new() };
     let sub = (!wants.coord.is_empty()).then(|| { let co = crate::coordinator::co::Co::of(&socket, &wants.coord); let v = look(&co); let sc = if !v.readable && v.status.is_some() { screen_text(&screen(&v, &co)) } else { String::new() }; (wants.coord.clone(), v, sc) });
     let here = repo_here(&wants.cwd);
-    let roots: BTreeMap<String, String> = known_repos().iter().map(|(k, v)| (k.clone(), text(v))).collect();
     Data {
-        items, autos, jobs, coord, coord_screen, sub, can_dispatch: crate::coordinator::who::ready(&socket), keys: repo_keys(), repos: roots.keys().cloned().collect(), roots,
+        items, autos, jobs, coord, coord_screen, sub, can_dispatch: crate::coordinator::who::ready(&socket), keys: repo_keys(), repos: roots.keys().cloned().collect(), roots, lately,
         session: session_name(&socket), notify: setting("board.notify", None).as_str().unwrap_or("").to_string(),
         repo: here.0, repo_root: here.1, host: crate::remote::check::hostname(),
         // herdr's approve action and a line left by the board key are for a board in a terminal, never the web board.
         approve: if wants.web { String::new() } else { crate::actions::finish_line::take_approve(&socket, &wants.own_pane) }, heard: if wants.web { None } else { crate::board::run::say::heard(&wants.own_pane, &socket) }, call: crate::voice::call::get(), call_ended: crate::voice::call::last().filter(|c| c.s("state") == "ended").map(|c| (c.t("id"), c.t("why"))), loaded: true, seq,
     }
+}
+/// How long a repo with no task in view keeps its heading by repo after its last use.
+pub const LATELY_DAYS: i64 = 14;
+/// The known repos of this machine whose heading by repo shows even with no task in view, so that space there still
+/// talks to its project coordinator: those whose folder is still there, and that have a project coordinator (running
+/// or saved), or a task (archived ones too) that changed in the last `LATELY_DAYS`. The many old ones a machine
+/// collects stay off the list.
+pub fn used_lately(items: &[Obj], roots: &BTreeMap<String, String>, socket: &str, now: i64) -> Vec<String> {
+    let since = now - LATELY_DAYS * 24 * 3600 * 1000;
+    let coordinated: Vec<String> = crate::coordinator::state::all(socket).iter().filter_map(|c| c.repo().map(String::from)).collect();
+    let used = |t: &Obj| ["at", "since", "created", "archivedAt"].iter().map(|k| t.i(k)).max().unwrap_or(0) >= since;
+    roots.iter().filter(|(name, folder)| std::path::Path::new(folder.as_str()).is_dir()
+        && (coordinated.contains(name) || items.iter().any(|t| t.s("id").split('/').next() == Some(name.as_str()) && used(t))))
+        .map(|(name, _)| name.clone()).collect()
 }
 /// An automation with what its row and its panel show, read here: its firings, newest first, its own settings, every
 /// work setting its next task will have, whether its tasks are research only.

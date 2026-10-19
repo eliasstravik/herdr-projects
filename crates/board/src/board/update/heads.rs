@@ -3,7 +3,7 @@
 //! on one folds it to its one line, which says how many tasks (and automations) it holds, and enter again unfolds it;
 //! what is folded is kept with the board's view (run/prefs.rs), so it stays folded while the list refreshes and after
 //! the board closes. With every machine shown, a machine with nothing in view has its heading too, folded (`0 tasks`):
-//! space there still talks to its machine coordinator.
+//! space there still talks to its machine coordinator. By repo, so has a repo used lately with no task in view.
 use super::list::{filter_now, relist, AUTOMATIONS};
 use super::Effect;
 use crate::board::state::{Rec, Row, State};
@@ -28,6 +28,10 @@ pub fn label(s: &State, host: &str) -> String {
 pub fn folded(s: &State, id: &str) -> bool { filter_now(s).is_empty() && s.folded.contains(id) }
 /// Whether a machine with nothing in view has its heading: not while a filter or the archive narrows the list.
 pub fn empty_shown(s: &State) -> bool { filter_now(s).is_empty() && !s.archive_view }
+/// Whether the repo `name` of the machine `host` has its heading with nothing in view: by repo, on this machine, for a
+/// repo used lately (data.rs: used_lately), and not while a filter or the archive narrows the list. It shows folded
+/// (`0 tasks`), so that its project coordinator is still a space away.
+pub fn empty_repo(s: &State, host: &str, name: &str) -> bool { s.by_repo && host.is_empty() && empty_shown(s) && s.data.lately.iter().any(|r| r == name) }
 /// One machine's part of the list: its groups, and whether it has a heading of its own (only with every machine shown).
 pub struct Part { pub host: String, pub heading: bool, pub groups: Vec<(String, Vec<Rec>)> }
 /// The groups, machine by machine in the order of herdr's sidebar (remotes.rs: place), this machine where it stands
@@ -67,8 +71,10 @@ pub fn says(s: &State) -> Option<String> {
 }
 /// Fold the heading `id`, or unfold it. The selection stays on it.
 pub fn toggle(s: &mut State, id: &str, fx: &mut Vec<Effect>) {
-    if let Some(Row::Head { name, empty: true, .. }) = s.rows.iter().find(|r| matches!(r, Row::Head { id: h, .. } if h == id)) {
-        let say = format!("No tasks on {name} yet. {} talks to its machine coordinator, which adds them there.", crate::board::keys::key_name("talk"));
+    if let Some(Row::Head { name, machine, empty: true, .. }) = s.rows.iter().find(|r| matches!(r, Row::Head { id: h, .. } if h == id)) {
+        let talk = crate::board::keys::key_name("talk");
+        let say = if *machine { format!("No tasks on {name} yet. {talk} talks to its machine coordinator, which adds them there.") }
+            else { format!("No tasks in {} yet. {talk} talks to its project coordinator, which adds them there.", crate::shown::words::repo_label(name)) };
         s.sel = id.to_string();
         return s.flash(say, Ink::Muted);
     }
