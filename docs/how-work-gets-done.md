@@ -90,6 +90,11 @@ When the agent's turn ends, the board:
 1. **Commits** anything left over, **brings the branch up to date with main** in the task's own worktree
    ([below](#staying-current-with-main)), and **runs the repo's `check`**. A failure goes straight back to the agent,
    three tries.
+   - Another Git process holding the worktree's index (`index.lock`: a repo gate's `git status`, an editor) is waited
+     out: a few tries over about four seconds, and nothing left to commit by then is no failure. A lock that stays
+     fails the commit, naming the lock file.
+   - A new round starts clean: the failure of the round before (a failed commit, a reviewer out of credits) is cleared
+     as soon as the check starts, so the row and the details never show it while the work is checked and reviewed.
 2. **Pushes the branch and opens a draft pull request**, when there is an `origin` remote and `gh`.
    - A pull request the agent already opened for the task's branch is taken on instead, and goes through the review and
      the merge as usual.

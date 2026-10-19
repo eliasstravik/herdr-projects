@@ -135,6 +135,7 @@ mod fallback_more;
 mod fallback_rest;
 mod fallback_settings;
 mod fast;
+mod finish_commit;
 mod finish_missed;
 mod first_run;
 mod flow;
