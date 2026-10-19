@@ -1,5 +1,5 @@
 //! ElevenLabs, from this machine: the agent made to match agent.rs (its tools first, then the agent, each made once and
-//! updated in place when the stamp changed, as herdr-call does it), and a short-lived token for one call, which is
+//! updated in place when the stamp changed), and a short-lived token for one call, which is
 //! all a page ever gets. The key goes to `curl` on its standard input, never on a command line. A test answers in
 //! the test's own thread instead (`set_fake`).
 use super::agent::{self, Made};
@@ -38,11 +38,12 @@ pub fn request(key: &str, method: &str, path: &str, body: &Value) -> Result<Valu
 fn tool_body(t: &agent::Tool) -> Value {
     json!({ "tool_config": { "type": "client", "name": t.name, "description": t.description, "parameters": (t.params)(), "expects_response": true, "response_timeout_secs": 20 } })
 }
-/// The agent's whole configuration. With language `auto` it starts in English and follows you into Swedish.
+/// The agent's whole configuration. With language `auto` it starts in English and follows you into any of the
+/// languages ElevenLabs' agents speak.
 pub fn agent_body(m: &Made, tool_ids: &[String]) -> Value {
     let lang = if m.language == "auto" { "en" } else { m.language.as_str() };
     let mut presets = json!({});
-    if m.language == "auto" { presets = json!({ "sv": { "overrides": { "agent": { "language": "sv", "first_message": agent::first_message("sv") } } } }); }
+    if m.language == "auto" { presets = Value::Object(agent::LANGUAGES.iter().filter(|l| **l != "en").map(|l| (l.to_string(), json!({ "overrides": { "agent": { "language": l } } }))).collect()); }
     json!({
         "name": agent::NAME, "tags": ["herdr-projects"],
         "conversation_config": {
@@ -51,7 +52,7 @@ pub fn agent_body(m: &Made, tool_ids: &[String]) -> Value {
                     "built_in_tools": if m.language == "auto" { json!({ "language_detection": { "type": "system", "name": "language_detection", "description": "", "params": { "system_tool_type": "language_detection", "only_at_conversation_start": false } } }) } else { json!({}) } } },
             "language_presets": presets,
             "tts": { "voice_id": m.voice, "model_id": agent::TTS_MODEL, "agent_output_audio_format": "pcm_16000" },
-            "asr": { "keywords": ["Coordinator", "herdr", "merge", "approve", "godkänn"], "user_input_audio_format": "pcm_16000" },
+            "asr": { "keywords": ["Coordinator", "herdr", "merge", "approve"], "user_input_audio_format": "pcm_16000" },
             "turn": { "turn_eagerness": "patient", "turn_timeout": 10, "silence_end_call_timeout": agent::SILENCE_S },
             "conversation": { "max_duration_seconds": agent::LONGEST_S, "client_events": ["conversation_initiation_metadata", "ping", "audio", "interruption", "user_transcript", "agent_response", "agent_response_correction", "client_tool_call", "vad_score"] },
         },
@@ -103,7 +104,7 @@ pub fn refused(e: &str, m: &Made) -> String {
     if !(low.contains("voice") && (low.contains(" 400 ") || low.contains(" 403 ") || low.contains(" 404 ") || low.contains(" 422 "))) { return e.into(); }
     let why = if low.contains("moderat") { "it has live moderation, which agents may not use" } else if low.contains("not_found") || low.contains("not found") || low.contains(" 404 ") { "it is not in your ElevenLabs account" } else { "agents may not use it" };
     let ours = if m.voice == agent::VOICE { "the built-in one" } else { "the one voice.voice names" };
-    format!("ElevenLabs refused the voice {} ({ours}) for the call's agent: {why}. Pick another: herdr-projects set voice.voice <voice id> (one from your ElevenLabs account, Voices, that agents can use and that speaks Swedish), or herdr-projects set voice.voice none for the built-in one. ElevenLabs said: {}", m.voice, crate::text::cut(e, 300))
+    format!("ElevenLabs refused the voice {} ({ours}) for the call's agent: {why}. Pick another: herdr-projects set voice.voice <voice id> (one from your ElevenLabs account, Voices, that agents can use and that speaks your call's language), or herdr-projects set voice.voice none for the built-in one. ElevenLabs said: {}", m.voice, crate::text::cut(e, 300))
 }
 /// A signed address for one call over ElevenLabs' WebSocket (the terminal board's call, which the helper on your
 /// computer holds): good for a quarter of an hour to start with, and all the helper gets.

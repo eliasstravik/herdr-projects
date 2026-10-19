@@ -43,7 +43,7 @@ const say = (by, text) => set({ lines: [...st.lines, { by, text: by === "voice" 
 
 async function send(what, body, method = "POST", k = key) {
   try {
-    const r = await fetch(`${API}/${what}`, { method, credentials: "same-origin", cache: "no-store", keepalive: what === "end", headers: { "content-type": "application/json", "x-herdr-projects": "1", "x-herdr-call": k }, body: method === "POST" ? JSON.stringify(body || {}) : undefined });
+    const r = await fetch(`${API}/${what}`, { method, credentials: "same-origin", cache: "no-store", keepalive: what === "end", headers: { "content-type": "application/json", "x-herdr-projects": "1", "x-herdr-projects-call": k }, body: method === "POST" ? JSON.stringify(body || {}) : undefined });
     const j = await r.json().catch(() => ({}));
     return { ...j, ok: r.ok && j.ok !== false, status: r.status };
   } catch { return { ok: false, status: 0, msg: "No connection." }; }

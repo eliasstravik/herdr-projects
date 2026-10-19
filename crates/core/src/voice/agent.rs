@@ -8,11 +8,13 @@ pub const NAME: &str = "herdr-projects voice";
 /// A small, quick model: it only talks and relays; the agents on the board do the thinking. ElevenLabs' id for
 /// DeepSeek V4.1 Flash (in its API's list of agent models); `voice.llm` puts another in its place.
 pub const LLM: &str = "deepseek-v41-flash";
-/// A model that speaks Swedish and English (reachy-voice's, heard in Swedish).
+/// A quick model that speaks every language below.
 pub const TTS_MODEL: &str = "eleven_v4_turbo";
-/// One of ElevenLabs' own voices that agents may use (one with live moderation may not), speaking Swedish and English
-/// with the model above: reachy-voice's agent speaks with it. `voice.voice` puts another in its place.
+/// Will, one of ElevenLabs' premade voices, in every account: agents may use it (one with live moderation may not),
+/// and it speaks the languages below with the model above. `voice.voice` puts another in its place.
 pub const VOICE: &str = "bIHbv24MWmeRgasZH58o";
+/// The languages ElevenLabs' agents speak, by its codes: English first, the one `auto` starts in.
+pub const LANGUAGES: [&str; 33] = ["en", "ar", "bg", "zh", "hr", "cs", "da", "nl", "fil", "fi", "fr", "de", "el", "hi", "hu", "id", "it", "ja", "ko", "ms", "no", "pl", "pt", "pt-br", "ro", "ru", "sk", "es", "sv", "ta", "tr", "uk", "vi"];
 /// A call with nobody saying anything for this long hangs up by itself; none is longer than this.
 pub const SILENCE_S: i64 = 120;
 pub const LONGEST_S: i64 = 3600;
@@ -34,18 +36,19 @@ pub fn tools() -> Vec<Tool> {
         Tool { name: "end_call", description: "Hang up, after a short goodbye.", params: || json!({ "type": "object", "properties": {} }) },
     ]
 }
-/// The settings a call is made with: the language (`auto`, `sv` or `en`), the voice and the model.
+/// The settings a call is made with: the language (`auto`, or one of `LANGUAGES`), the voice and the model.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Made { pub language: String, pub voice: String, pub llm: String }
 pub fn made() -> Made {
     let get = |n: &str| crate::store::settings::lookup::setting_text(n, None);
-    let language = match get("voice.language").as_str() { "sv" => "sv", "en" => "en", _ => "auto" }.to_string();
+    let language = get("voice.language");
+    let language = if LANGUAGES.contains(&language.as_str()) { language } else { "auto".into() };
     let voice = get("voice.voice");
     let llm = get("voice.llm");
     Made { language, voice: if voice.is_empty() || voice == "none" { VOICE.into() } else { voice }, llm: if llm.is_empty() || llm == "none" { LLM.into() } else { llm } }
 }
-/// The first thing said on a call, in its language.
-pub fn first_message(language: &str) -> &'static str { if language == "sv" { "Hej, jag lyssnar." } else { "Hi, I'm listening." } }
+/// The first thing said on a call: in English, or nothing in another language (the voice waits for you to speak).
+pub fn first_message(language: &str) -> &'static str { if language == "en" || language == "auto" { "Hi, I'm listening." } else { "" } }
 /// What the agent is made from: when this changes, the agent is updated before the next call.
 pub fn stamp(m: &Made) -> String {
     let tools: Vec<Value> = tools().iter().map(|t| json!([t.name, t.description, (t.params)()])).collect();

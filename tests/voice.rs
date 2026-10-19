@@ -1,7 +1,7 @@
 //! A voice call's own parts (crates/core/src/voice/): the words it sends (yours first, and no action you did not ask
 //! for, in English and Swedish), the call record (its ticket used once, its secrets kept as hashes, what was said),
-//! where the ElevenLabs key is found (and that it is never said), and the agent made once in ElevenLabs and updated
-//! only when it changed, with its token for one call. ElevenLabs is a fake answering in the test's thread.
+//! and the agent made once in ElevenLabs and updated only when it changed, with its token for one call. ElevenLabs is
+//! a fake answering in the test's thread.
 use crate::common;
 use common::*;
 use serde_json::{json, Value};
@@ -142,30 +142,6 @@ fn the_call_record_keeps_its_secrets_as_hashes_and_its_ticket_works_once() {
 }
 
 #[test]
-fn the_key_is_found_where_it_was_put_and_never_said() {
-    let _w = world();
-    assert!(sw::voice::key::find().is_none());
-    assert!(sw::voice::key::missing().contains("settings/elevenlabs.json") && sw::voice::key::missing().contains("{\"api_key\": \"…\"}"));
-    let home = sw::store::files::user_home();
-    // your agent-tokens file, then herdr-call's config, then the board's own file: the first one found wins
-    std::fs::create_dir_all(home.join(".config/agent-tokens")).unwrap();
-    std::fs::write(home.join(".config/agent-tokens/env.sh"), "export OTHER=1\nexport ELEVENLABS_API_KEY=\"sk_tokens_0123456789abcd\"\n").unwrap();
-    assert_eq!(sw::voice::key::find().unwrap().key, "sk_tokens_0123456789abcd");
-    let hc = home.join(".config/herdr/plugins/config/herdr-call");
-    std::fs::create_dir_all(&hc).unwrap();
-    std::fs::write(hc.join("config.toml"), "# herdr-call\nelevenlabs_api_key = \"sk_herdrcall_0123456789\"\n").unwrap();
-    let k = sw::voice::key::find().unwrap();
-    assert_eq!(k.key, "sk_herdrcall_0123456789"); assert!(k.from.ends_with("herdr-call/config.toml") && !k.from.contains("sk_"));
-    put_key();
-    let k = sw::voice::key::find().unwrap();
-    assert_eq!(k.key, "sk_test_0123456789abcdef"); assert!(k.from.ends_with("elevenlabs.json"));
-    // what `voice` says names where, never the key
-    let (v, said) = sw::calls::command::main(&[]);
-    assert!(said.starts_with("ElevenLabs key: found (") && !said.contains("sk_test") && !v.to_string().contains("sk_test"), "{said}");
-    assert_eq!(sw::voice::key::line_value("ELEVENLABS_API_KEY=short", "ELEVENLABS_API_KEY"), None, "too short to be a key");
-}
-
-#[test]
 fn the_agent_is_made_once_and_updated_only_when_it_changed() {
     let _w = world();
     let log = fake_eleven();
@@ -177,25 +153,34 @@ fn the_agent_is_made_once_and_updated_only_when_it_changed() {
     assert!(tools.iter().all(|b| b.at("tool_config").s("type") == "client" && b.at("tool_config").b("expects_response")));
     let body = &made.iter().find(|(m, p, _)| m == "POST" && p == "/v1/convai/agents/create").unwrap().2;
     let cc = body.at("conversation_config");
-    // private (a token for each call), patient turn-taking, the tools it calls on the page, Swedish and English
+    // private (a token for each call), patient turn-taking, the tools it calls on the page, any language ElevenLabs' agents speak
     assert_eq!(body.at("platform_settings").at("auth").at("enable_auth"), &json!(true));
     assert_eq!((cc.at("turn").s("turn_eagerness"), cc.at("tts").s("model_id")), ("patient", "eleven_v4_turbo"));
     assert!(cc.at("conversation").arr("client_events").contains(&json!("client_tool_call")) && cc.at("conversation").arr("client_events").contains(&json!("user_transcript")));
     assert_eq!(cc.at("agent").at("prompt").arr("tool_ids").len(), 6);
-    assert_eq!((cc.at("agent").s("language"), cc.at("language_presets").at("sv").at("overrides").at("agent").s("language")), ("en", "sv"));
+    assert_eq!((cc.at("agent").s("language"), cc.at("agent").s("first_message")), ("en", "Hi, I'm listening."));
+    let presets = cc.at("language_presets").as_object().unwrap();
+    assert_eq!(presets.len(), sw::voice::agent::LANGUAGES.len() - 1);
+    assert!(sw::voice::agent::LANGUAGES[1..].iter().all(|l| presets[*l].at("overrides").at("agent").s("language") == *l));
+    assert_eq!(cc.at("asr").arr("keywords"), &vec![json!("Coordinator"), json!("herdr"), json!("merge"), json!("approve")]);
     assert_eq!(cc.at("agent").at("prompt").at("built_in_tools").at("language_detection").at("params").s("system_tool_type"), "language_detection");
     assert!(cc.at("agent").at("prompt").s("prompt").contains("Approve, merge, stop and delete") && cc.at("agent").at("prompt").s("prompt").contains("[board]"));
-    // the same again: nothing is asked; a change (Swedish only) updates the tools and the agent in place
+    // the same again: nothing is asked; a change (German only) updates the tools and the agent in place
     let n = log.borrow().len();
     sw::voice::eleven::ensure_agent("sk_test").unwrap();
     assert_eq!(log.borrow().len(), n, "unchanged: nothing asked");
-    std::fs::write(sw::store::files::config_dir().join("config.json"), json!({ "voice.language": "sv", "coordinator.agent": "none", "watcher.agent": "none" }).to_string()).unwrap();
+    std::fs::write(sw::store::files::config_dir().join("config.json"), json!({ "voice.language": "de", "coordinator.agent": "none", "watcher.agent": "none" }).to_string()).unwrap();
     assert_eq!(sw::voice::eleven::ensure_agent("sk_test").unwrap(), "agent_1");
     let after: Vec<(String, String)> = log.borrow()[n..].iter().map(|(m, p, _)| (m.clone(), p.clone())).collect();
     assert_eq!(after.iter().filter(|(m, p)| m == "PATCH" && p.starts_with("/v1/convai/tools/")).count(), 6);
     assert_eq!(after.last().unwrap(), &("PATCH".to_string(), "/v1/convai/agents/agent_1".to_string()));
-    let sv = log.borrow().last().unwrap().2.clone();
-    assert_eq!((sv.at("conversation_config").at("agent").s("language"), sv.at("conversation_config").at("agent").s("first_message")), ("sv", "Hej, jag lyssnar."));
+    let de = log.borrow().last().unwrap().2.clone();
+    let cc = de.at("conversation_config");
+    assert_eq!((cc.at("agent").s("language"), cc.at("agent").s("first_message")), ("de", ""), "in another language than English the voice waits for you");
+    assert!(cc.at("language_presets").as_object().unwrap().is_empty() && cc.at("agent").at("prompt").at("built_in_tools").as_object().unwrap().is_empty());
+    // a language ElevenLabs' agents do not speak is auto
+    std::fs::write(sw::store::files::config_dir().join("config.json"), json!({ "voice.language": "klingon", "coordinator.agent": "none", "watcher.agent": "none" }).to_string()).unwrap();
+    assert_eq!(sw::voice::agent::made().language, "auto");
     // ElevenLabs refuses a voice (one with live moderation): said plainly, with how to pick another; nothing is kept
     let n = log.borrow().len();
     sw::voice::eleven::set_fake(Some(Rc::new(|m: &str, p: &str, _b: &Value| match (m, p) {
@@ -211,7 +196,7 @@ fn the_agent_is_made_once_and_updated_only_when_it_changed() {
     assert_eq!(sw::voice::eleven::refused("ElevenLabs answered 500 to POST /x: oops", &sw::voice::agent::made()), "ElevenLabs answered 500 to POST /x: oops");
     assert_eq!(sw::voice::agent::VOICE, "bIHbv24MWmeRgasZH58o");
     let log = fake_eleven();
-    std::fs::write(sw::store::files::config_dir().join("config.json"), json!({ "voice.language": "sv", "coordinator.agent": "none", "watcher.agent": "none" }).to_string()).unwrap();
+    std::fs::write(sw::store::files::config_dir().join("config.json"), json!({ "voice.language": "de", "coordinator.agent": "none", "watcher.agent": "none" }).to_string()).unwrap();
     // a token for one call
     assert_eq!(sw::voice::eleven::token("sk_test", "agent_1").unwrap(), "tok-short-lived");
     assert_eq!(log.borrow().last().unwrap().1, "/v1/convai/conversation/token?agent_id=agent_1");

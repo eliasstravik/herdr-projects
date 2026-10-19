@@ -52,11 +52,11 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     // the voice's expression tags are for how it speaks: never in the chat
     sw::webui::voice::api::local("heard", &json!({ "who": "agent", "text": "[neutral] Det går bra." }), &key);
     // held on the M1, with no echo cancelling there: the chat says headphones
-    sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": false, "how": "parec and pacat, no echo cancelling", "agent": "elias-m1", "peak": 0.2 }), &key);
+    sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": false, "how": "parec and pacat, no echo cancelling", "agent": "laptop", "peak": 0.2 }), &key);
     s.load();
     let t = s.text();
     // one row as the line that says who: "Voice call", then with whom, the computer that holds it and the key
-    assert!(t.contains(&format!(" ● Voice call  {}'s agent (Make the greeting) · on elias-m1 · ctrl+t hangs up", short(&a))), "{t}");
+    assert!(t.contains(&format!(" ● Voice call  {}'s agent (Make the greeting) · on laptop · ctrl+t hangs up", short(&a))), "{t}");
     assert!(t.contains("Voice: Det går bra.") && !t.contains("[neutral]") && t.contains("   headphones needed: no echo cancelling there"), "{t}");
     // lined up with the chat's line that says who: the mark in the mark's column, the words in the name's column, and
     // the lines under it indented as the chat's other lines (a mark one cell wide, as every mark of the board)
@@ -68,15 +68,15 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     assert_eq!(sw::text::width(&who[..who.find(|c: char| c.is_alphabetic()).unwrap()]), 3, "the line that says who starts its name there too: {who}");
     assert!(lines[at + 1].starts_with("   headphones") && lines[at + 2].starts_with("   Voice: "), "{t}");
     // a microphone that stayed near silent for ten seconds: the call's line says the voice may not hear you
-    sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": true, "agent": "elias-m1", "mic": 0.002, "secs": 12 }), &key);
+    sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": true, "agent": "laptop", "mic": 0.002, "secs": 12 }), &key);
     s.load();
     assert!(s.text().contains("\n   your microphone is very quiet: the voice may not hear you"), "{}", s.text());
-    sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": true, "agent": "elias-m1", "mic": 0.2, "secs": 12 }), &key);
+    sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": true, "agent": "laptop", "mic": 0.2, "secs": 12 }), &key);
     s.load();
     assert!(!s.text().contains("very quiet"));
-    sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": true, "agent": "elias-m1" }), &key);
+    sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": true, "agent": "laptop" }), &key);
     s.load();
-    assert!(s.text().contains("on elias-m1") && !s.text().contains("headphones"));
+    assert!(s.text().contains("on laptop") && !s.text().contains("headphones"));
     // the board's switch: the call talks to the Coordinator, then to the next task's agent, as the chat does
     s.press(&["space"]); s.load(); s.load();
     let to = call::target(&call::get().unwrap());

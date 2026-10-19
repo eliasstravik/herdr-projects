@@ -21,7 +21,7 @@ fn the_call_runs_over_webrtc_with_the_boards_own_worklet_and_asks_the_board_for_
     assert!(CALL.contains("const mine = out.key;") && CALL.contains("      await told;\n      if (key !== mine) return \"Not sent: this call has ended.\";"));
     // the echo cancelling of the browser, asked for; the key of the call on every call to the board
     assert!(CALL.contains("echoCancellation: true, noiseSuppression: true"));
-    assert!(CALL.contains(r#""x-herdr-projects": "1", "x-herdr-call": k"#));
+    assert!(CALL.contains(r#""x-herdr-projects": "1", "x-herdr-projects-call": k"#));
     // what was said goes to the board as it is said (not the board's own updates, which it sent)
     assert!(CALL.contains(r#"if (!message || /^\[board\]/.test(message)) return;"#) && CALL.contains("tell(by, message);"));
     // a tool waits until what was said before it is stored (tried three times): your words are there when it sends,

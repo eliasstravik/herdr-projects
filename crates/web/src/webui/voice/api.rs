@@ -1,9 +1,9 @@
 //! The front door's voice calls, under `/herdr-projects/api/voice/`. `start` makes a call: from the web board, for a
 //! page the web UI lets drive; from the terminal board, for a page that brings the call's ticket (once, for two
 //! minutes). It answers a short-lived ElevenLabs token and the call's key; the API key stays here. With that key in
-//! `x-herdr-call`, the page then says what was heard (`heard`), runs the voice agent's tools (`tool`), asks what to
-//! read back (`feed`) and hangs up (`end`). Every call that changes something comes from the board's own page. The
-//! terminal board's call runs the same calls in-process (`local`), for its helper.
+//! `x-herdr-projects-call`, the page then says what was heard (`heard`), runs the voice agent's tools (`tool`), asks
+//! what to read back (`feed`) and hangs up (`end`). Every call that changes something comes from the board's own page.
+//! The terminal board's call runs the same calls in-process (`local`), for its helper.
 use super::board;
 use crate::json::*;
 use crate::voice::{call, eleven, key};
@@ -11,7 +11,7 @@ use crate::webui::door::{json_out, same_origin, who, Upstream, OUR_HEADER};
 use crate::webui::proxy::Head;
 use std::net::TcpStream;
 
-pub const KEY_HEADER: &str = "x-herdr-call";
+pub const KEY_HEADER: &str = "x-herdr-projects-call";
 fn body(client: &mut TcpStream, head: &Head, rest: Vec<u8>) -> Option<Value> {
     let len: usize = head.header("content-length").and_then(|v| v.parse().ok()).unwrap_or(0);
     if len > 256 * 1024 { return None; }

@@ -21,7 +21,7 @@ fn a_call_from_the_web_board_gets_a_short_lived_token_and_never_the_key() {
     web(&w, "board", json!({}));
     // no key on this machine: said, with where to put it, and no call is left behind
     let (st, out) = start_web("test");
-    assert_eq!(st, 503); assert!(out.s("msg").contains("elevenlabs.json"), "{out}"); assert!(call::get().is_none());
+    assert_eq!(st, 503); assert_eq!(out.s("msg"), sw::voice::key::missing(), "{out}"); assert!(call::get().is_none());
     put_key();
     // a device the web UI lets only watch, or nobody logged in: no call
     assert_eq!(api::start(&json!({ "client": "test" }), || Ok("watch".to_string())).0, 403);

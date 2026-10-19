@@ -3,7 +3,7 @@
 **A call is a live conversation with the board's voice agent, about whoever the chat talks to.** You talk, it talks
 back, and you can talk over it. When you ask for something, it sends your request to the agent the chat is pointed at
 (the Coordinator, the selected task's agent, or a machine's or a repo's coordinator) and says it did. When that agent
-answers, it tells you the gist, in a sentence or two. It speaks Swedish and English, as you do.
+answers, it tells you the gist, in a sentence or two. It speaks your language, and follows you when you switch.
 
 The voice agent runs at [ElevenLabs](https://elevenlabs.io/agents). It never acts on the board itself: everything goes to
 the board's own agents, as if you had typed it in the chat.
@@ -35,7 +35,9 @@ The first call asks the browser for the microphone once. A call is private: it n
   checks this itself, from what was said on the call: a question ("what does merge mean?"), a no ("no, don't do it"),
   a yes to something else ("yes, explain it") or a yes about another task is not enough, and neither is the voice
   agent's word that you said yes. A no takes back what you asked before it, and a question that offers something
-  else ("would you like an explanation of merge?") does not count.
+  else ("would you like an explanation of merge?") does not count. The board knows these words in English and Swedish only: in
+  another language, ask for an approve, merge, stop or delete and say your yes in English (anything else goes in any
+  language).
 - **One action per message, in the board's words.** A confirmed action goes as the board writes it, the action and
   its task alone ("Approve HP-52."), never in the voice agent's words: nothing else it wrote goes along. One that
   names another action, also in other words ("approve HP-52 and ship it"), is not sent; the voice agent sends the
@@ -82,7 +84,7 @@ no window.
   it is compiled once, the first time, with the Xcode Command Line Tools (`xcode-select --install`), and macOS asks
   once whether the terminal herdr runs in may use the microphone (System Settings, Privacy & Security, Microphone).
 - **Headphones** are needed where nothing cancels the echo (no `pactl` on Linux, voice processing not available on
-  macOS): the chat says so on the call's line (`on m1 · headphones needed: no echo cancelling there`). So does a
+  macOS): the chat says so on the call's line (`on laptop · headphones needed: no echo cancelling there`). So does a
   microphone that stayed near silent for ten seconds (`your microphone is very quiet: the voice may not hear you`).
 - `herdr-projects voice test`, on the computer you sit at, tries its sound for a call: it plays a short tone, listens
   to the microphone for a moment, and says whether the echo is cancelled.
@@ -91,11 +93,15 @@ no window.
 
 ## Setting it up
 
-- **The ElevenLabs API key** stays on the machine the board runs on. It is looked for, in this order: the
-  `ELEVENLABS_API_KEY` variable, `~/.herdr-projects/settings/elevenlabs.json` (`{"api_key": "…"}`, the place for it),
-  herdr-call's own config, your agent-tokens file, a reachy-voice `.env`. The key needs the ElevenAgents write
-  permission. Nothing else is set up by hand: the voice agent, its prompt and its tools are made in your ElevenLabs
-  account before the first call and kept in step with this program after that.
+- **The ElevenLabs API key** stays on the machine the board runs on. Make one at ElevenLabs, Developers, API Keys
+  (https://elevenlabs.io/app/developers/api-keys), with the **ElevenAgents** permission set to **Write**: it makes the
+  voice agent and its tools, and starts each call. Then put it in one of two places, looked in this order:
+  - the `ELEVENLABS_API_KEY` environment variable, where herdr-projects runs;
+  - `~/.herdr-projects/settings/elevenlabs.json`, as `{"api_key": "…"}` (readable by you alone: `chmod 600`).
+
+  A call without a key says this, and so does `herdr-projects voice`. Nothing else is set up by hand: the voice agent,
+  its prompt and its tools are made in your ElevenLabs account before the first call and kept in step with this
+  program after that.
 - **The terminal board's calls** need herdr-projects on the computer you sit at (its call helper), and SSH from there
   to the board's machine with `herdr-projects` on its path, as other machines need.
 - `herdr-projects voice` says how it stands: where the key was found (never the key), the helper, how the last call
@@ -103,9 +109,9 @@ no window.
 
 | Setting | What it does |
 |---|---|
-| `voice.language` | `auto` (Swedish and English, as you speak), `sv` or `en` |
+| `voice.language` | `auto`: it starts in English and follows you into any language ElevenLabs' agents speak; or one of their language codes (`en`, `de`, `es`, `fr`, `ja`, `pt-br` …) for that one only, where the voice waits for you to speak first |
 | `voice.llm` | the voice agent's language model at ElevenLabs, or `none` for the built-in one, DeepSeek V4.1 Flash (`deepseek-v41-flash`); speech stays `eleven_v4_turbo` |
-| `voice.voice` | an ElevenLabs voice id that agents can use (not one with live moderation), or `none` for the built-in one. A voice ElevenLabs refuses is said in the call, with how to pick another |
+| `voice.voice` | an ElevenLabs voice id that agents can use (not one with live moderation), or `none` for the built-in one, Will (`bIHbv24MWmeRgasZH58o`), a premade voice every ElevenLabs account has. A voice ElevenLabs refuses is said in the call, with how to pick another |
 | `voice.helper` | `auto`: the call helper runs on a computer with saved machines; `none`: never |
 
 ## How it fits together

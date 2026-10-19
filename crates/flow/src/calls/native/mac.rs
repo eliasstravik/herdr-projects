@@ -14,10 +14,10 @@ pub struct Mac { child: Child, mic: mpsc::Receiver<Vec<u8>>, noaec: Arc<AtomicBo
 fn program() -> Result<std::path::PathBuf, String> {
     let dir = crate::store::files::data_dir().join("voice").join("bin");
     let hash = sha1_smol::Sha1::from(SOURCE).digest().to_string();
-    let bin = dir.join(format!("herdr-call-audio-{}", &hash[..10]));
+    let bin = dir.join(format!("herdr-projects-call-audio-{}", &hash[..10]));
     if bin.exists() { return Ok(bin); }
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let src = dir.join(format!("herdr-call-audio-{}.swift", &hash[..10]));
+    let src = dir.join(format!("herdr-projects-call-audio-{}.swift", &hash[..10]));
     std::fs::write(&src, SOURCE).map_err(|e| e.to_string())?;
     let out = Command::new("swiftc").args(["-O", "-o"]).arg(&bin).arg(&src).stdin(Stdio::null()).output().map_err(|_| "A call on macOS needs the Xcode Command Line Tools (for swiftc): run xcode-select --install, then call again.".to_string())?;
     if !out.status.success() { return Err(format!("The call's sound program did not build: {}", crate::text::cut(String::from_utf8_lossy(&out.stderr).trim(), 300))); }
