@@ -108,6 +108,8 @@ impl Engine {
             }
         }
     }
+    /// The updates waiting for a pause.
+    pub fn queued(&self) -> usize { self.queue.len() }
     /// How the sound stood, for the board (`herdr-projects voice`).
     pub fn report(&self) -> Value { json!({ "via": "native", "aec": self.audio.aec(), "how": self.audio.how(), "peak": (self.peak as f64 / 32768.0 * 1000.0).round() / 1000.0, "elements": 1, "playing": 1, "agent": crate::remote::check::hostname() }) }
     /// Run until the call ends; answers why.

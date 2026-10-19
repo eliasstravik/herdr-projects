@@ -118,8 +118,8 @@ fn an_update_is_read_in_a_pause_only_and_goodbye_ends_the_call() {
     // the voice agent speaks: half a second of sound
     c.hear(audio(1, &[1; 16000]));
     let t = 2_000_000 + 1600;
-    c.until(t, |c| c.asked().iter().any(|a| a.starts_with("feed")));
-    c.e.step(t);
+    // the board's answer comes in on a thread of its own: the update waits in the queue
+    c.until(t, |c| c.e.queued() == 1);
     assert!(!c.sent().iter().any(|m| m.s("type") == "user_message"), "not over the voice agent");
     // you speak
     c.hear(json!({ "type": "vad_score", "vad_score_event": { "vad_score": 0.9 } }));
@@ -130,7 +130,8 @@ fn an_update_is_read_in_a_pause_only_and_goodbye_ends_the_call() {
     let said: Vec<Value> = c.sent().into_iter().filter(|m| m.s("type") == "user_message").collect();
     assert_eq!(said.len(), 1); assert_eq!(said[0].s("text"), "[board] HP-52 needs you");
     // how the sound stands is told to the board: here with no echo cancelling
-    assert!(c.desk.lock().unwrap().asked.iter().any(|(w, b)| w == "audio" && b.s("via") == "native" && b.at("aec") == &json!(false)));
+    let told = |c: &Call| c.desk.lock().unwrap().asked.iter().any(|(w, b)| w == "audio" && b.s("via") == "native" && b.at("aec") == &json!(false));
+    c.until(t + 600 + QUIET_MS + 1, told);
     // goodbye: the call ends a moment later, and the board is told
     c.hear(json!({ "type": "client_tool_call", "client_tool_call": { "tool_call_id": "t9", "tool_name": "end_call", "parameters": {} } }));
     sw::clock::set(Some(t + 5000));
