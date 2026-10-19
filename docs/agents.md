@@ -93,6 +93,8 @@ A program that cannot do a role well is refused when you set it, with the reason
   the others' `--help`; the table's where it cannot be read), or any level where it takes none at start (most of
   Herdr's others). Cursor takes its effort in the model's name: `cursor/claude-opus-4-8[effort=high]`.
 - **`access ask`** for a program that never asks before it acts (pi).
+- **`access auto`** for a program with no auto mode of its own (all but Claude Code and Codex), and at the start, for a
+  version older than its first ([auto mode](auto-mode.md)).
 
 Two more are said when the program starts, not when it is set:
 
