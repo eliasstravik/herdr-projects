@@ -47,8 +47,10 @@ fn the_toggle_stands_beside_hide_and_the_call_page_takes_its_ticket_out_of_the_a
     assert!(BTN.contains(r#"if (other) { const out = await post("voice/end""#), "a call from the terminal board is hung up from the web too");
     assert!(BTN.contains("call.start({ client });"));
     assert!(CSS.contains(".sw-call { flex: none; margin-left: auto;") && CSS.contains("min-height: 40px"), "a thumb's size");
-    assert!(PAGE.contains("const ticket = location.hash.slice(1);") && PAGE.contains(r#"history.replaceState(null, "", location.pathname);"#));
+    assert!(PAGE.contains(r#"return [h.split("&")[0], /&auto$/.test(h)];"#) && PAGE.contains(r#"history.replaceState(null, "", location.pathname);"#));
     assert!(PAGE.contains("call.start({ ticket })"));
+    // the helper's window starts the call at once; your own browser, opened from the link, asks for a tap first
+    assert!(PAGE.contains("else if (auto) go();") && PAGE.contains(r#"$("start").hidden = false; }"#));
     for f in ["call.js", "callbtn.js", "callpage.js", "call.css", "vendor/elevenlabs.js", "vendor/rawAudioProcessor.js"] { assert!(sw::webui::page::file(f).is_some(), "{f} is served"); }
 }
 

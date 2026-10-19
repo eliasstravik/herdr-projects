@@ -48,7 +48,9 @@ pub fn flags(profile: &str, link: &str) -> Vec<String> {
 pub fn open(link: &str) -> Option<Child> {
     let profile = crate::store::files::data_dir().join("call-browser");
     if let Some(b) = chromium() {
-        if let Ok(ch) = Command::new(&b).args(flags(&profile.display().to_string(), link)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() { return Some(ch); }
+        // `&auto`: this window may use the microphone and play sound without a tap, so the page starts the call at once.
+        let link = format!("{link}&auto");
+        if let Ok(ch) = Command::new(&b).args(flags(&profile.display().to_string(), &link)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() { return Some(ch); }
     }
     let _ = Command::new(if cfg!(target_os = "macos") { "open" } else { "xdg-open" }).arg(link).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
     None
