@@ -14,9 +14,10 @@ const subs = new Set();
 let st = { state: "idle", mode: "", muted: false, target: "", note: "", lines: [] };
 let conv = null, key = "", timer = null, queue = [], heardAt = 0, spokeAt = 0, waiting = false, lock = null, cancelled = false;
 // What was said, told to the board one after the other (tried three times): a tool waits for it, so your words are
-// there before it sends; words that never got there stop a message from going (`lost`), until the next ones do.
+// there before it sends. Words of yours that never got there stop the next message from going (`lost`): the voice
+// agent is told to ask you to say the whole request again, and the chat says they did not reach the board.
 let told = Promise.resolve(), lost = false;
-const tell = (who, text) => { told = told.then(async () => { for (let n = 0; n < 3; n++) { if ((await send("heard", { who, text })).ok) { if (who === "user") lost = false; return; } } if (who === "user") lost = true; }); };
+const tell = (who, text) => { told = told.then(async () => { for (let n = 0; n < 3; n++) { if ((await send("heard", { who, text })).ok) return; } if (who === "user") { lost = true; say("board", "Those words did not reach the board: say the whole request again."); } }); };
 const set = (patch) => { st = { ...st, ...patch }; for (const f of subs) { try { f(st); } catch {} } };
 export const state = () => st;
 export const watch = (f) => { subs.add(f); f(st); return () => subs.delete(f); };
@@ -57,7 +58,8 @@ export async function start(how) {
     const { Conversation } = await import("./vendor/elevenlabs.js");
     const clientTools = Object.fromEntries(TOOLS.map((name) => [name, async (args) => {
       await told;
-      if (name === "send_message" && lost) return "Not sent: the human's last words did not reach the board. Ask them to say it again.";
+      // Lost words: this message does not go, and the human is asked to say all of it again; their next words count.
+      if (name === "send_message" && lost) { lost = false; return "Not sent: some of the human's words did not reach the board. Ask them to say their whole request again, then send it."; }
       const res = await send("tool", { name, args: args || {} });
       if (name === "end_call") setTimeout(() => end("said goodbye"), 2500);
       if (name === "switch_to" || name === "send_message") feed();

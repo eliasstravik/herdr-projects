@@ -3,7 +3,8 @@
 //! It reads the call as it was said since the last message (`talk`: your lines and the voice agent's, in order), so
 //! the voice agent's own word that you said yes is never enough. A question ("what does merge mean?"), a no ("no, do
 //! not do it") or a yes to something else ("yes, explain it") is no request and no yes; a yes to HP-52 is no yes to
-//! HP-99. A no takes back every request before it, and a question that offers something else ("would you like an
+//! HP-99, also when the yes names HP-99 itself ("yes, merge HP-99"), and a yes that names another action is no yes to
+//! this one. A no takes back every request before it, and a question that offers something else ("would you like an
 //! explanation of merge?") is no question to do it.
 use super::words::{actions_in, words_of, ACTIONS};
 
@@ -57,6 +58,12 @@ pub fn check(said: &str, talk: &[(String, String)], confirmed: bool) -> Verdict 
     if let Some(t) = in_said.iter().find(|t| !in_q.contains(t)) {
         return Verdict::Refuse(format!("Not sent: the human said yes to \"{question}\", which is not about {t}. Ask again about the task they mean."));
     }
+    // the yes itself: a task or an action it names must be the ones asked about
+    let yes_words = &talk[yes].1;
+    if let Some(t) = tags_in(yes_words).into_iter().find(|t| !in_q.contains(t) || !in_said.contains(t)) {
+        return Verdict::Ask(format!("Not sent: the human's yes names {t}, and the question was not about that. Ask again which task they mean."));
+    }
+    if actions_in(yes_words).iter().any(|a| !wanted.contains(a)) { return ask; }
     if wanted.iter().any(|a| !asked_at(a).iter().any(|&i| i < q)) { return ask; }
     Verdict::Send
 }
