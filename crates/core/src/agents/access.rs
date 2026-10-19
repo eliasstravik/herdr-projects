@@ -12,11 +12,14 @@ pub fn flags(a: &Kind, access: &str) -> Option<&'static [&'static str]> {
 /// "" when the program can work under this access, else why not (a program that is not in the table: "").
 pub fn why_not(k: &str, access: &str) -> String {
     let Some(a) = kind(k) else { return String::new() };
-    if flags(a, access).is_some() { return String::new(); }
+    if flags(a, access).is_some() { String::new() } else { format!("{k} cannot do \"{access}\": {}", lacks(access)) }
+}
+/// What a program lacks that cannot work under this access.
+pub fn lacks(access: &str) -> String {
     match access {
-        "ask" => format!("{k} cannot do \"ask\": it never asks before it acts"),
-        "auto" => format!("{k} cannot do \"auto\": it has no auto mode (only {} have one)", with_auto().join(", ")),
-        _ => format!("no access \"{access}\""),
+        "ask" => "it never asks before it acts".into(),
+        "auto" => format!("it has no auto mode (only {} have one)", with_auto().join(", ")),
+        _ => format!("there is no access \"{access}\""),
     }
 }
 /// "" when the installed program is new enough for this access, else why not. A version that cannot be read is taken

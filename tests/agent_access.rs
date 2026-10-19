@@ -42,7 +42,7 @@ fn a_program_with_no_auto_mode_is_refused_at_its_start_and_never_started_with_fu
     let _w = world();
     for k in ["pi", "copilot", "droid", "qwen", "omp"] {
         let e = refused_start(k, "auto");
-        assert!(e.contains(&format!("{k} cannot be started with access \"auto\": {k} cannot do \"auto\": it has no auto mode (only claude, codex have one)")), "{e}");
+        assert!(e.contains(&format!("{k} cannot be started with access \"auto\": it has no auto mode (only claude, codex have one)")), "{e}");
         assert!(e.contains("Set the role's access to full or ask"), "{e}");
     }
     assert!(why_not("claude", "auto").is_empty() && why_not("codex", "auto").is_empty());
@@ -103,7 +103,7 @@ fn an_auto_written_by_hand_for_a_program_without_it_stays_auto_and_its_start_is_
     delegate(&id);
     let t = settle(&id);
     assert!(calls(&w).iter().all(|c| !c.starts_with("agent start")), "pi was never started");
-    assert!(t.at("failure").to_string().contains("pi cannot do \\\"auto\\\""), "{}", t.at("failure"));
+    assert!(t.at("failure").to_string().contains("pi cannot be started with access \\\"auto\\\": it has no auto mode"), "{}", t.at("failure"));
 }
 
 #[test]

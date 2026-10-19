@@ -16,7 +16,7 @@ pub fn effort_for(k: &str, model: &str, effort: &str) -> String {
 pub fn access_args(k: &str, access: &str) -> Res<Vec<String>> {
     let Some(a) = kind(k) else { return if access == "full" { Ok(vec![]) } else { crate::fail!("{k} cannot be started with access \"{access}\": the board does not know its flags. Set the role's access to full, or choose another program.") } };
     let Some(f) = super::access::flags(a, access) else {
-        crate::fail!("{k} cannot be started with access \"{access}\": {}. Set the role's access to {}, or choose another program.", super::access::why_not(k, access), if access == "auto" { "full or ask" } else { "full" })
+        crate::fail!("{k} cannot be started with access \"{access}\": {}. Set the role's access to {}, or choose another program.", super::access::lacks(access), if access == "auto" { "full or ask" } else { "full" })
     };
     let old = super::access::too_old(k, access);
     if !old.is_empty() { crate::fail!("{k} cannot be started with access \"{access}\": {old}."); }
