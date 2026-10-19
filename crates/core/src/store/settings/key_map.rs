@@ -64,17 +64,17 @@ mod tests {
     use super::*;
     #[test]
     fn written() {
-        assert_eq!(chord_of("Ctrl+O").as_deref(), Some("ctrl+o"));
+        assert_eq!(chord_of("Ctrl+G").as_deref(), Some("ctrl+g"));
         assert_eq!(chord_of("shift+alt+Up").as_deref(), Some("alt+shift+up"));
         assert_eq!(chord_of("ctrl+Esc").as_deref(), Some("ctrl+escape"));
         assert_eq!(chord_of("Y").as_deref(), Some("shift+y"));
         assert_eq!(chord_of("F5").as_deref(), Some("f5"));
         assert_eq!(chord_of("f01").as_deref(), Some("f1"));
         assert_eq!(chord_of("f13"), None);
-        assert_eq!(chord_of("ctrl+ctrl+o"), None);
+        assert_eq!(chord_of("ctrl+ctrl+g"), None);
         assert_eq!(chord_of("hyper+o"), None);
-        assert_eq!(chord_of("ctrl+oo"), None);
-        assert_eq!(pairs(&json!("chatMessage = ctrl+o,  menu=f1")).unwrap(), vec![("chatMessage".into(), "ctrl+o".into()), ("menu".into(), "f1".into())]);
+        assert_eq!(chord_of("ctrl+gg"), None);
+        assert_eq!(pairs(&json!("chatMessage = ctrl+g,  menu=f1")).unwrap(), vec![("chatMessage".into(), "ctrl+g".into()), ("menu".into(), "f1".into())]);
         assert_eq!(pairs(&json!("chatMessage")).unwrap_err(), "chatMessage");
     }
 }

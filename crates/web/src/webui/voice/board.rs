@@ -12,7 +12,7 @@ pub const TERMINAL: &str = "voice-terminal";
 pub fn page_of(c: &Obj) -> Option<String> { c.s("owner").strip_prefix("web:").map(String::from) }
 /// The board the call's tools work on, lined up with who the call talks to.
 pub fn of(c: &Obj) -> Arc<Mutex<Client>> {
-    if let Some(p) = page_of(c) { let b = web::client(&p); { let mut g = b.lock().unwrap(); web::take_in(&mut g); } return b; }
+    if let Some(p) = page_of(c) { let b = web::client(&p); { let mut g = b.lock().unwrap(); web::take_in(&mut g); web::reload(&mut g); } return b; }
     let b = web::client(TERMINAL);
     { let mut g = b.lock().unwrap(); web::take_in(&mut g); line_up(&mut g, &call::target(c)); }
     b
@@ -35,7 +35,7 @@ pub fn who(g: &mut Client) -> Option<Who> { let r = g.s.current().cloned(); chat
 /// Who it is, as said aloud: "HP-52's agent", "the Coordinator".
 pub fn name_of(w: &Who) -> String {
     if !w.tag.is_empty() { return format!("{}'s agent ({})", w.tag, w.name); }
-    if w.name == "Coordinator" { "the Coordinator".into() } else { w.name.clone() }
+    match w.name.as_str() { "Coordinator" => "the Coordinator".into(), "New task" => "the board (no Coordinator here: it adds tasks)".into(), n if n.starts_with("Coordinator on ") => format!("the {n}"), n => n.to_string() }
 }
 /// The call of this machine as a web board's page shows it: none, or whether it is this page's own, where it was
 /// started, who it talks to and the last things said.

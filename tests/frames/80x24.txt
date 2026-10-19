@@ -91,7 +91,7 @@
  ctrl: does something
    ctrl+l       yes: approve the merge, say yes, retry, take it as it is
    ctrl+r       send it back: tell the agent to fix it, or to continue
- ↓ 40 more
+ ↓ 41 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────

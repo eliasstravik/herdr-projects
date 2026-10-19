@@ -6,6 +6,7 @@ use crate::voice::call::{self, Target};
 
 /// The front door's private link, as the web UI's shared link points at it; None when there is none.
 pub fn door_link() -> Option<String> {
+    if let Ok(l) = std::env::var("HERDR_PROJECTS_CALL_LINK") { return Some(l).filter(|l| !l.is_empty()); } // a stand-in, for tests
     let d = crate::webui::keep::door_info()?;
     let port = d.i("port") as u16;
     crate::webui::link::look(d.at("to").i("port") as u16, Some(port)).ours.into_iter().find(|e| !e.funnel).map(|e| e.url)

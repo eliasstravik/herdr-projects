@@ -36,11 +36,11 @@ fn the_menus_legend_is_reached_with_the_arrows_in_a_short_window_and_whole_in_a_
         for _ in 0..60 { s.press(&["down"]); }
         let end = s.text(); assert!(has(&end, LEGEND));
         s.press(&["down", "down"]); assert_eq!(s.text(), end, "nothing under the end"); assert_eq!(s.s.menu.as_ref().unwrap().at, n - 1);
-        for _ in 0..60 { s.press(&["up"]); }
+        for _ in 0..80 { s.press(&["up"]); }
         // ↑ on the first line scrolls on up to what is above the list (the plain keys), and ↓ comes back from there
         assert_eq!(s.s.menu.as_ref().unwrap().at, 0);
         assert!(has(&s.text(), r"^ Menu [^\n]*\n plain keys *\n[ ▌]  ↑ ↓ "), "the top with {rows} lines: {}", s.text());
-        for _ in 0..60 { if s.text() == top { break; } s.press(&["down"]); }
+        for _ in 0..80 { if s.text() == top { break; } s.press(&["down"]); }
         assert_eq!(s.s.menu.as_ref().unwrap().at, 0); assert_eq!(s.text(), top, "↓ goes back the way ↑ came");
     }
     // narrow: the line wraps, so every state it names can be read, and nothing is cut
@@ -48,11 +48,11 @@ fn the_menus_legend_is_reached_with_the_arrows_in_a_short_window_and_whole_in_a_
         s.rows = rows;
         let flat = |s: &mut common::board::Board| regex::Regex::new(r"\s+").unwrap().replace_all(&s.screen(cols).join("\n"), " ").into_owned();
         let mut seen = String::new();
-        for _ in 0..90 { s.press(&["down"]); seen = flat(&mut s); if seen.contains("the reviewer working") { break; } }
+        for _ in 0..120 { s.press(&["down"]); seen = flat(&mut s); if seen.contains("the reviewer working") { break; } }
         assert!(seen.contains("R#2 the review it is on or last had, coloured by where it stands: passed, failed, the reviewer working"), "whole at {cols}×{rows}: {seen}");
         assert!(!has(&s.screen(cols).join("\n"), "R#2[^\n]*…"), "not cut");
         for l in s.screen(cols) { assert!(sw::text::width(&l) <= cols, "fits {cols}: {l}"); }
-        for _ in 0..95 { s.press(&["up"]); }
+        for _ in 0..125 { s.press(&["up"]); }
     }
 }
 

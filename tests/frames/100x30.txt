@@ -113,9 +113,9 @@
    ctrl+z       undo
    ctrl+f       find: show only the tasks that match
    ctrl+c       twice: close the board
+   ctrl+o       a voice call with whoever the chat talks to
 
- alt: only shows or hides
- ↓ 29 more
+ ↓ 30 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────────────────────────

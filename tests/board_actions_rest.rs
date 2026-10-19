@@ -40,7 +40,7 @@ fn a_result_stays_through_the_beats_and_the_menu_names_every_key_and_no_old_one(
     assert!(has(&text, &format!(r"\n alt: only shows or hides *\n[ ▌]  {} +hide the chat's latest message", k("chatMessage"))), "{text}");
     assert!(has(&text, r"\n plain keys *\n[ ▌]  ↑ ↓ +move between tasks"), "{text}");
     // nothing of the keys that are gone
-    assert!(!has(&text, r"Coordinator's chat|restart|new Coordinator|ctrl\+[stdog]\b|alt\+[vhrn]\b|delete  "), "{text}");
+    assert!(!has(&text, r"Coordinator's chat|restart|new Coordinator|ctrl\+[stdg]\b|alt\+[vhrn]\b|delete  "), "{text}");
     assert!(text.contains("↑↓ pick a key · enter press it · esc close the menu"), "{text}");
     // a line picked with the arrows does what its key does: archive, and the task leaves the list's top
     s.press(&["down", "down", "down", "down", "enter"]); assert!(task("proj/2").b("archivedAt"));

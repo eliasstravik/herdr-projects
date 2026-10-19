@@ -49,8 +49,8 @@ fn one_header_line_five_groups_a_mark_for_each_state_and_the_task_panel_from_90_
     assert!(!s.s.side && !text.contains('│'));
     assert!(text.contains(&format!("Side panel off. {} shows it.", key_name("side"))));
     assert_eq!(sw::store::files::read_obj(&sw::store::files::data_dir().join("view.json")).unwrap().at("side"), &json!(false), "your choice is remembered");
-    s.press(&["?"]); assert!(has(&s.screen(120).join("\n"), &format!(r"{} +show the side panel", regex::escape(&key_name("side")))));
-    s.press(&["esc"]);
+    s.rows = 40; s.press(&["?"]); assert!(has(&s.screen(120).join("\n"), &format!(r"{} +show the side panel", regex::escape(&key_name("side")))));
+    s.press(&["esc"]); s.rows = 34;
     s.press(&["space"]); assert!(s.s.reply && !s.screen(120).join("\n").contains("│  PRJ-2 My own task") && !s.s.full);
     s.press(&["space", "alt+p"]); assert!(s.s.side && s.screen(120).join("\n").contains("│  PRJ-2 My own task"));
     s.cols = 80; s.screen(80); s.press(&["alt+p", "alt+p"]);

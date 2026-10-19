@@ -59,7 +59,7 @@
                 task: a page of its
                 text)
    enter        send what is typed;
- ↓ 85 more
+ ↓ 88 more
 
  + New task  added word for word
 ────────────────────────────────────────

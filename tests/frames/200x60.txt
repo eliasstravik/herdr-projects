@@ -203,6 +203,7 @@
    ctrl+z       undo
    ctrl+f       find: show only the tasks that match
    ctrl+c       twice: close the board
+   ctrl+o       a voice call with whoever the chat talks to
 
  alt: only shows or hides
    alt+c        hide the chat's latest message
@@ -232,7 +233,6 @@
    R#2          the review it is on or last had, coloured by where it stands: passed, failed, the reviewer working
    PR#16        its pull request: green when its checks pass, red when they fail
    [auto]       made by an automation; [research]: research only, nothing is merged
-
 
 
 

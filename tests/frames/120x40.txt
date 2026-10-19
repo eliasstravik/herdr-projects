@@ -143,6 +143,7 @@
    ctrl+z       undo
    ctrl+f       find: show only the tasks that match
    ctrl+c       twice: close the board
+   ctrl+o       a voice call with whoever the chat talks to
 
  alt: only shows or hides
    alt+c        hide the chat's latest message
@@ -154,8 +155,7 @@
    alt+s        group by repo: see which repo each task is in
    alt+d        show all done
    alt+m        show every machine's tasks (now: this machine)
-
- ↓ 18 more
+ ↓ 19 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
