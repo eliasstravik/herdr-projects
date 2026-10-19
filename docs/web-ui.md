@@ -40,10 +40,11 @@ In the sidebar, under **Agents** and above its foot (Install app, Settings), the
 
 Under it, one entry per machine that has a board, drawn as an agent's entry is:
 
-- **This machine** and **each other machine the board knows** (the ones its Other machines goes round: Herdr's saved
-  machines, or `board.machines`), in the order of Herdr's sidebar, this machine where that sidebar puts it
-  ([machine order](machine-order.md)). Then **All machines** (also while this machine is the only one: it then shows this
-  machine's tasks, and stays picked).
+- **All machines** first, at the top (also while this machine is the only one: it then shows this machine's tasks, and
+  stays picked).
+- Under it, **this machine** and **each other machine the board knows** (the ones its Other machines goes round: Herdr's
+  saved machines, or `board.machines`), in the order of Herdr's sidebar, this machine where that sidebar puts it
+  ([machine order](machine-order.md)).
 - **Names:** each as the web UI names that machine (`Mac`, `elias-macbook-pro-m1`, `vm-str`), matched to its PCs as below
   ([other machines](#other-machines)). One the web UI has no PC for keeps the board's name for it. A web UI that names
   this machine by no name of its own gives `This machine`.
@@ -380,3 +381,8 @@ In a real browser at a desktop's size (1280×800) and a phone's (390×800):
 
 Not checked: a web UI that serves real other PCs (the PCs' names were checked by a test), and the section through the web
 UI's own restart and update (the script and the place it goes are the ones the Board entry had).
+
+**All machines first**, checked on 2026-10-19 the same way (herdr-web-ui 0.4.12, Herdr 0.9.3, one other machine that
+answered and one that refused), at a phone's size (390×844) and a desktop's (1280×800): All machines stood at the top of
+the Boards section and of the board's **Whose tasks to show**, and the machines under it kept their order. The terminal
+board was the same as before: it lists no boards, and `Alt+M` still goes this machine, every machine, then each other one.
