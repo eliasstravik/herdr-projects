@@ -56,12 +56,15 @@ fn an_update_is_read_only_in_a_pause_never_while_you_talk_or_over_the_voice() {
 }
 
 #[test]
-fn the_toggle_stands_beside_hide_and_the_call_page_takes_its_ticket_out_of_the_address() {
-    assert!(CHAT.contains(r#"h("div.sw-chat-head", back, talk, who, hide, phone.btn), note, phone.strip, said.el, compose)"#));
-    assert!(BTN.contains(r#"btn.replaceChildren(icon("phone"), "Call");"#));
+fn the_toggle_stands_in_the_chats_bar_and_the_call_page_takes_its_ticket_out_of_the_address() {
+    // in the bar beside Hide and Full screen, the call's row under the bar; its word where the bar has room
+    assert!(CHAT.contains(r#"const bar = h("div.sw-chatbar", grip, back, who, state, h("span.sw-chatbar-space"), phone.btn, hide, grow2);"#));
+    assert!(CHAT.contains(r#"const el = h("footer.sw-chat", { "aria-label": "Chat" }, bar, phone.strip, note, own);"#));
+    assert!(BTN.contains(r#"btn.replaceChildren(icon("phone"), h("span.sw-call-label", "Call"));"#) && BTN.contains(r#"btn.setAttribute("aria-label", "Call");"#));
+    assert!(CSS.contains("@container (min-width: 521px) { .sw-call-label { display: inline; } }"));
     assert!(BTN.contains(r#"if (other) { const out = await post("voice/end""#), "a call from the terminal board is hung up from the web too");
     assert!(BTN.contains("call.start({ client });"));
-    assert!(CSS.contains(".sw-call { flex: none; margin-left: auto;") && CSS.contains("min-height: 40px"), "a thumb's size");
+    assert!(CSS.contains(".sw-call { flex: none; display: inline-flex;") && CSS.contains("min-height: 40px"), "a thumb's size");
     assert!(sw::webui::page::file("callpage.js").is_none(), "no page of its own: a terminal call has no browser");
     for f in ["call.js", "callbtn.js", "hear.js", "call.css", "vendor/elevenlabs.js", "vendor/rawAudioProcessor.js"] { assert!(sw::webui::page::file(f).is_some(), "{f} is served"); }
 }

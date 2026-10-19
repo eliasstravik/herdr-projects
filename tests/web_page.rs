@@ -38,7 +38,8 @@ fn a_rows_tag_has_a_column_of_its_own_and_a_narrow_list_drops_every_tag_at_once(
 #[test]
 fn the_chat_line_shows_only_what_there_is_and_the_boxs_frame_says_who_gets_the_words() {
     // Only what there is: replaceChildren would write a missing part out as the word "null".
-    assert!(CHAT.contains(r#"c.toAgent ? h("span.sw-who-name", c.name) : null"#) && CHAT.contains(r#"[c.status, c.progress].filter(Boolean).join("  "))].filter(Boolean)"#));
+    assert!(CHAT.contains("const mark = markEl(c.mark.t, c.mark.c);") && CHAT.contains(r#"const words = cap([c.status, c.progress].filter(Boolean).join(" · "));"#));
+    assert!(CHAT.contains("choice(coord, !c.toAgent, c.toAgent ? null : mark), choice(agent, !!c.toAgent, c.toAgent ? mark : agentMark)"));
     // The box's frame: the plain text colour for the Coordinator, the task's status colour for its agent.
     assert!(CHAT.contains("tone = c.box || \"text\";") && CHAT.contains("card.className = `sw-card sw-b-${to && (moved || !now) ? \"text\" : tone}`;"));
     for c in ["text", "red", "green", "yellow", "teal", "review", "check", "todo", "overlay0"] { assert!(COMPOSE_CSS.contains(&format!(".sw-card.sw-b-{c}")), "the page has a frame colour for {c}"); }
@@ -60,7 +61,9 @@ fn the_pages_styles_nothing_under_13px_targets_a_thumb_can_hit_and_a_draft_kept_
     // the board's own chat full screen hides the header with the open task and their arrows: the chat's own shows
     // then, so there is always one
     let full = include_str!("../crates/web/src/webui/page/chat.css");
-    assert!(full.contains(".sw-board.sw-chat-full > :is(.sw-head, .sw-body,") && full.contains(".sw-board.sw-chat-full .sw-chat-back { display: inline-flex; }"));
+    assert!(full.contains(".sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-body,") && full.contains(".sw-board.sw-chat-full .sw-chat-back { display: inline-flex; }"));
+    // the chat's switch is a thumb's size to tap, though drawn smaller (the web UI's own expander)
+    assert!(full.contains("@media (pointer: coarse) { .sw-chatbar .icon-button { min-width: var(--touch-target, 40px); min-height: var(--touch-target, 40px); } .sw-who-pick::before { content: \"\"; position: absolute; inset: -4px 0; } }"));
     assert!(has(CSS, r"\.sw-row\.is-selected \{[^}]*box-shadow: inset 3px 0 0 var\(--accent"), "the selected row has a bar in its gutter, not a tint alone");
     // The draft is kept with who it is for: a reload brings both back, so the words never go to whoever shows then.
     for part in ["sessionStorage.setItem(TO, JSON.stringify(to))", "if (box.value.trim()) to = savedTo();", "keep(box.value, to)", "scope: to.scope || \"\"", "scope: snap.flags?.scope || \"\""] { assert!(CHAT.contains(part), "{part}"); }

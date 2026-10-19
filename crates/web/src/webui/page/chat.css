@@ -15,7 +15,7 @@
    with how it stands. With nobody else to talk to, only their name, plainly. */
 .sw-who { flex: 0 0 auto; max-width: 75%; min-width: 0; display: inline-flex; align-items: center; gap: 2px; }
 .sw-who.segmented { padding: 2px; background: var(--bg-elevated, #211e1a); border: var(--hairline, 1px) solid var(--sw-line); border-radius: var(--radius-md, 8px); }
-.sw-who-pick { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--space-2, 8px); height: 32px; padding: 0 var(--space-3, 12px); border: 0; border-radius: calc(var(--radius-md, 8px) - 2px); background: transparent; color: var(--sw-dim); font: inherit; font-size: var(--fs-md, 14px); font-weight: var(--fw-medium, 500); cursor: pointer; }
+.sw-who-pick { position: relative; flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--space-2, 8px); height: 32px; padding: 0 var(--space-3, 12px); border: 0; border-radius: calc(var(--radius-md, 8px) - 2px); background: transparent; color: var(--sw-dim); font: inherit; font-size: var(--fs-md, 14px); font-weight: var(--fw-medium, 500); cursor: pointer; }
 .sw-who-pick.is-on { background: var(--bg-hover, #2a2621); color: var(--sw-strong); }
 @media (hover: hover) { .sw-who-pick:not(.is-on):hover { color: var(--sw-text); } }
 .sw-who.is-one .sw-who-pick { padding-left: 0; background: none; cursor: default; font-weight: var(--fw-semibold, 600); }
@@ -42,7 +42,8 @@
 @media (hover: hover) and (pointer: fine) { .sw-split::before { opacity: 0; } .sw-chat:hover .sw-split::before, .sw-split:focus-visible::before { opacity: 1; } }
 .sw-split[hidden] { display: none; }
 .sw-chat-note { margin: 0; padding: 0 var(--space-4, 16px) var(--space-2, 8px); color: var(--sw-dim); font-size: var(--fs-sm, 13px); }
-@media (pointer: coarse) { .sw-chatbar .icon-button { min-width: var(--touch-target, 40px); min-height: var(--touch-target, 40px); } .sw-who-pick { height: 36px; } }
+/* (The switch's choices reach a thumb's 40 px through an expander, as the web UI's own segmented switch does.) */
+@media (pointer: coarse) { .sw-chatbar .icon-button { min-width: var(--touch-target, 40px); min-height: var(--touch-target, 40px); } .sw-who-pick::before { content: ""; position: absolute; inset: -4px 0; } }
 
 /* The board's own chat, where the web UI has none to show: the conversation over the box, read as the web UI's chat
    reads (ChatView.css there: your words a card on the right, theirs plain prose), then the box (compose.css). */

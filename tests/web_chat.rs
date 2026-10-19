@@ -88,49 +88,37 @@ fn the_page_gets_the_two_you_can_talk_to_and_hiding_the_message_is_the_boards_ow
 }
 
 #[test]
-fn the_page_has_a_switch_hide_and_show_a_conversation_that_scrolls_back_and_tab_that_sends() {
-    // who you talk to: one button, as space on the terminal board: it names who gets your words, and a tap presses the
-    // board's own key, which flips to the other; with nobody else to flip to, it only names them
-    assert!(CHAT.contains(r#"const talk = h("button.btn.sw-talk", { type: "button", onclick: () => { if (!busy && now && !talk.disabled) onPress("talk"); } });"#));
+fn the_chats_bar_has_a_switch_hide_full_screen_and_a_grip_and_the_boards_own_conversation_reads_as_the_web_uis() {
+    // who you talk to: the web UI's segmented switch of the two (the Coordinator first), the one you talk to pressed; a
+    // tap on the other presses the board's own key, as space does on the terminal board; with nobody else, only a name
     assert!(TALK.contains("const [is, other] = c.toAgent ? [agent, coord] : [coord, onTask || onHead ? agent : \"\"];") && TALK.contains("`${c.task} agent`"));
-    assert!(TALK.contains("btn.disabled = !other; btn.title = other ? `Talk to ${other} instead`") && CHAT.contains("drawTalk(talk, talkNames(snap));"));
-    assert!(!CHAT.contains("segmented"), "no switch with two choices any more");
-    // full screen: the conversation fills the board, whole; its button, Esc or the back arrow go back
-    assert!(SAID.contains(r#"el.closest(".sw-board")?.classList.toggle("sw-chat-full", on);"#) && SAID.contains("if (on && !open && from > 0) opening(0); else if (!on && open) close(); else mark();"));
-    assert!(CSS.contains(".sw-board.sw-chat-full > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }") && CSS.contains(".sw-board.sw-chat-full .sw-said { max-height: none;"));
-    assert!(BOARD_JS.contains("if (chat.full()) return chat.full(false);") && BOARD_JS.contains("chat.full() ? chat.full(false) : closing?.()"));
-    // markdown read as the terminal reads it: bold is bold, the marks go; a screen stays as it is
+    assert!(CHAT.contains(r#"onclick: () => { if (!pressed && !busy && now) onPress("talk"); }"#) && CHAT.contains(r#"who.className = "sw-who segmented";"#));
+    assert!(CHAT.contains("const [coord, agent] = c.toAgent ? [other, is] : [is, other];") && CHAT.contains(r#"if (!other) { who.className = "sw-who is-one";"#));
+    // each with how it stands: the chat's own mark on the one you talk to, a task's row's mark on its agent
+    assert!(CHAT.contains("const agentMark = row ? markEl(row.mark, row.color, row.markDim) : null;"));
+    // how they stand in words beside it; on a narrow bar a word the mark already says steps aside
+    assert!(CHAT.contains(r#"state.classList.toggle("is-plain", PLAIN.test(c.status || "") && !c.progress);"#) && CSS.contains(".sw-who-status.is-plain { display: none; }"));
+    // Hide and Show press alt+c's key, so the board remembers which
+    assert!(CHAT.contains(r#"const hide = h("button.icon-button.sw-hide", { type: "button", onclick: () => onPress("chatMessage") });"#) && CHAT.contains(r#"hide.title = open ? "Hide the chat" : "Show the chat";"#));
+    // full screen: the board's header and list step aside; its own arrow, Esc or the board's arrow go back
+    assert!(CSS.contains(".sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }"));
+    assert!(CHAT.contains("hide.hidden = full; grow2.hidden = full;") && BOARD_JS.contains("if (chat.full()) return chat.full(false);") && BOARD_JS.contains("chat.full() ? chat.full(false) : closing?.()"));
+    // the grip on the bar sets the chat's share of the screen, kept in this browser, a quarter to four fifths
+    assert!(CHAT.contains(r#"const SPLIT = "sw-chat-split", LEAST = 0.25, MOST = 0.8, START = 0.46, STEP = 0.05;"#) && CHAT.contains("const end = () => { for (const [n, fn] of [[\"pointermove\", move], [\"pointerup\", end], [\"pointercancel\", end]]) grip.removeEventListener(n, fn); keepSplit(split); };"));
+    // docked, the board ends where the web UI's chat begins: its share under the list, or hidden only the web UI's box
+    assert!(CHAT.contains("if (docked && sized) board.style.setProperty(\"--sw-top-h\", `${Math.round(open ? H - Math.max(boxH + 140, split * H) : H - boxH)}px`);"));
+    // side by side where the window beside the web UI's sidebar is wide enough
+    assert!(CHAT.contains("const side = !full && open && window.innerWidth - (parseFloat(board.style.left) || 0) >= SIDE;") && CSS.contains(".sw-board.is-side .sw-chat { position: fixed; top: 0; right: 0;"));
+    // the board's own conversation, where the web UI has none: your words a card on the right, theirs plain prose,
+    // markdown read as the terminal reads it, a screen as it is; it follows new words while you are at its end
     assert!(SAID.contains("h(\"div.sw-said-text\", p.raw ? p.text : prose(p.text))") && SAID.contains("out.push(i % 2 ? h(\"strong\", bit) : bit)"));
-    assert!(!CHAT.contains("Talk to this task's agent\") : null"), "no text link any more");
-    // Hide and Show press alt+c's key
-    assert!(CHAT.contains(r#"onclick: () => onPress("chatMessage")"#) && CHAT.contains(r#"c.open ? "Hide" : "Show""#));
-    // the conversation: the newest thing said, whoever said it (the part the board says it opens on); Earlier opens
-    // the rest; the wheel and a swipe at the top do the same; Later goes down and once
-    // more from the end closes it; a new message starts at its beginning, but an opened conversation stays open while
-    // the same chat shows, on what you read or on its end (board_chat_open.rs for the terminal's)
-    assert!(SAID.contains("text.replaceChildren(...(open ? parts : parts.slice(from)).map(partEl));"));
-    assert!(CHAT.contains("fresh, !!c.raw, c.parts && c.parts.length ? c.from : 0, same);"));
-    assert!(CHAT.contains(r#"const whose = JSON.stringify([c.toAgent ? snap.list.selected : "", c.coord, !!c.open]);"#) && CHAT.contains("const fresh = key !== last, same = whose === lastWho;"));
-    assert!(SAID.contains("const keep = sameChat && open && !el.hidden, end = keep && atEnd(), was = keep ? reading() : null, before = parts;"));
-    assert!(SAID.contains("const i = was ? Math.min(Math.max(0, was.i - shift(before, parts)), parts.length - 1) : -1;"));
-    assert!(SAID.contains("if (end) text.scrollTop = text.scrollHeight; else if (i >= 0) text.scrollTop = rel(text.children[i]) - was.off;"));
-    assert!(SAID.contains(r#"up.addEventListener("click", () => { if (!open && from > 0 && text.scrollTop <= 1) opening(half()); else scroll(-half()); });"#));
-    assert!(SAID.contains(r#"down.addEventListener("click", () => { if (open && atEnd()) { if (!full) close(); } else scroll(half()); });"#));
-    assert!(SAID.contains(r#"text.addEventListener("wheel""#) && SAID.contains(r#"text.addEventListener("touchmove""#));
-    assert!(SAID.contains("if (!keep) { start = true; begin(); if (full) requestAnimationFrame(() => { if (full && !open && from > 0) opening(0); }); return; }") && SAID.contains("text.scrollTop = raw ? text.scrollHeight : 0; start = false;"));
-    // hidden, nothing is measured; shown again (Show, also after a reload with it hidden) or resized, the buttons are
-    // measured again, so a long reply has its Later button
-    assert!(SAID.contains("if (el.hidden || !text.clientHeight) return;") && SAID.contains("if (on) begin();"));
-    assert!(SAID.contains("new ResizeObserver(() => mark()).observe(text);"));
-    assert!(CHAT.contains("said.show(shown);") && !CHAT.contains("said.el.hidden"));
-    // its parts are no automation's mark: that one is `.sw-turn`, a 0.72em ring, and squeezed the words to a letter a line
-    assert!(BOARD_CSS.contains(".sw-turn { display: inline-block; position: relative; width: 0.72em;"));
-    assert!(!SAID.contains("div.sw-turn") && SAID.contains("div.sw-said-turn"));
+    assert!(SAID.contains("const end = !key || atEnd();") && SAID.contains("if (end) requestAnimationFrame(() => { text.scrollTop = text.scrollHeight; });"));
+    assert!(CSS.contains(".sw-turn-said.is-mine .sw-said-text { max-width: 80%;"));
+    // its parts are no automation's mark: that one is `.sw-turn`, a 0.72em ring
+    assert!(BOARD_CSS.contains(".sw-turn { display: inline-block; position: relative; width: 0.72em;") && !SAID.contains("div.sw-turn\""));
     // tab sends, and puts an agent on what it adds, where that applies; otherwise it moves on as tab does
     assert!(COMPOSE.contains(r#"if (e.key === "Tab" && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && !e.isComposing && box.value.trim() && onTab()) e.preventDefault();"#));
     assert!(CHAT.contains("onTab: () => { if (also.hidden || busy) return false; go(true); return true; }"));
-    // a thumb's size on touch, as wide as the box, and a phone keeps most of its window for the list
-    assert!(regex::Regex::new(r"@media \(pointer: coarse\) \{[^@]*\.sw-hide, \.sw-said-nav \.icon-button \{ min-height: var\(--touch-target").unwrap().is_match(CSS));
-    assert!(CSS.contains(".sw-chat > :not(.sw-composer) { width: min(100%, var(--chat-w, 820px)); margin-inline: auto;"));
-    assert!(CSS.contains("@media (max-width: 640px) { .sw-said { max-height: calc(var(--app-height, 100vh) * 0.22); }"));
+    // a thumb's size on touch
+    assert!(regex::Regex::new(r"@media \(pointer: coarse\) \{ \.sw-chatbar \.icon-button \{ min-width: var\(--touch-target, 40px\); min-height: var\(--touch-target").unwrap().is_match(CSS));
 }

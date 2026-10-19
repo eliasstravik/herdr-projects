@@ -149,10 +149,13 @@ export function openBoard({ onClose }) {
 }
 export function closeBoard() {
   if (!root) return;
+  // (Closed from here on: the chat's going puts the web UI back on its pane, and the page follows that at once.)
+  const was = root, c = chat;
+  root = null; chat = null;
   clearInterval(timer); timer = null;
   untrap?.(); untrap = null;
   window.removeEventListener("resize", fit);
-  chat?.destroy(); chat = null;
-  root.remove(); root = null;
+  c?.destroy();
+  was.remove();
   tell();
 }

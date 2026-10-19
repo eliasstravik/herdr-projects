@@ -23,9 +23,10 @@ fn typing_with_the_keyboard_up_the_header_steps_aside_and_the_conversation_takes
     assert!(ROOM.contains(r#"const mine = document.activeElement === box, on = mine && keyboard();"#) && ROOM.contains(r#"board.classList.toggle("sw-typing", on);"#));
     for rule in [
         r"\.sw-board\.sw-typing > :is\(\.sw-head, \.sw-body, \.sw-chips, \.sw-find-row, \.sw-note\) \{ display: none; \}",
-        r"\.sw-board\.sw-typing \.sw-chat \{ flex: 1; min-height: 0; overflow: hidden;[^}]*padding-bottom: calc\(var\(--space-2, 8px\) \+ var\(--sw-kb-cover, 0px\)\); \}",
-        r"\.sw-board\.sw-typing \.sw-said-box \{ flex: 1 1 0; min-height: 0; overflow: hidden; grid-template-rows: minmax\(0, 1fr\); \}",
-        r"\.sw-board\.sw-typing \.sw-said-box\.is-squeezed, \.sw-board\.sw-typing \.sw-said-full \{ display: none; \}",
+        r"\.sw-board\.sw-typing \.sw-chat \{ flex: 1; height: auto; min-height: 0; overflow: hidden;[^}]*\}",
+        r"\.sw-board\.sw-typing \.sw-own \{ padding-bottom: calc\(var\(--space-2, 8px\) \+ var\(--sw-kb-cover, 0px\)\); \}",
+        r"\.sw-board\.sw-typing \.sw-said-box \{ flex: 1 1 0; min-height: 0; overflow: hidden; \}",
+        r"\.sw-board\.sw-typing \.sw-said-box\.is-squeezed \{ display: none; \}",
         r"\.sw-board\.sw-typing \.sw-composer \{ margin-top: auto; \}",
     ] { assert!(has(CHAT_CSS, rule), "{rule}"); }
     // under its least (Earlier and Later, one over the other) the conversation steps aside for the words
@@ -42,7 +43,7 @@ fn the_box_stays_whole_above_the_keyboard_and_the_strip_ios_floats_over_it_and_t
     assert!(ROOM.contains(r#"board.style.setProperty("--sw-kb-cover", `${Math.max(0, Math.round(board.getBoundingClientRect().bottom - bottom)) + (ios() ? IOS_BAR : 0)}px`);"#));
     assert!(ROOM.contains(r#"/iP(hone|ad|od)/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)"#));
     // the field never taller than the room left in the board (never under its one line), with the keyboard up or not
-    assert!(ROOM.contains("card.getBoundingClientRect().bottom - (Math.min(chat.getBoundingClientRect().bottom, board.getBoundingClientRect().bottom) - px(getComputedStyle(chat).paddingBottom));"));
+    assert!(ROOM.contains("card.getBoundingClientRect().bottom - (Math.min(chat.getBoundingClientRect().bottom, board.getBoundingClientRect().bottom) - px(getComputedStyle(foot).paddingBottom));"));
     assert!(ROOM.contains(r#"box.style.setProperty("--sw-room", `${Math.max(px(getComputedStyle(box).minHeight), Math.floor(box.offsetHeight - o))}px`); };"#));
     assert!(COMPOSE_CSS.contains("max-height: 10lh; max-height: min(10lh, var(--sw-room, 10lh));"));
     assert!(COMPOSE_CSS.contains("max-height: min(calc(var(--app-height, 100dvh) / 2), 480px, var(--sw-room, 480px));"), "the grip's height too");
@@ -63,6 +64,6 @@ fn measuring_again_never_scrolls_the_caret_out_of_view_and_a_phone_on_its_side_k
     // not even one line over the keyboard: all but the box steps aside, its grip and the files' tiles too
     assert!(ROOM.contains(r#"if (on && over() > 0.5) { board.classList.add("sw-cramped"); box.style.removeProperty("--sw-room"); cap(); }"#));
     assert!(ROOM.contains(r#"board.classList.remove("sw-cramped");"#));
-    assert!(CHAT_CSS.contains(".sw-board.sw-typing.sw-cramped .sw-chat > :not(.sw-composer), .sw-board.sw-typing.sw-cramped .sw-files, .sw-board.sw-typing.sw-cramped .sw-grip { display: none; }"));
+    assert!(CHAT_CSS.contains(".sw-board.sw-typing.sw-cramped .sw-chat > :not(.sw-own), .sw-board.sw-typing.sw-cramped .sw-said-box, .sw-board.sw-typing.sw-cramped .sw-files, .sw-board.sw-typing.sw-cramped .sw-grip { display: none; }"));
     assert!(CHAT_CSS.contains(".sw-board.sw-typing.sw-cramped .sw-composer { --sw-grip-h: 0px; }"));
 }

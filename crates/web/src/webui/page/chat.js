@@ -39,7 +39,7 @@ export function chatEl({ onSend, onPress, onDock }) {
   // cleared: { id, reply, label, enter, delegate }. Tapping another task meanwhile changes what you look at, not this.
   let lastWho = null, to = null, now = null, tone = "text", status = "", snapNow = null, coordHead = false;
   let busy = false, closed = false; // closed: the board was closed, and this box writes nothing more
-  let full = false, open = true, split = savedSplit(), typing = false;
+  let full = false, open = true, split = savedSplit(), webTyping = false;
   let room = null, dock = null; // the room over a phone's keyboard, and the web UI's chat under the board
   let showing = null; // the conversation as the board last sent it: { parts, open, raw, toAgent }
   const go = async (delegate) => {
@@ -95,7 +95,7 @@ export function chatEl({ onSend, onPress, onDock }) {
   let labels = { enter: "", delegate: "" };
   // The first word typed (or file attached) locks who the draft is for, as the box then says; an empty box lets it go.
   function sync() {
-    const typed = !!box.value.trim(), holding = typed || files.count() > 0;
+    const typing = !!box.value.trim(), holding = typing || files.count() > 0;
     if (!holding) to = null; else if (!to && now) to = { ...now };
     const l = to || labels;
     // Where the page now shows somebody else (another task, another machine's Coordinator), the chip says that the
@@ -105,7 +105,7 @@ export function chatEl({ onSend, onPress, onDock }) {
     // before the page knows who it shows, right after a reload), it is the plain one, never the open task's colour.
     card.className = `sw-card sw-b-${to && (moved || !now) ? "text" : tone}`;
     chip.hidden = !moved; chip.className = "sw-to is-locked"; chip.textContent = moved ? `To: ${to.label}${to.reply ? " agent" : ""} · not who is shown above` : "";
-    send.disabled = !typed || busy || files.busy(); files.refresh(); voice.sync(); send.title = cap(l.enter) || "Send message"; also.hidden = !typed || !l.delegate; also.disabled = busy; also.title = l.delegate ? `${cap(l.delegate)} (Tab)` : "";
+    send.disabled = !typing || busy || files.busy(); files.refresh(); voice.sync(); send.title = cap(l.enter) || "Send message"; also.hidden = !typing || !l.delegate; also.disabled = busy; also.title = l.delegate ? `${cap(l.delegate)} (Tab)` : "";
   }
   const el = h("footer.sw-chat", { "aria-label": "Chat" }, bar, phone.strip, note, own);
 
@@ -124,10 +124,10 @@ export function chatEl({ onSend, onPress, onDock }) {
     board.classList.toggle("sw-chat-full", full);
     board.classList.toggle("sw-chat-hidden", !open && !full);
     board.classList.toggle("is-side", side);
-    board.classList.toggle("sw-web-typing", typing);
+    board.classList.toggle("sw-web-typing", webTyping);
     own.hidden = docked;
     said.show(!docked && (open || full));
-    const sized = !full && !typing && !side;
+    const sized = !full && !webTyping && !side;
     // Docked, the board ends where the web UI's chat begins: the chat's share of the screen under it, or with the chat
     // hidden only the web UI's box. With its own chat, the conversation's height is that share.
     const H = appHeight(), boxH = parseFloat(html.style.getPropertyValue("--sw-composer-h")) || 0;
@@ -178,7 +178,7 @@ export function chatEl({ onSend, onPress, onDock }) {
   let asked = "";
   const ask = (whose) => { if (whose === asked) return; asked = whose; onDock(); };
 
-  dock = dockFor({ boardOf: () => el.closest(".sw-board"), onChange: () => layout(), onTyping: (on) => { typing = on; layout(); },
+  dock = dockFor({ boardOf: () => el.closest(".sw-board"), onChange: () => layout(), onTyping: (on) => { webTyping = on; layout(); },
     // A coordinator's words in the web UI's box (the Coordinator's, a machine's or a repo's) go through the board; a
     // task's agent's as the web UI sends them.
     route: () => (snapNow?.chat && now && (!now.reply || coordHead) && snapNow.role === "drive" ? { delegate: labels.delegate || "", send: (text, delegate) => onSend(text, delegate, { id: now.id, reply: now.reply, scope: now.scope || "" }) } : null) });
