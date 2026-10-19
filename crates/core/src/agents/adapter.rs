@@ -192,7 +192,7 @@ pub fn plan_mode_args(kind: &str) -> Option<Vec<String>> { (kind == "claude").th
 /// A headless command for the Watcher: the program, its arguments, and what goes in on its stdin.
 pub struct OneShot { pub command: String, pub args: Vec<String>, pub stdin: Option<String> }
 /// The user's CLI pool is always launched in a real Herdr terminal pane, never as a Watcher one-shot.
-const INTERACTIVE_ONLY: &[&str] = &["freebuff", "codebuddy", "claude", "codex", "gemini", "cursor", "opencode", "kiro", "cline", "qodercli", "grok"];
+const INTERACTIVE_ONLY: &[&str] = &["freebuff", "codebuddy", "claude", "codex", "agy", "cursor", "opencode", "kiro", "cline", "qodercli", "grok"];
 pub fn one_shot(kind: &str, model: &str, _effort: &str, prompt: &str, system: &str, _lean: bool) -> Option<OneShot> {
     if INTERACTIVE_ONLY.contains(&kind) { return None; }
     match kind {

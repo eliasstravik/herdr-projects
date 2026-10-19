@@ -4,7 +4,7 @@ Ein kleines Herdr-Plugin zur Pflege einer globalen Reihenfolge von Coding-CLIs u
 
 ## Unterstützte CLIs
 
-`freebuff`, `codebuddy`, `claude`, `codex`, `gemini`, `cursor`, `opencode`, `kiro`, `cline`, `qodercli` (Qoder CLI) und `grok`. Ein Modell kann als `cli/modellname` angegeben werden. Modellnamen müssen vom jeweiligen CLI akzeptiert werden.
+`freebuff`, `codebuddy`, `claude`, `codex`, `agy` (Antigravity CLI), `cursor`, `opencode`, `kiro`, `cline`, `qodercli` (Qoder CLI) und `grok`. Ein Modell kann als `cli/modellname` angegeben werden. Modellnamen müssen vom jeweiligen CLI akzeptiert werden.
 
 ## Installation
 
@@ -64,7 +64,7 @@ Diese Einträge gehören in `~/.config/herdr/config.toml`; bestehende `[keys]`-E
 
 ## Bedienung
 
-1. Reihenfolge bearbeiten, z. B. `claude/opus,codex,gemini,cline,qodercli,grok`.
+1. Reihenfolge bearbeiten, z. B. `claude/opus,codex,agy,cline,qodercli,grok`.
 2. „Auf Herdr Projects anwenden“ wählen.
 3. Herdr Projects setzt den ersten Eintrag global als primären Worker und die restlichen als geordnete Fallbacks.
 

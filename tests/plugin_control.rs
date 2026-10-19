@@ -33,12 +33,12 @@ fn the_plugin_uses_the_projects_runner_from_its_parent_checkout_and_applies_all_
         .env("CONTROL_LOG", &calls)
         .env_remove("HERDR_PROJECTS_BIN")
         .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
-    child.stdin.take().unwrap().write_all(b"1\nclaude/opus,codex/gpt-6.1-sol,gemini,cursor,opencode,kiro,freebuff,codebuddy,cline,qodercli,grok\n2\n3\n").unwrap();
+    child.stdin.take().unwrap().write_all(b"1\nclaude/opus,codex/gpt-6.1-sol,agy,cursor,opencode,kiro,freebuff,codebuddy,cline,qodercli,grok\n2\n3\n").unwrap();
     let output = child.wait_with_output().unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     let shown = String::from_utf8_lossy(&output.stdout);
     assert!(shown.contains("Gespeichert. Noch nicht auf Herdr Projects angewendet."), "{shown}");
     assert!(shown.contains("Aktiviert: claude/opus → Fallback:"), "{shown}");
-    assert_eq!(fs::read_to_string(config.join("priority.txt")).unwrap(), "claude/opus,codex/gpt-6.1-sol,gemini,cursor,opencode,kiro,freebuff,codebuddy,cline,qodercli,grok\n");
-    assert_eq!(fs::read_to_string(calls).unwrap(), "set worker.fallback codex/gpt-6.1-sol,gemini,cursor,opencode,kiro,freebuff,codebuddy,cline,qodercli,grok\nset worker.agent claude/opus\n");
+    assert_eq!(fs::read_to_string(config.join("priority.txt")).unwrap(), "claude/opus,codex/gpt-6.1-sol,agy,cursor,opencode,kiro,freebuff,codebuddy,cline,qodercli,grok\n");
+    assert_eq!(fs::read_to_string(calls).unwrap(), "set worker.fallback codex/gpt-6.1-sol,agy,cursor,opencode,kiro,freebuff,codebuddy,cline,qodercli,grok\nset worker.agent claude/opus\n");
 }

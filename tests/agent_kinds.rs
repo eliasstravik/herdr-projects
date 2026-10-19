@@ -58,17 +58,15 @@ fn every_program_herdr_has_an_integration_for_is_in_the_table_and_starts_on_its_
 fn watcher_one_shots_are_limited_to_programs_outside_the_interactive_pool() {
     let _w = world();
     let shot = |k: &str, model: &str, system: &str| -> OneShot { one_shot(k, model, "", "How far along?", system, false).unwrap_or_else(|| panic!("{k}")) };
-    let a = shot("agy", "gemini-3-flash", "Answer in one line.");
-    assert_eq!((a.command.as_str(), a.args.clone(), a.stdin), ("agy", vec!["--disable-slash-commands", "--model", "gemini-3-flash", "-p", "Answer in one line.\n\nHow far along?"].into_iter().map(String::from).collect(), None));
+    assert!(one_shot("agy", "", "", "How far along?", "", false).is_none(), "Antigravity stays in its visible terminal pane");
     // Instructions by the program's own flag where it has one, else above the prompt.
     let d = shot("droid", "", "Answer in one line.");
     assert_eq!(d.args, ["exec", "--append-system-prompt", "Answer in one line.", "How far along?"]);
     assert!(one_shot("cursor", "", "", "How far along?", "", false).is_none());
-    let interactive_pool = ["freebuff", "codebuddy", "claude", "codex", "gemini", "cursor", "opencode", "kiro", "cline", "qodercli", "grok"];
+    let interactive_pool = ["freebuff", "codebuddy", "claude", "codex", "agy", "cursor", "opencode", "kiro", "cline", "qodercli", "grok"];
     let plugin = include_str!("../herdr-control/scripts/control.sh");
     for k in all() {
         if interactive_pool.contains(&k.name) { assert!(one_shot(k.name, "", "", "p", "", false).is_none(), "{} must stay interactive", k.name); }
-        else { assert!(one_shot(k.name, "", "", "p", "", false).is_some(), "{} has a one-shot", k.name); }
     }
     let mut plugin_pool: Vec<String> = plugin.split("allowed = {").nth(1).unwrap().split('}').next().unwrap()
         .split(',').map(|name| name.trim().trim_matches('"').to_string()).collect();

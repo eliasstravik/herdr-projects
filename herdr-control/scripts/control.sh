@@ -30,7 +30,7 @@ show_order() {
 validate_order() {
   python3 - "$1" <<'PY'
 import sys
-allowed = {"freebuff", "codebuddy", "claude", "codex", "gemini", "cursor", "opencode", "kiro", "cline", "qodercli", "grok"}
+allowed = {"freebuff", "codebuddy", "claude", "codex", "agy", "cursor", "opencode", "kiro", "cline", "qodercli", "grok"}
 items = [part.strip() for part in sys.argv[1].split(",") if part.strip()]
 if not items:
     raise SystemExit("Bitte mindestens eine CLI angeben.")
