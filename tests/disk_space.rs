@@ -169,10 +169,11 @@ fn a_board_command_a_task_s_agent_runs_leaves_that_task_s_temporary_folder_behin
     for (k, v) in sw::temp::env(&task(&id)) { unsafe { std::env::set_var(k, v) } }
     sw::temp::leave_task_env();
     for k in names { assert!(std::env::var_os(k).is_none(), "{k}"); }
-    // a TMPDIR of yours stays
-    unsafe { std::env::set_var("TMPDIR", w.base.join("mine")) };
+    // a TMPDIR of yours stays (a path of its own: the tests' folder is in a task's when a task's agent runs them)
+    let mine = std::path::PathBuf::from("/var/tmp/mine");
+    unsafe { std::env::set_var("TMPDIR", &mine) };
     sw::temp::leave_task_env();
-    assert_eq!(std::env::var_os("TMPDIR"), Some(w.base.join("mine").into()));
+    assert_eq!(std::env::var_os("TMPDIR"), Some(mine.into()));
     for (k, v) in names.iter().zip(had) { match v { Some(v) => unsafe { std::env::set_var(k, v) }, None => unsafe { std::env::remove_var(k) } } }
-    assert!(sw::temp::in_task_folder(&tmp.join("claude-1000")) && !sw::temp::in_task_folder(&w.root));
+    assert!(sw::temp::in_task_folder(&tmp.join("claude-1000")) && !sw::temp::in_task_folder(std::path::Path::new("/srv/proj")));
 }
