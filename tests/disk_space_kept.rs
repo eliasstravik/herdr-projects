@@ -103,3 +103,23 @@ fn the_build_an_approved_plan_starts_waits_for_room_on_a_nearly_full_disk() {
     assert_eq!(t.s("stage"), "working", "{}", t.at("failure"));
     assert!(t.at("plan").b("built") && !t.b("diskWait"));
 }
+
+#[test]
+fn a_link_reached_through_another_link_is_never_taken_away() {
+    let w = world();
+    let id = w.add("Linked twice");
+    // your folder, with a link of yours in it; the task's folder named through a link to that folder
+    let yours = w.base.join("home/stuff");
+    std::fs::create_dir_all(yours.join("site")).unwrap();
+    std::fs::write(yours.join("site/keep.txt"), "mine\n").unwrap();
+    std::os::unix::fs::symlink(yours.join("site"), yours.join("shortcut")).unwrap();
+    let base = sw::temp::board_base();
+    std::fs::create_dir_all(&base).unwrap();
+    std::os::unix::fs::symlink(&yours, base.join("parent")).unwrap();
+    let tmp = base.join("parent/shortcut");
+    sw::store::tasks::update(&id, |t| { t.put("tmp", tmp.display().to_string()); t.put("stage", "done"); Ok(sw::store::tasks::Change::Write) }).unwrap();
+    assert_eq!(sw::leftovers::free(&task(&id)), 0);
+    sw::leftovers::sweep::sweep();
+    assert!(std::fs::symlink_metadata(yours.join("shortcut")).map(|m| m.file_type().is_symlink()).unwrap_or(false), "your link stays");
+    assert!(yours.join("site/keep.txt").exists());
+}

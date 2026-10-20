@@ -64,19 +64,25 @@ fn trusted_top(p: &Path) -> Option<PathBuf> {
     tops.extend(orphans::kept_roots());
     tops.into_iter().filter(|t| p.starts_with(t) && p != t).max_by_key(|t| t.components().count())
 }
+/// Every folder above `p`, up to the trusted folder it is in, is a real folder, not a link: what is named under it is
+/// where it is named.
+fn above_real(p: &Path) -> bool {
+    let Some(top) = trusted_top(p) else { return false };
+    !p.ancestors().skip(1).take_while(|a| *a != top).any(|a| std::fs::symlink_metadata(a).map(|m| !m.is_dir() || m.file_type().is_symlink()).unwrap_or(true))
+}
 /// May the folder be emptied or removed: a real folder all the way down from a trusted folder, and guarded neither as
 /// it is named nor where it really is. Nothing is changed in asking.
 pub fn removable(p: &Path) -> bool {
-    let (Ok(m), Some(top)) = (std::fs::symlink_metadata(p), trusted_top(p)) else { return false };
-    if !m.is_dir() || p.ancestors().skip(1).take_while(|a| *a != top).any(|a| std::fs::symlink_metadata(a).map(|m| !m.is_dir() || m.file_type().is_symlink()).unwrap_or(true)) { return false; }
+    let Ok(m) = std::fs::symlink_metadata(p) else { return false };
+    if !m.is_dir() || !above_real(p) { return false; }
     let real = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
     !guarded(p) && !guarded(&real)
 }
-/// `removable`; a link in a trusted folder's place is taken away (what it points to stays, and nothing runs from it
-/// is stopped).
+/// `removable`; a link in a temporary folder's place, under real folders only, is taken away (what it points to
+/// stays, and nothing runs from it is stopped). A link reached through another link is never touched.
 fn safe(p: &Path) -> bool {
     let is_link = std::fs::symlink_metadata(p).map(|m| m.file_type().is_symlink()).unwrap_or(false);
-    if is_link && trusted_top(p).is_some() && !guarded(p) { let _ = std::fs::remove_file(p); }
+    if is_link && above_real(p) && !guarded(p) { let _ = std::fs::remove_file(p); }
     !is_link && removable(p)
 }
 /// Never removed: a folder this process's environment points into (a PATH entry of yours in an old scratchpad), the
