@@ -1,5 +1,6 @@
 //! Clean-up that is owed: nothing is touched while the task's herdr session cannot be reached, a close herdr did not
-//! do is tried again, and a clean-up killed half-way or never started, or never noted as owed, is carried out later.
+//! do is tried again, and a clean-up killed half-way or never started, or never noted as owed, is carried out later. A
+//! task that waits for you (your OK, an answer) is not done: none is owed, whatever shape it is in.
 use crate::common;
 use common::*;
 use serde_json::{json, Value};
@@ -160,6 +161,7 @@ fn a_done_task_with_no_note_that_clean_up_is_owed_is_cleaned_up_all_the_same_onc
     // merged while clean-up was off: no note, its space open. Turned on later: cleaned up whole, as it would have been
     let t = ready(&w, 1);
     let id = t.t("id");
+    assert_eq!(pass(&w, &id), 0, "waiting for your OK is not done: nothing of it is touched"); assert!(open(&w, &t));
     cleanup_setting(false);
     sw::actions::finish_line::approve(&id, None, false).unwrap();
     let c = settle(&id);
@@ -188,4 +190,16 @@ fn a_done_task_with_no_note_that_clean_up_is_owed_is_cleaned_up_all_the_same_onc
     assert!(kept(&c).contains("unmerged work"), "{}", kept(&c)); assert!(!c.b("tidy") && !open(&w, &c)); assert!(Path::new(t.s("worktree")).exists());
     assert!(!git(&w.root, &["branch", "--list", t.s("branch")]).is_empty());
     assert_eq!(pass(&w, &id), 0, "what it kept is kept");
+    // one that asked you a question and waits for the answer, its agent idle, its pane open, no note of any kind: that
+    // is the very shape of a clean-up owed, but for its stage. It is not done: nothing of it is touched.
+    w.script(json!({ "worker": [{ "status": "working" }] }));
+    let q = w.add("Asks you");
+    delegate(&q);
+    assert_eq!(settle(&q).s("stage"), "working");
+    sw::actions::filing::report(&q, sw::actions::filing::Report { state: "blocked".into(), kind: "question".into(), msg: "Which one?".into(), as_agent: true, ..Default::default() }).unwrap();
+    agent_pane(&w, task(&q).at("link").s("workspace"), |p| p["agent"]["status"] = json!("idle"));
+    let c = task(&q);
+    assert_eq!(c.s("stage"), "asks"); assert!(c.at("link").b("pane") && !c.b("tidy") && !c.b("cleaned") && !c.b("kept"));
+    assert_eq!(pass(&w, &q), 0, "waiting for you is not done: nothing of it is touched");
+    assert!(open(&w, &c) && Path::new(c.s("worktree")).exists() && !task(&q).b("kept"));
 }
