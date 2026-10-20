@@ -1,6 +1,7 @@
 //! The Boards section of the web UI's sidebar: one entry for all machines, first, then one per machine that has a board
-//! (this one and every other machine the board knows), each named as the web UI names that machine (pcs.rs) and saying
-//! at a glance how its board stands: a dot in the board's status colours and a short line (`1 working · 2 to do`).
+//! (this one and every other machine the board knows; all machines only once there is another), each named as the web
+//! UI names that machine (pcs.rs) and saying at a glance how its board stands: a dot in the board's status colours and
+//! a short line (`1 working · 2 to do`).
 //! Picking one is the choice the scope key makes (whose board you see), made at once: the section and the board are the
 //! same browser's board (web.rs), so the two stay in step.
 use super::pcs::{pc_of, Pc};
@@ -38,8 +39,9 @@ fn far(label: &str, m: &Remote, pcs: &[Pc]) -> (Value, Option<[usize; 5]>) {
     let detail: Vec<String> = std::iter::once(why.t("line")).chain(why.arr("detail").iter().map(|d| d.as_str().unwrap_or("").to_string())).filter(|d| !d.is_empty()).collect();
     (json!({ "scope": label, "name": name, "dot": "", "line": "not reachable", "off": true, "title": format!("{name} is not reachable: {}", detail.join("\n")) }), None)
 }
-/// Every entry: all machines together first, then each machine in the order of herdr's sidebar (machine-order.md; this
-/// machine first when there is none), named as the web UI names it.
+/// Every entry: all machines together first (not while this machine is the only one: it would be this one again), then
+/// each machine in the order of herdr's sidebar (machine-order.md; this machine first when there is none), named as the
+/// web UI names it.
 pub fn boards(c: &mut Client) -> Value {
     let now = crate::clock::now();
     if now - c.boards_at >= ASK { c.boards_at = now; poll(c, false); }
@@ -57,7 +59,8 @@ pub fn boards(c: &mut Client) -> Value {
         if let Some(n) = n { add(&mut all, &n); } else if e.b("off") { away += 1; }
         out.push(e);
     }
-    // All machines is always there, at the top, also with no other machine yet: it then shows this one's tasks.
+    // All machines at the top, once there is another machine: with only this one it would show the same tasks again.
+    if c.s.remotes.is_empty() { return json!({ "boards": out, "scope": c.s.scope }); }
     let mut e = entry("*", "All machines", &all, format!("Every machine's board: {}", line(&all)));
     if away > 0 { e["line"] = json!(format!("{} · {away} not reachable", line(&all))); }
     out.insert(0, e);
@@ -66,6 +69,8 @@ pub fn boards(c: &mut Client) -> Value {
 /// The board of one machine (`""` this one, `"*"` all of them, else the machine's name on the board), as the scope key
 /// would have shown it. One the board does not know (any more) is said, and nothing changes.
 pub fn choose(c: &mut Client, to: &str) -> Result<(), String> {
+    // (Not yet told which machines there are, every machine may still be another one: the answer settles it, update/remotes.rs.)
+    if to == "*" && c.s.remotes.is_empty() && c.s.listed_at.is_some() { return Err("There is no other machine: every machine's board is this one's.".into()); }
     if !to.is_empty() && to != "*" && !c.s.remotes.contains_key(to) { return Err(format!("The board knows no machine called {to}.")); }
     if c.s.scope == to { return Ok(()); }
     let mut fx = vec![];

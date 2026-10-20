@@ -26,10 +26,13 @@ fn other_machines_tasks_show_with_the_machines_name_and_an_action_goes_to_the_ma
     far.tasks("vm-a", "0.2.0", json!([theirs()]));
     far.answers("vm-a", "do", &json!({ "ok": true, "msg": "far/1: archived." }));
     let s = call("press", json!({ "id": "scope", "role": "watch" }), None); // whose board you see only shows: a watching device may
-    assert_eq!(s.at("flags").s("scope"), "*");
-    assert!(s.at("msg").s("text").contains("Every machine you can reach"), "{}", s.at("msg"));
+    // (no other machine known yet: herdr is asked for them first, and every machine shows once there is another one)
+    assert_eq!(s.at("flags").s("scope"), "");
+    assert!(s.at("msg").s("text").contains("Looking for other machines"), "{}", s.at("msg"));
     far::answered("t", 1);
     let s = call("board", json!({}), None);
+    assert_eq!(s.at("flags").s("scope"), "*");
+    assert!(s.at("msg").s("text").contains("Every machine you can reach"), "{}", s.at("msg"));
     assert_eq!(s.at("list").at("head").s("machines"), "vm-a");
     let f = rows_of(&s).into_iter().find(|r| r.s("host") == "vm-a").unwrap();
     assert_eq!((f.s("id"), f.s("title")), ("vm-a:far/1", "Theirs"));

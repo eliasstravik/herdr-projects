@@ -69,7 +69,7 @@ fn a_draft_goes_to_who_it_was_typed_for_a_merge_has_no_filled_yes_and_the_page_s
     let ids: Vec<String> = s.arr("menu").iter().map(|i| i.t("id")).collect();
     for no in ["yes", "sendBack", "undo", "close", "free"] { assert!(!ids.contains(&no.to_string()), "{ids:?}"); }
     for yes in ["stop", "archive", "pin", "scope", "settings"] { assert!(ids.contains(&yes.to_string()), "{yes}: {ids:?}"); }
-    assert_eq!(s.arr("menu").iter().find(|i| i.s("id") == "scope").unwrap().s("label"), "show every machine's tasks (now: this machine)");
+    assert_eq!(s.arr("menu").iter().find(|i| i.s("id") == "scope").unwrap().s("label"), "look for other machines (now: this machine)");
     for id in sw::webui::model::side::TERMINAL_ONLY { assert!(!ids.contains(&id.to_string()), "{id}"); }
     let said = s.to_string();
     assert!(!regex::Regex::new(r"ctrl\+|alt\+|\bshift\+").unwrap().is_match(&said), "no terminal key anywhere on the page");
