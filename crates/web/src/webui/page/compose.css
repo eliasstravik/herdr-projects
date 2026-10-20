@@ -13,7 +13,7 @@
   --sw-frame: var(--sw-text);
 }
 /* Who the box sends to, by its frame (view/textbox.js: boxColor): the Coordinator's is the plain text colour, an
-   agent's its task's status colour, a machine's or a repo's coordinator's its heading's colour (board.css: .sw-c-*). */
+   agent's its task's status colour, a machine's coordinator's its heading's accent, a repo's coordinator's the brighter grey (board.css: .sw-c-*). */
 .sw-card.sw-b-text { --sw-frame: var(--sw-text); } .sw-card.sw-b-red { --sw-frame: var(--sw-red); } .sw-card.sw-b-green { --sw-frame: var(--sw-green); } .sw-card.sw-b-yellow { --sw-frame: var(--sw-yellow); }
 .sw-card.sw-b-teal { --sw-frame: var(--sw-teal); } .sw-card.sw-b-review { --sw-frame: var(--sw-review); } .sw-card.sw-b-queue { --sw-frame: var(--sw-queue); } .sw-card.sw-b-check { --sw-frame: var(--sw-check); } .sw-card.sw-b-todo, .sw-card.sw-b-overlay0 { --sw-frame: var(--sw-todo); }
 .sw-card.sw-b-accent { --sw-frame: var(--accent, #f0a830); } .sw-card.sw-b-subtext0 { --sw-frame: var(--sw-dim); }

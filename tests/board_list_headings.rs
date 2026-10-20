@@ -2,11 +2,13 @@
 //! rows that never name their machine; the arrows stop on every heading, enter folds it to one line that says how many
 //! tasks it holds and unfolds it, at both levels, grouped by repo and by status; a fold outlasts a refresh and the board
 //! closing, gives way to a filter and to a task the selection is taken to; the hint line, the ? menu and the web board.
+//! A repo's heading is its name in plain text, bold, as loud as its tasks' titles, its key and caret muted.
 use crate::common;
 use common::board::{open, web, Board};
 use common::*;
 use serde_json::{json, Value};
 use sw::board::update::{update, Event};
+use sw::shown::ink::Ink;
 use sw::json::*;
 
 fn has(text: &str, re: &str) -> bool { regex::Regex::new(re).unwrap().is_match(text) }
@@ -125,4 +127,24 @@ fn a_click_on_a_heading_folds_it_and_the_web_board_has_the_same_headings_a_tap_f
     assert!(g.b("folded") && g.arr("rows").is_empty() && g.i("count") == 2, "{g:?}");
     let b = web(&w, "fold", json!({ "id": g.s("id") }));
     assert_eq!(groups(&b).into_iter().find(|g| g.s("name") == "to do").unwrap().arr("rows").len(), 2);
+}
+
+#[test]
+fn a_repos_heading_is_its_name_in_plain_bold_text_as_its_titles_and_its_key_muted() {
+    let w = world_with(Opts { repo: true, ..Default::default() });
+    w.add("Mine 1");
+    let mut s = open(&w.root, 30); s.s.side = false;
+    if !s.s.by_repo { s.press(&["alt+s"]); }
+    let lines = s.inked(100);
+    // Each piece of the first line with `on`, with its ink and boldness: blanks left out.
+    let pieces = |on: &str| { let l = lines.iter().find(|l| l.text().contains(on)).unwrap_or_else(|| panic!("no {on:?}")); l.0.iter().filter(|p| !p.t.trim().is_empty()).map(|p| (p.t.trim().to_string(), p.c, p.bold)).collect::<Vec<_>>() };
+    let head = pieces("▾ proj");
+    assert_eq!(head, vec![("▾".into(), Ink::Muted, false), ("proj".into(), Ink::Plain, true), ("· PRJ".into(), Ink::Muted, false)]);
+    let title = pieces("Mine 1").into_iter().find(|p| p.0.contains("Mine 1")).unwrap();
+    assert_eq!(title.1, Ink::Plain, "the heading is as loud as the titles under it: {title:?}");
+    // The web board: the heading in plain text too (board.css: .sw-c-plain), its key on its own, dimmed there.
+    let mut b = web(&w, "board", json!({}));
+    if !b.at("flags").b("byRepo") { b = web(&w, "press", json!({ "id": "byRepo" })); }
+    let g = b.at("list").arr("groups").iter().find(|g| g.s("name") == "proj").cloned().unwrap_or_else(|| panic!("{}", b.at("list")));
+    assert_eq!((g.s("color"), g.s("key")), ("plain", "PRJ"), "{g:?}");
 }

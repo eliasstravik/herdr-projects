@@ -1,5 +1,5 @@
-//! A machine's coordinator is drawn in its machine heading's colour, a repo's coordinator in its repo heading's: the
-//! chat's frame, its name over the box, its name in the hints, and the web board's chat. Inside the box (the prompt,
+//! A machine's coordinator is drawn in its machine heading's colour, a repo's coordinator in the brighter grey (its
+//! repo's heading is in plain text, as loud as its tasks): the chat's frame, its name over the box, its name in the hints, and the web board's chat. Inside the box (the prompt,
 //! who said what) all looks as with the top-level Coordinator, which keeps its plain look, so the three are told apart
 //! by their frames, in a light theme and a dark one.
 use crate::common;
@@ -7,7 +7,7 @@ use common::board::{open, Board};
 use common::*;
 use serde_json::json;
 use sw::board::theme::{resolve, Seen, Theme};
-use sw::board::update::coords::{MACHINE_INK, REPO_INK};
+use sw::board::update::coords::{MACHINE_INK, REPO_HEAD_INK, REPO_INK};
 use sw::board::update::heads::{group_id, machine_id};
 use sw::board::update::{update, Event};
 use sw::board::view::textbox::box_ink;
@@ -39,7 +39,7 @@ fn all(b: &mut Board, needle: &str, ink: Ink, bold: bool) {
 }
 
 #[test]
-fn a_repos_coordinator_is_drawn_in_its_headings_grey_and_a_machines_in_its_headings_accent() {
+fn a_repos_coordinator_is_drawn_in_the_brighter_grey_and_a_machines_in_its_headings_accent() {
     let w = coord_world();
     w.add("Fix the login");
     w.script(json!({ "coordinator": [{ "said": "Proj has one task open." }] }));
@@ -49,8 +49,8 @@ fn a_repos_coordinator_is_drawn_in_its_headings_grey_and_a_machines_in_its_headi
         s.theme = theme(name);
         if !s.s.by_repo { s.press(&["alt+s"]); }
         s.s.sel = group_id(&s.s, "", "proj"); s.load();
-        // the heading, and its coordinator's name in the hint, in the same grey
-        assert_eq!(inks_on(&s.inked(100), "▾ proj", "proj"), vec![(REPO_INK, true)]);
+        // the heading in plain text, bold; its coordinator's name in the hint in the brighter grey
+        assert_eq!(inks_on(&s.inked(100), "▾ proj", "proj"), vec![(REPO_HEAD_INK, true)]);
         assert_eq!(inks_on(&s.inked(100), "talk to the proj coordinator", "proj coordinator"), vec![(REPO_INK, false)]);
         s.press(&["space"]);
         assert_eq!(box_ink(&s.s, None), REPO_INK);
@@ -100,8 +100,8 @@ fn the_web_board_draws_a_headings_coordinator_in_its_headings_colour() {
     web("fold", json!({ "id": head }));
     let s = web("press", json!({ "id": "talk" }));
     assert_eq!((s.at("chat").s("tint"), s.at("chat").s("box")), ("subtext0", "subtext0"), "{}", s.at("chat"));
-    // the same colour as its heading on the page
-    assert!(s.at("list").arr("groups").iter().any(|g| g.s("id") == head && g.s("color") == "subtext0"), "{}", s.at("list"));
+    // its heading on the page is in plain text, as on the terminal board
+    assert!(s.at("list").arr("groups").iter().any(|g| g.s("id") == head && g.s("color") == "plain"), "{}", s.at("list"));
     // on the page only the name over the box takes it: who said what keeps the Coordinator's look (chat.css)
     let css = include_str!("../crates/web/src/webui/page/chat.css");
     let tinted: Vec<&str> = css.lines().filter(|l| l.contains("data-tint")).collect();

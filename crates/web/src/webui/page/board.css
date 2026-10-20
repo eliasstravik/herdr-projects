@@ -225,7 +225,7 @@ a.sw-tag:hover { text-decoration: underline; }
 /* The board's colour names. */
 .sw-c-red { color: var(--sw-red); } .sw-c-green { color: var(--sw-green); } .sw-c-yellow { color: var(--sw-yellow); }
 .sw-c-teal { color: var(--sw-teal); } .sw-c-review, .sw-c-blue { color: var(--sw-review); } .sw-c-check, .sw-c-text { color: var(--sw-check); }
-.sw-c-auto { color: var(--sw-auto); } .sw-c-queue { color: var(--sw-queue); } .sw-c-overlay0, .sw-c-subtext0, .sw-c-surface_dim { color: var(--sw-dim); } .sw-c-surface1 { color: var(--sw-line); } .sw-c-todo { color: var(--sw-todo); } .sw-c-accent, .sw-c-peach { color: var(--accent, #f0a830); }
+.sw-c-plain { color: var(--sw-text); } .sw-c-auto { color: var(--sw-auto); } .sw-c-queue { color: var(--sw-queue); } .sw-c-overlay0, .sw-c-subtext0, .sw-c-surface_dim { color: var(--sw-dim); } .sw-c-surface1 { color: var(--sw-line); } .sw-c-todo { color: var(--sw-todo); } .sw-c-accent, .sw-c-peach { color: var(--accent, #f0a830); }
 .sw-b { font-weight: var(--fw-semibold, 600); } .sw-d { opacity: 0.9; } /* a quiet mark: no fainter, or it falls under 3 to 1 on the light palettes */
 
 /* When the web UI's menu is not found: the Board, floating. */

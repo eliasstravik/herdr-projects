@@ -39,7 +39,7 @@ pub fn side_of(s: &mut State, t: &Theme) -> Obj {
         // The part it opens on: the newest thing said, whoever said it.
         "from": crate::board::view::talk::opens_at(&w.parts),
         "raw": w.raw, "mine": w.mine, "tone": if w.name == "Coordinator" && w.parts.first().map(|p| p.tone == "red").unwrap_or(false) { "red" } else { "" }, "note": w.note,
-        // A machine's or a repo's coordinator: its heading's colour, on its name, its labels and the box's frame.
+        // A machine's or a repo's coordinator: its own colour (coords.rs), on its name, its labels and the box's frame.
         "tint": if w.tint == crate::shown::ink::Ink::Plain { "" } else { w.tint.name() },
         "toAgent": s.reply && (r.is_some() || crate::board::update::coords::talking(s).is_some()), "box": crate::board::view::textbox::box_ink(s, r.as_ref()).name(),
         // Whether the latest message shows (alt+c), and the two you can talk to: the Coordinator, and the selected task's

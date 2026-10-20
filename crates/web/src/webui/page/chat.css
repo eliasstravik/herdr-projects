@@ -21,7 +21,7 @@
 .sw-who.is-one .sw-who-pick { padding-left: 0; background: none; cursor: default; font-weight: var(--fw-semibold, 600); }
 .sw-who-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sw-who .sw-mark { width: auto; font-size: var(--fs-sm, 13px); line-height: 1; }
-/* A machine's or a repo's coordinator: its name in its heading's colour (board.css: .sw-c-*). */
+/* A machine's or a repo's coordinator: its name in its own colour, a machine's its heading's accent, a repo's the grey. */
 .sw-chat[data-tint="accent"] .sw-who-pick.is-on .sw-who-name { color: var(--accent, #f0a830); }
 .sw-chat[data-tint="subtext0"] .sw-who-pick.is-on .sw-who-name { color: var(--sw-dim); }
 /* How they stand, in words, beside the switch; on a narrow bar a word the dot already says (idle, working) steps aside,
