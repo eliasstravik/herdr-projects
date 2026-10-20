@@ -1,8 +1,9 @@
 // The Boards section of the web UI's sidebar: under a heading that looks and folds as the web UI's own Agents heading
-// does, one entry for all machines at the top, then one per machine that has a board, each with a dot in the board's
-// status colours and a short line of how it stands (`1 working · 2 to do`). Its rows are built of the web UI's own
-// sidebar classes (AgentSidebar.tsx there), so they look as its agent rows do. Picking one shows that machine's board,
-// as the board's own Other machines does: the section and the board are one browser's board, so the two stay in step.
+// does, one entry for all machines at the top (once there is another machine), then one per machine that has a board,
+// each with a dot in the board's status colours and a short line of how it stands (`1 working · 2 to do`). Its rows are
+// built of the web UI's own sidebar classes (AgentSidebar.tsx there), so they look as its agent rows do. Picking one
+// shows that machine's board, as the board's own Other machines does: the section and the board are one browser's
+// board, so the two stay in step.
 // Every word comes from the board (webui/boards.rs).
 /* global document, window */
 import { h, icon, get, post } from "./dom.js";

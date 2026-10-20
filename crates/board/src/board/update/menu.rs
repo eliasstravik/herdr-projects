@@ -44,7 +44,7 @@ pub fn label(s: &State, k: K, r: Option<&Obj>) -> String {
         K::ByRepo => if s.by_repo { "group by status".into() } else { "group by repo: see which repo each task is in".into() },
         K::AllDone => if s.all_done { "show only the latest done".into() } else { "show all done".into() },
         K::Scope => {
-            let to = if next_scope.is_empty() { "show this machine's tasks only".to_string() } else if next_scope == "*" { "show every machine's tasks".into() } else { format!("show only {next_scope}'s tasks") };
+            let to = if super::remotes::seeks(s) { "look for other machines".to_string() } else if next_scope.is_empty() { "show this machine's tasks only".to_string() } else if next_scope == "*" { "show every machine's tasks".into() } else { format!("show only {next_scope}'s tasks") };
             let now = if s.scope.is_empty() { "this machine".to_string() } else if s.scope == "*" { "every machine".into() } else { format!("only {}", s.scope) };
             format!("{to} (now: {now})")
         }

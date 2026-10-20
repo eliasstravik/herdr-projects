@@ -34,8 +34,9 @@ fn each_machine_has_its_board_in_the_section_named_as_the_web_ui_names_it_with_h
     let mut stuck = far::theirs(3); stuck["state"] = json!("blocked");
     far.tasks("vm-a", "0.2.0", json!([busy, far::theirs(2), stuck]));
     // asked before the other machine answered: it is being asked, and there is nothing to add up yet
+    // (and before herdr said which machines there are, no all machines: it would be this one again)
     let first = boards(pcs());
-    assert_eq!(first.arr("boards")[1].s("name"), "Mac", "this machine as the web UI names it");
+    assert_eq!(first.arr("boards").iter().find(|e| e.s("scope") == "").map(|e| e.t("name")).as_deref(), Some("Mac"), "this machine as the web UI names it");
     far::answered("t", 1);
     let b = boards(None);
     assert_eq!(entries(&b), vec![
@@ -47,20 +48,28 @@ fn each_machine_has_its_board_in_the_section_named_as_the_web_ui_names_it_with_h
 }
 
 #[test]
-fn a_board_with_nothing_going_on_is_all_quiet_its_archive_left_out_and_all_machines_is_there_also_with_no_other_machine() {
+fn a_board_with_nothing_going_on_is_all_quiet_its_archive_left_out_and_with_no_other_machine_there_is_no_all_machines() {
     let w = world();
-    std::fs::write(sw::store::files::data_dir().join("view.json"), json!({ "cwd": w.root_str() }).to_string()).unwrap();
+    let far = Far::new(&w.base);
+    far.tasks("vm-a", "0.2.0", json!([]));
+    std::fs::write(sw::store::files::data_dir().join("view.json"), json!({ "cwd": w.root_str(), "scope": "*" }).to_string()).unwrap();
     sw::actions::archive::archive(&w.add("Old")).unwrap();
-    // a web UI that names this machine only by its id, or none: the board's own words for it
+    // a web UI that names this machine only by its id, or none: the board's own words for it; this machine is the only
+    // one, so all machines would be this one again: it is not there
+    let told = |fx| { let c = sw::webui::web::client("t"); let mut g = c.lock().unwrap(); let fx = sw::board::update::update(&mut g.s, sw::board::update::Event::Machines(fx)); sw::webui::web::effects(&mut g, fx, false); };
+    told(vec![]);
     let b = boards(Some(vec![pc("local", "local", "", true)]));
     assert_eq!(b.at("boards"), &json!([
-        { "scope": "*", "name": "All machines", "dot": "quiet", "line": "all quiet", "title": "Every machine's board: all quiet" },
         { "scope": "", "name": "This machine", "dot": "quiet", "line": "all quiet", "title": "This machine's board: all quiet" },
     ]));
-    // picked, it stays picked when the board learns again that there is no other machine
-    assert_eq!(call("scope", json!({ "to": "*" }), None).unwrap().at("flags").s("scope"), "*");
-    { let c = sw::webui::web::client("t"); let mut g = c.lock().unwrap(); let fx = sw::board::update::update(&mut g.s, sw::board::update::Event::Machines(vec![])); sw::webui::web::effects(&mut g, fx, false); }
-    assert_eq!(boards(None).s("scope"), "*");
+    // the terminal board showed every machine: with no other one, the web shows this machine's own, and cannot pick it
+    assert_eq!(b.s("scope"), "", "{b}");
+    assert_eq!(call("scope", json!({ "to": "*" }), None).unwrap_err(), "There is no other machine: every machine's board is this one's.");
+    // a second machine: all machines is there again, at the top
+    let m = sw::remote::Machine { label: "vm-a".into(), target: "me@vm-a".into(), ..Default::default() };
+    told(vec![m]);
+    let names: Vec<String> = boards(None).arr("boards").iter().map(|e| e.t("name")).collect();
+    assert_eq!(names, vec!["All machines", "This machine", "vm-a"]);
 }
 
 #[test]

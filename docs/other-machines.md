@@ -10,8 +10,12 @@ Which machines you see is the first thing in the board's header, in the accent c
 ## Set up another machine
 
 Machines are found through Herdr only: the ones you added with `herdr machine add`, or the ones you name in
-`board.machines`. With none, `Alt+M` says so. There is no Tailscale discovery. They are listed in the order of Herdr's
-machines sidebar ([machine order](machine-order.md)).
+`board.machines`. There is no Tailscale discovery. They are listed in the order of Herdr's machines sidebar
+([machine order](machine-order.md)).
+
+With no other machine there is no "every machine" to show, on the terminal board and on the web: `Alt+M` asks Herdr
+for its machines (`Looking for other machines…`), says when there are none, and shows every machine as soon as there
+is another one. A board that showed every machine goes back to this machine's own when the others are gone.
 
 Each other machine needs, once:
 

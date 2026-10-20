@@ -10,20 +10,31 @@ use crate::remote::why::{not_list, unknown};
 use crate::remote::{sidebar, Machine};
 use crate::shown::ink::Ink;
 
-/// The machines herdr knows (or the `board.machines` setting names): new ones are added, gone ones dropped.
+/// How long herdr's answer to which machines there are is taken as it stands (the board asks again after that).
+const LISTED: i64 = 60000;
+/// The machines herdr knows (or the `board.machines` setting names): new ones are added, gone ones dropped. With no
+/// other machine, every machine is only this one: the board shows this machine's own board, and offers no other.
 pub fn machines(s: &mut State, list: Vec<Machine>, fx: &mut Vec<Effect>) {
-    // (The web board keeps all machines: its sidebar offers that board also while this machine is the only one.)
-    if s.all() && !s.ctx.web && list.is_empty() && s.remotes.is_empty() {
-        s.scope.clear(); fx.push(Effect::Save);
-        let off = crate::store::settings::lookup::setting("board.machines", None) == json!("none");
-        s.flash(if off { "Other machines are off (unset board.machines turns them on).".to_string() } else { "No other machines. Add one with: herdr machine add <name> <ssh target>  (or name them in the board.machines setting).".into() }, Ink::Yellow);
-    }
     let auto = crate::store::settings::lookup::setting("board.machines", None).as_str().unwrap_or("auto") == "auto";
     s.own_order = auto.then(|| list.iter().map(|m| m.label.clone()).collect());
     for m in &list { s.remotes.entry(m.label.clone()).or_insert_with(|| Remote { machine: m.clone(), ..Default::default() }).machine = m.clone(); }
     s.remotes.retain(|k, _| list.iter().any(|m| m.label == *k));
+    s.listed_at = Some(crate::clock::now());
+    let alone = s.remotes.is_empty();
+    if s.all() && alone {
+        s.scope.clear(); fx.push(Effect::Save);
+        if !s.ctx.web { s.flash(none_said(), Ink::Yellow); }
+    }
+    // The scope key asked for the machines: every machine shows once there is another one.
+    if std::mem::take(&mut s.seeking) {
+        if alone { s.flash(none_said(), Ink::Yellow); } else { set_scope(s, "*".into(), fx); }
+    }
     relist(s);
     fx.push(Effect::Poll(true));
+}
+fn none_said() -> String {
+    let off = crate::store::settings::lookup::setting("board.machines", None) == json!("none");
+    if off { "Other machines are off (unset board.machines turns them on).".into() } else { "No other machines. Add one with: herdr machine add <name> <ssh target>  (or name them in the board.machines setting).".into() }
 }
 pub fn answered(s: &mut State, label: &str, answer: Result<Value, Value>) {
     let now = s.now;
@@ -71,13 +82,24 @@ pub fn shown(s: &State, host: &str) -> String { sidebar::shown_as(&super::heads:
 pub fn others(s: &State) -> Vec<&Remote> { let mut v: Vec<&Remote> = s.remotes.values().collect(); v.sort_by_key(|m| place(s, &m.machine.label)); v }
 /// The machines in view: all the others with every machine shown, else the one shown.
 pub fn in_view(s: &State) -> Vec<&Remote> { if s.scope == "*" { others(s) } else { s.remotes.get(&s.scope).into_iter().collect() } }
-/// Whose board, in turn: this machine, every machine, then each other machine by itself.
+/// Whose board, in turn: this machine, every machine, then each other machine by itself. Every machine is in it only
+/// while there is another one.
 pub fn scope_next(s: &State) -> String {
-    let ring: Vec<String> = std::iter::once(String::new()).chain(std::iter::once("*".to_string())).chain(others(s).into_iter().map(|m| m.machine.label.clone())).collect();
+    let others: Vec<String> = others(s).into_iter().map(|m| m.machine.label.clone()).collect();
+    let every = (!others.is_empty()).then(|| "*".to_string());
+    let ring: Vec<String> = std::iter::once(String::new()).chain(every).chain(others).collect();
     let at = ring.iter().position(|x| *x == s.scope).unwrap_or(0);
     ring[(at + 1) % ring.len()].clone()
 }
-pub fn next_scope(s: &mut State, fx: &mut Vec<Effect>) { let to = scope_next(s); set_scope(s, to, fx); }
+/// With no other machine known the board has nothing to go round: it asks herdr for the machines first (machines()
+/// goes on), unless herdr has just said there are none.
+pub fn seeks(s: &State) -> bool { s.remotes.is_empty() && !s.all() }
+pub fn next_scope(s: &mut State, fx: &mut Vec<Effect>) {
+    if !seeks(s) { let to = scope_next(s); return set_scope(s, to, fx); }
+    if s.listed_at.is_some_and(|t| crate::clock::now() - t < LISTED) { return s.flash(none_said(), Ink::Yellow); }
+    s.seeking = true; fx.push(Effect::Poll(true));
+    s.flash("Looking for other machines…".to_string(), Ink::Muted);
+}
 pub fn set_scope(s: &mut State, to: String, fx: &mut Vec<Effect>) {
     s.scope = to; fx.push(Effect::Save);
     if s.all() { fx.push(Effect::Poll(true)); }
