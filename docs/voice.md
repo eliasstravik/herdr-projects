@@ -141,6 +141,8 @@ Off, voice is gone, not just broken:
 - the board's front door refuses to start a call or to run the voice agent's tools;
 - the call helper does not run on this computer, whatever `voice.helper` says, so it listens on no machine over SSH;
 - nothing contacts ElevenLabs: no voice agent is made or kept in step, no voice is added to your account.
+- a call that is on when you turn them off ends within seconds, on either board, and lets go of the microphone and
+  of ElevenLabs.
 
 `herdr-projects voice` says that calls are off and how to turn them on again: `herdr-projects set voice.calls on`
 (or `herdr-projects unset voice.calls`). Dictation into the chat's text box is not a call and has its own switch:

@@ -6,7 +6,7 @@
 // call ends, the row gives way to one short line ("You hung up · 2 min · 19:20") that fades out after a few seconds:
 // nothing about a call that is over stays above the chat. Where the browser does not let the call be heard, Tap to hear
 // asks for the tap; "Can't hear?" plays it another way (hear.js). With voice calls off (`snap.calls`, voice.calls)
-// there is no Call button at all.
+// there is no Call button at all, and a call of this page's that was on ends.
 import { h, icon, client, post } from "./dom.js";
 import * as call from "./call.js";
 import * as hear from "./hear.js";
@@ -109,6 +109,8 @@ export function callEl({ onEnded } = {}) {
     // end as this page's own does.
     update(snap) {
       role = snap.role; calls = snap.calls !== false;
+      // Calls turned off: this page's own call ends here too, and lets go of the microphone and of ElevenLabs.
+      if (!calls && call.state().state !== "idle") call.end("voice calls were turned off");
       const c = snap.call, active = call.state().state !== "idle";
       // (this page's own call, just ended here, until the board has heard: not somebody else's)
       const late = c && c.mine && Date.now() - seenEnd < LATE_MS;

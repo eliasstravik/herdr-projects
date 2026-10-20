@@ -1,7 +1,8 @@
 //! `voice.calls off` (crates/core/src/voice/mod.rs): voice is gone, not just broken. The web board's page has no Call
 //! button and may not reach ElevenLabs, the front door refuses a call and the voice agent's tools, the call key only
 //! says calls are off, the call helper does not run and nothing contacts ElevenLabs; `herdr-projects voice` says how
-//! to turn them on. With the default, all of it is there.
+//! to turn them on. A call on when they are turned off ends, and its page or helper lets go of it. With the default,
+//! all of it is there.
 use crate::common;
 use crate::voice::{fake_eleven, put_key};
 use common::board::{open, web};
@@ -12,6 +13,7 @@ use sw::voice::call;
 use sw::webui::voice::{api, page};
 
 const BTN: &str = include_str!("../crates/web/src/webui/page/callbtn.js");
+const CALL: &str = include_str!("../crates/web/src/webui/page/call.js");
 const POLICY: &str = "default-src 'self'; connect-src 'self' wss://herdr.example";
 fn world_off() -> World { world_with(Opts { repo: true, settings: json!({ "voice.calls": "off" }), ..Default::default() }) }
 /// With a saved machine, where the call helper would run.
@@ -73,6 +75,35 @@ fn with_calls_off_no_call_helper_runs_whatever_voice_helper_says() {
     assert!(!sw::calls::helper::wanted());
     assert_eq!(sw::calls::helper::helper_main(std::sync::Arc::new(|_: &str, _: &serde_json::Value, _: &str| (404, json!({})))), 0);
     assert!(!sw::calls::helper::alive());
+}
+
+#[test]
+fn a_call_on_when_calls_are_turned_off_ends_and_its_page_or_helper_is_told_so() {
+    let w = world();
+    let _log = fake_eleven();
+    put_key();
+    web(&w, "board", json!({}));
+    let set = |v: &str| assert_eq!(sw::cli::main(vec!["set".into(), "voice.calls".into(), v.into()]), 0);
+    // a web board's call: its next question to the board, once calls are off, ends it and says so (410, off)
+    let (st, out) = api::start(&json!({ "client": "test" }), || Ok("drive".to_string()));
+    assert_eq!(st, 200, "{out}");
+    set("off");
+    let (st, said) = api::local("feed", &json!({}), out.s("key"));
+    assert_eq!((st, said.b("off"), said.b("ended")), (410, true, true), "{said}");
+    assert!(call::get().is_none() && call::last().unwrap().s("why") == sw::voice::TURNED_OFF);
+    // the page ends its call at that answer, and at the board's word that calls are off, whichever comes first
+    assert!(CALL.contains("if (out.status === 410 || out.ended || out.off) { key = \"\"; return end(out.off ? \"voice calls were turned off\" : \"ended\"); }"));
+    assert!(BTN.contains("if (!calls && call.state().state !== \"idle\") call.end(\"voice calls were turned off\");"));
+    // a call nobody asks about (a terminal board's, ringing): the keeper ends it within seconds
+    set("on");
+    let (st, _) = api::start(&json!({ "client": "test" }), || Ok("drive".to_string()));
+    assert_eq!(st, 200);
+    sw::voice::end_if_off();
+    assert!(call::get().is_some(), "with calls on, nothing ends");
+    set("off");
+    sw::voice::end_if_off();
+    assert!(call::get().is_none() && call::last().unwrap().s("why") == sw::voice::TURNED_OFF);
+    sw::voice::eleven::set_fake(None);
 }
 
 #[test]

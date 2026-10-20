@@ -131,7 +131,7 @@ async function feed() {
   const out = await send("feed", null, "GET", k);
   waiting = false;
   if (key !== k) return;
-  if (out.status === 410 || out.ended) { key = ""; return end("ended"); }
+  if (out.status === 410 || out.ended || out.off) { key = ""; return end(out.off ? "voice calls were turned off" : "ended"); }
   if (out.ok) { if (out.target && out.target !== st.target) set({ target: out.target }); queue.push(...(out.items || []).filter((i) => !(hush && i.kind === "alert"))); }
   next();
 }

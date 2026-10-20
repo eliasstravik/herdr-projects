@@ -23,7 +23,7 @@ fn body(client: &mut TcpStream, head: &Head, rest: Vec<u8>) -> Option<Value> {
 fn no(client: &mut TcpStream, status: u16, msg: &str) { json_out(client, status, &json!({ "ok": false, "msg": msg })) }
 pub fn route(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstream, what: &str) {
     if head.method == "POST" && (head.header(OUR_HEADER) != Some("1") || !same_origin(head)) { return no(&mut client, 403, "Use the board's own controls."); }
-    if what != "end" && !crate::voice::calls_on() { return json_out(&mut client, 403, &off()); }
+    if what != "end" && !crate::voice::calls_on() { let (st, out) = off_now(head.header(KEY_HEADER).unwrap_or("")); return json_out(&mut client, st, &out); }
     if what == "start" {
         if head.method != "POST" { return no(&mut client, 404, "Not found"); }
         let Some(args) = body(&mut client, head, rest) else { return no(&mut client, 400, "The request could not be read.") };
@@ -53,6 +53,14 @@ pub fn route(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstrea
 }
 /// The answer while voice calls are off, and how to turn them on.
 fn off() -> Value { json!({ "ok": false, "off": true, "msg": format!("{}: `herdr-projects set voice.calls on` turns them on.", crate::voice::OFF) }) }
+/// Calls are off: the call this key holds (one started before) ends, and its page or helper is told it ended (410),
+/// so that it lets go of the microphone and of ElevenLabs; without a call, a plain no.
+fn off_now(key: &str) -> (u16, Value) {
+    if call::by_key(key).is_none() { return (403, off()); }
+    crate::voice::end_if_off();
+    let mut out = off(); out["ended"] = json!(true);
+    (410, out)
+}
 /// Start a call. `role`: whether the web UI lets this page drive (asked only for a call from the web board).
 pub fn start(args: &Value, role: impl FnOnce() -> Result<String, String>) -> (u16, Value) {
     if !crate::voice::calls_on() { return (403, off()); }
@@ -92,7 +100,7 @@ pub fn start(args: &Value, role: impl FnOnce() -> Result<String, String>) -> (u1
 /// runs them for the helper over SSH, or in the helper itself for a board of its own computer). `start` takes the
 /// ticket; the rest the call's key.
 pub fn local(what: &str, args: &Value, key: &str) -> (u16, Value) {
-    if what != "end" && !crate::voice::calls_on() { return (403, off()); }
+    if what != "end" && !crate::voice::calls_on() { return off_now(key); }
     if what == "start" { return start(args, || Err("no web UI here".into())); }
     let Some(c) = call::by_key(key) else { return (410, json!({ "ok": false, "msg": "This call has ended." })) };
     call::seen();

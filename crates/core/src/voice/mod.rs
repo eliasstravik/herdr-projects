@@ -17,3 +17,8 @@ pub mod words;
 pub const OFF: &str = "Voice calls are off (voice.calls)";
 /// Whether there are voice calls at all (`voice.calls`): off, nothing rings, no helper runs and nothing reaches ElevenLabs.
 pub fn calls_on() -> bool { crate::store::settings::lookup::setting_text("voice.calls", None) != "off" }
+/// Why a call that was on when calls were turned off ended.
+pub const TURNED_OFF: &str = "voice calls were turned off";
+/// Calls are off: a call still on (started before) ends now. Its page or helper hears it ended at its next question
+/// and lets go of the microphone and of ElevenLabs. The keeper asks every few seconds; the front door at every question.
+pub fn end_if_off() { if !calls_on() && call::get().is_some() { call::end(TURNED_OFF); } }
