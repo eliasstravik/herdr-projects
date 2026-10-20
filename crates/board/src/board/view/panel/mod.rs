@@ -131,7 +131,7 @@ pub fn panel(s: &mut State, t: &Theme, r: &Obj, width: usize, full: bool, fit: u
     if over(&k, lead, gap) > 0 { top.drop(&["head"]); redraw_top(&mut k, &top); }
     if over(&k, lead, gap) > 0 { let f = k.parts[title].lines.first().cloned().unwrap_or_default().cut(k.w); k.parts[title].lines = vec![f]; }
     for n in 0..k.parts.len() { if over(&k, lead, gap) > 0 && n != title && n != top_part && k.parts[n].last.is_none() { k.parts[n].lines.clear(); } }
-    if over(&k, lead, gap) > 0 { top.drop(&["change"]); redraw_top(&mut k, &top); }
+    if over(&k, lead, gap) > 0 { top.drop(&["change", "remote"]); redraw_top(&mut k, &top); }
     for n in 0..k.parts.len() { if over(&k, lead, gap) > 0 && k.parts[n].last.is_some() { k.parts[n].lines.clear(); } }
     if over(&k, lead, gap) > 0 { k.parts[title].lines.clear(); }
     if top.get("now").is_some() && over(&k, lead, gap) > 0 {

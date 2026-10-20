@@ -1,6 +1,6 @@
 //! Work the board opens no pull request of its own for: a branch that brings main nothing (nothing needed changing, the
 //! agent merged its own pull request, or pushed to main itself), a pull request the agent already opened for the task's
-//! branch, and a repo archived on GitHub. Seen on HSW-3, SKL-8, ELA-2, ELA-3, HSW-213, HP-5 and HSW-219.
+//! branch, and a repo archived on GitHub. On Azure DevOps the same, its pull requests read with az (`Already merged in !1234`). Seen on HSW-3, SKL-8, ELA-2, ELA-3, HSW-213, HP-5 and HSW-219.
 use crate::flow::git::{change_of, gh};
 use crate::json::*;
 use crate::store::repos::git_out;
@@ -11,6 +11,8 @@ use std::path::Path;
 /// cannot say.
 fn prs_of(branch: &str, cwd: &Path) -> Vec<Value> {
     if branch.is_empty() { return vec![]; }
+    // On Azure DevOps, its pull requests in the same shape (azure/pr.rs).
+    if let Some(a) = crate::azure::host(cwd) { return crate::azure::pr::prs_of(&a, cwd, branch); }
     let r = gh(&["pr", "list", "--head", branch, "--state", "all", "--limit", "10", "--json", "number,url,state,baseRefName"], cwd, 60000);
     if r.status != 0 { return vec![]; }
     serde_json::from_str::<Value>(r.stdout.trim()).ok().and_then(|v| v.as_array().cloned()).unwrap_or_default()
@@ -25,7 +27,7 @@ pub fn open_pr(branch: &str, cwd: &Path) -> Option<OwnPr> {
 /// Why the agent's own pull request cannot be the task's: it merges into another branch than `onto`, the one the task
 /// started from and keeps up with. None when it merges into that one.
 pub fn wrong_base(p: &OwnPr, onto: &str) -> Option<String> {
-    (!p.base.is_empty() && p.base != onto).then(|| format!("The agent opened pull request #{} ({}) for this branch itself, and it merges into {}. This task started from {onto} and lands on {onto}, so the board does not take it as its own and opens none beside it.", p.number, p.url, p.base))
+    (!p.base.is_empty() && p.base != onto).then(|| format!("The agent opened pull request {} ({}) for this branch itself, and it merges into {}. This task started from {onto} and lands on {onto}, so the board does not take it as its own and opens none beside it.", crate::azure::numbered(&p.url, &p.number), p.url, p.base))
 }
 /// Whether the task made commits of its own: those on its branch before main was brought in now, that neither the
 /// branch it started from nor main as it was last brought in has.
@@ -42,13 +44,14 @@ pub fn nothing_to_land(t: &Task, tree: &Path, own: bool, ask: bool) -> Option<St
     if !ch.s("stat").is_empty() { return None; }
     let merged = if ask { prs_of(t.s("branch"), tree).into_iter().find(|p| p.s("state") == "MERGED") } else { None };
     Some(match merged {
-        Some(p) => format!("Already merged in #{}", p.t("number")),
+        Some(p) => format!("Already merged in {}", crate::azure::numbered(p.s("url"), &p.t("number"))),
         None if own => format!("Already on {}", crate::sync::main_word(t)),
         None => "No change needed".into(),
     })
 }
 /// The repo is archived on GitHub: read-only, nothing can be pushed to it or merged.
 pub fn archived(cwd: &Path) -> bool {
+    if crate::azure::host(cwd).is_some() { return false; }
     let r = gh(&["repo", "view", "--json", "isArchived", "--jq", ".isArchived"], cwd, 60000);
     r.status == 0 && r.stdout.trim() == "true"
 }

@@ -61,7 +61,7 @@ pub fn housekeeping(socket: &str, force: Force) {
             if let Some(w) = waiting_of(t) { if w.s("who") == "agent" && t.at("link").s("socket") == socket && now() >= w.i("until") && !runner_alive(t) { resume_cut(t.s("id")); } }
         }
     }
-    let watch = tasks.iter().any(|t| (t.b("pr") && !t.b("prMerged")) || (resyncable(t) && t.b("worktree")));
+    let watch = tasks.iter().any(|t| (t.b("pr") && !t.b("prMerged")) || t.b("pipelineWait") || (resyncable(t) && t.b("worktree")));
     if watch && (force == Force::Pr || due("prpoll", 120000)) {
         if inline() { JOBS.with(|j| j.borrow_mut().push(("prpoll".into(), "-".into(), vec![]))); } else { spawn_loose(&["run", "prpoll", "-"]); }
     }

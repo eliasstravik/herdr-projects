@@ -55,7 +55,8 @@ pub fn remote_head(root: &Path, branch: &str) -> String {
 /// the reviewed commit only. Only a task from an older version still has GitHub's auto-merge to switch off.
 pub fn cancel_auto_merge(t: &Task) -> Res<()> {
     if !t.b("autoMerge") { return Ok(()); }
-    if t.b("autoMergeLocal") { update_wait(t.s("id"), 10000, |t| { t.put("autoMerge", false); t.put("autoMergeLocal", false); t.put("requireApproval", true); Ok(Change::Write) })?; return Ok(()); }
+    // Azure DevOps has no auto-merge of GitHub's: what it waits for is the board's own, as a local one.
+    if t.b("autoMergeLocal") || crate::azure::pr::is_azure(t.s("pr")) { update_wait(t.s("id"), 10000, |t| { t.put("autoMerge", false); t.put("autoMergeLocal", false); t.put("requireApproval", true); Ok(Change::Write) })?; return Ok(()); }
     let r = gh(&["pr", "merge", &pr_number(t.s("pr")), "--disable-auto"], &folder_of(t.s("id")), 60000);
     if r.status != 0 {
         let said = if r.stderr.trim().is_empty() { r.stdout.clone() } else { r.stderr.clone() };

@@ -62,7 +62,7 @@ fn start(id: &str) {
 }
 fn hold(seen: &Task) {
     // Where GitHub's own auto-merge is what waits (a merge queue), that is switched off first.
-    if !seen.b("autoMergeLocal") && flow::git::gh(&["pr", "merge", &flow::git::pr_number(seen.s("pr")), "--disable-auto"], &folder_of(seen.s("id")), 60000).status != 0 { return; }
+    if !seen.b("autoMergeLocal") && !crate::azure::pr::is_azure(seen.s("pr")) && flow::git::gh(&["pr", "merge", &flow::git::pr_number(seen.s("pr")), "--disable-auto"], &folder_of(seen.s("id")), 60000).status != 0 { return; }
     let Ok(t) = update(seen.s("id"), |t| {
         if runner_alive(t) || t.s("stage") != "merging" || !t.at("mergeIntent").b("auto") || by_itself(t) { return Ok(Change::Keep); }
         t.put("stage", "approval"); t.put("autoMerge", false); t.put("autoMergeLocal", false); t.put("mergeIntent", Value::Null); t.put("requireApproval", false); t.put("since", now());

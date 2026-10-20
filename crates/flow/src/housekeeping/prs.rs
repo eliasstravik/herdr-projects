@@ -1,6 +1,8 @@
 //! Pull requests are watched: failed checks, a requested change or new feedback wake the agent; a merge made
 //! elsewhere marks the task done. Conflicts with main are found by the board's own sync (sync.rs), not here.
 //! A task waiting on a login is the human's: pull-request feedback does not wake its agent until that is cleared.
+//! Pull requests on Azure DevOps are watched the same way (read in gh's shape: azure/pr.rs), and a merged one waits
+//! for its main pipeline (land/main_pipeline.rs), looked at here on the same cadence.
 use crate::actions::finish_line::send_failure;
 use crate::clock::now;
 use crate::finish::shared::approval_message;
@@ -14,6 +16,8 @@ fn needs_login(t: &Task) -> bool { t.at("failure").b("auth") || (t.s("stage") ==
 
 pub fn poll_prs() {
     super::fetch_mains();
+    // Merged on Azure DevOps, waiting for the base branch's pipeline: looked at on the same cadence.
+    crate::land::main_pipeline::pass(&list(ListOpts::default()));
     for first in list(ListOpts::default()) {
         if !first.b("pr") || first.b("prMerged") || runner_alive(&first) || (first.s("stage") == "working" && !first.b("autoMerge")) || needs_login(&first) { continue; }
         // Its checks as the token can read them (land/readable.rs): a fine-grained token cannot read GitHub's list.
@@ -31,13 +35,15 @@ fn unread(id: &str, said: &str) {
     let _ = update_wait(id, 10000, |t| {
         if !t.b("autoMerge") || !t.b("checksWait") || runner_alive(t) { return Ok(Change::Keep); }
         if checks::overdue(t) { land = true; t.put("autoMerge", false); t.put("autoMergeLocal", false); t.put("msg", "Merging"); }
-        else { t.put("msg", format!("Waiting for GitHub checks · could not read them ({why})")); }
+        else { t.put("msg", format!("Waiting for {} checks · could not read them ({why})", crate::azure::host_word(t.s("pr")))); }
         Ok(Change::Write)
     });
     if land { spawn_runner("land", id, &[]); }
 }
+const REOPEN: &str = "Reopen the pull request (gh pr reopen) and approve again, or open a new one from the task's branch. Nothing was cleaned up; the work is still on its branch.";
+const REACTIVATE: &str = "Reactivate the pull request in Azure DevOps (az repos pr update --status active) and approve again, or open a new one from the task's branch. Nothing was cleaned up; the work is still on its branch.";
 #[derive(PartialEq)]
-enum Then { Nothing, Merged, Closed, Unreviewed, Land, Wake }
+enum Then { Nothing, Merged, Gate, Closed, Unreviewed, Land, Wake }
 
 fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
     let root = folder_of(id);
@@ -68,6 +74,13 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
         if j.s("state") == "MERGED" {
             let h = if !head.is_empty() { head.clone() } else { t.t("prHead") };
             mode = if covered(&local(), &h) { "always" } else { "merged" };
+            // Completed on Azure DevOps (by you, or after the board's own completion): done once its pipeline passed.
+            if crate::azure::pr::is_azure(pr) && crate::land::main_pipeline::applies(t) {
+                let base = if j.b("baseRefName") { j.t("baseRefName") } else { crate::sync::main_branch(&root, t) };
+                crate::land::main_pipeline::arm(t, &j.at("mergeCommit").t("oid"), &base, mode, &if mode == "always" { h } else { String::new() });
+                then = Then::Gate;
+                return Ok(Change::Write);
+            }
             t.put("stage", "done"); t.put("mergedAt", now()); if j.at("mergeCommit").b("oid") { t.put("mergeCommit", j.at("mergeCommit").t("oid")); } let tm = tidy_mark(t, mode, ""); t.put("tidy", tm.unwrap_or(Value::Null)); t.put("msg", format!("Merged: {pr}"));
             t.put("failure", Value::Null); t.put("prFailure", Value::Null); t.put("prMerged", true); t.put("prState", "merged"); t.put("autoMerge", false); t.put("mergeIntent", Value::Null);
             then = Then::Merged;
@@ -79,12 +92,13 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
             t.put("autoMerge", false); t.put("autoMergeLocal", false); t.put("stage", "approval"); t.put("mergeFailed", true); t.put("mergeIntent", Value::Null); t.put("requireApproval", true); t.put("prState", "closed");
             t.put("msg", "Pull request was closed without merging");
             let detail = format!("Pull request: {pr}\nBranch: {}\n\nGitHub reports it as closed, not merged. The approved merge did not happen.", t.so("branch").unwrap_or("unknown"));
-            for (k, v) in failure_patch(&obj(json!({ "stage": "merge", "title": "Pull request was closed without merging", "detail": detail, "next": "Reopen the pull request (gh pr reopen) and approve again, or open a new one from the task's branch. Nothing was cleaned up; the work is still on its branch.", "agentCanFix": false, "auth": false }))) { t.insert(k, v); }
+            for (k, v) in failure_patch(&obj(json!({ "stage": "merge", "title": "Pull request was closed without merging", "detail": detail, "next": if crate::azure::pr::is_azure(pr) { REACTIVATE } else { REOPEN }, "agentCanFix": false, "auth": false }))) { t.insert(k, v); }
             then = Then::Closed;
             return Ok(Change::Write);
         }
         if j.s("state") != "OPEN" || (t.s("stage") == "working" && !t.b("autoMerge")) || needs_login(t) { return Ok(Change::Keep); }
-        if !checks.is_empty() { t.put("prChecksSeen", true); } // this pull request has checks: a later empty list is not "none"
+        if !checks.is_empty() { t.put("prChecksSeen", true); }
+        if crate::azure::pr::is_azure(pr) { t.put("prRemote", crate::azure::shown::summary(j)); } // the panel's line of its votes and policies // this pull request has checks: a later empty list is not "none"
         // A remembered merge is for the commit that was reviewed. The pull request has moved on (someone pushed to it):
         // the approval is withdrawn, and nothing merges until that has been checked and reviewed here.
         let reviewed = if t.at("mergeIntent").b("verifiedHead") { t.at("mergeIntent").t("verifiedHead") } else { t.t("prHead") };
@@ -103,7 +117,7 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
         if t.b("prHead") && head != t.s("prHead") { return Ok(Change::Keep); } // stale or unknown-head CI cannot resolve a pushed repair
         // Only what the human wrote on it wakes the agent: the comments of the logged-in GitHub user, never anyone
         // else's (other people, review bots) and never the board's own review comments, which that same user posts.
-        let human = { let u = gh_user(&root); if u.is_empty() { j.at("author").t("login") } else { u } };
+        let human = { let u = if crate::azure::pr::is_azure(pr) { crate::azure::cli::user(&root) } else { gh_user(&root) }; if u.is_empty() { j.at("author").t("login") } else { u } };
         let others: Vec<&Value> = j.arr("comments").iter().chain(j.arr("reviews").iter().filter(|x| !x.s("body").trim().is_empty() || x.s("state") == "COMMENTED"))
             .filter(|x| x.at("author").b("login") && x.at("author").t("login") == human && !board_comment(x.s("body"))).collect();
         let mut keys: Vec<String> = others.iter().map(|x| {
@@ -135,7 +149,7 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
                 let was = if t.at("checksWait").s("via") == via { strings(t.at("checksWait").at("seen")) } else { vec![] };
                 let seen = checks::unique(was.into_iter().chain(checks.iter().map(checks::name)));
                 t.obj_mut("checksWait").put("names", json!(names)); t.obj_mut("checksWait").put("seen", json!(seen)); t.obj_mut("checksWait").put("via", via);
-                let msg = checks::waiting_words(&checks, &names, &strings(t.at("checksWait").at("flows"))); // the workflows not through, by name
+                let msg = checks::waiting_words_on(crate::azure::host_word(pr), &checks, &names, &strings(t.at("checksWait").at("flows"))); // the workflows not through, by name
                 t.put("msg", msg);
             }
             return Ok(Change::Write);
@@ -192,8 +206,8 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
             let t = get(id).unwrap_or(t);
             drop_remote_branch(&root, t.s("branch"), &if mode == "always" { if head.is_empty() { t.t("prHead") } else { head.clone() } } else { String::new() });
         }
-        Then::Unreviewed => { tell_sidebar(&t); if legacy { gh(&["pr", "merge", &pr_number(pr), "--disable-auto"], &root, 60000); } }
-        Then::Closed => tell_sidebar(&t),
+        Then::Unreviewed => { tell_sidebar(&t); if legacy && !crate::azure::pr::is_azure(pr) { gh(&["pr", "merge", &pr_number(pr), "--disable-auto"], &root, 60000); } }
+        Then::Closed | Then::Gate => tell_sidebar(&t),
         Then::Land => { spawn_runner("land", id, &[]); }
         Then::Wake => {
             let rounds = t.i("prRounds");

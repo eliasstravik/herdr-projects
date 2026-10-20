@@ -199,6 +199,8 @@ pub fn retry(id: &str) -> Res<Said> {
     if cur.s("stage") == "asks" && cur.s("kind") == "auth" { return go_on(&cur); }
     if cur.s("stage") != "failed" { crate::fail!("{cid} has nothing to retry."); }
     // None of its attempts passed: trying again is starting over, with fresh attempts.
+    // The main pipeline failed or did not finish after the merge: its runs are looked at again (land/main_pipeline.rs).
+    if cur.at("failure").s("stage") == "pipeline" && cur.b("pipelineFailed") { let t = crate::land::main_pipeline::rearm(&cid)?; return Ok(say(t, format!("{cid}: looking at its main pipeline again"))); }
     if cur.at("failure").s("stage") == "attempts" { let t = delegate(&cid, vec![])?; return Ok(say(t, format!("{cid}: starting over with fresh attempts"))); }
     let f = cur.at("failure").clone();
     // The agent never started on what was typed into its box: its program is started again and handed the same text.
@@ -259,6 +261,8 @@ pub fn details(id: &str) -> Res<Value> {
         "branch": if t.b("branch") { t.at("branch").clone() } else { Value::Null },
         "limits": limits_detail(&t, now()),
     }));
+    // On Azure DevOps: its pull request there now, and the main pipeline's runs (azure/shown.rs).
+    if let Some(a) = crate::azure::shown::details(&t) { out.put("azure", a); }
     // Waiting for a free slot: its place in the queue, and in words ("waiting for a free slot, Q#2").
     if let Some(n) = crate::flow::live::queue_place(&t) { let mut q = t.clone(); q.put("queuePlace", n); out.put("queue", json!({ "place": n, "words": crate::shown::queue::words(&q) })); }
     // A merge that waits for GitHub's checks: which ones, each once (the row says only how far they are).

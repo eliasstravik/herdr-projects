@@ -73,7 +73,11 @@ pub fn after_review(c: Ctx, g: &mut Guard) -> Res<()> {
         };
         let rv = Value::Object(rv);
         // The pull request says what the review found, the findings below the gate marked as not required.
-        if t.b("pr") && to_land { let round = get(id).map(|x| review_round(&x)).unwrap_or(0); flow::git::gh(&["pr", "comment", &flow::git::pr_number(t.s("pr")), "--body", &format!("{}{}", gate::pr_comment(&rv, round), flow::git::BOARD_COMMENT)], c.root, 60000); }
+        if t.b("pr") && to_land {
+            let round = get(id).map(|x| review_round(&x)).unwrap_or(0);
+            let body = format!("{}{}", gate::pr_comment(&rv, round), flow::git::BOARD_COMMENT);
+            match crate::azure::host(c.root) { Some(a) => { crate::azure::pr::comment(&a, c.root, t.s("pr"), &body); } None => { flow::git::gh(&["pr", "comment", &flow::git::pr_number(t.s("pr")), "--body", &body], c.root, 60000); } }
+        }
         review = Some(rv);
     }
     // A conflict with main that was repaired on the way here: one line in the record, with whether a review followed.

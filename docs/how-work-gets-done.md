@@ -133,13 +133,18 @@ it merges:
   withdraws the approval. On a repo with a merge queue, the task waits until GitHub says the pull request is merged;
 - **or locally**, squashed by default.
 
+A repo whose origin is at Azure DevOps has its pull request there, opened, merged and watched the same way through the
+Azure CLI, and its task is done only once the base branch's pipeline passed for the merge commit:
+[Azure DevOps](azure-devops.md).
+
 A conflict found here goes back to the agent the same way, and the merge you approved is retried after its repair. A
 checkout with unsaved files is never forced. Merging without your yes: [merging by itself](gate.md#merging-by-itself).
 
 ### GitHub's checks must pass first
 
-With `merge.checks: github`, a pull request merges only once its checks on GitHub pass, by itself or on your yes, in
-every repo the board merges in. `merge.checks: none` does not look at GitHub's checks.
+With `merge.checks: github` (what the built-in `auto` is on GitHub), a pull request merges only once its checks on
+GitHub pass, by itself or on your yes, in every repo the board merges in. `merge.checks: none` does not look at GitHub's
+checks. On Azure DevOps (`auto` is `azure` there) its policies are its checks: [Azure DevOps](azure-devops.md).
 
 | GitHub's checks are | The board |
 |---|---|
@@ -306,7 +311,7 @@ chat's, and the task waits for your new yes after the review.
 
 ## When a task is done
 
-Merged here or on GitHub, finished with nothing to merge, or called done by you: its space leaves Herdr's sidebar by
+Merged here, on GitHub or on Azure DevOps (there once its main pipeline passed), finished with nothing to merge, or called done by you: its space leaves Herdr's sidebar by
 itself, and its worktree and branch are removed. `workspace.cleanup false` keeps everything.
 
 **Work is never lost for it:**

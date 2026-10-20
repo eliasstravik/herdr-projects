@@ -8,6 +8,7 @@ pub mod actions;
 pub mod after;
 pub mod attempts;
 pub mod automations;
+pub mod azure;
 pub mod calls;
 pub mod coordinator;
 pub mod delegate;

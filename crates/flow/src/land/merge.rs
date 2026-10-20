@@ -45,7 +45,7 @@ pub(super) fn fail(g: &mut Guard, title: &str, detail: &str, next: &str, f: Fail
 pub(super) fn no_fix() -> Fail { Fail { agent_can_fix: false, auth: Some(false), keep_intent: false } }
 /// `head`: the commit that was merged. Nothing newer on the branch is taken for merged. `commit`: the commit it made on
 /// the branch it landed on, what a task that waited for it is told (after/handed.rs).
-fn landed(id: &str, g: &mut Guard, t: &Task, msg: &str, head: &str, commit: &str) -> Res<()> {
+pub(super) fn landed(id: &str, g: &mut Guard, t: &Task, msg: &str, head: &str, commit: &str) -> Res<()> {
     let mark = flow::spaces::tidy_mark(t, "always", head);
     let d = g.set(|t| {
         if !commit.is_empty() { t.put("mergeCommit", commit); }
@@ -74,13 +74,13 @@ fn onto_named(id: &str, g: &mut Guard, t: &Task, root: &Path, tree: &str, b: &st
         return Ok(false);
     }
     if !t.b("pr") { return Ok(true); }
-    let r = gh(&["pr", "view", &pr_number(t.s("pr")), "--json", "baseRefName"], root, 60000);
+    let r = match crate::azure::host(root) { Some(a) => crate::azure::pr::view_out(&a, root, t.s("pr"), "baseRefName"), None => gh(&["pr", "view", &pr_number(t.s("pr")), "--json", "baseRefName"], root, 60000) };
     let base = if r.status == 0 { serde_json::from_str::<Value>(&r.stdout).map(|v| v.t("baseRefName")).unwrap_or_default() } else { String::new() };
     // Not known is not "into b": nothing merges until GitHub says which branch it merges into.
     if base.is_empty() {
         let said = [r.stderr.trim(), r.stdout.trim()].into_iter().find(|s| !s.is_empty()).unwrap_or("no branch named").to_string();
         fail(g, "Could not read which branch the pull request merges into", &format!("Pull request: {}\nThis task started from, and lands on: {b}\n\ngh pr view:\n{said}\n\nNothing was merged.", t.s("pr")),
-            "Make sure gh is logged in and reaches GitHub (gh auth status), then approve again.", Fail { agent_can_fix: false, auth: Some(is_auth_failure(&said)), keep_intent: false })?;
+            if crate::azure::pr::is_azure(t.s("pr")) { crate::azure::cli::LOGIN } else { "Make sure gh is logged in and reaches GitHub (gh auth status), then approve again." }, Fail { agent_can_fix: false, auth: Some(is_auth_failure(&said)), keep_intent: false })?;
         return Ok(false);
     }
     if base == b { return Ok(true); }
@@ -145,6 +145,8 @@ pub fn land_core(id: &str, g: &mut Guard) -> Res<()> {
         }
     }
     t = g.check()?;
+    // On Azure DevOps, through its pull request there (merge_azure.rs).
+    if let Some(a) = crate::azure::host(&root).filter(|_| t.b("pr")) { return super::merge_azure::through_pr(id, g, &t, &root, &how, &a); }
     if t.b("pr") {
         // By number, not link: gh then uses the repo's own remote for the host.
         let pr = pr_number(t.s("pr"));

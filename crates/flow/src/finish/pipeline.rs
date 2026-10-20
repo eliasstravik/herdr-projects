@@ -182,6 +182,9 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
             git_slow(tp, &["push", "-u", "--force-with-lease", "origin", t.s("branch")], 120000)?;
             let ph = git_out(tp, &["rev-parse", &format!("refs/remotes/origin/{}", t.s("branch"))])?;
             g.set(|t| t.put("prHead", ph.clone()))?;
+            // Its pull request merged and the main pipeline failed after it (land/main_pipeline.rs): the fix is a new one.
+            if t.b("pipelineFailed") { t = g.set(|t| { for k in ["pr", "prSeen", "prState", "prFailure", "prRemote", "pipelineFailed"] { t.put(k, Value::Null); } t.put("prMerged", false); })?; }
+            let azure = crate::azure::host(&root);
             let mut url = t.t("pr");
             if url.is_empty() {
                 // It merges into the branch the task keeps up with: the one it started from at the remote.
@@ -194,7 +197,7 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
                     let body = format!("{}\n\nTask: {}", if text.is_empty() { t.t("title") } else { text.to_string() }, task_ref(id, &repo_keys()));
                     let mut args = vec!["pr", "create", "--draft", "--head", t.s("branch"), "--title", if t.b("title") { t.s("title") } else { id }, "--body", &body];
                     if let Some(b) = &onto { args.extend(["--base", b.as_str()]); }
-                    let r = flow::git::gh(&args, tp, 120000);
+                    let r = match &azure { Some(a) => crate::azure::pr::create(a, tp, t.s("branch"), onto.as_deref(), if t.b("title") { t.s("title") } else { id }, &body), None => flow::git::gh(&args, tp, 120000) };
                     url = r.stdout.split_whitespace().find(|w| w.starts_with("http://") || w.starts_with("https://")).unwrap_or("").to_string();
                     // The agent opened one itself for this branch: the board goes on with that one.
                     if url.is_empty() { own = already::open_pr(t.s("branch"), tp); }
@@ -220,7 +223,7 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
                 let why = match sync_r.filter(|r| r.status == "error") { Some(r) => format!("{}, and {what}", sync::held_why(r)), None => format!("{what} ({})", fetch::plain(said, t.s("branch"))) };
                 return super::sync_job::unpushed(g, &why, &format!("Branch: {}\nFolder: {tree}\n\n{}\n\n{said}", t.s("branch"), sync_r.map(|r| r.detail.as_str()).unwrap_or("")));
             }
-            Err(e) if e.msg.starts_with("pr:") => { fail(g, failure("pr", "Could not open the pull request", &format!("Branch: {}\nFolder: {tree}\n\ngh pr create:\n{}", t.s("branch"), &e.msg[3..]), "Inspect the GitHub error, fix what you safely can, then finish again. The board retries opening the pull request; do not push or ship manually."), FailHow::default())?; return Ok(()); }
+            Err(e) if e.msg.starts_with("pr:") => { let (tool, host) = if crate::azure::host(&root).is_some() { ("az repos pr create", "Azure DevOps") } else { ("gh pr create", "GitHub") }; fail(g, failure("pr", "Could not open the pull request", &format!("Branch: {}\nFolder: {tree}\n\n{tool}:\n{}", t.s("branch"), &e.msg[3..]), &format!("Inspect the {host} error, fix what you safely can, then finish again. The board retries opening the pull request; do not push or ship manually.")), FailHow::default())?; return Ok(()); }
             Err(e) => { fail(g, failure("push", "Could not push the branch", &format!("Branch: {}\nFolder: {tree}\n\n{}", t.s("branch"), e.msg), "Inspect the Git error and fix what you safely can without altering the human's checkout. Finish again so the board retries the push."), FailHow::default())?; return Ok(()); }
         }
     }

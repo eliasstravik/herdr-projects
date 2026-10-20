@@ -3,7 +3,7 @@
 //! only): where GitHub refuses it, the list is made of what such a token reads, the jobs of the commit's GitHub Actions
 //! runs (every matrix member, with the link to its log) and its commit statuses (an outside CI, Vercel), in the same
 //! shape, and what cannot be read that way (another app's check runs) is named, to be said on the task. Used by
-//! checks.rs, merge.rs and the pull requests' watch (housekeeping/prs.rs).
+//! checks.rs, merge.rs and the pull requests' watch (housekeeping/prs.rs). On Azure DevOps, the pull request and its policies.
 use crate::clock::now;
 use crate::flow::git::{gh, pr_number, GhOut};
 use crate::json::*;
@@ -13,9 +13,10 @@ use std::sync::Mutex;
 /// What a token without the Checks permission cannot read, said on the task that merged without it.
 pub const UNREAD: &str = "check runs of apps other than GitHub Actions (this GitHub token cannot read them; their commit statuses were read)";
 /// A pull request as gh gave it, its checks as `statusCheckRollup`. `unread`: what was not looked at (the token cannot
-/// read it). `fault`: why its checks could not be read at all (they are then none here).
+/// read it). `fault`: why its checks could not be read at all (they are then none here). `azure`: a pull request on
+/// Azure DevOps, its checks its policies (azure/policies.rs).
 #[derive(Default)]
-pub struct Read { pub view: Value, pub unread: Vec<String>, pub fault: String }
+pub struct Read { pub view: Value, pub unread: Vec<String>, pub fault: String, pub azure: bool }
 impl Read {
     pub fn listed(&self) -> &[Value] { self.view.arr("statusCheckRollup") }
     /// How they were read: GitHub's own list (`checks`, jobs only), or made of Actions runs, their jobs and statuses
@@ -37,6 +38,7 @@ fn remember(root: &Path) { if let Ok(mut l) = REFUSED.lock() { l.retain(|(p, _)|
 /// `gh pr view <pr> --json <fields>`, with its checks: GitHub's own list where the token reads it, else the list made
 /// here. Err: what gh said where it could not even give the pull request.
 pub fn pr_view(root: &Path, pr: &str, fields: &str) -> Result<Read, String> {
+    if let Some(a) = crate::azure::host(root) { return crate::azure::pr::view(&a, root, pr, &format!("{fields},statusCheckRollup")).map(|v| Read { view: v, azure: true, ..Default::default() }); }
     let n = pr_number(pr);
     if !refused_lately(root) {
         let r = gh(&["pr", "view", &n, "--json", &format!("{fields},statusCheckRollup")], root, 60000);
@@ -51,7 +53,7 @@ pub fn pr_view(root: &Path, pr: &str, fields: &str) -> Result<Read, String> {
     if !v.s("state").is_empty() && v.s("state") != "OPEN" { v["statusCheckRollup"] = json!([]); return Ok(Read { view: v, ..Default::default() }); }
     let (checks, fault) = match of_commit(root, &v.t("headRefOid")) { Ok(c) => (c, String::new()), Err(e) => (vec![], e) };
     v["statusCheckRollup"] = json!(checks);
-    Ok(Read { view: v, unread: vec![UNREAD.to_string()], fault })
+    Ok(Read { view: v, unread: vec![UNREAD.to_string()], fault, azure: false })
 }
 
 /// One GitHub Actions run of a commit.

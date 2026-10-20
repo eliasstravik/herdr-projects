@@ -43,7 +43,9 @@ pub fn unique(names: impl IntoIterator<Item = String>) -> Vec<String> {
 /// workflow (its run read from Actions, or one waited for by name: `flows`) stands for its jobs until they are listed,
 /// and for those still to come once all listed have passed. `waited`: what is still waited for (running, gone from
 /// the list, a workflow not through).
-pub fn waiting_words(listed: &[Value], waited: &[String], flows: &[String]) -> String {
+pub fn waiting_words(listed: &[Value], waited: &[String], flows: &[String]) -> String { waiting_words_on("GitHub", listed, waited, flows) }
+/// The same, for a host by its name (`Azure DevOps`).
+pub fn waiting_words_on(host: &str, listed: &[Value], waited: &[String], flows: &[String]) -> String {
     let is = |a: &str, b: &str| a.eq_ignore_ascii_case(b);
     let (runs, checks): (Vec<&Value>, Vec<&Value>) = listed.iter().partition(|c| c.b("run"));
     let workflows = unique(runs.iter().map(|c| name(c)).chain(flows.iter().cloned()));
@@ -57,8 +59,8 @@ pub fn waiting_words(listed: &[Value], waited: &[String], flows: &[String]) -> S
     let listed_name = |n: &str| checks.iter().any(|c| is(&name(c), n));
     all.extend(unique(waited.iter().filter(|w| !listed_name(w) && !a_workflow(w)).cloned()).iter().map(|_| true));
     let left = all.iter().filter(|p| **p).count();
-    if left == 0 { return "Waiting for GitHub checks to start".into(); }
-    format!("Waiting for GitHub checks · {} of {} passed", all.len() - left, all.len())
+    if left == 0 { return format!("Waiting for {host} checks to start"); }
+    format!("Waiting for {host} checks · {} of {} passed", all.len() - left, all.len())
 }
 /// Every check GitHub listed on this commit while the board waited for it (`checksWait.seen`), and every one it waited
 /// for (`checksWait.names`), read the same way (`via`, readable.rs): what was listed for an earlier commit, or read
@@ -82,6 +84,8 @@ pub fn judge(t: &Obj, head: &str, read: &readable::Read, root: &Path, base: &str
     let (listed, blind) = (read.listed(), !read.unread.is_empty());
     let look = sort(listed);
     if let Look::Failed(_) = look { return Judged { look, flows: vec![], unread: vec![] }; }
+    // On Azure DevOps its policies are all there is: listed from the moment the pull request is opened.
+    if read.azure { return Judged { look, flows: vec![], unread: vec![] }; }
     let mut flows = expected::flows_state(t, root, base, head);
     if !flows.failed.is_empty() { return Judged { look: Look::Failed(flows.failed), flows: vec![], unread: vec![] }; }
     let names: Vec<String> = listed.iter().map(name).collect();
@@ -108,13 +112,23 @@ pub fn unread_note(unread: &[String], required: &[String]) -> String {
     if !required.is_empty() { parts.push(format!("the required {} {} (listed by no GitHub Actions job and no commit status)", if required.len() == 1 { "check" } else { "checks" }, required.join(", "))); }
     if parts.is_empty() { String::new() } else { format!("Not read: {}", parts.join("; ")) }
 }
-/// Are GitHub's checks looked at for this task?
+/// Are the host's checks looked at for this task (GitHub's, or Azure DevOps' policies)?
 pub fn looked_at(t: &Obj) -> bool { setting_text("merge.checks", Some(t)) != "none" }
+/// Whose checks `merge.checks` means in the repo at `root`: `auto` (built in) is the host's own.
+pub fn host_checks(value: &str, root: &Path) -> &'static str {
+    match value { "none" => "none", "azure" => "azure", "github" => "github", _ => if crate::azure::host(root).is_some() { "azure" } else { "github" } }
+}
 /// The short reason, the same from the land step and from the pull requests' watch (housekeeping/prs.rs).
-pub fn failed_why(pr: &str, names: &[String]) -> String { format!("Checks failed on the pull request {pr}: {}. Look at them (gh pr checks) and fix them on your branch.", names.join(", ")) }
+pub fn failed_why(pr: &str, names: &[String]) -> String {
+    let look = if crate::azure::pr::is_azure(pr) { format!("az repos pr policy list --id {}", crate::azure::pr::id_of(pr)) } else { "gh pr checks".into() };
+    format!("Checks failed on the pull request {pr}: {}. Look at them ({look}) and fix them on your branch.", names.join(", "))
+}
 const LOG_LINES: usize = 40;
 /// The end of a failing check's log, where GitHub Actions ran it (`gh run view --job <id> --log-failed`).
 fn log_of(root: &Path, c: &Value) -> String {
+    // A build of Azure Pipelines: its failing job and the end of its log (azure/logs.rs).
+    if c.b("buildId") { if let Some(a) = crate::azure::host(root) { return crate::azure::logs::tail(&a, root, c.s("buildId")); } }
+    if c.b("azure") { return if c.b("detailsUrl") { format!("Azure DevOps gave no build log for it: {}", c.s("detailsUrl")) } else { "Azure DevOps gave no link to its log.".into() }; }
     let url = [c.s("detailsUrl"), c.s("targetUrl")].into_iter().find(|s| !s.is_empty()).unwrap_or("").to_string();
     let job: String = url.split("/job/").nth(1).map(|r| r.chars().take_while(|c| c.is_ascii_digit()).collect()).unwrap_or_default();
     if job.is_empty() || !url.contains("/actions/runs/") { return if url.is_empty() { "GitHub gave no link to its log.".into() } else { format!("Its log is not one gh can read: {url}") }; }
@@ -157,10 +171,12 @@ pub fn overdue(t: &Obj) -> bool { let l = ms(&setting_text("check.timeout", Some
 pub fn before_merge(id: &str, g: &mut Guard, t: &Task, root: &Path) -> Res<bool> {
     if !looked_at(t) || t.at("mergeIntent").b("anyway") { return Ok(true); }
     let pr = t.t("pr");
+    let az = crate::azure::pr::is_azure(&pr);
+    let (hs, tool) = if az { ("Azure DevOps'", "az repos pr show") } else { ("GitHub's", "gh pr view") };
     let read = match readable::pr_view(root, &pr, "headRefOid,baseRefName") {
         Ok(r) => r,
         Err(said) => {
-            fail(g, "Could not read GitHub's checks", &format!("Pull request: {pr}\n\ngh pr view:\n{said}\n\nNothing was merged."), "Make sure gh is logged in and reaches GitHub (gh auth status), then approve again.", super::merge::Fail { agent_can_fix: false, auth: Some(is_auth_failure(&said)), keep_intent: false })?;
+            fail(g, &format!("Could not read {hs} checks"), &format!("Pull request: {pr}\n\n{tool}:\n{said}\n\nNothing was merged."), if az { crate::azure::cli::LOGIN } else { "Make sure gh is logged in and reaches GitHub (gh auth status), then approve again." }, super::merge::Fail { agent_can_fix: false, auth: Some(is_auth_failure(&said)), keep_intent: false })?;
             return Ok(false);
         }
     };
@@ -193,11 +209,11 @@ pub fn before_merge(id: &str, g: &mut Guard, t: &Task, root: &Path) -> Res<bool>
                 g.set(|t| { t.put("checksWait", Value::Null); t.put("autoMerge", false); t.put("autoMergeLocal", false); })?;
                 let timeout = setting_text("check.timeout", Some(t));
                 let which = if names.is_empty() { "none has started (an outside CI reports in this repo: on the branch it merges into, or on its other pull requests)".to_string() } else { names.join(", ") };
-                fail(g, "GitHub's checks did not finish", &format!("Pull request: {pr}\nStill not finished after {timeout} (check.timeout): {which}\n\nNothing was merged."),
-                    &format!("Look at the pull request's checks on GitHub (gh pr checks {}): one may be stuck, or wait for a runner. Approve again to wait for them again, or merge without them: herdr-projects approve {id} --anyway.", pr_number(&pr)), no_fix())?;
+                fail(g, &format!("{hs} checks did not finish"), &format!("Pull request: {pr}\nStill not finished after {timeout} (check.timeout): {which}\n\nNothing was merged."),
+                    &format!("Look at the pull request's checks on {} ({}): one may be stuck, or wait for a runner. Approve again to wait for them again, or merge without them: herdr-projects approve {id} --anyway.", crate::azure::host_word(&pr), if az { format!("az repos pr policy list --id {}", crate::azure::pr::id_of(&pr)) } else { format!("gh pr checks {}", pr_number(&pr)) }), no_fix())?;
                 return Ok(false);
             }
-            let msg = waiting_words(listed, &checks, &flows);
+            let msg = if az { waiting_words_on("Azure DevOps", listed, &checks, &flows) } else { waiting_words(listed, &checks, &flows) };
             let d = g.set(|t| { t.put("failure", Value::Null); t.put("autoMerge", true); t.put("autoMergeLocal", true); let seen = unique(known(t, &head, read.via()).into_iter().chain(listed.iter().map(name))); t.put("checksWait", json!({ "since": since, "head": head, "via": read.via(), "for": approved, "names": checks, "flows": flows, "seen": seen })); t.put("msg", msg.clone()); })?;
             flow::sidebar::tell_sidebar(&d);
             Ok(false)
@@ -214,11 +230,11 @@ pub fn before_merge(id: &str, g: &mut Guard, t: &Task, root: &Path) -> Res<bool>
                 // so the merge that was approved survives it, and goes on once GitHub's checks pass on the repair.
                 let mut sent = pf.clone(); sent["sentAt"] = json!(now());
                 let mut patch = obj(off); patch.put("prFailure", sent); patch.put("prRounds", went + 1);
-                flow::send::send_own(id, &format!("GitHub's checks failed on the pull request, so this is not merged yet.\n\n{}\n\nFix it on your branch, run the checks and finish again.", bound_detail(&detail)), "checks", true, patch, 0)?;
+                flow::send::send_own(id, &format!("{hs} checks failed on the pull request, so this is not merged yet.\n\n{}\n\nFix it on your branch, run the checks and finish again.", bound_detail(&detail)), "checks", true, patch, 0)?;
                 return Ok(false);
             }
             // Its rounds are spent: it waits for you, and `approve` says why until `--anyway`.
-            let msg = format!("GitHub's checks failed: {}. Send the details to the agent, or merge it anyway", names.join(", "));
+            let msg = format!("{hs} checks failed: {}. Send the details to the agent, or merge it anyway", names.join(", "));
             let d = g.set(|t| { for (k, v) in obj(off.clone()) { t.insert(k, v); } t.put("prFailure", pf.clone()); t.put("stage", "approval"); t.put("mergeFailed", true); t.put("mergeIntent", Value::Null); t.put("msg", msg.clone()); })?;
             flow::sidebar::tell_sidebar(&d);
             Ok(false)

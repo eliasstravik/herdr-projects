@@ -14,7 +14,7 @@ use crate::status_words::{needs, review_tally};
 use crate::store::retries::waiting_of;
 
 /// The facts under Status, in the order they are drawn.
-pub const ORDER: [&str; 12] = ["head", "state", "after", "progress", "now", "time", "tokens", "who", "over", "made", "change", "next"];
+pub const ORDER: [&str; 13] = ["head", "state", "after", "progress", "now", "time", "tokens", "who", "over", "made", "change", "remote", "next"];
 fn same(a: &str, b: &str) -> bool { a.trim().to_lowercase() == b.trim().to_lowercase() }
 fn asks(kind: &str) -> String { needs(kind).map(|w| { let mut c = w.chars(); c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default() }).unwrap_or_else(|| "Needs you".into()) }
 /// The status part's facts by name, redrawn when some go.
@@ -86,6 +86,8 @@ pub fn status(k: &mut Kit, c: &Ctx, r: &Obj) -> (usize, Top, usize, String) {
         if c.full && !url.is_empty() && !c.web { v.push(Kit::dim(url.clone())); }
         rows.push(("change", k.fact("Change", v)));
     }
+    // Its pull request on Azure DevOps: the reviewers' votes and its policies (azure/shown.rs).
+    if r.b("prRemote") && !merged(r) { rows.push(("remote", k.fact_text("Azure", r.s("prRemote")).into_iter().map(|l| l.recolor(Ink::Soft)).collect())); }
     if !c.agent && !r.b("archivedAt") && !r.at("pending").b("word") && r.s("state") == "idle" && r.s("description").trim().is_empty() { rows.push(("next", k.fact("Next", Kit::wrap_at(&format!("No agent is on this yet. {} puts one on it.", key_name("delegate")), k.room).into_iter().map(|l| l.recolor(Ink::Muted)).collect()))); }
     let top = Top { rows };
     let top_part = k.part(top.lines());

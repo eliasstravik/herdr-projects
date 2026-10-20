@@ -3,6 +3,7 @@
 //! calls, no real herdr, no real board.
 #![allow(dead_code)]
 pub mod agents;
+pub mod az;
 pub mod board;
 pub mod endings;
 pub mod fixtures;
@@ -22,7 +23,7 @@ use sw::json::*;
 static ONE: Mutex<()> = Mutex::new(());
 pub fn one_at_a_time() -> MutexGuard<'static, ()> { ONE.lock().unwrap_or_else(|e| e.into_inner()) }
 static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-pub struct World { pub base: PathBuf, pub root: PathBuf, pub fake: Rc<herdr::FakeHerdr>, pub gh: Rc<gh::FakeGh>, pub socket: String, _listen: std::os::unix::net::UnixListener, _one: MutexGuard<'static, ()> }
+pub struct World { pub base: PathBuf, pub root: PathBuf, pub fake: Rc<herdr::FakeHerdr>, pub gh: Rc<gh::FakeGh>, pub az: Rc<az::FakeAz>, pub socket: String, _listen: std::os::unix::net::UnixListener, _one: MutexGuard<'static, ()> }
 #[derive(Default)]
 pub struct Opts { pub repo: bool, pub settings: Value, pub repo_settings: Option<Value>, pub origin: bool }
 pub fn git(cwd: &Path, a: &[&str]) -> String { worktrees::git(cwd, a).unwrap_or_else(|e| panic!("git {a:?}: {e}")) }
@@ -71,12 +72,15 @@ pub fn world_with(o: Opts) -> World {
     // gh too: never the real program, never the network.
     let gh = Rc::new(gh::FakeGh::default());
     { let g = gh.clone(); sw::flow::git::set_fake_gh(Some(Rc::new(move |a: &[String]| g.run(a)))); }
-    World { base, root, fake, gh, socket, _listen: listen, _one: one }
+    // az too, for a repo at Azure DevOps (az.rs).
+    let az = Rc::new(az::FakeAz::default());
+    { let a = az.clone(); sw::azure::cli::set_fake_az(Some(Rc::new(move |x: &[String]| a.run(x)))); }
+    World { base, root, fake, gh, az, socket, _listen: listen, _one: one }
 }
 impl Drop for World {
     // Out of the world's folder before it goes (a test may have gone into it): the other tests run in this same
     // process, and a program they start would find its folder gone.
-    fn drop(&mut self) { let _ = std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")); FAKE.with(|f| *f.borrow_mut() = None); sw::webui::web::forget(); sw::herdr::cli::set_fake(None); sw::flow::git::set_fake_gh(None); sw::clock::set(None); sw::runner::JOBS.with(|j| j.borrow_mut().clear()); let _ = std::process::Command::new("chmod").args(["-R", "u+w"]).arg(&self.base).status(); let _ = std::fs::remove_dir_all(&self.base); }
+    fn drop(&mut self) { let _ = std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")); FAKE.with(|f| *f.borrow_mut() = None); sw::webui::web::forget(); sw::herdr::cli::set_fake(None); sw::flow::git::set_fake_gh(None); sw::azure::cli::set_fake_az(None); sw::clock::set(None); sw::runner::JOBS.with(|j| j.borrow_mut().clear()); let _ = std::process::Command::new("chmod").args(["-R", "u+w"]).arg(&self.base).status(); let _ = std::fs::remove_dir_all(&self.base); }
 }
 impl World {
     /// The scripted turns, by role: { "worker": [step, …], "reviewer": […], "picker": […], "coordinator": […] }.
@@ -89,6 +93,8 @@ impl World {
     pub fn go_on(&self, t: &Obj) { let pi = self.state().arr("panes").iter().position(|p| p.s("pane_id") == t.at("link").s("pane")); if let Some(pi) = pi { agents::go_on(&self.fake, pi); } }
     /// What the fake gh answers from now on (gh.rs).
     pub fn gh_says(&self, c: Value) { *self.gh.cfg.borrow_mut() = c; }
+    /// What the fake az answers from now on (az.rs).
+    pub fn az_says(&self, c: Value) { *self.az.cfg.borrow_mut() = c; }
     pub fn add(&self, title: &str) -> String { sw::actions::filing::add(&self.root, title, Default::default()).unwrap().t("id") }
 }
 thread_local! { static FAKE: std::cell::RefCell<Option<Rc<herdr::FakeHerdr>>> = const { std::cell::RefCell::new(None) }; }
@@ -167,5 +173,6 @@ pub fn cut_world(waits: &str, settings: Value) -> World {
 /// The working agents started, by program, in order (not the reviewers).
 pub fn starts(w: &World) -> Vec<String> { w.state().arr("calls").iter().map(text).filter(|c| c.starts_with("agent start") && !regex::Regex::new(r"^agent start \S+-r ").unwrap().is_match(c)).map(|c| c.split(' ').nth(4).unwrap_or("").to_string()).collect() }
 /// Every call gh was asked, one per line.
+pub fn az_log(w: &World) -> String { w.az.log.borrow().iter().map(|l| format!("{l}\n")).collect() }
 pub fn gh_log(w: &World) -> String { w.gh.log.borrow().iter().map(|l| format!("{l}\n")).collect() }
 pub fn calls(w: &World) -> Vec<String> { w.state().arr("calls").iter().map(text).collect() }
