@@ -12,8 +12,9 @@
 @media (max-width: 480px) { .sw-chat { --sw-gutter: var(--space-3, 12px); } }
 /* The bar: one row on the box's column (as wide as it, centred with it), the switch at its left edge, the buttons at
    its right, the last over the box's Send (--sw-bar-end: how far in from the box's edge Send's middle is, less half a
-   button). */
+   button: a thumb's button is wider). */
 .sw-chatbar { --sw-bar-end: var(--space-3, 12px); position: relative; width: 100%; display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-1, 4px) var(--space-2, 8px); min-height: 52px; box-sizing: border-box; padding: var(--space-3, 12px) max(calc(var(--sw-gutter) + var(--sw-bar-end)), calc((100% - var(--chat-w, 820px)) / 2 + var(--sw-bar-end))) var(--space-2, 8px) max(var(--sw-gutter), calc((100% - var(--chat-w, 820px)) / 2)); }
+@media (pointer: coarse) { .sw-chatbar { --sw-bar-end: var(--space-1, 4px); } }
 .sw-chatbar-space { flex: 1 1 0; min-width: 0; }
 .sw-chatbar .icon-button { flex: none; color: var(--sw-dim); }
 .sw-chatbar .icon-button svg { width: 18px; height: 18px; }
@@ -52,7 +53,7 @@
 .sw-split[hidden] { display: none; }
 .sw-chat-note { margin: 0; padding: 0 var(--space-4, 16px) var(--space-2, 8px); color: var(--sw-dim); font-size: var(--fs-sm, 13px); }
 /* (The switch's choices reach a thumb's 40 px through an expander, as the web UI's own segmented switch does.) */
-@media (pointer: coarse) { .sw-chatbar { --sw-bar-end: var(--space-1, 4px); } .sw-chatbar .icon-button { min-width: var(--touch-target, 40px); min-height: var(--touch-target, 40px); } .sw-who-pick::before { content: ""; position: absolute; inset: -4px 0; } }
+@media (pointer: coarse) { .sw-chatbar .icon-button { min-width: var(--touch-target, 40px); min-height: var(--touch-target, 40px); } .sw-who-pick::before { content: ""; position: absolute; inset: -4px 0; } }
 
 /* The board's own chat, where the web UI has none to show: the conversation over the box, read as the web UI's chat
    reads (ChatView.css there: your words a card on the right, theirs plain prose), then the box (compose.css). */

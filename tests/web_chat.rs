@@ -128,3 +128,18 @@ fn the_chats_bar_has_a_switch_hide_full_screen_and_a_grip_and_the_boards_own_con
     // a thumb's size on touch
     assert!(regex::Regex::new(r"@media \(pointer: coarse\) \{ \.sw-chatbar \.icon-button \{ min-width: var\(--touch-target, 40px\); min-height: var\(--touch-target").unwrap().is_match(CSS));
 }
+
+#[test]
+fn the_bar_and_the_box_are_one_sheet_under_the_list_with_no_line_between_them() {
+    // under the list the chat is one sheet on the web UI's chat ground, its top corners rounded
+    assert!(CSS.contains("border-radius: var(--radius-2xl, 24px) var(--radius-2xl, 24px) 0 0; background: var(--sw-bg);"));
+    // no line under the bar, docked or not: an open chat's transcript scrolls under it through a short fade
+    assert!(!CSS.contains("border-bottom"));
+    assert!(CSS.contains(".sw-board.is-docked:is(:not(.sw-chat-hidden), .sw-web-typing) .sw-chat::after { content: \"\"; position: absolute; top: 100%;"));
+    // with no list over it, no sheet
+    assert!(CSS.contains(".sw-board:is(.sw-chat-full, .sw-web-typing, .sw-typing, .is-side) .sw-chat { border-radius: 0; box-shadow: none; }"));
+    // the bar on the box's column: the switch at its edge, the web UI's composer's gutter
+    assert!(CSS.contains("max(var(--sw-gutter), calc((100% - var(--chat-w, 820px)) / 2)); }") && CSS.contains("@media (max-width: 480px) { .sw-chat { --sw-gutter: var(--space-3, 12px); } }"));
+    // a narrow bar keeps its buttons on their row: the switch gives way first
+    assert!(CSS.contains("  .sw-who { flex: 100 1 0; max-width: max-content; }"));
+}
