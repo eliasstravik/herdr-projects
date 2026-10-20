@@ -244,7 +244,9 @@ So the front door stands in front of it instead:
 - **It passes every request on as it is**: pages, `/api/*`, the `/ws` socket, streams, ranged and ready-compressed files,
   the service worker. The same method, address and headers go in, in their own order and spelling; the same status,
   headers and bytes come out as they arrive. Only the two connection headers every HTTP hop writes for itself
-  (`Connection`, `Keep-Alive`) are its own.
+  (`Connection`, `Keep-Alive`) are its own, both ways: each request and its answer is one exchange that ends with
+  `Connection: close`, so a proxy in front that keeps its connections open (envoy) brings the next request to the
+  front door again, never straight to the web UI.
 - **It adds one line to the web UI's page**: a script, from the same address, that puts the Boards section into the
   sidebar. Nothing else in the page changes, and its security policy stays as sent. A page that cannot be read is passed
   on as it is.

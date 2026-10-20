@@ -8,7 +8,7 @@ use super::menu::Item;
 use super::Effect;
 use crate::board::job::Job;
 use crate::board::keys::{is, key_name, name, pair, typed, Press, KEYS, K};
-use crate::board::state::{Editing, State, Valid};
+use crate::board::state::{Editing, State, Valid, Whose};
 use crate::json::*;
 use crate::shown::ink::Ink;
 use crate::shown::words::clean;
@@ -45,9 +45,9 @@ pub fn remove(s: &mut State, a: &Obj) {
 pub fn fold(s: &mut State) { s.auto_open = !s.auto_open; s.full = false; s.editing = None; s.auto_at = -1; s.panel_top = 0; }
 pub fn settings(s: &mut State, a: &Obj) {
     if s.ctx.web { return super::web::auto_settings(s); }
-    if s.editing.as_ref().map(|e| e.auto).unwrap_or(false) { s.editing = None; s.panel_top = 0; return; }
+    if s.editing.as_ref().map(|e| e.whose == Whose::Auto).unwrap_or(false) { s.editing = None; s.panel_top = 0; return; }
     if !can_set(a) { return s.flash(format!("Its settings are changed on {}: herdr-projects set <name> <value> --automation \"{}\"", a.s("host"), a.s("name")), Ink::Yellow); }
-    s.editing = Some(Editing { id: a.t("row"), at: 0, typing: String::new(), auto: true }); s.auto_open = true; s.full = false; s.panel_top = 0;
+    s.editing = Some(Editing { id: a.t("row"), at: 0, typing: String::new(), whose: Whose::Auto }); s.auto_open = true; s.full = false; s.panel_top = 0;
 }
 /// Enter on a firing: to the task it made, on the board.
 pub fn go_to(s: &mut State, id: &str) {
@@ -88,7 +88,7 @@ pub fn menu_items(s: &State, a: &Obj) -> Vec<Item> {
         K::Side => Some(format!("{} the side panel: this automation, beside the list", if s.side { "hide" } else { "show" })),
         _ => None } };
     KEYS.iter().filter(|k| (k.group == Some("ctrl") || k.group == Some("alt")) && !TASK_ONLY.contains(&k.id) && (!s.auto_open || words(k.id).is_some() || OPEN_SAME.contains(&k.id)))
-        .map(|k| Item { id: k.id, group: k.group.unwrap(), key: name(k.id), label: words(k.id).unwrap_or_else(|| super::menu::label(s, k.id, None)) }).filter(|i| !i.label.is_empty()).collect()
+        .map(|k| Item { id: k.id, group: k.group.unwrap(), key: name(k.id), mine: false, label: words(k.id).unwrap_or_else(|| super::menu::label(s, k.id, None)) }).filter(|i| !i.label.is_empty()).collect()
 }
 pub fn run_menu(s: &mut State, k: K, fx: &mut Vec<Effect>) {
     let Some(a) = s.auto().cloned() else { return };

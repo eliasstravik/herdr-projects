@@ -1,9 +1,11 @@
 //! The settings page, drawn: each row the setting's plain label, its value, what a reader must know of it (that it
 //! does nothing here, or counts later) and its name as a command takes it, greyed. The line on top says what the
 //! selected row may be. Rows set for this task only are marked `*`; where any other comes from is not said here
-//! (`herdr-projects show` says it).
+//! (`herdr-projects show` says it). Your own settings (or your entry for a repo) are the same page, full screen, each
+//! row not your own saying where it comes from (built in, you, the repo's file).
 use crate::board::view::list::hl;
-use crate::board::state::State;
+use crate::board::keys::key_name;
+use crate::board::state::{State, Whose};
 use crate::board::theme::Theme;
 use crate::board::update::edit::{rows, value_say, words_of};
 use crate::json::*;
@@ -35,13 +37,33 @@ pub fn value_words(row: &Obj) -> String {
     };
     format!("{typed}{}", if e.means.is_empty() { String::new() } else { format!(". Means: {}", e.means) })
 }
-pub fn settings_page(s: &mut State, t: &Theme, r: &Obj, width: usize) -> Vec<Inked> {
+/// Yours, or your entry for a repo, full screen: its title, and the page with its selected row always on screen.
+pub fn mine_full(s: &mut State, t: &Theme, width: usize, h: usize) -> Vec<Inked> {
+    let w = s.editing.as_ref().map(|e| e.whose.clone()).unwrap_or_default();
+    let lines = if crate::board::update::edit::mine_read(s, &w).is_some() { settings_page(s, t, None, width.min(super::READ)) } else { vec![Inked::new(), Inked::of(" Reading your settings…", Ink::Muted)] };
+    s.panel_height = h.saturating_sub(2).max(1);
+    s.panel_length = lines.len();
+    s.panel_top = s.edit_line.min(s.panel_top.max((s.edit_line + 1).saturating_sub(s.panel_height))).min(lines.len().saturating_sub(s.panel_height));
+    let end = lines.len().min(s.panel_top + s.panel_height);
+    let name = if w.repo().is_empty() { "yours: what every task starts from".to_string() } else { format!("your entry for {}: what its tasks start from", crate::shown::words::repo_label(w.repo())) };
+    let left = Inked::plain(" ").add(Inked::plain("Settings").bold()).add(Inked::of(format!("  {}", crate::text::cut(&name, width.saturating_sub(30).max(8))), Ink::Muted));
+    let right = if lines.len() > s.panel_height { Inked::of(format!("lines {}–{end} of {} ", s.panel_top + 1, lines.len()), Ink::Muted) } else { Inked::new() };
+    let gap = width.saturating_sub(left.width() + right.width()).max(2);
+    let mut out = vec![left.add(Inked::spaces(gap)).add(right), Inked::of("─".repeat(width), Ink::Rule)];
+    out.extend(lines[s.panel_top..end].iter().cloned());
+    out
+}
+/// The page's lines: `r` the task or automation, None for yours.
+pub fn settings_page(s: &mut State, t: &Theme, r: Option<&Obj>, width: usize) -> Vec<Inked> {
     let all = rows(s);
-    let (auto, typing) = { let e = s.editing.as_mut().unwrap(); e.at = e.at.min(all.len().saturating_sub(1)); (e.auto, e.typing.clone()) };
+    let w = { let e = s.editing.as_mut().unwrap(); e.at = e.at.min(all.len().saturating_sub(1)); e.whose.clone() };
+    let typing = s.editing.as_ref().unwrap().typing.clone();
     let at = s.editing.as_ref().unwrap().at;
-    let whose = if auto { "this automation" } else { "this task" };
+    let whose = match &w { Whose::Auto => "this automation only", Whose::Task => "this task only", Whose::You => "set by you", Whose::Repo(_) => "said in your entry for this repo" };
     let label = |x: &Obj| entry_of(x.s("name")).map(|e| e.label.clone()).unwrap_or_else(|| x.t("name"));
-    let place = |x: &Obj| [x.t("note"), x.t("later")].into_iter().filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" · ");
+    // Yours: where a row not your own comes from, unless something says more of it.
+    let from = |x: &Obj| if w.mine() && !x.b("own") { x.t("from") } else { String::new() };
+    let place = |x: &Obj| { let said: Vec<String> = [x.t("note"), x.t("later")].into_iter().filter(|w| !w.is_empty()).collect(); if said.is_empty() { from(x) } else { said.join(" · ") } };
     let one = |v: &Value| crate::re!(r"\s*\n\s*").replace_all(&value_say(v), " / ").into_owned();
     let wide = all.iter().map(|x| crate::text::width(&label(x))).max().unwrap_or(0);
     let val = all.iter().map(|x| crate::text::width(&value_say(x.at("value")))).max().unwrap_or(0).min(24);
@@ -66,8 +88,9 @@ pub fn settings_page(s: &mut State, t: &Theme, r: &Obj, width: usize) -> Vec<Ink
         else if x.b("own") { lines.push(star(&fit, true)); } else { lines.push(Inked::of(fit, Ink::Muted)); }
     }
     lines.push(Inked::new());
-    lines.push(Inked::plain(" ").add(Inked::of("*", Ink::Accent)).add(Inked::of(format!(" {whose} only"), Ink::Muted)).cut(width));
-    lines.push(Inked::of(" Board settings are yours only: herdr-projects show", Ink::Muted).cut(width));
-    if !auto { for bad in r.at("snap").arr("problems") { lines.push(Inked::of(format!(" Not counted: {}", text(bad)), Ink::Yellow).cut(width)); } }
+    lines.push(Inked::plain(" ").add(Inked::of("*", Ink::Accent)).add(Inked::of(format!(" {whose}"), Ink::Muted)).cut(width));
+    let bad = match (&w, r) { (Whose::Task, Some(r)) => r.at("snap").arr("problems").to_vec(), (w, _) if w.mine() => crate::board::update::edit::mine_read(s, w).map(|v| v.arr("problems").to_vec()).unwrap_or_default(), _ => vec![] };
+    if !w.mine() { lines.push(Inked::of(format!(" Your own settings, which every task starts from: {} on a heading", key_name("settings")), Ink::Muted).cut(width)); }
+    for bad in bad { lines.push(Inked::of(format!(" Not counted: {}", text(&bad)), Ink::Yellow).cut(width)); }
     lines
 }

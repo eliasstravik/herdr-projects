@@ -75,7 +75,7 @@
    esc          back, one step at a time (as a popup, the
                 board closes on the last one)
    ?            this menu
- ↓ 55 more
+ ↓ 57 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────

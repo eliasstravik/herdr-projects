@@ -129,7 +129,7 @@ pub fn relist(s: &mut State) {
     s.selection_rows = next;
     s.selection_layout = layout;
     // With no automation selected, nothing of one is open.
-    if s.auto().is_none() { s.auto_open = false; s.auto_at = -1; if s.editing.as_ref().map(|e| e.auto).unwrap_or(false) { s.editing = None; } }
+    if s.auto().is_none() { s.auto_open = false; s.auto_at = -1; if s.editing.as_ref().map(|e| e.whose == crate::board::state::Whose::Auto).unwrap_or(false) { s.editing = None; } }
     // A question is about what it names: when that changed underneath it, the question goes.
     if let Some(a) = &s.ask { if !super::ask::still_valid(s, &a.valid) { s.ask = None; s.flash(format!("It changed while you were asked, so nothing was merged. Look at it again, then {}.", key_name("yes")), Ink::Yellow); } }
     // A reply belongs to the task it was started for: when that task is gone, the words are put away, nothing is sent.

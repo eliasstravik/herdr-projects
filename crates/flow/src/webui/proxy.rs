@@ -1,8 +1,9 @@
 //! Passing a request through to the web UI as it came: the same method, address and headers in, the same status,
 //! headers and bytes out (a stream stays a stream), and a socket upgrade (`/ws`) as two pipes. One change: a plain
-//! request goes on with `Connection: close`, so each request on its own connection is routed here, never riding on an
-//! earlier one's connection past the board's own paths. The web UI decides who is let in from the very headers a
-//! proxy in front sends, so the rest arrive as they were sent.
+//! request is one exchange with `Connection: close` both ways (proxy/once.rs), so each request on its own connection
+//! is routed here, never riding on an earlier one's connection past the board's own paths. The web UI decides who is
+//! let in from the very headers a proxy in front sends, so the rest arrive as they were sent.
+mod once;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -59,9 +60,10 @@ fn dechunk(mut b: &[u8]) -> Vec<u8> {
     }
     out
 }
-/// Read an answer to its end (the request asked for `Connection: close`). None when it is longer than `max`.
+/// Read an answer to its end, by its framing (the request asked for `Connection: close`, but the web UI may keep its
+/// connection). None when it is longer than `max`.
 pub fn read_answer(s: &mut TcpStream, max: usize) -> Option<Answer> {
-    let (head, mut rest) = read_head(s, 64 * 1024)?;
+    let (head, rest) = read_head(s, 64 * 1024)?;
     let text = String::from_utf8_lossy(&head).to_string();
     let mut lines = text.split("\r\n");
     let status_line = lines.next()?;
@@ -70,13 +72,7 @@ pub fn read_answer(s: &mut TcpStream, max: usize) -> Option<Answer> {
     let status: u16 = parts.next()?.parse().ok()?;
     let reason = parts.next().unwrap_or("").to_string();
     let headers: Vec<(String, String)> = lines.filter(|l| !l.is_empty()).filter_map(|l| l.split_once(':').map(|(k, v)| (k.to_string(), v.trim_start().to_string()))).collect();
-    let len = headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("content-length")).and_then(|(_, v)| v.parse::<usize>().ok());
-    let mut chunk = [0u8; 16384];
-    loop {
-        if let Some(l) = len { if rest.len() >= l { rest.truncate(l); break; } }
-        if rest.len() > max { return None; }
-        match s.read(&mut chunk) { Ok(0) | Err(_) => break, Ok(n) => rest.extend_from_slice(&chunk[..n]) }
-    }
+    let rest = once::whole_body(s, rest, status, &headers, max)?;
     let chunked = headers.iter().any(|(k, v)| k.eq_ignore_ascii_case("transfer-encoding") && v.to_lowercase().contains("chunked"));
     Some(Answer { status, reason, body: if chunked { dechunk(&rest) } else { rest }, headers, raw_head: head })
 }
@@ -103,13 +99,15 @@ pub const DOWN: &str = "The herdr web UI is not answering right now. It is start
 pub fn bad(client: &mut TcpStream, text: &str) {
     let _ = write!(client, "HTTP/1.1 502 Bad Gateway\r\ncontent-type: text/plain; charset=utf-8\r\ncache-control: no-store\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{text}", text.len());
 }
-/// One request, as it is: the head as it came (with `Connection: close`, or untouched for an upgrade), what was read
-/// past it, and then bytes both ways.
+/// One request, as it is: the head as it came (with `Connection: close`, or untouched for an upgrade), then one
+/// exchange (once.rs), or for an upgrade what was read past the head and bytes both ways.
 pub fn pass(mut client: TcpStream, head: &Head, rest: &[u8], host: &str, port: u16) -> bool {
     let Some(mut up) = connect(host, port) else { bad(&mut client, DOWN); return false };
     let upgrade = head.header("upgrade").is_some();
     let headers = if upgrade { head.headers.clone() } else { let mut h = head.without(&["connection", "keep-alive"]); h.push(("Connection".into(), "close".into())); h };
-    if up.write_all(&head.bytes(&headers)).is_err() || up.write_all(rest).is_err() { bad(&mut client, DOWN); return false; }
+    if up.write_all(&head.bytes(&headers)).is_err() { bad(&mut client, DOWN); return false; }
+    if !upgrade { return once::relay(client, up, head, rest); }
+    if up.write_all(rest).is_err() { bad(&mut client, DOWN); return false; }
     splice(client, up);
     true
 }

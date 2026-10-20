@@ -127,7 +127,7 @@ pub fn run(s: &mut State, k: K, r: Option<&Obj>, fx: &mut Vec<Effect>) {
         K::Stop => if let Some(r) = r { act::stop(s, r, fx) },
         K::Archive => match r { Some(r) => act::archive_selected(s, r, fx), None => s.flash("Select a task to archive or restore.", Ink::Muted) },
         K::Pin => if let Some(r) = r { act::pin(s, r, fx) },
-        K::Settings => super::edit::open(s, r),
+        K::Settings => super::edit::open(s, r, fx),
         K::Undo => act::undo(s, fx),
         K::Find => { s.mode = Mode::Find; s.full = false; let f = s.filter.clone(); s.input.set_text(&f); }
         K::Free => act::free_size(s, fx),

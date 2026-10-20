@@ -10,7 +10,7 @@ herdr-projects set review.rounds 5 --task 12             one task
 herdr-projects show 12                                   what task 12 runs on, and where each value comes from
 ```
 
-On the board, `Ctrl+E` opens the selected task's settings. Or just ask the Coordinator. Every setting, with what it
+On the board, `Ctrl+E` opens the selected task's settings, and on a heading your own. Or just ask the Coordinator. Every setting, with what it
 means, is in [the list](#the-list) below.
 
 ## Two kinds of setting
@@ -113,6 +113,13 @@ herdr-projects delegate <id> --reviewer.agent claude --merge.by itself
 - `Enter` changes it, and `Ctrl+U` puts a row back;
 - `*` marks the rows set for this task only. Every other row is plain: where its value comes from is `show <id>`'s;
 - what cannot apply to the task (fast mode for a program that has none) is not offered.
+
+**Your own settings on the board**: `Ctrl+E` on this machine's heading (or on a status group's) opens the same page for
+yours, what every task starts from, work and board settings both; on a repo's heading (grouped by repo) your entry for
+that repo. The `?` menu has a line for yours under the task's. A change there is the one `set` (or `set --repo`) makes,
+with the same checks, and `Ctrl+U` is `unset`. `*` marks what you set; every other row says where it comes from
+(`built in`, `you`, `the repo's file`). A task with no answer of its own follows at once. Another machine's settings
+are changed on that machine.
 
 ## The list
 

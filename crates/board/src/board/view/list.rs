@@ -6,7 +6,7 @@ use super::row_tall::tall_at;
 use crate::board::keys::key_name;
 use crate::board::state::{Mode, Rec, Row, State};
 use crate::board::theme::Theme;
-use crate::board::update::coords::{MACHINE_INK, REPO_INK};
+use crate::board::update::coords::{MACHINE_INK, REPO_HEAD_INK};
 use crate::board::update::heads::is_head;
 use crate::board::update::list::{counts, fold_rows, heading_height};
 use crate::json::*;
@@ -72,15 +72,16 @@ pub fn unread_lines(s: &State, width: usize) -> Vec<Inked> {
     }
     out
 }
-/// A heading's line. A machine's in bold accent, a rule after it to the edge; a repo's in bold, a status group's in its
-/// colour, a machine's automations' in theirs. Each has a caret in the marks' column, `▾` open, `▸` folded (then with
-/// how many tasks and automations it holds: `7 tasks, 1 automation`; a machine with nothing in view: `0 tasks`).
+/// A heading's line. A machine's in bold accent, a rule after it to the edge; a repo's in bold plain text, as loud as the
+/// titles under it; a status group's in its colour, a machine's automations' in theirs. Each has a caret in the marks'
+/// column, `▾` open, `▸` folded (then with how many tasks and automations it holds: `7 tasks, 1 automation`; a machine
+/// with nothing in view: `0 tasks`).
 /// A repo's heading has its key beside its name, dimmed (`gtm-agent · AGT`): the first thing to go where room is short.
 fn heading(s: &State, rows: &[Row], at: usize, width: usize) -> Inked {
     let r = &rows[at];
     let Row::Head { name, autos, machine, folded, folded_autos, id, .. } = r else { return Inked::new() };
     let key = if s.by_repo { crate::board::tags::heading_key(s, at) } else { String::new() };
-    let named = if *autos { Inked::of(name.clone(), Ink::Auto) } else if *machine { Inked::of(name.clone(), MACHINE_INK).bold() } else if s.by_repo { Inked::of(repo_label(name), REPO_INK).bold() } else { Inked::of(name.clone(), group_ink(name)) };
+    let named = if *autos { Inked::of(name.clone(), Ink::Auto) } else if *machine { Inked::of(name.clone(), MACHINE_INK).bold() } else if s.by_repo { Inked::of(repo_label(name), REPO_HEAD_INK).bold() } else { Inked::of(name.clone(), group_ink(name)) };
     let named = if key.is_empty() { named } else { named.add(Inked::of(format!(" · {key}"), Ink::Muted)) };
     let caret = if id.is_empty() { Inked::plain("  ") } else { Inked::of(if r.shut() { "▸ " } else { "▾ " }, Ink::Muted) };
     let mut out = Inked::plain(" ").add(caret).add(named);

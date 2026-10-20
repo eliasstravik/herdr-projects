@@ -106,7 +106,7 @@ pub fn set_setting(c: &mut Client, id: &str, name: &str, value: Option<String>) 
     if crate::store::settings_list::entry_of(name).is_none() { return Err(format!("Unknown setting \"{name}\".")); }
     if let Some(a) = &a { if !crate::board::update::autos::can_set(a) { c.s.flash(format!("Its settings are changed on {}: herdr-projects set <name> <value> --automation \"{}\"", a.s("host"), a.s("name")), Ink::Yellow); return Ok(()); } }
     let was = c.s.editing.take();
-    c.s.editing = Some(crate::board::state::Editing { id: if a.is_some() { r.t("row") } else { r.t("id") }, auto: a.is_some(), ..Default::default() });
+    c.s.editing = Some(crate::board::state::Editing { id: if a.is_some() { r.t("row") } else { r.t("id") }, whose: if a.is_some() { crate::board::state::Whose::Auto } else { crate::board::state::Whose::Task }, ..Default::default() });
     let mut fx: Vec<Effect> = vec![];
     crate::board::update::edit::save(&mut c.s, name, value, &mut fx);
     c.s.editing = was;

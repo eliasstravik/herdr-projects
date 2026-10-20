@@ -43,18 +43,19 @@ fn a_program_with_its_own_plan_mode_is_started_in_it_its_plan_taken_by_the_hook_
         sw::store::files::read_json(std::path::Path::new(file)).unwrap().at("hooks").clone()
     };
     let on = hooks(true);
-    let pre = &on.at("PreToolUse")[0];
+    let pre = &on.at("PermissionRequest")[0];
     assert_eq!(pre.s("matcher"), "ExitPlanMode");
     assert_eq!(pre.at("hooks")[0].s("command"), format!("'/bin/board' 'plan-written' '--id' 'proj/1' '--token' '{token}'"));
     assert!(!pre.at("hooks")[0].b("async"));
-    assert!(hooks(false).at("PreToolUse").is_null(), "only while the plan step is open");
-    // The hook: a wrong token or no plan lets the tool through; the plan is saved, and the tool is refused. (What it
-    // tells the agent goes to stderr, which a test in this process does not read: SAVED is that text.)
-    use sw::plan::presented::presented;
-    assert_eq!(presented(&id, "wrong", Some(json!({ "tool_input": { "plan": PLAN } }))), 0);
-    assert_eq!(presented(&id, &token, Some(json!({ "tool_input": {} }))), 0);
+    assert!(hooks(false).at("PermissionRequest").is_null(), "only while the plan step is open");
+    // The hook: a wrong token or no plan lets the tool through (nothing printed); the plan is saved, and the tool is
+    // refused with Claude Code's structured deny, whose message (SAVED) tells the agent to stop. The command exits 0.
+    use sw::plan::presented::{presented, SAVED};
+    assert_eq!(presented(&id, "wrong", Some(json!({ "tool_input": { "plan": PLAN } }))), None);
+    assert_eq!(presented(&id, &token, Some(json!({ "tool_input": {} }))), None);
     assert_eq!(P::read_plan(&t), "A first draft, said and not presented.");
-    assert_eq!(presented(&id, &token, Some(json!({ "tool_input": { "plan": "# As the hook took it" } }))), 2);
+    let deny = json!({ "hookSpecificOutput": { "hookEventName": "PermissionRequest", "decision": { "behavior": "deny", "message": SAVED } } });
+    assert_eq!(presented(&id, &token, Some(json!({ "tool_input": { "plan": "# As the hook took it" } }))), Some(deny));
     assert_eq!(P::read_plan(&t), "# As the hook took it");
     sw::actions::talk::tell(&id, "Present it properly.", false).unwrap(); // its next turn presents a new plan
     let t = settle(&id);
@@ -67,7 +68,7 @@ fn a_program_with_its_own_plan_mode_is_started_in_it_its_plan_taken_by_the_hook_
     let now = args_of(&w, &t);
     assert!(now.iter().any(|a| a == "--dangerously-skip-permissions") && !now.join(" ").contains("--permission-mode plan") && now != args, "{now:?}");
     assert!(has(prompts(&w, t.at("link").s("pane")).last().unwrap(), r"(?s)This task has an approved plan.*build exactly that plan"));
-    assert_eq!(presented(&id, &token, Some(json!({ "tool_input": { "plan": "late" } }))), 0);
+    assert_eq!(presented(&id, &token, Some(json!({ "tool_input": { "plan": "late" } }))), None);
 }
 
 #[test]
