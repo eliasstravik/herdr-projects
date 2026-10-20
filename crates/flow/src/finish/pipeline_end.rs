@@ -30,6 +30,14 @@ fn hold_pr_failure(g: &mut Guard, t: &Task) -> Res<bool> {
     Ok(true)
 }
 pub fn done(g: &mut Guard, t: &Task, msg: &str, review: Option<&Value>) -> Res<()> {
+    // Merged by the agent in its own pull request on Azure DevOps: done once its main pipeline passed, as a merge of the
+    // board's own is (land/main_pipeline.rs).
+    if t.b("ownMerge") && crate::land::main_pipeline::applies(t) {
+        let p = t.at("ownMerge").clone();
+        let d = g.set(|t| { t.put("pr", p.t("url")); if let Some(r) = review { t.put("review", r.clone()); } crate::land::main_pipeline::arm(t, &p.at("mergeCommit").t("oid"), &p.t("baseRefName"), "merged", ""); })?;
+        flow::sidebar::tell_sidebar(&d);
+        return Ok(());
+    }
     let mark = flow::spaces::tidy_mark(t, "merged", "");
     let d = g.set(|t| { t.put("stage", "done"); t.put("tidy", mark.clone().unwrap_or(Value::Null)); t.put("msg", one_line(msg, 2048)); t.put("failure", Value::Null); t.put("mergeIntent", Value::Null); if let Some(r) = review { t.put("review", r.clone()); } })?;
     flow::sidebar::tell_sidebar(&d);

@@ -38,6 +38,7 @@ mod automations_rest;
 mod automations_triggers;
 mod azure_devops;
 mod azure_devops_approval;
+mod azure_devops_completion;
 mod azure_devops_flow;
 mod azure_devops_gate;
 mod board_actions;

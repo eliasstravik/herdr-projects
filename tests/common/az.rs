@@ -8,7 +8,8 @@ use sw::flow::git::GhOut;
 use sw::json::*;
 
 /// What az answers: `head` (the pull request's last pushed commit), `merge` (its merge commit once completed),
-/// `status` (`active`, `completed`, `abandoned`; completed once the board completed it), `reviewers`, `policies`
+/// `status` (`active`, `completed`, `abandoned`; completed once the board completed it, unless `completeQueued`),
+/// `mergeStatus` (Azure DevOps' merge of an accepted completion: `queued`, `conflicts`, …), `reviewers`, `policies`
 /// (each evaluation as az gives it), `prs` (`repos pr list`), `createFail`, `completeFail`, `noLogin`, `threads`,
 /// `runs` (`pipelines runs list`), `pipelines` (`pipelines list`; one by default), `timeline` (by build id), `log`
 /// (a build log's lines).
@@ -30,7 +31,7 @@ impl FakeAz {
         let status = if self.completed.get() { "completed".to_string() } else if c.b("status") { c.t("status") } else { "active".into() };
         json!({ "pullRequestId": 42, "status": status, "title": "t", "isDraft": false, "sourceRefName": "refs/heads/b", "targetRefName": "refs/heads/main",
             "lastMergeSourceCommit": { "commitId": c.at("head") }, "lastMergeCommit": { "commitId": if c.b("merge") { c.t("merge") } else { "m".repeat(40) } },
-            "reviewers": if c.at("reviewers").is_array() { c.at("reviewers").clone() } else { json!([]) }, "createdBy": { "uniqueName": "me@acme.test" } })
+            "mergeStatus": c.at("mergeStatus"), "reviewers": if c.at("reviewers").is_array() { c.at("reviewers").clone() } else { json!([]) }, "createdBy": { "uniqueName": "me@acme.test" } })
     }
     /// Its completion, as `rest` asks it (kept: the body).
     fn complete(&self, c: &Value, asked: Value) -> GhOut {

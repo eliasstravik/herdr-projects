@@ -10,6 +10,10 @@ use std::path::Path;
 
 /// A pull request's link is one of Azure DevOps': `…/_git/<repo>/pullrequest/<id>`.
 pub fn is_azure(pr: &str) -> bool { pr.contains("/pullrequest/") }
+/// Where its comments are read, said to the agent: gh's command, or its threads in Azure DevOps.
+pub fn comments_at(pr: &str) -> String { if is_azure(pr) { format!("its comment threads in Azure DevOps: {pr}") } else { "gh pr view --comments".into() } }
+/// How a pull request's base is changed to `onto`: gh's command, or Azure DevOps' own page (az cannot do it).
+pub fn retarget(azure: bool, number: &str, onto: &str) -> String { if azure { format!("in Azure DevOps: Change target branch, in the pull request's menu, to {onto}") } else { format!("gh pr edit {number} --base {onto}") } }
 /// Its number, from its link (or the number itself).
 pub fn id_of(pr: &str) -> String { pr.split("/pullrequest/").nth(1).map(|r| r.chars().take_while(|c| c.is_ascii_digit()).collect()).filter(|s: &String| !s.is_empty()).unwrap_or_else(|| pr.trim_start_matches(['!', '#']).to_string()) }
 fn branch(r: &str) -> String { r.strip_prefix("refs/heads/").unwrap_or(r).to_string() }

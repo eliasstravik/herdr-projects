@@ -52,7 +52,8 @@ pub fn through_pr(id: &str, g: &mut Guard, t: &Task, root: &Path, how: &str, a: 
     if git_slow(root, &["fetch", "origin"], 60000).is_ok() && git_out(root, &["status", "--porcelain", "--untracked-files=no"]).map(|s| s.is_empty()).unwrap_or(false) { let _ = git_out(root, &["merge", "--ff-only", "@{upstream}"]); }
     // Accepted is not completed: Azure DevOps may still be merging it, or wait for an auto-complete.
     let seen = pr::view(a, root, &pr, "state").unwrap_or(Value::Null);
-    if seen.s("state") != "MERGED" { g.set(|t| { t.put("failure", Value::Null); t.put("autoMerge", true); t.put("autoMergeLocal", false); let m = format!("Approved: Azure DevOps completes it when its policies are through ({})", t.s("pr")); t.put("msg", m); })?; return Ok(()); }
+    // Watched from then on by its merge status, at most `check.timeout` (queued.rs).
+    if seen.s("state") != "MERGED" { g.set(|t| { t.put("failure", Value::Null); t.put("autoMerge", true); t.put("autoMergeLocal", false); super::queued::arm(t); let m = format!("Approved: Azure DevOps completes it when its policies are through ({})", t.s("pr")); t.put("msg", m); })?; return Ok(()); }
     flow::git::drop_remote_branch(root, t.s("branch"), &reviewed);
     let head = if reviewed.is_empty() { t.t("prHead") } else { reviewed.clone() };
     let commit = seen.at("mergeCommit").t("oid");

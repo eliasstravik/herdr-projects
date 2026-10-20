@@ -9,6 +9,7 @@ pub mod expected;
 pub mod main_pipeline;
 pub mod merge;
 pub mod merge_azure;
+pub mod queued;
 pub mod readable;
 pub mod triggers;
 pub use cleanup::{cleanup, cleanup_job, cleanup_with, tidy, Cleanup};

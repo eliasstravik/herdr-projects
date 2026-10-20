@@ -1,7 +1,7 @@
 //! A repo at Azure DevOps, from the finish line to done: its draft pull request is opened with az, it merges only once
 //! its policies pass and is completed by `merge.method`, then the task waits for the base branch's pipeline for the
 //! merge commit and is done once that passed. A pull request the human completed in Azure DevOps is taken for merged,
-//! and work the agent merged itself is `Already merged in !N`. No login to Azure DevOps is said as one.
+//! and work the agent merged itself is `Already merged in !N`, done once the main pipeline passed. No login to Azure DevOps is said as one.
 use crate::common;
 use common::az::{at_azure, policy, run, WEB};
 use common::*;
@@ -172,14 +172,23 @@ fn work_the_agent_merged_in_its_own_pull_request_on_azure_devops_is_already_merg
     let w = az_world(json!({}));
     let squash = json!([["push", "-q", "origin", "HEAD"], ["fetch", "-q", "origin", "main"], ["checkout", "-q", "--detach", "FETCH_HEAD"], ["merge", "-q", "--squash", "@{-1}"],
         ["-c", "user.email=agent@test", "-c", "user.name=agent", "commit", "-qm", "Merged PR 1234: release"], ["push", "-q", "origin", "HEAD:main"], ["checkout", "-q", "-"]]);
-    w.az_says(json!({ "prs": [{ "pullRequestId": 1234, "status": "completed", "targetRefName": "refs/heads/main", "lastMergeSourceCommit": { "commitId": "x" } }] }));
+    let merged = json!([{ "pullRequestId": 1234, "status": "completed", "targetRefName": "refs/heads/main", "lastMergeSourceCommit": { "commitId": "x" }, "lastMergeCommit": { "commitId": merge_commit() } }]);
+    w.az_says(json!({ "prs": merged }));
     w.script(json!({ "worker": [{ "files": { "f.txt": "v1\n" }, "commit": "v1", "note": "Did v1.", "git": squash }] }));
     let id = w.add("Release");
     delegate(&id);
     let t = settle(&id);
-    assert_eq!(t.s("stage"), "done", "{} {}", t.s("msg"), t.at("failure"));
     assert_eq!(t.s("doneWhy"), "Already merged in !1234");
     assert!(!az_log(&w).contains("repos pr create"), "{}", az_log(&w));
+    // merged is not done: its merge commit's main pipeline is waited for, as after a merge of the board's own
+    assert_eq!(t.s("stage"), "merging", "{} {}", t.s("msg"), t.at("failure"));
+    assert_eq!((t.at("pipelineWait").s("commit"), t.at("pipelineWait").s("base")), (merge_commit().as_str(), "main"), "{}", t.at("pipelineWait"));
+    assert_eq!(t.s("pr"), format!("{WEB}/pullrequest/1234"));
+    w.az_says(json!({ "prs": merged, "runs": [run(5, "CI", &merge_commit(), "completed", "succeeded")] }));
+    poll_prs();
+    let t = task(&id);
+    assert_eq!(t.s("stage"), "done", "{} {}", t.s("msg"), t.at("failure"));
+    assert_eq!(t.s("doneWhy"), "Already merged in !1234");
 }
 
 #[test]

@@ -38,15 +38,16 @@ pub fn made_commits(tree: &Path, base: &str, before: &str, prev_main: &str) -> b
 }
 /// Why the task is done without a pull request, when its branch brings main nothing: main (brought in just before) has
 /// everything on it. `ask`: GitHub may be asked for a pull request of the branch that was merged. None: there is work
-/// to land.
-pub fn nothing_to_land(t: &Task, tree: &Path, own: bool, ask: bool) -> Option<String> {
+/// to land. With it, the pull request it was merged in (gh's shape), when the agent merged its own: on Azure DevOps
+/// the task waits for that merge commit's main pipeline (pipeline_end.rs).
+pub fn nothing_to_land(t: &Task, tree: &Path, own: bool, ask: bool) -> Option<(String, Option<Value>)> {
     let ch = change_of(t)?;
     if !ch.s("stat").is_empty() { return None; }
     let merged = if ask { prs_of(t.s("branch"), tree).into_iter().find(|p| p.s("state") == "MERGED") } else { None };
     Some(match merged {
-        Some(p) => format!("Already merged in {}", crate::azure::numbered(p.s("url"), &p.t("number"))),
-        None if own => format!("Already on {}", crate::sync::main_word(t)),
-        None => "No change needed".into(),
+        Some(p) => (format!("Already merged in {}", crate::azure::numbered(p.s("url"), &p.t("number"))), Some(p)),
+        None if own => (format!("Already on {}", crate::sync::main_word(t)), None),
+        None => ("No change needed".into(), None),
     })
 }
 /// The repo is archived on GitHub: read-only, nothing can be pushed to it or merged.

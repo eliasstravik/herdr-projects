@@ -116,6 +116,15 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
             then = Then::Unreviewed;
             return Ok(Change::Write);
         }
+        // Completed by Azure DevOps' own hand, accepted but not carried out: its merge failed, or it took too long.
+        if let Some(f) = crate::land::queued::stalled(t, j) {
+            let title = f.t("title");
+            t.put("autoMerge", false); t.put("autoMergeLocal", false); t.put("completeQueued", Value::Null); t.put("stage", "approval"); t.put("mergeFailed", true); t.put("mergeIntent", Value::Null); t.put("requireApproval", true);
+            t.put("msg", title);
+            for (k, v) in failure_patch(&obj(f)) { t.insert(k, v); }
+            then = Then::Closed;
+            return Ok(Change::Write);
+        }
         if t.b("prHead") && head != t.s("prHead") { return Ok(Change::Keep); } // stale or unknown-head CI cannot resolve a pushed repair
         // Only what the human wrote on it wakes the agent: the comments of the logged-in GitHub user, never anyone
         // else's (other people, review bots) and never the board's own review comments, which that same user posts.
@@ -133,9 +142,9 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
         t.put("prFeedbackSeen", feedback);
         let decision = j.s("reviewDecision");
         let reason = if !failed.is_empty() { checks::failed_why(pr, &failed) }
-            else if decision == "CHANGES_REQUESTED" { format!("A reviewer asked for changes on the pull request {pr}. Read the review (gh pr view --comments) and address it on your branch.") } else { String::new() };
-        let why = if !reason.is_empty() { format!("{reason}{}", if others.is_empty() { "" } else { " Comments are also available for context (gh pr view --comments)." }) }
-            else if new_feedback { format!("New feedback on the pull request {pr}. Read the comments (gh pr view --comments) and address what they ask for on your branch; if nothing needs changing, say so and finish.") } else { String::new() };
+            else if decision == "CHANGES_REQUESTED" { format!("A reviewer asked for changes on the pull request {pr}. Read the review ({}) and address it on your branch.", crate::azure::pr::comments_at(pr)) } else { String::new() };
+        let why = if !reason.is_empty() { format!("{reason}{}", if others.is_empty() { String::new() } else { format!(" Comments are also available for context ({}).", crate::azure::pr::comments_at(pr)) }) }
+            else if new_feedback { format!("New feedback on the pull request {pr}. Read the comments ({}) and address what they ask for on your branch; if nothing needs changing, say so and finish.", crate::azure::pr::comments_at(pr)) } else { String::new() };
         let blocking = !failed.is_empty() || decision == "CHANGES_REQUESTED";
         let all_good = checks.iter().all(|c| CHECK_GOOD.contains(&checks::word(c).as_str()));
         // The board's own wait for GitHub's checks (land/checks.rs): none is still running, one failed, or it waited

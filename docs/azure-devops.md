@@ -39,9 +39,13 @@ login is said: `Could not open the pull request`, with what az said and what to 
   is named on the completion, whatever one the pull request already had (an auto-complete set in Azure DevOps). It is
   Azure DevOps' REST call through `az rest` (`az repos pr update` can say neither the strategy nor the commit), so it
   needs `az login`: a token from `az devops login` alone does not do for it.
+- **Completion accepted, not carried out**: Azure DevOps may accept the completion and still be merging it. The task
+  waits, watching the pull request's merge status: a conflict, a policy that rejects the merge or a failed merge sends
+  it back to you with the reason (a conflict is the agent's to fix), and a pull request still active after
+  `check.timeout` waits for you too, saying so. Completed in Azure DevOps meanwhile, it goes on by itself.
 - **Completed by you in Azure DevOps**: the task is merged without the board's own merge, and needs no clean checkout.
   **Abandoned** while its merge was awaited: it waits for you, as a closed pull request does on GitHub.
-- **Merged by the agent itself**: the task is done, `Already merged in !1234`.
+- **Merged by the agent itself**: `Already merged in !1234`, done once the main pipeline of its merge commit passed.
 - **Feedback**: what you write on it (as the user `az` is logged in as) wakes the agent, as on GitHub. The board's own
   review comment is a thread closed at once, so it never holds up a policy of resolved comments.
 

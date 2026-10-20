@@ -79,13 +79,13 @@ fn onto_named(id: &str, g: &mut Guard, t: &Task, root: &Path, tree: &str, b: &st
     // Not known is not "into b": nothing merges until GitHub says which branch it merges into.
     if base.is_empty() {
         let said = [r.stderr.trim(), r.stdout.trim()].into_iter().find(|s| !s.is_empty()).unwrap_or("no branch named").to_string();
-        fail(g, "Could not read which branch the pull request merges into", &format!("Pull request: {}\nThis task started from, and lands on: {b}\n\ngh pr view:\n{said}\n\nNothing was merged.", t.s("pr")),
+        fail(g, "Could not read which branch the pull request merges into", &format!("Pull request: {}\nThis task started from, and lands on: {b}\n\n{}:\n{said}\n\nNothing was merged.", t.s("pr"), if crate::azure::pr::is_azure(t.s("pr")) { "az repos pr show" } else { "gh pr view" }),
             if crate::azure::pr::is_azure(t.s("pr")) { crate::azure::cli::LOGIN } else { "Make sure gh is logged in and reaches GitHub (gh auth status), then approve again." }, Fail { agent_can_fix: false, auth: Some(is_auth_failure(&said)), keep_intent: false })?;
         return Ok(false);
     }
     if base == b { return Ok(true); }
     fail(g, &format!("The pull request merges into {base}, not {b}"), &format!("Pull request: {}\nIt merges into: {base}\nThis task started from, and lands on: {b}\n\nNothing was merged.", t.s("pr")),
-        &format!("Change the pull request's base back to {b} (gh pr edit {} --base {b}), then approve again.", pr_number(t.s("pr"))), no_fix())?;
+        &format!("Change the pull request's base back to {b} ({}), then approve again.", crate::azure::pr::retarget(crate::azure::pr::is_azure(t.s("pr")), &pr_number(t.s("pr")), b)), no_fix())?;
     Ok(false)
 }
 /// Main could not be fetched right before the merge: nothing is merged, and nothing failed. The task waits for your

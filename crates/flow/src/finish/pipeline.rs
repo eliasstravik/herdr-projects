@@ -165,12 +165,13 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
     // A branch that brings main nothing is done without one: no change was needed, or the work is on main already (the
     // agent merged its own pull request, or pushed to main itself). Main was brought in just now, so that is where it is.
     let ask = ch.b("merge.pr") && flow::git::has_origin(&root);
-    let why = if tree.is_empty() || research { None } else {
+    let landed = if tree.is_empty() || research { None } else {
         let before = sync_r.map(|r| if r.status == "merged" { r.before.clone() } else { r.head.clone() }).filter(|h| !h.is_empty()).unwrap_or_else(|| flow::git::head_of(Path::new(&tree)));
         let base = [t.s("baseSha"), t.s("from")].into_iter().find(|s| !s.is_empty()).unwrap_or("HEAD").to_string();
         already::nothing_to_land(&t, Path::new(&tree), already::made_commits(Path::new(&tree), &base, &before, &prev_main), ask)
     };
-    t = g.set(|t| t.put("doneWhy", why.clone().map(Value::from).unwrap_or(Value::Null)))?;
+    let (why, own) = match landed { Some((w, p)) => (Some(w), p), None => (None, None) };
+    t = g.set(|t| { t.put("doneWhy", why.clone().map(Value::from).unwrap_or(Value::Null)); t.put("ownMerge", own.clone().unwrap_or(Value::Null)); })?;
     if let Some(w) = &why { note = format!("{note} {w}."); }
     if !tree.is_empty() && ch.b("merge.pr") && !research && why.is_none() {
         let tp = Path::new(&tree);
@@ -218,7 +219,7 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
             Ok(None) => {}
             Err(e) if is_aborted(&e) => return Err(e),
             Err(_) if already::archived(Path::new(&tree)) => { fail(g, already::archived_failure(t.s("branch"), &tree), FailHow::default())?; return Ok(()); }
-            Err(e) if e.msg.starts_with("prbase:") => { fail(g, failure("pr", "The agent's pull request merges into another branch", &format!("Branch: {}\nFolder: {tree}\n\n{}", t.s("branch"), &e.msg[7..]), &format!("Change that pull request's base to {0} (gh pr edit <number> --base {0}), or close it, then finish again. The board goes on with it once it merges into {0}.", sync::main_branch(&root, &t))), FailHow::default())?; return Ok(()); }
+            Err(e) if e.msg.starts_with("prbase:") => { fail(g, failure("pr", "The agent's pull request merges into another branch", &format!("Branch: {}\nFolder: {tree}\n\n{}", t.s("branch"), &e.msg[7..]), &{ let b = sync::main_branch(&root, &t); format!("Change that pull request's base to {b} ({}), or close it, then finish again. The board goes on with it once it merges into {b}.", crate::azure::pr::retarget(crate::azure::host(&root).is_some(), "<number>", &b)) }), FailHow::default())?; return Ok(()); }
             // The remote cannot be reached (main could not be fetched either): it waits, and goes on by itself.
             Err(e) if offline(sync_r, &e.msg) => {
                 let (what, said) = if let Some(m) = e.msg.strip_prefix("pr:") { ("its pull request could not be opened", m) } else { ("the branch could not be pushed", e.msg.as_str()) };
