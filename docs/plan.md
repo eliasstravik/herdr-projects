@@ -56,7 +56,14 @@ severity. [The gate](gate.md) decides by the same rule (`review.mustFix`):
 
 - the plan passes: the build goes on, and nobody is asked;
 - it fails: the plan goes back to its writer with the reviewer's points, by itself, up to `review.rounds` times;
-- still failing then: the task is plan ready, with what the reviewer found in the plan's part, and the yes is yours.
+- still failing then: the task is plan ready, with what the reviewer found in the plan's part, and the yes is yours;
+- **the review cannot run** (its reviewer cannot start, or stops without a verdict): the task is plan ready all the same,
+  its row saying why (`The plan's review could not run (…): yours to judge`). Your yes (`ctrl+l`) builds the plan as
+  it stands; `herdr-projects retry <id>` has the reviewer look at it again.
+
+The reviewer runs in a read-only mount of its own, made the same way as the writer's. It is always started by the board
+from outside the writer's mount: the writer's program reports the end of its turn from inside its mount, and the board
+does the rest outside it (on macOS a sandbox cannot be made inside another).
 
 A look at a plan is not one of the task's review rounds: the first review of the work is still `Reviewer #1`.
 
@@ -124,7 +131,13 @@ The board does not only ask for it. Four things hold, from the moment the plan s
      `herdr-projects doctor` says whether plan approval can run on this machine, and why not.
 2. **The worktree's files are read-only too.** Every file and folder in it loses its write permission, ignored files
    too, and so does the worktree's own git folder (its index, its `HEAD`). Whatever runs outside the mount is answered
-   `Permission denied`. The permission comes back when the build starts (and before the worktree is removed).
+   `Permission denied`. The permission comes back when the build starts, before its agent is started (so a start that
+   fails leaves the worktree writable, and `plan.locked` false), when you stop the task, and before the worktree is
+   removed. Delegated again with the plan step still open, its writer starts again and the worktree is read-only again.
+
+   Every way out of the plan step leaves the worktree writable: your yes (also to a plan whose step failed after it was
+   written), a stop, and a delegate with the plan taken off (`set plan.approve none --task <id>`), which builds the plan
+   that was written as it stands, or starts the work when none was.
 3. **The board looks for itself**, when the plan's turn ends and once more right before the build starts. If something
    changed all the same (somebody took the read-only bit off), it undoes it in the task's own worktree: the branch goes
    back to the commit it stood on, added files go, and so do ignored files that were not there when the step began.
@@ -160,7 +173,8 @@ board's own look, and the hold on the build, are for the rest.
   - pi has no sandbox of its own.
   After the yes the program starts again the usual way, its own sandbox as you set it.
 - `HERDR_PROJECTS_SANDBOX` picks the tool outright: `bwrap`, `sandbox-exec`, or `none` (no mount: no plan is written in
-  a repo). Unset, the board tries the platform's own and remembers for ten minutes whether it works.
+  a repo). Unset, the board tries the platform's own and remembers for ten minutes whether it works. A try made from
+  inside a sandbox (on macOS one always fails there) is never remembered.
 
 ### A task in your own checkout
 
