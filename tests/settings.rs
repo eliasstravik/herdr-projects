@@ -58,7 +58,7 @@ fn the_repos_own_file_holds_its_facts_and_no_more_read_from_the_commit_the_workt
     let w = world_with(Opts { repo: true, repo_settings: Some(json!({ "workspace": { "setup": "true", "include": [".env"], "teardown": "down" }, "check": { "command": "npm test", "timeout": "5m" }, "merge": { "by": "itself" }, "review": { "when": "never" }, "worker": { "access": "full" }, "setup": "old name" })), ..Default::default() });
     let (facts, refused_) = repo_file(&w.root, Some("HEAD"));
     assert_eq!(Value::Object(facts), json!({ "workspace.setup": "true", "workspace.include": [".env"], "workspace.teardown": "down", "check.command": "npm test", "check.timeout": "5m" }));
-    assert_eq!(sw::store::settings_list::repo_facts(), vec!["research.only", "workspace.setup", "workspace.include", "workspace.teardown", "check.command", "check.again", "check.timeout", "repo.key"]);
+    assert_eq!(sw::store::settings_list::repo_facts(), vec!["research.only", "chat.only", "workspace.setup", "workspace.include", "workspace.teardown", "check.command", "check.again", "check.timeout", "repo.key"]);
     assert_eq!(refused_.len(), 4);
     for name in ["merge.by", "review.when", "worker.access"] { assert!(refused_.iter().any(|r| r.starts_with(&format!(".herdr-projects.json: {name} is refused: the repo's file may only hold"))), "{name}"); }
     assert!(refused_.contains(&".herdr-projects.json: unknown setting \"setup\" (did you mean workspace.setup?)".to_string()), "{refused_:?}");

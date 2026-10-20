@@ -116,6 +116,7 @@ pub fn shown_auto(a: Obj, now: i64) -> Obj {
     let fired = firings(&a);
     let oldest_first: Vec<Value> = fired.iter().rev().cloned().collect();
     o.put("research", l::research_only(&a));
+    o.put("chat", l::chat_only(&a));
     o.put("shown", json!({ "firings": fired.into_iter().take(20).collect::<Vec<_>>(), "own": rows.iter().filter(|x| x.own).map(|x| json!({ "name": x.name, "value": x.value, "own": true })).collect::<Vec<_>>(),
         "settings": rows.iter().map(|x| x.json()).collect::<Vec<_>>() }));
     o.put("rowNow", serde_json::to_value(row_of(&a, now, Some(&oldest_first))).unwrap_or(Value::Null));

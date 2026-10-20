@@ -8,7 +8,7 @@ use crate::store::settings_list::SETTINGS;
 
 /// Positional arguments, flags (`--flag value`, `--flag` true, `--no-flag` false), and each flag as it was typed.
 pub struct Args { pub pos: Vec<String>, pub flags: Obj, pub typed: Obj }
-const BOOL: [&str; 13] = ["json", "archived", "all", "delegate", "force", "help", "skill", "research", "every-repo", "anyway", "now", "clear", "machine"];
+const BOOL: [&str; 14] = ["json", "archived", "all", "delegate", "force", "help", "skill", "research", "chat", "every-repo", "anyway", "now", "clear", "machine"];
 pub fn parse(argv: &[String]) -> Args {
     let (mut pos, mut flags, mut typed) = (vec![], Obj::new(), Obj::new());
     let mut i = 0;
@@ -36,11 +36,11 @@ const SETTING: &str = "any work setting by its name (--review.when never)";
 pub struct Takes { pub flags: &'static [&'static str], pub settings: bool }
 const fn f(flags: &'static [&'static str]) -> Takes { Takes { flags, settings: false } }
 const fn s(flags: &'static [&'static str]) -> Takes { Takes { flags, settings: true } }
-const ADD: &[&str] = &["desc", "description", "repo", "delegate", "research", "after"];
+const ADD: &[&str] = &["desc", "description", "repo", "delegate", "research", "chat", "after"];
 const LIST: &[&str] = &["archived", "all", "query"];
 const WHERE: &[&str] = &["repo", "task", "automation"];
-const AUTO_ADD: &[&str] = &["prompt", "desc", "schedule", "when", "every-repo", "if", "repo", "research"];
-const AUTO_CHANGE: &[&str] = &["name", "prompt", "schedule", "when", "every-repo", "if", "research"];
+const AUTO_ADD: &[&str] = &["prompt", "desc", "schedule", "when", "every-repo", "if", "repo", "research", "chat"];
+const AUTO_CHANGE: &[&str] = &["name", "prompt", "schedule", "when", "every-repo", "if", "research", "chat"];
 /// One command per line, beside the commands it belongs with, never at the end. A command with subcommands names
 /// what each takes instead (`automations add`), and the command's own for one that is not named. The entries herdr,
 /// an agent's hook and the board itself run are here too: no command lets a flag through unread.
@@ -56,7 +56,7 @@ fn takes(cmd: &str, sub: &str) -> Option<Takes> {
         "list" | "ls" => f(LIST),
         "report" => f(&["state", "kind", "msg", "title", "progress", "eta", "desc", "repo"]),
         "describe" | "rename" | "tell" | "stop" | "start" | "pick" | "review" | "retry" | "fix" | "finish" | "details" | "pin" | "archive" | "restore" | "unarchive" | "clear" => f(&[]),
-        "delegate" => s(&["research", "after", "now"]),
+        "delegate" => s(&["research", "chat", "after", "now"]),
         "after" => f(&["clear"]),
         "approve" => f(&["anyway"]),
         "set" | "unset" | "show" => f(WHERE),
@@ -102,10 +102,12 @@ pub fn refuse_unknown(cmd: &str, a: &Args) -> Res<()> {
     let list = if t.settings { format!("{listed}, {SETTING}") } else { listed };
     crate::fail!("{who} does not know {}.{} It takes: {list}. Nothing was done.", odd.join(", "), near.map(|n| format!(" Did you mean --{n}?")).unwrap_or_default());
 }
-/// The options of add and delegate that are the task's own settings: every --<setting> (a name with a dot), and
-/// --research / --no-research, the short form of research.only. Any other option was refused before.
+/// The options of add and delegate that are the task's own settings: every --<setting> (a name with a dot), --chat /
+/// --no-chat, the short form of chat.only, and --research / --no-research, the short form of research.only (given
+/// apart). Any other option was refused before.
 pub fn pick_choices(flags: &Obj) -> (Vec<(String, Value)>, Option<bool>) {
-    let set = flags.iter().filter(|(k, _)| k.contains('.')).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let mut set: Vec<(String, Value)> = flags.iter().filter(|(k, _)| k.contains('.')).map(|(k, v)| (k.clone(), v.clone())).collect();
+    if let Some(v) = flags.get("chat") { set.push((crate::chat_only::CHAT.into(), json!(*v == json!(true)))); }
     (set, flags.get("research").map(|v| *v == json!(true)))
 }
 

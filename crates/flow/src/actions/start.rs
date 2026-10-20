@@ -55,6 +55,8 @@ const FRESH: &[&str] = &[
     "repoRefused",
     "researchRun",
     "researchTurned",
+    "chatRun",
+    "chatTurned",
     "attempts",
     "picked",
     "as",

@@ -55,6 +55,8 @@ pub fn checked_settings(a: &Obj, pairs: &Obj) -> Res<Obj> {
 }
 /// Will its next task be research only?
 pub fn research_only(a: &Obj) -> bool { is_research(&as_task(a, None)) }
+/// Will its next task be chat only?
+pub fn chat_only(a: &Obj) -> bool { crate::chat_only::is_chat(&as_task(a, None)) }
 /// Every work setting as the next task will have it.
 pub fn setting_rows(a: &Obj) -> Vec<Row> {
     let t = as_task(a, None);
@@ -102,7 +104,7 @@ pub fn add(o: Add) -> Res<Obj> {
 /// new --when without it keeps the condition the trigger had.
 pub fn change(reference: &str, name: Option<&str>, prompt: Option<&str>, trigger: Option<Value>, cond: Option<Option<Value>>, research: Option<bool>) -> Res<Obj> {
     let a = find(reference)?;
-    if name.is_none() && prompt.is_none() && trigger.is_none() && cond.is_none() && research.is_none() { return refuse("Nothing to change: give --name, --prompt, a trigger (--schedule, --when), a condition (--if), or --research / --no-research.".into()); }
+    if name.is_none() && prompt.is_none() && trigger.is_none() && cond.is_none() && research.is_none() { return refuse("Nothing to change: give --name, --prompt, a trigger (--schedule, --when), a condition (--if), --research / --no-research or --chat / --no-chat.".into()); }
     let mut next = Obj::new();
     if let Some(n) = name { next.put("name", name_of(n, a.s("id"))?); }
     if let Some(p) = prompt { next.put("prompt", prompt_of(p)?); }

@@ -48,6 +48,7 @@ every setting is, nearest answer first: **the task → your entry for that repo 
   `the repo's file`, `built in`). `unset research.only` takes an answer away again.
 - The name reads as what the board calls it everywhere, "research only", in the dotted style of `merge.by` and
   `review.when`.
+- With [`chat.only`](chat.md) on as well, chat wins: the task is a conversation, research that never finishes by itself.
 
 ### On the board
 

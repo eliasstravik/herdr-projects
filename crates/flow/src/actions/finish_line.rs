@@ -36,6 +36,7 @@ pub fn approve(id: &str, seen: Option<(Value, Value)>, anyway: bool) -> Res<Said
     if cur.s("stage") == "asks" && cur.s("kind") == "permission" { return tell(cur.s("id"), "Yes, go ahead.", false); }
     if approvable(&cur) { return approve_plan(cur.s("id")); }
     if cur.s("stage") == "pick" { crate::fail!("{0} waits for you to pick one of its attempts, not for a merge: herdr-projects pick {0} <letter>", cur.s("id")); }
+    if crate::chat_only::is_chat(&cur) { crate::fail!("{0} is chat only: nothing of it is merged. To end the conversation: herdr-projects finish {0}", cur.s("id")); }
     if is_research(&cur) { crate::fail!("{0} is research only: nothing of it is merged. To merge its change after all, turn that off (herdr-projects set research.only false --task {0}) and delegate it again.", cur.s("id")); }
     let t = update(cur.s("id"), |t| {
         if t.s("stage") != "approval" { crate::fail!("{} is not waiting for an approval to merge.", t.s("id")); }
@@ -168,14 +169,16 @@ pub fn finish_anyway(id: &str) -> Res<Said> {
     assert_unarchived(&cur)?;
     if stopped_at_limit(&cur) { return take_as_is(cur.s("id")); }
     if cur.s("stage") == "working" { return super::finish_stuck::finish_stuck(&cur); }
-    if cur.s("stage") != "nosummary" { crate::fail!("{} did not stop without a summary.", cur.s("id")); }
+    // A chat-only task ends when you say so: from its wait for your next message (finish/chat_only.rs).
+    let chat = |t: &Task| crate::chat_only::is_chat(t) && t.s("stage") == "asks" && !["permission", "auth"].contains(&t.s("kind"));
+    if cur.s("stage") != "nosummary" && !chat(&cur) { crate::fail!("{} did not stop without a summary.", cur.s("id")); }
     let t = update(cur.s("id"), |t| {
-        if t.s("stage") != "nosummary" || runner_alive(t) { crate::fail!("{} is busy.", t.s("id")); }
+        if (t.s("stage") != "nosummary" && !chat(t)) || runner_alive(t) { crate::fail!("{} is busy.", t.s("id")); }
         t.put("stage", "checking"); t.put("msg", ""); t.put("since", now());
         Ok(Change::Write)
     })?;
     spawn_runner("pipeline", t.s("id"), &[]);
-    let msg = format!("{}: taking the work as it is", t.s("id"));
+    let msg = if chat(&cur) { format!("{}: ending the chat", t.s("id")) } else { format!("{}: taking the work as it is", t.s("id")) };
     Ok(say(t, msg))
 }
 fn go_on(cur: &Task) -> Res<Said> {
@@ -254,6 +257,7 @@ pub fn details(id: &str) -> Res<Value> {
         "agent": if t.b("on") { t.at("on").clone() } else if t.b("agent") { t.at("agent").clone() } else { Value::Null },
         "handovers": handovers(&t).iter().map(|h| { let mut x = h.as_object().cloned().unwrap_or_default(); x.put("words", handover_line(h)); Value::Object(x) }).collect::<Vec<_>>(),
         "research": is_research(&t),
+        "chat": crate::chat_only::is_chat(&t),
         "report": t.at("report"),
         "plan": plan,
         "pr": if t.b("pr") { t.at("pr").clone() } else { Value::Null },

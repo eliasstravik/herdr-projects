@@ -68,18 +68,23 @@ pub fn settings(k: &mut Kit, c: &Ctx, r: &Obj) -> Drawn {
     // Done several times at once: how many and by whom, and who picks.
     let many = r.arr("attempts").len() > 1 || crate::store::attempts::attempt_count(&val("attempts.by")) > 1;
     if many { row("Attempts", vec![it(if r.arr("attempts").len() > 1 { r.arr("attempts").iter().map(|a| format!("{} {}", a.s("letter"), a.s("agent"))).collect::<Vec<_>>().join(", ") } else { say(&val("attempts.by")) }, &["attempts.by"]), it(if r.at("picked").is_object() { format!("{} was chosen", r.at("picked").s("letter")) } else if sval("attempts.pick") == "reviewer" { "the reviewer picks".into() } else { "you pick".into() }, &["attempts.pick"])], false, false); }
+    // A chat-only task is never checked, reviewed or merged: its one row says what it is instead.
+    let chat = crate::chat_only::is_chat(r);
     let no_review = sval("review.when") == "never";
     let reviewer = if no_review { let mut v = vec![it("off".into(), &["review.when"])]; v.extend(role("reviewer", "", "").into_iter().filter(|i| i.as_ref().map(|i| from(&i.1.iter().map(|s| s.as_str()).collect::<Vec<_>>())).unwrap_or(false))); v } else { role("reviewer", "", "") };
-    row("Reviewer", reviewer, false, false);
-    if let Some(t) = takes("reviewer.fallback") { row("Takes over", t, false, false); }
-    row("Review when", vec![it(if no_review { "never".into() } else if sval("review.when") == "always" { "always".into() } else { "in a repo".into() }, &["review.when"]), if !no_review || from(&["review.evidence"]) { it(if val("review.evidence") == json!(false) { "no evidence".into() } else { "with evidence".into() }, &["review.evidence"]) } else { None }], false, false);
-    let bar = sval("review.mustFix");
-    let rounds = val("review.rounds");
-    row("Send back", vec![it(match bar.as_str() { "trivial" => "any finding".into(), "critical" => "critical only".into(), b => format!("{b} or worse") }, &["review.mustFix"]), it(if rounds == json!(0) { "by hand".into() } else { format!("{} round{} max", if rounds.is_null() { "?".into() } else { text(&rounds) }, if rounds == json!(1) { "" } else { "s" }) }, &["review.rounds"])], false, false);
+    if !chat {
+        row("Reviewer", reviewer, false, false);
+        if let Some(t) = takes("reviewer.fallback") { row("Takes over", t, false, false); }
+        row("Review when", vec![it(if no_review { "never".into() } else if sval("review.when") == "always" { "always".into() } else { "in a repo".into() }, &["review.when"]), if !no_review || from(&["review.evidence"]) { it(if val("review.evidence") == json!(false) { "no evidence".into() } else { "with evidence".into() }, &["review.evidence"]) } else { None }], false, false);
+        let bar = sval("review.mustFix");
+        let rounds = val("review.rounds");
+        row("Send back", vec![it(match bar.as_str() { "trivial" => "any finding".into(), "critical" => "critical only".into(), b => format!("{b} or worse") }, &["review.mustFix"]), it(if rounds == json!(0) { "by hand".into() } else { format!("{} round{} max", if rounds.is_null() { "?".into() } else { text(&rounds) }, if rounds == json!(1) { "" } else { "s" }) }, &["review.rounds"])], false, false);
+    }
     let check = if val("check.command").is_null() { "none".to_string() } else { sval("check.command") };
-    if applies("check.command") { row("Check", vec![it(if check == "none" { "no command".into() } else { check }, &["check.command"]), it(format!("{} at most", sval("check.timeout")), &["check.timeout"]), it(if val("check.again").is_null() || sval("check.again") == "none" { String::new() } else { format!("fix rounds: {}", sval("check.again")) }, &["check.again"])], false, false); }
+    if applies("check.command") && !chat { row("Check", vec![it(if check == "none" { "no command".into() } else { check }, &["check.command"]), it(format!("{} at most", sval("check.timeout")), &["check.timeout"]), it(if val("check.again").is_null() || sval("check.again") == "none" { String::new() } else { format!("fix rounds: {}", sval("check.again")) }, &["check.again"])], false, false); }
     let research = crate::research::is_research(r);
-    if research { row("Research", vec![it("only · no change to the repo".into(), &["research.only"])], false, false); }
+    if chat { row("Chat", vec![it("no change to the repo · ends when you say".into(), &["chat.only"])], false, false); }
+    else if research { row("Research", vec![it("only · no change to the repo".into(), &["research.only"])], false, false); }
     else { row("Merge", vec![it(if sval("merge.by") == "itself" { "by itself, once it passes".into() } else { "after your yes".into() }, &["merge.by"]), if applies("merge.method") { it(sval("merge.method"), &["merge.method"]) } else { None }, if applies("merge.pr") { it(if val("merge.pr") == json!(false) { "no pull request".into() } else { "opens a pull request".into() }, &["merge.pr"]) } else { None }, if applies("merge.checks") && applies("merge.pr") && val("merge.pr") != json!(false) { it(if sval("merge.checks") == "none" { "GitHub's checks ignored".into() } else { "waits for GitHub's checks".into() }, &["merge.checks"]) } else { None }], false, false); }
     let time = if val("limit.time").is_null() { "none".to_string() } else { sval("limit.time") };
     let most = if val("limit.tokens").is_null() { "none".to_string() } else { sval("limit.tokens") };
@@ -87,7 +92,7 @@ pub fn settings(k: &mut Kit, c: &Ctx, r: &Obj) -> Drawn {
     if limited { row("Limits", vec![it(if time != "none" { format!("{time} a run") } else { "no time limit".into() }, &["limit.time"]), it(if most == "none" { "no token limit".into() } else if all.get("limit.tokens").map(|x| x.b("note")).unwrap_or(false) { format!("{most} tokens, not counted") } else { format!("{most} tokens") }, &["limit.tokens"])], false, false); }
     let said = |n: &str| { let v = val(n); if v.is_null() || text(&v) == "none" { String::new() } else { crate::re!(r"\s*\n\s*").replace_all(&say(&v), " / ").into_owned() } };
     if applies("workspace.from") { row("Workspace", vec![it(format!("from {}", match sval("workspace.from").as_str() { "here" => "your checkout".to_string(), "main" | "" => "main".into(), b => b.to_string() }), &["workspace.from"]), if from(&["workspace.branch"]) { it(format!("branch {}", sval("workspace.branch")), &["workspace.branch"]) } else { None }, it(if said("workspace.setup").is_empty() { String::new() } else { format!("set up with {}", said("workspace.setup")) }, &["workspace.setup"]), it(if said("workspace.include").is_empty() { String::new() } else { format!("copies {}", said("workspace.include")) }, &["workspace.include"]), it(if said("workspace.teardown").is_empty() { String::new() } else { format!("torn down with {}", said("workspace.teardown")) }, &["workspace.teardown"]), it(if val("workspace.cleanup") == json!(false) { "kept when done".into() } else { "removed when done".into() }, &["workspace.cleanup"])], false, false); }
-    row("Also", vec![if !many { it("one attempt".into(), &["attempts.by", "attempts.pick"]) } else { None }, if !research { it("not research only".into(), &["research.only"]) } else { None }, if !limited { it("no limits".into(), &["limit.time", "limit.tokens"]) } else { None }, if !backed { it("no fallback".into(), &["worker.fallback", "reviewer.fallback"]) } else { None }], false, false);
+    row("Also", vec![if !many { it("one attempt".into(), &["attempts.by", "attempts.pick"]) } else { None }, if !research && !chat { it("not research only".into(), &["research.only"]) } else { None }, if !limited { it("no limits".into(), &["limit.time", "limit.tokens"]) } else { None }, if !backed { it("no fallback".into(), &["worker.fallback", "reviewer.fallback"]) } else { None }], false, false);
     let mut notes: Vec<String> = r.at("fallbacks").as_object().map(|o| o.values().filter(|v| truthy(v)).map(text).collect()).unwrap_or_default();
     notes.extend(snap.arr("problems").iter().map(|x| format!("Not counted: {}", text(x))));
     if !notes.is_empty() { row("Note", vec![it(notes.join("\n"), &[])], true, true); }

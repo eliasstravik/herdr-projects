@@ -115,7 +115,7 @@
    ctrl+f       find: show only the tasks that match
    ctrl+c       twice: close the board
    ctrl+t       a voice call with whoever the chat talks to
- ↓ 31 more
+ ↓ 32 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────────────────────────

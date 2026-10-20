@@ -113,14 +113,16 @@ pub fn reviews(k: &mut Kit, c: &Ctx, r: &Obj) -> bool {
     k.parts.push(p);
     cut
 }
-/// The report: that a task is research only, and the link to the report its agent wrote.
+/// The report: that a task is research only (or a chat), and the link to the report its agent wrote.
 pub fn report(k: &mut Kit, c: &Ctx, r: &Obj) {
+    let chat = crate::chat_only::is_chat(r);
     let research = crate::research::is_research(r);
     let rep = r.at("report");
     let has = rep.is_object() && (rep.b("link") || rep.b("file"));
-    if !research && !has { return; }
-    let mut lines = vec![k.head(if research { "Research only" } else { "Report" }, None)];
-    if research { lines.extend(k.wrap(if has { "Changes nothing in the repo." } else { "Changes nothing in the repo. No report yet." }).into_iter().map(|l| l.recolor(Ink::Muted))); }
+    if !research && !chat && !has { return; }
+    let mut lines = vec![k.head(if chat { "Chat" } else if research { "Research only" } else { "Report" }, None)];
+    if chat { lines.extend(k.wrap("No change to the repo · ends when you say.").into_iter().map(|l| l.recolor(Ink::Muted))); }
+    else if research { lines.extend(k.wrap(if has { "Changes nothing in the repo." } else { "Changes nothing in the repo. No report yet." }).into_iter().map(|l| l.recolor(Ink::Muted))); }
     if has { lines.extend(artifact_rows(&json!({ "link": rep.at("link"), "caption": "Open report", "detail": if c.full { format!("{}{}", rep.s("file"), if rep.b("at") { format!(" · kept {} ago", age(c.now - rep.i("at"))) } else { String::new() }) } else { String::new() } }), if c.full { k.w } else { k.room + 2 }, c.full)); }
     k.part(lines);
 }

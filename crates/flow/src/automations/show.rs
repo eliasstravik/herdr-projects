@@ -45,6 +45,7 @@ pub fn describe(a: &Obj, now: i64) -> Value {
     let r = row_of(a, now, None);
     let mut out = obj(json!({ "id": a.at("id"), "name": a.at("name"), "on": r.on, "trigger": r.trigger, "repo": a.at("repo"), "folder": a.at("root"),
         "research": is_research(&obj(json!({ "id": format!("{}/0", a.s("repo")), "repo": a.at("repo"), "settings": a.o("settings").cloned().unwrap_or_default() }))),
+        "chat": crate::chat_only::is_chat(&obj(json!({ "id": format!("{}/0", a.s("repo")), "repo": a.at("repo"), "settings": a.o("settings").cloned().unwrap_or_default() }))),
         "prompt": a.at("prompt"), "settings": a.o("settings").cloned().unwrap_or_default(), "last": firings_of(a.s("id")).last().cloned(), "next": if a.b("on") && a.b("nextAt") { a.at("nextAt").clone() } else { Value::Null } }));
     if a.b("offWhy") { out.put("offWhy", a.at("offWhy").clone()); }
     Value::Object(out)

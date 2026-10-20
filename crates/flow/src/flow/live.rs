@@ -68,6 +68,7 @@ pub fn shown(t: &Task, session: &Session, here: &str, seen: &mut BTreeMap<String
     if let Some(tr) = &tries { out.put("tries", tr.clone()); }
     // Research only or not is worked out here, by the machine that owns the task: a row says it.
     out.put("research", is_research_among(t, seen));
+    out.put("chatOnly", crate::chat_only::is_chat_among(t, seen));
     let mut probe = t.clone();
     probe.put("pendingText", pending);
     if let Some(tr) = &tries { probe.put("tries", tr.clone()); }
