@@ -43,6 +43,14 @@ fn locked(said: &str) -> bool { moved(said) || has(said, &["cannot lock ref", "u
 pub fn moved(said: &str) -> bool { has(said, &["but expected"]) }
 /// The lock file git said is held, when it did: another git command's now, or one a git that stopped left behind.
 fn lock_file(said: &str) -> Option<String> { crate::re!(r"Unable to create '([^']+\.lock)'").captures(said).map(|c| c[1].to_string()) }
+/// git 2.53 says a held lock file only as "fetching ref <ref> failed: reference already exists", as it says a real
+/// conflict: it is the lock when that ref's `.lock` file is there in the repo's common git dir (whatever worktree asks).
+fn lock_left(dir: &Path, said: &str) -> Option<String> {
+    let r = crate::re!(r"fetching ref '?(refs/[^\s']+)'? failed: reference already exists").captures(said)?[1].to_string();
+    let common = git_out(dir, &["rev-parse", "--path-format=absolute", "--git-common-dir"]).ok()?;
+    let f = Path::new(common.trim()).join(format!("{r}.lock"));
+    f.exists().then(|| f.display().to_string())
+}
 fn network(said: &str) -> bool {
     has(said, &["could not resolve host", "temporary failure in name resolution", "connection timed out", "connection reset", "connection refused", "network is unreachable", "early eof", "remote end hung up", "rpc failed", "operation timed out", "returned error: 5", "kex_exchange_identification", "connection closed by", "gnutls", "ssl_"])
 }
@@ -54,8 +62,10 @@ pub fn unreachable(said: &str) -> bool { network(said) || has(said, &["did not a
 /// Whether git said origin has no such branch.
 pub fn no_such_branch(said: &str) -> bool { has(said, &["couldn't find remote ref"]) }
 /// What a fetch that failed means, in plain words, with what to do: the first line of every failure that names it.
-pub fn plain(said: &str, b: &str) -> String {
-    if let Some(f) = lock_file(said) { return format!("git's lock file {f} stayed in the way on every try: another git command is writing origin's copy of {b}, or one that stopped left it behind. If no git command runs in this repo, delete that file; the board tries again by itself"); }
+pub fn plain(said: &str, b: &str) -> String { plain_held(said, b, lock_file(said)) }
+/// `plain`, with the lock file found held when git's words did not name it.
+pub fn plain_held(said: &str, b: &str, lock: Option<String>) -> String {
+    if let Some(f) = lock { return format!("git's lock file {f} stayed in the way on every try: another git command is writing origin's copy of {b}, or one that stopped left it behind. If no git command runs in this repo, delete that file; the board tries again by itself"); }
     if locked(said) { return "another fetch of this repo was writing the same branch at that moment, again on every try. Nothing is wrong with the work; the board tries again by itself".into(); }
     if no_such_branch(said) { return format!("origin has no branch {b}. If the remote's main branch has another name, run git fetch origin and then git remote set-head origin --auto in your checkout"); }
     if login(said) { return "origin asked for a login, and the board never types one in. Make sure git fetch origin works in your checkout without a prompt (an SSH key in the agent, or a credential helper)".into(); }
@@ -78,16 +88,17 @@ pub fn fetch_branch(dir: &Path, b: &str) -> Res<()> {
         let n = st.i("started") + 1;
         let write = |ok: i64, at: i64| { let _ = write_json(&file, &json!({ "started": n, "ok": ok, "at": at })); };
         write(st.i("ok"), st.i("at"));
-        let mut said = String::new();
+        let (mut said, mut held) = (String::new(), None);
         for i in 1..=TRIES {
             match quiet_git(dir, &["fetch", "--no-tags", "origin", &spec], FETCH_MS) {
                 Ok(_) => { write(n, now()); return Ok(()); }
                 Err(e) => said = e,
             }
-            if i == TRIES || !(locked(&said) || network(&said)) { break; }
+            held = lock_file(&said).or_else(|| lock_left(dir, &said));
+            if i == TRIES || !(locked(&said) || held.is_some() || network(&said)) { break; }
             pause(i);
         }
-        Err(Error::new(format!("{}.\n\nWhat git said (git fetch origin {b}):\n{}", plain(&said, b), if said.is_empty() { "nothing" } else { &said })))
+        Err(Error::new(format!("{}.\n\nWhat git said (git fetch origin {b}):\n{}", plain_held(&said, b, held), if said.is_empty() { "nothing" } else { &said })))
     }).map_err(|e| if e.kind == crate::err::Kind::Busy { Error::new(format!("another fetch of this repo has been running for over {} minutes. The board tries again by itself.", WAIT_MS / 60000)) } else { e })
 }
 /// origin's own main branch was never named here (no `origin/HEAD`, as after `git remote add`): asked of origin once,
@@ -119,5 +130,20 @@ mod tests {
         assert!(plain("fatal: '/gone.git' does not appear to be a git repository", "main").starts_with("origin is not a repository"));
         assert_eq!(plain("fatal: something new", "main"), "something new");
         assert!(!network("fatal: couldn't find remote ref main") && !locked("Permission denied (publickey)"));
+        // git 2.53's words for a lock file in the way, and for a real conflict: the lock only when its file is there
+        let dir = std::env::temp_dir().join(format!("sw-fetch-plain-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        git_out(&std::env::temp_dir(), &["init", "-q", &dir.display().to_string()]).unwrap();
+        let exists = "error: fetching ref refs/remotes/origin/main failed: reference already exists";
+        assert!(!locked(exists) && lock_left(&dir, exists).is_none());
+        assert_eq!(plain_held(exists, "main", lock_left(&dir, exists)), "fetching ref refs/remotes/origin/main failed: reference already exists");
+        let lock = dir.join(".git/refs/remotes/origin/main.lock");
+        std::fs::create_dir_all(lock.parent().unwrap()).unwrap();
+        std::fs::write(&lock, "").unwrap();
+        let named = lock_left(&dir, exists).unwrap();
+        assert_eq!(std::fs::canonicalize(&named).unwrap(), std::fs::canonicalize(&lock).unwrap());
+        assert!(plain_held(exists, "main", Some(named.clone())).starts_with(&format!("git's lock file {named} stayed")));
+        assert!(lock_left(&dir, "error: fetching ref refs/remotes/origin/main failed: something else").is_none());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
