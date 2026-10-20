@@ -44,25 +44,25 @@ fn fast_mode_only_codex_has_one_and_its_argument_comes_after_the_model_and_effor
 }
 
 #[test]
-fn fast_mode_the_reviewer_s_is_on_by_default_the_agent_s_is_off_and_either_can_be_chosen_for_one_task() {
+fn fast_mode_is_off_by_default_for_the_agent_and_the_reviewer_and_either_can_be_chosen_for_one_task() {
     let w = world();
-    assert_eq!((setting("reviewer.fast", None), setting("worker.fast", None)), (json!(true), json!(false)));
+    assert_eq!((setting("reviewer.fast", None), setting("worker.fast", None)), (json!(false), json!(false)));
     let id = w.add("Something");
     let mine = || (setting("worker.fast", Some(&task(&id))), setting("reviewer.fast", Some(&task(&id))));
-    assert_eq!(mine(), (json!(false), json!(true)));
+    assert_eq!(mine(), (json!(false), json!(false)));
     let set = |name: &str, v: &str, on_task: bool| { let t = task(&id); set_value(name, &json!(v), &if on_task { Scope::task(&t) } else { Scope::you() }).unwrap().value };
     let unset = |name: &str, on_task: bool| { let t = task(&id); unset_value(name, &if on_task { Scope::task(&t) } else { Scope::you() }).unwrap().value };
-    assert_eq!((set("reviewer.fast", "off", true), set("worker.fast", "on", true)), (json!(false), json!(true)));
-    assert_eq!((set("reviewer.fast", "false", false), set("worker.fast", "true", false)), (json!(false), json!(true)));
-    assert_eq!((unset("reviewer.fast", true), unset("worker.fast", true)), (json!(false), json!(true))); // back to yours
-    assert_eq!((unset("reviewer.fast", false), unset("worker.fast", false)), (json!(true), json!(false)));
-    assert_eq!(mine(), (json!(false), json!(true)));
+    assert_eq!((set("reviewer.fast", "on", true), set("worker.fast", "on", true)), (json!(true), json!(true)));
+    assert_eq!((set("reviewer.fast", "true", false), set("worker.fast", "false", false)), (json!(true), json!(false)));
+    assert_eq!((unset("reviewer.fast", true), unset("worker.fast", true)), (json!(true), json!(false))); // back to yours
+    assert_eq!((unset("reviewer.fast", false), unset("worker.fast", false)), (json!(false), json!(false)));
+    assert_eq!(mine(), (json!(false), json!(false)));
     let e = set_value("worker.fast", &json!("maybe"), &Scope::you()).unwrap_err().msg;
     assert!(e.contains("worker.fast is a switch: true or false (yes, no, on and off work too), not \"maybe\""), "{e}"); // never silently false
 }
 
 #[test]
-fn fast_mode_a_codex_reviewer_is_started_in_it_and_not_when_it_is_turned_off_for_the_task() {
+fn fast_mode_a_codex_reviewer_is_started_in_the_default_tier_and_in_fast_mode_when_it_is_turned_on_for_the_task() {
     let w = world();
     let review = json!({ "verdict": { "meets": true, "text": "Fine.", "findings": [] } });
     let started = |name: &str| calls(&w).into_iter().filter(|c| c.starts_with(&format!("agent start {name} "))).next_back().unwrap_or_default();
@@ -70,13 +70,13 @@ fn fast_mode_a_codex_reviewer_is_started_in_it_and_not_when_it_is_turned_off_for
     let one = w.add("First");
     delegate(&one);
     assert_eq!(settle(&one).s("stage"), "approval");
-    assert!(regex::Regex::new(r#"--kind codex .* -c service_tier="fast""#).unwrap().is_match(&started("sw-proj-1-r")), "{}", started("sw-proj-1-r"));
+    let r = started("sw-proj-1-r");
+    assert!(regex::Regex::new(r#"--kind codex .* -c service_tier="default""#).unwrap().is_match(&r) && !r.contains("service_tier=\"fast\""), "{r}");
     assert!(!started("sw-proj-1").contains("service_tier")); // the working agent is Claude Code, and `fast` is off anyway
     let two = w.add("Second");
-    delegate_with(&two, json!({ "reviewer.fast": false }));
+    delegate_with(&two, json!({ "reviewer.fast": true }));
     assert_eq!(settle(&two).s("stage"), "approval");
-    let r = started("sw-proj-2-r");
-    assert!(regex::Regex::new(r#"--kind codex .* -c service_tier="default""#).unwrap().is_match(&r) && !r.contains("service_tier=\"fast\""), "{r}");
+    assert!(regex::Regex::new(r#"--kind codex .* -c service_tier="fast""#).unwrap().is_match(&started("sw-proj-2-r")), "{}", started("sw-proj-2-r"));
 }
 
 #[test]

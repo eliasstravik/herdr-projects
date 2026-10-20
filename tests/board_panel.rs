@@ -59,7 +59,7 @@ fn the_panel_beside_the_list_cuts_a_long_description_short_and_the_whole_panel_s
       assert!(has(&t, &keyed(r"\n {2}State {8}○ to do · \ds ago\n\n {2}Description · {panel} shows it\n\n {2}Settings ─")) && !t.contains("Line 1 of"), "{t}"); }
     { let side = beside(&w, &big, 28); every(&side, "28 rows"); let t = side.join("\n"); assert!(!has(&t, "Description|Line 1 of"), "{t}"); }
     { let side = beside(&w, &big, 21); let t = side.join("\n");
-      assert!(has(&t, &keyed(r"\n {2}Status ─+\n {2}State {8}○ to do · \ds ago\n\n {2}Settings ─+\n {2}Agent {8}claude · default model\n {15}default effort\n {2}Reviewer {5}codex · default model\n {15}default effort · fast\n {2}Review when {2}in a repo · with evidence\n {2}Send back {4}major or worse · 3 rounds max\n {2}16 more settings · {settings} shows them\n\n {2}{panel} shows the whole task")), "{t}");
+      assert!(has(&t, &keyed(r"\n {2}Status ─+\n {2}State {8}○ to do · \ds ago\n\n {2}Settings ─+\n {2}Agent {8}claude · default model\n {15}default effort\n {2}Reviewer {5}codex · default model\n {15}default effort\n {2}Review when {2}in a repo · with evidence\n {2}Send back {4}major or worse · 3 rounds max\n {2}16 more settings · {settings} shows them\n\n {2}{panel} shows the whole task")), "{t}");
       assert!(!side.iter().any(|l| l.ends_with('…')), "nothing is cut in the middle of a line"); }
     // With too little room for all, a value somebody chose comes before the built-in ones.
     set("limit.time", "2h", &big);

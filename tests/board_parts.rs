@@ -117,7 +117,7 @@ fn the_settings_page_every_work_setting_plain_and_a_mark_on_this_tasks_own() {
     s.press(&["esc"]); assert!(s.s.editing.is_none() && s.s.full, "back to the whole task, one step");
     s.s.panel_top = 1_000_000;
     let whole = s.screen(120).join("\n");
-    assert!(has(&whole, r"\n Reviewer +claude · default model \* · default effort · no fast mode in claude *\n"), "{whole}");
+    assert!(has(&whole, r"\n Reviewer +claude · default model \* · default effort *\n"), "{whole}");
     assert!(has(&whole, &format!(r"\n \* this task only\n {} changes them *\n", regex::escape(&key_name("settings")))), "{whole}");
 }
 

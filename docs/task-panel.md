@@ -31,7 +31,7 @@ whether the chat's message shows, and `Space` never opens or folds it, at any wi
  Settings ───────────────────────────────────────────
  Agent        claude · opus * · default effort
  Plan first   off
- Reviewer     codex · default model · default effort · fast
+ Reviewer     codex · default model · default effort
  Review when  in a repo · with evidence
  Send back    major or worse · 5 rounds max
  Check        npm test · 15m at most

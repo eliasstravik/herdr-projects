@@ -33,7 +33,7 @@ impl Entry {
 }
 
 /// The five every role has. `who` is the role as a sentence names it.
-fn role(name: &str, who: &str, agent: &str, fast: bool, kind: Kind) -> Vec<Entry> {
+fn role(name: &str, who: &str, agent: &str, kind: Kind) -> Vec<Entry> {
     let cap = if name == "worker" { "Agent's".to_string() } else { format!("{}{}'s", name[..1].to_uppercase(), &name[1..]) };
     let names = crate::agents::kinds::KIND_NAMES.iter().map(|k| format!("`{k}`")).collect::<Vec<_>>().join(", ");
     let mut agent_doc = format!("{who}'s program: one of {names}, with an optional model after a slash (`codex/gpt-6.1-sol`, `agy/gemini-3-pro`). The model travels with the program, so one program's model is never handed to another; a name the program does not take is refused with the ones it does (`herdr-projects models` lists them, [models](models.md)). A program that cannot do this role, or take a model or an effort, is refused with the reason ([agents](agents.md))");
@@ -46,7 +46,7 @@ fn role(name: &str, who: &str, agent: &str, fast: bool, kind: Kind) -> Vec<Entry
     text.adds = kind == Kind::Work;
     vec![a,
         e(&format!("{name}.effort"), &format!("{cap} effort"), kind, Ty::Effort, json!("default"), &format!("{who}'s effort level: one its program accepts (checked against `{name}.agent`), or `default` for the program's own")),
-        e(&format!("{name}.fast"), &format!("{cap} fast mode"), kind, Ty::Switch, json!(fast), &format!("{who} in its program's fast mode: a faster service tier that uses more of your allowance. Only Codex has one; for another program it does nothing, and `show` says so")),
+        e(&format!("{name}.fast"), &format!("{cap} fast mode"), kind, Ty::Switch, json!(false), &format!("{who} in its program's fast mode: a faster service tier that uses more of your allowance. Only Codex has one; for another program it does nothing, and `show` says so")),
         e(&format!("{name}.access"), &format!("{cap} access"), kind, Ty::Access, json!("full"), &format!("what {who} may do without asking: `full` (anything), `ask` (nothing: it asks first) or `auto` (its program's own auto mode, which checks each action and does the safe ones without asking, and stops the risky ones). The board turns it into each program's own flags. `ask` is refused for a program that cannot ask ({}); `auto` for one with no auto mode (all but {}), and for a version older than its first", crate::agents::kinds::all().filter(|k| k.access_ask.is_none()).map(|k| k.name).collect::<Vec<_>>().join(", "), crate::agents::access::with_auto().join(", "))),
         text]
 }
@@ -55,11 +55,11 @@ pub static SETTINGS: LazyLock<Vec<Entry>> = LazyLock::new(|| {
     use Kind::*;
     let mut s = vec![];
     // who works, who reviews, who you talk to
-    s.extend(role("worker", "the working agent", "claude", false, Work));
+    s.extend(role("worker", "the working agent", "claude", Work));
     s.push(e("worker.fallback", "Agent's fallback", Work, Ty::Agents, json!("none"), "who takes over when the working agent cannot go on: a list of agents tried in order (`codex, claude/claude-opus-5-5`; a model after a slash, as in `worker.agent`), or `none`. It takes over in the same worktree, with the task, what was done so far and the open findings, when the agent's provider is down (after the board's own tries), the agent is out of allowance or logged out, or its work still fails the review or the check after `review.rounds` rounds. With the list used up the task waits for you. Nobody extra runs until then. More: [the fallback agent](fallback.md)"));
-    s.extend(role("reviewer", "the reviewer", "codex", true, Work));
+    s.extend(role("reviewer", "the reviewer", "codex", Work));
     s.push(e("reviewer.fallback", "Reviewer's fallback", Work, Ty::Agents, json!("none"), "who takes over when the reviewer cannot go on: a list of agents tried in order (`codex, claude/claude-opus-5-5`; a model after a slash, as in `reviewer.agent`), or `none`. It reviews in its place when the reviewer's provider is down (after the board's own tries), the reviewer is out of allowance or logged out, or its program is not installed here; it then reviews the later rounds of that task too. With the list used up the review fails as before. Nobody extra runs until then. More: [the fallback agent](fallback.md)"));
-    s.extend(role("coordinator", "the Coordinator, the agent you talk to in the chat", "claude", false, Board));
+    s.extend(role("coordinator", "the Coordinator, the agent you talk to in the chat", "claude", Board));
     // the Watcher
     s.push(e("watcher.agent", "Watcher's program", Board, Ty::Agent, json!("claude/claude-haiku-5-5"), "the Watcher: a small model behind the \"doing now\" line, the progress guess and the minutes left. `none`: none of the three. A program with no headless one-shot is refused ([agents](agents.md)). More: [the Watcher](watcher.md)").none());
     s.push(e("watcher.every", "Watcher looks every", Board, Ty::Time, json!("60s"), "the least time between two looks of the Watcher at one working agent. One hidden model call covers every agent whose look is due, one call runs at a time on the machine, a screen that has not changed costs none, and a busy machine is looked at up to five times less often"));
