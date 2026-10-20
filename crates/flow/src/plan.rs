@@ -57,7 +57,10 @@ pub fn plan_rule(t: &Obj) -> String { format!("This task starts with a plan, and
 /// A planner of its own: it never builds.
 pub fn planner_rule(t: &Obj) -> String { format!("You are the planner of this task: you write the plan, and another agent builds from it after the plan is approved. You build nothing: {NOTHING} {WHAT} Write it for an agent that has not seen what you read: name the files and the steps. {} {AFTER}", how(t)) }
 /// The yes, as the plan's own writer hears it.
-pub fn go_words(t: &Obj) -> String { format!("Your plan is approved{}. Build it now, exactly that plan: it is in {}. From here on the task's rules for the work hold: do the work, check it, and stop only when it is finished. Where you have to leave the plan, say where and why in your closing summary: the review checks the work against the task and against this plan.", if t.at("plan").s("approvedBy") == "reviewer" { " (the reviewer checked it against the task)" } else { "" }, plan_file(t).display()) }
+pub fn go_words(t: &Obj) -> String {
+    if t.at("plan").s("approvedBy") == "nobody" && read_plan(t).is_empty() { return "The plan step is over: it was taken off for this task before a plan was written. Do the task now: from here on the task's rules for the work hold. Do the work, check it, and stop only when it is finished.".into(); }
+    format!("Your plan is approved{}. Build it now, exactly that plan: it is in {}. From here on the task's rules for the work hold: do the work, check it, and stop only when it is finished. Where you have to leave the plan, say where and why in your closing summary: the review checks the work against the task and against this plan.", if t.at("plan").s("approvedBy") == "reviewer" { " (the reviewer checked it against the task)" } else { "" }, plan_file(t).display())
+}
 /// The same, for an agent that did not write the plan.
 pub fn build_words(t: &Obj) -> String { format!("This task has an approved plan, written by {}: read {} first, and build exactly that plan. Where you have to leave it, say where and why in your closing summary: the review checks the work against the task and against this plan.", if t.at("plan").b("writer") { "a planner" } else { "the agent before you" }, plan_file(t).display()) }
 /// What a builder's first prompt ends with when its task has an approved plan.

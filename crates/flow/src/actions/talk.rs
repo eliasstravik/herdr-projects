@@ -151,6 +151,7 @@ pub fn stop(id: &str) -> Res<Task> {
         Ok(Change::Write)
     })?;
     kill_runner(&t);
+    if crate::plan::open(&t) && t.at("plan").b("locked") { crate::plan::lock::set_locked(&cid, false); } // stopped in its plan step: writable again until it starts once more
     if let Some(a) = &a { if ["working", "blocked", "unknown"].contains(&a.s("agent_status")) { let _ = flow::task::h(&t).agent_keys(t.at("link").s("pane"), &[interrupt_key(t.s("agent"))]); } }
     if t.at("link").at("reviewer").b("pane") { flow::tabs::close_reviewer_tab(&flow::task::h(&t), t.at("link").at("reviewer")); }
     flow::sidebar::tell_sidebar(&t);

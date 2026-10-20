@@ -1,6 +1,6 @@
 //! The finish line's keys: approve, send the review or the failure back, finish anyway, retry.
 use super::limits::{carry_on, take_as_is};
-use super::plan::{approve_plan, awaits_plan};
+use super::plan::{approvable, approve_plan, awaits_plan, review_again};
 use super::shared::{say, Said};
 use super::start::delegate;
 use super::talk::tell;
@@ -34,7 +34,7 @@ pub fn approve(id: &str, seen: Option<(Value, Value)>, anyway: bool) -> Res<Said
     };
     moved(&cur)?;
     if cur.s("stage") == "asks" && cur.s("kind") == "permission" { return tell(cur.s("id"), "Yes, go ahead.", false); }
-    if awaits_plan(&cur) { return approve_plan(cur.s("id")); }
+    if approvable(&cur) { return approve_plan(cur.s("id")); }
     if cur.s("stage") == "pick" { crate::fail!("{0} waits for you to pick one of its attempts, not for a merge: herdr-projects pick {0} <letter>", cur.s("id")); }
     if is_research(&cur) { crate::fail!("{0} is research only: nothing of it is merged. To merge its change after all, turn that off (herdr-projects set research.only false --task {0}) and delegate it again.", cur.s("id")); }
     let t = update(cur.s("id"), |t| {
@@ -92,6 +92,7 @@ pub fn send_error(id: &str) -> Res<Said> {
     let cid = cur.t("id");
     if stopped_at_limit(&cur) { return carry_on(&cid, false); }
     if cur.s("stage") == "failed" && cur.at("failure").s("stage") == "send" { return retry(&cid); }
+    if awaits_plan(&cur) && cur.at("plan").b("reviewFailed") { return review_again(&cid); } // a plan whose review could not run
     if cur.s("stage") == "nosummary" || (cur.s("stage") == "failed" && cur.at("failure").b("auth") && cur.at("failure").s("stage") == "agent") {
         let out = tell(&cid, &flow::send::with_tail(&cur, "You stopped before the work was finished. Continue the task where you left off."), false)?;
         return Ok(say(out.task, format!("{cid}: told the agent to continue")));
@@ -197,6 +198,7 @@ pub fn retry(id: &str) -> Res<Said> {
     if stopped_at_limit(&cur) { return carry_on(&cid, false); }
     // The agent said it needs a login: you have signed in, and it is told to carry on.
     if cur.s("stage") == "asks" && cur.s("kind") == "auth" { return go_on(&cur); }
+    if awaits_plan(&cur) && cur.at("plan").b("reviewFailed") { return review_again(&cid); } // its review could not run: once more
     if cur.s("stage") != "failed" { crate::fail!("{cid} has nothing to retry."); }
     // None of its attempts passed: trying again is starting over, with fresh attempts.
     // The main pipeline failed or did not finish after the merge: its runs are looked at again (land/main_pipeline.rs).

@@ -1,7 +1,8 @@
 //! The plan's turn ended: the board makes sure nothing was changed, takes the plan, and hands it to whoever approves it.
 //! Every turn that ends while the plan step is open is the plan's, so nothing is committed, checked, pushed or reviewed
 //! as work before the yes. Who approves is `plan.approve` as it reads now: you (the task waits as "plan ready"), the
-//! reviewer (its look decides), or nobody any more (the setting was taken off meanwhile: the build goes on).
+//! reviewer (its look decides; a review that cannot start or gives no verdict leaves the plan for your yes), or nobody
+//! any more (the setting was taken off meanwhile: the build goes on).
 use super::build::{start_build, start_build_by};
 use super::review::{points_of, review_plan};
 use super::untouched::{held_failure, put_back, undone_words};
@@ -49,7 +50,7 @@ pub fn plan_written(id: &str, g: &mut Guard, said: &str) -> Res<()> {
     let words = first_words(&text);
     t = g.set(|t| {
         let p = t.obj_mut("plan");
-        p.del("was"); p.put("at", now()); p.put("words", words.clone()); p.put("file", "plan.md"); p.put("link", link.clone());
+        p.del("was"); p.del("reviewFailed"); p.put("at", now()); p.put("words", words.clone()); p.put("file", "plan.md"); p.put("link", link.clone());
         if !undone.is_empty() { p.put("undone", json!({ "list": undone.iter().take(30).collect::<Vec<_>>(), "n": undone.len(), "at": now() })); }
         t.put("failure", Value::Null);
     })?;
@@ -60,11 +61,12 @@ pub fn plan_written(id: &str, g: &mut Guard, said: &str) -> Res<()> {
         let ch = work(Some(&t));
         let r = review_plan(id, g, &ch)?;
         if r.aborted { return Ok(()); }
+        // The reviewer could not start, or gave no verdict: the plan is yours to judge, with the reason on its row. Your
+        // yes builds it; retry has it reviewed again.
         let Some(rv) = r.review else {
-            let mut f = obj(json!({ "stage": "plan", "title": if r.auth { "Needs a login" } else { "The plan's review failed" }, "msg": if r.auth { "The reviewer needs a login".to_string() } else { format!("The plan's review failed: {}. Retry to review it again", one_line(&r.error, 200)) },
-                "detail": format!("The reviewer could not check the plan: {}", r.error), "next": "Investigate the reviewer failure, then retry: the plan is reviewed again." }));
-            if r.auth { f.put("auth", true); }
-            fail(g, f, FailHow::default())?;
+            let why = if r.auth { "the reviewer needs a login".to_string() } else { one_line(&r.error, 400) };
+            g.set(|t| t.obj_mut("plan").put("reviewFailed", json!({ "why": why, "auth": r.auth, "at": now() })))?;
+            ready(g, &undone)?;
             return Ok(());
         };
         let rv = Value::Object(rv);
@@ -87,7 +89,9 @@ pub fn ready(g: &mut Guard, undone: &[String]) -> Res<Task> {
         let rv = t.at("plan").at("review").clone();
         t.put("stage", "plan"); t.put("kind", "permission"); t.put("turnOpen", false); t.put("expectedWake", Value::Null); t.put("watch", Value::Null);
         let words = t.at("plan").t("words");
-        let msg = if rv.is_object() && !gate::passes(&rv) { format!("The reviewer did not pass the plan ({}): yours to judge", gate::tally(&rv)) }
+        let failed = t.at("plan").at("reviewFailed").t("why");
+        let msg = if !failed.is_empty() { format!("The plan's review could not run ({failed}): yours to judge") }
+            else if rv.is_object() && !gate::passes(&rv) { format!("The reviewer did not pass the plan ({}): yours to judge", gate::tally(&rv)) }
             else if !undone.is_empty() { format!("{words} · {}", undone_words(undone)) } else if !words.is_empty() { words } else { "The plan is written".into() };
         t.put("msg", msg);
     })?;

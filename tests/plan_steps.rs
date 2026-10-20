@@ -1,5 +1,6 @@
 //! When a plan step starts and ends: the settings read when their step starts, a stop with no plan as a failure the
-//! agent can fix, no plan written in a repo without a read-only mount, a plan said rather than saved, and a plan
+//! agent can fix, no plan written in a repo without a read-only mount, a plan said rather than saved, a plan whose
+//! review cannot start left for your yes (which builds it, writable, even when the build's start fails), and a plan
 //! approved once and handed to every attempt.
 use crate::common;
 use common::*;
@@ -62,16 +63,17 @@ fn the_settings_are_read_when_their_step_starts_and_a_stop_with_no_plan_is_a_fai
 fn without_a_read_only_mount_no_plan_is_written_in_a_repo_and_a_plan_said_not_saved_is_the_new_plan() {
     let w = plan_world(json!({ "plan.approve": "you", "worker.agent": "codex", "review.when": "never" }), "none");
     // A machine where the mount cannot be made: nothing is started, in the task's worktree or in your checkout.
+    let needs = if cfg!(target_os = "macos") { "needs macOS's own sandbox" } else { "needs bubblewrap" };
     let none = w.add("No mount");
     delegate(&none);
     let t = settle(&none);
     assert_eq!((t.s("stage"), t.at("plan").is_null(), t.at("failure").s("title")), ("failed", true, "Could not start the agent"));
-    assert!(t.at("failure").s("detail").contains("needs bubblewrap") && t.at("failure").s("detail").contains("set plan.approve none --task proj/1"), "{}", t.at("failure"));
+    assert!(t.at("failure").s("detail").contains(needs) && t.at("failure").s("detail").contains("set plan.approve none --task proj/1"), "{}", t.at("failure"));
     assert!(!w.state().arr("panes").iter().any(|p| p.at("agent").is_object()), "no program was started");
     assert!(!is_locked(&t));
     let mut open = t.clone(); open.put("plan", json!({ "asked": 1, "by": "you" }));
     let api = sw::herdr::Herdr::new(Some(w.socket.clone()));
-    assert!(sw::plan::sandbox::start_program(&api, &open, "x", "codex", "p", &[]).unwrap_err().message.contains("needs bubblewrap"), "nor an open plan step's writer, started again later");
+    assert!(sw::plan::sandbox::start_program(&api, &open, "x", "codex", "p", &[], "writer").unwrap_err().message.contains(needs), "nor an open plan step's writer, started again later");
     // With the plan taken off it starts as any task does.
     delegate_with(&none, json!({ "plan.approve": "none" }));
     w.script(json!({ "worker": [{ "status": "working" }] }));
@@ -97,6 +99,45 @@ fn without_a_read_only_mount_no_plan_is_written_in_a_repo_and_a_plan_said_not_sa
     let t = settle(&id);
     assert_eq!((t.s("stage"), t.at("failure").s("title")), ("failed", "No plan was written"));
     assert!(t.at("failure").s("detail").contains("no new plan"), "{}", t.at("failure"));
+}
+
+#[test]
+fn a_plan_review_that_cannot_start_leaves_the_plan_for_your_yes_and_the_yes_builds_it_writable_even_when_its_start_fails() {
+    let w = plan_world(json!({ "plan.approve": "you", "worker.agent": "codex", "review.when": "never" }), "bwrap");
+    w.script(json!({ "worker": [{ "plan": PLAN, "note": "Written." }, { "plan": PLAN, "note": "The same." }, { "status": "working" }] }));
+    let id = w.add("Work");
+    delegate(&id);
+    assert_eq!(settle(&id).s("stage"), "plan");
+    // The reviewer is asked for now, and its read-only mount cannot be made (macOS: a sandbox inside another).
+    set_value("plan.approve", &json!("reviewer"), &Scope::task(&task(&id))).unwrap();
+    unsafe { std::env::set_var("HERDR_PROJECTS_SANDBOX", "none") };
+    tell(&id, "Once more.");
+    let t = settle(&id);
+    assert_eq!((t.s("stage"), t.s("kind")), ("plan", "permission"), "{}", t.at("failure"));
+    assert!(t.s("msg").starts_with("The plan's review could not run (") && t.s("msg").ends_with("): yours to judge"), "{}", t.s("msg"));
+    assert!(t.at("plan").at("reviewFailed").s("why").contains("its reviewer must run where the repo cannot be written"), "{}", t.at("plan"));
+    assert!(!t.at("plan").at("reviewFailed").s("why").contains("its writer"));
+    assert!(t.at("failure").is_null() && is_locked(&t) && t.at("plan").b("locked"));
+    // Retry: it is looked at again, and still cannot be; the plan waits for you as before.
+    sw::actions::finish_line::retry(&id).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "plan", "{}", t.at("failure"));
+    assert!(t.at("plan").b("reviewFailed"));
+    // Your yes builds it. The worktree is writable before the build's agent starts: a start that fails leaves it so.
+    w.patch(|s| s["missing"] = json!(["codex"]));
+    approve(&id);
+    let t = settle(&id);
+    assert_eq!((t.s("stage"), t.at("plan").s("approvedBy")), ("failed", "you"), "{}", t.at("failure"));
+    assert!(!is_locked(&t) && t.at("plan").at("locked") == &json!(false), "{}", t.at("plan"));
+    assert!(std::fs::write(std::path::Path::new(t.s("worktree")).join("f.txt"), "x\n").is_ok());
+    std::fs::remove_file(std::path::Path::new(t.s("worktree")).join("f.txt")).unwrap();
+    // Retry starts the build again: the plan is built, not written again.
+    w.patch(|s| s["missing"] = json!([]));
+    sw::actions::finish_line::retry(&id).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "working", "{}", t.at("failure"));
+    assert!(t.at("plan").b("built") && !is_locked(&t) && !w.pane_of(&t).at("agent").b("boxed"));
+    assert!(last(&w, &t).contains("This task has an approved plan") || last(&w, &t).contains("Your plan is approved"), "{}", last(&w, &t));
 }
 
 #[test]

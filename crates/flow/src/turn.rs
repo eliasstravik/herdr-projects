@@ -1,6 +1,7 @@
 //! The agent's own turn-end report. `turn-ended` is run by the hook the board passes at launch, inside the agent's
 //! own turn: it only records the event and starts the finish runner, exits 0, prints nothing, and never waits more
-//! than two seconds. Every judgement is made by the finish runner (finish/).
+//! than two seconds. Every judgement is made by the finish runner (finish/). A plan writer's hook runs inside its
+//! read-only mount: its runner is started by the keeper instead, outside (runner/outside.rs).
 use crate::agents::{helpers, installed, kinds::kind, read_turn::Turn};
 use crate::clock::now;
 use crate::json::*;

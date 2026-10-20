@@ -71,6 +71,10 @@ fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
     let label = flow::sidebar::space_label(&t);
     // The plan has its yes: this start is the build's (plan/build.rs).
     if plan::approved(&t) && !t.at("plan").b("built") { return plan::build::start_build(id, g); }
+    // The plan was taken off while its step was open: the plan written is built as it stands (with none, the work starts).
+    if plan::open(&t) && plan::wanted(&t).is_empty() { return plan::build::start_build_by(id, g, "nobody"); }
+    // The step goes on: its worktree read-only again, where a stop made it writable.
+    if plan::open(&t) && !t.at("plan").b("locked") { plan::lock::set_locked(id, true); t = g.check()?; }
     // 1. A place to work, unless the task still has a live pane from an earlier run.
     let live_pane = if t.at("link").b("pane") { api.pane_get(t.at("link").s("pane")) } else { None };
     if live_pane.is_some() && api.agent_get(t.at("link").s("pane"))?.is_some() { // delegate again on a task whose agent is still there: just continue it

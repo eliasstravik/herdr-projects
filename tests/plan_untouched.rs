@@ -1,6 +1,7 @@
 //! Nothing is changed before a plan's yes: the worktree is read-only while the plan is written and while it waits (also
 //! for files git ignores); a change that gets in all the same is put back and kept as a patch; in your own checkout a
-//! change the board may not undo holds the build until it is undone.
+//! change the board may not undo holds the build until it is undone. And every way out of the step takes the lock off:
+//! a stop, a delegate with the plan taken off, and your yes to a plan whose step failed.
 use crate::common;
 use common::board::open;
 use common::*;
@@ -95,4 +96,44 @@ fn nothing_is_changed_before_the_yes_what_gets_in_is_put_back_and_a_change_the_b
     assert_eq!(u.s("stage"), "working", "{}", u.at("failure"));
     assert!(u.at("plan").b("built"));
     assert_eq!(u.at("plan").s("approvedBy"), "you");
+}
+
+#[test]
+fn a_stop_a_delegate_with_the_plan_taken_off_and_a_yes_to_a_failed_plan_step_each_leave_the_worktree_writable() {
+    let w = world_with(Opts { repo: true, settings: json!({ "plan.approve": "you", "worker.agent": "codex", "review.when": "never" }), ..Default::default() });
+    unsafe { std::env::set_var("HERDR_PROJECTS_SANDBOX", "bwrap") };
+    w.patch(|s| s["pids"] = json!(true));
+    w.script(json!({ "worker": [{ "plan": PLAN, "note": "Written." }, { "status": "working" }, { "status": "working" }] }));
+    let id = w.add("Work");
+    delegate(&id);
+    let t = settle(&id);
+    assert!(t.s("stage") == "plan" && is_locked(&t), "{}", t.at("failure"));
+    // Stopped in its plan step: writable, and the task says so.
+    sw::actions::talk::stop(&id).unwrap();
+    let t = task(&id);
+    assert_eq!((t.s("stage"), t.at("plan").at("locked"), is_locked(&t)), ("stopped", &json!(false), false));
+    // Delegated again, the step goes on: read-only once more, its writer in the mount.
+    delegate(&id);
+    let t = settle(&id);
+    assert!(is_locked(&t) && t.at("plan").b("locked") && !t.at("plan").b("approvedAt"), "{}", t.at("plan"));
+    assert_eq!(w.pane_of(&t).at("agent").at("boxed"), &json!(true));
+    // The plan taken off, and delegated again: the plan written is built as it stands, writable.
+    sw::actions::talk::stop(&id).unwrap();
+    sw::store::settings::change::set_value("plan.approve", &json!("none"), &sw::store::settings::lookup::Scope::task(&task(&id))).unwrap();
+    delegate(&id);
+    let t = settle(&id);
+    assert_eq!((t.s("stage"), t.at("plan").s("approvedBy")), ("working", "nobody"), "{}", t.at("failure"));
+    assert!(t.at("plan").b("built") && !is_locked(&t) && t.at("plan").at("locked") == &json!(false));
+    assert!(!w.pane_of(&t).at("agent").b("boxed"));
+    // What an older version left behind (#229): a plan written, its step failed, the worktree read-only. Your yes builds it.
+    w.script(json!({ "worker": [{ "plan": PLAN, "note": "Written." }, { "status": "working" }] }));
+    let old = w.add("Stuck");
+    delegate(&old);
+    assert_eq!(settle(&old).s("stage"), "plan");
+    sw::store::tasks::patch(&old, |t| { t.put("stage", "failed"); t.put("failure", json!({ "stage": "plan", "title": "The plan's review failed", "detail": "The reviewer could not check the plan: sandbox-exec" })); }).unwrap();
+    assert!(is_locked(&task(&old)));
+    approve(&old);
+    let t = settle(&old);
+    assert_eq!((t.s("stage"), t.at("plan").s("approvedBy")), ("working", "you"), "{}", t.at("failure"));
+    assert!(!is_locked(&t) && t.at("plan").at("locked") == &json!(false) && t.at("failure").is_null());
 }

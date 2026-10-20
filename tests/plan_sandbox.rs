@@ -1,7 +1,7 @@
 //! The read-only mount a plan's writer runs in, on each platform (plan/sandbox/tool.rs): bubblewrap's command on Linux,
 //! `sandbox-exec` and its Seatbelt profile on macOS, the programs whose own sandbox is turned off inside it, what the
-//! board says where no mount can be made (no apt advice on a Mac), doctor's line, and a plan step started that way. And
-//! the real thing: a write into the guarded folders is refused while one elsewhere works (on macOS always; on Linux
+//! board says where no mount can be made (no apt advice on a Mac), doctor's line, and a plan step started that way;
+//! inside such a mount, a probe that is never kept and a runner that is started from outside instead. And the real thing: a write into the guarded folders is refused while one elsewhere works (on macOS always; on Linux
 //! where bubblewrap can be used).
 use crate::common;
 use common::*;
@@ -36,9 +36,9 @@ fn the_seatbelt_profile_denies_writes_under_the_real_paths_only() {
 
 #[test]
 fn each_platform_names_its_own_tool_and_a_program_s_own_sandbox_is_off_inside_seatbelt() {
-    let mac = Tool::SandboxExec.no_mount("proj/1");
+    let mac = Tool::SandboxExec.no_mount("proj/1", "writer");
     assert!(mac.contains("`sandbox-exec`") && mac.contains("set plan.approve none --task proj/1") && !mac.contains("apt") && !mac.contains("bubblewrap"), "{mac}");
-    let linux = Tool::Bwrap.no_mount("proj/1");
+    let linux = Tool::Bwrap.no_mount("proj/1", "writer");
     assert!(linux.contains("needs bubblewrap") && linux.contains("sudo apt install bubblewrap"), "{linux}");
     assert!(Tool::SandboxExec.not_started("codex", "proj/1").starts_with("codex did not start in its read-only mount (sandbox-exec)."));
     assert_eq!((Tool::Bwrap.denied(), Tool::SandboxExec.denied()), ("Read-only file system", "Operation not permitted"));
@@ -89,7 +89,33 @@ fn a_plan_step_on_macos_starts_its_writer_under_sandbox_exec_with_the_worktree_a
     assert!(boxed_command(&t, "x", "claude", &[]).ends_with("claude --settings '{\"sandbox\":{\"enabled\":false}}'"));
     // Where it cannot be used, the task says so in macOS's words.
     unsafe { std::env::set_var("HERDR_PROJECTS_SANDBOX", "none") };
-    assert!(sw::plan::sandbox::no_mount("proj/1").contains(if cfg!(target_os = "macos") { "sandbox-exec" } else { "bubblewrap" }));
+    assert!(sw::plan::sandbox::no_mount("proj/1", "writer").contains(if cfg!(target_os = "macos") { "sandbox-exec" } else { "bubblewrap" }));
+}
+
+#[test]
+fn inside_a_sandbox_a_probe_is_never_kept_and_a_runner_asked_for_is_started_from_outside() {
+    let w = world();
+    let id = w.add("Work");
+    let kept = sw::store::files::data_dir().join("sandbox.json");
+    let jobs = || sw::runner::JOBS.with(|j| j.borrow().clone());
+    // macOS's own check is looked up, not linked: it builds everywhere, and finds no sandbox where there is no such check.
+    let os = sw::plan::sandbox::inside::os_says();
+    if !cfg!(target_os = "macos") { assert!(!os); }
+    // The plan writer's turn-end hook runs in its mount, with the mark its program was started with.
+    unsafe { std::env::set_var(sw::plan::sandbox::inside::MARK, "1") };
+    assert!(sw::plan::sandbox::inside::inside());
+    let _ = sw::plan::sandbox::tool();
+    assert!(!kept.exists(), "what a probe from inside found (macOS: no sandbox inside another) says nothing of outside");
+    assert_eq!(sw::runner::spawn_runner("finish", &id, &[]), 0);
+    sw::runner::outside::start_asked(); // a pass inside starts nothing
+    assert!(jobs().is_empty(), "no runner was started in the mount");
+    assert_eq!(sw::runner::outside::asked(), vec![("finish".to_string(), id.clone(), vec![])]);
+    // Outside (the keeper's housekeeping), it is started, once.
+    unsafe { std::env::remove_var(sw::plan::sandbox::inside::MARK) };
+    sw::housekeeping::housekeeping(&w.socket, sw::housekeeping::Force::Yes);
+    sw::housekeeping::housekeeping(&w.socket, sw::housekeeping::Force::Yes);
+    assert_eq!(jobs().iter().filter(|j| j.0 == "finish").cloned().collect::<Vec<_>>(), vec![("finish".to_string(), id.clone(), vec![])]);
+    assert!(sw::runner::outside::asked().is_empty());
 }
 
 /// Runs `sh -c <script>` in this platform's mount, guarding `guard`: (it worked, what it said).

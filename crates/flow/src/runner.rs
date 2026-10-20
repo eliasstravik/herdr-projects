@@ -1,6 +1,9 @@
 //! Long jobs (delegate, finish line, land, restart) run in a detached runner so the board stays responsive and hook
 //! commands never hold herdr up. A runner marks itself in task.json as `runner: {pid, start, started, job}`; a marker
-//! whose process is gone is ignored. Each turn is a separate runner, so counters live in task.json.
+//! whose process is gone is ignored. Each turn is a separate runner, so counters live in task.json. One asked for from
+//! inside a sandbox is started from outside it (runner/outside.rs).
+pub mod outside;
+
 use crate::err::{Error, Res};
 use crate::json::*;
 use crate::store::files::*;
@@ -33,6 +36,7 @@ pub fn start_reaped(c: &mut Command) -> u32 {
 }
 /// Start a detached runner for one job on one task. Returns at once.
 pub fn spawn_runner(job: &str, id: &str, extra: &[&str]) -> u32 {
+    if crate::plan::sandbox::inside::boxed() { return outside::ask(job, id, extra); }
     if inline() { JOBS.with(|j| j.borrow_mut().push((job.into(), id.into(), extra.iter().map(|s| s.to_string()).collect()))); return 0; }
     user_env();
     let dir = if id == "-" { data_dir() } else { dir_of(id) };
