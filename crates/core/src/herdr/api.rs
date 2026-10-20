@@ -37,8 +37,9 @@ impl Herdr {
     pub fn tab_get(&self, id: &str) -> Option<Value> { self.call(args(&["tab", "get", id])).ok().map(|r| r.at("tab").clone()).filter(|v| !v.is_null()) }
     pub fn tab_rename(&self, id: &str, label: &str) -> Option<Value> { self.call(args(&["tab", "rename", id, label])).ok() }
     pub fn tab_close(&self, id: &str) -> Option<Value> { self.call(args(&["tab", "close", id])).ok() }
-    pub fn worktree_create(&self, cwd: &str, branch: &str, base: &str, label: &str) -> HRes<Value> {
+    pub fn worktree_create(&self, cwd: &str, branch: &str, base: &str, label: &str, path: Option<&std::path::Path>) -> HRes<Value> {
         let mut a = args(&["worktree", "create", "--cwd", cwd, "--branch", branch]);
+        if let Some(path) = path { a.extend(args(&["--path", &path.display().to_string()])); }
         if !base.is_empty() { a.extend(args(&["--base", base])); }
         if !label.is_empty() { a.extend(args(&["--label", label])); }
         a.push("--no-focus".into());

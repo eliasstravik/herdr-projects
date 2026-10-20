@@ -102,9 +102,12 @@ fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
                 git_out(&root, &["update-ref", "HEAD", &c])?;
             }
             let branch = free_branch(&root, &t);
+            let destination = crate::worktree_destination::parent(&root, &t)?;
+            let destination = destination.as_ref().map(|p| crate::worktree_destination::reserve(&root, p, &branch)).transpose()?;
             // An attempt works in a tab of its task's one space; any other task in a space of its own.
-            res = if t.b("attemptOf") { crate::attempts::place::open_place(&api, &root, &t, &branch, &from)? } else { flow::spaces::opening_worktree(&api, &root, || api.worktree_create(&root.display().to_string(), &branch, &from, &label))? };
-            let dir = if res.at("worktree").b("path") { res.at("worktree").t("path") } else { res.at("workspace").at("worktree").t("checkout_path") };
+            res = if t.b("attemptOf") { crate::attempts::place::open_place(&api, &root, &t, &branch, &from, destination.as_deref())? } else { flow::spaces::opening_worktree(&api, &root, || api.worktree_create(&root.display().to_string(), &branch, &from, &label, destination.as_deref()))? };
+            crate::worktree_destination::record(&root, &t, destination.as_deref(), &branch, &res)?;
+            let dir = crate::worktree_destination::returned(&res);
             // The repo's own file, read from the commit the worktree starts from: its facts, and what it was refused.
             let (facts, refused) = repo_file(&root, Some(&from));
             exclude_rule_dir(&root);

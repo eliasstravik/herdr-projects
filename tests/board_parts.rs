@@ -96,7 +96,7 @@ fn the_settings_page_every_work_setting_plain_and_a_mark_on_this_tasks_own() {
     set_value("review.rounds", &json!(5), &Scope::default()).unwrap();
     set_value("merge.by", &json!("itself"), &Scope::repo("proj")).unwrap();
     set_value("reviewer.agent", &json!("claude"), &Scope::task(&task(&id))).unwrap();
-    let mut s = open(&w.root, 61); s.s.sel = id.clone(); s.load();
+    let mut s = open(&w.root, 62); s.s.sel = id.clone(); s.load();
     s.press(&["ctrl+e"]);
     let text = s.screen(120).join("\n");
     assert!(text.starts_with(" Settings  PRJ-1 \"One\""), "{text}");
@@ -125,7 +125,7 @@ fn the_settings_page_every_work_setting_plain_and_a_mark_on_this_tasks_own() {
 fn the_settings_page_move_change_and_put_back() {
     let w = world();
     let id = w.add("One"); let other = w.add("Two");
-    let mut s = open(&w.root, 34); s.s.sel = id.clone(); s.load();
+    let mut s = open(&w.root, 35); s.s.sel = id.clone(); s.load();
     let mine = || task(&id).at("settings").clone();
     let names = |s: &common::board::Board| sw::board::update::edit::rows(&s.s).iter().map(|x| x.t("name")).collect::<Vec<_>>();
     let at = |s: &common::board::Board| names(s)[s.s.editing.as_ref().unwrap().at].clone();

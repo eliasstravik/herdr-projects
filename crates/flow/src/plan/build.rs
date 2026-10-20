@@ -132,7 +132,7 @@ pub fn start_build_by(id: &str, g: &mut Guard, by: &str) -> Res<()> {
 /// of its own. The worktree, the branch and the tab the plan was written in are attempt A's.
 fn fan_out(g: &mut Guard, agents: &[String]) -> Res<Task> {
     let t = g.check()?;
-    let place: Obj = ["worktree", "branch", "from", "baseSha", "repoFile", "repoRefused", "root", "ownNote"].iter().filter(|k| t.contains_key(**k)).map(|k| (k.to_string(), t.at(k).clone())).collect();
+    let place: Obj = ["worktree", "worktreeLocation", "branch", "from", "baseSha", "repoFile", "repoRefused", "root", "ownNote"].iter().filter(|k| t.contains_key(**k)).map(|k| (k.to_string(), t.at(k).clone())).collect();
     let l = t.at("link").clone();
     let mut made = vec![];
     for (n, agent) in agents.iter().enumerate() {

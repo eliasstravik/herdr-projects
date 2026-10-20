@@ -13,13 +13,14 @@ use std::path::{Path, PathBuf};
 
 /// Answers as `herdr worktree create` does: { workspace, tab, root_pane, worktree: { path } }. One attempt at a time
 /// per task: two that start together must not both make the space.
-pub fn open_place(api: &Herdr, root: &Path, t: &Task, branch: &str, from: &str) -> Res<Value> {
+pub fn open_place(api: &Herdr, root: &Path, t: &Task, branch: &str, from: &str, destination: Option<&Path>) -> Res<Value> {
     with_lock_wait(&format!("space:{}", t.s("attemptOf")), 180000, || {
         let p = get(t.s("attemptOf"));
         let space = p.as_ref().filter(|p| p.at("link").b("workspace")).and_then(|p| api.workspace_get(p.at("link").s("workspace")));
         let Some(space) = space else {
             let label: String = p.as_ref().map(|p| p.t("title")).unwrap_or_else(|| t.t("title")).chars().take(60).collect();
-            let res = flow::spaces::opening_worktree(api, root, || api.worktree_create(&root.display().to_string(), branch, from, &label))?;
+            let res = flow::spaces::opening_worktree(api, root, || api.worktree_create(&root.display().to_string(), branch, from, &label, destination))?;
+            crate::worktree_destination::record(root, t, destination, branch, &res)?;
             let dir = if res.at("worktree").b("path") { res.at("worktree").t("path") } else { res.at("workspace").at("worktree").t("checkout_path") };
             let ws = res.at("workspace").t("workspace_id");
             update_wait(t.s("attemptOf"), 10000, |p| { p.obj_mut("link").put("workspace", ws.clone()); p.obj_mut("link").put("ownsWorkspace", true); p.put("spaceDir", Path::new(&dir).parent().map(|x| x.display().to_string()).unwrap_or_default()); Ok(Change::Write) })?;
@@ -31,8 +32,8 @@ pub fn open_place(api: &Herdr, root: &Path, t: &Task, branch: &str, from: &str) 
             attempts_of(&p).iter().find(|c| c.b("worktree")).and_then(|c| Path::new(c.s("worktree")).parent().map(|x| x.to_path_buf())).unwrap_or_else(|| data_dir().join("worktrees").join(t.s("repo")))
         };
         let name: String = branch.chars().map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '-' }).collect();
-        let dir = base.join(name);
-        if !dir.exists() { git_slow(root, &["worktree", "add", "--no-track", "-b", branch, &dir.display().to_string(), from], 120000)?; }
+        let dir = match destination { Some(p) => p.to_path_buf(), None => crate::worktree_destination::reserve(root, &base, &name)? };
+        git_slow(root, &["worktree", "add", "--no-track", "-b", branch, &dir.display().to_string(), from], 120000)?;
         let ws = space.t("workspace_id");
         let r = api.tab_create(&ws, &dir.display().to_string(), &flow::tabs::agent_tab(Some(t)), &board_env())?;
         let tab = if r.at("tab").b("tab_id") { r.at("tab").t("tab_id") } else { r.at("root_pane").t("tab_id") };

@@ -32,6 +32,7 @@ pub fn adopt(id: &str, letter: &str, by: &str) -> Res<Task> {
         if !["attempts", "pick", "reviewing"].contains(&t.s("stage")) { crate::fail!("{id} is not choosing among attempts."); }
         for k in TAKEN.iter().chain(["reviewerOn"].iter()) { if kid.contains_key(*k) { t.put(k, kid.at(k).clone()); } }
         t.put("app", kid.at("agent").clone()); t.put("as", kid.at("id").clone()); t.put("startedOnce", true);
+        t.put("worktreeLocation", kid.at("worktreeLocation").clone());
         if kid.b("root") { t.put("root", kid.at("root").clone()); }
         let (tl, kl) = (t.at("link").clone(), kid.at("link").clone());
         t.put("link", json!({ "socket": if tl.b("socket") { tl.at("socket").clone() } else { kl.at("socket").clone() }, "workspace": if tl.b("workspace") { tl.at("workspace").clone() } else { kl.at("workspace").clone() }, "ownsWorkspace": true, "tab": kl.at("tab"), "pane": kl.at("pane"), "terminal": kl.at("terminal"), "agent": kl.at("agent"), "reviewer": null }));

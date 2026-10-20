@@ -20,3 +20,4 @@ pub mod temp;
 pub mod text;
 pub mod util;
 pub mod voice;
+pub mod worktree_destination;

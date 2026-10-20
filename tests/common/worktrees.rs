@@ -18,7 +18,8 @@ pub fn worktree(f: &F, st: &mut Value, verb: &str, flag: &dyn Fn(&str) -> Option
             let root = repo_of(Path::new(&flag("--cwd").unwrap_or_default()));
             let branch = flag("--branch").unwrap_or_default();
             let safe: String = branch.chars().map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '-' }).collect();
-            let dest = f.dir.join("worktrees").join(root.file_name().unwrap_or_default()).join(safe);
+            let default = f.dir.join("worktrees").join(root.file_name().unwrap_or_default()).join(safe);
+            let dest = if st.b("ignoreWorktreePath") { default } else { flag("--path").map(PathBuf::from).unwrap_or(default) };
             let ds = dest.display().to_string();
             let exists = git(&root, &["rev-parse", "--verify", &format!("refs/heads/{branch}")]).is_ok();
             let base = flag("--base").unwrap_or_else(|| "HEAD".into());
@@ -30,6 +31,7 @@ pub fn worktree(f: &F, st: &mut Value, verb: &str, flag: &dyn Fn(&str) -> Option
             let mut m = made.as_object().cloned().unwrap();
             m.insert("type".into(), json!("worktree_created"));
             m.insert("worktree".into(), json!({ "path": ds, "branch": branch, "open_workspace_id": made.at("workspace").at("workspace_id") }));
+            if st.b("missingWorktreePath") { m.remove("worktree"); m.get_mut("workspace").unwrap()["worktree"] = Value::Null; }
             ok(Value::Object(m))
         }
         "open" => {
