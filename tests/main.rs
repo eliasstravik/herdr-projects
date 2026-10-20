@@ -264,6 +264,7 @@ mod web_chat;
 mod web_chat_box;
 mod web_dock;
 mod web_door;
+mod web_door_keep;
 mod web_door_more;
 mod web_door_rest;
 mod web_far;
