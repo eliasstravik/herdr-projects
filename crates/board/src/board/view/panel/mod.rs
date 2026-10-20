@@ -148,8 +148,8 @@ pub fn panel(s: &mut State, t: &Theme, r: &Obj, width: usize, full: bool, fit: u
 /// The task details, full screen: the same parts as beside the list, each whole, and every review the task had. Or
 /// its settings page in their place while that is open, its selected row always on screen.
 pub fn full_panel(s: &mut State, t: &Theme, r: &Obj, width: usize, h: usize) -> Vec<Inked> {
-    let editing = s.editing.as_ref().map(|e| e.id == r.s("id") && !e.auto).unwrap_or(false) && r.has("title");
-    let lines = if editing { page::settings_page(s, t, r, width.min(READ)) } else { panel(s, t, r, width.min(READ), true, 0) };
+    let editing = s.editing.as_ref().map(|e| e.id == r.s("id") && e.whose == crate::board::state::Whose::Task).unwrap_or(false) && r.has("title");
+    let lines = if editing { page::settings_page(s, t, Some(r), width.min(READ)) } else { panel(s, t, r, width.min(READ), true, 0) };
     s.panel_height = h.saturating_sub(2).max(1);
     s.panel_length = lines.len();
     if editing { s.panel_top = s.edit_line.min(s.panel_top.max((s.edit_line + 1).saturating_sub(s.panel_height))); }

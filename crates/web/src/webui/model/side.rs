@@ -57,10 +57,10 @@ pub fn side_of(s: &mut State, t: &Theme) -> Obj {
     let actions: Vec<(String, String)> = buttons_of(s, r.as_ref(), who.as_ref(), false).into_iter().filter(|(id, _)| !TERMINAL_ONLY.contains(&id.as_str()) && !CHAT_OWN.contains(&id.as_str()) && !(id == "back" && open)).collect();
     let pick = |id: &str| typing.iter().find(|(i, _)| i == id).map(|(_, l)| l.clone()).unwrap_or_default();
     // More: only what applies now and is not a button already, in the buttons' own words. A key with no button on the
-    // page (the settings page, the terminal's size) has no entry; yes and send back are buttons when they apply.
+    // page (the settings page, yours, the terminal's size) has no entry; yes and send back are buttons when they apply.
     let menu: Vec<Value> = crate::board::update::menu::items(s).into_iter().filter(|i| {
         let id = entry(i.id).name;
-        !TERMINAL_ONLY.contains(&id) && entry(i.id).web.is_some() && !["yes", "sendBack"].contains(&id) && (id != "undo" || s.draft_away.is_some() || s.archive_undo.is_some()) && (!["stop", "archive", "pin"].contains(&id) || r.is_some())
+        !i.mine && !TERMINAL_ONLY.contains(&id) && entry(i.id).web.is_some() && !["yes", "sendBack"].contains(&id) && (id != "undo" || s.draft_away.is_some() || s.archive_undo.is_some()) && (!["stop", "archive", "pin"].contains(&id) || r.is_some())
     }).map(|i| json!({ "id": entry(i.id).name, "group": i.group, "label": i.label })).collect();
     let can_open = r.as_ref().map(|r| r.has("title") && !r.b("archivedAt") && if r.b("host") { r.at("link").b("pane") } else { is_agent(r) }).unwrap_or(false);
     obj(json!({

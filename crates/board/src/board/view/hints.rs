@@ -42,7 +42,7 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
     }
     if s.menu.is_some() { return (vec![plain(arrows, "pick a key"), plain(enter, "press it"), plain(esc, "close the menu")], chat_key); }
     if let Some(e) = &s.editing {
-        return (if !e.typing.is_empty() { vec![plain(enter, "save this value"), plain(esc, "leave it as it is")] } else { vec![plain(pair(K::Up), "move"), plain(enter, "change"), plain(name(K::PutBack), "put back"), plain(esc, "back to the task")] }, chat_key);
+        return (if !e.typing.is_empty() { vec![plain(enter, "save this value"), plain(esc, "leave it as it is")] } else { vec![plain(pair(K::Up), "move"), plain(enter, "change"), plain(name(K::PutBack), "put back"), plain(esc, if e.whose.mine() { "back to the list" } else { "back to the task" })] }, chat_key);
     }
     if s.mode == Mode::Find { return (vec![plain(enter, "keep the filter"), plain(esc, "cancel")], chat_key); }
     let agent_on = r.map(is_agent).unwrap_or(false);

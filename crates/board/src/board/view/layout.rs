@@ -154,6 +154,7 @@ fn draw_at(s: &mut State, t: &Theme, width: usize, rows: usize) -> Screen {
     let shown_job = s.job().cloned();
     let top: Vec<Inked> = if s.menu.is_some() { super::menu::menu_lines(s, t, width, h) }
         else if let (Some(a), true) = (&auto, s.auto_open) { super::panel::auto::auto_full(s, t, a, width, h) }
+        else if crate::board::update::edit::mine_open(s) { super::panel::page::mine_full(s, t, width, h) }
         else if s.full && (r.is_some() || shown_job.is_some()) { let x = r.clone().or(shown_job.clone()).unwrap(); super::guard::part(|| super::panel::full_panel(s, t, &x, width, h)).unwrap_or_else(|why| vec![Inked::new(), failed(&format!("The task details could not be shown: {why}"), width)]) }
         else if width >= WIDE && s.side {
             // The task panel on the right, while you have it open, on herdr's sidebar colour when the theme gives it one.

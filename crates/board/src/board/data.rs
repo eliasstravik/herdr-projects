@@ -9,7 +9,7 @@ use crate::flow::{live::board, talk::task_talk, task::is_agent_task};
 use crate::herdr::cli::{current_socket, session_name};
 use crate::json::*;
 use crate::shown::states::as_row;
-use crate::store::{automations::automations, inbox::{clear_dispatch, dispatches}, keys::{repo_keys, Keys}, marks::tilde, repos::{branch_of, can_worktree, folder_of, known_repos, repo_of}, settings::{lookup::{in_repo, setting, Scope}, show::{problems, rows}}};
+use crate::store::{automations::automations, inbox::{clear_dispatch, dispatches}, keys::{repo_keys, Keys}, marks::tilde, repos::{branch_of, can_worktree, folder_of, known_repos, repo_of}, settings::{lookup::{in_repo, setting, Scope}, show::{problems, problems_in, rows}}};
 use std::collections::BTreeMap;
 
 /// Another machine, as the board knows it: its tasks as rows, its automations, its Coordinator as it sent it
@@ -41,13 +41,16 @@ pub struct Data {
     pub approve: String, pub heard: Option<(String, String)>,
     /// The voice call of this machine, when one is on (voice/call.rs); else the last one, ended (its id and why).
     pub call: Option<Obj>, pub call_ended: Option<(String, String)>,
+    /// Your settings ("") or your entry for a repo, while the settings page shows them: which, and its rows and problems.
+    pub mine: Option<(String, Value)>,
     pub loaded: bool,
     /// Which read this is (`reads_started`), counted from the program's start.
     pub seq: u64,
 }
-/// What the board wants a closer look at.
+/// What the board wants a closer look at. `mine`: your settings (`Some("")`) or your entry for a repo, for the
+/// settings page.
 #[derive(Clone, Debug, Default)]
-pub struct Wants { pub ids: Vec<String>, pub cwd: String, pub own_pane: String, pub web: bool, pub coord: String }
+pub struct Wants { pub ids: Vec<String>, pub cwd: String, pub own_pane: String, pub web: bool, pub coord: String, pub mine: Option<String> }
 
 /// The repo the board is in, worked out once for each folder: a busy lock keeps what was known.
 pub fn repo_here(cwd: &str) -> (String, String) {
@@ -86,7 +89,8 @@ pub fn load(wants: &Wants) -> Data {
         session: session_name(&socket), notify: setting("board.notify", None).as_str().unwrap_or("").to_string(),
         repo: here.0, repo_root: here.1, host: crate::remote::check::hostname(),
         // herdr's approve action and a line left by the board key are for a board in a terminal, never the web board.
-        approve: if wants.web { String::new() } else { crate::actions::finish_line::take_approve(&socket, &wants.own_pane) }, heard: if wants.web { None } else { crate::board::run::say::heard(&wants.own_pane, &socket) }, call: crate::voice::call::get(), call_ended: crate::voice::call::last().filter(|c| c.s("state") == "ended").map(|c| (c.t("id"), c.t("why"))), loaded: true, seq,
+        approve: if wants.web { String::new() } else { crate::actions::finish_line::take_approve(&socket, &wants.own_pane) }, heard: if wants.web { None } else { crate::board::run::say::heard(&wants.own_pane, &socket) }, call: crate::voice::call::get(), call_ended: crate::voice::call::last().filter(|c| c.s("state") == "ended").map(|c| (c.t("id"), c.t("why"))),
+        mine: wants.mine.as_ref().map(|r| (r.clone(), mine(r))), loaded: true, seq,
     }
 }
 /// How long a repo with no task in view keeps its heading by repo after its last use.
@@ -116,6 +120,12 @@ pub fn shown_auto(a: Obj, now: i64) -> Obj {
         "settings": rows.iter().map(|x| x.json()).collect::<Vec<_>>() }));
     o.put("rowNow", serde_json::to_value(row_of(&a, now, Some(&oldest_first))).unwrap_or(Value::Null));
     o
+}
+/// Your settings (`repo` "") or your entry for a repo, as `show` and `show --repo` read them: every row, and what is
+/// not counted.
+pub fn mine(repo: &str) -> Value {
+    let scope = if repo.is_empty() { Scope::you() } else { Scope::repo(repo) };
+    json!({ "settings": rows(&scope).iter().map(|r| r.json()).collect::<Vec<_>>(), "problems": problems_in(&scope) })
 }
 /// A closer look at one task of this machine.
 pub fn snap(t: &Obj) -> Value {

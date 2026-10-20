@@ -200,6 +200,7 @@
    ctrl+a       archive this task
    ctrl+p       pin this task to the top
    ctrl+e       this task's settings: see and change each one
+                your own settings: what every task starts from
    ctrl+z       undo
    ctrl+f       find: show only the tasks that match
    ctrl+c       twice: close the board
@@ -233,7 +234,6 @@
    R#2          the review it is on or last had, coloured by where it stands: passed, failed, the reviewer working
    PR#16        its pull request: green when its checks pass, red when they fail
    [auto]       made by an automation; [research]: research only, nothing is merged
-
 
 
 

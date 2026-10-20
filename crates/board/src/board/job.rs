@@ -29,8 +29,8 @@ pub enum Job {
     /// One of the exact actions, on a task or an automation of another machine.
     Far { machine: crate::remote::Machine, host: String, action: String, req: Value, quiet: bool },
     AutoTurn { id: String, on: bool }, AutoFire { id: String }, AutoRemove { id: String, name: String },
-    /// A setting of a task (or an automation, `auto`): a value, or none to put it back.
-    Set { id: String, name: String, value: Option<String>, auto: bool },
+    /// A setting of a task, an automation, yours or your entry for a repo (`whose`): a value, or none to put it back.
+    Set { id: String, name: String, value: Option<String>, whose: super::state::Whose },
     CoordSeen { unseen: String, to: String },
     /// You left the chat with a task whose chat changed its code: its review need not wait the quiet time.
     ChatLeft { id: String },
@@ -179,7 +179,7 @@ fn run_one(job: Job) -> Done {
             Job::AutoTurn { id, on } => { let (w, ink) = crate::automations::show::turned_words(&crate::automations::list::turn(&id, on)?); Done::say(w, ink) }
             Job::AutoFire { id } => { let a = crate::automations::list::find(&id)?; let f = crate::automations::fire::fire(&id, crate::automations::told::Cause::Run, crate::clock::now())?; let (w, ink) = crate::automations::show::fired_words(&a, &f); Done::say(w, ink) }
             Job::AutoRemove { id, name } => { crate::automations::list::remove(&id)?; Done::say(format!("Removed the automation \"{name}\"."), Ink::Muted).and(Then::AutoGone) }
-            Job::Set { id, name, value, auto } => super::job_far::set(&id, &name, value, auto)?,
+            Job::Set { id, name, value, whose } => super::job_far::set(&id, &name, value, &whose)?,
             Job::CoordSeen { unseen, to } => { crate::coordinator::requests::seen(&unseen, crate::coordinator::co::Co::of(&crate::herdr::cli::current_socket(), &to)); Done::default() }
             Job::ChatLeft { id } => { crate::finish::chat::left(&id); Done::default() }
             Job::OpenAgent { id, popup } => super::job_far::open_agent(&id, popup),
