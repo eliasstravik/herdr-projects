@@ -163,6 +163,13 @@ pub fn failed_on(t: &Obj) -> Option<String> {
     let names = strings(f.at("checks"));
     Some(if names.is_empty() { "its pull request's checks failed on GitHub".into() } else { format!("GitHub's checks failed on its pull request: {}", names.join(", ")) })
 }
+/// What of the checks still running waits for your approval in Azure DevOps (a build held at its environment's
+/// approval), in words; empty when nothing does.
+pub fn held_builds(root: &Path, listed: &[Value]) -> String {
+    let Some(a) = crate::azure::host(root) else { return String::new() };
+    let running: Vec<(String, String)> = listed.iter().filter(|c| c.b("buildId") && !CHECK_GOOD.contains(&word(c).as_str()) && !CHECK_BAD.contains(&word(c).as_str())).map(|c| (c.t("buildId"), format!("the build {}", name(c)))).collect();
+    if running.is_empty() { String::new() } else { crate::azure::runs::awaiting(&a, root, &running) }
+}
 /// The board has waited for GitHub's checks longer than `check.timeout`.
 pub fn overdue(t: &Obj) -> bool { let l = ms(&setting_text("check.timeout", Some(t))); l > 0 && now() - t.at("checksWait").i("since") >= l }
 
@@ -204,7 +211,10 @@ pub fn before_merge(id: &str, g: &mut Guard, t: &Task, root: &Path) -> Res<bool>
             // One wait per approval and commit: it counts from when the board first found them running.
             let (w, approved) = (t.at("checksWait"), t.at("mergeIntent").i("approvedAt"));
             let since = if w.s("head") == head && w.i("for") == approved { w.i("since") } else { now() };
-            let stuck = { let mut x = t.clone(); x.put("checksWait", json!({ "since": since })); overdue(&x) };
+            // A build held at an approval in Azure DevOps waits for you, never for a timeout (azure/runs.rs).
+            let held = if read.azure { held_builds(root, listed) } else { String::new() };
+            let since = if held.is_empty() { since } else { now() }; // `check.timeout` counts from your yes
+            let stuck = held.is_empty() && { let mut x = t.clone(); x.put("checksWait", json!({ "since": since })); overdue(&x) };
             if stuck {
                 g.set(|t| { t.put("checksWait", Value::Null); t.put("autoMerge", false); t.put("autoMergeLocal", false); })?;
                 let timeout = setting_text("check.timeout", Some(t));
@@ -213,8 +223,8 @@ pub fn before_merge(id: &str, g: &mut Guard, t: &Task, root: &Path) -> Res<bool>
                     &format!("Look at the pull request's checks on {} ({}): one may be stuck, or wait for a runner. Approve again to wait for them again, or merge without them: herdr-projects approve {id} --anyway.", crate::azure::host_word(&pr), if az { format!("az repos pr policy list --id {}", crate::azure::pr::id_of(&pr)) } else { format!("gh pr checks {}", pr_number(&pr)) }), no_fix())?;
                 return Ok(false);
             }
-            let msg = if az { waiting_words_on("Azure DevOps", listed, &checks, &flows) } else { waiting_words(listed, &checks, &flows) };
-            let d = g.set(|t| { t.put("failure", Value::Null); t.put("autoMerge", true); t.put("autoMergeLocal", true); let seen = unique(known(t, &head, read.via()).into_iter().chain(listed.iter().map(name))); t.put("checksWait", json!({ "since": since, "head": head, "via": read.via(), "for": approved, "names": checks, "flows": flows, "seen": seen })); t.put("msg", msg.clone()); })?;
+            let msg = if !held.is_empty() { held.clone() } else if az { waiting_words_on("Azure DevOps", listed, &checks, &flows) } else { waiting_words(listed, &checks, &flows) };
+            let d = g.set(|t| { t.put("failure", Value::Null); t.put("autoMerge", true); t.put("autoMergeLocal", true); let seen = unique(known(t, &head, read.via()).into_iter().chain(listed.iter().map(name))); t.put("checksWait", json!({ "since": since, "head": head, "via": read.via(), "for": approved, "names": checks, "flows": flows, "seen": seen, "approval": if held.is_empty() { Value::Null } else { json!(held) } })); t.put("msg", msg.clone()); })?;
             flow::sidebar::tell_sidebar(&d);
             Ok(false)
         }

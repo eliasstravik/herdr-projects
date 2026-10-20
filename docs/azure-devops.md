@@ -51,6 +51,7 @@ The pull requests are looked at on the same cadence as GitHub's, every two minut
 | Policy | The board |
 |---|---|
 | a build validation or status check still running | waits, at most `check.timeout`: `Waiting for Azure DevOps checks · 0 of 1 passed` |
+| a build validation held at an approval (its environment's check in Azure Pipelines) | waits for you, with no timeout: `Waiting for your approval in Azure DevOps: the build reports, at Staging`. Once you approve it there, it waits for the build again, `check.timeout` counting from then |
 | one that failed | merges nothing; the failure goes back to the agent with the policy's name, the failing job and step, and the end of its log, within `review.rounds`, then waits for you (`approve <id> --anyway` merges all the same) |
 | a policy of people not met (reviewers, required reviewers, resolved comments, linked work items) | waits for it, as a review still required on GitHub; a reviewer who rejects, or waits for the author, is a change asked for |
 | one that is not blocking | never holds the merge up |
@@ -68,7 +69,11 @@ repo has) runs for the merge commit, its row saying how far: `Main pipeline runn
   `fix` sends that to the agent; it fixes it on its branch (which has the merge in it) and finishes again, and a new
   pull request brings the fix in. `retry` looks at the runs again, after you ran the pipeline again in Azure DevOps (the
   newest run of a pipeline counts).
-- **Not through after `merge.pipelineTimeout`** (60 minutes by default): it waits for you with that reason.
+- **Held at an approval** in Azure DevOps (a deployment stage's environment check): the task waits for you,
+  `Waiting for your approval in Azure DevOps: the pipeline reports, at Production_DE`, with no timeout; once approved
+  there it goes on by itself.
+- **Not through after `merge.pipelineTimeout`** (60 minutes by default, counted from your last approval there): it
+  waits for you with that reason.
 
 `merge.pipeline` says which runs it waits for:
 

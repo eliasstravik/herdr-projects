@@ -3,7 +3,8 @@
 //! or `none`). Meanwhile the task stays at stage "merging" with `pipelineWait`, its row saying how far the runs are,
 //! looked at on the pull requests' cadence (housekeeping/prs.rs). Passed: done, and cleaned up. Failed or cancelled:
 //! it waits for you with the reason and the end of the failing job's log, `fix` sends that to the agent, whose next
-//! finish opens a new pull request; `retry` looks at the runs again. Longer than `merge.pipelineTimeout`: it waits for you.
+//! finish opens a new pull request; `retry` looks at the runs again. Longer than `merge.pipelineTimeout`: it waits for you. A run held at an approval in Azure DevOps (its environment's check)
+//! waits for you as it is, with no timeout.
 use crate::azure::{self, runs};
 use crate::clock::now;
 use crate::flow::{git::drop_remote_branch, sidebar::tell_sidebar, spaces::tidy_mark};
@@ -29,9 +30,17 @@ pub fn arm(t: &mut Obj, commit: &str, base: &str, mode: &str, head: &str) {
     t.put("pipelineWait", json!({ "commit": commit, "base": base, "since": now(), "mode": mode, "head": head }));
     t.put("msg", format!("Merged: {}. Waiting for the main pipeline to start", t.s("pr")));
 }
-fn say(id: &str, msg: &str) {
-    if let Ok(t) = update_wait(id, 10000, |t| { if !t.b("pipelineWait") || t.s("msg") == msg { return Ok(Change::Keep); } t.put("msg", msg); Ok(Change::Write) }) { tell_sidebar(&t); }
+/// The row's words. `held`: a run waits for your approval in Azure DevOps, so the task waits for you (state.rs).
+fn say_held(id: &str, msg: &str, held: bool) {
+    let mark = if held { json!(msg) } else { Value::Null };
+    if let Ok(t) = update_wait(id, 10000, |t| {
+        if !t.b("pipelineWait") || (!held && t.s("msg") == msg && *t.at("pipelineWait").at("approval") == mark) { return Ok(Change::Keep); }
+        t.put("msg", msg); t.obj_mut("pipelineWait").put("approval", mark.clone());
+        if held { t.obj_mut("pipelineWait").put("since", now()); } // `merge.pipelineTimeout` counts from your yes
+        Ok(Change::Write)
+    }) { tell_sidebar(&t); }
 }
+fn say(id: &str, msg: &str) { say_held(id, msg, false) }
 /// It is done: passed, or nothing to wait for. Cleaned up as a merged task is.
 fn done(id: &str, words: &str) {
     let (mut mode, mut head) = ("always".to_string(), String::new());
@@ -97,6 +106,8 @@ pub fn look(id: &str) {
         }
         runs::Look::NotStarted(names) => { if overdue(&t) { return late(&format!("{} not started", names.join(", "))); } say(id, &format!("Merged. Waiting for the pipeline {} to start", names.join(", "))); }
         runs::Look::Running(words) => { if overdue(&t) { return late(&words); } say(id, &words); }
+        // Waiting for a person is not the pipeline taking too long: no timeout while it is so.
+        runs::Look::Approval(words) => say_held(id, &words, true),
     }
 }
 /// `retry` on a task whose pipeline failed or did not finish: it waits for (and looks at) the runs again.

@@ -69,6 +69,8 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
     let prev = was.as_ref().map(|w| w.at("prFailure").clone()).unwrap_or(Value::Null);
     let same = |p: &Value| p.s("remoteKind") == "checks" && p.s("head") == head && strings(p.at("checks")) == failed;
     let detail = if failed.is_empty() { String::new() } else if same(&prev) { prev.t("detail") } else { checks::failed_detail(&root, pr, &bad) };
+    // A build of its checks held at an approval in Azure DevOps: the merge waits for you, not for a timeout.
+    let held = if was.as_ref().map(|w| w.b("autoMerge") && w.b("checksWait")).unwrap_or(false) && failed.is_empty() && crate::azure::pr::is_azure(pr) { checks::held_builds(&root, &checks) } else { String::new() };
     let res = update_wait(id, 10000, |t| {
         if t.b("archivedAt") || t.s("pr") != pr || runner_alive(t) { return Ok(Change::Keep); } // archived or active since the request started: next poll
         if j.s("state") == "MERGED" {
@@ -141,7 +143,7 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
         if t.b("autoMerge") && t.b("checksWait") {
             // An empty list is not a pass: they have not started yet, or went from the list (checks::none_listed).
             let gone = checks::missing(t, &head, via, &checks);
-            if !failed.is_empty() || (!checks.is_empty() && all_good && gone.is_empty()) || ignored || checks::overdue(t) { t.put("autoMerge", false); t.put("autoMergeLocal", false); t.put("msg", "Merging"); then = Then::Land; }
+            if !failed.is_empty() || (!checks.is_empty() && all_good && gone.is_empty()) || ignored || (checks::overdue(t) && held.is_empty()) { t.put("autoMerge", false); t.put("autoMergeLocal", false); t.put("msg", "Merging"); then = Then::Land; }
             else if !checks.is_empty() && t.at("checksWait").s("head") == head {
                 // Still running: which ones is kept, so that one gone from the list later is still waited for.
                 let names = checks::unique(checks.iter().filter(|c| !CHECK_GOOD.contains(&checks::word(c).as_str())).map(checks::name).chain(gone));
@@ -150,7 +152,9 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
                 let seen = checks::unique(was.into_iter().chain(checks.iter().map(checks::name)));
                 t.obj_mut("checksWait").put("names", json!(names)); t.obj_mut("checksWait").put("seen", json!(seen)); t.obj_mut("checksWait").put("via", via);
                 let msg = checks::waiting_words_on(crate::azure::host_word(pr), &checks, &names, &strings(t.at("checksWait").at("flows"))); // the workflows not through, by name
-                t.put("msg", msg);
+                t.put("msg", if held.is_empty() { msg } else { held.clone() });
+                t.obj_mut("checksWait").put("approval", if held.is_empty() { Value::Null } else { json!(held) });
+                if !held.is_empty() { t.obj_mut("checksWait").put("since", now()); } // `check.timeout` counts from your yes
             }
             return Ok(Change::Write);
         }

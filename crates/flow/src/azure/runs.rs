@@ -61,6 +61,26 @@ pub fn stages_of(recs: &[super::logs::Record]) -> Vec<Stage> {
     recs.iter().filter(|r| r.kind == "Stage").map(|r| Stage { done: r.state == "completed", running: r.state == "inProgress", deploying: deploying.contains(&r.id), name: r.name.clone() }).collect()
 }
 pub fn stages(a: &Azure, root: &Path, run: &str) -> Vec<Stage> { stages_of(&timeline(a, root, run)) }
+/// The stages of a run held at an approval (a check of its environment, `Checkpoint.Approval` under way): they wait
+/// for a person, not for the machine.
+pub fn approvals_of(recs: &[super::logs::Record]) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    for r in recs.iter().filter(|r| r.kind == "Checkpoint.Approval" && r.state == "inProgress") {
+        let mut at = r.parent.clone();
+        for _ in 0..4 { match recs.iter().find(|x| x.id == at) { Some(x) if x.kind == "Stage" => { if !out.contains(&x.name) { out.push(x.name.clone()); } break; } Some(x) => at = x.parent.clone(), None => break } }
+    }
+    out
+}
+/// What waits for your approval in Azure DevOps, in words (`the build reports, at Staging`), of runs by id and name.
+/// Empty: nothing does.
+pub fn awaiting(a: &Azure, root: &Path, runs: &[(String, String)]) -> String {
+    let mut parts = vec![];
+    for (id, name) in runs {
+        let at = approvals_of(&timeline(a, root, id));
+        if !at.is_empty() { parts.push(format!("{name}, at {}", at.join(", "))); }
+    }
+    if parts.is_empty() { String::new() } else { format!("Waiting for your approval in Azure DevOps: {}", parts.join("; ")) }
+}
 /// How far the runs are, in the row's words: the stage that deploys (`Deploying staging`), else how many stages are
 /// through (`Main pipeline running · 2 of 3 stages`), else that it runs.
 pub fn progress(stages: &[Stage], runs: usize) -> String {
@@ -75,7 +95,8 @@ pub fn progress(stages: &[Stage], runs: usize) -> String {
     format!("{word} running · {} of {} stages", stages.iter().filter(|s| s.done).count(), stages.len())
 }
 /// What the runs say together.
-pub enum Look { Passed(String), Running(String), Failed { why: String, detail: String }, NotStarted(Vec<String>) }
+/// `Approval`: running, and held at an approval: in words, what waits for you.
+pub enum Look { Passed(String), Running(String), Approval(String), Failed { why: String, detail: String }, NotStarted(Vec<String>) }
 /// `runs`: those of the commit `merge.pipeline` waits for (`wanted`), `missing`: those it names not run yet.
 pub fn look(a: &Azure, root: &Path, runs: &[Run], missing: &[String]) -> Look {
     if let Some(r) = runs.iter().find(|r| failed(r)) {
@@ -87,6 +108,8 @@ pub fn look(a: &Azure, root: &Path, runs: &[Run], missing: &[String]) -> Look {
     if going.is_empty() && missing.is_empty() {
         return Look::Passed(runs.iter().map(|r| format!("{} {}", r.pipeline, if r.result == "partiallysucceeded" { "partly succeeded" } else { "passed" })).collect::<Vec<_>>().join(", "));
     }
+    let held = awaiting(a, root, &going.iter().map(|r| (r.id.clone(), format!("the pipeline {}", r.pipeline))).collect::<Vec<_>>());
+    if !held.is_empty() { return Look::Approval(held); }
     let all: Vec<Stage> = going.iter().flat_map(|r| stages(a, root, &r.id)).collect();
     Look::Running(if going.is_empty() { format!("Waiting for the pipeline {} to start", missing.join(", ")) } else { progress(&all, going.len()) })
 }
