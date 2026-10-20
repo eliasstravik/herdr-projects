@@ -16,10 +16,10 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
             let Some(pi) = flag("--pane").and_then(|id| find(st, &id)) else { return fail("pane_not_found", "pane not found") };
             let p = &st["panes"][pi];
             let shell = 4194400;
-            // The agent is pid 1, with a process under it. `tool`: a command in a group of its own (not listed); in its own
-            // group: `helper`, one wired to it (an MCP server); `child`, a command that is not; `wrapped`, the
-            // agent's own program under an npm wrapper
-            let under = ["tool", "helper", "child", "wrapped"].iter().any(|k| p.b(k));
+            // The agent is pid 1, with a process under it. In groups of their own (not listed): `servers`, helpers wired
+            // to it (MCP servers, a tool driver); `tool`, a command that is not. In its own group: `helper`, one wired
+            // to it (an MCP server); `child`, a command that is not; `wrapped`, the agent's own program under an npm wrapper
+            let under = ["tool", "servers", "helper", "child", "wrapped"].iter().any(|k| p.b(k));
             let fg = if st.b("pids") && p.at("agent").is_object() { p.at("agent").i("pid") } else if under { 1 } else if p.b("busy") { shell + 1 } else { shell };
             let mut front = vec![json!({ "pid": fg, "name": if p.b("wrapped") { "node" } else if under { "agent" } else if p.b("busy") { "sleep" } else { "bash" } })];
             if p.b("helper") { front.push(json!({ "pid": 2, "name": "mcp-server" })); }

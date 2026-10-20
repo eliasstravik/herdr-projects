@@ -21,8 +21,9 @@ impl Fake for FakeHerdr {
         let Exit(status, stdout, stderr) = match r { Ok(e) | Err(e) => e };
         Ran { status, stdout, stderr }
     }
-    /// pid 1 is an agent with one process under it: 2, wired to it (an MCP server), or 3, which is not (`child`, `wrapped`)
-    fn kids(&self, pid: i64) -> Vec<i64> { if pid != 1 { vec![] } else if self.st.borrow().arr("panes").iter().any(|p| p.b("child") || p.b("wrapped")) { vec![3] } else { vec![2] } }
+    /// pid 1 is an agent with one process under it: 2, wired to it (an MCP server: `helper`, `servers`), or 3, which is
+    /// not (`child`, `wrapped`, `tool`)
+    fn kids(&self, pid: i64) -> Vec<i64> { if pid != 1 { vec![] } else if self.st.borrow().arr("panes").iter().any(|p| p.b("child") || p.b("wrapped") || p.b("tool")) { vec![3] } else { vec![2] } }
     fn wired_to(&self, pid: i64, _group: &[i64]) -> Option<bool> { Some(pid == 2) }
     /// Ending a fake agent's process: its pane is at its shell again.
     fn kill(&self, pid: i64) { for p in self.st.borrow_mut()["panes"].as_array_mut().unwrap() { if p.at("agent").i("pid") == pid { p["agent"] = Value::Null; } } }

@@ -318,12 +318,24 @@ itself, and its worktree and branch are removed. `workspace.cleanup false` keeps
 - What an agent program keeps running as part of itself is no such command: its MCP servers, or its own program under
   an npm wrapper (`codex` installed with npm). They are in the agent's own process group, and an MCP server's input and
   output are wired to the agent itself (a pipe or a socket the agent holds the other end of). So a finished agent with
-  MCP servers is closed like any other. A command whose streams go elsewhere (the terminal, a file, `/dev/null`) keeps
-  the space open, in the agent's group or not, and so does one in a group of its own. What cannot be told counts as a
-  command.
+  MCP servers is closed like any other. A program the board knows (`claude`, `codex`, `pi`, and Herdr's others) may
+  keep such helpers in process groups of their own too (a tool driver, a server started by a plugin): wired to it the
+  same way, they are its own. A command whose streams go elsewhere (the terminal, a file, `/dev/null`) keeps the space
+  open, in the agent's group or not, and so does one in a group of its own, under any program. What cannot be told
+  counts as a command.
+- After a task ended, its checkout and branch go only once its commits are at the remote: its branch tip (or the commit
+  its merge made of it) must be reachable from what `git ls-remote origin` lists at that moment: the pull request's
+  head, which GitHub keeps after the branch is deleted, the main it lands on, or the branch itself. Until then both are
+  kept, the task says `(unpublished commits on <branch>: push them or set workspace.cleanup false)`, and its space stays
+  open, so that a push from its own terminal is all it needs; it is looked at again after the quiet time. A repo
+  without a remote, or a task that lands in your own checkout (`merge.pr false`), has nothing to publish: the local
+  rule above is what holds. A branch with no commits of its own asks nothing.
 - Nor is one Herdr could not answer for, or whose Herdr session is not running: then nothing of the task is touched.
 - The clean-up is tried again by itself (about every half minute, board open or closed) and happens once the space is
   free. After a turn of the agent, only once that has been quiet for ten minutes. Work that appeared meanwhile is kept.
+  A done task with no note that a clean-up is owed (done while `workspace.cleanup` was off, or by an older version)
+  whose space is still open gets one all the same: its branch goes whole when the board merged it and the branch holds
+  nothing past the commit that was reviewed; otherwise only what git calls merged, and the rest is kept as above.
 - An agent Herdr cannot place (status "unknown") counts as at work until its screen has stood still for two minutes, its
   saved conversation ends in a finished turn, and nothing runs under the agent program but its own helpers (above). So
   an agent of unknown status that keeps a command of its own running is never closed by itself: archive or remove its

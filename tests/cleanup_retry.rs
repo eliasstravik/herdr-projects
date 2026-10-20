@@ -1,6 +1,7 @@
 //! A clean-up put off because the task's space was in use (a command of yours, a tool the agent started, an agent herdr
 //! cannot place, a turn in its own terminal) is tried again by the housekeeping pass once the space is free. The helpers an
-//! agent keeps in its own process group (an MCP server) are part of it, not a command in use.
+//! agent keeps in its own process group (an MCP server), or a known program in groups of their own, are part of it, not
+//! a command in use.
 use crate::common;
 use common::*;
 use serde_json::{json, Value};
@@ -169,6 +170,31 @@ fn a_helper_the_agent_keeps_in_its_own_process_group_does_not_keep_a_merged_task
     pane(&w, &p, |p| p["child"] = json!(false));
     assert_eq!(pass(&w, &id), 1);
     assert!(gone(&w, &t));
+}
+#[test]
+fn the_helpers_a_known_program_keeps_in_groups_of_their_own_are_its_own_and_a_command_it_left_running_is_not() {
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    // MCP servers and a tool driver in process groups of their own, wired to the agent (as pi and codex keep them): part of it
+    let t = merged_with(&w, "servers");
+    assert!(!task(t.s("id")).b("kept") && gone(&w, &t), "{}", kept(&task(t.s("id"))));
+    // a command in a group of its own that is not wired to the agent is at work: kept until it ends, helpers or not
+    let t = merged_with(&w, "tool");
+    let (id, p) = (t.t("id"), t.at("link").t("pane"));
+    assert!(kept(&task(&id)).contains("in use again"), "{}", kept(&task(&id))); assert!(open_and_kept(&w, &t));
+    pane(&w, &p, |p| { p["tool"] = json!(false); p["servers"] = json!(true); });
+    assert_eq!(pass(&w, &id), 1);
+    assert!(gone(&w, &t));
+    // under a program the board does not know it cannot tell a helper from a command: it waits
+    w.script(json!({ "worker": [{ "files": { "m.txt": "x\n" }, "commit": "m", "note": "Did it." }] }));
+    let id = w.add("Unknown program");
+    delegate(&id);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure"));
+    pane(&w, t.at("link").s("pane"), |p| { p["servers"] = json!(true); p["agent"]["kind"] = json!("mystery"); });
+    sw::actions::finish_line::approve(&id, None, false).unwrap();
+    let c = settle(&id);
+    assert_eq!(c.s("stage"), "done", "{}", c.at("failure"));
+    assert!(kept(&c).contains("in use again") && open_and_kept(&w, &t), "{}", kept(&c));
 }
 /// A task approved and merged while its agent's pane has `flag` set.
 fn merged_with(w: &World, flag: &str) -> Obj {

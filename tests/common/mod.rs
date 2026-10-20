@@ -70,6 +70,7 @@ pub fn world_with(o: Opts) -> World {
     FAKE.with(|f| *f.borrow_mut() = Some(fake.clone()));
     // gh too: never the real program, never the network.
     let gh = Rc::new(gh::FakeGh::default());
+    if o.repo && o.origin { *gh.origin.borrow_mut() = Some(base.join("origin.git")); }
     { let g = gh.clone(); sw::flow::git::set_fake_gh(Some(Rc::new(move |a: &[String]| g.run(a)))); }
     World { base, root, fake, gh, socket, _listen: listen, _one: one }
 }

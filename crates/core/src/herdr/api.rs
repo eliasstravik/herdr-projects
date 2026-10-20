@@ -92,6 +92,10 @@ impl Herdr {
     /// no. Beside the program, its process group may hold only its helpers: one wired to the group itself on its input
     /// and output (an MCP server, procs.rs), or the agent's own program under a wrapper (`codex` installed with npm). A
     /// command is at work, in the program's group (on the terminal, a file or `/dev/null`) or in a group of its own.
+    /// Under the group, a known agent program (`agents::kinds`: pi, codex, claude, ...) keeps helpers in groups of
+    /// their own while idle (MCP servers, tool drivers), wired to it the same way: its own affair, not counted. Any
+    /// other process under the group is a command it left running. A job of the pane's shell (typed in the pane, a
+    /// child of the shell and not of the agent) counts whatever runs.
     pub fn pane_childless(&self, id: &str, agent: &str) -> bool {
         let Some(i) = self.process_info(id) else { return false };
         let procs: Vec<&Value> = i.arr("foreground_processes").iter().filter(|p| crate::gate::is_int(p.at("pid"))).collect();
@@ -100,7 +104,9 @@ impl Herdr {
         let lead = i.i("foreground_process_group_id");
         let helper = |p: &Value| p.i("pid") == lead || (!agent.is_empty() && p.s("name") == agent) || super::procs::wired_to(p.i("pid"), &front) == Some(true);
         if !procs.iter().all(|p| helper(p)) { return false; }
-        for pid in &front { match kids(*pid) { Ok(k) if k.iter().all(|p| front.contains(p)) => {} _ => return false } }
+        let known = crate::agents::kinds::kind_named(agent).is_some();
+        let own = |p: &i64| front.contains(p) || (known && super::procs::wired_to(*p, &front) == Some(true));
+        for pid in &front { match kids(*pid) { Ok(k) if k.iter().all(|p| own(p)) => {} _ => return false } }
         if !crate::gate::is_int(i.at("shell_pid")) { return true; }
         kids(i.i("shell_pid")).map(|k| k.iter().all(|p| front.contains(p))).unwrap_or(false)
     }
