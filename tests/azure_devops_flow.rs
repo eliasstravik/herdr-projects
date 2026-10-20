@@ -59,9 +59,7 @@ fn a_task_at_azure_devops_opens_its_draft_pull_request_merges_once_its_policies_
     poll_prs();
     let t = settle(&id);
     let sent = w.az.sent.borrow().iter().find(|s| s.s("resource") == "pullRequests").cloned().unwrap_or(Value::Null);
-    assert_eq!(sent.at("body").s("status"), "completed", "{sent}");
-    assert_eq!(sent.at("body").at("lastMergeSourceCommit").s("commitId"), reviewed);
-    assert_eq!((sent.at("body").at("completionOptions").s("mergeStrategy"), sent.at("body").at("completionOptions").at("deleteSourceBranch")), ("squash", &json!(true)));
+    assert!(sent.s("body").starts_with("--id 42 --status completed --squash true --delete-source-branch true --merge-commit-message"), "{sent}");
     assert_eq!(t.s("stage"), "merging", "not done until its pipeline passed: {}", t.s("msg"));
     assert!(t.b("prMerged") && t.at("pipelineWait").s("commit") == merge_commit() && t.at("pipelineWait").s("base") == "main", "{}", t.at("pipelineWait"));
     assert!(Path::new(t.s("worktree")).exists() && !t.b("tidy"), "nothing cleaned up yet");
@@ -95,8 +93,24 @@ fn merge_method_and_merge_pipeline_none_complete_it_as_asked_and_done_at_once() 
     assert_eq!(t.s("stage"), "done", "{} {}", t.s("msg"), t.at("failure"));
     assert_eq!(t.s("mergeCommit"), merge_commit());
     let sent = w.az.sent.borrow().iter().find(|s| s.s("resource") == "pullRequests").cloned().unwrap_or(Value::Null);
-    assert_eq!(sent.at("body").at("completionOptions").s("mergeStrategy"), "noFastForward");
+    assert!(sent.s("body").starts_with("--id 42 --status completed --squash false --delete-source-branch true"), "{sent}");
     assert!(!az_log(&w).contains("pipelines runs"), "{}", az_log(&w));
+}
+
+#[test]
+fn merge_method_rebase_completes_it_through_the_repositorys_own_route_at_the_reviewed_commit() {
+    let w = az_world(json!({ "merge.method": "rebase", "merge.pipeline": "none" }));
+    let id = to_approval(&w, "Rebased");
+    let reviewed = git(Path::new(task(&id).s("worktree")), &["rev-parse", "HEAD"]);
+    w.az_says(json!({ "head": reviewed }));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{} {}", t.s("msg"), t.at("failure"));
+    let sent = w.az.sent.borrow().iter().find(|s| s.s("resource") == "pullRequests").cloned().unwrap_or(Value::Null);
+    let body = sent.at("body");
+    assert_eq!((body.s("status"), body.at("lastMergeSourceCommit").s("commitId")), ("completed", reviewed.as_str()), "{sent}");
+    assert_eq!((body.at("completionOptions").s("mergeStrategy"), body.at("completionOptions").at("deleteSourceBranch")), ("rebase", &json!(true)));
+    assert!(az_log(&w).contains("rest --method patch --url https://dev.azure.com/acme/Big%20Project/_apis/git/repositories/shop/pullRequests/42?api-version=7.1"), "{}", az_log(&w));
 }
 
 #[test]

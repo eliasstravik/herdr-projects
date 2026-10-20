@@ -68,6 +68,17 @@ pub fn invoke(a: &Azure, cwd: &Path, area: &str, resource: &str, route: &[(&str,
     if let Some(f) = file { let _ = std::fs::remove_file(f); }
     r
 }
+/// Azure DevOps' own application, the resource `az rest` asks a token for.
+const DEVOPS: &str = "499b84ac-1321-427f-aa17-267ca6975798";
+/// One REST call `az devops invoke` cannot make, through `az rest` at `url`: invoke finds a resource by its name only
+/// and takes the first route of that name, which for `pullRequests` is the project's, a GET only.
+pub fn rest(cwd: &Path, method: &str, url: &str, body: &Value) -> GhOut {
+    let f = data_dir().join(format!("az-{}-{}.json", std::process::id(), now()));
+    let _ = write_json(&f, body);
+    let r = az(&["rest", "--method", method, "--url", url, "--resource", DEVOPS, "--headers", "Content-Type=application/json", "--body", &format!("@{}", f.display()), "--output", "json"], cwd, 120000);
+    let _ = std::fs::remove_file(f);
+    r
+}
 /// Who is logged in to Azure DevOps here: the human. Asked once a day; "" when az cannot say.
 pub fn user(cwd: &Path) -> String {
     let file = data_dir().join("az-user.json");

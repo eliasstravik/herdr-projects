@@ -35,7 +35,9 @@ login is said: `Could not open the pull request`, with what az said and what to 
   request as Azure DevOps says it now (`azure`: its status, reviewers and policies) and, after the merge, the main
   pipeline's runs.
 - **Merged** on approve: only at the commit that was reviewed, marked ready, its policies passed, then completed by
-  `merge.method` (`squash`; `merge` is a merge with no fast-forward; `rebase`), its source branch deleted.
+  `merge.method` (`squash`; `merge` is a merge with no fast-forward; `rebase`), its source branch deleted. Squash and
+  merge go through `az repos pr update`; a rebase, which that cannot say, through `az rest`, and so needs `az login`
+  (a token from `az devops login` alone does not do for it).
 - **Completed by you in Azure DevOps**: the task is merged without the board's own merge, and needs no clean checkout.
   **Abandoned** while its merge was awaited: it waits for you, as a closed pull request does on GitHub.
 - **Merged by the agent itself**: the task is done, `Already merged in !1234`.

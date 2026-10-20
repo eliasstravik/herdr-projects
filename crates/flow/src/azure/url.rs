@@ -14,6 +14,8 @@ impl Azure {
     pub fn web(&self) -> String { format!("{}/{}/_git/{}", self.org_url(), enc(&self.project), enc(&self.repo)) }
     pub fn pr_url(&self, id: &str) -> String { format!("{}/pullrequest/{id}", self.web()) }
     pub fn build_url(&self, id: &str) -> String { format!("{}/{}/_build/results?buildId={id}", self.org_url(), enc(&self.project)) }
+    /// A pull request in Azure DevOps' REST API, on the repository's route (the one that takes a PATCH).
+    pub fn pr_api(&self, id: &str) -> String { format!("{}/{}/_apis/git/repositories/{}/pullRequests/{id}?api-version=7.1", self.org_url(), enc(&self.project), enc(&self.repo)) }
 }
 fn dec(s: &str) -> String {
     let b = s.as_bytes();

@@ -1,6 +1,6 @@
 //! A stand-in for the az program (the Azure CLI), answering in the test's own thread (azure::cli::set_fake_az): canned
 //! answers set by the test (`w.az_says(json!({..}))`), every call logged (`az_log(&w)`), and what each `devops invoke`
-//! sent kept (`sent`). No real az, no network. `at_azure(&w)` puts the world's repo at Azure DevOps.
+//! sent kept (`sent`; a completion: its flags or its body). No real az, no network. `at_azure(&w)` puts the world's repo at Azure DevOps.
 use super::World;
 use serde_json::{json, Value};
 use std::cell::{Cell, RefCell};
@@ -32,6 +32,13 @@ impl FakeAz {
             "lastMergeSourceCommit": { "commitId": c.at("head") }, "lastMergeCommit": { "commitId": if c.b("merge") { c.t("merge") } else { "m".repeat(40) } },
             "reviewers": if c.at("reviewers").is_array() { c.at("reviewers").clone() } else { json!([]) }, "createdBy": { "uniqueName": "me@acme.test" } })
     }
+    /// Its completion, as `repos pr update --status completed` (kept: its flags) or `rest` (kept: the body) asks it.
+    fn complete(&self, c: &Value, asked: Value) -> GhOut {
+        self.sent.borrow_mut().push(json!({ "resource": "pullRequests", "body": asked }));
+        if c.b("completeFail") { return fail(c.s("completeFail")); }
+        if !c.b("completeQueued") { self.completed.set(true); }
+        ok(self.pr(c))
+    }
     pub fn run(&self, a: &[String]) -> GhOut {
         let c = self.cfg.borrow().clone();
         self.log.borrow_mut().push(a.iter().take_while(|s| *s != "--org").cloned().collect::<Vec<_>>().join(" "));
@@ -44,6 +51,7 @@ impl FakeAz {
             ("repos", "pr", "create") => if c.b("createFail") { fail(c.s("createFail")) } else { ok(self.pr(&c)) },
             ("repos", "pr", "list") => ok(if c.at("prs").is_array() { c.at("prs").clone() } else { json!([]) }),
             ("repos", "pr", "show") => ok(self.pr(&c)),
+            ("repos", "pr", "update") if has("--status") => self.complete(&c, a.iter().skip(3).cloned().collect::<Vec<_>>().join(" ").into()),
             ("repos", "pr", "update") => ok(self.pr(&c)),
             ("repos", "pr", "policy") => ok(if c.at("policies").is_array() { c.at("policies").clone() } else { json!([]) }),
             ("pipelines", "runs", "list") => ok(if c.at("runs").is_array() { c.at("runs").clone() } else { json!([]) }),
@@ -54,12 +62,16 @@ impl FakeAz {
                 let resource = a.iter().position(|s| s == "--resource").and_then(|i| a.get(i + 1)).cloned().unwrap_or_default();
                 if !body.is_null() { self.sent.borrow_mut().push(json!({ "resource": resource, "body": body })); }
                 match resource.as_str() {
-                    "pullRequests" => { if c.b("completeFail") { return fail(c.s("completeFail")); } if !c.b("completeQueued") { self.completed.set(true); } ok(self.pr(&c)) }
+                    "pullRequests" => fail("The requested resource does not support http method 'PATCH'."),
                     "pullRequestThreads" => ok(if has("POST") { json!({ "id": 1 }) } else { json!({ "value": if c.at("threads").is_array() { c.at("threads").clone() } else { json!([]) } }) }),
                     "timeline" => ok(c.at("timeline").at(&param("buildId")).clone()),
                     "logs" => ok(json!({ "count": 2, "value": c.at("log") })),
                     _ => fail(&format!("fake az: unknown resource {resource}")),
                 }
+            }
+            ("rest", _, _) if at(4).ends_with("/_apis/git/repositories/shop/pullRequests/42?api-version=7.1") => {
+                let file = a.iter().position(|s| s == "--body").and_then(|i| a.get(i + 1)).and_then(|f| f.strip_prefix('@')).map(String::from);
+                self.complete(&c, file.and_then(|f| std::fs::read_to_string(f).ok()).and_then(|s| serde_json::from_str::<Value>(&s).ok()).unwrap_or(Value::Null))
             }
             _ => fail(&format!("fake az: unknown {}", a.join(" "))),
         }
