@@ -103,6 +103,7 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
         else if r.s("state") == "error" && can_send_error(r) { vec![Some(fix.clone()), opt(st("failed"), as_is.clone()), Some(reply.clone())] }
         else if st("plan") && r.s("state") == "blocked" { vec![Some(Hint { short: "approve the plan".into(), ..hk(K::Yes, "approve this task's plan") }), Some(hk(K::Talk, "send the plan back with your words")), Some(hk(K::Panel, "read the whole plan"))] }
         else if agent_on && r.s("state") == "blocked" && r.s("kind") == "permission" { vec![Some(hk(K::Yes, "say yes to this task's agent")), Some(reply.clone()), Some(open.clone())] }
+        else if agent_on && r.s("state") == "blocked" && st("asks") && r.s("kind") != "auth" && crate::chat_only::is_chat(r) { vec![Some(hk(K::Talk, "answer this task's agent")), Some(Hint { short: "end the chat".into(), ..hk(K::Yes, "end the chat, as it is") }), Some(open.clone())] }
         else if agent_on && r.s("state") == "blocked" { vec![Some(if r.s("kind") == "question" { hk(K::Talk, "answer this task's agent") } else { reply.clone() }), Some(open.clone())] }
         else if stuck_finishing(r) { vec![Some(hk(K::Yes, "finish with what its agent said last")), Some(open.clone()), Some(reply.clone())] }
         else if agent_on && r.s("state") == "working" { vec![Some(open.clone()), Some(reply.clone()), Some(stop.clone())] }

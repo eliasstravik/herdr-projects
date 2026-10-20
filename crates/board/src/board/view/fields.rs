@@ -48,6 +48,7 @@ pub fn row_title(s: &State, r: &Obj) -> String {
     if is_auto(r) { return crate::shown::words::clean(auto(r).s("name")); }
     let mut t = crate::shown::words::clean(if r.b("title") { r.s("title") } else { r.s("id") });
     if r.arr("attempts").len() > 1 { t.push_str(&format!(" ×{}", r.arr("attempts").len())); }
+    if crate::chat_only::is_chat(r) { t.push_str(" [chat]"); }
     if is_research(r) { t.push_str(" [research]"); }
     if r.at("automation").b("id") { t.push_str(" [auto]"); }
     if r.b("archivedAt") && !s.archive_view { t.push_str(" [archived]"); }

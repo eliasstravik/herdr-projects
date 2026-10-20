@@ -147,6 +147,8 @@ pub fn yes(s: &mut State, r: &Obj, fx: &mut Vec<Effect>) {
     }
     let simple = |s: &mut State, action: &str, local: Job, fx: &mut Vec<Effect>| act(s, r, action, json!({}), local, fx);
     if is_agent(r) && r.s("state") == "blocked" && r.s("kind") == "permission" { return simple(s, "approve", Job::Approve { id, seen: None, anyway: false }, fx); }
+    // A chat-only task that waits for your next message: yes ends the conversation, as it is (finish/chat_only.rs).
+    if st("asks") && r.s("kind") != "auth" && crate::chat_only::is_chat(r) { return simple(s, "finish", Job::FinishAnyway { id }, fx); }
     // Stopped at a limit, without a summary, or with the board stuck at "Finishing": yes takes the work as it is,
     // through the check and the review.
     if (st("stopped") && r.b("limitStop")) || st("nosummary") || stuck_finishing(r) { return simple(s, "finish", Job::FinishAnyway { id }, fx); }

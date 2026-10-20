@@ -2,10 +2,11 @@
 pub const HELP: &str = r#"herdr-projects: a work board for herdr
 
   herdr-projects                     open the board here (in herdr: bind a key to the plugin action "open")
-  herdr-projects add <title> [--desc TEXT] [--repo NAME|PATH] [--delegate] [--after ID[,ID…]] [--<setting> VALUE ...] [--research|--no-research]
+  herdr-projects add <title> [--desc TEXT] [--repo NAME|PATH] [--delegate] [--after ID[,ID…]] [--<setting> VALUE ...] [--research|--no-research] [--chat|--no-chat]
                                       (--research: research only, short for --research.only true. Its agent changes
                                        nothing in the repo; the result is a report. --no-research: not research only,
-                                       where a default says it is)
+                                       where a default says it is. --chat: chat only, short for --chat.only true: a
+                                       conversation that changes nothing and ends only when you say: finish <id>)
   herdr-projects list [--archived] [--all] [--query TEXT] [--json]
   herdr-projects report <id> --state idle|working|blocked|done|error [--kind question|permission|auth] [--msg TEXT] [--title TEXT]
                          [--progress 0-100] [--eta MINUTES]   (your own task, with --state working: how far, and minutes left)
@@ -13,7 +14,7 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
   (a title is at most 60 characters: a longer one is shortened at a word, its full text kept in the description)
   (an <id> is repo/134; every repo has a short key, made from its name, and HSW-134 names the same task, in any
    letter case. Another key: herdr-projects set repo.key HSW --repo NAME; the old one still names its tasks)
-  herdr-projects delegate <id> [--after ID[,ID…]|--now] [--<setting> VALUE ...] [--research|--no-research]
+  herdr-projects delegate <id> [--after ID[,ID…]|--now] [--<setting> VALUE ...] [--research|--no-research] [--chat|--no-chat]
                                       any work setting, for this task only: --reviewer.agent claude --merge.by itself
                                       (a refused option changes nothing on the task)
                                       --after: start only once those tasks (of any repo here, or of another machine:
@@ -31,7 +32,8 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
   herdr-projects retry <id>                    send the saved error back to the agent; on a task a limit stopped: continue
   herdr-projects fix <id>                      send failure details to the agent (never approves a merge)
   herdr-projects finish <id>                   finish anyway, when the agent stopped without a summary or at a limit,
-                                                or when the board missed it finishing (its agent at rest, the row still "Finishing")
+                                                or when the board missed it finishing (its agent at rest, the row still "Finishing");
+                                                on a chat-only task: end the conversation, as it is
   herdr-projects details <id>                  failure details, review, next steps, and what it used against its limits
   herdr-projects pin|archive|restore|clear <id>
   herdr-projects set <name> <value> [--repo NAME | --task ID | --automation NAME]

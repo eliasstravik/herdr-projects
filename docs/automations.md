@@ -90,10 +90,10 @@ herdr-projects automations add "Jira handoff" --prompt "Move the ticket to Done"
 herdr-projects automations                         the list
 herdr-projects automations add "<name>" --prompt "<what each task is to do>"
                 (--schedule "<when>" | --when <event> [--every-repo] [--if '<field> = <pattern>'])
-                [--repo NAME|PATH] [--<setting> VALUE ...] [--research|--no-research]
+                [--repo NAME|PATH] [--<setting> VALUE ...] [--research|--no-research] [--chat|--no-chat]
 herdr-projects automations show <name>             all of it: prompt, trigger, settings, last firings
 herdr-projects automations change <name> [--name NEW] [--prompt TEXT] [--schedule … | --when …]
-                [--if '…' | --if none] [--research | --no-research]
+                [--if '…' | --if none] [--research | --no-research] [--chat | --no-chat]
 herdr-projects automations on|off <name>
 herdr-projects automations run <name>              fire it now (through the same guards; never while it is off)
 herdr-projects automations firings <name>          when, what fired it, the task it made or why it was skipped
@@ -115,7 +115,8 @@ An automation may hold its own value for any setting a single task may hold: the
 `coordinator.*` or `watcher.*`.
 
 - Research only is one of them (`research.only`; `--research` on `automations add` and `automations change` is its short
-  form: [research-only tasks](research.md)).
+  form: [research-only tasks](research.md)). So is chat only (`chat.only`, `--chat` and `--no-chat`): each task it makes
+  is a conversation that ends when you say ([chat-only tasks](chat.md)).
 - It saves only the ones that differ. At a firing they become the new task's own settings, and everything else is looked
   up by the one rule, as for a task you typed ([settings](settings.md)). There is no place of its own in that order, and
   no setting that exists only for automations.

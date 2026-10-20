@@ -21,7 +21,7 @@ pub fn reviewed(t: &Obj) -> bool { setting("review.when", Some(t)) != json!("nev
 /// Green to merge: checked, reviewed past the gate (or not to be reviewed at all), up to date with main, and nothing
 /// that is yours to decide.
 pub fn green(t: &Obj) -> bool {
-    if t.s("stage") != "approval" || t.b("archivedAt") || !flow::task::is_agent_task(t) || !t.b("reviewedHead") || is_research(t) { return false; }
+    if t.s("stage") != "approval" || t.b("archivedAt") || !flow::task::is_agent_task(t) || !t.b("reviewedHead") || is_research(t) || crate::chat_only::is_chat(t) { return false; }
     if ["failure", "prFailure", "syncBlocked", "mergeFailed", "requireApproval", "mergeIntent", "autoMerge", "chat"].iter().any(|k| t.b(k)) { return false; }
     if over_now(t).is_some() { return false; } // at its token limit nothing merges by itself
     if t.at("review").is_object() { gate::passes(t.at("review")) } else { !reviewed(t) }

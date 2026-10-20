@@ -18,6 +18,7 @@ pub fn automations_sent() -> Vec<Value> {
         let own: Vec<Value> = rows.iter().filter(|x| x.own).map(|x| json!({ "name": x.name, "value": x.value, "own": true })).collect();
         let mut o = a.clone();
         o.put("research", l::research_only(&a));
+        o.put("chat", l::chat_only(&a));
         o.put("shown", json!({ "firings": firings(&a).into_iter().take(FIRINGS_SENT).collect::<Vec<_>>(), "own": own, "settings": sent }));
         Value::Object(o)
     }).collect()

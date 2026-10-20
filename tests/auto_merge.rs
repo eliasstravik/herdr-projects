@@ -40,7 +40,7 @@ fn merge_by_yours_for_all_tasks_your_entry_for_a_repo_one_tasks_own_the_repos_ow
     assert_eq!(t.at("repoFile"), &json!({}));
     let refused = strings(t.at("repoRefused")).join("\n");
     assert_eq!(t.arr("repoRefused").len(), 2, "{refused}");
-    assert!(regex::Regex::new(r"merge\.by[^\n]*may only hold research\.only, workspace\.setup, workspace\.include, workspace\.teardown, check\.command, check\.again, check\.timeout").unwrap().is_match(&refused), "{refused}");
+    assert!(regex::Regex::new(r"merge\.by[^\n]*may only hold research\.only, chat\.only, workspace\.setup, workspace\.include, workspace\.teardown, check\.command, check\.again, check\.timeout").unwrap().is_match(&refused), "{refused}");
     assert!(refused.contains("unknown setting \"land\""), "{refused}");
     assert!(t.at("fallbacks").s("repoFile").contains("merge.by"), "{}", t.at("fallbacks"));
 }

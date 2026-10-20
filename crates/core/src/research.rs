@@ -17,16 +17,18 @@ use std::path::{Path, PathBuf};
 
 /// Is this task research only? A row of the board says it (as the machine that owns the task worked it out); a task
 /// whose agent was started is what it was started as (`researchRun`); one not started yet is what the setting says now.
+/// A chat-only task is not: chat wins (chat_only.rs).
 pub fn is_research(t: &Task) -> bool {
     if let Some(b) = t.at("research").as_bool() { return b; }
     if t.contains_key("state") || t.b("host") { return false; }
+    if crate::chat_only::is_chat(t) { return false; }
     if let Some(b) = t.at("researchRun").as_bool() { if !t.b("researchOpen") { return b; } }
     setting(RESEARCH, Some(t)) == json!(true)
 }
 /// The same answer for every task of one list: tasks of one repo that say nothing of their own share one lookup.
 pub fn is_research_among(t: &Task, seen: &mut BTreeMap<String, bool>) -> bool {
     let asks = !t.at("research").is_boolean() && (!t.at("researchRun").is_boolean() || t.b("researchOpen"));
-    if !asks || t.at("settings").as_object().map(|s| s.contains_key(RESEARCH)).unwrap_or(false) || t.b("carried") || t.b("repoFile") { return is_research(t); }
+    if !asks || t.at("settings").as_object().map(|s| s.contains_key(RESEARCH) || s.contains_key(crate::chat_only::CHAT)).unwrap_or(false) || t.b("carried") || t.b("repoFile") { return is_research(t); }
     let repo = if t.s("repo").is_empty() { t.s("id").split('/').next().unwrap_or("").to_string() } else { t.s("repo").to_string() };
     *seen.entry(repo).or_insert_with(|| is_research(t))
 }
@@ -147,17 +149,18 @@ pub fn changes_of(t: &Task, dir: &Path) -> Option<Vec<String>> {
 }
 /// The moment an agent starts: what the setting says now is what this run is, kept on the task until the next start.
 pub fn starts_as(t: &mut Task) -> Res<()> {
-    let only = setting(RESEARCH, Some(t)) == json!(true);
+    let only = setting(RESEARCH, Some(t)) == json!(true) && setting(crate::chat_only::CHAT, Some(t)) != json!(true);
     let why = turn_refusal(t, only);
     if !why.is_empty() { crate::fail!("{why} To start it as it was: herdr-projects set {RESEARCH} false --task {}", t.s("id")); }
     if let Some(run) = t.at("researchRun").as_bool() { if run != only && t.b("startedAgentAt") { t.put("researchTurned", true); } }
     t.put("researchRun", only);
+    crate::chat_only::starts_as(t);
     t.del("researchOpen");
     Ok(())
 }
 /// Turning research only on for a task started as an ordinary one: the reason it is refused, or "".
 pub fn turn_refusal(t: &Task, to: bool) -> String {
-    if !to || t.at("researchRun") != &json!(false) { return String::new(); }
+    if !to || t.at("researchRun") != &json!(false) || setting(crate::chat_only::CHAT, Some(t)) == json!(true) { return String::new(); }
     let id = t.s("id");
     let instead = format!("Leave {id} as it is and add a new task as research only, or");
     if t.b("pr") && !t.b("prMerged") && t.s("prState") != "closed" {

@@ -3,6 +3,7 @@
 //! without a change. Which crate holds what, and why: docs/crates.md.
 pub mod agents;
 pub mod board_rule;
+pub mod chat_only;
 pub mod check_progress;
 pub mod clock;
 pub mod err;

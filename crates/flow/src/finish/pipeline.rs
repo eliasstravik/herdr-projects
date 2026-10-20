@@ -44,6 +44,8 @@ pub fn pipeline_job(id: &str) {
 /// `keep_intent`/`reason`: the turn this follows was the board's own (a wake). `synced`: the caller already brought the
 /// branch up to date with main (a re-sync, or the sync after an approval) and this is its result.
 pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: &str, synced: Option<&sync::Synced>) -> Res<()> {
+    // A chat-only task is here only when the human said it is done: it ends, with nothing checked or merged.
+    if crate::chat_only::is_chat(&g.check()?) { return super::chat_only::end(g, text); }
     // A task that starts with a plan, and the build has not started: this turn was the plan's (plan/written.rs).
     if crate::plan::pending(&g.check()?) { return crate::plan::written::plan_written(id, g, text); }
     // A new round: what failed in the one before is not this one's, so the row and its details never show it meanwhile.

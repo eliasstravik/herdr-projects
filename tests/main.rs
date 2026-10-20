@@ -109,6 +109,7 @@ mod board_still_sight;
 mod board_textbox;
 mod board_widths;
 mod board_widths_rest;
+mod chat_only;
 mod chat_review;
 mod check_again;
 mod check_progress;
