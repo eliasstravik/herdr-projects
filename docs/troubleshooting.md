@@ -118,12 +118,17 @@ task panel ends in `Kept:` and says why:
 | `(uncommitted changes)` | its checkout has files that were never committed | look at them; reply to the task, or remove the worktree yourself |
 | `(unmerged work on <branch>)` | its branch holds commits that were not merged | merge them, or reply to the task to go on with them |
 | `(its space is in use again)` | a turn in its agent's terminal, a command still running in one of its panes, or an agent Herdr cannot place | nothing: it is tried again about every half minute and closes once the space is free |
+| `(unpublished commits on <branch>: push them or set workspace.cleanup false)` | no ref of the remote (the pull request's head, main, the branch) holds its commits | push the branch from its terminal, which stays open for it; it is looked at again after the quiet time |
+| `(origin could not be asked whether <branch> is published: …)` | the remote did not answer `git ls-remote` | nothing: it is asked again after the quiet time |
 | `(its herdr session cannot be reached)` | the Herdr session it ran in is not running | start that session; it is tried again |
 
 - **Nothing says `Kept:`, and the space still stays**: `herdr-projects show <id>` tells whether `workspace.cleanup` was
   turned off, and where. `herdr-projects set workspace.cleanup true` turns it on again.
 - **An agent with MCP servers used to stay `in use` for good**: its servers counted as a command still running. Since
-  this was fixed, the next pass closes those spaces by itself.
+  this was fixed, the next pass closes those spaces by itself. The same held for a known program's helpers in process
+  groups of their own (pi's tool driver, codex's servers); fixed the same way.
+- **A task done while `workspace.cleanup` was off** (or by an older version) stays open after it is turned on: fixed; the
+  next pass cleans it up like any other.
 - **To close one at once**: archive the task (`Ctrl+A`); what is kept on disk stays, and the task says where.
 
 ## Behind main: main could not be fetched

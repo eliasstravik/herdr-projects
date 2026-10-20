@@ -114,6 +114,7 @@ mod check_script;
 mod check_script_since;
 mod cleanup_late;
 mod cleanup_owed;
+mod cleanup_published;
 mod cleanup_retry;
 mod cleanup_space;
 mod cli;

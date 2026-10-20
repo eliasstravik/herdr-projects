@@ -3,7 +3,8 @@
 //! sidebar either way: a kept checkout stays on disk, and a reply reopens it. Clean-up takes a while (teardown), and
 //! the agent's terminal is open until its end: whatever it was looked at is looked at again right before anything is
 //! removed. A clean-up put off because the space was in use says so (`retry`), and the housekeeping pass tries again;
-//! `since` is what the attempt before saw, so nothing that happened in between is missed.
+//! `since` is what the attempt before saw, so nothing that happened in between is missed. After a task ended, its
+//! commits must be at the remote too before its checkout or branch goes (published.rs): until then it is put off.
 use crate::agents::installed::read_turn_of;
 use crate::clock::now;
 use crate::flow;
@@ -20,9 +21,10 @@ use crate::store::tasks::{get, update_wait, Change, Task};
 use std::cell::{Cell, RefCell};
 use std::path::Path;
 
-/// What a clean-up kept, and, when it was put off, what it saw for the next try.
+/// What a clean-up kept, and, when it was put off, what it saw for the next try. `wait`: the next try only after the
+/// quiet time, not at the next pass (what it waits for is a push of yours, and origin is not asked every half minute).
 #[derive(Default, Debug)]
-pub struct Cleanup { pub kept: Vec<String>, pub retry: bool, pub turn: bool, pub comp: Value, pub tip: String, pub still: Value, pub event_seq: i64 }
+pub struct Cleanup { pub kept: Vec<String>, pub retry: bool, pub turn: bool, pub wait: bool, pub comp: Value, pub tip: String, pub still: Value, pub event_seq: i64 }
 pub struct Opts<'a> { pub delete_branch: &'a str, pub keep_unmerged: bool, pub still: Option<&'a dyn Fn() -> bool>, pub since: Option<Value>, pub first: Option<String> }
 pub fn cleanup(t: &Task, delete_branch: &str) -> Vec<String> { cleanup_with(t, Opts { delete_branch, keep_unmerged: false, still: None, since: None, first: None }).kept }
 fn still_ms() -> i64 { std::env::var("HERDR_PROJECTS_STILL_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(120000) }
@@ -50,7 +52,7 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
     let turn = Cell::new(false);
     let tip_of = || if t.b("branch") { git_out(&root, &["rev-parse", "--verify", &format!("refs/heads/{}", t.s("branch"))]).unwrap_or_default() } else { String::new() };
     let tip = match (&o.since, &o.first) { (Some(s), _) => s.t("tip"), (None, Some(f)) => f.clone(), (None, None) => tip_of() }; // what is safe to delete is what the first look saw
-    let later = |kept: Vec<String>| Cleanup { kept, retry: true, turn: turn.get(), comp: seen.borrow().clone(), tip: tip.clone(), still: quiet.borrow().clone(), event_seq: get(t.s("id")).map(|c| c.i("eventSeq")).unwrap_or(0) };
+    let later = |kept: Vec<String>| Cleanup { kept, retry: true, turn: turn.get(), wait: false, comp: seen.borrow().clone(), tip: tip.clone(), still: quiet.borrow().clone(), event_seq: get(t.s("id")).map(|c| c.i("eventSeq")).unwrap_or(0) };
     // An agent herdr cannot place (status "unknown"): its screen must have stood still from one attempt to a later
     // one, its saved conversation end in a finished turn, and nothing run under it.
     let at_rest = |a: &Value| -> bool {
@@ -122,12 +124,25 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
     let landed = || tip.is_empty() || ["HEAD", t.s("baseSha"), t.s("from")].iter().filter(|r| !r.is_empty()).any(|r| git_out(&root, &["merge-base", "--is-ancestor", &tip, r]).is_ok());
     let spent = o.keep_unmerged && t.b("branch") && landed();
     let wt = t.s("worktree");
+    // After a task ended, its commits must be at the remote too (published.rs) before its checkout or branch goes: not
+    // yet (or origin cannot say): kept whole, its pane open, and tried again, so a push from there is enough.
+    let unpublished = || -> Option<Cleanup> {
+        if !still { return None; }
+        let why = match super::published::published(&root, t, &tip) {
+            Ok(true) => return None,
+            Ok(false) => format!("unpublished commits on {}: push them or set workspace.cleanup false", t.s("branch")),
+            Err(e) => format!("origin could not be asked whether {} is published: {}", t.s("branch"), e.lines().next().unwrap_or("no answer")),
+        };
+        let what = if wt.is_empty() || !Path::new(wt).exists() { format!("branch {}", t.s("branch")) } else { tilde(wt) };
+        Some(Cleanup { wait: true, ..later(vec![format!("{what} ({why})")]) })
+    };
     let wt_short = tilde(wt);
     if !wt.is_empty() && Path::new(wt).exists() {
         if t.at("plan").b("locked") { crate::plan::lock::unlock(t); } // read-only while its plan waited: a worktree that cannot be written cannot be removed
         if !flow::git::dirty(Path::new(wt)).is_empty() { return keep(format!("{wt_short} (uncommitted changes)")); }
         if moved() { return keep(format!("{wt_short} (new work arrived during clean-up)")); }
         if o.keep_unmerged && t.b("branch") && !spent { return keep(format!("{wt_short} (unmerged work on {})", t.s("branch"))); }
+        if let Some(c) = unpublished() { return c; }
         let teardown = command_of(&setting("workspace.teardown", Some(t)));
         if !teardown.is_empty() {
             let env = vec![("HERDR_PROJECTS_ID".to_string(), t.t("id")), ("HERDR_PROJECTS_WORKTREE".into(), wt.into()), ("HERDR_PROJECTS_REPO".into(), root.display().to_string())];
@@ -154,7 +169,7 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
             let there = match api.call(args(&["workspace", "get", link.s("workspace")])) { Ok(_) => true, Err(e) if e.code.contains("not_found") => false, Err(_) => { if still { return stuck(); } true } };
             if there && !close_space() { return stuck(); }
         }
-    } else if in_use() { return used(); } else if !close_space() { return stuck(); }
+    } else if in_use() { return used(); } else if let Some(c) = unpublished() { return c; } else if !close_space() { return stuck(); }
     if let Some(api) = &api { flow::spaces::close_repo_space(api, &root); }
     let mut kept = vec![];
     if t.b("branch") && tip_of() != tip { kept.push(format!("branch {} (new work arrived during clean-up)", t.s("branch"))); }
@@ -182,7 +197,7 @@ pub fn tidy(id: &str, delete_branch: &str) {
         if !same(t) { return Ok(Change::Keep); }
         let msg = prev.as_ref().filter(|p| p.has("msg")).map(|p| p.t("msg")).unwrap_or_else(|| t.t("msg"));
         // In use: tried again by the housekeeping pass, and after a turn of the agent only once it has been quiet a while.
-        let quiet_from = if kept.turn { now() } else { prev.as_ref().map(|p| p.i("quietFrom")).unwrap_or(0) };
+        let quiet_from = if kept.turn || kept.wait { now() } else { prev.as_ref().map(|p| p.i("quietFrom")).unwrap_or(0) };
         t.put("tidy", if kept.retry { json!({ "deleteBranch": delete_branch, "tip": kept.tip, "comp": kept.comp, "still": if kept.still.is_null() { Value::Null } else { kept.still.clone() }, "eventSeq": kept.event_seq, "quietFrom": quiet_from, "msg": msg }) } else { Value::Null });
         if !kept.kept.is_empty() { t.put("kept", kept.kept.clone()); } else {
             flow::task::clear_notes(t); left = true; t.del("kept"); t.put("worktree", Value::Null); t.put("cleaned", now());

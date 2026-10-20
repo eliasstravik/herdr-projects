@@ -14,13 +14,19 @@ use sw::json::*;
 /// `jobs` (each run's jobs), `statuses` (the commit's statuses), `actionsFail` (it may not read Actions either).
 /// `noLogin`: gh is not logged in where it runs (a keeper started without the login shell's GH_TOKEN): every call fails.
 /// `prs`: the pull requests GitHub has for a head branch (`pr list --head`), each { number, url, state }; none by
-/// default. `archived`: the repo is archived on GitHub (`repo view`).
+/// default. `archived`: the repo is archived on GitHub (`repo view`). A merge keeps the pull request's head as GitHub
+/// does, as `refs/pull/<n>/head` in the world's origin repo (`origin`), where a push of the branch would go.
 #[derive(Default)]
-pub struct FakeGh { pub cfg: RefCell<Value>, pub log: RefCell<Vec<String>>, pub merged: Cell<bool>, late: Cell<i64> }
+pub struct FakeGh { pub cfg: RefCell<Value>, pub log: RefCell<Vec<String>>, pub merged: Cell<bool>, pub origin: RefCell<Option<std::path::PathBuf>>, late: Cell<i64> }
 fn ok(out: &str) -> GhOut { GhOut { status: 0, stdout: if out.is_empty() { String::new() } else { format!("{out}\n") }, stderr: String::new() } }
 fn rows(v: &Value) -> String { v.as_array().map(|a| a.iter().map(|r| strings(r).join("\t")).collect::<Vec<_>>().join("\n")).unwrap_or_default() }
 fn fail(m: &str) -> GhOut { GhOut { status: 1, stdout: String::new(), stderr: format!("{m}\n") } }
 impl FakeGh {
+    /// GitHub keeps a merged pull request's head commit under `refs/pull/<n>/head`, whatever becomes of its branch.
+    fn keep_head(&self, n: &str, oid: &str) {
+        let (Some(o), false) = (self.origin.borrow().clone(), oid.is_empty()) else { return };
+        let _ = std::process::Command::new("git").args(["--git-dir", &o.display().to_string(), "update-ref", &format!("refs/pull/{n}/head"), oid]).output();
+    }
     pub fn run(&self, a: &[String]) -> GhOut {
         let c = self.cfg.borrow().clone();
         self.log.borrow_mut().push(a.join(" "));
@@ -43,7 +49,7 @@ impl FakeGh {
                 if has("--disable-auto") { return if c.b("disableFail") { fail("could not disable auto-merge") } else { ok("") }; }
                 if has("--auto") { return if c.b("autoOk") { ok("") } else { fail("auto-merge is not allowed") }; }
                 if c.b("mergeFail") { return fail(c.s("mergeFail")); }
-                if !c.b("queue") { self.merged.set(true); }
+                if !c.b("queue") { self.merged.set(true); self.keep_head(a.get(2).map(|s| s.as_str()).unwrap_or(""), &only); }
                 ok("")
             }
             ("pr", "view") => {

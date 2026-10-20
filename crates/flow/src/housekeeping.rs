@@ -13,11 +13,22 @@ use crate::flow::{send::resume_cut, spaces::{sweep_closing, sweep_repo_spaces}, 
 use crate::herdr::{cli::socket_exists, Herdr};
 use crate::json::*;
 use crate::runner::{inline, runner_alive, spawn_runner, start_reaped, user_env, detach, JOBS};
-use crate::store::{files::{bin, data_dir, has_tasks}, marks::due, old_suggestions::save_old_suggestions, repos::folder_of, retries::waiting_of, settings::lookup::setting, tasks::{get, list, ListOpts, Task}};
+use crate::store::{files::{bin, data_dir, has_tasks}, marks::due, old_suggestions::save_old_suggestions, repos::{folder_of, git_out}, retries::waiting_of, settings::lookup::setting, tasks::{get, list, ListOpts, Task}};
 use crate::sync::{fetch_main, known_target, main_branch, resyncable, tree_of, via_remote};
 use std::collections::HashMap;
 
 fn key(s: &str) -> String { sha1_smol::Sha1::from(s).digest().to_string()[..8].to_string() }
+/// What a done task's clean-up may delete, for the job that does it: what its note says; with no note, its branch
+/// whole when the board merged it and the branch holds nothing past the commit that was reviewed, else only what git
+/// calls merged (as housekeeping/prs.rs decides for a merge made elsewhere).
+fn tidy_args(t: &Task) -> &'static [&'static str] {
+    if t.b("tidy") { return if t.at("tidy").s("deleteBranch") == "always" { &[] } else { &["--merged"] }; }
+    if !t.b("mergedAt") || !t.b("branch") { return &["--merged"]; }
+    let root = folder_of(t.s("id"));
+    let tip = git_out(&root, &["rev-parse", "--verify", &format!("refs/heads/{}", t.s("branch"))]).unwrap_or_default();
+    let head = if t.b("reviewedHead") { t.t("reviewedHead") } else { t.t("prHead") };
+    if tip.is_empty() || tip == head || (!head.is_empty() && git_out(&root, &["merge-base", "--is-ancestor", &tip, &head]).is_ok()) { &[] } else { &["--merged"] }
+}
 #[derive(PartialEq, Clone, Copy)]
 pub enum Force { No, Yes, Pr }
 
@@ -42,11 +53,14 @@ pub fn housekeeping(socket: &str, force: Force) {
         crate::attempts::settle::settle_pass(&tasks, socket, now());
         if due(&format!("spaces-{}", key(socket)), 30000) { sweep_repo_spaces(socket); sweep_closing(socket); }
         // A clean-up that found the task's space in use is tried again, so a done task leaves the sidebar by itself once
-        // the space is free; after a turn in the agent's own terminal only when that has been quiet for a while.
+        // the space is free; after a turn in the agent's own terminal only when that has been quiet for a while. A done
+        // task with no such note (done while clean-up was off, or by a version without it) whose space was never
+        // closed, nor anything of it kept, is owed one all the same: clean-up writes the note itself (land/cleanup.rs).
         let quiet: i64 = std::env::var("HERDR_PROJECTS_QUIET_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(600000);
         for t in &tasks {
-            if t.s("stage") != "done" || setting("workspace.cleanup", Some(t)) != json!(true) || !t.b("tidy") || t.b("archivedAt") || t.at("link").s("socket") != socket || runner_alive(t) || now() - t.at("tidy").i("quietFrom") < quiet { continue; }
-            if due(&format!("tidy-{}", key(t.s("id"))), 30000) { spawn_runner("cleanup", t.s("id"), if t.at("tidy").s("deleteBranch") == "merged" { &["--merged"] } else { &[] }); }
+            if t.s("stage") != "done" || setting("workspace.cleanup", Some(t)) != json!(true) || t.b("archivedAt") || t.at("link").s("socket") != socket || runner_alive(t) { continue; }
+            let owed = if t.b("tidy") { now() - t.at("tidy").i("quietFrom") >= quiet } else { t.at("link").b("pane") && !t.b("cleaned") && !t.b("kept") };
+            if owed && due(&format!("tidy-{}", key(t.s("id"))), 30000) { spawn_runner("cleanup", t.s("id"), tidy_args(t)); }
         }
         crate::notify::notify_pass(&list(ListOpts::default()));
         resync(&tasks, socket);

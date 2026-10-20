@@ -1,5 +1,5 @@
 //! Clean-up that is owed: nothing is touched while the task's herdr session cannot be reached, a close herdr did not
-//! do is tried again, and a clean-up killed half-way or never started is carried out later.
+//! do is tried again, and a clean-up killed half-way or never started, or never noted as owed, is carried out later.
 use crate::common;
 use common::*;
 use serde_json::{json, Value};
@@ -152,4 +152,40 @@ fn a_clean_up_that_was_killed_half_way_or_never_started_is_owed_from_the_moment_
     sw::land::cleanup_job(&z, "always");
     let c = task(&z);
     assert!(c.b("cleaned") && !c.b("tidy")); assert!(!Path::new(t.s("worktree")).exists()); assert_eq!(w.state().arr("workspaces").len(), 0);
+}
+
+#[test]
+fn a_done_task_with_no_note_that_clean_up_is_owed_is_cleaned_up_all_the_same_once_clean_up_is_on() {
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    // merged while clean-up was off: no note, its space open. Turned on later: cleaned up whole, as it would have been
+    let t = ready(&w, 1);
+    let id = t.t("id");
+    cleanup_setting(false);
+    sw::actions::finish_line::approve(&id, None, false).unwrap();
+    let c = settle(&id);
+    assert_eq!(c.s("stage"), "done", "{}", c.at("failure")); assert!(!c.b("tidy") && !c.b("cleaned") && open(&w, &c) && Path::new(t.s("worktree")).exists());
+    assert_eq!(pass(&w, &id), 0, "off: nothing is closed behind your back");
+    cleanup_setting(true);
+    let (other, sock) = (w.base.join("other.sock").display().to_string(), w.socket.clone());
+    put(&id, |c| c.obj_mut("link").put("socket", other));
+    assert_eq!(pass(&w, &id), 0, "not from another session");
+    put(&id, |c| c.obj_mut("link").put("socket", sock));
+    assert_eq!(pass(&w, &id), 1);
+    let c = task(&id);
+    assert!(c.b("cleaned") && !c.b("tidy") && !c.b("kept"), "{c:?}"); assert!(!Path::new(t.s("worktree")).exists()); assert_eq!(w.state().arr("workspaces").len(), 0);
+    assert_eq!(git(&w.root, &["branch", "--list", t.s("branch")]), "", "merged by the board: its branch goes too");
+    assert_eq!(pass(&w, &id), 0, "and then it is over");
+    // reported done without a merge while clean-up was off: its space goes, its branch and checkout stay, said once
+    let t = ready(&w, 2);
+    let id = t.t("id");
+    cleanup_setting(false);
+    sw::actions::filing::report(&id, sw::actions::filing::Report { state: "done".into(), ..Default::default() }).unwrap();
+    let c = settle(&id);
+    assert_eq!(c.s("stage"), "done"); assert!(!c.b("tidy") && open(&w, &c));
+    cleanup_setting(true);
+    assert_eq!(pass(&w, &id), 1);
+    let c = task(&id);
+    assert!(kept(&c).contains("unmerged work"), "{}", kept(&c)); assert!(!c.b("tidy") && !open(&w, &c)); assert!(Path::new(t.s("worktree")).exists());
+    assert!(!git(&w.root, &["branch", "--list", t.s("branch")]).is_empty());
+    assert_eq!(pass(&w, &id), 0, "what it kept is kept");
 }
