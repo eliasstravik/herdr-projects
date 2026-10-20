@@ -1,6 +1,6 @@
 //! A stand-in for the az program (the Azure CLI), answering in the test's own thread (azure::cli::set_fake_az): canned
 //! answers set by the test (`w.az_says(json!({..}))`), every call logged (`az_log(&w)`), and what each `devops invoke`
-//! sent kept (`sent`; a completion: its flags or its body). No real az, no network. `at_azure(&w)` puts the world's repo at Azure DevOps.
+//! sent kept (`sent`). No real az, no network. `at_azure(&w)` puts the world's repo at Azure DevOps.
 use super::World;
 use serde_json::{json, Value};
 use std::cell::{Cell, RefCell};
@@ -32,7 +32,7 @@ impl FakeAz {
             "lastMergeSourceCommit": { "commitId": c.at("head") }, "lastMergeCommit": { "commitId": if c.b("merge") { c.t("merge") } else { "m".repeat(40) } },
             "reviewers": if c.at("reviewers").is_array() { c.at("reviewers").clone() } else { json!([]) }, "createdBy": { "uniqueName": "me@acme.test" } })
     }
-    /// Its completion, as `repos pr update --status completed` (kept: its flags) or `rest` (kept: the body) asks it.
+    /// Its completion, as `rest` asks it (kept: the body).
     fn complete(&self, c: &Value, asked: Value) -> GhOut {
         self.sent.borrow_mut().push(json!({ "resource": "pullRequests", "body": asked }));
         if c.b("completeFail") { return fail(c.s("completeFail")); }
@@ -51,7 +51,6 @@ impl FakeAz {
             ("repos", "pr", "create") => if c.b("createFail") { fail(c.s("createFail")) } else { ok(self.pr(&c)) },
             ("repos", "pr", "list") => ok(if c.at("prs").is_array() { c.at("prs").clone() } else { json!([]) }),
             ("repos", "pr", "show") => ok(self.pr(&c)),
-            ("repos", "pr", "update") if has("--status") => self.complete(&c, a.iter().skip(3).cloned().collect::<Vec<_>>().join(" ").into()),
             ("repos", "pr", "update") => ok(self.pr(&c)),
             ("repos", "pr", "policy") => ok(if c.at("policies").is_array() { c.at("policies").clone() } else { json!([]) }),
             ("pipelines", "runs", "list") => ok(if c.at("runs").is_array() { c.at("runs").clone() } else { json!([]) }),

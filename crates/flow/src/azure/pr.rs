@@ -94,15 +94,13 @@ pub fn view_out(a: &Azure, cwd: &Path, pr: &str, fields: &str) -> GhOut {
 pub fn ready(a: &Azure, cwd: &Path, pr: &str) -> GhOut { run(a, cwd, &["repos", "pr", "update", "--id", &id_of(pr), "--draft", "false"], 60000) }
 /// How `merge.method` is said to Azure DevOps.
 pub fn strategy(how: &str) -> &'static str { match how { "merge" => "noFastForward", "rebase" => "rebase", _ => "squash" } }
-/// Completes it by `merge.method`, its source branch deleted: squash and merge through `az repos pr update`, at the
-/// commit Azure DevOps last saw pushed. A rebase it cannot say: that is the REST call itself, at `head` only (Azure
-/// DevOps refuses it once the branch has moved on).
+/// Completes it at `head` only (Azure DevOps refuses it once the branch has moved on), by `merge.method` named as its
+/// strategy, its source branch deleted. `az repos pr update` can do neither: it keeps a strategy already on the pull
+/// request and completes it at whatever was pushed last. So this is the REST call itself (`az rest`).
 pub fn complete(a: &Azure, cwd: &Path, pr: &str, head: &str, how: &str, message: &str) -> GhOut {
-    let id = id_of(pr);
-    if how != "rebase" { return run(a, cwd, &["repos", "pr", "update", "--id", &id, "--status", "completed", "--squash", if how == "merge" { "false" } else { "true" }, "--delete-source-branch", "true", "--merge-commit-message", message], 120000); }
     let mut body = json!({ "status": "completed", "completionOptions": { "mergeStrategy": strategy(how), "deleteSourceBranch": true, "mergeCommitMessage": message } });
     if !head.is_empty() { body["lastMergeSourceCommit"] = json!({ "commitId": head }); }
-    super::cli::rest(cwd, "patch", &a.pr_api(&id), &body)
+    super::cli::rest(cwd, "patch", &a.pr_api(&id_of(pr)), &body)
 }
 /// A comment of the board's own (the review), as a thread that is closed at once: it never holds the merge up where
 /// comments must be resolved.
