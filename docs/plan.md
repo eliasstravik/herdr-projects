@@ -81,6 +81,8 @@ checked and what it is unsure of; and to stop.
 - **Claude Code uses its own plan mode**: it starts with `--permission-mode plan` in place of its access flags. In that
   mode it cannot edit unasked, and it presents its plan with its own tool (`ExitPlanMode`), which would ask in the
   terminal. The board takes the plan there instead, through a hook it passes at launch, and tells the agent to stop.
+  The hook answers the question `ExitPlanMode` would ask (Claude Code's `PermissionRequest`) with a `deny`, so the
+  terminal shows `Denied by PermissionRequest hook`, a refusal, not a `hook error`.
 - **Every other program** (Codex, pi, Herdr's others: [agents](agents.md)) saves the plan as a file in the task's own
   folder.
 
