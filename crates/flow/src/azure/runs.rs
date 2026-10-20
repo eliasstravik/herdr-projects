@@ -74,11 +74,11 @@ pub fn approvals_of(recs: &[super::logs::Record]) -> Vec<String> {
 /// What waits for your approval in Azure DevOps, in words (`the build reports, at Staging`), of runs by id and name.
 /// Empty: nothing does.
 pub fn awaiting(a: &Azure, root: &Path, runs: &[(String, String)]) -> String {
-    let mut parts = vec![];
-    for (id, name) in runs {
-        let at = approvals_of(&timeline(a, root, id));
-        if !at.is_empty() { parts.push(format!("{name}, at {}", at.join(", "))); }
-    }
+    awaiting_of(&runs.iter().map(|(id, name)| (name.clone(), timeline(a, root, id))).collect::<Vec<_>>())
+}
+/// The same, of timelines already read, by the run's name.
+pub fn awaiting_of(read: &[(String, Vec<super::logs::Record>)]) -> String {
+    let parts: Vec<String> = read.iter().filter_map(|(name, recs)| { let at = approvals_of(recs); (!at.is_empty()).then(|| format!("{name}, at {}", at.join(", "))) }).collect();
     if parts.is_empty() { String::new() } else { format!("Waiting for your approval in Azure DevOps: {}", parts.join("; ")) }
 }
 /// How far the runs are, in the row's words: the stage that deploys (`Deploying staging`), else how many stages are
@@ -108,8 +108,10 @@ pub fn look(a: &Azure, root: &Path, runs: &[Run], missing: &[String]) -> Look {
     if going.is_empty() && missing.is_empty() {
         return Look::Passed(runs.iter().map(|r| format!("{} {}", r.pipeline, if r.result == "partiallysucceeded" { "partly succeeded" } else { "passed" })).collect::<Vec<_>>().join(", "));
     }
-    let held = awaiting(a, root, &going.iter().map(|r| (r.id.clone(), format!("the pipeline {}", r.pipeline))).collect::<Vec<_>>());
+    // Each run's timeline, read once: what is held at an approval, else how far its stages are.
+    let read: Vec<(String, Vec<super::logs::Record>)> = going.iter().map(|r| (format!("the pipeline {}", r.pipeline), timeline(a, root, &r.id))).collect();
+    let held = awaiting_of(&read);
     if !held.is_empty() { return Look::Approval(held); }
-    let all: Vec<Stage> = going.iter().flat_map(|r| stages(a, root, &r.id)).collect();
+    let all: Vec<Stage> = read.iter().flat_map(|(_, recs)| stages_of(recs)).collect();
     Look::Running(if going.is_empty() { format!("Waiting for the pipeline {} to start", missing.join(", ")) } else { progress(&all, going.len()) })
 }

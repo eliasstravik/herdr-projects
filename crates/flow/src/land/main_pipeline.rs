@@ -34,9 +34,10 @@ pub fn arm(t: &mut Obj, commit: &str, base: &str, mode: &str, head: &str) {
 fn say_held(id: &str, msg: &str, held: bool) {
     let mark = if held { json!(msg) } else { Value::Null };
     if let Ok(t) = update_wait(id, 10000, |t| {
-        if !t.b("pipelineWait") || (!held && t.s("msg") == msg && *t.at("pipelineWait").at("approval") == mark) { return Ok(Change::Keep); }
+        if !t.b("pipelineWait") || (t.s("msg") == msg && *t.at("pipelineWait").at("approval") == mark) { return Ok(Change::Keep); }
+        // `merge.pipelineTimeout` counts from your yes there: from when the hold ended.
+        if !held && t.at("pipelineWait").b("approval") { t.obj_mut("pipelineWait").put("since", now()); }
         t.put("msg", msg); t.obj_mut("pipelineWait").put("approval", mark.clone());
-        if held { t.obj_mut("pipelineWait").put("since", now()); } // `merge.pipelineTimeout` counts from your yes
         Ok(Change::Write)
     }) { tell_sidebar(&t); }
 }

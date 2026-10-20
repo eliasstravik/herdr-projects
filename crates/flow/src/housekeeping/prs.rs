@@ -143,6 +143,7 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
         if t.b("autoMerge") && t.b("checksWait") {
             // An empty list is not a pass: they have not started yet, or went from the list (checks::none_listed).
             let gone = checks::missing(t, &head, via, &checks);
+            if held.is_empty() && t.at("checksWait").b("approval") { t.obj_mut("checksWait").put("since", now()); t.obj_mut("checksWait").put("approval", Value::Null); } // `check.timeout` counts from your yes
             if !failed.is_empty() || (!checks.is_empty() && all_good && gone.is_empty()) || ignored || (checks::overdue(t) && held.is_empty()) { t.put("autoMerge", false); t.put("autoMergeLocal", false); t.put("msg", "Merging"); then = Then::Land; }
             else if !checks.is_empty() && t.at("checksWait").s("head") == head {
                 // Still running: which ones is kept, so that one gone from the list later is still waited for.
@@ -154,7 +155,6 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
                 let msg = checks::waiting_words_on(crate::azure::host_word(pr), &checks, &names, &strings(t.at("checksWait").at("flows"))); // the workflows not through, by name
                 t.put("msg", if held.is_empty() { msg } else { held.clone() });
                 t.obj_mut("checksWait").put("approval", if held.is_empty() { Value::Null } else { json!(held) });
-                if !held.is_empty() { t.obj_mut("checksWait").put("since", now()); } // `check.timeout` counts from your yes
             }
             return Ok(Change::Write);
         }

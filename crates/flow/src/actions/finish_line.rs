@@ -36,6 +36,7 @@ pub fn approve(id: &str, seen: Option<(Value, Value)>, anyway: bool) -> Res<Said
     if cur.s("stage") == "asks" && cur.s("kind") == "permission" { return tell(cur.s("id"), "Yes, go ahead.", false); }
     if approvable(&cur) { return approve_plan(cur.s("id")); }
     if cur.s("stage") == "pick" { crate::fail!("{0} waits for you to pick one of its attempts, not for a merge: herdr-projects pick {0} <letter>", cur.s("id")); }
+    if let Some(why) = crate::azure::shown::held(&cur) { crate::fail!("{}", crate::azure::shown::held_answer(cur.s("id"), &why)); }
     if crate::chat_only::is_chat(&cur) { crate::fail!("{0} is chat only: nothing of it is merged. To end the conversation: herdr-projects finish {0}", cur.s("id")); }
     if is_research(&cur) { crate::fail!("{0} is research only: nothing of it is merged. To merge its change after all, turn that off (herdr-projects set research.only false --task {0}) and delegate it again.", cur.s("id")); }
     let t = update(cur.s("id"), |t| {

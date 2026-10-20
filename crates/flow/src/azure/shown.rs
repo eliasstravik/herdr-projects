@@ -1,10 +1,22 @@
 //! What a task shows of its pull request on Azure DevOps: one line for the task panel (its reviewers' votes and its
 //! policies, kept on the task by the pull requests' watch as `prRemote`), and for `details` the pull request as Azure
-//! DevOps says it now, with the main pipeline's runs of its merge commit while the task waits for them.
+//! DevOps says it now, with the main pipeline's runs of its merge commit while the task waits for them; and what a
+//! task held at an approval there waits for.
 use super::{host, pr, runs};
 use crate::json::*;
 use crate::store::repos::folder_of;
 
+/// What the task waits for you to approve in Azure DevOps (a build of its checks, or its main pipeline, held at an
+/// approval: land/checks.rs, land/main_pipeline.rs), in words. None: nothing is held there.
+pub fn held(t: &Obj) -> Option<String> {
+    if t.s("stage") != "merging" { return None; }
+    [t.at("checksWait").s("approval"), t.at("pipelineWait").s("approval")].into_iter().find(|s| !s.is_empty()).map(String::from)
+}
+/// What yes says to such a task: the approval is Azure DevOps' to give, not the board's.
+pub fn held_answer(id: &str, why: &str) -> String {
+    let what = why.strip_prefix("Waiting for your approval in Azure DevOps: ").unwrap_or(why);
+    format!("{id} waits for your approval in Azure DevOps ({what}), not for a yes here: approve it there and the board goes on by itself.")
+}
 /// A reviewer's vote in words.
 pub fn vote(v: i64) -> &'static str { match v { 10 => "approved", 5 => "approved with suggestions", -5 => "waiting for the author", -10 => "rejected", _ => "no vote" } }
 /// A check's result in words: passed, failed, running.

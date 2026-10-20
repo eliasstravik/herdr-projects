@@ -40,6 +40,16 @@ fn a_build_validation_held_at_an_approval_makes_the_merge_wait_for_you_with_no_t
     let t = settle(&id);
     assert_eq!((t.s("stage"), t.s("msg")), ("merging", "Waiting for your approval in Azure DevOps: the build reports, at Staging"), "{}", t.at("failure"));
     assert_eq!(state(&id), ("blocked".to_string(), "permission".to_string()), "it waits for you, not for the machine");
+    // the approval is Azure DevOps' to give: the board offers no yes of its own, and its yes says where to give it
+    let answer = format!("{} waits for your approval in Azure DevOps (the build reports, at Staging), not for a yes here: approve it there and the board goes on by itself.", task(&id).s("id"));
+    assert_eq!(finish_line::approve(&id, None, false).err().map(|e| e.msg), Some(answer.clone()));
+    let mut b = common::board::open(&w.root, 44);
+    b.s.sel = id.clone(); b.load();
+    let text = b.text();
+    assert!(!text.contains("say yes to this task's agent") && !text.contains(&format!("{} ", sw::board::keys::key_name("yes"))), "{text}");
+    b.press(&["ctrl+l"]);
+    assert!(b.text().replace('\n', " ").contains("not for a yes here"), "{}", b.text());
+    assert_eq!(task(&id).s("stage"), "merging", "nothing merged, nothing changed");
     // far past check.timeout: still yours to approve, nothing gave up
     sw::clock::advance(40 * 60000);
     poll_prs();
