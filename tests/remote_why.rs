@@ -100,7 +100,7 @@ fn real_programs_herdr_projects_machines_this_machine_as_a_bare_login_shell_then
     let ms: Vec<(String, bool, String, serde_json::Value)> = r.arr("machines").iter().map(|m| (m.t("label"), m.b("ok"), if m.b("version") { m.t("version") } else { m.at("why").t("kind") }, m.at("tasks").clone())).collect();
     assert_eq!(ms, vec![("vm-a".into(), true, "0.2.0".into(), json!(1)), ("vm-b".into(), false, "path".into(), serde_json::Value::Null)]);
     let said = sw::remote::check::say(&r);
-    assert!(has(&said, &format!(r"this machine: a login shell \(.+\) finds herdr-projects {}\n", regex::escape(version))), "{said}");
+    assert!(has(&said, &format!(r"this machine: a login shell \(.+\) finds herdr-projects {} · 1000 GB free\n", regex::escape(version))), "{said}");
     assert!(has(&said, r"vm-a +answers · herdr-projects 0\.2\.0 · 1 task  \(.*@vm-a\)\n"), "{said}");
     assert!(has(&said, r"vm-b +does not answer: node is not found there  \(.*@vm-b\)\n    A login shell on vm-b finds `herdr-projects` but not `node`"), "{said}");
     assert!(has(&said, r"    What came back:\n      env: 'node': No such file or directory"), "{said}");

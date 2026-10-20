@@ -29,7 +29,11 @@ pub fn archive(id: &str) -> Res<Task> {
         let _ = h.workspace_close(&workspace);
         flow::spaces::close_repo_space(&h, &folder_of(t.s("id")));
     }
-    Ok(t)
+    // Its agent gone with its space: its temporary files go too, and its line says what that freed.
+    if !crate::leftovers::sweep::agent_gone(&t) { return Ok(t); }
+    let freed = crate::leftovers::free(&t);
+    if crate::leftovers::said(freed).is_empty() { return Ok(t); }
+    update(t.s("id"), |t| { let m = crate::leftovers::with_said(t.s("msg"), freed); t.put("msg", m); Ok(Change::Write) })
 }
 /// Restore changes nothing in herdr and starts nothing.
 pub fn restore(id: &str) -> Res<Task> { let cur = find(id)?; update(cur.s("id"), |t| { t.put("archivedAt", Value::Null); Ok(Change::Write) }) }
@@ -46,6 +50,7 @@ pub fn clear(id: &str) -> Res<(String, Vec<String>)> {
     let mut kept = crate::land::cleanup(&t, "merged");
     if !t.arr("attempts").is_empty() { kept.extend(crate::attempts::adopt::discard_all(&cid)); }
     if kept.is_empty() { flow::task::clear_notes(&t); }
+    crate::leftovers::free(&t); // its temporary files, whatever was kept
     with_task_lock(&cid, 5000, || { remove(&cid); Ok(()) })?;
     Ok((cid, kept))
 }

@@ -125,7 +125,7 @@ pub fn remote_list() -> Value {
     let coordinator = crate::coordinator::far::sent(&crate::coordinator::look::look(&socket), ready);
     // Its machine's and its repos' coordinators that were ever talked to, by level ("machine", "project:<repo>").
     let coordinators: Obj = crate::coordinator::state::all(&socket).into_iter().filter(|co| !co.is_top()).map(|co| (co.to(), crate::coordinator::far::sent(&crate::coordinator::look::look(&co), ready))).collect();
-    json!({ "host": check::hostname(), "version": VERSION, "automations": automations::automations_sent(), "coordinator": coordinator, "coordinators": coordinators, "sidebar": sidebar::sent(), "tasks": tasks })
+    json!({ "host": check::hostname(), "version": VERSION, "free": crate::leftovers::room::free_here(), "automations": automations::automations_sent(), "coordinator": coordinator, "coordinators": coordinators, "sidebar": sidebar::sent(), "tasks": tasks })
 }
 pub fn remote_main(a: &[String]) -> i32 {
     let what = a.first().cloned().unwrap_or_default();

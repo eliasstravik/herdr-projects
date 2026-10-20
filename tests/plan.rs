@@ -35,7 +35,7 @@ fn plan_approve_you_waits_as_plan_ready_and_the_yes_starts_the_build() {
     assert_eq!(t.at("plan").at("locked"), &json!(true));
     let a = agent_of(&w, t.at("link").s("pane"));
     assert_eq!((a.at("boxed"), a.s("kind")), (&json!(true), "codex"));
-    let ran = w.state().arr("calls").iter().map(text).find(|c| c.starts_with("pane run")).unwrap_or_default();
+    let ran = w.state().arr("calls").iter().map(text).find(|c| c.starts_with("pane run") && c.contains("bwrap")).unwrap_or_default();
     assert!(ran.contains(&format!("env HERDR_PROJECTS_AGENT=sw-proj-1 HERDR_PROJECTS_BOXED=1 bwrap --dev-bind / / --ro-bind {0} {0} --ro-bind ", t.s("worktree"))), "{ran}");
     assert!(!t.b("review") && !t.b("pr"));
     let r = row(&id);

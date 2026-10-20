@@ -177,6 +177,8 @@ pub fn tidy(id: &str, delete_branch: &str) {
     let still = || get(id).map(|c| same(&c)).unwrap_or(false);
     let first = if t.at("tidy").b("fresh") { Some(t.at("tidy").t("tip")) } else { None };
     let kept = cleanup_with(&t, Opts { delete_branch, keep_unmerged: delete_branch != "always", still: Some(&still), since: prev.clone(), first });
+    // Its temporary files go once its agent has (a kept worktree stays): docs/disk-space.md.
+    let freed = if kept.retry || !crate::leftovers::sweep::agent_gone(&t) { 0 } else { crate::leftovers::free(&t) };
     let mut left = false;
     let _ = update_wait(id, 10000, |t| {
         if !same(t) { return Ok(Change::Keep); }
@@ -189,7 +191,7 @@ pub fn tidy(id: &str, delete_branch: &str) {
             let s = t.at("link").at("socket").clone(); t.put("link", json!({ "socket": s }));
         }
         let end = if msg.ends_with('.') { "" } else { "." };
-        t.put("msg", if kept.kept.is_empty() { msg.clone() } else { format!("{msg}{end} Kept: {}", kept.kept.join(", ")) });
+        t.put("msg", crate::leftovers::with_said(&if kept.kept.is_empty() { msg.clone() } else { format!("{msg}{end} Kept: {}", kept.kept.join(", ")) }, freed));
         Ok(Change::Write)
     });
     if left && !t.arr("attempts").is_empty() {

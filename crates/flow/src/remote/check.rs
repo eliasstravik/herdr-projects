@@ -33,7 +33,7 @@ pub fn here(ms: u64) -> Value {
 }
 fn asked(m: &Machine, ms: u64) -> Value {
     match ask(m, "list", None, ms) {
-        Ok(j) if j.at("tasks").is_array() => json!({ "label": m.label, "target": m.target, "ok": true, "version": j.t("version"), "tasks": j.arr("tasks").iter().filter(|t| !t.b("archivedAt")).count() }),
+        Ok(j) if j.at("tasks").is_array() => json!({ "label": m.label, "target": m.target, "ok": true, "version": j.t("version"), "tasks": j.arr("tasks").iter().filter(|t| !t.b("archivedAt")).count(), "free": j.at("free") }),
         Ok(j) => json!({ "label": m.label, "target": m.target, "ok": false, "why": not_list(&j, &m.label, &m.target) }),
         Err(why) => json!({ "label": m.label, "target": m.target, "ok": false, "why": why }),
     }
@@ -42,7 +42,9 @@ pub fn check(ms: u64) -> Value {
     let list = machines();
     let me = std::thread::spawn(move || here(ms));
     let others: Vec<_> = list.into_iter().map(|m| std::thread::spawn(move || asked(&m, ms))).collect();
-    json!({ "here": me.join().unwrap_or(Value::Null), "machines": others.into_iter().filter_map(|h| h.join().ok()).collect::<Vec<_>>(), "off": setting("board.machines", None) == json!("none") })
+    let mut here = me.join().unwrap_or(Value::Null);
+    if let Some(h) = here.as_object_mut() { h.put("free", crate::leftovers::room::free_here()); }
+    json!({ "here": here, "machines": others.into_iter().filter_map(|h| h.join().ok()).collect::<Vec<_>>(), "off": setting("board.machines", None) == json!("none") })
 }
 pub fn say(r: &Value) -> String {
     let rows: Vec<&Value> = std::iter::once(r.at("here")).chain(r.arr("machines").iter()).collect();
@@ -51,7 +53,9 @@ pub fn say(r: &Value) -> String {
         let head = if x.b("here") {
             if x.b("ok") { format!("this machine: a login shell ({}) finds herdr-projects {}", x.s("shell"), if x.b("version") { x.t("version") } else { "(an older one than this)".into() }) } else { format!("this machine: other machines cannot ask it: {}", x.at("why").s("line")) }
         } else if x.b("ok") { format!("answers · herdr-projects {} · {} task{}", if x.b("version") { x.t("version") } else { "(an older one: update it there)".into() }, x.i("tasks"), if x.i("tasks") == 1 { "" } else { "s" }) } else { format!("does not answer: {}", x.at("why").s("line")) };
-        let mut out = vec![format!("{:<wide$}  {head}{}", x.s("label"), if x.b("here") { String::new() } else { format!("  ({})", x.s("target")) })];
+        // Free disk: the least among the disks its board writes to (an older version does not say).
+        let free = x.at("free").as_u64().map(|f| format!(" · {} free", crate::disk::gb(f))).unwrap_or_default();
+        let mut out = vec![format!("{:<wide$}  {head}{free}{}", x.s("label"), if x.b("here") { String::new() } else { format!("  ({})", x.s("target")) })];
         if !x.b("ok") {
             let mut d: Vec<String> = x.at("why").arr("detail").iter().map(text).collect();
             if x.at("why").b("said") { d.push("What came back:".into()); d.extend(x.at("why").s("said").lines().map(|l| format!("  {l}"))); }

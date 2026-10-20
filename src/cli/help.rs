@@ -61,8 +61,11 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
   herdr-projects coordinator --machine …       the same for this machine's machine coordinator
   herdr-projects coordinator --project REPO …  the same for a repo's project coordinator
   herdr-projects --skill                       instructions an agent can load
-  herdr-projects machines                      other machines: whether each answers, its version, or why not and what to do;
-                                                and whether another machine could ask this one
+  herdr-projects machines                      other machines: whether each answers, its version and free disk, or why not
+                                                and what to do; and whether another machine could ask this one
+  herdr-projects sweep [--dry]                 remove what ended tasks left behind now: their temporary files, agents'
+                                                files for worktrees that are gone, old build output (docs/disk-space.md);
+                                                --dry: only say what would go
   herdr-projects web-ui [link|unlink]          the board inside the herdr web UI: how it stands; point the web UI's shared link at it, or back
   herdr-projects voice [end|test]              voice calls here: where the ElevenLabs key is found (ELEVENLABS_API_KEY,
                                                 or ~/.herdr-projects/settings/elevenlabs.json), the call helper on this

@@ -34,6 +34,7 @@ pub fn rules(t: &Obj) -> String {
         if plan::open(t) && !planner { plan::plan_rule(t) } else { String::new() },
         if chat && !planner { c::chat_rule(t) } else if research && !planner { r::research_rule(t) } else { String::new() },
         tree,
+        if planner { crate::temp::rule(t) } else { format!("{} {}", crate::temp::rule(t), crate::temp::STOP_RULE) },
         if !check.is_empty() && !research && !chat && !planner { format!("Your work only counts as done when this passes: {check}") } else { String::new() },
         if planner { String::new() } else if chat { c::CHAT_STOP.into() } else { "Do not stop until the work is finished and you have checked that it works. Stopping means it is finished and goes to review. End with a short summary of what you did.".into() },
         format!("If you cannot continue without the human, run this and then stop: {cmd} report {} --state blocked --kind <question|permission|auth> --msg \"<why, in one line>\"  (question: the human must type an answer; permission: you need approval to do something; auth: a login, token or credential is missing). Write the reason like these: \"Need a GitHub login to open the PR\", \"Should the old settings file be removed\", \"Need your OK to delete the test data\".{}", t.s("id"), if chat { "" } else { " Do not end with a question otherwise." }),
