@@ -36,7 +36,7 @@ pub fn start_reaped(c: &mut Command) -> u32 {
 }
 /// Start a detached runner for one job on one task. Returns at once.
 pub fn spawn_runner(job: &str, id: &str, extra: &[&str]) -> u32 {
-    if crate::plan::sandbox::inside::inside() { return outside::ask(job, id, extra); }
+    if crate::plan::sandbox::inside::boxed() { return outside::ask(job, id, extra); }
     if inline() { JOBS.with(|j| j.borrow_mut().push((job.into(), id.into(), extra.iter().map(|s| s.to_string()).collect()))); return 0; }
     user_env();
     let dir = if id == "-" { data_dir() } else { dir_of(id) };

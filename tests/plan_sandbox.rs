@@ -98,6 +98,9 @@ fn inside_a_sandbox_a_probe_is_never_kept_and_a_runner_asked_for_is_started_from
     let id = w.add("Work");
     let kept = sw::store::files::data_dir().join("sandbox.json");
     let jobs = || sw::runner::JOBS.with(|j| j.borrow().clone());
+    // macOS's own check is looked up, not linked: it builds everywhere, and finds no sandbox where there is no such check.
+    let os = sw::plan::sandbox::inside::os_says();
+    if !cfg!(target_os = "macos") { assert!(!os); }
     // The plan writer's turn-end hook runs in its mount, with the mark its program was started with.
     unsafe { std::env::set_var(sw::plan::sandbox::inside::MARK, "1") };
     assert!(sw::plan::sandbox::inside::inside());
