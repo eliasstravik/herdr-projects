@@ -15,7 +15,7 @@ use crate::json::*;
 use crate::research::{is_research, report_folder};
 use crate::runner::{claim, is_aborted, Guard};
 use crate::store::attempts::attempts_of;
-use crate::store::files::{board_env, dir_of};
+use crate::store::files::dir_of;
 use crate::store::marks::pending_events;
 use crate::store::repos::folder_of;
 use crate::store::settings::lookup::work;
@@ -98,7 +98,7 @@ fn compare(id: &str, g: &mut Guard, t: &Task) -> Res<Obj> {
     let ws = t.at("link").t("workspace");
     let err = |e: &str| Ok(obj(json!({ "error": e, "by": k })));
     if ws.is_empty() || api.workspace_get(&ws).is_none() { return Ok(obj(json!({ "error": "the task's space is gone, so nobody compared the attempts" }))); }
-    let made = api.tab_create(&ws, &cwd.display().to_string(), flow::tabs::PICKER_TAB, &board_env())?;
+    let made = api.tab_create(&ws, &cwd.display().to_string(), flow::tabs::PICKER_TAB, &crate::temp::task_env(t))?;
     let tab = if made.at("tab").b("tab_id") { made.at("tab").t("tab_id") } else { made.at("root_pane").t("tab_id") };
     let pane = if made.at("root_pane").is_object() { made.at("root_pane").t("pane_id") } else { api.panes(Some(&ws))?.into_iter().find(|p| p.s("tab_id") == tab).map(|p| p.t("pane_id")).unwrap_or_default() };
     if pane.is_empty() { if !tab.is_empty() { api.tab_close(&tab); } return Ok(obj(json!({ "error": "herdr opened no terminal for the comparison" }))); }

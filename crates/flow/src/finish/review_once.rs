@@ -12,7 +12,7 @@ use crate::flow;
 use crate::gate;
 use crate::json::*;
 use crate::runner::{is_aborted, Guard};
-use crate::store::files::{artifacts_dir, board_env};
+use crate::store::files::artifacts_dir;
 use crate::store::handovers::{handover_line, last_handover, log_handover};
 use crate::store::marks::pending_events;
 use crate::store::repos::{cwd_of, folder_of, git_out};
@@ -70,7 +70,7 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
         close_reviewer(id); // a tab left over from an interrupted round
         // Its own tab, never focused: the human stays where they are, and the agent's tab and the board keep their size.
         let label = if plan.is_some() { Some(flow::tabs::PLAN_REVIEW_TAB) } else { None };
-        let made = flow::tabs::open_reviewer_tab(&api, &t, round, if other { &rkind } else { "" }, &folder.display().to_string(), &board_env(), label)?;
+        let made = flow::tabs::open_reviewer_tab(&api, &t, round, if other { &rkind } else { "" }, &folder.display().to_string(), &crate::temp::task_env(&t), label)?;
         let pane = made.pane.clone();
         pane_tab = Some((made.pane.clone(), made.tab.clone()));
         let taken: Vec<String> = api.agents().unwrap_or_default().iter().map(|a| a.t("name")).filter(|n| !n.is_empty()).collect();

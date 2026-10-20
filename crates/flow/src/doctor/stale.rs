@@ -8,6 +8,7 @@ use crate::store::marks::tilde;
 use crate::store::repos::{git_out, is_repo, known_repos};
 use crate::store::settings::lookup::{setting, setting_text};
 use crate::store::tasks::{list, ListOpts};
+use crate::disk::size;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -21,22 +22,20 @@ pub struct Left { pub path: PathBuf, pub repo: PathBuf, pub why: Why, pub bytes:
 pub fn cache_dir() -> PathBuf {
     std::env::var("XDG_CACHE_HOME").ok().filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or_else(|| crate::store::files::user_home().join(".cache")).join("herdr-projects")
 }
-/// The bytes a folder takes on disk, links not followed; `more` when the walk ran out of time first.
-fn size(dir: &Path, until: Instant) -> (u64, bool) {
-    use std::os::unix::fs::MetadataExt;
-    let (mut n, mut todo) = (0u64, vec![dir.to_path_buf()]);
-    while let Some(d) = todo.pop() {
-        if Instant::now() > until { return (n, true); }
-        for e in std::fs::read_dir(&d).into_iter().flatten().flatten() {
-            let Ok(m) = e.metadata() else { continue };
-            n += m.blocks() * 512;
-            if m.is_dir() { todo.push(e.path()); }
-        }
-    }
-    (n, false)
-}
 /// A task branch's fixed start (`work/` of `work/{n}-{slug}`): a branch that starts so is the board's.
 fn branch_start() -> String { setting_text("workspace.branch", None).split('{').next().unwrap_or("").to_string() }
+/// Kept warm builds no longer `current`, an hour after they last changed (the setup removes them only when it runs).
+pub fn old_builds(cache: &Path) -> Vec<PathBuf> {
+    let mut out = vec![];
+    for set in std::fs::read_dir(cache.join("warm")).into_iter().flatten().flatten().map(|e| e.path()) {
+        let current = std::fs::read_to_string(set.join("current")).unwrap_or_default().trim().to_string();
+        for s in std::fs::read_dir(&set).into_iter().flatten().flatten() {
+            let (name, old) = (s.file_name().to_string_lossy().to_string(), s.metadata().and_then(|m| m.modified()).map(|t| t.elapsed().unwrap_or_default() > Duration::from_secs(3600)).unwrap_or(false));
+            if name.starts_with("seed-") && name != current && old { out.push(s.path()); }
+        }
+    }
+    out
+}
 /// Every leftover, sizes measured for at most a few seconds in all.
 pub fn ask(cache: &Path) -> Vec<Left> {
     let mut out: Vec<Left> = vec![];
@@ -65,14 +64,7 @@ pub fn ask(cache: &Path) -> Vec<Left> {
             out.push(Left { path: path.into(), repo: repo.clone(), why: Why::NoTask(branch), bytes: 0, more: false });
         }
     }
-    // Kept warm builds no longer `current`, an hour after they last changed (the setup removes them only when it runs).
-    for set in std::fs::read_dir(cache.join("warm")).into_iter().flatten().flatten().map(|e| e.path()) {
-        let current = std::fs::read_to_string(set.join("current")).unwrap_or_default().trim().to_string();
-        for s in std::fs::read_dir(&set).into_iter().flatten().flatten() {
-            let (name, old) = (s.file_name().to_string_lossy().to_string(), s.metadata().and_then(|m| m.modified()).map(|t| t.elapsed().unwrap_or_default() > Duration::from_secs(3600)).unwrap_or(false));
-            if name.starts_with("seed-") && name != current && old { out.push(Left { path: s.path(), repo: PathBuf::new(), why: Why::OldBuild, bytes: 0, more: false }); }
-        }
-    }
+    out.extend(old_builds(cache).into_iter().map(|path| Left { path, repo: PathBuf::new(), why: Why::OldBuild, bytes: 0, more: false }));
     out.dedup_by(|a, b| a.path == b.path);
     let until = Instant::now() + Duration::from_secs(3);
     for l in out.iter_mut() { (l.bytes, l.more) = size(&l.path, until); }

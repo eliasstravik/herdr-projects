@@ -15,6 +15,7 @@ pub mod provider_error;
 pub mod read_tokens;
 pub mod read_turn;
 pub mod roles;
+pub mod scratch;
 pub mod screen_text;
 pub mod start;
 pub mod start_failed;

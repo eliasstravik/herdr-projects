@@ -1,0 +1,65 @@
+# Disk space
+
+**A task cleans up after itself.** Everything temporary its agent and its reviewers make goes into one folder of the
+task's own, and that folder goes when the task ends. What tasks that ended before left behind is swept away by itself,
+and a task that would start on a nearly full disk waits instead of failing half-way through its build.
+
+## A task's own temporary folder
+
+Each task gets a short folder of its own, such as `/tmp/hp-1000/3f9a2c/HP-96` (your user id, then one folder per board,
+then the task's name). Its agent and every reviewer start with it as `TMPDIR` (and `TMP`, `TEMP`,
+`CLAUDE_CODE_TMPDIR`), so the test projects, previews, venvs and smoke installs they make land there, and so does what
+their own tools keep: Claude Code's scratchpad is inside it. They are told so in their rules, and told to stop the
+servers they started before they finish (unless you asked them to keep one running).
+
+## When a task ends
+
+Done, archived or removed, once its agent is gone with its space:
+
+1. whatever still runs from its temporary folder (a dev server the agent or a reviewer started there) is stopped;
+2. its temporary folder is removed, and so are the folders an agent's program kept for its worktree outside it (Claude
+   Code's `/tmp/claude-<uid>/<worktree path with dashes>` of an agent started before this);
+3. its line says what that freed: `Freed 1.4 GB of temporary files.`
+
+A worktree that is kept (it holds unsaved or unmerged work, or `workspace.cleanup` is off) stays as it is: only the
+temporary files go. A done task whose agent stays open (`workspace.cleanup` off) loses them too, all but the folders
+its program keeps for itself (Claude Code's scratchpad folder, emptied), so the agent goes on if you talk to it again;
+what it makes after that goes in the sweep once nobody talked to it for an hour. While its agent works, nothing is
+touched.
+
+## The sweep
+
+The sweep removes what tasks that ended before left: it runs when the board opens (when the last sweep is over an hour
+old), once a day by itself, before a start on a nearly full disk, and when you run `herdr-projects sweep`, which says
+what it removed (`herdr-projects sweep --dry` only says what would go). What still runs from a folder it takes (a dev server left behind) is stopped first. It takes:
+
+- the temporary folders of done and archived tasks whose agent is gone (or open and quiet for an hour, as above);
+- the folders an agent's program kept for a worktree of the board's that is gone;
+- the board's task folders whose task was removed;
+- the build output (`target/`, `node_modules/`, `.next/`, and only what git ignores) of a worktree a done or archived
+  task kept, once nothing changed on the task for `board.oldBuilds` days (7; `0`: never);
+- old warm builds in `~/.cache/herdr-projects` that nothing uses.
+
+**What it never touches:** a task at work, its worktree and its folders; your repos and your home folder; a loose folder
+in `/tmp` the board did not make; a folder that changed in the last hour; a folder your environment points into (a `PATH` entry in an old scratchpad keeps that one); and anything
+reached through a link: a folder goes only where it and each folder above it, up to the temporary folder, the build
+caches or the worktree folder it is in, is a real folder. A link in a temporary folder's place is taken away, and
+what it points to, and what runs there, stays. An agent's
+folder for a worktree counts as the board's only when its name is a known worktree folder followed by a name as the
+task branches start (`work-`), no folder of that name is there, and no other folder beside it starts so. What the
+last sweep removed is kept in `~/.herdr-projects/data/sweep.json`.
+
+## A nearly full disk
+
+Before a task starts (its worktree, its setup, its agent, and the build once its plan has its yes), the board looks at the disks it writes to: the repo's, the
+worktrees', the board's data and the temporary files. Under `board.diskFree` GB free (5; `0`: never looked at), it
+sweeps first; still under, the task goes back to the queue with a plain line instead of failing with "No space left on
+device":
+
+```
+Disk nearly full on vm-str: 778 MB free on /; this task starts once 5.0 GB is free (board.diskFree). Free some space:
+herdr-projects sweep, and herdr-projects doctor lists more that can go.
+```
+
+It starts by itself once there is room. `herdr-projects machines` says how much each machine has free, and
+`herdr-projects doctor` lists each disk and the leftovers it could clean.

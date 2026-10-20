@@ -145,6 +145,7 @@ pub fn start_queued(socket: &str) -> Vec<String> {
         let max = setting("board.agents", None).as_i64().unwrap_or(4);
         for w in waiting {
             if busy >= max { break; }
+            if crate::leftovers::room::still_waiting(w) { continue; } // no room on the disk yet: no runner for it
             let t = update(w.s("id"), |t| { if t.s("stage") != "queued" { return Ok(Change::Keep); } t.put("stage", "starting"); t.put("msg", ""); Ok(Change::Write) })?;
             if t.s("stage") != "starting" { continue; }
             busy += 1;

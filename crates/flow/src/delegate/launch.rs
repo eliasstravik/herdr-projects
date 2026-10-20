@@ -67,6 +67,9 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
     };
     let (mut blocked, mut hooked) = (false, x.hooked);
     let pane = t.at("link").t("pane");
+    // Its temporary folder, as TMPDIR and the rest: removed with all in it when the task ends (temp.rs).
+    let tmp = crate::temp::made(&t);
+    let _ = api.pane_run(&pane, &crate::temp::export_line(&t));
     let mut start_with = |with_hook: bool| -> Res<()> {
         // In a read-only mount while its plan waits (plan/sandbox.rs).
         match plan::sandbox::start_program(&api, &t, &name, &kind, &pane, &args(with_hook)?, "writer") {
@@ -88,7 +91,7 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
         t.put("stage", "working"); t.put("armedAt", now()); t.put("expectedWake", Value::Null); t.put("turnOpen", true); t.put("turnBy", "start"); t.put("msg", "");
         t.obj_mut("link").put("agent", name.clone());
         if !(t.i("workAt") >= t.i("since") && t.has("workAt")) { t.put("workAt", now()); }
-        t.put("startedAgentAt", now()); t.put("exitedAt", Value::Null);
+        t.put("startedAgentAt", now()); t.put("exitedAt", Value::Null); t.put("tmp", tmp.display().to_string());
         t.put("hooked", hooked); t.put("agentVersion", version.clone()); t.put("sent", Value::Null); t.put("unsent", Value::Null);
         if plan::open(t) { t.obj_mut("plan").put("mode", plan_mode); }
         if t.at("failure").s("stage") == "send" { t.put("failure", Value::Null); }

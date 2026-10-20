@@ -168,7 +168,13 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
 /// nothing to land is tidied the same way, only its branch is deleted just when git calls it merged.
 pub fn tidy(id: &str, delete_branch: &str) {
     let Some(t) = get(id) else { return };
-    if setting("workspace.cleanup", Some(&t)) != json!(true) || t.b("archivedAt") { return; }
+    if t.b("archivedAt") { return; }
+    // Kept as it is (`workspace.cleanup` off): its temporary files go all the same, as far as its open agent lets them.
+    if setting("workspace.cleanup", Some(&t)) != json!(true) {
+        let n = if t.s("stage") == "done" { crate::leftovers::sweep::free_ended(&t) } else { 0 };
+        if !crate::leftovers::said(n).is_empty() { let _ = update_wait(id, 10000, |c| { if c.s("stage") != "done" { return Ok(Change::Keep); } let m = crate::leftovers::with_said(c.s("msg"), n); c.put("msg", m); Ok(Change::Write) }); }
+        return;
+    }
     // The task as it ended: a turn started since (typed in the agent's own terminal) means it is no longer over.
     let armed = t.at("armedAt").clone();
     let same = move |c: &Task| c.s("stage") == "done" && !c.b("archivedAt") && *c.at("armedAt") == armed;
@@ -177,6 +183,8 @@ pub fn tidy(id: &str, delete_branch: &str) {
     let still = || get(id).map(|c| same(&c)).unwrap_or(false);
     let first = if t.at("tidy").b("fresh") { Some(t.at("tidy").t("tip")) } else { None };
     let kept = cleanup_with(&t, Opts { delete_branch, keep_unmerged: delete_branch != "always", still: Some(&still), since: prev.clone(), first });
+    // Its temporary files go once its agent has (a kept worktree stays): docs/disk-space.md.
+    let freed = if kept.retry { 0 } else { crate::leftovers::sweep::free_ended(&t) };
     let mut left = false;
     let _ = update_wait(id, 10000, |t| {
         if !same(t) { return Ok(Change::Keep); }
@@ -189,7 +197,7 @@ pub fn tidy(id: &str, delete_branch: &str) {
             let s = t.at("link").at("socket").clone(); t.put("link", json!({ "socket": s }));
         }
         let end = if msg.ends_with('.') { "" } else { "." };
-        t.put("msg", if kept.kept.is_empty() { msg.clone() } else { format!("{msg}{end} Kept: {}", kept.kept.join(", ")) });
+        t.put("msg", crate::leftovers::with_said(&if kept.kept.is_empty() { msg.clone() } else { format!("{msg}{end} Kept: {}", kept.kept.join(", ")) }, freed));
         Ok(Change::Write)
     });
     if left && !t.arr("attempts").is_empty() {

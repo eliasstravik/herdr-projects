@@ -84,6 +84,9 @@ fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
         flow::send::deliver(&t, &flow::send::with_tail(&t, &[turned, "Continue this task.".into()].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n")), None, false)?;
         return Ok(());
     }
+    // Room on the disk first: on a nearly full one the task waits in the queue, not fails half-way (leftovers/room.rs).
+    if let Err(line) = crate::leftovers::room::make_room(&t) { g.set(|t| crate::leftovers::room::wait(t, &line))?; return Ok(()); }
+    if t.b("diskWait") { t = g.set(|t| { t.del("diskWait"); })?; }
     if live_pane.is_none() {
         let mut copy = false;
         let (res, mut patch): (Value, Obj);

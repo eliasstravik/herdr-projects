@@ -1,6 +1,6 @@
 {
   "name": "herdr-projects",
-  "version": "1.2.11",
+  "version": "1.2.12",
   "private": true,
   "description": "A work board for herdr. The program is Rust (Cargo.toml); this file only gives every agent the one command that runs the tests.",
   "license": "MIT",

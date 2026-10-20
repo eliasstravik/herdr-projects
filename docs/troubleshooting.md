@@ -10,7 +10,8 @@
 | `herdr-projects doctor` | the health check: every problem below in one run, each with what to do ([the health check](#the-health-check)) |
 | `herdr-projects install` | writes the `herdr-projects` launcher again, and says if something else of that name comes first on your PATH ([installing](install.md)) |
 | `herdr-projects models [program]` | the model names each agent program takes here, or why its list cannot be read ([models](models.md)) |
-| `herdr-projects machines` | whether each other machine answers, and why not ([other machines](other-machines.md)) |
+| `herdr-projects machines` | whether each other machine answers, how much disk each has free, and why not ([other machines](other-machines.md)) |
+| `herdr-projects sweep` | removes what ended tasks left behind now, and says what ([disk space](disk-space.md)) |
 | `herdr-projects show <id>` | every setting a task runs on, and where each value comes from ([settings](settings.md)) |
 | `herdr-projects details <id>` | everything about one task: reviews, hand-overs, limits, what it waits for |
 | `herdr workspace list` | whether Herdr itself runs and answers |
@@ -31,7 +32,7 @@ with `✗` is a problem, with what to do under it. It exits 1 when there is a pr
 | plan approval | a plan's writer cannot run in its read-only mount here (bubblewrap missing or user namespaces not allowed on Linux; `sandbox-exec` not usable on macOS), while your settings ask for plans (`plan.approve`). With no setting asking, it is said as a fact | install bubblewrap; on macOS start Herdr outside any sandbox; or `herdr-projects set plan.approve none` ([a plan first](plan.md)) |
 | other machines | one does not answer, runs an older version, or cannot ask this one | what `herdr-projects machines` says ([other machines](other-machines.md)) |
 | disk space | under 10 GB free on a disk that holds the board's data, your repos, worktrees, build caches or temporary files: a task's setup may fail there | free some space, starting with the leftovers below |
-| leftovers | the worktree of a done or archived task (a clean-up keeps one with unsaved work), a worktree on a task branch no task has, one git still lists whose folder is gone, an old warm build in `~/.cache/herdr-projects` | the `git worktree remove`, `git worktree prune` or `rm -rf` it names. It never removes anything itself |
+| leftovers | the worktree of a done or archived task (a clean-up keeps one with unsaved work), a worktree on a task branch no task has, one git still lists whose folder is gone, an old warm build in `~/.cache/herdr-projects` | the `git worktree remove`, `git worktree prune` or `rm -rf` it names. It never removes anything itself; `herdr-projects sweep` removes what is provably an ended task's ([disk space](disk-space.md)) |
 | older installs | herdr-superwork or herdr-projects 0.2 still in the way | it takes over what it can, and says what is left ([older installs](old-installs.md)) |
 
 Other machines are asked only when there are some, and each for at most 5 seconds. A done task's worktree is no
@@ -45,6 +46,15 @@ The full table of reasons and fixes: [when an agent could not start](could-not-s
 
 **First time with a program?** Start it once yourself, in a terminal, in a folder of a repo: log in, finish its first
 setup, and trust the folder if it asks ([agent programs](agents.md#before-a-programs-first-task)).
+
+## No space left on device
+
+| You see | What it is | What to do |
+|---|---|---|
+| a task's setup or check failed with `No space left on device` | the disk filled up during its build | `herdr-projects sweep`, then `herdr-projects doctor` for what else can go; then finish or delegate it again |
+| `Disk nearly full on vm-str: … free on …; this task starts once 5.0 GB is free` | the board kept the task from starting on a nearly full disk (`board.diskFree`) | the same; it starts by itself once there is room |
+
+Ended tasks clean up after themselves, and the board sweeps what they left once a day: [disk space](disk-space.md).
 
 ## A model name is refused
 
