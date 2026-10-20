@@ -5,18 +5,23 @@ use crate::herdr::Herdr;
 use crate::json::*;
 use crate::store::files::write_json;
 
-pub fn target(socket: &str) -> Option<Obj> {
-    let c = state::get(socket).unwrap_or_default();
+pub fn target(socket: &str) -> Option<Obj> { target_for(&Co::top(socket)) }
+pub fn target_for(co: &Co) -> Option<Obj> {
+    let c = state::get(co).unwrap_or_default();
     if c.s("controlPriority") == crate::mission_control::priority() && c.b("controlFallback") {
         return who::pick_of(c.s("controlFallback"), "").ok().flatten();
     }
     who::choice()
 }
 pub fn tick(socket: &str) -> Res<()> {
-    let co = Co::top(socket);
-    let c = state::get(&co).unwrap_or_default();
+    for co in state::all(socket) { tick_one(&co)?; }
+    if let Some(co) = crate::mission_control::selected_coordinator(socket) { tick_one(&co)?; }
+    Ok(())
+}
+pub fn tick_one(co: &Co) -> Res<()> {
+    let c = state::get(co).unwrap_or_default();
     if state::pumping(&c) || c.b("want") || !c.b("run") { return Ok(()) }
-    let api = Herdr::new(Some(socket.into()));
+    let api = Herdr::new(Some(co.socket.clone()));
     let agent = api.agent_get(c.s("pane")).ok().flatten();
     let explicit = regex::Regex::new(r"(?im)^\s*(?:[✗×!⚠⏺●]\s*)?(?:api error:|error:|usage limit reached|quota exceeded|individual quota reached|rate limit exceeded|you.ve hit your (?:usage )?limit|http (?:429|529|401|403))").unwrap();
     let turn = crate::finish::turn_ended::screen_error(&api, c.s("pane"), agent.as_ref()).filter(|t| explicit.is_match(&t.error));
@@ -28,16 +33,15 @@ pub fn tick(socket: &str) -> Res<()> {
     let at = order.iter().position(|s| s == &on).unwrap_or(0);
     let next = order.iter().skip(at + 1).find(|s| crate::agents::installed::installed(&crate::store::settings::values::agent_of(s).kind));
     let Some(next) = next else { return Ok(()) };
-    let file = state::dir_of(&co).join(format!("handover-{}.json", crate::clock::now()));
+    let file = state::dir_of(co).join(format!("handover-{}.json", crate::clock::now()));
     write_json(&file, &Value::Object(c.clone()))?;
-    state::change(&co, |s| { s.put("controlPriority", crate::mission_control::priority()); s.put("controlFallback", next.clone()); s.put("controlHandover", format!("{on} → {next}: {error}")); true })?;
-    requests::handover(who::pick_of(next, "")?, &co)?;
-    let wanted = crate::mission_projects::root();
+    state::change(co, |s| { s.put("controlPriority", crate::mission_control::priority()); s.put("controlFallback", next.clone()); s.put("controlHandover", format!("{on} → {next}: {error}")); true })?;
+    requests::handover(who::pick_of(next, "")?, co)?;
     let last = c.arr("where").last();
     let folder = last.filter(|m| std::path::Path::new(m.s("root")).is_dir()).map(|m| std::path::PathBuf::from(m.s("root")))
-        .unwrap_or_else(|| if wanted.is_dir() { wanted } else { crate::store::files::user_home() });
-    let scope = if last.map(|m| m.s("said").starts_with("[MISSION-CONTROL-PROJEKT]")).unwrap_or(false) { "[MISSION-CONTROL-PROJEKT]\n" } else { "" };
+        .or_else(|| co.root()).unwrap_or_else(crate::store::files::user_home);
+    let scope = last.and_then(|m| m.s("said").lines().next()).filter(|s| s.starts_with("[MISSION-CONTROL-")).map(|s| format!("{s}\n")).unwrap_or_default();
     let pending = last.map(|m| format!("\nZuletzt übergebene Nachricht für {} (bei dieser Fehlermeldung unbeantwortet):\n{}", m.s("root"), m.s("said"))).unwrap_or_default();
-    requests::send(&folder, &format!("{scope}Orchestrator-Providerwechsel von {on} zu {next}. Ursache: {error}. Der bisherige Terminal-Pane bleibt zur Einsicht offen. Die vollständige Vorgeschichte liegt in {}. Lies sie und `board list`, bevor du weiterarbeitest. Setze offene Aufträge und offene ORCHESTRATOR-REVIEW-Anfragen fort; lege bereits existierende Teilaufgaben nicht erneut an. Berichte dem Menschen den Wechsel.{pending}", file.display()), false, "", &co)?;
+    requests::send(&folder, &format!("{scope}Orchestrator-Providerwechsel von {on} zu {next}. Ursache: {error}. Der bisherige Terminal-Pane bleibt zur Einsicht offen. Die vollständige Vorgeschichte liegt in {}. Lies sie und `board list`, bevor du weiterarbeitest. Setze offene Aufträge und offene ORCHESTRATOR-REVIEW-Anfragen fort; lege bereits existierende Teilaufgaben nicht erneut an. Berichte dem Menschen den Wechsel.{pending}", file.display()), false, "", co)?;
     Ok(())
 }

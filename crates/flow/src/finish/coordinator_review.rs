@@ -19,7 +19,7 @@ pub fn run(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, to_land:
         t.put("msg", "Der Orchestrator prüft das Ergebnis"); t.put("reviewAt", crate::clock::now()); t.put("waiting", Value::Null);
     })?;
     g.allow(&["reviewneeds"]);
-    let co = Co::top(t.at("link").s("socket"));
+    let co = crate::mission_control::coordinator_for_task(&t, t.at("link").s("socket")).unwrap_or_else(|| Co::top(t.at("link").s("socket")));
     let folder = cwd_of(&t);
     let dir = crate::flow::task::review_dir(&t);
     let verdict = dir.join("verdict.json");

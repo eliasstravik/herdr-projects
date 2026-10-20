@@ -1,4 +1,4 @@
-//! Mission Control: project list, persistent task composer, and visible interactive CLI panes.
+//! A project's own Herdr Space: fixed project identity, persistent task composer, and visible CLI panes.
 pub mod draw;
 pub mod events;
 pub mod worker;
@@ -21,8 +21,13 @@ pub struct State {
 impl State {
     pub fn folder(&self) -> Option<&Project> { self.projects.get(self.project.selected().unwrap_or(0)) }
     pub fn save_draft(&mut self) {
-        if let Some(p) = self.project.selected().and_then(|i| self.projects.get(i)) { self.drafts.insert(p.path.display().to_string(), self.draft.text()); }
-        let _ = crate::store::files::write_json(&draft_file(), &json!(self.drafts));
+        if let Some(p) = self.project.selected().and_then(|i| self.projects.get(i)) {
+            let path = p.path.display().to_string(); let value = self.draft.text(); self.drafts.insert(path.clone(), value.clone());
+            let _ = crate::store::files::with_lock_wait("mission-control-drafts", 5000, || {
+                let mut drafts: HashMap<String, String> = crate::store::files::read_json(&draft_file()).and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+                drafts.insert(path, value); crate::store::files::write_json(&draft_file(), &json!(drafts))
+            });
+        }
     }
     pub fn choose(&mut self, index: usize) {
         if self.projects.is_empty() { return; }
@@ -30,7 +35,7 @@ impl State {
         if let Some(p) = self.folder() {
             let path = p.path.display().to_string();
             self.draft.set_text(self.drafts.get(&path).map(String::as_str).unwrap_or(""));
-            let _ = crate::mission_layout::selected(&self.socket, &path);
+            if std::env::var_os("HERDR_CONTROL_PROJECT_PATH").is_none() { let _ = crate::mission_layout::selected(&self.socket, &path); }
         }
     }
     pub fn send(&mut self) {
@@ -49,7 +54,11 @@ pub fn open() -> crate::err::Res<i32> {
     let socket = crate::herdr::cli::current_socket();
     let pane = std::env::var("HERDR_PANE_ID").unwrap_or_default();
     if pane.is_empty() { crate::fail!("Mission Control muss in einem echten Herdr-Pane laufen.") }
-    crate::mission_layout::register(&socket, &pane)?;
+    let pinned = std::env::var("HERDR_CONTROL_PROJECT_PATH").ok().filter(|p| std::path::Path::new(p).is_dir());
+    if let Some(folder) = &pinned {
+        let current = crate::herdr::Herdr::new(Some(socket.clone())).pane_get(&pane).unwrap_or_default();
+        crate::mission_layout::register_project(&socket, folder, current.s("workspace_id"), &pane)?;
+    } else { crate::mission_layout::register(&socket, &pane)?; }
     let drafts: HashMap<String, String> = crate::store::files::read_json(&draft_file()).and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
     let (tx, commands) = channel(); let (updates, rx) = channel();
     worker::start(socket.clone(), commands, updates);
@@ -62,6 +71,13 @@ pub fn open() -> crate::err::Res<i32> {
         folders_rect: Rect::default(), input_rect: Rect::default(), send_rect: Rect::default(), priority_rect: Rect::default(), refresh_rect: Rect::default(),
         socket, tx, closed_at: None,
     };
+    if let Some(path) = pinned {
+        if let Ok(mut folders) = crate::mission_projects::scan(std::path::Path::new(&path).parent().unwrap_or(std::path::Path::new(&path))) {
+            folders.retain(|p| p.path == std::path::Path::new(&path)); s.projects = folders;
+        }
+        if s.projects.is_empty() { s.projects.push(Project { name: std::path::Path::new(&path).file_name().unwrap_or_default().to_string_lossy().into_owned(), path: path.clone().into(), remote: String::new() }); }
+        s.project.select(Some(0));
+    }
     loop {
         for update in rx.try_iter() { worker::receive(&mut s, update); }
         terminal.draw(|frame| draw::draw(frame, &mut s))?;

@@ -8,8 +8,42 @@ use crate::store::files::{data_dir, marker, marker_alive, read_obj, with_lock_wa
 pub fn file(socket: &str) -> std::path::PathBuf { data_dir().join(format!("mission-control-{}.json", session_name(socket))) }
 pub fn state(socket: &str) -> Obj { read_obj(&file(socket)).unwrap_or_default() }
 pub fn anchor(socket: &str) -> Option<String> {
+    if let Some(folder) = std::env::var("HERDR_CONTROL_PROJECT_PATH").ok() { return project_anchor(socket, &folder); }
     let c = state(socket);
     (c.b("pane") && marker_alive(c.at("owner"))).then(|| c.t("pane"))
+}
+pub fn project_anchor(socket: &str, folder: &str) -> Option<String> {
+    let c = state(socket);
+    let key = project_key(folder);
+    let p = c.at("projects").get(&key)?;
+    (p.b("pane") && marker_alive(p.at("owner"))).then(|| p.t("pane"))
+}
+pub fn register_project(socket: &str, folder: &str, workspace: &str, pane: &str) -> Res<()> {
+    let mut c = state(socket);
+    let key = project_key(folder);
+    let mut projects = c.o("projects").cloned().unwrap_or_default();
+    let mut p = projects.get(&key).and_then(Value::as_object).cloned().unwrap_or_default();
+    if p.s("pane") != pane { p.put("children", json!([])); }
+    p.put("folder", folder); p.put("workspace", workspace); p.put("pane", pane);
+    p.put("owner", marker());
+    projects.insert(key, Value::Object(p)); c.put("projects", Value::Object(projects));
+    write_json(&file(socket), &Value::Object(c))
+}
+pub fn prepare_project(socket: &str, folder: &str, workspace: &str, pane: &str) -> Res<()> {
+    let mut c = state(socket); let key = project_key(folder);
+    let mut projects = c.o("projects").cloned().unwrap_or_default();
+    let mut p = projects.get(&key).and_then(Value::as_object).cloned().unwrap_or_default();
+    if p.s("pane") != pane { p.put("children", json!([])); p.put("owner", Value::Null); }
+    p.put("folder", folder); p.put("workspace", workspace); p.put("pane", pane);
+    projects.insert(key, Value::Object(p)); c.put("projects", Value::Object(projects));
+    write_json(&file(socket), &Value::Object(c))
+}
+pub fn project_workspace(socket: &str, folder: &str) -> Option<String> {
+    state(socket).at("projects").get(&project_key(folder)).map(|p| p.t("workspace")).filter(|s| !s.is_empty())
+}
+pub fn project_key(folder: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new(); folder.hash(&mut h); format!("{:016x}", h.finish())
 }
 pub fn register(socket: &str, pane: &str) -> Res<()> {
     let mut c = state(socket);
@@ -23,7 +57,8 @@ pub fn selected(socket: &str, folder: &str) -> Res<()> {
 /// The left control pane keeps its width. Further CLIs split the largest owned pane on its right.
 pub fn split(api: &Herdr, cwd: &str, env: &[(String, String)]) -> Res<Option<Value>> {
     let socket = api.socket_path();
-    let Some(root) = anchor(&socket) else { return Ok(None) };
+    let folder = std::env::var("HERDR_CONTROL_PROJECT_PATH").unwrap_or_default();
+    let Some(root) = (if folder.is_empty() { anchor(&socket) } else { project_anchor(&socket, &folder) }) else { return Ok(None) };
     with_lock_wait(&format!("mission-layout:{}", session_name(&socket)), 10000, || {
         let Some(control) = api.pane_get(&root) else { crate::fail!("Mission Control ist geschlossen. Bitte erneut öffnen.") };
         let layout = api.pane_layout(&root).unwrap_or(Value::Null);

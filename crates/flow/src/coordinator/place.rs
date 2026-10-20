@@ -27,10 +27,15 @@ pub fn home_space(api: &Herdr, c: Option<&Obj>) -> Res<String> {
 fn space_for(api: &Herdr, co: &Co, c: Option<&Obj>) -> Res<String> {
     let Some(root) = co.root().filter(|r| real(r) != real(&user_home())) else { return home_space(api, c) };
     let list: Vec<Value> = api.workspaces()?.into_iter().filter(|w| !w.at("worktree").is_object()).collect();
-    let base = root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let repo = co.repo().unwrap_or_default();
-    if let Some(w) = list.iter().find(|w| c.map(|c| c.b("space") && w.s("workspace_id") == c.s("space")).unwrap_or(false)).or_else(|| list.iter().find(|w| w.s("label") == repo || w.s("label") == base)) { return Ok(w.t("workspace_id")); }
-    Ok(api.workspace_create(&root.display().to_string(), repo, &[])?.at("workspace").t("workspace_id"))
+    let mission = crate::mission_control::is_active(&co.socket);
+    let label = repo.to_string();
+    if mission {
+        if let Some(workspace) = crate::mission_layout::project_workspace(&co.socket, &root.display().to_string()) { return Ok(workspace); }
+    }
+    if let Some(w) = list.iter().find(|w| c.map(|c| c.b("space") && w.s("workspace_id") == c.s("space")).unwrap_or(false))
+        .or_else(|| list.iter().find(|w| w.s("label") == label || (!mission && w.s("label") == root.file_name().unwrap_or_default().to_string_lossy()))) { return Ok(w.t("workspace_id")); }
+    Ok(api.workspace_create(&root.display().to_string(), &label, &[])?.at("workspace").t("workspace_id"))
 }
 /// Not written down (the state file was lost) but there: the pane in the coordinator's own folder. A project
 /// coordinator's folder is the human's repo: only a pane in a tab named after it.
@@ -47,20 +52,39 @@ fn put(c: &mut Obj, co: &Co, space: Value, pane: &Value, was: Value) {
 }
 /// Its tab, found or opened: one pane, in its own folder. Returns the pane.
 pub fn open_tab(api: &Herdr, co: &Co, env: &[(String, String)]) -> Res<Value> {
+    let mission_project = co.repo().is_some() && crate::mission_control::is_active(&co.socket);
     if co.is_top() {
         if let Some(pane) = crate::mission_layout::split(api, &home(co).display().to_string(), env)? {
             change(co, |c| { put(c, co, pane.at("workspace_id").clone(), &pane, Value::Null); c.put("tiled", true); true })?;
             return Ok(pane);
         }
     }
-    let mut pane = adopt(api, co);
+    let saved = get(co);
+    let mut pane = if mission_project && saved.as_ref().map(|c| !c.b("pane")).unwrap_or(false) { None } else { adopt(api, co) };
+    if mission_project {
+        let folder = home(co).display().to_string();
+        if let Some(control_id) = crate::mission_layout::project_anchor(&co.socket, &folder) {
+            if let (Some(existing), Some(control)) = (pane.as_ref(), api.pane_get(&control_id)) {
+                if existing.s("tab_id") != control.s("tab_id") {
+                    let moved = api.call(crate::herdr::cli::args(&["pane", "move", existing.s("pane_id"), "--tab", control.s("tab_id"), "--split", "right", "--target-pane", &control_id, "--no-focus"]))?;
+                    pane = Some(moved.at("move_result").at("pane").clone());
+                }
+            }
+        }
+    }
     let mut old = None;
     if let Some(p) = pane.as_ref().filter(|_| co.is_top()) { if let Some(w) = api.workspace_get(p.s("workspace_id")) { if w.s("label") == COORDINATOR_TAB && !w.at("worktree").is_object() && w.i("pane_count") == 1 { old = Some(w.t("workspace_id")); } } }
-    let space = match &pane { Some(p) => p.t("workspace_id"), None => space_for(api, co, get(co).as_ref())? };
+    let space = match &pane { Some(p) => p.t("workspace_id"), None => space_for(api, co, saved.as_ref())? };
     if pane.is_none() {
-        let r = api.tab_create(&space, &home(co).display().to_string(), &co.name(), env)?;
-        pane = if r.at("root_pane").is_object() { Some(r.at("root_pane").clone()) } else { api.panes(Some(&space))?.into_iter().find(|p| p.s("tab_id") == r.at("tab").s("tab_id")) };
-        if pane.is_none() { if r.at("tab").b("tab_id") { api.tab_close(r.at("tab").s("tab_id")); } crate::fail!("herdr opened no terminal for the {}", co.name()); }
+        if mission_project {
+            let folder = home(co).display().to_string();
+            let Some(control) = crate::mission_layout::project_anchor(&co.socket, &folder) else { crate::fail!("Der Projekt-Space {} hat kein Taskfeld-Pane.", co.name()); };
+            pane = Some(api.pane_split(&control, &home(co).display().to_string(), "right", env)?);
+        } else {
+            let r = api.tab_create(&space, &home(co).display().to_string(), &co.name(), env)?;
+            pane = if r.at("root_pane").is_object() { Some(r.at("root_pane").clone()) } else { api.panes(Some(&space))?.into_iter().find(|p| p.s("tab_id") == r.at("tab").s("tab_id")) };
+            if pane.is_none() { if r.at("tab").b("tab_id") { api.tab_close(r.at("tab").s("tab_id")); } crate::fail!("herdr opened no terminal for the {}", co.name()); }
+        }
     }
     let pane = pane.unwrap();
     change(co, |c| {

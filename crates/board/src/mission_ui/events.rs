@@ -20,11 +20,9 @@ pub fn handle(s: &mut State, event: Event) -> bool {
                 else { s.order.handle(&p); }
                 return false;
             }
-            if keys::is(&p, K::Delegate) { s.sidebar = !s.sidebar; return false; }
-            if s.sidebar && keys::is(&p, K::Up) { s.choose(s.project.selected().unwrap_or(0).saturating_sub(1)); }
-            else if s.sidebar && keys::is(&p, K::Down) { s.choose(s.project.selected().unwrap_or(0) + 1); }
-            else if keys::is(&p, K::Enter) { if s.sidebar { s.sidebar = false; } else { s.send(); } }
-            else { s.sidebar = false; s.draft.handle(&p); }
+            if keys::is(&p, K::Delegate) { return false; }
+            if keys::is(&p, K::Enter) { s.send(); }
+            else { s.draft.handle(&p); }
         }
         Event::Mouse(m) => {
             let point = ratatui::layout::Position::new(m.column, m.row);
@@ -32,12 +30,8 @@ pub fn handle(s: &mut State, event: Event) -> bool {
                 MouseEventKind::Down(MouseButton::Left) => {
                     if s.send_rect.contains(point) { if s.priority { let _ = s.tx.send(Command::Priority(s.order.text())); } else { s.send(); } }
                     else if s.priority_rect.contains(point) { priority(s); }
-                    else if s.refresh_rect.contains(point) { let _ = s.tx.send(Command::Refresh); }
-                    else if s.folders_rect.contains(point) { let index = s.project.offset() + m.row.saturating_sub(s.folders_rect.y) as usize; s.choose(index); s.sidebar = false; }
-                    else if s.input_rect.contains(point) { s.sidebar = false; }
+                    else if s.input_rect.contains(point) { }
                 }
-                MouseEventKind::ScrollDown if s.folders_rect.contains(point) => s.choose(s.project.selected().unwrap_or(0) + 1),
-                MouseEventKind::ScrollUp if s.folders_rect.contains(point) => s.choose(s.project.selected().unwrap_or(0).saturating_sub(1)),
                 _ => {}
             }
         }

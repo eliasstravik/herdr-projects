@@ -13,7 +13,6 @@ pub fn start(socket: String, commands: Receiver<Command>, updates: Sender<Update
         crate::flow::send::shim();
         crate::extras::refresh_sidebar();
         crate::mission_keeper::ensure();
-        if let Err(e) = crate::mission_control::apply_priority(&crate::mission_control::priority()) { let _ = updates.send(Update::Error(e.msg)); }
         refresh(&updates);
         loop {
             match commands.recv_timeout(Duration::from_millis(1000)) {
@@ -29,19 +28,24 @@ pub fn start(socket: String, commands: Receiver<Command>, updates: Sender<Update
                 Err(RecvTimeoutError::Disconnected) => break,
                 Err(RecvTimeoutError::Timeout) => {}
             }
-            if let Err(e) = crate::mission_control::ensure(&socket) { let _ = updates.send(Update::Error(e.msg)); }
+            if crate::mission_control::has_session(&socket) {
+                if let Err(e) = crate::mission_control::ensure(&socket) { let _ = updates.send(Update::Error(e.msg)); }
+            }
             crate::mission_keeper::ensure();
             if !crate::keeper::keeper_alive() { crate::keeper::tick_once(&socket, false); }
             let tasks = crate::store::tasks::list(Default::default());
             crate::mission_agents::sync(&tasks, &socket);
-            let coordinator = crate::coordinator::look::summary(socket.as_str());
+            let coordinator = crate::mission_control::selected_summary(socket.as_str());
             if updates.send(Update::Snapshot(coordinator)).is_err() { break; }
         }
     });
 }
 fn refresh(updates: &Sender<Update>) {
     match crate::mission_projects::scan(&crate::mission_projects::root()) {
-        Ok(folders) => { let _ = updates.send(Update::Folders(folders)); }
+        Ok(mut folders) => {
+            if let Ok(path) = std::env::var("HERDR_CONTROL_PROJECT_PATH") { folders.retain(|p| p.path == PathBuf::from(&path)); }
+            let _ = updates.send(Update::Folders(folders));
+        }
         Err(e) => { let _ = updates.send(Update::Error(format!("Projektordner können nicht geladen werden: {e}"))); }
     }
 }

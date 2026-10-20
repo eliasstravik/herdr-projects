@@ -149,7 +149,8 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
         if let Some(w) = c.o("want").cloned() {
             taken.insert(w.t("at"));
             // Its conversation is known before its terminal goes: a restart reopens it.
-            if !["open", "handover"].contains(&w.s("what")) { if c.b("run") { active(co, &c); c = get(co).unwrap_or(c); } close_place(&api, &c); }
+            let keep_project_pane = co.repo().is_some() && crate::mission_control::is_active(&co.socket) && ["new", "handover"].contains(&w.s("what"));
+            if !["open", "handover"].contains(&w.s("what")) && !keep_project_pane { if c.b("run") { active(co, &c); c = get(co).unwrap_or(c); } close_place(&api, &c); }
             let _ = change(co, |c| {
                 if c.at("want").at("at") == w.at("at") { c.put("want", Value::Null); }
                 if w.s("what") == "open" { return true; }
@@ -177,7 +178,7 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
             let run = get(co).map(|c| c.i("startedAt")).unwrap_or(0);
             let seq = ag.as_ref().map(|a| a.at("completion_seq").clone()).unwrap_or(Value::Null);
             let at_rest = ag.as_ref().map(|a| ["idle", "done"].contains(&a.s("agent_status"))).unwrap_or(false);
-            let scoped = m.s("text").starts_with("[MISSION-CONTROL-PROJEKT]");
+            let scoped = m.s("text").starts_with("[MISSION-CONTROL-PROJEKT]") || m.s("text").starts_with("[MISSION-CONTROL-RESEARCH-RESULT]");
             if (m.b("review") || scoped) && (!at_rest || get(co).map(|c| c.b("typed")).unwrap_or(false)) { stuck = true; break; }
             // Has this run of the program finished a turn since the last words went in, and is it at rest? Then
             // whatever went in a while ago has been dealt with.

@@ -29,11 +29,12 @@ fn hold_pr_failure(g: &mut Guard, t: &Task) -> Res<bool> {
     flow::sidebar::tell_sidebar(&h);
     Ok(true)
 }
-fn done(g: &mut Guard, t: &Task, msg: &str, review: Option<&Value>) -> Res<()> {
+fn done(g: &mut Guard, t: &Task, msg: &str, review: Option<&Value>, research: bool) -> Res<()> {
     let mark = flow::spaces::tidy_mark(t, "merged", "");
     let d = g.set(|t| { t.put("stage", "done"); t.put("tidy", mark.clone().unwrap_or(Value::Null)); t.put("msg", one_line(msg, 2048)); t.put("failure", Value::Null); t.put("mergeIntent", Value::Null); if let Some(r) = review { t.put("review", r.clone()); } })?;
     flow::sidebar::tell_sidebar(&d);
     crate::land::tidy(d.s("id"), "merged"); // done with nothing to merge leaves herdr's sidebar like merged work does
+    if research { super::research::mission_result(&d, review); }
     Ok(())
 }
 pub fn after_review(c: Ctx, g: &mut Guard) -> Res<()> {
@@ -45,7 +46,7 @@ pub fn after_review(c: Ctx, g: &mut Guard) -> Res<()> {
     // Nothing to land: it is simply done, unless work outside a repo is reviewed too (review "always").
     if !to_land && ch.s("review.when") != "always" && !(c.research && ch.s("review.when") != "never") {
         if hold_pr_failure(g, &t)? { return Ok(()); }
-        return done(g, &t, &format!("{}{}", finished(c.text), c.note), None);
+        return done(g, &t, &format!("{}{}", finished(c.text), c.note), None, c.research);
     }
     // An adversarial review before it reaches you. Its settings are read now, as the review starts.
     let ch = work(get(id).as_ref());
@@ -136,7 +137,7 @@ pub fn after_review(c: Ctx, g: &mut Guard) -> Res<()> {
     }
     if !to_land {
         let msg = format!("{}{}{}", review.as_ref().map(|r| format!("{} ", gate::sentence(r, "accept"))).unwrap_or_default(), finished(c.text), c.note);
-        return done(g, &t, &msg, review.as_ref());
+        return done(g, &t, &msg, review.as_ref(), c.research);
     }
     let stat = change.as_ref().map(|x| x.at("stat").clone()).unwrap_or(Value::Null);
     t = g.set(|t| { t.put("review", review.clone().unwrap_or(Value::Null)); t.put("stat", stat.clone()); t.put("reviewedHead", head_v.clone()); t.put("mergeFailed", false); })?;

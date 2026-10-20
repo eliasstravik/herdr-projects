@@ -24,7 +24,7 @@ pub fn name_agent_tab(api: &Herdr, tab: &str, t: Option<&Obj>) { name_tab(api, t
 pub struct Opened { pub tab: String, pub pane: String, pub terminal: String }
 /// A terminal pane split from the task's existing anchor pane.
 pub fn open_tab(api: &Herdr, t: &Obj, _label: &str, cwd: &str, env: &[(String, String)], who: &str) -> Res<Opened> {
-    if let Some(pane) = crate::mission_layout::split(api, cwd, env)? {
+    if let Some(pane) = crate::mission_control::split_task(api, &crate::store::repos::folder_of(t.s("id")), cwd, env)? {
         return Ok(Opened { tab: pane.t("tab_id"), pane: pane.t("pane_id"), terminal: pane.t("terminal_id") });
     }
     let workspace = if t.at("link").b("workspace") { t.at("link").t("workspace") } else { api.pane_get(t.at("link").s("pane")).map(|p| p.t("workspace_id")).unwrap_or_default() };

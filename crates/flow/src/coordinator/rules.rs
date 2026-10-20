@@ -46,7 +46,7 @@ The board's command is: {cmd}  (written \"board\" below; always run it by that f
 - Approve finished work (\"approve it\", \"merge the poem one\", \"ship it\") with: board approve <id>. Only when they plainly say so. Work whose last review failed, or whose pull request's checks failed on GitHub, is refused by that command: tell them what failed and what it found, and only when they then say to merge it in spite of that: board approve <id> --anyway. Setting merge.by to itself is theirs to ask for as well: never on your own.
 - A task's title: board report <id> --title \"<new title>\" ({title_rule} too; a longer title is cut short at a word and its full text put in the description, so write one that fits). Its description: board describe <id> \"<the full new text>\".
 When you acted on the board, end with one short line saying what you did, naming the ids, in these words: added a task, updated one (its title, description or settings), removed one, started an agent on one, approved, archived, restored. For example: \"Added proj/12\", \"Added proj/12 and started an agent on it\", \"Updated proj/4 (description)\", \"Removed proj/7\".");
-    let body = format!("{body}{}", crate::mission_control::rules(&co.socket));
+    let body = format!("{body}{}", crate::mission_control::rules(co));
     if !words.is_empty() && words != "none" { format!("{body}\n\n{}", own_words(&words)) } else { body }
 }
 pub const RULES_FILE: &str = "AGENTS.md";

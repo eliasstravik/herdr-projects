@@ -11,11 +11,13 @@ fn drain() { flush(); sw::runner::drain_jobs(&|job, id, extra| { sw::jobs::run_j
 fn mission(w: &World) -> String {
     unsafe { std::env::set_var("HERDR_PROJECTS_COORDINATOR_DIR", w.base.join("mission-coordinator")); }
     let api = Herdr::new(Some(w.socket.clone()));
-    let ws = api.workspace_create(&w.root_str(), "Mission Control", &[]).unwrap();
+    let ws = api.workspace_create(&w.root_str(), "proj", &[]).unwrap();
     let pane = ws.at("root_pane").t("pane_id");
-    sw::mission_layout::register(&w.socket, &pane).unwrap();
+    sw::mission_layout::register_project(&w.socket, &w.root_str(), &ws.at("workspace").t("workspace_id"), &pane).unwrap();
+    sw::mission_layout::selected(&w.socket, &w.root_str()).unwrap();
     pane
 }
+fn coordinator(w: &World) -> sw::coordinator::co::Co { sw::mission_control::project_coordinator(&w.root, &w.socket).unwrap() }
 #[test]
 fn priority_selects_the_coordinator_and_workers_and_refuses_invalid_changes_before_saving() {
     let _w = world();
@@ -48,19 +50,18 @@ fn folders_are_visible_before_they_have_tasks_and_keep_their_real_origin() {
     assert!(!real.remote.is_empty());
 }
 #[test]
-fn opening_and_submitting_uses_the_selected_cli_and_project_in_one_visible_tab() {
+fn opening_and_submitting_uses_the_selected_cli_and_project_space() {
     let w = world();
     apply_priority("agy,codex").unwrap();
     let root = mission(&w);
     sw::mission_control::ensure(&w.socket).unwrap(); drain();
-    let c = sw::coordinator::state::get(&w.socket).unwrap();
+    let c = sw::coordinator::state::get(coordinator(&w)).unwrap();
     assert_eq!(c.at("run").s("kind"), "agy");
     assert_ne!(c.s("pane"), root);
-    assert!(c.b("tiled"));
-    sw::mission_control::show(false).unwrap();
-    assert_eq!(w.state().arr("workspaces").len(), 1, "opening twice focuses the existing Mission Control");
+    assert!(!c.b("tiled"));
+    assert_eq!(w.state().arr("workspaces").len(), 1, "task field and coordinator share the project space");
     submit(&w.root, "Baue eine Suche", &w.socket).unwrap(); drain();
-    let c = sw::coordinator::state::get(&w.socket).unwrap();
+    let c = sw::coordinator::state::get(coordinator(&w)).unwrap();
     assert!(prompts(&w, c.s("pane")).last().unwrap().contains("Baue eine Suche"));
     let context = c.arr("where").last().unwrap();
     assert_eq!(context.s("root"), w.root_str());
@@ -72,22 +73,23 @@ fn opening_and_submitting_uses_the_selected_cli_and_project_in_one_visible_tab()
     assert_eq!(w.state().arr("tabs").len(), 1);
     assert!(!calls(&w).iter().any(|c| c.starts_with("tab create")));
 }
+
 #[test]
 fn worker_results_are_reviewed_by_the_existing_orchestrator_without_a_reviewer_cli() {
     let w = world();
     apply_priority("agy,codex").unwrap();
-    let root = mission(&w);
+    mission(&w);
     sw::mission_control::ensure(&w.socket).unwrap(); drain();
-    let pane = sw::coordinator::state::get(&w.socket).unwrap().t("pane");
+    let pane = sw::coordinator::state::get(coordinator(&w)).unwrap().t("pane");
     let id = w.add("Ein Ergebnis prüfen");
     w.script(json!({"worker":[{"files":{"f.txt":"Änderung\n"},"note":"Fertig."}],
         "coordinator":[{"reviewTask":id,"verdict":{"meets":true,"text":"Änderung im selben Orchestrator geprüft.","findings":[]}}]}));
     delegate(&id);
-    assert_eq!(task(&id).at("link").s("missionPane"), root);
+    assert_eq!(task(&id).at("link").s("missionPane"), pane);
     let t = settle(&id);
     assert_eq!(t.s("agent"), "codex");
     assert_eq!(t.s("stage"), "approval", "{}", t.at("failure"));
-    assert_eq!(sw::coordinator::state::get(&w.socket).unwrap().s("pane"), pane);
+    assert_eq!(sw::coordinator::state::get(coordinator(&w)).unwrap().s("pane"), pane);
     assert!(t.at("review").s("by").contains("Orchestrator"));
     assert!(prompts(&w, &pane).last().unwrap().contains("[ORCHESTRATOR-REVIEW]"));
     assert_eq!(w.state().arr("tabs").len(), 1);
@@ -99,7 +101,7 @@ fn changing_priority_replaces_an_idle_coordinator_without_closing_mission_contro
     let w = world(); apply_priority("agy,codex").unwrap();
     let root = mission(&w); sw::mission_control::ensure(&w.socket).unwrap(); drain();
     apply_priority("codex,agy").unwrap(); sw::mission_control::ensure(&w.socket).unwrap(); drain();
-    let c = sw::coordinator::state::get(&w.socket).unwrap();
+    let c = sw::coordinator::state::get(coordinator(&w)).unwrap();
     assert_eq!(c.at("run").s("kind"), "codex");
     assert!(Herdr::new(Some(w.socket.clone())).pane_get(&root).is_some());
     assert!(!calls(&w).iter().any(|c| c.starts_with("tab close")));
@@ -110,14 +112,14 @@ fn changing_priority_replaces_an_idle_coordinator_without_closing_mission_contro
 fn coordinator_quota_handover_keeps_the_error_terminal_visible_and_follows_the_order() {
     let w = world(); apply_priority("agy,codex").unwrap(); mission(&w);
     sw::mission_control::ensure(&w.socket).unwrap(); drain();
-    let old = sw::coordinator::state::get(&w.socket).unwrap().t("pane");
+    let old = sw::coordinator::state::get(coordinator(&w)).unwrap().t("pane");
     w.patch(|st| { for p in st["panes"].as_array_mut().unwrap() { if p.s("pane_id") == old { p["agent"]["screen"] = json!("⏺ API Error: usage limit reached. Quota exceeded."); p["agent"]["status"] = json!("done"); } } });
     sw::mission_fallback::tick(&w.socket).unwrap(); drain();
-    let c = sw::coordinator::state::get(&w.socket).unwrap();
+    let c = sw::coordinator::state::get(coordinator(&w)).unwrap();
     assert_eq!(c.at("run").s("kind"), "codex");
     assert_ne!(c.s("pane"), old);
     assert!(Herdr::new(Some(w.socket.clone())).pane_get(&old).is_some());
-    assert_eq!(sw::mission_fallback::target(&w.socket).unwrap().s("kind"), "codex");
+    assert_eq!(sw::mission_fallback::target_for(&coordinator(&w)).unwrap().s("kind"), "codex");
     assert!(prompts(&w, c.s("pane")).last().unwrap().contains("Providerwechsel"));
     assert_eq!(w.state().arr("tabs").len(), 1);
     assert!(!calls(&w).iter().any(|c| c.starts_with("tab close")));
@@ -142,13 +144,13 @@ fn antigravity_trust_preserves_model_and_existing_workspaces_without_duplicate_e
 fn a_review_request_waits_for_the_current_orchestrator_turn_to_finish() {
     let w = world(); apply_priority("agy,codex").unwrap(); mission(&w);
     sw::mission_control::ensure(&w.socket).unwrap(); drain();
-    let pane = sw::coordinator::state::get(&w.socket).unwrap().t("pane");
+    let pane = sw::coordinator::state::get(coordinator(&w)).unwrap().t("pane");
     set_status(&w, &pane, "working");
-    sw::coordinator::requests::send(&w.root, "[ORCHESTRATOR-REVIEW]\nPrüfe das Ergebnis", false, "", &w.socket).unwrap(); drain();
+    sw::coordinator::requests::send(&w.root, "[ORCHESTRATOR-REVIEW]\nPrüfe das Ergebnis", false, "", coordinator(&w)).unwrap(); drain();
     assert!(prompts(&w, &pane).is_empty());
-    assert_eq!(sw::coordinator::state::get(&w.socket).unwrap().arr("queue").len(), 1);
+    assert_eq!(sw::coordinator::state::get(coordinator(&w)).unwrap().arr("queue").len(), 1);
     set_status(&w, &pane, "idle");
-    sw::coordinator::pump::pump(w.socket.as_str());
+    sw::coordinator::pump::pump(coordinator(&w));
     assert!(prompts(&w, &pane).last().unwrap().contains("[ORCHESTRATOR-REVIEW]"));
 }
 
@@ -158,8 +160,8 @@ fn worker_choice_excludes_the_running_coordinator_even_after_its_provider_change
     sw::mission_control::ensure(&w.socket).unwrap(); drain();
     let id = w.add("Andere CLI");
     assert_eq!(sw::mission_control::worker_choice(&task(&id), &w.socket).unwrap(), "codex");
-    sw::coordinator::state::change(&w.socket, |c| { c.obj_mut("run").put("kind", "codex"); true }).unwrap();
-    assert!(!sw::mission_control::worker_allowed(&w.socket, "codex/another-model"));
+    sw::coordinator::state::change(coordinator(&w), |c| { c.obj_mut("run").put("kind", "codex"); true }).unwrap();
+    assert!(!sw::mission_control::worker_allowed_for(&task(&id), &w.socket, "codex/another-model"));
     assert_eq!(sw::mission_control::worker_choice(&task(&id), &w.socket).unwrap(), "claude");
 }
 
@@ -167,11 +169,11 @@ fn worker_choice_excludes_the_running_coordinator_even_after_its_provider_change
 fn a_project_message_waits_for_the_previous_turn_and_refuses_tasks_in_another_repo() {
     let w = world(); apply_priority("agy,codex").unwrap(); mission(&w);
     sw::mission_control::ensure(&w.socket).unwrap(); drain();
-    let pane = sw::coordinator::state::get(&w.socket).unwrap().t("pane");
+    let pane = sw::coordinator::state::get(coordinator(&w)).unwrap().t("pane");
     set_status(&w, &pane, "working");
     submit(&w.root, "Ist die Startseite umgestellt?", &w.socket).unwrap(); drain();
     assert!(prompts(&w, &pane).is_empty());
-    set_status(&w, &pane, "idle"); sw::coordinator::pump::pump(w.socket.as_str());
+    set_status(&w, &pane, "idle"); sw::coordinator::pump::pump(coordinator(&w));
     assert_eq!(prompts(&w, &pane).len(), 1);
     assert_eq!(sw::mission_control::task_folder(&w.base, "", &pane, &w.socket).unwrap(), w.root);
     let other = w.base.join("other-project"); std::fs::create_dir(&other).unwrap();
@@ -195,11 +197,11 @@ fn mission_control_only_draws_projects_and_input_with_tasks_in_the_native_sideba
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(104, 60)).unwrap();
     terminal.draw(|f| draw::draw(f, &mut s)).unwrap();
     let text: String = terminal.backend().buffer().content.iter().map(|cell| cell.symbol()).collect();
-    assert!(text.contains("offene Tasks ganz links unter agents"));
-    assert!(text.contains("Task für proj"));
+    assert!(text.contains("Space: proj"));
+    assert!(text.contains("Task für proj"), "{text}");
     assert!(!text.contains("Orchestrator · Live-Ausgabe"));
     assert!(!text.contains("Noch keine Tasks"));
-    assert!(s.folders_rect.width > 90);
+    assert_eq!(s.folders_rect.width, 0, "the project folder list is replaced by Herdr Spaces");
 }
 
 #[test]
@@ -207,10 +209,10 @@ fn antigravity_individual_quota_marker_starts_the_next_coordinator_and_keeps_pro
     let w = world(); apply_priority("agy,codex").unwrap(); mission(&w);
     sw::mission_control::ensure(&w.socket).unwrap(); drain();
     submit(&w.root, "Ist die Startseite umgestellt?", &w.socket).unwrap(); drain();
-    let old = sw::coordinator::state::get(&w.socket).unwrap().t("pane");
+    let old = sw::coordinator::state::get(coordinator(&w)).unwrap().t("pane");
     w.patch(|st| { for p in st["panes"].as_array_mut().unwrap() { if p.s("pane_id") == old { p["agent"]["screen"] = json!("⚠ Individual quota reached. Please upgrade your subscription. Resets in 4h."); p["agent"]["status"] = json!("done"); } } });
     sw::mission_fallback::tick(&w.socket).unwrap(); drain();
-    let c = sw::coordinator::state::get(&w.socket).unwrap();
+    let c = sw::coordinator::state::get(coordinator(&w)).unwrap();
     assert_eq!(c.at("run").s("kind"), "codex");
     let messages = prompts(&w, c.s("pane"));
     assert!(messages.last().unwrap().contains(&w.root_str()));
@@ -223,12 +225,12 @@ fn resting_old_coordinators_are_saved_and_closed_after_handover_while_workers_st
     let w = world(); apply_priority("agy,codex").unwrap(); mission(&w);
     sw::mission_control::ensure(&w.socket).unwrap(); drain();
     let api = Herdr::new(Some(w.socket.clone()));
-    let old = sw::coordinator::state::get(&w.socket).unwrap();
-    let record = sw::coordinator::state::dir_of(&w.socket).join("handover-test.json");
+    let old = sw::coordinator::state::get(coordinator(&w)).unwrap();
+    let record = sw::coordinator::state::dir_of(coordinator(&w)).join("handover-test.json");
     sw::store::files::write_json(&record, &json!(old)).unwrap();
     let worker = api.pane_split(old.s("pane"), &w.root_str(), "down", &[]).unwrap();
     let next = api.pane_split(old.s("pane"), old.s("cwd"), "down", &[]).unwrap();
-    sw::coordinator::state::change(&w.socket, |c| {c.put("pane", next.at("pane_id").clone());true}).unwrap();
+    sw::coordinator::state::change(coordinator(&w), |c| {c.put("pane", next.at("pane_id").clone());true}).unwrap();
     api.call(sw::herdr::cli::args(&["agent","start","next","--kind","codex","--pane",next.s("pane_id")])).unwrap();
     set_status(&w, old.s("pane"), "working");
     sw::mission_panes::tidy(&w.socket).unwrap();
@@ -247,7 +249,9 @@ fn resting_old_coordinators_are_saved_and_closed_after_handover_while_workers_st
 
 #[test]
 fn stopped_tasks_stay_in_the_native_agent_list_without_becoming_running_coding_agents() {
-    let w = world(); apply_priority("agy,codex").unwrap(); let root = mission(&w);
+    let w = world(); apply_priority("agy,codex").unwrap(); mission(&w);
+    sw::mission_control::ensure(&w.socket).unwrap(); drain();
+    let root = sw::coordinator::state::get(coordinator(&w)).unwrap().t("pane");
     let api = Herdr::new(Some(w.socket.clone()));
     let pane = api.pane_split(&root, &w.root_str(), "right", &[]).unwrap();
     let id = w.add("Suchseite");
@@ -257,7 +261,9 @@ fn stopped_tasks_stay_in_the_native_agent_list_without_becoming_running_coding_a
     let raw = api.call(sw::herdr::cli::args(&["agent","get",pane.s("pane_id")])).unwrap();
     assert_eq!(raw.at("agent").s("agent"), sw::herdr::api::TASK_AGENT);
     assert!(api.agent_get(pane.s("pane_id")).unwrap().is_none());
-    assert!(api.agents().unwrap().is_empty());
+    let agents = api.agents().unwrap();
+    assert_eq!(agents.len(), 1, "only the project orchestrator should be a running agent");
+    assert_eq!(agents[0].s("pane_id"), root);
     assert!(w.state().arr("metadata").iter().any(|m| m.s("pane") == pane.s("pane_id") && m.to_string().contains("task=PRJ-1 Suchseite")));
     sw::mission_agents::sync(&[], &w.socket);
     assert!(api.call(sw::herdr::cli::args(&["agent","get",pane.s("pane_id")])).is_err());

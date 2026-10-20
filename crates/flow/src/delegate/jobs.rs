@@ -87,7 +87,7 @@ fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
             let mission = t.at("link").s("missionPane");
             res = if !mission.is_empty() {
                 let board = api.pane_get(&mission).ok_or_else(|| crate::err::Error::new("Mission Control's Herdr pane is not open. Reopen the board pane and delegate again."))?;
-                let pane = mission_split(&api, &mission, t.s("worktree"))?;
+                let pane = mission_split(&api, &mission, &root, t.s("worktree"))?;
                 json!({ "workspace": { "workspace_id": board.at("workspace_id") }, "tab": { "tab_id": pane.at("tab_id") }, "root_pane": pane, "worktree": { "path": t.s("worktree") } })
             } else {
                 if crate::herdr::cli::fake().is_none() { crate::fail!("Open Mission Control in a Herdr pane before starting an agent. Agents must tile beside the board; a separate task tab is not opened."); }
@@ -111,7 +111,7 @@ fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
             } else if !mission.is_empty() {
                 let board = api.pane_get(&mission).ok_or_else(|| crate::err::Error::new("Mission Control's Herdr pane is not open. Reopen the board pane and delegate again."))?;
                 let dir = super::worktree::add_tiled_worktree(&root, &t, &branch, &from)?;
-                let pane = mission_split(&api, &mission, &dir.display().to_string())?;
+                let pane = mission_split(&api, &mission, &root, &dir.display().to_string())?;
                 if !pane.b("pane_id") { crate::fail!("herdr opened no terminal pane beside Mission Control"); }
                 json!({ "workspace": { "workspace_id": board.at("workspace_id") }, "tab": { "tab_id": pane.at("tab_id") }, "root_pane": pane, "worktree": { "path": dir.display().to_string() } })
             } else {
@@ -129,7 +129,7 @@ fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
             let mission = t.at("link").s("missionPane");
             res = if !mission.is_empty() {
                 let board = api.pane_get(&mission).ok_or_else(|| crate::err::Error::new("Mission Control's Herdr pane is not open. Reopen the board pane and delegate again."))?;
-                let pane = mission_split(&api, &mission, &root.display().to_string())?;
+                let pane = mission_split(&api, &mission, &root, &root.display().to_string())?;
                 json!({ "workspace": { "workspace_id": board.at("workspace_id") }, "tab": { "tab_id": pane.at("tab_id") }, "root_pane": pane })
             } else {
                 if crate::herdr::cli::fake().is_none() { crate::fail!("Open Mission Control in a Herdr pane before starting an agent. Agents must tile beside the board; a separate task tab is not opened."); }
@@ -276,8 +276,8 @@ pub fn bring_forward(api: &Herdr, pane: &Value, has_agent: bool) -> crate::herdr
     if has_agent { api.agent_focus(pane.s("pane_id")).map(|_| ()) } else { api.workspace_focus(pane.s("workspace_id")).map(|_| { let _ = api.tab_focus(pane.s("tab_id")); }) }
 }
 
-fn mission_split(api: &Herdr, anchor: &str, cwd: &str) -> Res<Value> {
-    match crate::mission_layout::split(api, cwd, &board_env())? {
+fn mission_split(api: &Herdr, anchor: &str, folder: &Path, cwd: &str) -> Res<Value> {
+    match crate::mission_control::split_task(api, folder, cwd, &board_env())? {
         Some(pane) => Ok(pane), None => Ok(api.pane_split(anchor, cwd, "right", &board_env())?),
     }
 }
