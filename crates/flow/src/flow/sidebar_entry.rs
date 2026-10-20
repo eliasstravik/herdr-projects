@@ -30,7 +30,7 @@ pub fn entry_of(t: &Obj, who_is: &str, now: i64) -> Entry {
     let r = as_row(t);
     let (at_who, at_stand) = who_stands(&r);
     let f = row_fields(&r, now);
-    let tags = [is_research(&r).then_some("[research]"), r.at("automation").b("id").then_some("[auto]")].into_iter().flatten().collect::<Vec<_>>().join(" ");
+    let tags = [crate::chat_only::is_chat(&r).then_some("[chat]"), is_research(&r).then_some("[research]"), r.at("automation").b("id").then_some("[auto]")].into_iter().flatten().collect::<Vec<_>>().join(" ");
     // An agent that took over from another is named: `agent codex · working`, `reviewer pi · under review`.
     let whose = if !who_is.is_empty() { who_is.to_string() } else if at_who == who::REVIEWER { who::AGENT.into() } else { at_who.clone() };
     let took = if whose == who::REVIEWER { agent_of(t.s("reviewerOn")).kind } else if whose == who::AGENT && t.b("on") { t.t("agent") } else { String::new() };

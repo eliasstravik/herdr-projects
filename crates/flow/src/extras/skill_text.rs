@@ -30,6 +30,9 @@ Every command accepts `--json`. Below, `herdr-projects` stands for that path.
   then changes nothing in the repo and its result is a report (later: `delegate <id> --research`). It is short for
   the setting `research.only`: `--research.only true`, or `set research.only true --task <id>` (`--repo <name>`
   for every new task of a repo; `--no-research` on one task says otherwise).
+  Add `--chat` when the human plainly asked for a conversation with nothing to build (a consulting session, a
+  discussion): the agent changes nothing, every stop of it waits for the human, and the task ends only when the human
+  says so (`finish <id>`). Short for the setting `chat.only`; with `research.only` on too, chat wins.
   Add a task only when the human asked for it: nothing adds tasks by itself.
 - `herdr-projects delegate <id>`: put an agent on a task. It works in its own git worktree, as an ordinary herdr
   agent in its own herdr space. Any work setting can be chosen for this one task as `--<name> <value>`:
@@ -75,7 +78,7 @@ Every command accepts `--json`. Below, `herdr-projects` stands for that path.
   `automations add "<name>" --prompt "<what each task is to do>" --schedule "<every 2h | daily 09:00 | mon 09:00 | cron "0 9 * * 1">"`
   or `--when <added|approval|review-failed|failed|needs-you|merged> [--every-repo] [--if 'branch = feature/KIC-*']`
   (`--if`: only for a task whose branch, title or repo is like that, `*` anything, `!=` not like); `--repo`,
-  `--research` and any work setting (`--worker.agent codex`) as on `delegate`. `automations show|change|on|off|run|firings|remove <name>`;
+  `--research`, `--chat` and any work setting (`--worker.agent codex`) as on `delegate`. `automations show|change|on|off|run|firings|remove <name>`;
   its settings later: `set <name> <value> --automation <name>`. There is no webhook trigger. Only when the human asks.
 - `herdr-projects archive <id>` hides a task and keeps everything; `restore <id>` brings it back; `clear <id>` removes it
   (only when the human plainly asks).

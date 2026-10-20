@@ -80,7 +80,7 @@ fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
     if live_pane.is_some() && api.agent_get(t.at("link").s("pane"))?.is_some() { // delegate again on a task whose agent is still there: just continue it
         t = g.set(|t| { let _ = r::starts_as(t); })?;
         let turned = turned_words(&t);
-        t = g.set(|t| { t.put("stage", "working"); t.put("armedAt", now()); t.put("turnOpen", true); t.put("turnBy", "start"); t.del("researchTurned"); })?;
+        t = g.set(|t| { t.put("stage", "working"); t.put("armedAt", now()); t.put("turnOpen", true); t.put("turnBy", "start"); t.del("researchTurned"); t.del("chatTurned"); })?;
         flow::send::deliver(&t, &flow::send::with_tail(&t, &[turned, "Continue this task.".into()].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n")), None, false)?;
         return Ok(());
     }
@@ -162,7 +162,7 @@ fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
     let (resume, prompt) = if t.b("startedAgentAt") { again_prompt(&t, &[turned].into_iter().filter(|s| !s.is_empty()).chain(waiting.iter().cloned()).collect::<Vec<_>>()) }
         else { (None, std::iter::once(first_prompt(&t)).chain(waiting.iter().cloned()).collect::<Vec<_>>().join("\n\n")) };
     if let Err(e) = start_agent(id, g, &prompt, resume.as_deref()) { if !waiting.is_empty() { untake_text(id, waiting.len())?; } return Err(e); }
-    if t.b("researchTurned") { g.set(|t| t.del("researchTurned"))?; }
+    if t.b("researchTurned") || t.b("chatTurned") { g.set(|t| { t.del("researchTurned"); t.del("chatTurned"); })?; }
     Ok(())
 }
 /// Restarting an exited agent: the same pane (or a new one in the task's workspace, reopened from the worktree if the

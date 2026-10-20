@@ -30,7 +30,8 @@ pub fn auto_panel(s: &mut State, t: &Theme, a: &Obj, width: usize, full: bool) -
     let key = if a.b("host") { String::new() } else { crate::store::keys::repo_keys().get(a.s("repo")).cloned().unwrap_or_default() };
     st.extend(k.fact_text("Repo", &format!("{} · {}", crate::board::tags::repo_with_key(a.s("repo"), &key), crate::store::marks::tilde(a.s("root")))));
     st.extend(k.fact_text("Last firing", row.s("last")));
-    if a.b("research") { st.extend(k.fact_text("Research", "only · its tasks change nothing in the repo")); }
+    if a.b("chat") { st.extend(k.fact_text("Chat", "only · its tasks are conversations that end when you say")); }
+    else if a.b("research") { st.extend(k.fact_text("Research", "only · its tasks change nothing in the repo")); }
     k.part(st);
     let prompt = k.wrap(a.s("prompt"));
     k.text("Prompt", prompt, 1, false);

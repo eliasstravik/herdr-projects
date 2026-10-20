@@ -52,8 +52,8 @@ From the one list of status words (`crates/core/src/status_words.rs`):
 | done, while its space is still open | `done` |
 
 - Somebody is named only while somebody is on it. A waiting task says what it waits for.
-- Then the review round and pull request as the row writes them (`R#1 PR#113`), the task's tags (`[research]`,
-  `[auto]`), and last the row's time: `6m` for how long it has worked, `2m ago` for how long it has waited.
+- Then the review round and pull request as the row writes them (`R#1 PR#113`), the task's tags (`[chat]`,
+  `[research]`, `[auto]`), and last the row's time: `6m` for how long it has worked, `2m ago` for how long it has waited.
 - The time is by the minute (`<1m` before the first): Herdr shows what it was last told, and the board does not write
   every second. It stands last, so a narrow sidebar cuts it first.
 

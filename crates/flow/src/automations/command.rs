@@ -21,19 +21,23 @@ use std::path::Path;
 pub const HOW: &str = "automations takes:
   automations                                   the list
   automations add \"<name>\" --prompt \"<what its task is to do>\" (--schedule \"<when>\" | --when <event> [--every-repo] [--if '…'])
-                  [--repo NAME|PATH] [--<setting> VALUE ...] [--research|--no-research]
+                  [--repo NAME|PATH] [--<setting> VALUE ...] [--research|--no-research] [--chat|--no-chat]
       --schedule   every 2h · daily 09:00 · mon 09:00 · mon,thu 09:00 · cron \"0 9 * * 1\"   (this machine's time zone)
       --when       added · approval · review-failed · failed · needs-you · merged   (a task of its repo; --every-repo: of any)
       --if         only for a task like this: 'branch = feature/KIC-*' · 'title != *wip*'   (branch, title or repo; * anything, ? one)
   automations show <name>                       all of it: prompt, trigger, settings, last firings
-  automations change <name> [--name NEW] [--prompt TEXT] [--schedule … | --when …] [--if '…' | --if none] [--research | --no-research]
+  automations change <name> [--name NEW] [--prompt TEXT] [--schedule … | --when …] [--if '…' | --if none] [--research | --no-research] [--chat | --no-chat]
   automations on|off <name>                     off, it never fires and keeps everything
   automations run <name>                        fire it now
   automations firings <name>                    every firing: when, what fired it, the task it made or why it was skipped
   automations remove <name>
   set <setting> <value> --automation <name> · unset <setting> --automation <name> · show --automation <name>";
-/// Its work settings from a command's options: every --<name with a dot>.
-fn settings_of(flags: &Obj) -> Obj { flags.iter().filter(|(k, _)| k.contains('.')).map(|(k, v)| (k.clone(), v.clone())).collect() }
+/// Its work settings from a command's options: every --<name with a dot>, and --chat, short for chat.only.
+fn settings_of(flags: &Obj) -> Obj {
+    let mut s: Obj = flags.iter().filter(|(k, _)| k.contains('.')).map(|(k, v)| (k.clone(), v.clone())).collect();
+    if let Some(c) = chat(flags) { s.put(crate::chat_only::CHAT, c); }
+    s
+}
 fn show_text(a: &Obj) -> String {
     let n = now();
     let d = describe(a, n);
@@ -42,7 +46,8 @@ fn show_text(a: &Obj) -> String {
     let mut out = vec![format!("{}  ({}{})", a.s("name"), if d.b("on") { "on" } else { "off" }, if a.b("offWhy") { format!(": {}", a.s("offWhy")) } else { String::new() }),
         format!("  trigger   {}{}", d.s("trigger"), if d.b("next") { format!("  (next: {})", when(d.i("next"))) } else { String::new() }),
         format!("  repo      {}  {}", a.s("repo"), tilde(a.s("root")))];
-    if l::research_only(a) { out.push("  research  only: its tasks change nothing in the repo".into()); }
+    if l::chat_only(a) { out.push("  chat      only: its tasks are conversations that end when you say".into()); }
+    else if l::research_only(a) { out.push("  research  only: its tasks change nothing in the repo".into()); }
     out.push(format!("  settings  {}", if own.is_empty() { "none of its own: its tasks run on what any task would".to_string() } else { own.join(" · ") }));
     out.push("  prompt".into());
     out.extend(a.s("prompt").split('\n').map(|l| format!("    {l}")));
@@ -52,6 +57,7 @@ fn show_text(a: &Obj) -> String {
 }
 fn flag_text(flags: &Obj, k: &str) -> Option<String> { match flags.get(k) { None => None, Some(Value::Bool(true)) => Some(String::new()), Some(v) => Some(text(v)) } }
 fn research(flags: &Obj) -> Option<bool> { flags.get("research").map(|v| *v == json!(true)) }
+fn chat(flags: &Obj) -> Option<bool> { flags.get("chat").map(|v| *v == json!(true)) }
 pub fn automations_command(pos: &[String], flags: &Obj, here: &Path) -> Res<(Value, String)> {
     let cmd = pos.first().map(|s| s.as_str()).unwrap_or("list");
     let name = pos.iter().skip(1).cloned().collect::<Vec<_>>().join(" ");
@@ -71,7 +77,11 @@ pub fn automations_command(pos: &[String], flags: &Obj, here: &Path) -> Res<(Val
         }
         "show" => { let a = l::find(&need()?)?; let mut d = describe(&a, n); d.as_object_mut().unwrap().put("firings", firings(&a)); Ok((d, show_text(&a))) }
         "change" | "edit" => {
-            let a = l::change(&need()?, flag_text(flags, "name").as_deref(), flag_text(flags, "prompt").as_deref(), trigger_of(flags)?, condition_of(flags)?, research(flags))?;
+            // --chat is its setting, chat.only: written once the rest of the change is made, and alone it is the whole change.
+            let (trigger, cond) = (trigger_of(flags)?, condition_of(flags)?);
+            let only_chat = chat(flags).is_some() && ["name", "prompt", "schedule", "when", "if", "research"].iter().all(|k| !flags.contains_key(*k));
+            let mut a = if only_chat { l::find(&need()?)? } else { l::change(&need()?, flag_text(flags, "name").as_deref(), flag_text(flags, "prompt").as_deref(), trigger, cond, research(flags))? };
+            if let Some(c) = chat(flags) { l::set_setting(a.s("id"), crate::chat_only::CHAT, &json!(c))?; a = l::find(a.s("id"))?; }
             Ok((describe(&a, n), format!("Changed \"{}\": {}. It applies from its next firing; tasks already made keep what they had.", a.s("name"), say_trigger(a.at("trigger")))))
         }
         "on" | "off" => { let a = l::turn(&need()?, cmd == "on")?; Ok((describe(&a, n), format!("\"{}\" is {cmd}.{}", a.s("name"), if cmd == "off" { " It never fires while it is off, and keeps everything." } else { "" }))) }

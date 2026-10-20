@@ -9,6 +9,12 @@ This holds for every task, [research-only](research.md) ones too:
 - however many times in a row the agent asks (an interview of fifteen questions is fifteen waits and no review);
 - whether or not a report or a closing note is already there.
 
+## A chat-only task always waits
+
+A [chat-only task](chat.md) is a conversation: **every** stop of its agent waits for you, with or without the command
+below. Nothing is ever checked, reviewed, pushed or merged for it, and it is done only when you end it (yes on the board,
+`herdr-projects finish <id>`).
+
 ## How an agent says it waits
 
 There are two ways for an agent to stop. The board tells them apart by one thing only:

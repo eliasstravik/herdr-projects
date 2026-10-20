@@ -155,7 +155,7 @@
    alt+a        show the archive
    alt+s        group by repo: see which repo each task is in
    alt+d        show all done
- ↓ 20 more
+ ↓ 21 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

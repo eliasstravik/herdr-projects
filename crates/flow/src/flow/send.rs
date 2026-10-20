@@ -33,7 +33,9 @@ pub fn deliver(t: &Task, text: &str, wake: Option<Value>, first: bool) -> Res<&'
 /// The closing-note rule. With a working hook the note is only the fallback, so it is repeated on plugin-sent prompts
 /// only for kinds without one; kinds with no launch flag for standing rules also get a short form of the rules.
 pub fn prompt_tail(t: &Task) -> String {
-    let rules = if has_standing(t.s("agent")) { String::new() } else {
+    let rules = if has_standing(t.s("agent")) { String::new() } else if crate::chat_only::is_chat(t) {
+        "Rules still apply: this task is chat only, a conversation: change nothing in the repo, never push or merge. Every stop of yours waits for the human's next message.".to_string()
+    } else {
         format!("Rules still apply: do the work yourself on your own branch, never push or merge.{}\nIf you cannot continue without the human, run: {} report {} --state blocked --msg \"<why>\" and stop (every time you stop to wait for their answer: a stop without it means finished, and is reviewed). Write the reason like these: \"Need a GitHub login to open the PR\", \"Should the old settings file be removed\", \"Need your OK to delete the test data\".",
             if is_research(t) { " This task is research only: change nothing in the repo, and keep your report out of it." } else { "" }, shim().display(), t.s("id"))
     };

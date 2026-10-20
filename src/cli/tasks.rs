@@ -14,12 +14,13 @@ use crate::store::{keys::{repo_keys, tag_of}, reviews::{current_review, review_r
 /// One task of `list`: named by its key (`HSW-134`), in a column of its own.
 fn line(t: &Obj, keys: &crate::store::keys::Keys) -> String {
     format!("{:<9} {:<8}{}{}  {}{}{}{}", crate::store::keys::say_id(t.s("id"), keys), t.t("state"), if t.b("kind") { format!(" {}", t.s("kind")) } else { String::new() }, if t.b("shownApp") { format!(" [{}]", t.s("shownApp")) } else { String::new() },
-        t.s("title"), if t.b("research") { " [research]" } else { "" }, if queued(t) { format!("  · {}", queue_words(t)) } else if !crate::after::todo_line(t).is_empty() { format!("  · {}", crate::after::todo_line(t)) } else if t.b("note") { format!("  · {}", t.s("note")) } else { String::new() }, if t.b("archivedAt") { "  (archived)" } else { "" })
+        t.s("title"), if t.b("chatOnly") { " [chat]" } else if t.b("research") { " [research]" } else { "" }, if queued(t) { format!("  · {}", queue_words(t)) } else if !crate::after::todo_line(t).is_empty() { format!("  · {}", crate::after::todo_line(t)) } else if t.b("note") { format!("  · {}", t.s("note")) } else { String::new() }, if t.b("archivedAt") { "  (archived)" } else { "" })
 }
 fn brief(t: &Obj) -> Value {
     let mut o = obj(json!({ "id": t.at("id"), "state": t.at("state"), "kind": t.at("kind"), "app": t.at("shownApp"), "title": t.at("title"), "msg": t.at("note"), "stage": t.at("stage"), "progress": t.at("progress"), "eta": t.at("eta") }));
     if t.b("pr") { o.put("pr", t.at("pr").clone()); }
     if t.b("research") { o.put("research", t.at("research").clone()); }
+    if t.b("chatOnly") { o.put("chat", true); }
     if !queue_tag(t).is_empty() { o.put("queue", t.i("queuePlace")); } // its place in the queue for a free slot: 1 gets the next
     if t.b("archivedAt") { o.put("archivedAt", t.at("archivedAt").clone()); }
     if let Some(rv) = current_review(t) { o.put("review", rv.clone()); }
@@ -54,7 +55,7 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
                 let how = crate::after::waiting_words(&d).map(|w| format!(", it {w}")).unwrap_or_else(|| ", an agent is on it".into());
                 format!("{how}{}", if tab { format!(" (the message was sent with {})", key_name("delegate")) } else { String::new() })
             } else if let Some(d) = &after { format!(", it will wait for {} to be done once it is delegated", crate::after::names(d)) } else { String::new() };
-            (shown_of(t.s("id")), format!("{}: added{}{on}{}", t.s("id"), if is_research(&t) { " as research only" } else { "" }, title_note(&rest(1))))
+            (shown_of(t.s("id")), format!("{}: added{}{on}{}", t.s("id"), if crate::chat_only::is_chat(&t) { " as chat only" } else if is_research(&t) { " as research only" } else { "" }, title_note(&rest(1))))
         }
         "list" | "ls" => {
             let q = flag("query").unwrap_or_default().trim().to_lowercase(); // a task is found by its number and its tag too: 134, #134, hsw-134
