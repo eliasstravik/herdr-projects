@@ -3,7 +3,7 @@
 //! the other end), and on this computer itself, for a board that runs here; it says how surely you are here when a call
 //! rings (here.rs), and when this computer gets the call it holds it right here, with this computer's microphone and
 //! speaker and no browser (native/). One per computer; the keeper starts it while herdr has saved machines and
-//! `voice.helper` is `auto`, and starts it again when it stopped.
+//! `voice.helper` is `auto`, and starts it again when it stopped. With `voice.calls off` it never runs.
 use super::listen::{Door, Listener};
 use super::native::{audio, board::Pipe, engine::Engine, ws};
 use crate::json::*;
@@ -17,7 +17,7 @@ use std::sync::{mpsc, Arc, Mutex};
 fn beat_file() -> std::path::PathBuf { data_dir().join("voice").join("helper.json") }
 /// Alive means it wrote its heartbeat in the last half minute.
 pub fn alive() -> bool { std::fs::metadata(beat_file()).and_then(|m| m.modified()).map(|m| m.elapsed().map(|e| e.as_secs() < 30).unwrap_or(true)).unwrap_or(false) }
-pub fn wanted() -> bool { crate::store::settings::lookup::setting_text("voice.helper", None) != "none" && !machines().is_empty() }
+pub fn wanted() -> bool { crate::voice::calls_on() && crate::store::settings::lookup::setting_text("voice.helper", None) != "none" && !machines().is_empty() }
 /// Started by the keeper, when it should run and does not.
 pub fn ensure() { if wanted() && !alive() && crate::store::marks::due("voice-helper-start", 20000) { crate::housekeeping::spawn_loose(&["voice", "helper"]); } }
 fn this_computer() -> String { crate::remote::check::hostname() }
@@ -82,6 +82,7 @@ fn listen_here(door: Door) {
     }
 }
 pub fn helper_main(door: Door) -> i32 {
+    if !crate::voice::calls_on() { return 0; }
     let Ok(_held) = crate::store::files::hold_lock("voice-helper", 0) else { return 0 }; // one per computer
     let mut listening: Vec<String> = vec![];
     let (exe, stamp) = { let e = crate::store::files::bin(); let s = crate::keeper::code_stamp(&e); (e, s) };

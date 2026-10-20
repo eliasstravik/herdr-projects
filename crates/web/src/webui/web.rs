@@ -135,7 +135,8 @@ pub fn snapshot(c: &mut Client, have: &str) -> Value {
     let panel = if auto_open { super::model::panel::auto_panel_of(s, t, a.as_ref().unwrap()) } else if s.full { r.as_ref().map(|r| super::model::panel::panel_of(s, t, r)).unwrap_or(Value::Null) } else { Value::Null };
     // With a task or an automation open: every setting of it, to see and to change.
     let settings = if panel.is_null() { Value::Null } else if auto_open { super::model::settings::settings_of(s, a.as_ref().unwrap(), true) } else { r.as_ref().map(|r| super::model::settings::settings_of(s, r, false)).unwrap_or(Value::Null) };
-    let mut data = obj(json!({ "list": super::model::list::list_of(s, t), "panel": panel, "settings": settings, "call": call }));
+    // `calls`: whether there are voice calls at all (voice.calls); off, the page has no Call button.
+    let mut data = obj(json!({ "list": super::model::list::list_of(s, t), "panel": panel, "settings": settings, "call": call, "calls": crate::voice::calls_on() }));
     for (k, v) in super::model::side::side_of(s, t) { data.insert(k, v); }
     let text = serde_json::to_string(&data).unwrap_or_default();
     let mark: String = crate::store::files::base64url(&sha1_smol::Sha1::from(text.as_bytes()).digest().bytes()).chars().take(16).collect();

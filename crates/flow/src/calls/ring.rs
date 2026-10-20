@@ -7,6 +7,7 @@ use crate::voice::call::{self, Target};
 /// Ring: a new call for `t`. `session`: the board's herdr session, whose herdr window on this computer (when in use)
 /// takes the call here. Answers the call's id, or why it cannot ring.
 pub fn ring(owner: &str, t: &Target, session: &str) -> Result<String, String> {
+    if !crate::voice::calls_on() { return Err(crate::voice::OFF.into()); }
     if crate::voice::key::find().is_none() { return Err(crate::voice::key::missing()); }
     let (c, ticket, _) = call::start(owner, t);
     call::change(|x| { x.put("pickup", ticket.clone()); x.put("session", if session.is_empty() { "default" } else { session }); });

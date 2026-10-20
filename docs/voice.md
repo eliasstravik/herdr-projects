@@ -127,7 +127,24 @@ no window.
 | `voice.language` | `auto`: it starts in English and follows you into any language ElevenLabs' agents speak; or one of their language codes (`en`, `de`, `es`, `fr`, `ja`, `pt-br` …) for that one only, where the voice waits for you to speak first |
 | `voice.llm` | the voice agent's language model at ElevenLabs, or `none` for the built-in one, DeepSeek V4.1 Flash (`deepseek-v41-flash`); speech stays `eleven_v4_turbo` |
 | `voice.voice` | an ElevenLabs voice id that agents can use (not one with live moderation), or `none` for the built-in one, Warren ([above](#setting-it-up)). A voice ElevenLabs refuses is said in the call, with how to pick another |
+| `voice.calls` | `on`: calls as above; `off`: no calls at all ([below](#turning-calls-off)) |
 | `voice.helper` | `auto`: the call helper runs on a computer with saved machines; `none`: never |
+
+## Turning calls off
+
+`herdr-projects set voice.calls off` turns voice calls off on this machine, for when you cannot or will not use them.
+Off, voice is gone, not just broken:
+
+- the web board has no Call button, and its page is not allowed to reach ElevenLabs;
+- `Ctrl+T` on the terminal board says "Voice calls are off (voice.calls)" and does nothing else; the `?` menu says
+  the same on its line;
+- the board's front door refuses to start a call or to run the voice agent's tools;
+- the call helper does not run on this computer, whatever `voice.helper` says, so it listens on no machine over SSH;
+- nothing contacts ElevenLabs: no voice agent is made or kept in step, no voice is added to your account.
+
+`herdr-projects voice` says that calls are off and how to turn them on again: `herdr-projects set voice.calls on`
+(or `herdr-projects unset voice.calls`). Dictation into the chat's text box is not a call and has its own switch:
+the herdr web UI's Settings, Voice input.
 
 ## How it fits together
 

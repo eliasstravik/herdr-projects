@@ -4,6 +4,7 @@
 //! (agent.rs), its built-in voice in your account (builtin.rs), its API (eleven.rs), the words a call sends: your own
 //! (words.rs), and no action you did not ask for and say yes to (confirm.rs).
 //! The page that holds the call is the web board's (crates/web/src/webui/page/call.js); docs/voice.md says how it works.
+//! `voice.calls off` turns all of it off (calls_on).
 pub mod agent;
 pub mod builtin;
 pub mod call;
@@ -11,3 +12,8 @@ pub mod eleven;
 pub mod key;
 pub mod confirm;
 pub mod words;
+
+/// What every place a call would start from says while calls are off.
+pub const OFF: &str = "Voice calls are off (voice.calls)";
+/// Whether there are voice calls at all (`voice.calls`): off, nothing rings, no helper runs and nothing reaches ElevenLabs.
+pub fn calls_on() -> bool { crate::store::settings::lookup::setting_text("voice.calls", None) != "off" }

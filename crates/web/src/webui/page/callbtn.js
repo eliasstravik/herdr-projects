@@ -5,7 +5,8 @@
 // call started from the terminal board shows there too (the board says so: `snap.call`), and End hangs it up. When a
 // call ends, the row gives way to one short line ("You hung up · 2 min · 19:20") that fades out after a few seconds:
 // nothing about a call that is over stays above the chat. Where the browser does not let the call be heard, Tap to hear
-// asks for the tap; "Can't hear?" plays it another way (hear.js).
+// asks for the tap; "Can't hear?" plays it another way (hear.js). With voice calls off (`snap.calls`, voice.calls)
+// there is no Call button at all.
 import { h, icon, client, post } from "./dom.js";
 import * as call from "./call.js";
 import * as hear from "./hear.js";
@@ -21,7 +22,7 @@ const hhmm = (at) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minu
 const bare = (name) => (name || "").replace(/^the /, "");
 
 export function callEl({ onEnded } = {}) {
-  let other = null, role = "drive", otherSince = 0;
+  let other = null, role = "drive", otherSince = 0, calls = true;
   // The call that ended last, as one line: { text, at, secs, failed }; shown until its time is up.
   let ended = null, seenEnd = 0, fadeT = 0, goneT = 0, tick = 0;
   const btn = h("button.icon-button.sw-call", { type: "button", onclick: () => tap() });
@@ -62,7 +63,7 @@ export function callEl({ onEnded } = {}) {
     const on = mine || !!other;
     const ringing = mine ? s.state === "starting" : other?.state === "ringing";
     // The button starts a call; while one rings or is on, the row's End hangs it up and the button steps aside.
-    btn.hidden = on;
+    btn.hidden = on || !calls;
     btn.replaceChildren(icon("phone"), h("span.sw-call-label", "Call"));
     btn.title = "Call: talk with whoever the chat talks to"; btn.setAttribute("aria-label", "Call");
     btn.disabled = role !== "drive";
@@ -107,7 +108,7 @@ export function callEl({ onEnded } = {}) {
     // The board's word on the call of this machine: another page's or the terminal board's shows here too, and its
     // end as this page's own does.
     update(snap) {
-      role = snap.role;
+      role = snap.role; calls = snap.calls !== false;
       const c = snap.call, active = call.state().state !== "idle";
       // (this page's own call, just ended here, until the board has heard: not somebody else's)
       const late = c && c.mine && Date.now() - seenEnd < LATE_MS;

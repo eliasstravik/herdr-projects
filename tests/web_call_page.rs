@@ -72,7 +72,7 @@ fn the_toggle_stands_in_the_chats_bar_and_the_call_page_takes_its_ticket_out_of_
 #[test]
 fn a_call_on_is_one_row_with_its_way_to_hang_up_and_a_call_over_leaves_only_a_line_that_fades() {
     // while it rings or is on, the Call button steps aside for the row, whose End (Cancel while it rings) hangs up
-    assert!(BTN.contains("btn.hidden = on;") && BTN.contains(r#"hang.replaceChildren(icon("phoneOff"), ringing ? "Cancel" : "End");"#));
+    assert!(BTN.contains("btn.hidden = on || !calls;") && BTN.contains(r#"hang.replaceChildren(icon("phoneOff"), ringing ? "Cancel" : "End");"#));
     assert!(BTN.contains(r#"const hang = h("button.btn.sw-call-end", { type: "button", title: "Hang up the call", onclick: () => tap() }"#));
     assert!(BTN.contains(r#"who.textContent = ringing ? "Calling…" : "On call";"#) && BTN.contains("time.textContent = clock("));
     // where it is held, when that is not this browser: the call helper's computer the board names

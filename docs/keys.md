@@ -203,7 +203,7 @@ The tables below always show the chords the board comes with.
 | `Ctrl+F` | find: type, and the list shows only the tasks that match, archived ones too. `Enter` keeps the filter, `Esc` leaves find; `Esc` on the list clears a filter that is kept |
 | `Ctrl+K` | only while a remote view holds the board's terminal at another size than herdr shows it (the line at the top says so): end that view, so the board has its own size again ([board-size.md](board-size.md)) |
 | `Ctrl+C` | twice: close the board, with text typed too: the draft is kept and is back when the board reopens |
-| `Ctrl+T` | a voice call with whoever the chat talks to: a live conversation with the board's voice agent, which sends what you ask for to the Coordinator, the task's agent or a coordinator, and reads their answers back in short. The call follows the chat: `Space` and moving between tasks change who it talks to. The microphone and the speaker are the computer you sit at: its call helper holds the call there, in the terminal's computer, with no browser. The key again hangs up. More: [voice calls](voice.md) |
+| `Ctrl+T` | a voice call with whoever the chat talks to: a live conversation with the board's voice agent, which sends what you ask for to the Coordinator, the task's agent or a coordinator, and reads their answers back in short. The call follows the chat: `Space` and moving between tasks change who it talks to. The microphone and the speaker are the computer you sit at: its call helper holds the call there, in the terminal's computer, with no browser. The key again hangs up. With `voice.calls off` it only says that calls are off. More: [voice calls](voice.md) |
 
 **`Alt`: only shows or hides**
 

@@ -3,7 +3,8 @@
 //! minutes). It answers a short-lived ElevenLabs token and the call's key; the API key stays here. With that key in
 //! `x-herdr-projects-call`, the page then says what was heard (`heard`), runs the voice agent's tools (`tool`), asks
 //! what to read back (`feed`) and hangs up (`end`). Every call that changes something comes from the board's own page.
-//! The terminal board's call runs the same calls in-process (`local`), for its helper.
+//! The terminal board's call runs the same calls in-process (`local`), for its helper. With `voice.calls off` every one
+//! but `end` is refused, and nothing reaches ElevenLabs.
 use super::board;
 use crate::json::*;
 use crate::voice::{call, eleven, key};
@@ -22,6 +23,7 @@ fn body(client: &mut TcpStream, head: &Head, rest: Vec<u8>) -> Option<Value> {
 fn no(client: &mut TcpStream, status: u16, msg: &str) { json_out(client, status, &json!({ "ok": false, "msg": msg })) }
 pub fn route(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstream, what: &str) {
     if head.method == "POST" && (head.header(OUR_HEADER) != Some("1") || !same_origin(head)) { return no(&mut client, 403, "Use the board's own controls."); }
+    if what != "end" && !crate::voice::calls_on() { return json_out(&mut client, 403, &off()); }
     if what == "start" {
         if head.method != "POST" { return no(&mut client, 404, "Not found"); }
         let Some(args) = body(&mut client, head, rest) else { return no(&mut client, 400, "The request could not be read.") };
@@ -49,8 +51,11 @@ pub fn route(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstrea
     };
     json_out(&mut client, 200, &out)
 }
+/// The answer while voice calls are off, and how to turn them on.
+fn off() -> Value { json!({ "ok": false, "off": true, "msg": format!("{}: `herdr-projects set voice.calls on` turns them on.", crate::voice::OFF) }) }
 /// Start a call. `role`: whether the web UI lets this page drive (asked only for a call from the web board).
 pub fn start(args: &Value, role: impl FnOnce() -> Result<String, String>) -> (u16, Value) {
+    if !crate::voice::calls_on() { return (403, off()); }
     let ticket = args.s("ticket");
     let (c, key_secret) = if !ticket.is_empty() {
         let Some((c, k)) = call::take_ticket(ticket) else { return (410, json!({ "ok": false, "msg": "This call link was used already or is too old. Press the call key on the board again." })) };
@@ -87,6 +92,7 @@ pub fn start(args: &Value, role: impl FnOnce() -> Result<String, String>) -> (u1
 /// runs them for the helper over SSH, or in the helper itself for a board of its own computer). `start` takes the
 /// ticket; the rest the call's key.
 pub fn local(what: &str, args: &Value, key: &str) -> (u16, Value) {
+    if what != "end" && !crate::voice::calls_on() { return (403, off()); }
     if what == "start" { return start(args, || Err("no web UI here".into())); }
     let Some(c) = call::by_key(key) else { return (410, json!({ "ok": false, "msg": "This call has ended." })) };
     call::seen();

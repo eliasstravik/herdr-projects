@@ -34,7 +34,7 @@ pub fn label(s: &State, k: K, r: Option<&Obj>) -> String {
         K::Find => "find: show only the tasks that match".into(),
         K::Free => if super::keys::on(s, K::Free, r) { "end the remote view that holds this pane at another size".into() } else { String::new() },
         K::Close => "twice: close the board".into(),
-        K::Call => if s.data.call.is_some() { "hang up the call".into() } else { "a voice call with whoever the chat talks to".into() },
+        K::Call => if s.data.call.is_some() { "hang up the call".into() } else if !crate::voice::calls_on() { "voice calls are off (voice.calls)".into() } else { "a voice call with whoever the chat talks to".into() },
         K::ChatMessage => format!("{} the chat's latest message", if s.chat_open { "hide" } else { "show" }),
         K::ChatScrollUp => "scroll the chat's message up".into(),
         K::ChatScrollDown => "scroll the chat's message down".into(),

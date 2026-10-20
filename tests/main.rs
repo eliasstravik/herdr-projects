@@ -253,6 +253,7 @@ mod voice_builtin;
 mod voice_commands;
 mod voice_key;
 mod voice_native;
+mod voice_off;
 mod voice_pickup;
 mod waiting;
 mod waiting_more;

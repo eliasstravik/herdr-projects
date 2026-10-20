@@ -2,7 +2,7 @@
 //! whether this computer's call helper runs, and for which machines; how the last call sounded; a call on now), and
 //! `voice end` to hang one up, and `voice test` to try this computer's sound for a call (a short tone out, a moment of
 //! the microphone in, and whether the echo is cancelled). `voice helper` and `voice listen` are the helper's own
-//! (helper.rs, listen.rs), run in the background.
+//! (helper.rs, listen.rs), run in the background. With `voice.calls off` it says only that, and how to turn them on.
 use crate::json::*;
 use crate::voice::{call, key};
 
@@ -25,6 +25,10 @@ pub fn main(args: &[String]) -> (Value, String) {
         let on = call::get().is_some();
         call::end("hung up from the command line");
         return (json!({ "ended": on }), if on { "The call was hung up.".into() } else { "No call was on.".into() });
+    }
+    if !crate::voice::calls_on() {
+        let off = format!("{}: no call rings, the call helper does not run, and nothing contacts ElevenLabs.\nTurn them on: herdr-projects set voice.calls on", crate::voice::OFF);
+        return (json!({ "calls": "off" }), off);
     }
     let k = key::find();
     let machines: Vec<String> = crate::remote::machines().into_iter().map(|m| m.label).collect();
