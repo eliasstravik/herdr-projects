@@ -25,6 +25,12 @@ pub fn housekeeping(socket: &str, force: Force) {
     if !has_tasks() { return; }
     crate::runner::outside::start_asked(); // jobs asked for from inside a plan writer's sandbox, started out here
     if force == Force::No && !due(&format!("housekeep-{}", key(socket)), 2000) { return; }
+    // One pass per session at a time. Every runner ends with a forced pass, and a pass can spend minutes in herdr calls
+    // when herdr is slow; without this, runners that already gave up their marker pile up in their exit pass while the
+    // passes they overlap keep spawning more (`run cleanup` every 30s per done task), until the process limit is hit.
+    let _ = crate::store::files::with_lock_wait(&format!("housekeep-pass-{}", key(socket)), 0, || { housekeeping_pass(socket, force); Ok(()) });
+}
+fn housekeeping_pass(socket: &str, force: Force) {
     // What an older version kept of suggested tasks is written down and taken off the tasks, once (store/old_suggestions.rs).
     let _ = save_old_suggestions();
     // With the attempts of tasks done several times at once: each has an agent of its own to look after (attempts.rs).
