@@ -4,9 +4,17 @@
    the board lays out around it: docked or not, its share of the screen, full screen, hidden, side by side on a wide
    screen, and stepped aside to the bar while a phone's keyboard is up. The controls are the web UI's `.icon-button` and
    its colours, type and sizes, sized here for a thumb. */
-.sw-chat { flex: none; container-type: inline-size; display: flex; flex-direction: column; min-height: 0; border-top: var(--hairline, 1px) solid var(--sw-line); background: var(--sw-bg); }
-/* The bar: one row, the switch at the left, the buttons at the right. */
-.sw-chatbar { position: relative; width: 100%; display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-1, 4px) var(--space-2, 8px); min-height: 52px; box-sizing: border-box; padding: var(--space-2, 8px) var(--space-2, 8px) var(--space-2, 8px) var(--space-3, 12px); }
+/* Under the list the chat is one sheet: the bar and the chat under it (the web UI's, docked, or the board's own) on the
+   ground the web UI's chat has, its top corners rounded where it meets the list, and no line between the bar and the
+   box. Its gutter is the web UI's composer's (Composer.css there), so the switch starts where the box
+   does. */
+.sw-chat { --sw-gutter: var(--space-4, 16px); position: relative; flex: none; container-type: inline-size; display: flex; flex-direction: column; min-height: 0; border-top: var(--hairline, 1px) solid var(--sw-line); border-radius: var(--radius-2xl, 24px) var(--radius-2xl, 24px) 0 0; background: var(--sw-bg); box-shadow: 0 -8px 24px -16px rgb(0 0 0 / 0.35); }
+@media (max-width: 480px) { .sw-chat { --sw-gutter: var(--space-3, 12px); } }
+/* The bar: one row on the box's column (as wide as it, centred with it), the switch at its left edge, the buttons at
+   its right, the last over the box's Send (--sw-bar-end: how far in from the box's edge Send's middle is, less half a
+   button: a thumb's button is wider). */
+.sw-chatbar { --sw-bar-end: var(--space-3, 12px); position: relative; width: 100%; display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-1, 4px) var(--space-2, 8px); min-height: 52px; box-sizing: border-box; padding: var(--space-3, 12px) max(calc(var(--sw-gutter) + var(--sw-bar-end)), calc((100% - var(--chat-w, 820px)) / 2 + var(--sw-bar-end))) var(--space-2, 8px) max(var(--sw-gutter), calc((100% - var(--chat-w, 820px)) / 2)); }
+@media (pointer: coarse) { .sw-chatbar { --sw-bar-end: var(--space-1, 4px); } }
 .sw-chatbar-space { flex: 1 1 0; min-width: 0; }
 .sw-chatbar .icon-button { flex: none; color: var(--sw-dim); }
 .sw-chatbar .icon-button svg { width: 18px; height: 18px; }
@@ -29,12 +37,16 @@
 .sw-who-status { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sw-dim); font-size: var(--fs-sm, 13px); }
 .sw-who-status:empty { display: none; }
 @container (max-width: 520px) {
-  .sw-chatbar { flex-wrap: wrap; }
+  .sw-chatbar { flex-wrap: wrap; column-gap: 0; }
+  /* The buttons keep their row: the switch takes the room they leave (all it needs, before the space between), its
+     names cut short where that is less, so that none of them goes under it. */
+  .sw-who { flex: 100 1 0; max-width: max-content; }
+  .sw-who > .sw-who-pick { padding-inline: var(--space-2, 8px); }
   .sw-who-status { order: 9; flex-basis: 100%; padding-left: 2px; }
   .sw-who-status.is-plain { display: none; }
 }
-/* The grip on the bar's top edge: dragged, it moves where the list ends and the chat begins. */
-.sw-split { position: absolute; top: -9px; left: 50%; z-index: 2; display: grid; place-items: center; width: 56px; height: 18px; transform: translateX(-50%); cursor: ns-resize; touch-action: none; }
+/* The grip at the sheet's top edge, its handle just inside it: dragged, it moves where the list ends and the chat begins. */
+.sw-split { position: absolute; top: -4px; left: 50%; z-index: 2; display: grid; place-items: center; width: 56px; height: 18px; transform: translateX(-50%); cursor: ns-resize; touch-action: none; }
 .sw-split::before { content: ""; width: var(--space-8, 32px); height: 4px; border-radius: var(--radius-pill, 999px); background: var(--border-strong, #3e3830); }
 .sw-split:hover::before, .sw-split:active::before { background: var(--accent, #f0a830); }
 @media (hover: hover) and (pointer: fine) { .sw-split::before { opacity: 0; } .sw-chat:hover .sw-split::before, .sw-split:focus-visible::before { opacity: 1; } }
@@ -47,8 +59,10 @@
    reads (ChatView.css there: your words a card on the right, theirs plain prose), then the box (compose.css). */
 .sw-own { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 0 var(--space-4, 16px) max(var(--space-4, 16px), calc(env(safe-area-inset-bottom, 0px) - var(--space-4, 16px))); }
 @media (max-width: 480px) { .sw-own { padding-inline: var(--space-3, 12px); } }
-.sw-said-box { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: min(100%, var(--chat-w, 820px)); margin-inline: auto; }
+.sw-said-box { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: min(100%, var(--chat-w, 820px)); margin-inline: auto; }
 .sw-said-box[hidden] { display: none; }
+/* The conversation scrolls up under the bar through the same short fade as the web UI's docked chat (below). */
+.sw-said-box::before { content: ""; position: absolute; top: 0; right: 0; left: 0; z-index: 1; height: var(--space-3, 12px); background: linear-gradient(var(--sw-bg), transparent); pointer-events: none; }
 .sw-said { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: var(--border-strong, #3e3830) transparent; padding: var(--space-2, 8px) 0 var(--space-3, 12px); color: var(--sw-text); font-size: var(--chat-fs-body, 15px); line-height: var(--lh-prose, 1.65); white-space: pre-wrap; overflow-wrap: anywhere; }
 .sw-said:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: -2px; }
 .sw-turn-said + .sw-turn-said { margin-top: var(--space-4, 16px); }
@@ -61,9 +75,11 @@
 .sw-turn-said.is-raw .sw-said-text { font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-xs, 12px); white-space: pre; overflow-x: auto; }
 
 /* How the board lays out around the chat. Docked: the board ends where the web UI's chat begins (chat.js measures it:
-   --sw-top-h), the bar its foot. */
+   --sw-top-h), the bar its foot, flowing into the web UI's chat on the same ground. With the chat open its transcript
+   scrolls up under the bar through a short fade, as the web UI's own chat scrolls under its header (ChatView.css
+   there), not under a line. */
 .sw-board.is-docked { bottom: auto; height: var(--sw-top-h, var(--app-height, 100%)); }
-.sw-board.is-docked .sw-chat { border-bottom: var(--hairline, 1px) solid var(--sw-line); }
+.sw-board.is-docked:is(:not(.sw-chat-hidden), .sw-web-typing) .sw-chat::after { content: ""; position: absolute; top: 100%; right: 0; left: 0; height: var(--space-4, 16px); background: linear-gradient(var(--sw-bg), transparent); pointer-events: none; }
 /* With its own chat: the chat has its share of the screen under the list; hidden, only the bar and the box. */
 .sw-board:not(.is-docked):not(.sw-chat-full):not(.is-side) .sw-chat { height: var(--sw-chat-share, 46%); max-height: 80%; }
 .sw-board.sw-chat-hidden:not(.is-docked) .sw-chat { height: auto; }
@@ -71,6 +87,8 @@
    are still there when it goes back). Docked, the board is then only its bar, over the web UI's chat. */
 .sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }
 .sw-board.sw-chat-full:not(.is-docked) .sw-chat { flex: 1; height: auto; border-top: 0; }
+/* With no list over it (full screen, typing, side by side) it is no sheet: square, flat. */
+.sw-board:is(.sw-chat-full, .sw-web-typing, .sw-typing, .is-side) .sw-chat { border-radius: 0; box-shadow: none; }
 .sw-board.is-docked:is(.sw-chat-full, .sw-web-typing) { height: auto; padding-top: env(safe-area-inset-top, 0px); }
 .sw-board:is(.sw-chat-full, .sw-web-typing) .sw-chat { border-top: 0; }
 /* Side by side on a wide screen: the list (or the open task) in a column of its own at the left, the chat beside it

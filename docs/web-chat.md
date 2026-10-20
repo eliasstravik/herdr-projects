@@ -13,7 +13,7 @@ On a phone, and in a narrow window:
 │   ! HP-5  Write a haiku …        │
 │ ▾ to do 4                        │
 │   ○ HP-4  Fix flaky login test   │
-├────────────── ═══ ───────────────┤  the grip
+│╭───────────── ═══ ──────────────╮│  the chat's sheet, its grip
 │ [● Coordinator│○ HP-4 agent]☎ ⌄ ⤢│  the bar
 │                                  │
 │   the web UI's own transcript    │
@@ -24,6 +24,13 @@ On a phone, and in a narrow window:
 ```
 
 In a wide window the list and the chat stand side by side, the bar at the top of the chat.
+
+**The bar and the chat are one piece.** Under the list they are one sheet with rounded top corners, on the ground the
+web UI's chat has, with no line between the bar and the box: the switch starts where the box starts, and the last
+button stands over the box's Send. With the chat hidden that is the bar and the box alone, one dock at the foot of the
+screen. With the chat shown, its transcript scrolls up under the bar through a short fade, as the web UI's own chat
+scrolls under its header. Full screen, while typing on a phone and side by side there is no list above, so no sheet: the
+bar heads the chat. On a narrow phone the buttons keep their row, and the switch's names are cut short first.
 
 ## The bar
 
@@ -41,7 +48,7 @@ In a wide window the list and the chat stand side by side, the bar at the top of
 - **Full screen** (the arrows): the board's header and list step aside and the chat has the whole screen under the bar.
   The same button, in the same place, then shows the arrows going in and goes back; so do Esc and a phone's back
   gesture (or the browser's Back), as full screen is a step in the browser's history.
-- **The grip** on the bar's top edge (on a phone, and on a desktop when pointed at) moves where the list ends and the
+- **The grip** at the top of the sheet (on a phone, and on a desktop when pointed at) moves where the list ends and the
   chat begins: from a quarter to four fifths of the screen, kept in this browser. The arrow keys move it a step, Home
   puts it back.
 
@@ -96,3 +103,9 @@ UI's box, Hide, Full screen, the More menu over the docked chat, a call ringing,
 call's service played by the page), Enter and Send + start through the board (one message each, the box emptied),
 closing the board and Back (the web UI back on its pane). The keyboard was played: the web UI's mark set and its
 height made shorter. Not tried on a real phone.
+
+**The bar and the chat as one sheet** were checked on 2026-10-20 against a real web UI (herdr-web-ui 0.4.12) through
+the front door, in Chromium and WebKit at a phone's sizes (440×956, 393×852, 375×760) and a desktop's (900×900,
+1440×900), dark and light: the chat hidden and shown, docked and the board's own, full screen and side by side, before
+and after. The switch's left edge and the box's line up, and the last button stands over Send, at every size. Not tried
+on a real phone.
