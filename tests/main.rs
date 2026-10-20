@@ -162,6 +162,7 @@ mod helpers;
 mod herdr_keys;
 mod home_folder;
 mod home_folder_more;
+mod housekeeping_once;
 mod install;
 mod keeper_update;
 mod keys_list;

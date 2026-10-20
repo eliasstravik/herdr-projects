@@ -2,7 +2,9 @@
 //! hook, rate-limited by timestamps in the data folder, so nothing important depends on the board being open:
 //! start the jobs asked for from inside a sandbox (runner/outside.rs), start queued tasks when a slot is free (and the
 //! ones that wait for others, once those are done: after.rs), reconcile each linked task with herdr, bring waiting
-//! tasks up to date when main moved, and poll open pull requests (housekeeping/prs.rs).
+//! tasks up to date when main moved, and poll open pull requests (housekeeping/prs.rs). One pass per herdr session at
+//! a time (housekeeping/once.rs).
+mod once;
 mod prs;
 pub use prs::poll_prs;
 
@@ -25,6 +27,9 @@ pub fn housekeeping(socket: &str, force: Force) {
     if !has_tasks() { return; }
     crate::runner::outside::start_asked(); // jobs asked for from inside a plan writer's sandbox, started out here
     if force == Force::No && !due(&format!("housekeep-{}", key(socket)), 2000) { return; }
+    once::once(&key(socket), force, |f| pass(socket, f));
+}
+fn pass(socket: &str, force: Force) {
     // What an older version kept of suggested tasks is written down and taken off the tasks, once (store/old_suggestions.rs).
     let _ = save_old_suggestions();
     // With the attempts of tasks done several times at once: each has an agent of its own to look after (attempts.rs).
@@ -47,6 +52,9 @@ pub fn housekeeping(socket: &str, force: Force) {
         let quiet: i64 = std::env::var("HERDR_PROJECTS_QUIET_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(600000);
         for t in &tasks {
             if t.s("stage") != "done" || setting("workspace.cleanup", Some(t)) != json!(true) || !t.b("tidy") || t.b("archivedAt") || t.at("link").s("socket") != socket || runner_alive(t) || now() - t.at("tidy").i("quietFrom") < quiet { continue; }
+            // Read again: the list is from the pass's start, and a clean-up started since may still run (it can take
+            // longer than the half minute between tries).
+            if get(t.s("id")).is_none_or(|c| runner_alive(&c)) { continue; }
             if due(&format!("tidy-{}", key(t.s("id"))), 30000) { spawn_runner("cleanup", t.s("id"), if t.at("tidy").s("deleteBranch") == "merged" { &["--merged"] } else { &[] }); }
         }
         crate::notify::notify_pass(&list(ListOpts::default()));
