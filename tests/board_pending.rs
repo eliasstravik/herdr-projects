@@ -196,7 +196,7 @@ fn every_action_a_key_starts_has_its_words_and_open_or_talk_never_waits() {
     }
     assert_eq!(Job::Far { machine: Default::default(), host: "vm".into(), action: "auto-run".into(), req: json!({ "id": "a1" }), quiet: false }.about(), "vm:auto:a1");
     // A setting changed, or words on their way to a Coordinator, are not a row's: they show nothing there.
-    assert_eq!(sw::board::update::pending::words(&s.s, &Job::Set { id: i(), name: "x".into(), value: None, auto: false }), None);
+    assert_eq!(sw::board::update::pending::words(&s.s, &Job::Set { id: i(), name: "x".into(), value: None, whose: Default::default() }), None);
     // Opening its agent says "Opening…" until it answers, and goes then: nothing of it is read back.
     s.s.pending.insert(id.clone(), sw::board::state::Pending { word: "Opening…".into(), wait: false, kind: "OpenAgent".into(), through: true, out: 1, ..Default::default() });
     let _ = update(&mut s.s, Event::Done(Done { about: id.clone(), kind: Job::OpenAgent { id: id.clone(), popup: false }.kind(), ..Default::default() }));

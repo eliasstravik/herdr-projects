@@ -35,9 +35,20 @@ pub struct Away { pub text: String, pub to: String, pub cwd: String, pub warned:
 /// What the archive view put aside, to come back to.
 #[derive(Clone, Debug, Default)]
 pub struct Back { pub sel: String, pub top: usize, pub filter: String, pub mode: Option<Mode>, pub value: String }
-/// The settings page: whose (a task, or an automation's row), the picked row, and the setting being typed for.
+/// Whose settings the page shows: a task's, an automation's, yours (what every task starts from, as `set` changes
+/// them), or your entry for a repo (`set --repo`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum Whose { #[default] Task, Auto, You, Repo(String) }
+impl Whose {
+    /// Yours or your entry for a repo: no task's or automation's.
+    pub fn mine(&self) -> bool { matches!(self, Whose::You | Whose::Repo(_)) }
+    /// The repo of your entry for a repo ("" for every other).
+    pub fn repo(&self) -> &str { if let Whose::Repo(r) = self { r } else { "" } }
+}
+/// The settings page: whose (a task, an automation's row, or a heading for yours), the picked row, and the setting
+/// being typed for.
 #[derive(Clone, Debug, Default)]
-pub struct Editing { pub id: String, pub at: usize, pub typing: String, pub auto: bool }
+pub struct Editing { pub id: String, pub at: usize, pub typing: String, pub whose: Whose }
 /// The first run's one screen.
 #[derive(Clone, Debug, Default)]
 pub struct Setup { pub file: String, pub typing: bool, pub key: Option<(bool, String, String)>, pub sidebar: Option<bool> }

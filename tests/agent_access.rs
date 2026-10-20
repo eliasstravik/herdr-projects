@@ -154,7 +154,7 @@ fn on_the_settings_page_the_access_row_passes_over_a_value_its_program_cannot_do
     let mut b = common::board::open(&w.root, 44);
     b.s.sel = id.clone(); b.load();
     let r = b.s.current().unwrap().clone();
-    sw::board::update::edit::open(&mut b.s, Some(&r));
+    sw::board::update::edit::open(&mut b.s, Some(&r), &mut vec![]);
     let at = sw::board::update::edit::rows(&b.s).iter().position(|r| r.s("name") == "worker.access").unwrap();
     b.s.editing.as_mut().unwrap().at = at;
     b.press(&["enter"]);

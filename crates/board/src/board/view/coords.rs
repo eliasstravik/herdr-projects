@@ -1,5 +1,5 @@
 //! The chat with a heading's coordinator (update/coords.rs), drawn as the Coordinator's is but under its own name
-//! ("vm-str coordinator", "herdr-projects coordinator") and in its heading's colour: this machine's as read here,
+//! ("vm-str coordinator", "herdr-projects coordinator") and in its own colour: this machine's as read here,
 //! another machine's as that machine sent it with its tasks (coordinator/far.rs).
 use super::chat::{coord_who, parts_text, Who};
 use super::talk::{with_mine, Part};

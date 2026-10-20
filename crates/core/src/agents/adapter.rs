@@ -28,7 +28,8 @@ pub fn hook_args(kind: &str, h: &Hook) -> Res<Option<Vec<String>>> {
     match kind {
         // A settings file of the task's own, added to the user's settings for this one launch (the user's own hooks
         // still run). The hooks are asynchronous, so a slow or failing one never holds the agent's turn. In plan mode
-        // the plan is presented with ExitPlanMode, which asks in the terminal: the board takes the plan there instead.
+        // the plan is presented with ExitPlanMode, which asks in the terminal: the board takes the plan at that question
+        // (PermissionRequest, which runs even when the user allows ExitPlanMode) and answers no (plan/presented.rs).
         "claude" => {
             let command = hook_command(h).iter().map(|s| shq(s)).collect::<Vec<_>>().join(" ");
             let file = h.dir.join(format!("hook-{}.json", h.role));
@@ -36,7 +37,7 @@ pub fn hook_args(kind: &str, h: &Hook) -> Res<Option<Vec<String>>> {
             let mut hooks = obj(json!({ "Stop": one, "StopFailure": one }));
             if h.plan {
                 let plan_cmd = [h.shim.as_str(), "plan-written", "--id", &h.id, "--token", &h.token].iter().map(|s| shq(s)).collect::<Vec<_>>().join(" ");
-                hooks.put("PreToolUse", json!([{ "matcher": "ExitPlanMode", "hooks": [{ "type": "command", "command": plan_cmd }] }]));
+                hooks.put("PermissionRequest", json!([{ "matcher": "ExitPlanMode", "hooks": [{ "type": "command", "command": plan_cmd }] }]));
             }
             write_private(&file, &json!({ "hooks": hooks }).to_string())?;
             Ok(Some(vec!["--settings".into(), file.display().to_string()]))

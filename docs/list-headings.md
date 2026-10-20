@@ -31,8 +31,9 @@ machine**, its repos (or status groups) under it, and their tasks under those.
 - One whose tasks cannot be read has no heading: it says so above the list, as always.
 - **A row never names its machine.** Its tag is the one it has on its own machine's board: the repo's key and number
   (`HSW-151`, [task numbers](task-numbers.md)). The heading above says whose it is.
-- **A repo's heading** is its name with its key beside it, dimmed (`herdr-projects · HSW`), never
-  `vm-str:herdr-projects`. On each machine, the repo the board is in comes first.
+- **A repo's heading** is its name in bold, in the text colour of the task titles under it, with its key beside it,
+  dimmed (`herdr-projects · HSW`), never `vm-str:herdr-projects`. It is never quieter than its tasks, in any theme, so
+  a list of several repos reads as several blocks. It has no rule: the rule is a machine's. On each machine, the repo the board is in comes first.
 - **On one machine** (this machine's board, or one other machine by itself) there is no machine heading.
 
 ## Folding

@@ -39,7 +39,7 @@ pub fn side_of(s: &mut State, t: &Theme) -> Obj {
         // The part it opens on: the newest thing said, whoever said it.
         "from": crate::board::view::talk::opens_at(&w.parts),
         "raw": w.raw, "mine": w.mine, "tone": if w.name == "Coordinator" && w.parts.first().map(|p| p.tone == "red").unwrap_or(false) { "red" } else { "" }, "note": w.note,
-        // A machine's or a repo's coordinator: its heading's colour, on its name, its labels and the box's frame.
+        // A machine's or a repo's coordinator: its own colour (coords.rs), on its name, its labels and the box's frame.
         "tint": if w.tint == crate::shown::ink::Ink::Plain { "" } else { w.tint.name() },
         "toAgent": s.reply && (r.is_some() || crate::board::update::coords::talking(s).is_some()), "box": crate::board::view::textbox::box_ink(s, r.as_ref()).name(),
         // Whether the latest message shows (alt+c), and the two you can talk to: the Coordinator, and the selected task's
@@ -57,10 +57,10 @@ pub fn side_of(s: &mut State, t: &Theme) -> Obj {
     let actions: Vec<(String, String)> = buttons_of(s, r.as_ref(), who.as_ref(), false).into_iter().filter(|(id, _)| !TERMINAL_ONLY.contains(&id.as_str()) && !CHAT_OWN.contains(&id.as_str()) && !(id == "back" && open)).collect();
     let pick = |id: &str| typing.iter().find(|(i, _)| i == id).map(|(_, l)| l.clone()).unwrap_or_default();
     // More: only what applies now and is not a button already, in the buttons' own words. A key with no button on the
-    // page (the settings page, the terminal's size) has no entry; yes and send back are buttons when they apply.
+    // page (the settings page, yours, the terminal's size) has no entry; yes and send back are buttons when they apply.
     let menu: Vec<Value> = crate::board::update::menu::items(s).into_iter().filter(|i| {
         let id = entry(i.id).name;
-        !TERMINAL_ONLY.contains(&id) && entry(i.id).web.is_some() && !["yes", "sendBack"].contains(&id) && (id != "undo" || s.draft_away.is_some() || s.archive_undo.is_some()) && (!["stop", "archive", "pin"].contains(&id) || r.is_some())
+        !i.mine && !TERMINAL_ONLY.contains(&id) && entry(i.id).web.is_some() && !["yes", "sendBack"].contains(&id) && (id != "undo" || s.draft_away.is_some() || s.archive_undo.is_some()) && (!["stop", "archive", "pin"].contains(&id) || r.is_some())
     }).map(|i| json!({ "id": entry(i.id).name, "group": i.group, "label": i.label })).collect();
     let can_open = r.as_ref().map(|r| r.has("title") && !r.b("archivedAt") && if r.b("host") { r.at("link").b("pane") } else { is_agent(r) }).unwrap_or(false);
     obj(json!({

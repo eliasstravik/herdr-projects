@@ -140,6 +140,7 @@
    ctrl+a       archive this task
    ctrl+p       pin this task to the top
    ctrl+e       this task's settings: see and change each one
+                your own settings: what every task starts from
    ctrl+z       undo
    ctrl+f       find: show only the tasks that match
    ctrl+c       twice: close the board
@@ -154,8 +155,7 @@
    alt+a        show the archive
    alt+s        group by repo: see which repo each task is in
    alt+d        show all done
-   alt+m        show every machine's tasks (now: this machine)
- ↓ 19 more
+ ↓ 20 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -170,6 +170,7 @@
    ctrl+a       archive this task
    ctrl+p       pin this task to the top
    ctrl+e       this task's settings: see and change each one
+                your own settings: what every task starts from
    ctrl+z       undo
    ctrl+f       find: show only the tasks that match
    ctrl+c       twice: close the board
@@ -194,8 +195,7 @@
    ?            asks you
    !            asks for your OK
    @            needs a login
-   ✗            went wrong
- ↓ 8 more
+ ↓ 9 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

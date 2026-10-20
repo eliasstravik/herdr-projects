@@ -68,8 +68,8 @@ pub fn auto_panel(s: &mut State, t: &Theme, a: &Obj, width: usize, full: bool) -
 }
 /// The whole automation, full screen, or its settings page in its place.
 pub fn auto_full(s: &mut State, t: &Theme, a: &Obj, width: usize, h: usize) -> Vec<Inked> {
-    let editing = s.editing.as_ref().map(|e| e.auto && e.id == a.s("row")).unwrap_or(false);
-    let (lines, at) = if editing { (super::page::settings_page(s, t, a, width.min(READ)), vec![]) } else { auto_panel(s, t, a, width.min(READ), true) };
+    let editing = s.editing.as_ref().map(|e| e.whose == crate::board::state::Whose::Auto && e.id == a.s("row")).unwrap_or(false);
+    let (lines, at) = if editing { (super::page::settings_page(s, t, Some(a), width.min(READ)), vec![]) } else { auto_panel(s, t, a, width.min(READ), true) };
     s.panel_height = h.saturating_sub(2).max(1); s.panel_length = lines.len();
     let keep = if editing { Some(s.edit_line) } else if s.auto_at >= 0 { at.get(s.auto_at as usize).copied() } else { None };
     if let Some(keep) = keep { s.panel_top = keep.min(s.panel_top.max((keep + 1).saturating_sub(s.panel_height))); }

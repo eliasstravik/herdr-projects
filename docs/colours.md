@@ -17,7 +17,7 @@ board still reads.
 | purple | an automation |
 | plain text colour (the box only) | you type to the Coordinator |
 | a machine's heading's colour (the theme's accent) | a machine's coordinator, in the chat |
-| a repo's heading's grey | a repo's coordinator, in the chat |
+| the brighter grey (Herdr's `subtext0`) | a repo's coordinator, in the chat |
 
 ## The board is in Herdr's theme
 
@@ -207,13 +207,13 @@ prompt mark `❯` look the same whoever the box talks to, as they do with the Co
 | the Coordinator (also: a new task, find, a task whose message goes to the Coordinator or into its description) | the theme's plain text colour |
 | a task's agent, or a task your message starts an agent on | that task's status colour, the very one its mark has in the list |
 | a machine's coordinator ([machine and project coordinators](machine-and-project-coordinators.md)) | its machine's heading's colour: the theme's accent (blue in most themes) |
-| a repo's coordinator | its repo's heading's colour: the brighter grey (Herdr's `subtext0`) |
+| a repo's coordinator | the brighter grey (Herdr's `subtext0`); its repo's heading itself is in plain text ([list headings](list-headings.md)) |
 
-A machine's or a repo's coordinator is in its heading's colour outside the frame too: its name on the line above the box
+A machine's or a repo's coordinator is in that colour outside the frame too: its name on the line above the box
 (`vm-str coordinator  working`: the name in its colour, where it stands still grey) and its name in the hints (`space
 talk to the vm-str coordinator`, `enter send to the vm-str coordinator`). Never inside the box: `You:` and
 `vm-str coordinator:` there are as grey as `Coordinator:` is. On the web Board the same: the text field's frame and the
-name over it in the colours its headings have there, the conversation as the Coordinator's. The Coordinator keeps its plain look, so the three are told apart at a glance.
+name over it in those colours, the conversation as the Coordinator's. The Coordinator keeps its plain look, so the three are told apart at a glance.
 
 So an agent's box also says how its task is doing: amber while the agent works, red when it needs you, green when ready
 to approve, blue under review, pink while queued (for a free slot, or after other tasks), teal when done, dim grey for a

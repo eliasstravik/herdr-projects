@@ -93,6 +93,7 @@ mod board_rows_two;
 mod board_rows_waits;
 mod board_rows_wrap;
 mod board_rows_wrap_list;
+mod board_settings_yours;
 mod board_setup;
 mod board_size;
 mod board_size_held;

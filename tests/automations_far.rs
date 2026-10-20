@@ -109,7 +109,7 @@ fn other_machines_automations_are_in_the_list_with_their_machine_named_and_are_c
     s.press(&["tab"]); assert_eq!(asked(&f), json!({ "action": "auto-run", "id": "0a1b2c3d" }));
     // ctrl+e opens its settings, the page a task has: the rows are that machine's, and each change is made there
     s.press(&["ctrl+e"]);
-    let e = s.s.editing.clone().unwrap(); assert_eq!((e.id.as_str(), e.auto, s.s.auto_open), ("vm-b:auto:0a1b2c3d", true, true));
+    let e = s.s.editing.clone().unwrap(); assert_eq!((e.id.as_str(), e.whose == sw::board::state::Whose::Auto, s.s.auto_open), ("vm-b:auto:0a1b2c3d", true, true));
     let text = t(&mut s, 120);
     like(&text, r"^ Settings {2}Theirs nightly"); like(&text, r"\n▌› {3}Agent's program +claude +worker\.agent\n"); like(&text, r"\n {3}\* Merged by +itself +merge\.by\n"); like(&text, r"\n {5}Review when +always +review\.when\n");
     assert_eq!(s.screen(120).last().unwrap(), "  ↑ ↓ move · enter change · ctrl+u put back · esc back to the task");
