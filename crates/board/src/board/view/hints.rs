@@ -11,7 +11,7 @@ use crate::json::*;
 use crate::shown::ink::Ink;
 use crate::shown::states::{can_send_error, failed_review, failure_for, in_review, is_agent, stuck_finishing};
 
-/// `lit`: words of `words` drawn in `tint` (a heading's coordinator's name, in its heading's colour).
+/// `lit`: words of `words` drawn in `tint` (a heading's coordinator's name, in its colour).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Hint { pub key: String, pub words: String, pub stays: bool, pub short: String, pub shortest: String, pub lit: String, pub tint: Ink }
 fn h(p: (String, String)) -> Hint { Hint { key: p.0, words: p.1, ..Default::default() } }

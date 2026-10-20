@@ -1,7 +1,7 @@
 //! The text box you type in, as the board draws it. Its prompt is only ❯: who gets your words is said by its grey words
 //! while it is empty, by the hint line under it while it holds any (`enter send to #34's agent`), and by the colour of
 //! its frame: a task's agent's in that task's status colour (the very one its mark has), a machine's or a repo's
-//! coordinator's in its heading's colour, the Coordinator's in plain text. Inside the frame, the prompt too, all looks
+//! coordinator's in its own colour (update/coords.rs), the Coordinator's in plain text. Inside the frame, the prompt too, all looks
 //! as with the Coordinator. Its edge names no one.
 use super::chat::more_word;
 use crate::board::state::{Mode, State};

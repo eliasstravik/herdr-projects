@@ -210,7 +210,7 @@ export function chatEl({ onSend, onPress, onDock }) {
       snapNow = snap;
       el.hidden = !c;
       if (!c) return;
-      // A machine's or a repo's coordinator is drawn in its heading's colour: its name in the bar (chat.css).
+      // A machine's or a repo's coordinator is drawn in its own colour: its name in the bar (chat.css).
       if (c.tint) el.dataset.tint = c.tint; else delete el.dataset.tint;
       drawWho(snap, c);
       // Talking to a machine's or a repo's coordinator (on its heading), not to a task's agent.
@@ -230,7 +230,7 @@ export function chatEl({ onSend, onPress, onDock }) {
       showing = { parts, raw: !!c.raw, toAgent: !!c.toAgent };
       said.set(parts);
       // The box's frame says who gets your words, as on the terminal board: the plain text colour for the Coordinator,
-      // the task's status colour for its agent, a heading's colour for its coordinator.
+      // the task's status colour for its agent, a heading's coordinator's own colour for it.
       tone = c.box || "text"; // (drawn by `sync`, below, once who is shown now is known)
       box.placeholder = cap(snap.send.place || "");
       labels = snap.send;
