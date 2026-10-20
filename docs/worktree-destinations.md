@@ -26,7 +26,8 @@ a hidden `.herdr-projects-reservations` folder below the parent, leaving the che
 
 Herdr receives the absolute directory as `worktree create --path`. Later attempts in the same Herdr space use
 Git to create their own worktrees in the same configured parent. Planning uses the task's worktree, so it follows
-the same policy. Existing worktrees stay where they are: changing this setting does not move or remove them.
+the same policy. The low-disk guard checks the configured destination volume before creating a worktree.
+Existing worktrees stay where they are: changing this setting does not move or remove them.
 The setting does not change handoff, merge or cleanup policy, or who owns a workspace.
 
 Before setup or a worker starts, the board records and checks the returned location. With a destination configured,

@@ -287,6 +287,7 @@ mod web_settings;
 mod web_voice;
 mod workspace_branch;
 mod workspace_destination;
+mod workspace_destination_disk;
 mod workspace_destination_failures;
 mod workspace_destination_lifecycle;
 mod workspace_from;

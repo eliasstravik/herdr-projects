@@ -11,9 +11,14 @@ use std::path::PathBuf;
 /// The free space a start needs: `board.diskFree` GB (0: none is looked at).
 pub fn needed() -> u64 { setting("board.diskFree", None).as_i64().unwrap_or(5).max(0) as u64 * GB }
 /// The disks a start of this task writes to.
-fn places(t: &Task) -> Vec<PathBuf> {
+pub fn places(t: &Task) -> Vec<PathBuf> {
     let mut v = vec![crate::store::repos::folder_of(t.s("id")), crate::store::files::data_dir(), crate::temp::root(), crate::doctor::stale::cache_dir()];
     if t.b("worktree") { v.push(PathBuf::from(t.s("worktree"))); }
+    let root = crate::store::repos::folder_of(t.s("id"));
+    let existing = t.b("worktree") && std::path::Path::new(t.s("worktree")).exists();
+    if !existing && !t.b("startedOnce") && crate::store::repos::can_worktree(&root) {
+        if let Ok(Some(dest)) = crate::worktree_destination::configured(&root, t) { v.push(dest); }
+    }
     v.extend(super::orphans::kept_roots()); // where worktrees are made
     v
 }

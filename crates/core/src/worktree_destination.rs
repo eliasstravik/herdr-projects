@@ -7,14 +7,21 @@ use crate::store::tasks::{update_wait, Change, Task};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Resolve at creation time, against the physical primary checkout (not a linked worktree or a symlink to it).
-pub fn parent(root: &Path, t: &Task) -> Res<Option<PathBuf>> {
+/// Resolve a configured parent without creating it, so a start can check its volume before writing anything.
+pub fn configured(root: &Path, t: &Task) -> Res<Option<PathBuf>> {
     let value = setting_text("workspace.destination", Some(t));
     if value.is_empty() || value == "none" {
         return Ok(None);
     }
     let primary = fs::canonicalize(primary_root(root))?;
-    let dest = primary.join(value);
+    Ok(Some(primary.join(value)))
+}
+
+/// Resolve at creation time, against the physical primary checkout (not a linked worktree or a symlink to it).
+pub fn parent(root: &Path, t: &Task) -> Res<Option<PathBuf>> {
+    let Some(dest) = configured(root, t)? else {
+        return Ok(None);
+    };
     fs::create_dir_all(&dest)?;
     Ok(Some(fs::canonicalize(dest)?))
 }
