@@ -350,3 +350,7 @@ requests, starts queued tasks, runs the Watcher, and keeps Herdr's sidebar curre
 - **Its life.** Herdr starts it with its server. Any Herdr event, or opening the board, starts it again if it died. It
   replaces itself when the plugin is updated, and exits when Herdr is gone. It looks after this machine's tasks only.
 - An open board does the same. After an update it loads the new version by itself, in place, once nothing is half typed.
+- **One pass at a time.** This round of looking after the tasks also runs after every hook and every background job.
+  Only one runs per Herdr session at a time: one that comes while another is under way (a slow Herdr) does nothing
+  itself, and the one under way goes round once more at its end if it was asked to (a pull request poll is never lost).
+  A clean-up still running for a task is not started again.
