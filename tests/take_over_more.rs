@@ -127,8 +127,10 @@ fn real_programs_herdr_superworks_own_processes_are_stopped_and_no_other() {
     let data = w.base.join("moved/data");
     let old = w.base.join("old/herdr-superwork");
     std::fs::create_dir_all(old.parent().unwrap()).unwrap();
-    std::fs::copy("/bin/sleep", &old).unwrap();
-    let keeper = std::process::Command::new(&old).arg("30").spawn().unwrap();
+    // A copy of bash, not of sleep: a multi-call coreutils (uutils) runs as what its name says, and knows no herdr-superwork.
+    let bash = ["/bin/bash", "/usr/bin/bash"].into_iter().find(|p| std::path::Path::new(p).exists()).expect("bash");
+    std::fs::copy(bash, &old).unwrap();
+    let keeper = std::process::Command::new(&old).args(["-c", "sleep 30; exit"]).spawn().unwrap();
     let mut other = std::process::Command::new("/bin/sleep").arg("30").spawn().unwrap();
     let mark = |c: &std::process::Child| { let pid = c.id() as i64; serde_json::json!({ "pid": pid, "start": sw::store::files::proc_start(pid) }).to_string() };
     put(&data.join("keeper.json"), &mark(&keeper));

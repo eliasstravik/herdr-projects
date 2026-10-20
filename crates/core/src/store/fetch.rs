@@ -43,6 +43,14 @@ fn locked(said: &str) -> bool { moved(said) || has(said, &["cannot lock ref", "u
 pub fn moved(said: &str) -> bool { has(said, &["but expected"]) }
 /// The lock file git said is held, when it did: another git command's now, or one a git that stopped left behind.
 fn lock_file(said: &str) -> Option<String> { crate::re!(r"Unable to create '([^']+\.lock)'").captures(said).map(|c| c[1].to_string()) }
+/// git 2.53 says a lock file in the way only as "fetching ref <ref> failed: reference already exists": the lock file
+/// is named as older gits name it, where it is there.
+fn held_lock(dir: &Path, said: &str) -> String {
+    let Some(r) = crate::re!(r"fetching ref (refs/\S+) failed: reference already exists").captures(said).map(|c| c[1].to_string()) else { return said.to_string() };
+    let Ok(common) = git_out(dir, &["rev-parse", "--path-format=absolute", "--git-common-dir"]) else { return said.to_string() };
+    let lock = Path::new(&common).join(format!("{r}.lock"));
+    if lock.exists() { format!("{said}\nerror: cannot lock ref '{r}': Unable to create '{}': File exists.", lock.display()) } else { said.to_string() }
+}
 fn network(said: &str) -> bool {
     has(said, &["could not resolve host", "temporary failure in name resolution", "connection timed out", "connection reset", "connection refused", "network is unreachable", "early eof", "remote end hung up", "rpc failed", "operation timed out", "returned error: 5", "kex_exchange_identification", "connection closed by", "gnutls", "ssl_"])
 }
@@ -82,7 +90,7 @@ pub fn fetch_branch(dir: &Path, b: &str) -> Res<()> {
         for i in 1..=TRIES {
             match quiet_git(dir, &["fetch", "--no-tags", "origin", &spec], FETCH_MS) {
                 Ok(_) => { write(n, now()); return Ok(()); }
-                Err(e) => said = e,
+                Err(e) => said = held_lock(dir, &e),
             }
             if i == TRIES || !(locked(&said) || network(&said)) { break; }
             pause(i);
