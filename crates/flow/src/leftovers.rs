@@ -2,7 +2,9 @@
 //! sw-core) and the folders its agent's and reviewers' programs kept for its worktree (agents/scratch.rs), each once
 //! what still runs from it is stopped (leftovers/procs.rs). The sweep (leftovers/sweep.rs) does the same for tasks
 //! that ended before, takes old build output out of kept worktrees (leftovers/builds.rs), and a start makes room first
-//! on a disk that is nearly full (leftovers/room.rs). Nothing is removed that the board's environment points into.
+//! on a disk that is nearly full (leftovers/room.rs). Nothing is removed that the board's environment points into, and
+//! nothing is reached through a link: a folder is removed only where it and each folder above it, up to the temporary,
+//! cache or worktree folder it is in, is a real folder (a link in its place is taken away, never followed).
 pub mod builds;
 pub mod orphans;
 pub mod procs;
@@ -26,6 +28,57 @@ pub fn free(t: &Obj) -> u64 {
     if t.b("worktree") { orphans::remember(Path::new(t.s("worktree"))); }
     places_of(t).iter().map(|p| remove(p)).sum()
 }
+/// The same for a done task whose agent is still open, at rest (`workspace.cleanup` off): everything goes but the
+/// folders its program made for itself (Claude Code's `claude-<uid>/<folder>/<session>/scratchpad`), emptied, so the
+/// agent goes on working if you talk to it again.
+pub fn free_open(t: &Obj) -> u64 {
+    let per: Vec<std::ffi::OsString> = crate::agents::scratch::per_folder(Path::new("")).iter().filter_map(|p| p.file_name().map(|n| n.to_os_string())).collect();
+    let tmp = crate::temp::of(t);
+    let mut n = 0;
+    if safe(&tmp) {
+        procs::stop_in(&tmp);
+        for e in std::fs::read_dir(&tmp).into_iter().flatten().flatten() {
+            let (p, dir) = (e.path(), e.file_type().map(|f| f.is_dir()).unwrap_or(false));
+            n += if dir && per.contains(&e.file_name()) { thin(&p, 3) } else if dir { remove(&p) } else { gone_file(&p) };
+        }
+    }
+    if t.b("worktree") { for p in scratch_of(Path::new(t.s("worktree"))) { n += thin(&p, 2); } }
+    n
+}
+fn gone_file(p: &Path) -> u64 { use std::os::unix::fs::MetadataExt; let n = std::fs::symlink_metadata(p).map(|m| m.blocks() * 512).unwrap_or(0); if std::fs::remove_file(p).is_ok() { n } else { 0 } }
+/// Empty a folder, keeping the folders in it `keep` levels down (emptied too): the bytes that went.
+fn thin(p: &Path, keep: usize) -> u64 {
+    if !safe(p) { return 0; }
+    procs::stop_in(p);
+    let mut n = 0;
+    for e in std::fs::read_dir(p).into_iter().flatten().flatten() {
+        let (q, dir) = (e.path(), e.file_type().map(|f| f.is_dir()).unwrap_or(false));
+        n += if dir && keep > 0 { thin(&q, keep - 1) } else if dir { remove(&q) } else { gone_file(&q) };
+    }
+    n
+}
+/// The folder it is in that the board trusts: a temporary folder, the build caches, a worktree folder.
+fn trusted_top(p: &Path) -> Option<PathBuf> {
+    let mut tops = crate::agents::scratch::temp_roots();
+    tops.push(crate::doctor::stale::cache_dir());
+    tops.extend(orphans::kept_roots());
+    tops.into_iter().filter(|t| p.starts_with(t) && p != t).max_by_key(|t| t.components().count())
+}
+/// May the folder be emptied or removed: a real folder all the way down from a trusted folder, and guarded neither as
+/// it is named nor where it really is. Nothing is changed in asking.
+pub fn removable(p: &Path) -> bool {
+    let (Ok(m), Some(top)) = (std::fs::symlink_metadata(p), trusted_top(p)) else { return false };
+    if !m.is_dir() || p.ancestors().skip(1).take_while(|a| *a != top).any(|a| std::fs::symlink_metadata(a).map(|m| !m.is_dir() || m.file_type().is_symlink()).unwrap_or(true)) { return false; }
+    let real = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    !guarded(p) && !guarded(&real)
+}
+/// `removable`; a link in a trusted folder's place is taken away (what it points to stays, and nothing runs from it
+/// is stopped).
+fn safe(p: &Path) -> bool {
+    let is_link = std::fs::symlink_metadata(p).map(|m| m.file_type().is_symlink()).unwrap_or(false);
+    if is_link && trusted_top(p).is_some() && !guarded(p) { let _ = std::fs::remove_file(p); }
+    !is_link && removable(p)
+}
 /// Never removed: a folder this process's environment points into (a PATH entry of yours in an old scratchpad), the
 /// home folder, the board's own folders, a known repo, or a folder that holds one of them.
 pub fn guarded(p: &Path) -> bool {
@@ -38,7 +91,7 @@ pub fn guarded(p: &Path) -> bool {
 }
 /// Stop what runs from a folder, then remove it: the bytes that went.
 pub fn remove(p: &Path) -> u64 {
-    if !p.is_dir() || guarded(p) { return 0; }
+    if !safe(p) { return 0; }
     procs::stop_in(p);
     let took = || size(p, Instant::now() + Duration::from_secs(10)).0;
     let before = took();

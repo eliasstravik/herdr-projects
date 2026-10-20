@@ -134,6 +134,7 @@ mod coordinator_sessions;
 mod coordinator_stop;
 mod detached_jobs;
 mod disk_space;
+mod disk_space_kept;
 mod disk_space_sweep;
 mod doctor;
 mod doctor_leftovers;

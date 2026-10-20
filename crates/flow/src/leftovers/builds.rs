@@ -1,7 +1,7 @@
 //! Old build output in a worktree a done or archived task kept (a clean-up that kept unsaved work, or
 //! `workspace.cleanup` off): `target/`, `node_modules/` and `.next/` (at most three folders down), once nothing changed
 //! on the task for `board.oldBuilds` days. Only what git ignores goes: never a file the work is made of, and never in a
-//! worktree something still runs from. The next build makes it again.
+//! worktree something still runs from but the task's own agent, at rest. The next build makes it again.
 use crate::json::*;
 use crate::store::repos::git_out;
 use crate::store::settings::lookup::setting;
@@ -31,12 +31,14 @@ pub fn old_enough(t: &Task) -> bool {
     let at = super::changed_at(&file).unwrap_or(crate::clock::now()).max(t.i("archivedAt"));
     crate::clock::now() - at >= days * DAY_MS
 }
-/// The old build output of an ended task's kept worktree that may go.
-pub fn old_builds_of(t: &Task) -> Vec<PathBuf> {
+/// The old build output of an ended task's kept worktree that may go. `agent`: the shell of the pane its agent is still
+/// open in, at rest: what runs under it does not keep the build.
+pub fn old_builds_of(t: &Task, agent: Option<i32>) -> Vec<PathBuf> {
     let tree = PathBuf::from(t.s("worktree"));
-    if !t.b("worktree") || !tree.is_dir() || !old_enough(t) || !super::procs::in_folder(&tree).is_empty() { return vec![]; }
+    if !t.b("worktree") || !tree.is_dir() || !old_enough(t) || !super::procs::in_folder_but(&tree, agent).is_empty() { return vec![]; }
     if tree == crate::store::repos::folder_of(t.s("id")) { return vec![]; } // the human's own checkout, never
+    super::orphans::remember(&tree); // its worktree folder is trusted from here on (leftovers.rs)
     build_dirs(&tree).into_iter().filter(|d| git_out(&tree, &["check-ignore", "-q", &d.display().to_string()]).is_ok()).collect()
 }
 /// Remove it: the bytes freed.
-pub fn free_builds(t: &Task) -> u64 { old_builds_of(t).iter().map(|d| super::remove(d)).sum() }
+pub fn free_builds(t: &Task, agent: Option<i32>) -> u64 { old_builds_of(t, agent).iter().map(|d| super::remove(d)).sum() }

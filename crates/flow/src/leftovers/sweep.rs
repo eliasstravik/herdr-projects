@@ -16,16 +16,29 @@ use std::path::PathBuf;
 
 const HOUR_MS: i64 = 3_600_000;
 pub fn ended(t: &Task) -> bool { t.s("stage") == "done" || t.b("archivedAt") }
-/// The task's agent is gone: no pane, its herdr session not running (its panes went with it), or herdr says none is
-/// there. What herdr cannot say counts as there.
-pub fn agent_gone(t: &Task) -> bool {
+/// Where a task's agent is: gone (no pane, its herdr session not running, so its panes went with it, or herdr says
+/// none is there), still open and at rest (with the pid of its pane's shell), or at work. What herdr cannot say is
+/// at work.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Agent { Gone, Open(Option<i32>), Busy }
+pub fn agent_now(t: &Task) -> Agent {
     let l = t.at("link");
-    if !l.b("pane") { return true; }
-    if !l.b("socket") || !socket_exists(l.s("socket")) { return true; }
-    matches!(Herdr::new(Some(l.t("socket"))).agent_get(l.s("pane")), Ok(None))
+    if !l.b("pane") || !l.b("socket") || !socket_exists(l.s("socket")) { return Agent::Gone; }
+    let api = Herdr::new(Some(l.t("socket")));
+    match api.agent_get(l.s("pane")) {
+        Ok(None) => Agent::Gone,
+        Ok(Some(a)) if ["idle", "done"].contains(&a.s("agent_status")) => Agent::Open(api.shell_pid(l.s("pane")).map(|p| p as i32)),
+        _ => Agent::Busy,
+    }
 }
-/// An ended task the sweep may tidy: its agent gone, no job of the board's on it, no clean-up still to come.
-fn at_rest(t: &Task) -> bool { ended(t) && !crate::runner::runner_alive(t) && !t.at("tidy").is_object() && agent_gone(t) }
+pub fn agent_gone(t: &Task) -> bool { agent_now(t) == Agent::Gone }
+/// Free what a task that just ended left, as its agent is: all of it once the agent is gone, all but what the agent's
+/// program keeps for itself while it is open at rest, nothing while it works.
+pub fn free_ended(t: &Task) -> u64 { match agent_now(t) { Agent::Gone => super::free(t), Agent::Open(_) => super::free_open(t), Agent::Busy => 0 } }
+/// An ended task the sweep may tidy: no job of the board's on it, no clean-up still to come.
+fn at_rest(t: &Task) -> bool { ended(t) && !crate::runner::runner_alive(t) && !t.at("tidy").is_object() }
+/// Nothing changed on the task for an hour: its open agent is not talked to.
+fn quiet(t: &Task) -> bool { super::changed_at(&crate::store::files::dir_of(t.s("id")).join("task.json")).map(|at| crate::clock::now() - at >= HOUR_MS).unwrap_or(false) }
 /// The folders of tasks at work, and your repos: never a leftover.
 fn working(tasks: &[Task]) -> Vec<PathBuf> {
     let mut v: Vec<PathBuf> = tasks.iter().filter(|t| !ended(t)).flat_map(|t| [cwd_of(t), PathBuf::from(t.s("worktree"))]).filter(|p| !p.as_os_str().is_empty()).collect();
@@ -36,7 +49,7 @@ fn working(tasks: &[Task]) -> Vec<PathBuf> {
 pub fn sweep() -> Value { sweep_with(false) }
 /// `dry`: only what would go, each with its size; nothing is stopped or removed.
 pub fn sweep_with(dry: bool) -> Value {
-    let remove = |p: &std::path::Path| if dry { if p.is_dir() && !super::guarded(p) { crate::disk::size(p, std::time::Instant::now() + std::time::Duration::from_secs(10)).0.max(1) } else { 0 } } else { remove(p) };
+    let remove = |p: &std::path::Path| if dry { if super::removable(p) { crate::disk::size(p, std::time::Instant::now() + std::time::Duration::from_secs(10)).0.max(1) } else { 0 } } else { remove(p) };
     let r = with_lock_wait("sweep", 0, || {
         let tasks = list(ListOpts { include_archived: true, attempts: true, ..Default::default() });
         let mut went: Vec<Value> = vec![];
@@ -44,8 +57,13 @@ pub fn sweep_with(dry: bool) -> Value {
         for t in &tasks {
             let there: Vec<PathBuf> = super::places_of(t).into_iter().filter(|p| p.is_dir()).collect();
             if (there.is_empty() && !std::path::Path::new(t.s("worktree")).is_dir()) || !at_rest(t) { continue; } // herdr is asked only where there is something
-            for p in there { let n = remove(&p); add("temporary files of an ended task", &p, n); }
-            let n = if dry { builds::old_builds_of(t).iter().map(|d| remove(d)).sum() } else { builds::free_builds(t) };
+            let shell = match agent_now(t) {
+                Agent::Gone => { for p in there { let n = remove(&p); add("temporary files of an ended task", &p, n); } None }
+                // Open at rest (`workspace.cleanup` off): all but its program's own folders, once nobody talked to it for an hour.
+                Agent::Open(shell) if quiet(t) => { let n = if dry { there.iter().map(|p| remove(p)).sum() } else { super::free_open(t) }; add("temporary files of a done task whose agent is open", &crate::temp::of(t), n); shell }
+                _ => continue,
+            };
+            let n = if dry { builds::old_builds_of(t, shell).iter().map(|d| remove(d)).sum() } else { builds::free_builds(t, shell) };
             add("old build output in a kept worktree", std::path::Path::new(t.s("worktree")), n);
         }
         let live = working(&tasks);

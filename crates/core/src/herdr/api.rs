@@ -79,6 +79,8 @@ impl Herdr {
         a.extend(envs(env)); a.push("--no-focus".into());
         Ok(self.call(a)?.at("pane").clone())
     }
+    /// The pid of the shell a pane runs, under which its program runs.
+    pub fn shell_pid(&self, id: &str) -> Option<i64> { self.process_info(id).and_then(|i| i.at("shell_pid").as_i64()).filter(|p| *p > 1) }
     fn process_info(&self, id: &str) -> Option<Value> { self.call(args(&["pane", "process-info", "--pane", id])).ok().map(|r| r.at("process_info").clone()) }
     /// Is nothing but its shell running in the pane? Unknown counts as busy.
     pub fn pane_idle(&self, id: &str) -> bool {

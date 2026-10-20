@@ -30,8 +30,7 @@ pub fn archive(id: &str) -> Res<Task> {
         flow::spaces::close_repo_space(&h, &folder_of(t.s("id")));
     }
     // Its agent gone with its space: its temporary files go too, and its line says what that freed.
-    if !crate::leftovers::sweep::agent_gone(&t) { return Ok(t); }
-    let freed = crate::leftovers::free(&t);
+    let freed = crate::leftovers::sweep::free_ended(&t);
     if crate::leftovers::said(freed).is_empty() { return Ok(t); }
     update(t.s("id"), |t| { let m = crate::leftovers::with_said(t.s("msg"), freed); t.put("msg", m); Ok(Change::Write) })
 }

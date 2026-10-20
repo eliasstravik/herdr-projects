@@ -22,8 +22,10 @@ Done, archived or removed, once its agent is gone with its space:
 3. its line says what that freed: `Freed 1.4 GB of temporary files.`
 
 A worktree that is kept (it holds unsaved or unmerged work, or `workspace.cleanup` is off) stays as it is: only the
-temporary files go. A done task whose agent still runs (`workspace.cleanup` off) keeps them until it is archived or
-removed.
+temporary files go. A done task whose agent stays open (`workspace.cleanup` off) loses them too, all but the folders
+its program keeps for itself (Claude Code's scratchpad folder, emptied), so the agent goes on if you talk to it again;
+what it makes after that goes in the sweep once nobody talked to it for an hour. While its agent works, nothing is
+touched.
 
 ## The sweep
 
@@ -31,7 +33,7 @@ The sweep removes what tasks that ended before left: it runs when the board open
 old), once a day by itself, before a start on a nearly full disk, and when you run `herdr-projects sweep`, which says
 what it removed (`herdr-projects sweep --dry` only says what would go). What still runs from a folder it takes (a dev server left behind) is stopped first. It takes:
 
-- the temporary folders of done and archived tasks whose agent is gone;
+- the temporary folders of done and archived tasks whose agent is gone (or open and quiet for an hour, as above);
 - the folders an agent's program kept for a worktree of the board's that is gone;
 - the board's task folders whose task was removed;
 - the build output (`target/`, `node_modules/`, `.next/`, and only what git ignores) of a worktree a done or archived
@@ -39,14 +41,17 @@ what it removed (`herdr-projects sweep --dry` only says what would go). What sti
 - old warm builds in `~/.cache/herdr-projects` that nothing uses.
 
 **What it never touches:** a task at work, its worktree and its folders; your repos and your home folder; a loose folder
-in `/tmp` the board did not make; a folder that changed in the last hour; and a folder your environment points into (a `PATH` entry in an old scratchpad keeps that one). An agent's
+in `/tmp` the board did not make; a folder that changed in the last hour; a folder your environment points into (a `PATH` entry in an old scratchpad keeps that one); and anything
+reached through a link: a folder goes only where it and each folder above it, up to the temporary folder, the build
+caches or the worktree folder it is in, is a real folder. A link in a temporary folder's place is taken away, and
+what it points to, and what runs there, stays. An agent's
 folder for a worktree counts as the board's only when its name is a known worktree folder followed by a name as the
 task branches start (`work-`), no folder of that name is there, and no other folder beside it starts so. What the
 last sweep removed is kept in `~/.herdr-projects/data/sweep.json`.
 
 ## A nearly full disk
 
-Before a task starts (its worktree, its setup, its agent), the board looks at the disks it writes to: the repo's, the
+Before a task starts (its worktree, its setup, its agent, and the build once its plan has its yes), the board looks at the disks it writes to: the repo's, the
 worktrees', the board's data and the temporary files. Under `board.diskFree` GB free (5; `0`: never looked at), it
 sweeps first; still under, the task goes back to the queue with a plain line instead of failing with "No space left on
 device":

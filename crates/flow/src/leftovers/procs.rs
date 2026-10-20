@@ -5,18 +5,19 @@
 use std::path::{Path, PathBuf};
 
 fn inside(p: &Path, dir: &Path) -> bool { p.starts_with(dir) }
-/// This process and the ones it runs under.
-fn own_line() -> Vec<i32> {
-    let mut v = vec![std::process::id() as i32];
-    let mut at = v[0];
-    for _ in 0..64 {
-        let Some(up) = std::fs::read_to_string(format!("/proc/{at}/stat")).ok().and_then(|s| s.rfind(')').and_then(|i| s[i + 2..].split(' ').nth(1).and_then(|x| x.parse::<i32>().ok()))) else { break };
-        if up <= 1 { break; }
-        v.push(up); at = up;
-    }
-    #[cfg(not(target_os = "linux"))] { let up = unsafe { libc::getppid() }; if up > 1 { v.push(up); } }
+/// The process a process runs under.
+fn parent_of(pid: i32) -> Option<i32> {
+    #[cfg(target_os = "linux")] { std::fs::read_to_string(format!("/proc/{pid}/stat")).ok().and_then(|s| s.rfind(')').and_then(|i| s[i + 2..].split(' ').nth(1).and_then(|x| x.parse::<i32>().ok()))) }
+    #[cfg(not(target_os = "linux"))] { std::process::Command::new("ps").args(["-o", "ppid=", "-p", &pid.to_string()]).output().ok().and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse().ok()) }
+}
+/// A process and the ones it runs under, up to the first.
+fn line_of(pid: i32) -> Vec<i32> {
+    let mut v = vec![pid];
+    for _ in 0..64 { match parent_of(*v.last().unwrap()) { Some(up) if up > 1 && !v.contains(&up) => v.push(up), _ => break } }
     v
 }
+/// This process and the ones it runs under.
+fn own_line() -> Vec<i32> { line_of(std::process::id() as i32) }
 /// A process that is gone, or a zombie that only waits for its parent to read it.
 fn ended(pid: i32) -> bool {
     if !crate::store::files::pid_alive(pid as i64) { return true; }
@@ -52,8 +53,13 @@ pub fn in_folder(dir: &Path) -> Vec<i32> {
     let own = own_line();
     running_from(&dir).into_iter().filter(|p| !own.contains(p)).collect()
 }
+/// What runs from the folder that does not run under `under` (a pane's shell: the task's own agent, at rest there).
+pub fn in_folder_but(dir: &Path, under: Option<i32>) -> Vec<i32> {
+    in_folder(dir).into_iter().filter(|p| under.map(|u| !line_of(*p).contains(&u)).unwrap_or(true)).collect()
+}
 /// Stop what runs from the folder: asked to end, then, a few seconds on, ended. How many there were.
 pub fn stop_in(dir: &Path) -> usize {
+    if std::fs::symlink_metadata(dir).map(|m| m.file_type().is_symlink()).unwrap_or(true) { return 0; } // never through a link
     let pids = in_folder(dir);
     for sig in [libc::SIGTERM, libc::SIGKILL] {
         let left: Vec<i32> = pids.iter().copied().filter(|p| !ended(*p)).collect();
