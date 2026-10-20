@@ -17,10 +17,12 @@ fn branch(r: &str) -> String { r.strip_prefix("refs/heads/").unwrap_or(r).to_str
 pub fn state_of(status: &str) -> &'static str { match status.to_lowercase().as_str() { "completed" => "MERGED", "abandoned" => "CLOSED", _ => "OPEN" } }
 /// What its reviewers' votes say, as gh's `reviewDecision`: rejected or waiting for the author is a change asked for;
 /// `required`: a blocking policy of reviewers (their number, required reviewers, resolved comments) is not met yet.
+/// A required reviewer who has not voted says nothing by itself: a group (`[TEAM FOUNDATION]\Developers`) keeps its
+/// vote at 0 when one of its members approves, so only the policies decide what is still required.
 pub fn decision(reviewers: &[Value], required: bool) -> &'static str {
     let votes: Vec<i64> = reviewers.iter().map(|r| r.i("vote")).collect();
     if votes.iter().any(|v| *v < 0) { return "CHANGES_REQUESTED"; }
-    if required || reviewers.iter().any(|r| r.b("isRequired") && r.i("vote") <= 0) { return "REVIEW_REQUIRED"; }
+    if required { return "REVIEW_REQUIRED"; }
     if votes.iter().any(|v| *v >= 5) { "APPROVED" } else { "" }
 }
 /// One pull request as az gives it, in gh's shape (without its checks and comments).

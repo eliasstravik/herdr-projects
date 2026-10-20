@@ -36,7 +36,7 @@ fn a_pull_request_reads_as_gh_says_one_its_status_its_votes_and_its_merge_commit
     assert_eq!(pr::decision(&[vote(10, false)], false), "APPROVED");
     assert_eq!(pr::decision(&[vote(5, false), vote(-10, false)], false), "CHANGES_REQUESTED", "rejected");
     assert_eq!(pr::decision(&[vote(-5, false)], false), "CHANGES_REQUESTED", "waiting for the author");
-    assert_eq!(pr::decision(&[vote(0, true), vote(10, false)], false), "REVIEW_REQUIRED", "a required reviewer has not voted");
+    assert_eq!(pr::decision(&[vote(0, true), vote(0, true)], false), "", "a required group keeps its vote at 0 when a member approves: only the policies say what is required");
     assert_eq!(pr::decision(&[vote(10, false)], true), "REVIEW_REQUIRED", "a policy of reviewers not met");
     assert_eq!(pr::decision(&[], false), "");
     let a = az("acme", "Shop", "web").unwrap();
@@ -57,6 +57,8 @@ fn its_policies_are_its_checks_builds_and_statuses_while_a_policy_of_people_is_a
     let (checks, people) = policies::rollup(&a, &[policy("Build", "CI build", "rejected", Some(7)), optional, off, status, policy("Minimum number of reviewers", "", "approved", None)]);
     let seen: Vec<(String, String, String)> = checks.iter().map(|c| (c.t("name"), c.t("status"), c.t("conclusion"))).collect();
     assert_eq!(seen, vec![("CI build".into(), "COMPLETED".into(), "FAILURE".into()), ("Lint".into(), "COMPLETED".into(), "NEUTRAL".into()), ("sonar/quality".into(), "IN_PROGRESS".into(), "".into())]);
+    let mut unnamed = policy("Build", "", "approved", Some(9)); unnamed["configuration"]["settings"]["displayName"] = json!(null); unnamed["context"]["buildDefinitionName"] = json!("api-service");
+    assert_eq!(policies::name(&unnamed), "api-service", "a build validation with no name of its own: its pipeline's");
     assert_eq!(checks[0].s("buildId"), "7"); assert_eq!(checks[0].s("detailsUrl"), "https://dev.azure.com/acme/Shop/_build/results?buildId=7");
     assert!(!people);
     let (checks, people) = policies::rollup(&a, &[policy("Required reviewers", "", "queued", None), policy("Build", "CI build", "approved", Some(7))]);
@@ -94,9 +96,16 @@ fn the_main_pipeline_s_runs_are_those_merge_pipeline_names_and_say_how_far_they_
     assert!(runs::passed(&all[1]) && runs::failed(&all[2]) && !runs::passed(&all[0]) && !runs::failed(&all[0]));
     assert!(runs::passed(&runs::run_of(&run(4, "CI", "c", "completed", "partiallySucceeded"))));
     assert!(runs::failed(&runs::run_of(&run(4, "CI", "c", "completed", "canceled"))));
-    let st = |n: &str, state: &str| runs::Stage { name: n.into(), done: state == "completed", running: state == "inProgress" };
+    let st = |n: &str, state: &str| runs::Stage { name: n.into(), done: state == "completed", running: state == "inProgress", ..Default::default() };
     assert_eq!(runs::progress(&[st("Build", "completed"), st("Test", "completed"), st("Package", "inProgress")], 1), "Main pipeline running · 2 of 3 stages");
     assert_eq!(runs::progress(&[st("Build", "completed"), st("Deploy_Staging", "inProgress"), st("Deploy_Prod", "pending")], 1), "Deploying Staging");
     assert_eq!(runs::progress(&[st("Deployment", "inProgress")], 1), "Deploying");
     assert_eq!(runs::progress(&[], 2), "Main pipelines running");
+    // As Azure Pipelines gives it: a stage `Production_DE` whose deployment job `Deploy` runs (job, phase, stage)
+    let rec = |id: &str, parent: &str, kind: &str, name: &str, state: &str| json!({ "id": id, "parentId": parent, "type": kind, "name": name, "state": state });
+    let tl = json!({ "records": [rec("s1", "", "Stage", "Build & Push", "completed"), rec("s2", "", "Stage", "Staging", "completed"), rec("s3", "", "Stage", "Production_DE", "inProgress"),
+        rec("p3", "s3", "Phase", "Deploy", "inProgress"), rec("j3", "p3", "Job", "Deploy", "inProgress"), rec("j1", "s1", "Job", "service", "completed")] });
+    let real = runs::stages_of(&logs::records_of(&tl));
+    assert_eq!(runs::progress(&real, 1), "Deploying Production DE");
+    assert_eq!(runs::progress(&real[..2], 1), "Main pipeline running · 2 of 2 stages");
 }

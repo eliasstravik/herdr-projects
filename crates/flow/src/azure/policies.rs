@@ -19,6 +19,8 @@ pub fn kind(p: &Value) -> Kind {
 pub fn name(p: &Value) -> String {
     let (c, s) = (p.at("configuration"), p.at("configuration").at("settings"));
     if s.b("displayName") { return s.t("displayName"); }
+    // A build validation with no name of its own is called after its pipeline.
+    if p.at("context").b("buildDefinitionName") { return p.at("context").t("buildDefinitionName"); }
     if kind(p) == Kind::Status && s.b("statusName") { return [s.s("statusGenre"), s.s("statusName")].into_iter().filter(|x| !x.is_empty()).collect::<Vec<_>>().join("/"); }
     c.at("type").t("displayName")
 }
