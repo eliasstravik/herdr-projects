@@ -40,8 +40,9 @@ In the sidebar, under **Agents** and above its foot (Install app, Settings), the
 
 Under it, one entry per machine that has a board, drawn as an agent's entry is:
 
-- **All machines** first, at the top (also while this machine is the only one: it then shows this machine's tasks, and
-  stays picked).
+- **All machines** first, at the top, once the board knows another machine. While this machine is the only one it is
+  not there (it would show this machine's tasks again), and a board that showed every machine shows this machine's own;
+  it comes back as soon as herdr has a second machine.
 - Under it, **this machine** and **each other machine the board knows** (the ones its Other machines goes round: Herdr's
   saved machines, or `board.machines`), in the order of Herdr's sidebar, this machine where that sidebar puts it
   ([machine order](machine-order.md)).

@@ -70,6 +70,7 @@ mod board_list_rest;
 mod board_more;
 mod board_needs;
 mod board_needs_rest;
+mod board_one_machine;
 mod board_panel;
 mod board_pending;
 mod board_panel_form;

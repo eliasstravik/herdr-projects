@@ -63,7 +63,7 @@ fn ready_to_approve_the_merge_asks_first_the_menu_acts_remove_asks_and_messages_
     assert_eq!(s.s.menu.as_ref().unwrap().at, -1, "no line is picked when the menu opens");
     s.press(&["enter"]); assert!(s.s.menu.is_some());
     let k = |id: &str| regex::escape(&key_name(id));
-    for line in [format!("{} +remove this task", k("stop")), format!("{} +archive this task", k("archive")), format!(r"{} +show every machine's tasks \(now: this machine\)", k("scope")), "◆ +ready to approve".into(), "@ +needs a login".into()] { assert!(has(&text, &line), "{line}: {text}"); }
+    for line in [format!("{} +remove this task", k("stop")), format!("{} +archive this task", k("archive")), format!(r"{} +look for other machines \(now: this machine\)", k("scope")), "◆ +ready to approve".into(), "@ +needs a login".into()] { assert!(has(&text, &line), "{line}: {text}"); }
     assert!(has(&text, r"\n[ ▌]  y  n +answer a question: y yes, n or esc no \(enter never confirms\)"));
     s.press(&["x", "ctrl+l"]); assert!(s.s.menu.is_some(), "a stray key neither acts nor closes the menu");
     s.press(&["down", "down", "down", "down", "enter"]);

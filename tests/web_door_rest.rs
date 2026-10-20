@@ -82,7 +82,7 @@ fn the_sidebars_boards_come_through_the_door_with_the_web_uis_names_and_picking_
     assert_eq!(ask(&up, &get("/herdr-projects/api/boards?client=side", "")).0, 401, "not logged in, nothing of the board");
     let (st, _, body) = ask(&up, &get("/herdr-projects/api/boards?client=side", "cookie: token=good\r\n"));
     let j: Value = serde_json::from_str(&body).unwrap();
-    assert_eq!((st, j.at("boards")[1].s("name")), (200, "home"), "this machine as the web UI names it, under All machines: {body}");
+    assert_eq!((st, j.at("boards")[0].s("name")), (200, "home"), "this machine as the web UI names it, alone (no All machines with no other one): {body}");
     let pick = r#"{"to":""}"#;
     assert_eq!(ask(&up, &format!("POST /herdr-projects/api/scope?client=side HTTP/1.1\r\nhost: 127.0.0.1\r\ncontent-length: {}\r\n{PAGE}\r\n{pick}", pick.len())).0, 200);
     assert!(sw::webui::door::LOOKS.contains(&"scope"), "a device that only watches may pick a board");
