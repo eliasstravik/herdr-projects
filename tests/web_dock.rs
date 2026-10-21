@@ -104,6 +104,7 @@ fn a_coordinators_words_in_the_web_uis_box_go_through_the_board_and_tab_stays_th
     assert!(!DOCK.contains("Send + start") && CHAT.contains("? { send: (text) => onSend(text, false, {"));
     // a coordinator's (the Coordinator, a machine's or a repo's); a task's agent's go as the web UI sends them
     assert!(CHAT.contains("route: () => (snapNow?.chat && now && (!now.reply || coordHead) && snapNow.role === \"drive\""));
-    // the web UI's box with a phone's keyboard up: the board steps aside to its bar
-    assert!(DOCK.contains(r#"now = on && !!box?.matches?.(BOX) && !!box.closest(COMPOSER) && html.hasAttribute("data-keyboard");"#) && CHAT.contains(r#"board.classList.toggle("sw-web-typing", webTyping);"#));
+    // the web UI's box with a phone's keyboard up: the board steps aside to its bar (with the chat shown: hidden, it
+    // stays hidden, web_keyboard.rs)
+    assert!(DOCK.contains(r#"now = on && !!box?.matches?.(BOX) && !!box.closest(COMPOSER) && html.hasAttribute("data-keyboard");"#) && CHAT.contains(r#"board.classList.toggle("sw-web-typing", stepped);"#));
 }

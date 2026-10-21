@@ -123,10 +123,12 @@ export function chatEl({ onSend, onPress, onDock }) {
     board.classList.toggle("sw-chat-full", full);
     board.classList.toggle("sw-chat-hidden", !open && !full);
     board.classList.toggle("is-side", side);
-    board.classList.toggle("sw-web-typing", webTyping);
+    // Typing in the web UI's box with the chat hidden, the board stays in view over it: the chat stays hidden.
+    const stepped = webTyping && (open || full);
+    board.classList.toggle("sw-web-typing", stepped);
     own.hidden = docked;
     said.show(!docked && (open || full));
-    const sized = !full && !webTyping && !side;
+    const sized = !full && !stepped && !side;
     // Docked, the board ends where the web UI's chat begins: the chat's share of the screen under it, or with the chat
     // hidden only the web UI's box. With its own chat, the conversation's height is that share.
     const H = appHeight(), boxH = parseFloat(html.style.getPropertyValue("--sw-composer-h")) || 0;

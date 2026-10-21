@@ -87,6 +87,10 @@ however long the words get (`crates/web/src/webui/page/room.js`):
 - **The board's header, its chips and the list step aside**, as they do for the chat full screen: the chat has the
   whole of what the keyboard leaves. The chat's bar, which says who gets your words, stays. When the keyboard goes down (or you
   tap elsewhere), all of it is back.
+- **With the chat hidden, it stays hidden**: a tap in the box and typing there never open it. The board stays in view
+  over the chat's bar and the box, the list as tall as the keyboard leaves it, and the box stays whole above the keyboard
+  (and the strip iOS floats over it). Only the bar's Show (or Full screen) opens the chat; then the board steps aside as
+  above. Hidden, the chat is only its bar and its box, with or without a keyboard: the list has the rest.
 - **The conversation takes what the box leaves**, over it. Where that is too little to read (104 px), it steps aside for
   the words, and comes back when they are shorter.
 - **The box is never taller than the room left**: as tall as its words, up to ten lines (or the height set with the
@@ -96,7 +100,7 @@ however long the words get (`crates/web/src/webui/page/room.js`):
   in that you did not type (a file's path, a dictation). Measuring again (the window's size, the board drawn again
   every two seconds) never moves where the box is scrolled to.
 - **Where not even one line fits** (a phone on its side, the keyboard leaving 200 px), all of the chat but the box steps
-  aside too: the chat's bar, the conversation, the grip and the attached files' tiles. The files stay
+  aside too (and the board with it, also with the chat hidden): the chat's bar, the conversation, the grip and the attached files' tiles. The files stay
   attached (their paths are in the words) and come back with the room.
 - **On an iPhone the box also stands clear of the strip iOS floats over the page** while its keyboard is up (its arrows
   and Done): iOS counts it as part of the visible window, so the box keeps 72 px more room at its foot. That strip was
@@ -112,6 +116,13 @@ keyboard going down; and at 844×390 on its side (the keyboard leaving 200 and 2
 In each the card's foot and the caret's line stayed above the strip, also after a resize and after the board drew
 the chat again; before, the box ran 120 px (with a picture, 170 px) under the strip and the keyboard. Not tried on a
 real phone.
+
+The chat hidden while you type was tried the same way (2026-10-21, Chromium and WebKit) at a phone's size (390×844, the
+keyboard leaving 470 px), on its side (844×390, leaving 200), a tablet's (820×1180, leaving 780) and a desktop's
+(1440×900, no keyboard), with the board's own box and with the web UI's docked: a tap in the box and typing kept the
+chat hidden and the header and the list in view (on the phone 203 px of list over the box, before none), except on
+its side, where not even the box fits beside them; Show while typing opened the chat (the board stepping aside), Hide
+put it back, and with the keyboard down the list had its whole height again.
 
 ## What is the board's own, in that shape
 

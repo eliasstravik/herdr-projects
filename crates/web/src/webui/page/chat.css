@@ -80,8 +80,9 @@
    there), not under a line. */
 .sw-board.is-docked { bottom: auto; height: var(--sw-top-h, var(--app-height, 100%)); }
 .sw-board.is-docked:is(:not(.sw-chat-hidden), .sw-web-typing) .sw-chat::after { content: ""; position: absolute; top: 100%; right: 0; left: 0; height: var(--space-4, 16px); background: linear-gradient(var(--sw-bg), transparent); pointer-events: none; }
-/* With its own chat: the chat has its share of the screen under the list; hidden, only the bar and the box. */
-.sw-board:not(.is-docked):not(.sw-chat-full):not(.is-side) .sw-chat { height: var(--sw-chat-share, 46%); max-height: 80%; }
+/* With its own chat: the chat has its share of the screen under the list; hidden, only the bar and the box (the list has
+   the rest, also while you type in it). */
+.sw-board:not(.is-docked):not(.sw-chat-full):not(.is-side):not(.sw-chat-hidden) .sw-chat { height: var(--sw-chat-share, 46%); max-height: 80%; }
 .sw-board.sw-chat-hidden:not(.is-docked) .sw-chat { height: auto; }
 /* Full screen, and typing in the web UI's box with a phone's keyboard up: the board's header and list step aside (they
    are still there when it goes back). Docked, the board is then only its bar, over the web UI's chat. */
@@ -100,12 +101,13 @@
 .sw-board.is-side.has-task .sw-list-host { display: none; }
 .sw-board.is-side .sw-split { display: none; }
 
-/* Typing in the board's own box with a phone's keyboard up (room.js): the board's header, chips and list step aside,
-   the conversation takes what is left over the box (under its least it steps aside), and the box stays whole above
-   the keyboard and above the strip iOS floats over it (--sw-kb-cover). */
+/* Typing in the board's own box with a phone's keyboard up (room.js): the box stays whole above the keyboard and above
+   the strip iOS floats over it (--sw-kb-cover). With the chat shown, the board's header, chips and list step aside and
+   the conversation takes what is left over the box (under its least it steps aside); hidden, the chat stays hidden and
+   the board stays in view over the box. */
 .sw-board.sw-typing > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }
 .sw-board.sw-typing .sw-chat { flex: 1; height: auto; min-height: 0; overflow: hidden; border-top: 0; padding-top: env(safe-area-inset-top, 0px); }
-.sw-board.sw-typing .sw-own { padding-bottom: calc(var(--space-2, 8px) + var(--sw-kb-cover, 0px)); }
+.sw-board.sw-keys .sw-own { padding-bottom: calc(var(--space-2, 8px) + var(--sw-kb-cover, 0px)); }
 .sw-board.sw-typing .sw-said-box { flex: 1 1 0; min-height: 0; overflow: hidden; }
 .sw-board.sw-typing .sw-said-box.is-squeezed { display: none; }
 .sw-board.sw-typing .sw-composer { margin-top: auto; }

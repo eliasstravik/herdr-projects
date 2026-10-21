@@ -89,8 +89,9 @@ address names that pane's chat view (`?ws=…&pane=…&view=chat#board`), so Bac
 
 While you type in the web UI's box with a phone's keyboard up, **the board steps aside to its bar**: the header and the
 list go, and the web UI's chat has the room the keyboard leaves, as it handles its own box above the keyboard. When
-the keyboard goes down, the list is back. The keyboard is known by the web UI's own mark on the page
-(`data-keyboard`). The board's own box, where it stands in, keeps its own way: [above a phone's
+the keyboard goes down, the list is back. With the chat hidden it stays hidden: the board stays in view down to the
+web UI's box, its list as tall as the keyboard leaves it, and is as tall as before once the keyboard is down. The
+keyboard is known by the web UI's own mark on the page (`data-keyboard`). The board's own box, where it stands in, keeps its own way: [above a phone's
 keyboard](web-chat-box.md#above-a-phones-keyboard).
 
 ## How it was tried

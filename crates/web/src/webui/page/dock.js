@@ -51,7 +51,7 @@ const uploading = (box) => !!box.closest(COMPOSER)?.querySelector(".composer-att
 // does (a task's agent). The Coordinator's go through the board, as its own box sends them: with where you were (the
 // repo, the open task), and waiting while it is busy. It decides itself what to start, so there is no second way to send.
 export function dockFor({ boardOf, onChange, onTyping, route }) {
-  let want = null, on = false, home = null, homeSearch = "", shown = "", wait = 0, typing = false, queued = false, boxH = -1;
+  let want = null, on = false, home = null, homeSearch = "", shown = "", wait = 0, typing = false, queued = false, boxH = -1, appH = "";
   const mine = () => !!want && here(want) && !!document.querySelector(CHAT) && !!document.querySelector(COLUMN);
   // What the board covers, given to the web UI's pane column as room to leave: down to the foot of the board's bar, or
   // on a wide screen the width of the board's column under the bar.
@@ -67,7 +67,9 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
     html.style.setProperty("--sw-dock-left", side ? `${Math.max(0, Math.round(b.right - c.left))}px` : "0px");
     const composer = document.querySelector(COMPOSER), ch = Math.round(composer?.getBoundingClientRect().height || 0);
     if (composer && !composer.dataset.swSized) { composer.dataset.swSized = "1"; sizes?.observe(composer); }
-    if (ch !== boxH) { boxH = ch; html.style.setProperty("--sw-composer-h", `${ch}px`); onChange(); }
+    // (And the height the web UI's shell leaves, which a phone's keyboard going down changes after the box let go.)
+    const app = html.style.getPropertyValue("--app-height");
+    if (ch !== boxH || app !== appH) { boxH = ch; appH = app; html.style.setProperty("--sw-composer-h", `${ch}px`); onChange(); }
     keys();
   };
   const soon = () => { if (!queued) { queued = true; requestAnimationFrame(fit); } };
@@ -78,7 +80,7 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
   };
   const set = (now) => {
     if (now === on) return;
-    on = now; boxH = -1;
+    on = now; boxH = -1; appH = "";
     html.classList.toggle("sw-dock", on);
     if (!on) { for (const v of ["--sw-dock-top", "--sw-dock-left", "--sw-composer-h"]) html.style.removeProperty(v); if (typing) { typing = false; onTyping(false); } }
     onChange();

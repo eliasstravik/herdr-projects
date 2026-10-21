@@ -1,6 +1,7 @@
 //! The web board's chat above a phone's keyboard (crates/web/src/webui/page/room.js, chat.css), read as text: while you
 //! type with the keyboard up the board's header steps aside, the conversation gives way, the box is never taller than
-//! the room left (the strip iOS floats over the page left out too), and the line with the caret stays in view.
+//! the room left (the strip iOS floats over the page left out too), and the line with the caret stays in view. With the
+//! chat hidden it stays hidden while you type, in the board's own box and in the web UI's docked one.
 use regex::Regex;
 
 const ROOM: &str = include_str!("../crates/web/src/webui/page/room.js");
@@ -8,6 +9,7 @@ const CHAT: &str = include_str!("../crates/web/src/webui/page/chat.js");
 const COMPOSE: &str = include_str!("../crates/web/src/webui/page/compose.js");
 const CHAT_CSS: &str = include_str!("../crates/web/src/webui/page/chat.css");
 const COMPOSE_CSS: &str = include_str!("../crates/web/src/webui/page/compose.css");
+const DOCK: &str = include_str!("../crates/web/src/webui/page/dock.js");
 const PAGE: &str = include_str!("../crates/web/src/webui/page.rs");
 const DOC: &str = include_str!("../docs/web-chat-box.md");
 fn has(text: &str, re: &str) -> bool { Regex::new(re).unwrap().is_match(text) }
@@ -20,11 +22,11 @@ fn typing_with_the_keyboard_up_the_header_steps_aside_and_the_conversation_takes
     assert!(CHAT.contains("onGrow: () => room?.fit()") && COMPOSE.contains("onGrow = () => {} }) {") && has(COMPOSE, r"else \{ box\.style\.height = .auto.; box\.style\.height = `\$\{box\.scrollHeight\}px`; \}\s*box\.scrollTop = top;\s*onGrow\(\);"));
     // a keyboard is up: the web UI's own mark, or a visible window much shorter than the page (not only zoomed in)
     assert!(ROOM.contains(r#"html.hasAttribute("data-keyboard") || (!!vv && Math.abs(vv.scale - 1) < 0.01 && window.innerHeight - vv.height > KEYBOARD)"#));
-    assert!(ROOM.contains(r#"const mine = document.activeElement === box, on = mine && keyboard();"#) && ROOM.contains(r#"board.classList.toggle("sw-typing", on);"#));
+    assert!(ROOM.contains(r#"const mine = document.activeElement === box, on = mine && keyboard();"#) && ROOM.contains(r#"board.classList.toggle("sw-typing", on && !shut); board.classList.toggle("sw-keys", on);"#));
     for rule in [
         r"\.sw-board\.sw-typing > :is\(\.sw-head, \.sw-body, \.sw-chips, \.sw-find-row, \.sw-note\) \{ display: none; \}",
         r"\.sw-board\.sw-typing \.sw-chat \{ flex: 1; height: auto; min-height: 0; overflow: hidden;[^}]*\}",
-        r"\.sw-board\.sw-typing \.sw-own \{ padding-bottom: calc\(var\(--space-2, 8px\) \+ var\(--sw-kb-cover, 0px\)\); \}",
+        r"\.sw-board\.sw-keys \.sw-own \{ padding-bottom: calc\(var\(--space-2, 8px\) \+ var\(--sw-kb-cover, 0px\)\); \}",
         r"\.sw-board\.sw-typing \.sw-said-box \{ flex: 1 1 0; min-height: 0; overflow: hidden; \}",
         r"\.sw-board\.sw-typing \.sw-said-box\.is-squeezed \{ display: none; \}",
         r"\.sw-board\.sw-typing \.sw-composer \{ margin-top: auto; \}",
@@ -62,8 +64,31 @@ fn measuring_again_never_scrolls_the_caret_out_of_view_and_a_phone_on_its_side_k
     assert!(COMPOSE.contains("const top = box.scrollTop;") && has(COMPOSE, r"box\.style\.height = `\$\{box\.scrollHeight\}px`; \}\s*box\.scrollTop = top;\s*onGrow\(\);"));
     assert!(ROOM.contains("const top = box.scrollTop;") && has(ROOM, r"cap\(\); \}\s*box\.scrollTop = top;"));
     // not even one line over the keyboard: all but the box steps aside, its grip and the files' tiles too
-    assert!(ROOM.contains(r#"if (on && over() > 0.5) { board.classList.add("sw-cramped"); box.style.removeProperty("--sw-room"); cap(); }"#));
+    assert!(ROOM.contains(r#"if (on && over() > 0.5) { board.classList.add("sw-typing", "sw-cramped"); box.style.removeProperty("--sw-room"); cap(); }"#));
     assert!(ROOM.contains(r#"board.classList.remove("sw-cramped");"#));
     assert!(CHAT_CSS.contains(".sw-board.sw-typing.sw-cramped .sw-chat > :not(.sw-own), .sw-board.sw-typing.sw-cramped .sw-said-box, .sw-board.sw-typing.sw-cramped .sw-files, .sw-board.sw-typing.sw-cramped .sw-grip { display: none; }"));
     assert!(CHAT_CSS.contains(".sw-board.sw-typing.sw-cramped .sw-composer { --sw-grip-h: 0px; }"));
+}
+
+#[test]
+fn with_the_chat_hidden_typing_keeps_it_hidden_and_the_board_in_view() {
+    // the board's own box: the board steps aside only for a chat that is shown; hidden, the box only keeps clear of the
+    // keyboard (and of the strip iOS floats over it)
+    assert!(ROOM.contains(r#"const shut = board.classList.contains("sw-chat-hidden");"#));
+    assert!(ROOM.contains(r#"board.classList.toggle("sw-typing", on && !shut);"#), "never stepped aside for a hidden chat");
+    assert!(CHAT_CSS.contains(".sw-board.sw-keys .sw-own { padding-bottom: calc(var(--space-2, 8px) + var(--sw-kb-cover, 0px)); }"));
+    // where the board is hidden is the CSS's alone: the rules that hide it all hang on sw-typing, none on sw-keys
+    assert!(!has(CHAT_CSS, r"\.sw-keys[^{]*\{[^}]*display: none"));
+    // the web UI's docked box: the board steps aside to its bar only for a chat that is shown or full screen
+    assert!(CHAT.contains("const stepped = webTyping && (open || full);") && CHAT.contains(r#"board.classList.toggle("sw-web-typing", stepped);"#));
+    assert!(CHAT.contains("const sized = !full && !stepped && !side;"), "hidden, the board still ends where the web UI's box begins");
+    assert!(!CHAT.contains(r#"toggle("sw-web-typing", webTyping)"#));
+    // the keyboard going down after the box let go: the board measured again for the height the web UI's shell leaves
+    assert!(DOCK.contains(r#"const app = html.style.getPropertyValue("--app-height");"#) && DOCK.contains("if (ch !== boxH || app !== appH) { boxH = ch; appH = app;"));
+    // hidden, the board's own chat is only its bar and its box (its share of the screen is the shown chat's)
+    assert!(CHAT_CSS.contains(".sw-board:not(.is-docked):not(.sw-chat-full):not(.is-side):not(.sw-chat-hidden) .sw-chat { height: var(--sw-chat-share, 46%); max-height: 80%; }"));
+    assert!(CHAT_CSS.contains(".sw-board.sw-chat-hidden:not(.is-docked) .sw-chat { height: auto; }"));
+    // a tap in the box never shows the chat: nothing but its Hide button (and Escape, to hide) presses chatMessage
+    assert_eq!(CHAT.matches(r#"onPress("chatMessage")"#).count(), 1);
+    assert!(!has(CHAT, r#"addEventListener\("focus(in)?""#) && !has(COMPOSE, r#"addEventListener\("focus(in)?""#));
 }

@@ -43,10 +43,13 @@ export function roomFor({ chat, said, box }) {
     const board = chat.closest(".sw-board");
     if (!board) return;
     const mine = document.activeElement === box, on = mine && keyboard();
+    // With the chat hidden it stays hidden while you type: the board stays in view over the box, which only keeps
+    // clear of the keyboard. Only Show (or Full screen) opens it.
+    const shut = board.classList.contains("sw-chat-hidden");
     // Measured again from the start: the field is as tall as its words for a moment, so where it was scrolled to is
     // put back after (or it would end scrolled up from the caret's line).
     const top = box.scrollTop;
-    board.classList.toggle("sw-typing", on); board.classList.remove("sw-cramped");
+    board.classList.toggle("sw-typing", on && !shut); board.classList.toggle("sw-keys", on); board.classList.remove("sw-cramped");
     said.classList.remove("is-squeezed"); box.style.removeProperty("--sw-room");
     if (on) {
       // What of the board is under the keyboard (where it was not made as short as what is over it), and the strip.
@@ -62,8 +65,8 @@ export function roomFor({ chat, said, box }) {
     const cap = () => { const o = over(); if (o > 0.5) box.style.setProperty("--sw-room", `${Math.max(px(getComputedStyle(box).minHeight), Math.floor(box.offsetHeight - o))}px`); };
     cap();
     // Not even one line fits over the keyboard (a phone on its side): all but the box steps aside, the files' tiles
-    // too (they stay attached: their paths are in the words).
-    if (on && over() > 0.5) { board.classList.add("sw-cramped"); box.style.removeProperty("--sw-room"); cap(); }
+    // too (they stay attached: their paths are in the words), and the board too where the chat is hidden.
+    if (on && over() > 0.5) { board.classList.add("sw-typing", "sw-cramped"); box.style.removeProperty("--sw-room"); cap(); }
     box.scrollTop = top;
     // The caret's line in view where the field changed under it: its height, or words put in (a file's path, dictation).
     if (!mine) height = 0; else if (box.clientHeight !== height || box.value !== words) { height = box.clientHeight; showCaret(); }
