@@ -55,8 +55,17 @@ pub fn under_way_count(ap: &Obj, board: &[Obj]) -> usize { tasks(ap).iter().filt
 pub fn needing(ap: &Obj, board: &[Obj], approve: bool) -> Vec<(String, &'static str)> {
     board.iter().filter(|t| may_look_after(ap, t)).filter_map(|t| need_of(t, approve).map(|w| (t.t("id"), w))).collect()
 }
-/// Your to-do tasks in its area that it could start (`autopilot.scope all`): never started, nobody's but yours.
-pub fn yours_to_start(co: &Co, board: &[Obj]) -> usize { board.iter().filter(|t| in_area(co, t) && !t.b("host") && t.s("stage") == "todo" && !t.b("archivedAt") && !t.at("autopilot").is_object() && !t.b("startedOnce")).count() }
+/// Your to-do tasks in its area that it could start (`autopilot.scope all`): never started, nobody's but yours, and
+/// it the nearest coordinator to them on autopilot with `scope all`.
+pub fn yours_to_start(co: &Co, board: &[Obj]) -> usize { board.iter().filter(|t| is_yours_to_start(co, t)).count() }
+pub fn is_yours_to_start(co: &Co, t: &Obj) -> bool {
+    in_area(co, t) && !t.b("host") && t.s("stage") == "todo" && !t.b("archivedAt") && !t.at("autopilot").is_object() && !t.b("startedOnce") && nearest_all(&co.socket, t).map(|n| n == *co).unwrap_or(false)
+}
+/// The coordinator a to-do task of yours goes to under `autopilot.scope all`: the nearest on autopilot with `scope all`
+/// on the task's own machine: its repo's, then the machine's, then the main Coordinator.
+pub fn nearest_all(socket: &str, t: &Obj) -> Option<Co> {
+    [Co::project(socket, &repo_of(t)), Co::machine(socket), Co::top(socket)].into_iter().find(|c| super::record::is_on(c) && super::record::words(c, "autopilot.scope") == "all")
+}
 /// Did this coordinator add the task (from its own pane, in any turn)?
 /// A task of another machine is its own when its autopilot record names this machine.
 pub fn added_by(co: &Co, t: &Obj) -> bool {

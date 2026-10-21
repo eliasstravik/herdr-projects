@@ -2,11 +2,12 @@
 pub const HELP: &str = r#"herdr-projects: a work board for herdr
 
   herdr-projects                     open the board here (in herdr: bind a key to the plugin action "open")
-  herdr-projects add <title> [--desc TEXT] [--repo NAME|PATH] [--delegate] [--after ID[,ID…]] [--<setting> VALUE ...] [--research|--no-research] [--chat|--no-chat]
+  herdr-projects add <title> [--desc TEXT] [--repo NAME|PATH] [--delegate] [--after ID[,ID…]] [--<setting> VALUE ...] [--research|--no-research] [--chat|--no-chat] [--on MACHINE]
                                       (--research: research only, short for --research.only true. Its agent changes
                                        nothing in the repo; the result is a report. --no-research: not research only,
                                        where a default says it is. --chat: chat only, short for --chat.only true: a
-                                       conversation that changes nothing and ends only when you say: finish <id>)
+                                       conversation that changes nothing and ends only when you say: finish <id>.
+                                       --on: add it on another machine the board knows, as that machine adds its own)
   herdr-projects list [--archived] [--all] [--query TEXT] [--json]
   herdr-projects report <id> --state idle|working|blocked|done|error [--kind question|permission|auth] [--msg TEXT] [--title TEXT]
                          [--progress 0-100] [--eta MINUTES]   (your own task, with --state working: how far, and minutes left)
@@ -38,9 +39,10 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
   herdr-projects pin|archive|restore|clear <id>
   herdr-projects archive --done [--repo NAME]  archive every done task of that repo (or of every repo) in one go; one
                                                 that works, waits, is to do or is pinned stays, and is counted
-  herdr-projects set <name> <value> [--repo NAME | --task ID | --automation NAME]
-                                      change a setting: for you, for your entry for one repo, for one task, or for an automation
-  herdr-projects unset <name> [--repo NAME | --task ID]
+  herdr-projects set <name> <value> [--repo NAME | --task ID | --automation NAME | --main-coordinator | --machine-coordinator | --project-coordinator REPO]
+                                      change a setting: for you, for your entry for one repo, for one task, for an automation,
+                                      or for one coordinator (its coordinator.* and autopilot.* settings)
+  herdr-projects unset <name> [--repo NAME | --task ID | the same coordinator flags]
                                       back to what it would be without that answer
   herdr-projects show [<id>] [--repo NAME]     every setting and the place it came from; without an id, your own
                                       (a program setting, such as worker.agent, takes claude, codex, pi or another
@@ -62,6 +64,12 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
   herdr-projects coordinator stop              close it; the next message starts it again where it left off (words still waiting go in then)
   herdr-projects coordinator --machine …       the same for this machine's machine coordinator
   herdr-projects coordinator --project REPO …  the same for a repo's project coordinator
+  herdr-projects autopilot                     every coordinator of this machine, with its autopilot (docs/autopilot.md)
+  herdr-projects autopilot on [--machine | --project REPO] [--goal TEXT] [--autopilot.<name> VALUE …]
+                                                put a coordinator on autopilot: the board wakes it to work toward its goal,
+                                                within its limits; the values given are for this time only
+  herdr-projects autopilot off [--machine | --project REPO | --all]
+                                                off again (--all: every coordinator of this machine)
   herdr-projects --skill                       instructions an agent can load
   herdr-projects machines                      other machines: whether each answers, its version and free disk, or why not
                                                 and what to do; and whether another machine could ask this one

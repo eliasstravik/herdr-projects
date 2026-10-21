@@ -4,7 +4,7 @@
 //! else is refused, with the rule and the setting that would allow it. A task's agent or reviewer can never switch
 //! autopilot nor write a coordinator's setting, and those of a task autopilot added may write nothing on the board but
 //! `report` on their own task. A coordinator's turn a task's agent started is held to the same about autopilot.
-use super::care::{held_for_you, in_area, may_look_after, need_of, touches_repo_file, under_way, under_way_count};
+use super::care::{held_for_you, may_look_after, need_of, touches_repo_file, under_way, under_way_count};
 use super::record::{change, get as record, key_of, task_rec, words};
 use super::turn::{agents_turn, autopilot_turn, caller as coordinator_caller};
 use crate::coordinator::co::Co;
@@ -53,8 +53,8 @@ pub fn guard(cmd: &str, pos: &[String], flags: &Obj, agent: Option<(&Obj, &str)>
             let t = task()?;
             let yours = !t.at("autopilot").is_object() && task_rec(&ap, t.s("id")).is_none();
             if left(&t) { return refused(&format!("delegate {}", t.s("id")), "That task is left to the human now."); }
-            if yours && !(words(&co, "autopilot.scope") == "all" && in_area(&co, &t) && t.s("stage") == "todo" && !t.b("startedOnce")) {
-                return refused(&format!("delegate {}", t.s("id")), "It may start only its own tasks (autopilot.scope all also lets it start the human's to-do tasks in its area).");
+            if yours && !super::care::is_yours_to_start(&co, &t) {
+                return refused(&format!("delegate {}", t.s("id")), "It may start only its own tasks (autopilot.scope all also lets the nearest coordinator on autopilot with it start the human's to-do tasks in its area: the repo's, then the machine's, then the main Coordinator).");
             }
             if !under_way(&t) && under_way_count(&ap, &board) as i64 >= super::record::count(&co, "autopilot.tasksAtOnce") { return refused(&format!("delegate {}", t.s("id")), "Its tasks at once are full (autopilot.tasksAtOnce)."); }
             Ok(Some(co))
