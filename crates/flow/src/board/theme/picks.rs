@@ -1,6 +1,6 @@
 //! The board's own colours, picked to fit the theme: "review", the blue of a review that is running, "auto", the
-//! purple of an automation, "queue", the pink of a task that waits for a free slot, and "pilot", the orange of a
-//! coordinator on autopilot. Each is the theme's own colour
+//! purple of an automation, "queue", the pink of a task that waits for a free slot, and "pilot", the orange of an
+//! autopilot's wakes in the chat. Each is the theme's own colour
 //! of that hue where it is one and told apart from all it sits beside; else the first of the board's own that is; else
 //! the one furthest from them.
 use super::greys::{apart, rgb};
@@ -95,7 +95,7 @@ pub fn is_orange(c: C) -> bool {
     let hue = 60.0 * ((g - b) / if spread == 0.0 { 1.0 } else { spread });
     r > g && g > b && spread >= 60.0 && (12.0..=42.0).contains(&hue)
 }
-/// "pilot": a coordinator on autopilot, which no task's state, no automation and no queue has. The theme's own peach
+/// "pilot": an autopilot's wakes in the chat, which no task's state, no automation and no queue has. The theme's own peach
 /// where that is an orange told apart from every status colour, the purple, the pink, the greys, text and background;
 /// else one of the board's oranges, the first that is; else the one furthest from them.
 pub const PILOT_BESIDE: [&str; 12] = ["red", "green", "yellow", "teal", "review", "todo", "auto", "queue", "text", "subtext0", "overlay0", "panel_bg"];

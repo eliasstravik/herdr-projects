@@ -25,8 +25,9 @@ shown by itself, that machine's). It folds nothing: `Enter` there says so. The l
 lands where it did after an archive or a fold: `↑` reaches the top row. The archive has none.
 
 It stands for the [Coordinator](coordinator.md), as a machine's or a repo's heading stands for its coordinator: `Alt+P`,
-`Alt+T`, `Ctrl+E`, and `Tab` / `Ctrl+X` for [autopilot](autopilot.md). While a coordinator is on autopilot, its row has
-an autopilot line, beside the heading or under it where the list is narrow; the top row also sums up the others
+`Alt+T`, `Ctrl+E`, and `Tab` / `Ctrl+X` for [autopilot](autopilot.md). While a coordinator is on autopilot, its row reads as
+a task's: autopilot's mark `✈` before its name, its timing in the columns on the right and what it does on the line
+under it; the top row also sums up the others
 (`Coordinator · 2 others on · 1 needs you`).
 
 ## Machine and repo headings

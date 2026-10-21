@@ -1,8 +1,7 @@
-//! Autopilot on the board: the main Coordinator's row on top (what it sums up of the others), a coordinator's
-//! autopilot line only while it is on, `Tab` and `Ctrl+X` on a coordinator's row, its panel beside the list and whole
-//! (with its last wakes), its settings page (this time's values while on), the web board's same row, and a frame of it.
-//! And other machines: their coordinators' lines and keys, what the main Coordinator sees of them (only what an open
-//! board heard), and its adds there, their slot taken here and given back when that machine refuses.
+//! Autopilot on the board: a coordinator's row drawn as a task's while on (mark, columns, its line under it, the theme's
+//! own inks; nothing while off), the main Coordinator's on top, `Tab` and `Ctrl+X` there, its panel, its settings page,
+//! the web board's row, a frame. Other machines: their coordinators' rows and keys, what the main Coordinator sees of
+//! them (only what an open board heard), its adds there, their slot taken here and given back when refused.
 use crate::common;
 use common::board::{open, web, Board};
 use common::pilot::*;
@@ -11,6 +10,7 @@ use serde_json::json;
 use sw::board::state::Whose;
 use sw::board::update::pilot::main_id;
 use sw::json::*;
+use sw::shown::ink::Ink;
 
 fn board(w: &World) -> Board { let mut b = open(&w.root, 40); b.s.side = false; b.load(); b }
 fn line_with<'a>(lines: &'a [String], needle: &str) -> Option<&'a String> { lines.iter().find(|l| l.contains(needle)) }
@@ -34,12 +34,14 @@ fn the_main_coordinators_row_is_on_top_and_shows_autopilot_only_while_it_is_on()
     assert!(sw::autopilot::record::is_on(&sw::coordinator::co::Co::top(&w.socket)));
     b.load();
     let lines = b.screen(140);
-    let top = line_with(&lines, "Coordinator").unwrap();
-    assert!(top.contains("Coordinator   autopilot on · every 6h + events"), "beside its name where it fits: {top}");
-    let narrow = b.screen(40);
-    let bare = |l: &String| l.trim_start_matches(['▌', ' ']).to_string();
-    let at = narrow.iter().position(|l| bare(l) == "Coordinator").unwrap_or_else(|| panic!("{narrow:#?}"));
-    assert!(bare(&narrow[at + 1]).starts_with("autopilot on"), "on the line under it where it does not: {narrow:#?}");
+    // A task's row: autopilot's mark before its name, the timing in the columns at the right edge, what it does under it
+    let at = lines.iter().position(|l| l.contains("✈ Coordinator")).unwrap_or_else(|| panic!("{lines:#?}"));
+    assert!(lines[at].ends_with("0 of 5 added  next in 10m") && lines[at].chars().count() == 140 && lines[at + 1].trim_start_matches(['▌', ' ']).starts_with("On · wakes every 6h + events"), "{lines:#?}");
+    // Narrow: the columns give way, the least needed first; when it next wakes goes to the end of the line under it
+    let (narrow, narrower) = (b.screen(40), b.screen(26));
+    assert!(line_with(&narrow, "✈ Coordinator").map(|l| l.ends_with(" next in 10m") && !l.contains("added")).unwrap_or(false), "{narrow:#?}");
+    let at = narrower.iter().position(|l| l.contains("✈ Coordinator")).unwrap();
+    assert!(!narrower[at].contains("next") && narrower[at + 1].contains("On · wakes every") && narrower[at + 1].chars().count() <= 26, "{narrower:#?}");
     // Tab again says it is on; ctrl+x turns it off; again says it is off
     b.press(&["tab"]); assert!(b.text().contains("is on autopilot already"), "{}", b.text());
     b.press(&["ctrl+x"]); b.load();
@@ -61,13 +63,44 @@ fn the_main_row_sums_up_the_others_and_a_repos_heading_has_its_own_line() {
     assert!(line_with(&lines, "Coordinator").unwrap().contains("Coordinator · 1 other on"), "{lines:#?}");
     b.press(&["alt+s"]); b.load();
     let lines = b.screen(140);
-    let head = line_with(&lines, "▾ proj").unwrap();
-    assert!(head.contains("autopilot on · every 1h + events"), "{head}");
+    let head = line_with(&lines, "✈ proj").unwrap_or_else(|| panic!("{lines:#?}"));
+    assert!(head.contains("▾ ✈ proj · PRJ") && head.trim_end().ends_with("0 of 5 added  next in 10m"), "{head}");
     // at `needs you`, the main row says so
     sw::autopilot::record::change(&proj(&w), |ap, _| { ap.put("needsYou", true); true }).unwrap();
     b.load();
     assert!(line_with(&b.screen(140), "Coordinator").unwrap().contains("1 other on · 1 needs you"));
-    assert!(line_with(&b.screen(140), "▾ proj").unwrap().contains("autopilot needs you"));
+    // Its mark and its state word in red, as a task's that needs you; nothing on the list in a colour of its own
+    let inked = b.inked(140);
+    let has = |what: &str, bold: bool| inked.iter().any(|l| l.0.iter().any(|p| p.t == what && p.c == Ink::Red && p.bold == bold));
+    assert!(has("✈", true) && has("Needs you", false) && b.text().contains("Needs you · its last wakes went unanswered"), "{inked:?}");
+    assert!(inked.iter().all(|l| l.0.iter().all(|p| p.c != Ink::Pilot)), "the theme's own inks only");
+}
+
+#[test]
+fn on_an_empty_board_the_main_coordinators_row_and_its_line_show() {
+    let w = pilot_world();
+    ok(&["autopilot", "on", "--goal", "Docs", "--autopilot.hours", "00:00-00:01"]);
+    let mut b = board(&w); assert!(b.s.sel.is_empty(), "nothing selected");
+    let lines = b.screen(140); let at = lines.iter().position(|l| l.contains("✈ Coordinator")).unwrap_or_else(|| panic!("{lines:#?}"));
+    assert!(lines[at].ends_with("waits for its hours") && lines[at + 1].trim() == "Asleep · its hours are 00:00-00:01", "{lines:#?}");
+}
+
+#[test]
+fn a_frame_of_the_board_with_coordinators_on_autopilot() {
+    let w = pilot_world();
+    sw::clock::set(Some(1_800_000_000_000));
+    let id = w.add("Fix the docs index");
+    ok(&["autopilot", "on", "--goal", "Keep the docs current", "--autopilot.every", "1h"]);
+    ok(&["autopilot", "on", "--project", "proj", "--goal", "Docs", "--autopilot.when", "done"]);
+    tick(&w); tick(&w);
+    // The repo's coordinator added the task: its last task's column has that task's mark and tag
+    sw::autopilot::record::change(&proj(&w), |ap, _| { ap.put("tasks", vec![json!({ "id": id, "by": "added", "at": sw::clock::now() })]); ap.put("added", 1); true }).unwrap();
+    let mut b = open(&w.root, 16); b.s.side = false; b.press(&["alt+s"]); b.load(); // wide, and narrow
+    let got = [b.screen(100), b.screen(56)].map(|l| l.join("\n")).join("\n\n").replace(&sw::remote::check::hostname(), "HOST");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/frames/autopilot.txt");
+    let want = std::fs::read_to_string(&path).unwrap_or_default();
+    if want.is_empty() || std::env::var("UPDATE_FRAMES").is_ok() { std::fs::write(&path, format!("{got}\n")).unwrap(); return; }
+    assert_eq!(got, want.trim_end_matches('\n'), "the frame changed: UPDATE_FRAMES=1 npm run check autopilot writes it again");
 }
 
 #[test]
@@ -80,16 +113,12 @@ fn a_coordinators_panel_beside_the_list_and_whole_and_nothing_of_autopilot_while
     let t = panel(&mut b);
     assert!(t.contains("proj coordinator") && t.contains("Status") && t.contains("Settings") && !t.contains("autopilot"), "off: nothing of autopilot: {t}");
     ok(&["autopilot", "on", "--project", "proj", "--goal", "Docs stay current", "--autopilot.tasksPerDay", "3"]);
-    tick(&w); tick(&w);
-    b.load();
-    let t = b.screen(160).join("\n");
-    assert!(t.contains("· autopilot on") && t.contains("Goal") && t.contains("Docs stay current") && t.contains("0 of 3 added · 0 of 2 under way"), "{t}");
+    tick(&w); tick(&w); b.load(); let t = b.screen(160).join("\n");
+    assert!(t.contains("· ✈ autopilot on") && t.contains("Goal") && t.contains("Docs stay current") && t.contains("0 of 3 added · 0 of 2 under way"), "{t}");
     assert!(t.contains("3 tasks a day") && t.contains("* this time only"), "this time's value is marked: {t}");
-    b.press(&["alt+t"]);
-    let t = b.screen(160).join("\n");
+    b.press(&["alt+t"]); let t = b.screen(160).join("\n");
     assert!(t.contains("Wakes") && t.contains("autopilot was turned on") && t.contains("answered"), "whole, with its last wakes: {t}");
-    b.press(&["esc"]);
-    assert!(!b.s.full);
+    b.press(&["esc"]); assert!(!b.s.full);
 }
 
 #[test]
@@ -99,14 +128,12 @@ fn the_settings_page_of_a_coordinators_row_saves_for_this_time_while_on_and_as_i
     b.s.sel = main_id(""); b.load();
     b.press(&["ctrl+e"]);
     assert_eq!(b.s.editing.as_ref().map(|e| e.whose.clone()), Some(Whose::Coord("main".into(), String::new())));
-    b.rows = 120;
-    let t = b.screen(140).join("\n");
+    b.rows = 120; let t = b.screen(140).join("\n");
     assert!(t.contains("This coordinator") && t.contains("autopilot.tasksPerDay") && !t.contains("merge.method"), "the main row: its own rows and nothing more: {t}");
     let pick = |b: &mut Board, name: &str| { let at = sw::board::update::edit::rows(&b.s).iter().position(|r| r.s("name") == name).unwrap(); b.s.editing.as_mut().unwrap().at = at; };
     // off: a value is its own
     pick(&mut b, "autopilot.scope"); b.press(&["enter"]);
-    let co = sw::coordinator::co::Co::top(&w.socket);
-    assert_eq!(sw::autopilot::record::words(&co, "autopilot.scope"), "all");
+    let co = sw::coordinator::co::Co::top(&w.socket); assert_eq!(sw::autopilot::record::words(&co, "autopilot.scope"), "all");
     let cfg: serde_json::Value = serde_json::from_str(&read(&sw::store::settings::places::config_file())).unwrap();
     assert_eq!(cfg.at("coordinators").at("main").at("autopilot").at("scope"), &json!("all"));
     // on: this time's, marked, and gone at off
@@ -114,10 +141,8 @@ fn the_settings_page_of_a_coordinators_row_saves_for_this_time_while_on_and_as_i
     pick(&mut b, "autopilot.approve"); b.press(&["enter"]); b.load();
     assert_eq!(record(&co).at("once").at("autopilot.approve"), &json!("yes"));
     assert!(b.screen(140).join("\n").contains("saved for this time"));
-    pick(&mut b, "autopilot.approve"); b.press(&["ctrl+u"]);
-    assert!(record(&co).at("once").at("autopilot.approve").is_null());
-    pick(&mut b, "autopilot.approve"); b.press(&["enter"]);
-    ok(&["autopilot", "off"]);
+    pick(&mut b, "autopilot.approve"); b.press(&["ctrl+u"]); assert!(record(&co).at("once").at("autopilot.approve").is_null());
+    pick(&mut b, "autopilot.approve"); b.press(&["enter"]); ok(&["autopilot", "off"]);
     assert_eq!(sw::autopilot::record::words(&co, "autopilot.approve"), "no");
 }
 
@@ -128,30 +153,14 @@ fn the_web_board_has_the_same_row_line_and_buttons() {
     ok(&["autopilot", "on", "--goal", "Docs"]);
     let snap = web(&w, "board", json!({}));
     let main = snap.at("list").arr("groups").iter().find(|g| g.b("main")).cloned().unwrap_or_else(|| panic!("{snap}"));
-    assert_eq!(main.s("name"), "Coordinator");
-    assert!(main.arr("pilot").iter().map(|p| p.t("t")).collect::<String>().starts_with("autopilot on"), "{main}");
+    assert_eq!(main.s("name"), "Coordinator"); let p = main.at("pilot"); assert!(p.arr("mark").iter().map(|x| x.t("t")).collect::<String>() == "✈" && p.arr("under").iter().map(|x| x.t("t")).collect::<String>().starts_with("On · wakes every 6h"), "{main}");
+    assert_eq!(p.arr("cols").len(), 2, "today's adds and when it next wakes: {main}");
     let snap = web(&w, "pick", json!({ "id": main_id(""), "open": true }));
     assert!(snap.at("panel").b("coordinator"), "{}", snap.at("panel"));
     let labels: Vec<String> = snap.arr("actions").iter().map(|a| a.t("label")).collect();
     assert!(labels.contains(&"autopilot on".to_string()) && labels.contains(&"off".to_string()), "{labels:?}");
     web(&w, "press", json!({ "id": "stop" }));
     assert!(!sw::autopilot::record::is_on(&sw::coordinator::co::Co::top(&w.socket)));
-}
-
-#[test]
-fn a_frame_of_the_board_with_coordinators_on_autopilot() {
-    let w = pilot_world();
-    sw::clock::set(Some(1_800_000_000_000));
-    w.add("Fix the docs index");
-    ok(&["autopilot", "on", "--goal", "Keep the docs current", "--autopilot.every", "1h"]);
-    ok(&["autopilot", "on", "--project", "proj", "--goal", "Docs", "--autopilot.when", "done"]);
-    tick(&w); tick(&w);
-    let mut b = open(&w.root, 24); b.s.side = false; b.press(&["alt+s"]); b.load();
-    let got = b.screen(100).join("\n").replace(&sw::remote::check::hostname(), "HOST");
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/frames/autopilot.txt");
-    let want = std::fs::read_to_string(&path).unwrap_or_default();
-    if want.is_empty() || std::env::var("UPDATE_FRAMES").is_ok() { std::fs::write(&path, format!("{got}\n")).unwrap(); return; }
-    assert_eq!(got, want.trim_end_matches('\n'), "the frame changed: UPDATE_FRAMES=1 npm run check autopilot writes it again");
 }
 
 fn far_world() -> (World, crate::far::Far) { let w = pilot_world_with(json!({ "board.machines": "vm-b" })); let f = crate::far::Far::new(&w.base); (w, f) }
@@ -172,13 +181,14 @@ fn main_in_wake(w: &World, extra: &[&str]) -> sw::coordinator::co::Co {
 #[test]
 fn another_machines_coordinator_shows_its_line_and_takes_its_keys_there_and_an_older_one_says_to_update() {
     let (w, f) = far_world();
-    far_list(&f, json!({ "machine": { "on": true, "state": "on", "line": "autopilot on · every 2h + events" } }), json!([]));
+    far_list(&f, json!({ "machine": { "on": true, "state": "working", "line": "autopilot working · every 2h + events", "activity": "Working · woke for its timer", "added": "1 of 5 added", "next": "", "last": "#3", "lastId": "web/3" } }), json!([]));
     let mut b = board(&w);
     sw::board::update::update(&mut b.s, sw::board::update::Event::Machines(sw::remote::machines()));
     for m in sw::remote::machines() { let a = sw::remote::ask_list(&m, 20000); sw::board::update::update(&mut b.s, sw::board::update::Event::Remote { label: m.label.clone(), answer: a }); }
     b.press(&["alt+m"]); assert_eq!(b.s.scope, "*");
-    let lines = b.screen(160);
-    assert!(line_with(&lines, "▸ vm-b").map(|l| l.contains("autopilot on · every 2h + events")).unwrap_or(false), "{lines:#?}");
+    let lines = b.screen(160); let at = lines.iter().position(|l| l.contains("▸ ✈ vm-b")).unwrap_or_else(|| panic!("{lines:#?}"));
+    assert!(lines[at].contains("──") && lines[at].ends_with("1 of 5 added  last #3"), "its rule, then its columns: {lines:#?}");
+    assert!(lines[at + 1].contains("Working · woke for its timer"), "{lines:#?}");
     assert!(line_with(&lines, "Coordinator").unwrap().contains("1 other on"), "the main row sums up every machine's: {lines:#?}");
     f.answers("vm-b", "do", &json!({ "ok": true, "msg": "Autopilot off for the vm-b coordinator." }));
     b.s.sel = sw::board::update::heads::machine_id("vm-b"); b.press(&["ctrl+x"]);
@@ -186,8 +196,7 @@ fn another_machines_coordinator_shows_its_line_and_takes_its_keys_there_and_an_o
     assert_eq!((who.as_str(), what.as_str(), req.s("action"), req.s("to")), ("vm-b", "do", "autopilot-off", "machine"));
     // a machine on an older version sends no autopilot: the keys say to update it
     sw::board::update::update(&mut b.s, sw::board::update::Event::Remote { label: "vm-b".into(), answer: Ok(json!({ "host": "vm-b", "version": "1.0.0", "tasks": [] })) });
-    b.press(&["tab"]);
-    assert!(b.text().contains("runs an older version that has no autopilot: update herdr-projects there first"), "{}", b.text());
+    b.press(&["tab"]); assert!(b.text().contains("runs an older version that has no autopilot: update herdr-projects there first"), "{}", b.text());
     // the door there: Tab and Ctrl+X from another machine's board
     ok(&["set", "autopilot.goal", "Tidy", "--machine-coordinator"]);
     let a = sw::remote::door("do", &json!({ "action": "autopilot-on", "id": "", "to": "machine" })).unwrap();
@@ -225,14 +234,6 @@ fn an_add_on_another_machine_takes_its_slot_here_carries_the_record_and_gives_th
     let a = sw::remote::door("add", &json!({ "title": "From afar", "repo": "proj", "own": {}, "delegate": false, "from": "laptop", "autopilot": { "coordinator": "main", "name": "Coordinator", "repoFileWaits": false }, "settings": {} })).unwrap();
     let t = task(a.s("id"));
     assert_eq!((t.at("autopilot").s("machine"), t.at("autopilot").at("repoFileWaits"), t.at("carried").s("from")), ("laptop", &json!(false), "laptop"));
-}
-
-#[test]
-fn on_an_empty_board_the_main_coordinators_row_and_its_line_show() {
-    let w = pilot_world();
-    ok(&["autopilot", "on", "--goal", "Docs", "--autopilot.hours", "00:00-00:01"]);
-    let mut b = board(&w); assert!(b.s.sel.is_empty(), "nothing selected");
-    assert!(line_with(&b.screen(140), "Coordinator").map(|l| l.contains("autopilot asleep")).unwrap_or(false), "{:#?}", b.screen(140));
 }
 
 #[test]

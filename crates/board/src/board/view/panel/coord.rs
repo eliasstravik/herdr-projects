@@ -8,6 +8,7 @@ use crate::board::keys::key_name;
 use crate::board::state::State;
 use crate::board::update::coords::{look_of, Target};
 use crate::board::update::pilot::view;
+use crate::board::view::pilot::PILOT_MARK;
 use crate::json::*;
 use crate::shown::ink::{Ink, Inked};
 use crate::shown::words::when;
@@ -19,13 +20,13 @@ pub fn coord_panel(s: &State, t: &Target, width: usize, full: bool) -> Vec<Inked
     let on = v.b("on");
     let look = look_of(s, t);
     let mut title: Vec<Inked> = k.wrap(&t.name).into_iter().map(|l| l.bold()).collect();
-    if on { if let Some(l) = title.last_mut() { *l = l.clone().add(Inked::of(" · autopilot on", Ink::Pilot)); } }
+    if on { if let Some(l) = title.last_mut() { *l = l.clone().add(Inked::of(format!(" · {PILOT_MARK} autopilot on"), Ink::Muted)); } }
     k.part(title);
     let mut st = vec![k.head("Status", None)];
     let chat = look.as_ref().map(|l| l.state.clone()).unwrap_or_else(|| "none".into());
     let chat_words = match chat.as_str() { "none" => "not started: your first message starts it".to_string(), "exited" => "stopped: the next message starts it again".into(), x => x.to_string() };
     if on {
-        let ink = if ["needs you", "could not start"].contains(&v.s("state")) { Ink::Red } else { Ink::Pilot };
+        let ink = if ["needs you", "could not start"].contains(&v.s("state")) { Ink::Red } else { Ink::Plain };
         let mut state = vec![Inked::of(format!("autopilot {}", v.s("state")), ink).bold()];
         if !v.s("couldNot").is_empty() { state.push(Inked::of(v.t("couldNot"), Ink::Red)); }
         if !v.s("next").is_empty() { state.push(Kit::dim(v.t("next"))); }

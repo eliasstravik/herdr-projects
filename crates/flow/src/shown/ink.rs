@@ -32,7 +32,7 @@ pub enum Ink {
     Todo,
     /// The automations' own purple.
     Auto,
-    /// A coordinator on autopilot: an orange no status, automation or queue has.
+    /// An autopilot's wakes in the chat: an orange no status, automation or queue has (its row on the list has none).
     Pilot,
     /// herdr's thin rules and frames (surface1), its dimmest separators (surface_dim).
     Rule,

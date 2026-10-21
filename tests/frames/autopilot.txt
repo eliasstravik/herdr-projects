@@ -1,19 +1,11 @@
  herdr-projects  proj · PRJ · 1 to do
 
-   Coordinator · 1 other on   autopilot on · every 1h + events · next in 1h
+   ✈ Coordinator · 1 other on                                               0 of 5 added  next in 1h
+     On · woke 0s ago: autopilot was turned on
 
- ▾ proj · PRJ   autopilot on · every 6h + events · next in 6h
+ ▾ ✈ proj · PRJ                                                    1 of 5 added  ○ PRJ-1  next in 6h
+     On · woke 0s ago: autopilot was turned on
 ▌○ PRJ-1 Fix the docs index                                                                   0s ago
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -22,3 +14,20 @@
 │ ❯ Send message to Coordinator                                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
   tab put an agent on this task · space talk about this task · ? all keys
+
+ herdr-projects  proj · PRJ · 1 to do
+
+   ✈ Coordinator · 1 other on   0 of 5 added  next in 1h
+     On · woke 0s ago: autopilot was turned on
+
+ ▾ ✈ proj · PRJ        1 of 5 added  ○ PRJ-1  next in 6h
+     On · woke 0s ago: autopilot was turned on
+▌○ PRJ-1 Fix the docs index
+
+
+
+ ○ Coordinator  idle
+╭──────────────────────────────────────────────────────╮
+│ ❯ Send message to Coordinator                        │
+╰──────────────────────────────────────────────────────╯
+  tab put an agent on this task · ? all keys

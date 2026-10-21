@@ -54,7 +54,8 @@ A machine's heading and a repo's heading stand for their coordinator, as a row s
 - `Ctrl+E` opens its settings page: its own rows first, under `This coordinator`, then what that heading's page always
   showed (on this machine's heading your own settings, on a repo's your entry for that repo).
 - `Tab`, with nothing typed, puts it on [autopilot](autopilot.md) with its saved goal and settings; `Ctrl+X` takes it
-  off. While on, an autopilot line goes beside the heading.
+  off. While on, the heading reads as a task's row: autopilot's mark, its timing on the right, what it
+  does under its name ([autopilot](autopilot.md)).
 - Grouped by status, or on one machine, these coordinators have no heading: change the grouping to reach them.
 
 **Each has its own settings**, `coordinator.*` and `autopilot.*`, looked up **this coordinator → you → built in**

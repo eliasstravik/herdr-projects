@@ -37,8 +37,8 @@ first task: `↑` reaches it. `Space` there talks to it.
 - Its settings (`coordinator.*`) are looked up as a task's are: **this coordinator → you → built in**. One set for it
   alone goes in the `coordinators` part of your `config.json` (`set … --main-coordinator`). A change counts from its next
   fresh chat ([settings](settings.md)).
-- `Tab` there puts it on [autopilot](autopilot.md), `Ctrl+X` takes it off. While on, its row has an autopilot line, and
-  it sums up the other coordinators on autopilot: `Coordinator · 2 others on · 1 needs you`.
+- `Tab` there puts it on [autopilot](autopilot.md), `Ctrl+X` takes it off. While on, its row reads as a task's (autopilot's mark,
+  its timing on the right, what it does under its name), and it sums up the other coordinators on autopilot: `Coordinator · 2 others on · 1 needs you`.
 
 ## Your message, and where you were
 

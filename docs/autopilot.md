@@ -62,16 +62,32 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
 - **A heading stands for its coordinator**: a machine's heading with every machine shown (`Alt+M`), a repo's heading
   when grouped by repo (`Alt+S`). Grouped by status, or on one machine, those coordinators have no row: change the
   grouping to reach them, as to talk to them.
-- **While it is on, its row has an autopilot line**, laid out as an automation's row is: beside the heading, or under
-  it where the list is narrow.
+- **While it is on, its row reads as a task's row**: autopilot's mark `✈` before its name, where a task has its mark
+  and an automation its arrow; the timing in the columns on the right, where a task keeps its progress and its time; and
+  what it does now on the line under its name, as a live task's second line.
 
   ```
-   Coordinator · 2 others on · 1 needs you
-   ▾ herdr-projects · HSW   autopilot on · every 1h + events · last HSW-92 · next in 40m
+     ✈ Coordinator · 2 others on · 1 needs you                    0 of 5 added  next in 1h
+       On · woke 12m ago: HSW-92 merged
+
+   ▾ ✈ herdr-projects · HSW                               2 of 5 added  ✓ HSW-92  next in 40m
+       Working · woke for HSW-92 merged
   ```
 
-  Its state word, its triggers, the last task it added and when it next wakes. Off, nothing of autopilot shows, as a
-  task shows nothing of an agent before one is on it.
+  - **The mark** takes the colour of its state, as a task's does: red at `needs you` and `could not start` (bold, as a
+    task that waits for you), yellow while `working`, quiet while `asleep`, plain text else. No colour of its own.
+  - **The columns**: today's adds against `autopilot.tasksPerDay` (`2 of 5 added`), the last task it added with that
+    task's mark and tag (as an automation shows the task it made), and when it next wakes (`next in 40m`, `waits for its
+    hours`). They end at the list's right edge, where a task's time does. Where the list is narrow they give way, the
+    adds first, then the last task; when it next wakes then goes to the end of the line under the name.
+  - **The line under the name** starts with its state word, then what goes with it: `On · woke 12m ago: …` (or
+    `On · wakes every 1h + events` before its first wake), `Working · woke for …`, `At its limit · 3 of 3 added · 1 of 2
+    under way`, `Asleep · its hours are 09:00-17:00`, `Needs you · its last wakes went unanswered`, `Could not start ·
+    …`. In the brighter grey a task's line has; `Needs you` and `Could not start` in red.
+  - **A machine's heading** keeps its rule: it runs from the name to the columns.
+
+  Off, nothing of autopilot shows, as a task shows nothing of an agent before one is on it. A machine on an older
+  version sends only its old line: that goes under the name.
 - **The state word**, the first that holds:
 
   | Word | Means |
@@ -89,8 +105,8 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
   same whole, with its last 20 wakes (when, why, answered). While on: its goal, today's counts
   (`2 of 5 added · 1 of 2 under way`) and its settings in plain words.
 - **Its wakes show in its chat**, under the name `Autopilot`, in autopilot's colour, never as your words.
-- **Its colour** is an orange of its own ([colours](colours.md)). `needs you` and `could not start` are red. The word
-  `autopilot` is on the line, so colour is never the only clue.
+- **Its colours** on the list are the theme's own, as a task's ([colours](colours.md)): red where it needs you, yellow
+  while it works. The mark and the state word on its line say the same, so colour is never the only clue.
 
 ## When it wakes
 

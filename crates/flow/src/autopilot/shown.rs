@@ -1,8 +1,8 @@
 //! A coordinator's autopilot as it is shown, in the same words on its row, in its panel, on the command line and to
 //! another machine: nothing while it is off. On, its state word (shown first wins: `needs you`, `could not start`,
-//! `working`, `asleep`, `at its limit`, `on`), its line laid out as an automation's row
-//! (`autopilot on · every 1h + events · last HSW-92 · next in 40m`), its goal, today's counts, its settings in plain
-//! words (`*` on this time's) and its last wakes.
+//! `working`, `asleep`, `at its limit`, `on`), its line (`autopilot on · every 1h + events · last HSW-92 · next in
+//! 40m`), what it does now in a sentence (its row's second line: `On · woke 12m ago: HSW-92 merged`), its goal, today's
+//! counts, its settings in plain words (`*` on this time's) and its last wakes.
 use super::care::needing;
 use super::limits::{board_tasks, room, today};
 use super::record::{get, scope_of, tasks, words};
@@ -43,7 +43,30 @@ pub fn next_words(co: &Co, ap: &Obj, now: i64) -> String {
 }
 /// The last task it added, as the board names it ("" none).
 pub fn last_added(ap: &Obj) -> String { tasks(ap).into_iter().filter(|t| t.s("by") == "added").max_by_key(|t| t.i("at")).map(|t| say_id(t.s("id"), &repo_keys())).unwrap_or_default() }
-/// The line under its heading: `autopilot on · every 1h + events · last HSW-92 · next in 40m`.
+/// The task id of the last task it added, as kept ("" none): its row finds that task's mark by it.
+pub fn last_id(ap: &Obj) -> String { tasks(ap).into_iter().filter(|t| t.s("by") == "added").max_by_key(|t| t.i("at")).map(|t| t.t("id")).unwrap_or_default() }
+/// What it does now, in a sentence that starts with its state: `Working · woke for HSW-92 merged`, `At its limit · 3
+/// of 3 added · 2 of 2 under way`, `On · woke 12m ago: its timer, and the board changed`. "" while it is off.
+pub fn activity(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String {
+    let st = state_word(co, ap, board, now);
+    let last = ap.arr("wakes").last().filter(|w| w.b("why"));
+    let rest = match st {
+        "" => return String::new(),
+        "needs you" if words(co, "coordinator.access") == "ask" => "coordinator.access is ask: it would wait at every prompt".to_string(),
+        "needs you" => "its last wakes went unanswered".into(),
+        "could not start" => ap.t("couldNot"),
+        "working" => { let why = super::wake::why_words(ap.at("wake").arr("reasons")); if why.is_empty() { "a wake's turn is under way".into() } else { format!("woke for {why}") } }
+        "asleep" => format!("its hours are {}", words(co, "autopilot.hours")),
+        "at its limit" => today(co, ap, board, now).say(),
+        _ => last.map(|w| format!("woke {} ago: {}", age(now - w.i("at")), w.s("why"))).unwrap_or_else(|| format!("wakes {}", triggers(co))),
+    };
+    let mut word = st.to_string();
+    word[..1].make_ascii_uppercase();
+    if rest.is_empty() { word } else { format!("{word} · {rest}") }
+}
+/// Today's adds against their limit, for its row's column: `2 of 5 added`.
+pub fn added_words(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String { let t = today(co, ap, board, now); format!("{} of {} added", t.added, t.per_day) }
+/// Its line, all of it in one: `autopilot on · every 1h + events · last HSW-92 · next in 40m` (the command line, and what `Tab` says while it is on).
 pub fn line_of(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String {
     let st = state_word(co, ap, board, now);
     if st.is_empty() { return String::new(); }
@@ -78,6 +101,7 @@ pub fn view(co: &Co, now: i64) -> Value {
     let wakes: Vec<Value> = ap.arr("wakes").iter().rev().cloned().collect();
     json!({ "on": true, "state": state_word(co, &ap, &board, now), "line": line_of(co, &ap, &board, now), "goal": words(co, "autopilot.goal"),
         "today": today(co, &ap, &board, now).say(), "couldNot": ap.at("couldNot"), "next": next_words(co, &ap, now), "last": last_added(&ap),
+        "lastId": last_id(&ap), "activity": activity(co, &ap, &board, now), "added": added_words(co, &ap, &board, now),
         "settings": settings_of(co).into_iter().map(|(l, v, o)| json!({ "label": l, "value": v, "once": o })).collect::<Vec<_>>(), "wakes": wakes })
 }
 /// What the main Coordinator's row sums up of the others: "2 others on", "1 needs you" ("" none on).

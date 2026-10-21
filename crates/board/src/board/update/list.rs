@@ -212,7 +212,7 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
         rows
     };
     // No task gives way for an automation: theirs are not counted.
-    let lines_of = |rows: &[Row], s: &State| -> usize { rows.iter().enumerate().map(|(n, r)| match r { Row::Head { .. } => heading_height(rows, n) + crate::board::view::pilot::extra(s, r, s.list_width), Row::Rec(o) => crate::board::view::row_wrap::row_height(s, o, s.list_width, s.list_tall), Row::Auto(_) => 0, _ => 1 }).sum() };
+    let lines_of = |rows: &[Row], s: &State| -> usize { rows.iter().enumerate().map(|(n, r)| match r { Row::Head { .. } => heading_height(rows, n) + crate::board::view::pilot::extra(s, r), Row::Rec(o) => crate::board::view::row_wrap::row_height(s, o, s.list_width, s.list_tall), Row::Auto(_) => 0, _ => 1 }).sum() };
     let over = |rows: &[Row], s: &State| !s.whole && s.list_room > 0 && lines_of(rows, s) > s.list_room;
     let mut keep = DONE_SHOWN;
     let mut rows = lay(keep, usize::MAX, s);

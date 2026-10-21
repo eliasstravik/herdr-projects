@@ -15,7 +15,7 @@ board still reads.
 | dim grey | to do |
 | light grey | the board runs its own check |
 | purple | an automation |
-| orange | a coordinator on autopilot |
+| orange | an autopilot's wakes in the chat |
 | plain text colour (the box only) | you type to the Coordinator |
 | a machine's heading's colour (the theme's accent) | a machine's coordinator, in the chat |
 | the brighter grey (Herdr's `subtext0`) | a repo's coordinator, in the chat |
@@ -133,20 +133,22 @@ stands. One that is off is quiet as a done task is: its mark dimmed, its words g
 On the web Board it is a purple of the board's own (`#a855f7`, pulled towards the page's text colour so it reads on light
 and dark), since the web UI has no purple among its status colours.
 
-## A coordinator on autopilot is orange
+## A coordinator on autopilot has the theme's colours; its wakes are orange
 
-A coordinator on [autopilot](autopilot.md) is not a task either, so it has a colour of its own: an orange. It is used for
-its autopilot line on its row, the main Coordinator's sum of the others (`2 others on`), and its wakes in the chat,
-under the name `Autopilot`.
+A coordinator on [autopilot](autopilot.md) has no colour of its own on the list: its row reads as a task's, in the
+theme's own colours. Its mark `✈` is red at `needs you` and `could not start` (those words on its line too), yellow while
+it works, quiet while asleep and plain text else; its columns are in the fainter grey, its line in the brighter one, as
+a task's. The main Coordinator's sum of the others (`2 others on`) is grey, its `1 needs you` red.
+
+**Colour is not the only clue**: the mark is a plane where every task's mark is another shape, its line starts with its
+state word, and nothing of autopilot shows while it is off. With `NO_COLOR` that still stands.
+
+Its wakes in the chat, under the name `Autopilot`, are an orange, so they are never read as your words:
 
 - It is **the theme's own `peach`** where that is an orange told apart from every status colour, the automations'
   purple, the queue's pink, both greys, plain text and the background. The tests measure that in every built-in theme.
 - Else it is the first of the board's oranges that is: `#fb923c`, `#f97316`, `#ff8c42`, `#ea580c`, `#c2410c`, the darker
   ones first on a light theme.
-- `needs you` and `could not start` are not orange: those words are red, as anything that needs you is.
-
-**Colour is not the only clue**: the line says `autopilot` in words, with its state word after it, and nothing of
-autopilot shows while it is off. With `NO_COLOR` that still stands.
 
 On the web Board it is the board's `#f97316`, pulled towards the page's text colour, as the purple and the pink are.
 

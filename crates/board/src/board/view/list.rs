@@ -77,23 +77,20 @@ pub fn unread_lines(s: &State, width: usize) -> Vec<Inked> {
 /// column, `▾` open, `▸` folded (then with how many tasks and automations it holds: `7 tasks, 1 automation`; a machine
 /// with nothing in view: `0 tasks`).
 /// A repo's heading has its key beside its name, dimmed (`gtm-agent · AGT`): the first thing to go where room is short.
-/// A coordinator's heading has its autopilot line beside it while autopilot is on, or under it (view/pilot.rs): the
-/// second line. The main Coordinator's row, on top, is its name and what it sums up of the others.
-fn heading(s: &State, rows: &[Row], at: usize, width: usize) -> (Inked, Option<Inked>) {
+/// A coordinator's heading on autopilot is drawn as a task's row (view/pilot.rs): autopilot's mark before its name, its
+/// timing in the columns on the right, what it does now on the line under it. The main Coordinator's row, on top, is
+/// its name and what it sums up of the others.
+fn heading(s: &State, t: &Theme, rows: &[Row], at: usize, width: usize) -> (Inked, Option<Inked>) {
     let r = &rows[at];
     let Row::Head { name, autos, machine, folded, folded_autos, id, .. } = r else { return (Inked::new(), None) };
-    let pilot = super::pilot::line_of(s, id);
-    if crate::board::update::pilot::is_main(id) { let (l, under) = super::pilot::placed(Inked::plain("   ").add(super::pilot::main_head(s, id)), pilot, width); return (l.cut(width), under); }
+    let pilot = super::pilot::shown(s, t, id);
+    if crate::board::update::pilot::is_main(id) { return super::pilot::placed(Inked::plain("   "), super::pilot::main_head(s, id), pilot, false, width); }
     let key = if s.by_repo { crate::board::tags::heading_key(s, at) } else { String::new() };
     let named = if *autos { Inked::of(name.clone(), Ink::Auto) } else if *machine { Inked::of(name.clone(), MACHINE_INK).bold() } else if s.by_repo { Inked::of(repo_label(name), REPO_HEAD_INK).bold() } else { Inked::of(name.clone(), group_ink(name)) };
-    let named = if key.is_empty() { named } else { named.add(Inked::of(format!(" · {key}"), Ink::Muted)) };
+    let mut named = if key.is_empty() { named } else { named.add(Inked::of(format!(" · {key}"), Ink::Muted)) };
     let caret = if id.is_empty() { Inked::plain("  ") } else { Inked::of(if r.shut() { "▸ " } else { "▾ " }, Ink::Muted) };
-    let mut out = Inked::plain(" ").add(caret).add(named);
-    if r.shut() { out = out.add(Inked::of(format!("  {}", crate::board::update::heads::holds(*folded, *folded_autos)), Ink::Muted)); }
-    let (mut out, under) = super::pilot::placed(out, pilot, width.saturating_sub(if *machine { 4 } else { 0 }));
-    if *machine { let rest = width.saturating_sub(out.width() + 2); if rest > 0 { out = out.add(Inked::of(format!(" {}", "─".repeat(rest)), Ink::Muted)); } }
-    if out.width() > width { out = out.fit(width); }
-    (out, under)
+    if r.shut() { named = named.add(Inked::of(format!("  {}", crate::board::update::heads::holds(*folded, *folded_autos)), Ink::Muted)); }
+    super::pilot::placed(Inked::plain(" ").add(caret), named, pilot, *machine, width)
 }
 struct L { text: Inked, sel: bool, head: bool, n: usize, rest: usize, id: String, auto: bool }
 fn line(text: Inked) -> L { L { text, sel: false, head: false, n: 0, rest: 0, id: String::new(), auto: false } }
@@ -138,7 +135,7 @@ pub fn list_lines(s: &mut State, t: &Theme, width: usize, h: usize, screen: usiz
             Row::Head { id, .. } => {
                 if heading_height(&rows, k) > 1 { lines.push(L { head: true, ..line(Inked::new()) }); }
                 // An open heading at the foot of what shows goes with the empty line above it; a folded one is a row.
-                let (text, under) = heading(s, &rows, k, width);
+                let (text, under) = heading(s, t, &rows, k, width);
                 let sel = !id.is_empty() && *id == s.sel;
                 // The main Coordinator's row is a row, never a heading left hanging at the foot of what shows.
                 let hangs = !r.shut() && !crate::board::update::pilot::is_main(id);

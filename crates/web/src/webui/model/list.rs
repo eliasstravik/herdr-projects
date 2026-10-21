@@ -58,9 +58,9 @@ pub fn list_of(s: &State, t: &Theme) -> Value {
     let push = |groups: &mut Vec<Obj>, row: Value| { if let Some(g) = groups.last_mut() { if let Some(a) = g.get_mut("rows").and_then(|x| x.as_array_mut()) { a.push(row); } } };
     // A folded heading's count: how many rows it hides, in words where automations are among them (`7 tasks, 1 automation`).
     let count = |folded: usize, autos: usize| if autos > 0 { json!(crate::board::update::heads::holds(folded, autos)) } else { json!(folded) };
-    // A coordinator's heading has its autopilot line while that is on (board/view/pilot.rs), and the main Coordinator's
-    // row on top what it sums up of the others.
-    let pilot = |id: &str| crate::board::view::pilot::line_of(s, id).map(|l| pieces(&l)).unwrap_or_default();
+    // A coordinator's heading on autopilot has autopilot's mark, its columns and its line under it (board/view/pilot.rs),
+    // and the main Coordinator's row on top what it sums up of the others. Off: null.
+    let pilot = |id: &str| crate::board::view::pilot::shown(s, t, id).map(|p| json!({ "mark": pieces(&p.mark), "cols": p.cols.iter().map(|(_, c)| pieces(c)).collect::<Vec<_>>(), "under": pieces(&p.under) })).unwrap_or(Value::Null);
     let coord = |id: &str| crate::board::update::coords::of_head(s, id).is_some();
     for (at, row) in s.rows.iter().enumerate() {
         match row {
