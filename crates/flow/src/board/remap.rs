@@ -84,6 +84,8 @@ thread_local! {
 }
 /// The keys as they come, whatever you set: for the made pages (docs/keys.md keeps the built-in chords).
 pub fn as_built<T>(f: impl FnOnce() -> T) -> T { let was = AS_BUILT.with(|b| b.replace(true)); let out = f(); AS_BUILT.with(|b| b.set(was)); out }
+/// Inside as_built: the keys are written as they come too (key_style.rs).
+pub fn built() -> bool { AS_BUILT.with(|b| b.get()) }
 /// herdr's config.toml as it is on disk now: where it is and when it last changed.
 fn config_mark() -> String {
     use std::os::unix::fs::MetadataExt;

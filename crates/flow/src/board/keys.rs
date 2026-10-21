@@ -12,7 +12,8 @@
 //! docs/keys.md; `help` a plain key's line in the ? menu; `hint` its usual words on the hint line; `draft` the board's
 //! key with a draft in the text box too; `web` what its button is called on the web board. In doc, help and hint,
 //! another key is named as {name}, never by its chord. The order is the order everywhere. Your own chord for a key
-//! (`board.keys`, remap.rs) takes the place of `keys` and `raw` in is() and in every name of the key.
+//! (`board.keys`, remap.rs) takes the place of `keys` and `raw` in is() and in every name of the key; your style
+//! (`board.keyStyle`, key_style.rs) writes its modifiers as your keyboard does.
 use std::cell::Cell;
 
 /// The groups, in the order the ? menu and docs/keys.md show them.
@@ -131,9 +132,11 @@ thread_local! { static BUTTONS: Cell<bool> = const { Cell::new(false) }; }
 pub fn name_as_buttons(on: bool) { BUTTONS.with(|b| b.set(on)); }
 fn own(k: &Key) -> String {
     if BUTTONS.with(|b| b.get()) { if let Some(w) = k.web { return format!("“{w}”"); } }
-    if let Some(mine) = super::remap::chords(k.name) { return mine[0].clone(); }
-    k.show.unwrap_or(k.keys.first().copied().unwrap_or("")).to_string()
+    if let Some(mine) = super::remap::chords(k.name) { return super::key_style::spell(&mine[0]); }
+    super::key_style::spell(k.show.unwrap_or(k.keys.first().copied().unwrap_or("")))
 }
+/// A group's heading in the ? menu, its modifier in your style ("opt: only shows or hides" on a Mac).
+pub fn group_name(g: &str, name: &str) -> String { match name.split_once(": ") { Some((m, rest)) if m == g => format!("{}: {rest}", super::key_style::modifier(m)), _ => name.to_string() } }
 /// The chord a key is pressed with, yours where `board.keys` moves it ("ctrl+l"); "" for a key typed as a character.
 pub fn chord(id: K) -> String { let k = entry(id); super::remap::chords(k.name).map(|m| m[0].clone()).unwrap_or_else(|| if k.raw.is_empty() { k.keys.first().copied().unwrap_or("").to_string() } else { String::new() }) }
 /// The key called `id` as the board writes it: "ctrl+a".
