@@ -29,6 +29,8 @@ pub fn look(co: &Co, ap: &mut Obj, board: &[Obj], when: &str, approve: bool, ret
     let wants = |w: &str| when.split_whitespace().any(|x| x == w);
     for t in board.iter().filter(|t| in_area(co, t)) {
         let id = t.t("id");
+        // Another machine's task of its own, seen over: its slot is free also once that machine is heard no more.
+        if t.b("host") && super::care::over(t) && task_rec(ap, &id).map(|r| !r.b("over")).unwrap_or(false) { with_task(ap, &id, |r| { r.put("over", true); }); }
         let marks = marks_of(ap, t, approve);
         let had: Vec<String> = seen.get(&id).map(strings).unwrap_or_default();
         next.put(&id, marks.clone());

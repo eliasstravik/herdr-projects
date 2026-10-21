@@ -44,7 +44,7 @@ pub fn guard(cmd: &str, pos: &[String], flags: &Obj, agent: Option<(&Obj, &str)>
     if !ap.b("on") { return refused(&format!("{cmd}"), "Autopilot was turned off: this turn may only read the board now."); }
     let board = super::limits::board_tasks();
     let id = pos.get(1).cloned().unwrap_or_default();
-    let task = || find(&id);
+    let task = || super::limits::find_task(&id);
     let approve_yes = words(&co, "autopilot.approve") == "yes";
     let left = |t: &Obj| task_rec(&ap, t.s("id")).map(|r| r.b("left")).unwrap_or(false);
     match cmd {
@@ -57,6 +57,12 @@ pub fn guard(cmd: &str, pos: &[String], flags: &Obj, agent: Option<(&Obj, &str)>
                 return refused(&format!("delegate {}", t.s("id")), "It may start only its own tasks (autopilot.scope all also lets the nearest coordinator on autopilot with it start the human's to-do tasks in its area: the repo's, then the machine's, then the main Coordinator).");
             }
             if !under_way(&t) && under_way_count(&ap, &board) as i64 >= super::record::count(&co, "autopilot.tasksAtOnce") { return refused(&format!("delegate {}", t.s("id")), "Its tasks at once are full (autopilot.tasksAtOnce)."); }
+            // The settings it gives a task are those `autopilot.mayChange` allows, as on `add`; never merge.*, limit.*.
+            let may = words(&co, "autopilot.mayChange");
+            let mut named: Vec<String> = flags.keys().filter(|k| k.contains('.')).cloned().collect();
+            if flags.has("research") { named.push("research.only".into()); }
+            if flags.has("chat") { named.push("chat.only".into()); }
+            if let Some(n) = named.iter().find(|n| !crate::store::settings::pilot_values::may_change(&may, n)) { return refused(&format!("delegate {} --{n}", t.s("id")), "It may give a task only the settings autopilot.mayChange allows, and never merge.*, limit.* or autopilot.*."); }
             Ok(Some(co))
         }
         "tell" => {
@@ -77,6 +83,7 @@ pub fn guard(cmd: &str, pos: &[String], flags: &Obj, agent: Option<(&Obj, &str)>
             let t = task()?;
             let own = task_rec(&ap, t.s("id")).map(|r| r.s("by") == "added").unwrap_or(false);
             if !own { return refused(&format!("{cmd} {}", t.s("id")), "It may stop or archive only the tasks it added."); }
+            if left(&t) { return refused(&format!("{cmd} {}", t.s("id")), "That task is left to the human now."); }
             if ["approval", "plan", "pick"].contains(&t.s("stage")) { return refused(&format!("{cmd} {}", t.s("id")), "That task waits for the human's yes."); }
             Ok(Some(co))
         }
@@ -103,7 +110,7 @@ pub fn guard(cmd: &str, pos: &[String], flags: &Obj, agent: Option<(&Obj, &str)>
 /// After a command of an autopilot turn went through: what it did, in its record (a retry counted, a task of yours
 /// it started now its to look after).
 pub fn note(co: &Co, cmd: &str, pos: &[String]) {
-    let Some(id) = pos.get(1).and_then(|i| find(i).ok()).map(|t| t.t("id")) else { return };
+    let Some(id) = pos.get(1).and_then(|i| super::limits::find_task(i).ok()).map(|t| t.t("id")) else { return };
     let _ = change(co, |ap, _| {
         match cmd {
             "retry" => { super::record::with_task(ap, &id, |r| { let n = r.i("retries") + 1; r.put("retries", n); }); true }

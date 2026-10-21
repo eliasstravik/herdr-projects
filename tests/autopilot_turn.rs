@@ -75,6 +75,9 @@ fn delegate_retry_tell_stop_and_archive_keep_to_the_tasks_it_may_look_after() {
         mine_id = sw::store::tasks::list(Default::default()).into_iter().find(|t| t.s("title") == "Mine").unwrap().t("id");
         assert!(refused(&["tell", &mine_id, "carry on"]).contains("waits with a question"));
         let mut sc = w.fake.script.borrow().clone(); sc["worker"] = json!([step(1), step(2)]); w.script(sc);
+        // what it may give a task on `delegate` too: autopilot.mayChange, never merge.* nor limit.*
+        assert!(refused(&["delegate", &mine_id, "--merge.by", "itself", "--limit.time", "none"]).contains("only the settings autopilot.mayChange allows"));
+        assert!(task(&mine_id).at("settings").at("merge.by").is_null());
         ok(&["delegate", &mine_id]);
         let t = settle(&mine_id); assert_eq!(t.s("stage"), "approval");
         sw::store::tasks::set(&mine_id, json!({ "stage": "failed", "failure": { "title": "The check failed", "detail": "boom" } })).unwrap();
@@ -84,6 +87,10 @@ fn delegate_retry_tell_stop_and_archive_keep_to_the_tasks_it_may_look_after() {
         sw::store::tasks::set(&mine_id, json!({ "stage": "approval" })).unwrap();
         assert!(refused(&["archive", &mine_id]).contains("waits for the human's yes"));
         sw::store::tasks::set(&mine_id, json!({ "stage": "todo" })).unwrap();
+        // left to the human: no more its to stop or archive
+        sw::autopilot::record::change(&co, |ap, _| { sw::autopilot::record::with_task(ap, &mine_id, |r| { r.put("left", true); }); true }).unwrap();
+        assert!(refused(&["archive", &mine_id]).contains("left to the human")); assert!(refused(&["stop", &mine_id]).contains("left to the human"));
+        sw::autopilot::record::change(&co, |ap, _| { sw::autopilot::record::with_task(ap, &mine_id, |r| { r.put("left", false); }); true }).unwrap();
         ok(&["archive", &mine_id]);
         // under `scope all`, your to-do task in its area is one it may start, and then looks after
         in_pane(&w, "");

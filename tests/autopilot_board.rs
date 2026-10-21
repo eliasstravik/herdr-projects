@@ -233,3 +233,39 @@ fn an_add_on_another_machine_takes_its_slot_here_carries_the_record_and_gives_th
     assert_eq!((t.at("autopilot").s("machine"), t.at("autopilot").at("repoFileWaits")), ("laptop", &json!(false)));
     assert_eq!(t.at("carried").s("from"), "laptop");
 }
+
+#[test]
+fn on_an_empty_board_the_main_coordinators_row_and_its_line_show() {
+    let w = pilot_world();
+    ok(&["autopilot", "on", "--goal", "Docs", "--autopilot.hours", "00:00-00:01"]);
+    let mut b = board(&w);
+    assert!(b.s.sel.is_empty(), "nothing selected");
+    assert!(line_with(&b.screen(140), "Coordinator").map(|l| l.contains("autopilot asleep")).unwrap_or(false), "{:#?}", b.screen(140));
+}
+
+#[test]
+fn a_task_it_added_on_another_machine_keeps_its_slot_until_seen_over_and_is_looked_after_there() {
+    let (w, f) = far_world();
+    let main = sw::coordinator::co::Co::top(&w.socket);
+    w.script(json!({ "coordinator": [{ "status": "working" }] }));
+    ok(&["autopilot", "on", "--goal", "Docs", "--autopilot.every", "none", "--autopilot.tasksAtOnce", "1"]);
+    tick(&w);
+    in_pane(&w, &pane_of(&main));
+    f.answers("vm-b", "add", &json!({ "ok": true, "id": "web/7", "msg": "web/7: added on vm-b, an agent is on it" }));
+    ok(&["add", "Fix their docs", "--repo", "web", "--on", "vm-b"]);
+    assert!(refused(&["add", "And more", "--repo", "web", "--on", "vm-b"]).contains("tasks at once are full"), "its slot stands while vm-b is not heard");
+    // heard asking a question: answered there, through vm-b's door
+    far_list(&f, json!({}), json!([{ "id": "web/7", "title": "Fix their docs", "stage": "asks", "kind": "question", "created": sw::clock::now(), "autopilot": { "coordinator": "main", "machine": sw::remote::check::hostname() } }]));
+    let _ = sw::remote::ask_list(&sw::remote::machines()[0], 20000);
+    f.answers("vm-b", "do", &json!({ "ok": true, "msg": "Sent to the agent" }));
+    assert!(ok(&["tell", "vm-b:web/7", "Use the existing index"]).contains("vm-b: Sent to the agent"));
+    let (_, what, req) = f.asked().pop().unwrap();
+    assert_eq!((what.as_str(), req.s("action"), req.s("id"), req.s("text")), ("do", "tell", "web/7", "Use the existing index"));
+    // seen merged there: its slot is free, also once vm-b is heard no more
+    far_list(&f, json!({}), json!([{ "id": "web/7", "title": "Fix their docs", "stage": "done", "mergedAt": sw::clock::now(), "created": sw::clock::now(), "autopilot": { "coordinator": "main", "machine": sw::remote::check::hostname() } }]));
+    let _ = sw::remote::ask_list(&sw::remote::machines()[0], 20000);
+    in_pane(&w, ""); minutes(1); tick(&w); minutes(4);
+    in_pane(&w, &pane_of(&main));
+    assert_eq!(sw::autopilot::limits::today(&main, &record(&main), &sw::autopilot::limits::board_tasks(), sw::clock::now()).under_way, 0);
+    in_pane(&w, "");
+}

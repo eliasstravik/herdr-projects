@@ -140,8 +140,10 @@ pub fn list_lines(s: &mut State, t: &Theme, width: usize, h: usize, screen: usiz
                 // An open heading at the foot of what shows goes with the empty line above it; a folded one is a row.
                 let (text, under) = heading(s, &rows, k, width);
                 let sel = !id.is_empty() && *id == s.sel;
-                lines.push(L { head: !r.shut() && under.is_none(), sel, id: id.clone(), ..line(text) });
-                if let Some(u) = under { lines.push(L { head: !r.shut(), sel, id: id.clone(), ..line(u) }); }
+                // The main Coordinator's row is a row, never a heading left hanging at the foot of what shows.
+                let hangs = !r.shut() && !crate::board::update::pilot::is_main(id);
+                lines.push(L { head: hangs && under.is_none(), sel, id: id.clone(), ..line(text) });
+                if let Some(u) = under { lines.push(L { head: hangs, sel, id: id.clone(), ..line(u) }); }
             }
             Row::Note(n) => lines.push(line(Inked::plain("   ").add(Inked::of(n.clone(), Ink::Muted)))),
             Row::Rec(_) | Row::Auto(_) => {

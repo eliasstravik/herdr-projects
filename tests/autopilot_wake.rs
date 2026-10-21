@@ -248,3 +248,16 @@ fn unanswered_wakes_up_to_needs_you_after_and_turning_on_again_resumes() {
     assert_eq!(record(&co).arr("wakes").last().unwrap().at("answered"), &json!(true));
     assert_eq!(record(&co).i("unanswered"), 0);
 }
+
+#[test]
+fn ask_first_access_holds_its_wakes_while_it_shows_needs_you() {
+    let w = pilot_world();
+    let co = proj(&w);
+    on_and_quiet(&w, &co, &["--autopilot.every", "none", "--autopilot.gap", "1m"]);
+    ok(&["set", "coordinator.access", "ask", "--project-coordinator", "proj"]);
+    assert_eq!(sw::autopilot::shown::view(&co, sw::clock::now()).s("state"), "needs you");
+    w.add("One"); minutes(2); tick(&w);
+    assert_eq!(prompts_of(&w, &co).len(), 1, "no wake at a permission prompt");
+    ok(&["unset", "coordinator.access", "--project-coordinator", "proj"]); tick(&w);
+    assert_eq!(prompts_of(&w, &co).len(), 2);
+}

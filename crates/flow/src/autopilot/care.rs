@@ -49,8 +49,11 @@ pub fn touches_repo_file(t: &Obj) -> bool {
 /// May it look after this task: one of its own, not left to you.
 pub fn may_look_after(ap: &Obj, t: &Obj) -> bool { task_rec(ap, t.s("id")).map(|r| !r.b("left")).unwrap_or(false) }
 /// Its own tasks that are under way, of those on the board.
-/// A slot taken for an add on another machine that has not answered yet (add.rs) counts too.
-pub fn under_way_count(ap: &Obj, board: &[Obj]) -> usize { tasks(ap).iter().filter(|r| r.b("pending") || board.iter().any(|t| t.s("id") == r.s("id") && under_way(t))).count() }
+/// A slot taken for an add on another machine that has not answered yet (add.rs) counts too, and so does a task of
+/// another machine it started there while no board hears that machine, until it is seen over.
+pub fn under_way_count(ap: &Obj, board: &[Obj]) -> usize {
+    tasks(ap).iter().filter(|r| r.b("pending") || match board.iter().find(|t| t.s("id") == r.s("id")) { Some(t) => under_way(t), None => crate::after::far::is_far(r.s("id")) && r.b("started") && !r.b("over") }).count()
+}
 /// Its tasks that need looking after now, with why.
 pub fn needing(ap: &Obj, board: &[Obj], approve: bool) -> Vec<(String, &'static str)> {
     board.iter().filter(|t| may_look_after(ap, t)).filter_map(|t| need_of(t, approve).map(|w| (t.t("id"), w))).collect()

@@ -40,6 +40,8 @@ pub fn tick(co: &Co, board: &[Obj], now: i64) {
     let (approve, retries, when) = (words(co, "autopilot.approve") == "yes", count(co, "autopilot.retries"), words(co, "autopilot.when"));
     let (gap, every, per_day, after) = (ms(&words(co, "autopilot.gap")), ms(&words(co, "autopilot.every")), count(co, "autopilot.wakesPerDay"), count(co, "autopilot.needsYouAfter"));
     let (goal, may, scope, hours) = (words(co, "autopilot.goal"), words(co, "autopilot.mayChange"), words(co, "autopilot.scope"), words(co, "autopilot.hours"));
+    // A coordinator that asks before it acts would wait at a permission prompt: it shows `needs you`, and sleeps.
+    let ask_first = words(co, "coordinator.access") == "ask";
     let mut kick = false;
     let _ = change(co, |ap, c| {
         if !ap.b("on") { return false; }
@@ -93,7 +95,7 @@ pub fn tick(co: &Co, board: &[Obj], now: i64) {
         // What holds it back.
         let on_wake = pending.iter().any(|r| r.s("why") == "on") && now - ap.i("failedAt") >= gap;
         let busy = look.as_ref().map(|(rest, _)| !rest).unwrap_or(false) || c.arr("queue").iter().any(mine) || ap.at("wake").b("typedAt");
-        if ap.b("needsYou") || !awake(&hours, now) || ap.i("woke") >= per_day || busy { return true; }
+        if ap.b("needsYou") || ask_first || !awake(&hours, now) || ap.i("woke") >= per_day || busy { return true; }
         if !on_wake && now < ended + gap { return true; }
         if !room(co, ap, board, now) && needing(ap, board, approve).is_empty() { return true; }
         // A reason that is only the timer goes only when the board changed since its last wake ended.

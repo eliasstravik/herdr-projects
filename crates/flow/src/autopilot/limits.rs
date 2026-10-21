@@ -33,3 +33,9 @@ pub fn board_tasks() -> Vec<Obj> {
     all.extend(super::heard::far_tasks(crate::clock::now()));
     all
 }
+/// A task by its id, its number or its tag here, or another machine's (`vm-b:web/7`) as an open board last heard it.
+pub fn find_task(id: &str) -> crate::err::Res<Obj> {
+    if let Ok(t) = crate::store::tasks::find(id) { return Ok(t); }
+    if crate::after::far::split(id).is_some() { if let Some(t) = super::heard::far_tasks(crate::clock::now()).into_iter().find(|t| t.s("id").eq_ignore_ascii_case(id)) { return Ok(t); } }
+    crate::fail!("No task {id}. Another machine's task is named by its machine first (vm-b:web/7), and is known here as a board last heard it.")
+}

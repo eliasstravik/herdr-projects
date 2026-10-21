@@ -71,7 +71,7 @@ pub fn add_far(co: &Co, label: &str, title: &str, o: AddOpts, delegate: bool) ->
         let t = today(co, &ap, &board, now());
         if !t.adds_left() { crate::refuse!("Refused in an autopilot wake: add. Today's tasks are used: {} (autopilot.tasksPerDay).", t.say()); }
         if start && under_way_count(&ap, &board) as i64 >= t.at_once { crate::refuse!("Refused in an autopilot wake: add. Its tasks at once are full: {} (autopilot.tasksAtOnce).", t.say()); }
-        change(co, |ap, _| { roll(ap, now()); own_task(ap, &slot, "added", now()); super::record::with_task(ap, &slot, |r| { r.put("pending", true); }); let n = ap.i("added") + 1; ap.put("added", n); true })?;
+        change(co, |ap, _| { roll(ap, now()); own_task(ap, &slot, "added", now()); super::record::with_task(ap, &slot, |r| { r.put("pending", true); r.put("started", start); }); let n = ap.i("added") + 1; ap.put("added", n); true })?;
         Ok(())
     })?;
     let rec = record_of(co, &crate::remote::check::hostname());

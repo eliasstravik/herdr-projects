@@ -7,6 +7,7 @@
 //! `id`, a `label`, a `target` (`user@host` or `ssh://user@host:port`), a `session` and `enabled`. The
 //! `board.machines` setting names them by hand instead. The order the board lists them in is herdr's sidebar's
 //! (remote/sidebar.rs).
+pub mod act;
 pub mod add;
 pub mod automations;
 pub mod carry;
@@ -191,7 +192,7 @@ pub fn door_with(what: &str, req: &Value, bytes: &[u8]) -> Res<Value> {
                 "approve" => { let seen = if req.at("seen").is_array() { Some((req.at("seen").get(0).cloned().unwrap_or_default(), req.at("seen").get(1).cloned().unwrap_or_default())) } else { None }; ok(finish_line::approve(&id, seen, *req.at("anyway") == json!(true))?.msg) }
                 "pick" => ok(crate::attempts::settle::pick(&id, &req.t("letter"))?.msg),
                 "fix" => ok(finish_line::send_failure(&id)?.msg),
-                "retry" => ok(finish_line::send_error(&id)?.msg),
+                "retry" => ok(finish_line::send_error_noted(&id, req.s("text"))?.msg),
                 "again" => ok(finish_line::retry(&id)?.msg),
                 "review" => ok(finish_line::send_review(&id)?.msg),
                 "finish" => ok(finish_line::finish_anyway(&id)?.msg),
