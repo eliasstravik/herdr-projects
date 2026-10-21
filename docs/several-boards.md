@@ -18,8 +18,9 @@ Coordinator, but they all share the machine's one list.
 The header names the repo new tasks go to. Three ways to send one to another repo, without a second board:
 
 - **The popup follows you.** With `board.open popup`, the board opens in the repo of the pane you are in: go to a pane of
-  that repo, press the board key, type ([the board as a popup](board.md#the-board-as-a-popup)). A board in a tab keeps
-  the repo it opened in.
+  that repo, press the board key, type ([the board as a popup](board.md#the-board-as-a-popup)). It is the folder the
+  pane is in now: a pane that `cd`'d into another repo is in that repo, also in a space that started in another one. A
+  task's worktree is its repo. A board in a tab keeps the repo it opened in.
 - **Tell the Coordinator which repo**: "add this to gtm-agent" works from any repo. It adds the task with `--repo`, as
   you can yourself: `herdr-projects add "Fix the login" --repo gtm-agent`.
 - **Talk to the repo's own coordinator.** Group by repo (`Alt+S`) and press `Space` on the repo's heading. What you say
