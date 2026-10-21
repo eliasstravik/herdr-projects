@@ -56,18 +56,18 @@ pub fn launch(socket: Option<&str>, args: &[String], input: &str, timeout_ms: u6
     if let Some(mut si) = child.stdin.take() { let _ = si.write_all(input.as_bytes()); }
     wait_with_timeout(child, timeout_ms)
 }
-/// Waits for a child, reading what it writes; kills it after `timeout_ms`.
+/// Waits for a child, reading what it writes; kills it after `timeout_ms` (one too long to count: never).
 pub fn wait_with_timeout(mut child: std::process::Child, timeout_ms: u64) -> HRes<Ran> {
     use std::io::Read;
     let mut out = child.stdout.take();
     let mut err = child.stderr.take();
     let t_out = std::thread::spawn(move || { let mut s = Vec::new(); if let Some(o) = out.as_mut() { let _ = o.read_to_end(&mut s); } s });
     let t_err = std::thread::spawn(move || { let mut s = Vec::new(); if let Some(o) = err.as_mut() { let _ = o.read_to_end(&mut s); } s });
-    let until = std::time::Instant::now() + Duration::from_millis(timeout_ms);
+    let until = std::time::Instant::now().checked_add(Duration::from_millis(timeout_ms));
     let status = loop {
         match child.try_wait() {
             Ok(Some(st)) => break st.code().unwrap_or(-1),
-            Ok(None) if std::time::Instant::now() >= until => { let _ = child.kill(); let _ = child.wait(); return Err(herr("timeout", "herdr did not answer in time")); }
+            Ok(None) if until.is_some_and(|u| std::time::Instant::now() >= u) => { let _ = child.kill(); let _ = child.wait(); return Err(herr("timeout", "herdr did not answer in time")); }
             Ok(None) => std::thread::sleep(Duration::from_millis(5)),
             Err(e) => return Err(herr("spawn_failed", e.to_string())),
         }
