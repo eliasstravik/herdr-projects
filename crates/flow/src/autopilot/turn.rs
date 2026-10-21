@@ -28,7 +28,7 @@ fn in_that_turn(c: &Obj, socket: &str) -> bool {
 pub fn autopilot_turn(co: &Co) -> bool {
     let Some(c) = get(co) else { return false };
     let w = c.at("autopilot").at("turn");
-    w.b("typedAt") && w.i("typedAt") == c.i("sentAt") && c.at("mark").b("rest") && in_that_turn(&c, &co.socket)
+    w.b("id") && w.s("id") == c.s("typedId") && c.at("mark").b("rest") && in_that_turn(&c, &co.socket)
 }
 /// The last message typed in came from a task's agent or reviewer, and its turn has not ended: who sent it.
 pub fn agents_turn(co: &Co) -> Option<Value> {

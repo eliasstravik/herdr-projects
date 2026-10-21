@@ -6,7 +6,7 @@ use super::pump::active;
 use super::requests::{open, tab_note, typed_there};
 use super::rules_place::intro_line_of;
 use super::state::{get, home, pumping};
-use super::who::{choice, describe, same_choice};
+use super::who::{choice_of, describe, same_choice};
 use crate::agents::adapter;
 use crate::agents::installed::read_turn_of;
 use crate::agents::kinds::kind;
@@ -45,7 +45,7 @@ pub fn look(co: impl Into<Co>) -> Look {
     let co = co.into();
     let socket = co.socket.as_str();
     let c = get(&co);
-    let def = choice();
+    let def = choice_of(&co);
     let Some(c) = c.filter(|c| c.b("run") || c.b("pane") || !c.arr("queue").is_empty() || c.b("want") || c.b("error")) else {
         return Look { state: "none".into(), run: def.clone(), def, ..Default::default() };
     };

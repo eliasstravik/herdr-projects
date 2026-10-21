@@ -38,7 +38,7 @@ pub fn next_words(co: &Co, ap: &Obj, now: i64) -> String {
     if !ap.arr("pending").is_empty() { return if gap > now { format!("next in {}", age(gap - now)) } else { String::new() }; }
     let every = ms(&words(co, "autopilot.every"));
     if every == 0 { return String::new(); }
-    let at = (ended + every).max(gap);
+    let at = (ended.max(ap.i("timerAt")) + every).max(gap);
     if at > now { format!("next in {}", age(at - now)) } else { String::new() }
 }
 /// The last task it added, as the board names it ("" none).

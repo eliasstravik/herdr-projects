@@ -74,7 +74,7 @@ pub fn typed(c: &mut Obj, m: &Value, started: bool) {
     if started { if let Some(mk) = c.get_mut("mark").and_then(|x| x.as_object_mut()) { mk.put("rest", true); } }
     if let Some(w) = ap.get_mut("wake").and_then(|w| w.as_object_mut()) { w.put("typedAt", at); w.put("mark", c.at("mark").clone()); }
     // The turn it starts, kept past the wake's answer: a write of that turn is known as autopilot's while it lasts.
-    ap.put("turn", json!({ "typedAt": at, "mark": c.at("mark").clone() }));
+    ap.put("turn", json!({ "id": m.at("id"), "typedAt": at, "mark": c.at("mark").clone() }));
     let mut wakes = ap.arr("wakes").to_vec();
     wakes.push(json!({ "at": at, "why": why_words(ap.at("wake").arr("reasons")), "answered": Value::Null }));
     let cut = wakes.len().saturating_sub(20);

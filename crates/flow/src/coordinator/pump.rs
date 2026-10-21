@@ -214,7 +214,7 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
                 c.put("mark", json!({ "run": run, "seq": seq, "rest": at_rest }));
                 c.put("intro", false); c.put("sentAt", now()); c.put("last", m.at("said").clone()); c.put("over", over.clone()); c.put("overId", over_id.clone());
                 // Who its turn is on: a task's agent that sent it (coordinator tell), and an autopilot wake (autopilot/).
-                c.put("typedFrom", m.at("sender").clone());
+                c.put("typedFrom", m.at("sender").clone()); c.put("typedId", id.clone());
                 if m.b("autopilot") { crate::autopilot::wake::typed(c, &m, started); }
                 true
             })?;

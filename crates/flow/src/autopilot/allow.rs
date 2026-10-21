@@ -38,7 +38,7 @@ pub fn guard(cmd: &str, pos: &[String], flags: &Obj, agent: Option<(&Obj, &str)>
     let Some(co) = coordinator_caller() else { return Ok(None) };
     if agents_turn(&co).is_some() && switches(cmd, pos) { return no("This turn was started by a message from a task's agent or reviewer: it cannot switch autopilot or change a coordinator's settings. Only the human does.".into()); }
     if !autopilot_turn(&co) { return Ok(None); }
-    if reads(cmd, pos) { return Ok(None); }
+    if reads(cmd, pos) { return Ok(Some(co)); } // in an autopilot turn, `list` and `details` say more (history.rs)
     let ap = record(&co);
     if cmd == "autopilot" && sub(pos) == "off" { return Ok(None); }
     if !ap.b("on") { return refused(&format!("{cmd}"), "Autopilot was turned off: this turn may only read the board now."); }

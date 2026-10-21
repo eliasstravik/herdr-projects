@@ -44,7 +44,7 @@ pub fn tick(co: &Co, board: &[Obj], now: i64) {
     let _ = change(co, |ap, c| {
         if !ap.b("on") { return false; }
         roll(ap, now);
-        let ended_at = |ap: &mut Obj, c: &Obj| { ap.put("endAt", now); ap.put("seenTo", c.i("sentAt")); let s = snapshot(co, ap, board, now); ap.put("snap", s); };
+        let ended_at = |ap: &mut Obj, c: &Obj| { ap.put("endAt", now); ap.put("seenId", c.t("typedId")); let s = snapshot(co, ap, board, now); ap.put("snap", s); };
         let judge = |ap: &mut Obj, answered: bool| {
             let mut w = ap.arr("wakes").to_vec();
             if let Some(last) = w.last_mut() { last["answered"] = json!(answered); }
@@ -56,7 +56,7 @@ pub fn tick(co: &Co, board: &[Obj], now: i64) {
         // The turn the last message typed in started has ended: a wake's is answered.
         if let Some((rest, seq)) = &look {
             let mark = c.at("mark");
-            if *rest && !seq.is_null() && mark.i("run") == c.i("startedAt") && *seq != *mark.at("seq") && c.i("sentAt") > ap.i("seenTo") {
+            if *rest && !seq.is_null() && mark.i("run") == c.i("startedAt") && *seq != *mark.at("seq") && c.b("typedId") && c.s("typedId") != ap.s("seenId") {
                 let typed = ap.at("wake").b("typedAt");
                 ended_at(ap, c);
                 if typed { judge(ap, true); ap.put("wake", Value::Null); }
@@ -77,8 +77,10 @@ pub fn tick(co: &Co, board: &[Obj], now: i64) {
         // What happened, and the timer.
         let happened = events(co, ap, board, &when, approve, retries);
         let mut pending = merged(ap.arr("pending"), &happened);
+        // The timer counts from when its last wake ended, or from its last look that found nothing new; missed ticks
+        // are not caught up.
         let ended = ap.i("endAt").max(ap.i("since"));
-        if every > 0 && now >= ended + every && !pending.iter().any(|r| r.s("why") == "timer") { pending.push(reason("timer", "", "")); }
+        if every > 0 && now >= ended.max(ap.i("timerAt")) + every && !pending.iter().any(|r| r.s("why") == "timer") { pending.push(reason("timer", "", "")); ap.put("timerAt", now); }
         ap.put("pending", pending.clone());
         if pending.is_empty() { return true; }
         // One wake in the queue at most: one not typed in yet takes the new reasons in.
