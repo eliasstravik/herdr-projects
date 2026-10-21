@@ -1,17 +1,21 @@
 //! Your own keys (`board.keys`): a moved key answers to your chord only, and the hint line, the ? menu and the board's
 //! messages name it so; a chord another key has, or the key that opens the board, is refused with the key it clashes
-//! with; it is yours only; docs/keys.md keeps the built-in chords.
+//! with; it is yours only; docs/keys.md keeps the built-in chords. And the keys' names as on your keyboard
+//! (`board.keyStyle`): `mac` writes the Option key's chords as opt, `pc` as alt, `auto` by the system the board runs on.
 use crate::common;
 use common::board::open;
 use common::*;
 use serde_json::json;
 use sw::actions::settings::{settings_command, Where};
-use sw::board::keys::{is, key_name, Press, K};
+use sw::board::keys::{is, key_name, say, Press, K};
 use sw::board::remap::read;
 
 fn you() -> Where { Where { task: None, repo: None, automation: None, coord: None } }
 fn set(v: &str) -> Result<String, String> {
     settings_command("set", &["set".into(), "board.keys".into()], &you(), Some(json!(v))).map(|r| r.1).map_err(|e| e.msg)
+}
+fn set_in(name: &str, v: &str) -> Result<String, String> {
+    settings_command("set", &["set".into(), name.into()], &you(), Some(json!(v))).map(|r| r.1).map_err(|e| e.msg)
 }
 fn v(a: &[&str]) -> Vec<String> { a.iter().map(|s| s.to_string()).collect() }
 
@@ -107,4 +111,47 @@ fn a_hand_written_chord_of_the_key_that_opens_the_board_does_not_count_on_the_bo
     bind("prefix+a");
     assert_eq!(key_name("menu"), "alt+w");
     assert!(is(&Press::chord("alt+w"), K::Menu));
+}
+
+#[test]
+fn mac_writes_opt_where_pc_writes_alt_and_the_keys_stay_the_same() {
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    w.script(json!({ "worker": [{ "files": { "f.txt": "1\n" }, "commit": "1", "note": "Made f." }] }));
+    let id = w.add("Make f");
+    delegate(&id); settle(&id);
+    // auto: by the system the board runs on.
+    assert_eq!(key_name("chatMessage"), "alt+c");
+    sw::board::key_style::system_is(Some(true));
+    assert_eq!(key_name("chatMessage"), "opt+c");
+    set_in("board.keyStyle", "pc").unwrap();
+    assert_eq!(key_name("chatMessage"), "alt+c", "pc says alt on a Mac too");
+    set_in("board.keyStyle", "mac").unwrap();
+    assert_eq!((key_name("chatMessage"), key_name("yes"), key_name("up")), ("opt+c".to_string(), "ctrl+l".to_string(), "↑".to_string()));
+    assert_eq!(say("{chatScrollUp} up, {back} back"), "opt+k up, esc back");
+    assert_eq!(sw::board::remap::as_built(|| key_name("side")), "alt+p", "docs/keys.md keeps the PC names");
+    let mut s = open(&w.root, 34); s.s.side = false;
+    s.s.sel = id.clone(); s.load(); s.press(&["space"]);
+    assert!(s.chat(120).hints.ends_with("opt+c hide the latest message · space back to the Coordinator"), "{}", s.chat(120).hints);
+    s.press(&["alt+c"]); assert!(!s.chat(120).framed, "the Option key sends alt: it is the same key");
+    s.press(&["alt+c"]);
+    s.press(&["?"]);
+    let t = s.text();
+    assert!(t.contains("opt: only shows or hides") && t.contains("ctrl: does something"), "{t}");
+    assert!(regex::Regex::new(r"opt\+c +hide the chat's latest message").unwrap().is_match(&t), "{t}");
+    assert!(!t.contains("alt"), "{t}");
+    // Your own chord is written in your style too.
+    set_in("board.keys", "side=alt+o").unwrap();
+    assert_eq!(key_name("side"), "opt+o");
+    assert!(is(&Press::chord("alt+o"), K::Side));
+    set_in("board.keyStyle", "pc").unwrap();
+    assert_eq!((key_name("chatMessage"), key_name("side")), ("alt+c".to_string(), "alt+o".to_string()));
+}
+
+#[test]
+fn it_is_one_of_auto_mac_pc_and_yours_only() {
+    let _w = world();
+    let e = set_in("board.keyStyle", "apple").unwrap_err();
+    assert!(e.contains("auto") && e.contains("mac") && e.contains("pc"), "{e}");
+    let e = settings_command("set", &["set".into(), "board.keyStyle".into()], &Where { task: None, repo: Some("proj".into()), automation: None, coord: None }, Some(json!("mac"))).unwrap_err().msg;
+    assert!(e.contains("board.keyStyle is a board setting: it is yours only"), "{e}");
 }
