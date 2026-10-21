@@ -123,6 +123,7 @@ mod cleanup_space;
 mod cli;
 mod cli_rest;
 mod closing_note;
+mod context_folder;
 mod coordinator;
 mod coordinator_chat;
 mod coordinator_chat_more;
