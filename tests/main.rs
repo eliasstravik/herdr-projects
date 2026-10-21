@@ -116,6 +116,7 @@ mod check_progress_rest;
 mod check_progress_run;
 mod check_script;
 mod check_script_since;
+mod cleanup_in_use;
 mod cleanup_late;
 mod cleanup_owed;
 mod cleanup_retry;

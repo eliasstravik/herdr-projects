@@ -3,7 +3,8 @@
 //! sidebar either way: a kept checkout stays on disk, and a reply reopens it. Clean-up takes a while (teardown), and
 //! the agent's terminal is open until its end: whatever it was looked at is looked at again right before anything is
 //! removed. A clean-up put off because the space was in use says so (`retry`), and the housekeeping pass tries again;
-//! `since` is what the attempt before saw, so nothing that happened in between is missed.
+//! `since` is what the attempt before saw, so nothing that happened in between is missed. What keeps it in use is said
+//! in words (in_use.rs).
 use crate::agents::installed::read_turn_of;
 use crate::clock::now;
 use crate::flow;
@@ -11,6 +12,7 @@ use crate::herdr::api::read_screen;
 use crate::herdr::cli::{args, current_socket, socket_exists};
 use crate::herdr::Herdr;
 use crate::json::*;
+use super::in_use::{self, InUse, Why};
 use crate::runner::{claim, release, sh};
 use crate::store::marks::tilde;
 use crate::store::repos::{cwd_of, folder_of, git_out};
@@ -22,13 +24,13 @@ use std::path::Path;
 
 /// What a clean-up kept, and, when it was put off, what it saw for the next try.
 #[derive(Default, Debug)]
-pub struct Cleanup { pub kept: Vec<String>, pub retry: bool, pub turn: bool, pub comp: Value, pub tip: String, pub still: Value, pub event_seq: i64 }
+pub struct Cleanup { pub kept: Vec<String>, pub in_use: Vec<String>, pub retry: bool, pub turn: bool, pub comp: Value, pub tip: String, pub still: Value, pub event_seq: i64 }
 pub struct Opts<'a> { pub delete_branch: &'a str, pub keep_unmerged: bool, pub still: Option<&'a dyn Fn() -> bool>, pub since: Option<Value>, pub first: Option<String> }
 pub fn cleanup(t: &Task, delete_branch: &str) -> Vec<String> { cleanup_with(t, Opts { delete_branch, keep_unmerged: false, still: None, since: None, first: None }).kept }
 fn still_ms() -> i64 { std::env::var("HERDR_PROJECTS_STILL_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(120000) }
 fn settle_ms() -> i64 { std::env::var("HERDR_PROJECTS_SETTLE_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(5000) }
 #[derive(Clone, Copy)]
-struct AgentNow { busy: bool, unknown: bool }
+struct AgentNow { busy: bool, unknown: bool, why: Why }
 pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
     let root = folder_of(t.s("id"));
     let link = t.at("link");
@@ -50,19 +52,20 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
     let turn = Cell::new(false);
     let tip_of = || if t.b("branch") { git_out(&root, &["rev-parse", "--verify", &format!("refs/heads/{}", t.s("branch"))]).unwrap_or_default() } else { String::new() };
     let tip = match (&o.since, &o.first) { (Some(s), _) => s.t("tip"), (None, Some(f)) => f.clone(), (None, None) => tip_of() }; // what is safe to delete is what the first look saw
-    let later = |kept: Vec<String>| Cleanup { kept, retry: true, turn: turn.get(), comp: seen.borrow().clone(), tip: tip.clone(), still: quiet.borrow().clone(), event_seq: get(t.s("id")).map(|c| c.i("eventSeq")).unwrap_or(0) };
+    let held: RefCell<InUse> = RefCell::default(); // what kept it in use at the last look
+    let later = |kept: Vec<String>| Cleanup { kept, in_use: held.borrow().all(), retry: true, turn: turn.get(), comp: seen.borrow().clone(), tip: tip.clone(), still: quiet.borrow().clone(), event_seq: get(t.s("id")).map(|c| c.i("eventSeq")).unwrap_or(0) };
     // An agent herdr cannot place (status "unknown"): its screen must have stood still from one attempt to a later
     // one, its saved conversation end in a finished turn, and nothing run under it.
-    let at_rest = |a: &Value| -> bool {
-        let Some(api) = &api else { return false };
+    let at_rest = |a: &Value| -> Result<(), Why> {
+        let Some(api) = &api else { return Err(Why::Unsure) };
         let screen = read_screen(api, link.s("pane"), Some(a.s("agent_status")), 120);
-        if screen.trim().is_empty() { return false; }
+        if screen.trim().is_empty() { return Err(Why::Blank); }
         let sig = format!("{}|{}", text(a.at("state_change_seq")), sha1_smol::Sha1::from(screen.as_bytes()).digest());
         let at = { let q = quiet.borrow(); if q.s("sig") == sig { q.i("at") } else { now() } };
         *quiet.borrow_mut() = json!({ "sig": sig, "at": at });
-        if o.since.as_ref().map(|s| s.at("still").s("sig") != sig).unwrap_or(true) || now() - at < still_ms() { return false; }
-        if let Some(turn) = read_turn_of(t.s("agent"), t.so("transcript").map(Path::new), t.s("session"), &cwd_of(t), false) { if !(turn.finished || !turn.error.is_empty() || turn.interrupted) { return false; } }
-        api.pane_childless(link.s("pane"), a.s("agent")) // a command it left running in the background would go down with the space
+        if o.since.as_ref().map(|s| s.at("still").s("sig") != sig).unwrap_or(true) || now() - at < still_ms() { return Err(Why::Moving); }
+        if let Some(turn) = read_turn_of(t.s("agent"), t.so("transcript").map(Path::new), t.s("session"), &cwd_of(t), false) { if !(turn.finished || !turn.error.is_empty() || turn.interrupted) { return Err(Why::TurnOpen); } }
+        if api.pane_childless(link.s("pane"), a.s("agent")) { Ok(()) } else { Err(Why::Beside) } // a command it left running in the background would go down with the space
     };
     // After a task ended (`still`): herdr is asked directly: an agent at work in the pane, or a turn of it that ended
     // since, is a turn you started in its terminal. What herdr cannot tell counts as busy.
@@ -73,21 +76,21 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
                 *seen.borrow_mut() = a.at("completion_seq").clone();
                 let st = a.s("agent_status");
                 let busy = st == "working" || st == "blocked";
-                let unknown = if st == "idle" || st == "done" { !api.pane_childless(link.s("pane"), a.s("agent")) } else { !busy && !at_rest(&a) };
-                Some(AgentNow { busy, unknown })
+                let (unknown, why) = if st == "idle" || st == "done" { (!api.pane_childless(link.s("pane"), a.s("agent")), Why::Beside) } else if busy { (false, Why::Turn) } else { at_rest(&a).err().map(|w| (true, w)).unwrap_or((false, Why::Turn)) };
+                Some(AgentNow { busy, unknown, why })
             }
             Ok(None) => { *seen.borrow_mut() = Value::Null; None }
-            Err(_) => { *seen.borrow_mut() = o.since.as_ref().map(|s| s.at("comp").clone()).unwrap_or(Value::Null); Some(AgentNow { busy: true, unknown: true }) }
+            Err(_) => { *seen.borrow_mut() = o.since.as_ref().map(|s| s.at("comp").clone()).unwrap_or(Value::Null); Some(AgentNow { busy: true, unknown: true, why: Why::NoAnswer }) }
         }
     };
     let comp_now = || seen.borrow().clone();
     // The space is closed whole: a pane of yours in it with something running keeps it open as well.
-    let others_busy = || -> bool {
-        if still && unknown { return true; }
-        let (true, Some(w), Some(api)) = (still, &ws, &api) else { return false };
+    let others_busy = || -> Option<InUse> {
+        if still && unknown { return Some(in_use::space_unanswered()); }
+        let (true, Some(w), Some(api)) = (still, &ws, &api) else { return None };
         match api.panes(Some(w.s("workspace_id"))) {
-            Ok(ps) => ps.iter().any(|p| p.s("pane_id") != link.at("reviewer").s("pane") && { let own = p.s("pane_id") == link.s("pane"); let a = api.agent_get(p.s("pane_id")).ok().flatten(); if own && a.is_some() { false } else { a.is_some() || !api.pane_idle(p.s("pane_id")) } }),
-            Err(_) => true,
+            Ok(ps) => ps.iter().filter(|p| p.s("pane_id") != link.at("reviewer").s("pane")).find_map(|p| { let own = p.s("pane_id") == link.s("pane"); let a = api.agent_get(p.s("pane_id")).ok().flatten(); if own && a.is_some() { None } else if a.is_some() || !api.pane_idle(p.s("pane_id")) { Some(in_use::other(api, p.s("pane_id"), a.is_some())) } else { None } }),
+            Err(_) => Some(in_use::space_unanswered()),
         }
     };
     // Turn-end events the agent's own hook filed since clean-up began.
@@ -105,14 +108,21 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
         reused = !agent.map(|a| a.unknown).unwrap_or(false) && (agent.map(|a| a.busy).unwrap_or(false) || !t.b("hooked") || events() > 0);
     }
     let base = if o.since.is_some() { since_comp.clone() } else if agent.is_some() { Some(comp_now()) } else { None };
+    // What keeps the space in use, if anything; it is also kept for the line of a clean-up put off (`held`).
     let in_use = || -> bool {
-        if reused || events() > 0 { turn.set(true); return true; }
-        let a = agent_now();
-        if let Some(x) = a { if !x.unknown && (x.busy || (o.since.is_none() && agent.is_none()) || base.as_ref().map(|b| comp_now() != *b).unwrap_or(false)) { turn.set(true); return true; } }
-        a.map(|x| x.unknown).unwrap_or(false) || agent.map(|x| x.unknown).unwrap_or(false) || others_busy()
+        let pane = |w: Why| in_use::agent(w, api.as_ref(), link.s("pane"));
+        let found = (|| {
+            if reused || events() > 0 { turn.set(true); return Some(pane(Why::Turn)); }
+            let a = agent_now();
+            if let Some(x) = a { if !x.unknown && (x.busy || (o.since.is_none() && agent.is_none()) || base.as_ref().map(|b| comp_now() != *b).unwrap_or(false)) { turn.set(true); return Some(pane(Why::Turn)); } }
+            if let Some(x) = a.filter(|x| x.unknown).or(agent.filter(|x| x.unknown)) { return Some(pane(x.why)); }
+            others_busy()
+        })();
+        if let Some(f) = &found { *held.borrow_mut() = f.clone(); }
+        found.is_some()
     };
     let keep = |why: String| -> Cleanup { let open = in_use() || !close_space(); if let Some(api) = &api { flow::spaces::close_repo_space(api, &root); } if open { later(vec![why]) } else { Cleanup { kept: vec![why], ..Default::default() } } };
-    let used = || later(vec![format!("{} (its space is in use again)", tilde(&cwd_of(t).display().to_string()))]);
+    let used = || later(vec![format!("{} ({})", tilde(&cwd_of(t).display().to_string()), held.borrow().line(t.s("id")))]);
     let stuck = || later(vec![format!("{} (herdr did not close its space)", tilde(&cwd_of(t).display().to_string()))]);
     // Its session is not there to ask (herdr is down, or gone): whether its agent works is unknown: nothing is touched.
     if still && api.is_none() && !sock.is_empty() && (link.b("pane") || link.b("workspace")) { return later(vec![format!("{} (its herdr session cannot be reached)", tilde(&cwd_of(t).display().to_string()))]); }
@@ -190,8 +200,9 @@ pub fn tidy(id: &str, delete_branch: &str) {
         if !same(t) { return Ok(Change::Keep); }
         let msg = prev.as_ref().filter(|p| p.has("msg")).map(|p| p.t("msg")).unwrap_or_else(|| t.t("msg"));
         // In use: tried again by the housekeeping pass, and after a turn of the agent only once it has been quiet a while.
+        // What kept it in use, every thing, is kept with it for `details`.
         let quiet_from = if kept.turn { now() } else { prev.as_ref().map(|p| p.i("quietFrom")).unwrap_or(0) };
-        t.put("tidy", if kept.retry { json!({ "deleteBranch": delete_branch, "tip": kept.tip, "comp": kept.comp, "still": if kept.still.is_null() { Value::Null } else { kept.still.clone() }, "eventSeq": kept.event_seq, "quietFrom": quiet_from, "msg": msg }) } else { Value::Null });
+        t.put("tidy", if kept.retry { json!({ "deleteBranch": delete_branch, "tip": kept.tip, "comp": kept.comp, "still": if kept.still.is_null() { Value::Null } else { kept.still.clone() }, "eventSeq": kept.event_seq, "quietFrom": quiet_from, "msg": msg, "inUse": kept.in_use }) } else { Value::Null });
         if !kept.kept.is_empty() { t.put("kept", kept.kept.clone()); } else {
             flow::task::clear_notes(t); left = true; t.del("kept"); t.put("worktree", Value::Null); t.put("cleaned", now());
             let s = t.at("link").at("socket").clone(); t.put("link", json!({ "socket": s }));
