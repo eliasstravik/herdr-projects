@@ -28,8 +28,8 @@ Your first message starts it. Until then the chat says `not started: your first 
 
 ## What each one is
 
-- **An ordinary agent in a long-lived chat**, like the Coordinator: the same program, model and effort
-  (`coordinator.agent`, …), the same board commands, its own tab. Everything you say is one conversation, kept: if its
+- **An ordinary agent in a long-lived chat**, like the Coordinator: the same board commands, its own tab, and settings
+  of its own (below). Everything you say is one conversation, kept: if its
   program exits or Herdr restarts, your next message starts it again in the same conversation.
 - **A machine coordinator** is about that machine as a whole: its repos and folders, the tasks and agents on it. It runs
   in a folder of its own (`~/.herdr-projects/data/coordinator/<session>/machine/chat`), with its rules in `AGENTS.md`
@@ -45,6 +45,27 @@ Your first message starts it. Until then the chat says `not started: your first 
 - **Another machine's** coordinators run on that machine. Its board sends what they said with its tasks, and what you
   type goes there. A machine on an older version has none: the chat says to update it there.
 - **Herdr's sidebar** names each as the board does, with where it stands and its last message.
+
+## A heading is its coordinator
+
+A machine's heading and a repo's heading stand for their coordinator, as a row stands for its task:
+
+- `Alt+P` shows it beside the list, `Alt+T` whole, in the [task panel](task-panel.md)'s form.
+- `Ctrl+E` opens its settings page: its own rows first, under `This coordinator`, then what that heading's page always
+  showed (on this machine's heading your own settings, on a repo's your entry for that repo).
+- `Tab`, with nothing typed, puts it on [autopilot](autopilot.md) with its saved goal and settings; `Ctrl+X` takes it
+  off. While on, an autopilot line goes beside the heading.
+- Grouped by status, or on one machine, these coordinators have no heading: change the grouping to reach them.
+
+**Each has its own settings**, `coordinator.*` and `autopilot.*`, looked up **this coordinator → you → built in**
+([settings](settings.md)). What you set for yourself counts for every coordinator; one set for this coordinator alone
+wins over it. `coordinator.instructions` add up: yours, then the coordinator's own.
+
+```
+herdr-projects set coordinator.effort high --machine-coordinator
+herdr-projects set coordinator.agent codex --project-coordinator herdr-projects
+herdr-projects show --project-coordinator herdr-projects
+```
 
 ## From a shell
 

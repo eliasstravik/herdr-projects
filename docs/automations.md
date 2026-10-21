@@ -2,7 +2,7 @@
 
 **An automation is a saved task plus a trigger.** Each time the trigger fires, the board adds an ordinary task and puts
 an agent on it at once. Nothing else: it chases no goal by itself, and it wakes nobody (nothing is sent to the
-Coordinator).
+Coordinator). A coordinator that works toward a goal by itself is [autopilot](autopilot.md).
 
 The easiest way to make one is to tell the Coordinator in plain words: "every Monday at nine, look for dependencies that
 are out of date", "after every merge, update the changelog". It runs the commands below.

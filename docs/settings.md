@@ -16,9 +16,11 @@ means, is in [the list](#the-list) below.
 ## Two kinds of setting
 
 - **Work settings**: who works, where, how it is checked, how it lands. They can be set for a task, a repo, or you.
-- **Board settings**: the board itself, the Coordinator, the Watcher (everything under `board.`, `coordinator.` and
-  `watcher.`). They are yours only. Setting one on a task or for a repo is refused, and the answer says how to set it for
-  yourself.
+- **Board settings**: the board itself and the Watcher (everything under `board.` and `watcher.`). They are yours
+  only. Setting one on a task or for a repo is refused, and the answer says how to set it for yourself.
+- **A coordinator's settings**: its program, model, effort, access and your words for it (`coordinator.`), and its
+  [autopilot](autopilot.md) (`autopilot.`). They can be set for one coordinator, or for you (every coordinator), and
+  `autopilot.*` also for this time only, while autopilot is on. Setting one on a task or for a repo is refused.
 
 One setting is neither: `repo.key`, a fact about one repo.
 
@@ -29,14 +31,25 @@ One setting is neither: `repo.key`, a fact about one repo.
    One function does this for every setting (`crates/core/src/store/settings/lookup.rs`); no setting has a lookup of its
    own.
 2. **A board setting is yours only** (above).
-3. **A setting is read when its step starts, and a step under way is never changed**: the agent's settings at its next
+3. **A coordinator's setting is looked up as a work setting is, in its own order:**
+   **this time → this coordinator → you → built in.** The same function does it.
+   - **This coordinator** is the `coordinators` part of your `config.json`, keyed as the coordinators are:
+     `{"coordinators": {"main": {…}, "machine": {…}, "projects": {"<repo>": {…}}}}`. `set`, `unset` and `show` take
+     `--main-coordinator`, `--machine-coordinator` or `--project-coordinator <repo>`.
+   - **This time** is the `autopilot.*` values given with `autopilot on`, kept until autopilot goes off. A
+     `coordinator.*` value is never for this time.
+   - `autopilot.goal` is for one coordinator only: never yours, never for this time.
+   - None of them is ever read from a repo's own file, so code written by agents cannot change them.
+   - `coordinator.instructions` add up: yours, then the coordinator's own. A changed `coordinator.*` counts from its next
+     fresh chat.
+4. **A setting is read when its step starts, and a step under way is never changed**: the agent's settings at its next
    start (whether the task is research only among them), the review's at the next review, the merge's right before the
    merge.
-4. **A repo's own fact** (`repo.key`, the short key of its tasks) is set for that repo and nowhere else: **your entry for
+5. **A repo's own fact** (`repo.key`, the short key of its tasks) is set for that repo and nowhere else: **your entry for
    the repo → the repo's own file → built in.** It is refused on a task and for yourself. Every repo and folder has one:
    the board makes it from the repo's name when it first sees the repo, and saves it as your entry for that repo
    (`"repos": { "gtm-skills": { "repo": { "key": "SKL" } } }`). More: [task numbers and repo keys](task-numbers.md).
-5. **A task in no repo** skips the two repo places. `workspace.*`, `check.*` and `merge.*` do not apply to it, and `show`
+6. **A task in no repo** skips the two repo places. `workspace.*`, `check.*` and `merge.*` do not apply to it, and `show`
    says so.
 
 ## The places
@@ -98,7 +111,9 @@ herdr-projects set <name> <value>                you
 herdr-projects set <name> <value> --repo <name>  your entry for that repo
 herdr-projects set <name> <value> --task <id>    one task
 herdr-projects set <name> <value> --automation <name>   the tasks one automation makes (automations.md)
-herdr-projects unset <name>  [--repo … | --task … | --automation …]   back to what it would be
+herdr-projects set <name> <value> --main-coordinator     one coordinator's own (also --machine-coordinator,
+                                                         --project-coordinator <repo>): coordinator.* and autopilot.*
+herdr-projects unset <name>  [--repo … | --task … | --automation … | a coordinator's flag]   back to what it would be
 herdr-projects show                              your settings, the changed ones marked
 herdr-projects show <id>                         every value of one task, and the place it came from
 herdr-projects delegate <id> --reviewer.agent claude --merge.by itself

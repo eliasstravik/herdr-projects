@@ -182,6 +182,24 @@ and `Ctrl+U` as `unset`. `*` marks what you set, and every other row says where 
 a repo's entry `you`). `Esc` goes back to the list. On another machine's heading the board says to change them there
 ([settings](settings.md)).
 
+## A coordinator in the panel
+
+On a coordinator's row (the main Coordinator's on top of the list, a machine's or a repo's heading) the panel shows that
+coordinator, in the same form:
+
+- **Status**: `State` (its chat's, `idle` or `working`; on [autopilot](autopilot.md), autopilot's word), `Last`, its
+  latest message as the chat shows it, and while on, `Goal` and `Today` (`2 of 5 added · 1 of 2 under way`).
+- **Settings**: `Agent` (its program, model and effort), and while on, `Wakes`, `Limits`, `May set`, `May touch` and the
+  rest, in plain words. `*` marks this time's values, with `* this time only` under them.
+- While autopilot is off, nothing of it shows.
+- A `coordinator.*` value changed while its chat runs says `from its next fresh chat`, here and on its settings page.
+- `Alt+T` shows it whole, and while on its last 20 wakes: when, why, and whether it answered.
+
+`Ctrl+E` there opens its settings page, in this page's form and keys: its own rows first, under `This coordinator`,
+then on this machine's heading your own settings, on a repo's heading your entry for that repo. While autopilot is on,
+`Enter` on an autopilot row other than the goal saves it for this time only, and a line under the rows says so. Another
+machine's coordinator's page is shown whole, to read; it is changed on that machine.
+
 ## The reviews
 
 **Every review is kept, and they read as a history.**

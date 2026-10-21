@@ -26,6 +26,20 @@ herdr-projects coordinator stop
 Restart and new are commands, not board keys. You can also just ask the Coordinator to do them. `new --agent …` changes
 only the next one: your default stays as it is.
 
+## Its row and its settings
+
+**The Coordinator has a row of its own, on top of the list**, wherever a Coordinator can run. The list still opens on its
+first task: `↑` reaches it. `Space` there talks to it.
+
+- `Alt+P` shows it beside the list, `Alt+T` whole, in the [task panel](task-panel.md)'s form: how it stands, its last
+  message, its program, model and effort.
+- `Ctrl+E` opens its settings page: its own rows, under `This coordinator`.
+- Its settings (`coordinator.*`) are looked up as a task's are: **this coordinator → you → built in**. One set for it
+  alone goes in the `coordinators` part of your `config.json` (`set … --main-coordinator`). A change counts from its next
+  fresh chat ([settings](settings.md)).
+- `Tab` there puts it on [autopilot](autopilot.md), `Ctrl+X` takes it off. While on, its row has an autopilot line, and
+  it sums up the other coordinators on autopilot: `Coordinator · 2 others on · 1 needs you`.
+
 ## Your message, and where you were
 
 Your words reach it exactly as typed. Which repo you were in and which task you had open are kept beside each message,
@@ -75,6 +89,8 @@ whole conversation, its dialogs, slash commands and menus, **go into it** in Her
 - The agent's own new-chat command (`/clear`, `/new`) is followed: the chat and a restart go with the conversation it
   is in now.
 - Its program, model and effort are settings (`coordinator.agent`, …): [roles and commands](roles-and-commands.md).
+- `coordinator new`, `restart` and `stop` leave [autopilot](autopilot.md) as it is. `stop` on one on autopilot says
+  that its next wake starts it again.
 
 ## Its standing rules are a file
 

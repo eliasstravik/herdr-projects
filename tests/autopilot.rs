@@ -230,3 +230,48 @@ fn every_coordinators_rules_say_what_a_wake_is_and_hold_every_exception_for_one(
         assert!(rules.contains("board autopilot off --all, which covers this machine only"));
     }
 }
+
+#[test]
+fn end_to_end_a_task_it_adds_is_planned_reviewed_twice_and_merges_by_itself_with_no_yes_of_yours() {
+    let w = pilot_world_with(json!({ "review.when": "repos", "merge.by": "itself", "worker.agent": "codex" }));
+    unsafe { std::env::set_var("HERDR_PROJECTS_SANDBOX", "bwrap") };
+    w.patch(|s| s["pids"] = json!(true));
+    ok(&["set", "plan.approve", "reviewer", "--repo", "proj"]);
+    let work = |n: i64| json!({ "files": { "f.txt": format!("{n}\n") }, "commit": format!("v{n}"), "note": format!("Did v{n}.") });
+    let verdict = |findings: serde_json::Value| json!({ "verdict": { "meets": true, "text": "Looked at it.", "findings": findings } });
+    w.script(json!({ "coordinator": [{ "status": "working" }, { "status": "working" }, { "status": "working" }],
+        "worker": [{ "plan": "# Plan\n\n1. Add f.txt with one line.\n", "note": "Planned." }, work(1), work(2)],
+        "reviewer": [verdict(json!([])), verdict(json!([{ "severity": "major", "subject": "The line is wrong", "where": "f.txt", "proof": "read it" }])), verdict(json!([]))] }));
+    let co = proj(&w);
+    ok(&["autopilot", "on", "--project", "proj", "--goal", "Docs", "--autopilot.every", "none"]);
+    tick(&w);
+    assert_eq!(prompts_of(&w, &co).len(), 1);
+    in_pane(&w, &pane_of(&co));
+    assert!(sw::autopilot::turn::autopilot_turn(&co));
+    let said = ok(&["add", "Write f.txt", "--repo", "proj"]);
+    assert!(said.contains(": added, an agent is on it"), "{said}");
+    let id = sw::store::tasks::list(Default::default()).into_iter().find(|t| t.s("title") == "Write f.txt").unwrap().t("id");
+    assert_eq!(task(&id).at("autopilot").s("coordinator"), "project:proj");
+    // what follows is the board's own work, not the coordinator's shell
+    in_pane(&w, "");
+    // settled as `settle` does, with the clock a second on before each job: this world's clock stands still, and a
+    // closing note is known as new by its time, after the turn it closes was armed
+    let jobs = || sw::runner::drain_jobs(&|job, id, extra| { sw::clock::advance(1000); sw::jobs::run_job(job, id, extra); flush(); });
+    let (mut t, mut stages) = (task(&id), vec![]);
+    for _ in 0..40 {
+        if t.s("stage") == "done" { break; }
+        flush(); jobs(); flush();
+        if t.at("link").b("pane") { sw::hook::on_pane(&w.socket, t.at("link").s("pane")); }
+        jobs();
+        t = task(&id);
+        stages.push(t.t("stage"));
+    }
+    assert_eq!(t.s("stage"), "done", "{} {}", t.at("failure"), t.s("msg"));
+    assert_eq!(t.at("plan").s("approvedBy"), "reviewer");
+    assert_eq!((sw::store::reviews::review_round(&t), t.i("reviewRounds")), (2, 1));
+    assert_eq!(read(&w.root.join("f.txt")), "2\n", "merged by itself");
+    assert!(t.b("mergedAt") && !stages.iter().any(|s| s == "approval" || s == "plan"), "no yes of yours was waited for: {stages:?}");
+    assert_eq!(record(&co).i("added"), 1);
+    let today = sw::autopilot::limits::today(&co, &record(&co), &sw::autopilot::limits::board_tasks(), sw::clock::now());
+    assert_eq!(today.say(), "1 of 5 added · 0 of 2 under way", "added today 1, and merged it is under way no more");
+}
