@@ -53,21 +53,22 @@ export function listEl(list, opts) {
 // A heading: a machine's (over its groups) or a group's (over its rows), as the terminal board has them. A tap folds it
 // to its one line, with how many tasks (and automations) it holds, and unfolds it.
 // A coordinator's heading (and the main Coordinator's row on top) on autopilot is drawn as a task's row: autopilot's
-// mark before its name, its columns on the right, what it does now on a line under it. The selected one has an Open
-// button that shows the coordinator whole.
+// mark first, in the marks' column left of the caret, its columns on the right, what it does now on a line under it.
+// The selected one has an Open button that shows the coordinator whole.
 function headEl(g, selected, onFold, onOpen) {
   const count = g.main ? null : g.folded ? g.count : g.machine ? null : g.rows.length + g.more;
   const p = g.pilot;
   // A repo's heading has its key beside its name, dimmed: `gtm-agent · AGT`.
-  const words = [p ? h("span.sw-pilot-mark", { "aria-label": "on autopilot" }, ink(p.mark)) : null, g.key ? h("span", g.name, h("span.sw-repo-key", ` · ${g.key}`)) : g.name,
+  const mark = p ? h("span.sw-pilot-mark", { "aria-label": "on autopilot" }, ink(p.mark)) : null;
+  const words = [g.key ? h("span", g.name, h("span.sw-repo-key", ` · ${g.key}`)) : g.name,
     count === null ? null : h("span.sw-count", String(count)), g.sum ? h("span.sw-count", ` · ${g.sum}`) : null];
   const tag = g.machine || g.main ? "h2.sw-machine-name" : "h3.sw-group-name";
   const cols = p?.cols?.length ? h("span.sw-pilot-cols", p.cols.map((c) => ink(c))) : null;
   const under = p ? h("span.sw-pilot-says", ink(p.under)) : null;
-  if (!g.id) return h(`${tag}.sw-c-${g.color}${p ? ".sw-on-pilot" : ""}`, words, cols, under);
+  if (!g.id) return h(`${tag}.sw-c-${g.color}${p ? ".sw-on-pilot" : ""}`, mark, words, cols, under);
   const open = g.coord && selected ? h("button.btn.sw-open", { type: "button", "aria-label": `Open ${g.name}`, onclick: (e) => { e.stopPropagation(); onOpen(g.id); } }, "Open", icon("right")) : null;
   return h(`${tag}.sw-c-${g.color}${selected ? ".is-selected" : ""}${g.main ? ".sw-main-row" : ""}${p ? ".sw-on-pilot" : ""}`,
-    h("button.sw-fold", { type: "button", "aria-expanded": g.folded ? "false" : "true", title: g.main ? "The Coordinator" : g.folded ? "Unfold" : "Fold", onclick: () => onFold(g.id) }, g.main ? null : h("span.sw-caret", { "aria-hidden": "true" }, g.folded ? "▸" : "▾"), words), cols, open, under);
+    h("button.sw-fold", { type: "button", "aria-expanded": g.folded ? "false" : "true", title: g.main ? "The Coordinator" : g.folded ? "Unfold" : "Fold", onclick: () => onFold(g.id) }, mark, g.main ? null : h("span.sw-caret", { "aria-hidden": "true" }, g.folded ? "▸" : "▾"), words), cols, open, under);
 }
 // Machines whose tasks could not be read: one notice over the list, each machine a line with what to do behind it.
 // Dismissed, it stays away in this browser until another machine stops answering or one answers for another reason.

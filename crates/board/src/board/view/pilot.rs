@@ -1,5 +1,5 @@
-//! A coordinator's row as the list draws it, in a task's grammar while autopilot is on: autopilot's mark left of its
-//! name (`✈`, in the colour of its state, as a task's mark is), the timing in the columns on the right where a task
+//! A coordinator's row as the list draws it, in a task's grammar while autopilot is on: autopilot's mark in the marks'
+//! column, left of the caret (`◎`, in the colour of its state, as a task's mark is), the timing in the columns on the right where a task
 //! keeps its progress and an automation when it fires (`2 of 5 added  ✓ HSW-92  next in 40m`: the first go first where
 //! room is short), and what it does now on the line under its name, as a live task's second line
 //! (`On · woke 12m ago: HSW-92 merged`). The main Coordinator's row, on top, is its name and what it sums up of the
@@ -11,8 +11,9 @@ use crate::board::update::pilot::{others, view};
 use crate::json::*;
 use crate::shown::ink::{Ink, Inked};
 
-/// Autopilot's mark: a plane, where a task's mark is round, a diamond or a sign and an automation's an arrow going round.
-pub const PILOT_MARK: &str = "✈";
+/// Autopilot's mark: a ring around its goal, of the family of a task's marks (round, a diamond or a sign) and an
+/// automation's arrow going round, one column wide as they are.
+pub const PILOT_MARK: &str = "◎";
 /// What a coordinator's row shows of its autopilot while it is on: its mark, its columns (the least needed first) and
 /// its line under the name.
 pub struct Shown { pub mark: Inked, pub cols: Vec<(&'static str, Inked)>, pub under: Inked }
@@ -50,24 +51,21 @@ pub fn main_head(s: &State, id: &str) -> Inked {
     let (on, need) = sum.split_once(" · ").map(|(a, b)| (a.to_string(), format!(" · {b}"))).unwrap_or((sum, String::new()));
     named.add(Inked::of(format!(" · {on}"), Ink::Muted)).add(Inked::of(need, Ink::Red))
 }
-/// A coordinator's heading, drawn: `lead` (its caret), its name and what follows it, then a machine's rule (`rule`) to
-/// the edge. On autopilot its mark goes before the name, its columns at the right edge (as many as fit) and its line
-/// under it, with when it next wakes at its end where that column had no room.
-pub fn placed(lead: Inked, named: Inked, pilot: Option<Shown>, rule: bool, width: usize) -> (Inked, Option<Inked>) {
+/// A coordinator's heading, drawn: its caret (`▾ `, or blanks where it has none), its name and what follows it, then a
+/// machine's rule (`rule`) to the edge. On autopilot its mark goes in the marks' column, as a task's, and the caret one
+/// step in, where a task's tag starts; its columns at the right edge (as many as fit) and its line under it, with when
+/// it next wakes at its end where that column had no room.
+pub fn placed(caret: Inked, named: Inked, pilot: Option<Shown>, rule: bool, width: usize) -> (Inked, Option<Inked>) {
     let drawn_rule = |n: usize| if rule && n >= 4 { Inked::plain(" ").add(Inked::of("─".repeat(n - 2), Ink::Muted)).add(Inked::plain(" ")) } else { Inked::spaces(n) };
-    let Some(p) = pilot else {
-        let mut out = lead.add(named);
-        let rest = width.saturating_sub(out.width() + 2);
-        if rule && rest > 0 { out = out.add(Inked::of(format!(" {}", "─".repeat(rest)), Ink::Muted)); }
-        return (out.cut(width), None);
-    };
+    let ruled = |mut out: Inked| { let rest = width.saturating_sub(out.width() + 2); if rule && rest > 0 { out = out.add(Inked::of(format!(" {}", "─".repeat(rest)), Ink::Muted)); } out.cut(width) };
+    let Some(p) = pilot else { return (ruled(Inked::plain(" ").add(caret).add(named)), None) };
     let next_all = p.next_words();
-    let left = lead.add(p.mark).add(Inked::plain(" ")).add(named);
+    let left = Inked::plain(" ").add(p.mark).add(Inked::plain(" ")).add(caret).add(named);
     let join = |c: &[(&str, Inked)]| { let mut out = Inked::new(); for (n, (_, x)) in c.iter().enumerate() { if n > 0 { out = out.add(Inked::spaces(2)); } out = out.add(x.clone()); } out };
     let mut cols = p.cols;
     while !cols.is_empty() && left.width() + 2 + join(&cols).width() > width { cols.remove(0); }
     let right = join(&cols);
-    let first = if right.is_empty() { placed(left, Inked::new(), None, rule, width).0 } else { let gap = width.saturating_sub(left.width() + right.width()); left.add(drawn_rule(gap)).add(right).cut(width) };
+    let first = if right.is_empty() { ruled(left) } else { let gap = width.saturating_sub(left.width() + right.width()); left.add(drawn_rule(gap)).add(right).cut(width) };
     let next = if cols.iter().any(|(k, _)| *k == "next") { Inked::new() } else { next_all };
     (first, Some(Inked::spaces(5).add(p.under).add(next).cut(width)))
 }

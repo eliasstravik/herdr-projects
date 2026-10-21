@@ -42,13 +42,12 @@ pub fn others(s: &State, main: &Target) -> String {
     for m in super::remotes::in_view(s) { if s.scope == "*" || m.machine.label == main.host { mine(&m.pilots, &m.machine.label, &mut views); } }
     crate::autopilot::shown::others_words(&views)
 }
-/// `Tab` on a coordinator's row: autopilot on, with its saved goal and settings. Already on: it says so; at `needs
-/// you`: it resumes.
+/// `Tab` on a coordinator's row: autopilot on, with its saved goal and settings, and nothing said: its heading shows it.
+/// Already on: it says so; at `needs you`: it resumes.
 pub fn turn_on(s: &mut State, t: &Target, fx: &mut Vec<Effect>) {
     let v = view(s, t);
     if v.is_null() && !t.host.is_empty() { return s.flash(format!("{} runs an older version that has no autopilot: update herdr-projects there first.", t.host), Ink::Yellow); }
     if v.b("on") && !["needs you", "could not start"].contains(&v.s("state")) { return s.flash(format!("The {} is on autopilot already: {}.", t.name, v.s("line")), Ink::Muted); }
-    s.flash(format!("Turning autopilot on for the {}…", t.name), Ink::Muted);
     fx.push(job(s, t, true));
 }
 /// `Ctrl+X` on a coordinator's row: autopilot off. Off already: it says so.
@@ -62,7 +61,7 @@ pub fn turn_off(s: &mut State, t: &Target, fx: &mut Vec<Effect>) {
 fn job(s: &State, t: &Target, on: bool) -> Effect {
     if t.host.is_empty() { return Effect::Run(Job::Pilot { to: t.to.clone(), on }); }
     let m = s.remotes.get(&t.host).map(|m| m.machine.clone()).unwrap_or_default();
-    Effect::Run(Job::Far { machine: m, host: t.host.clone(), action: if on { "autopilot-on" } else { "autopilot-off" }.into(), req: json!({ "id": "", "to": t.to }), quiet: false })
+    Effect::Run(Job::Far { machine: m, host: t.host.clone(), action: if on { "autopilot-on" } else { "autopilot-off" }.into(), req: json!({ "id": "", "to": t.to }), quiet: on })
 }
 /// A ctrl or alt key's line in the ? menu on a coordinator's row, where it does something there of its own.
 pub fn menu_label(s: &State, k: crate::board::keys::K) -> Option<String> {

@@ -29,18 +29,18 @@ fn the_main_coordinators_row_is_on_top_and_shows_autopilot_only_while_it_is_on()
     // Tab with no goal saved: refused, and said
     b.press(&["tab"]);
     assert!(b.text().contains("Tell a coordinator its goal first."), "{}", b.text());
-    ok(&["set", "autopilot.goal", "Keep the docs current", "--main-coordinator"]);
+    ok(&["set", "autopilot.goal", "Keep the docs current", "--main-coordinator"]); b.s.msg.clear();
     b.press(&["tab"]);
-    assert!(sw::autopilot::record::is_on(&sw::coordinator::co::Co::top(&w.socket)));
+    assert!(sw::autopilot::record::is_on(&sw::coordinator::co::Co::top(&w.socket)) && b.s.msg.is_empty(), "on says nothing: its row shows it ({})", b.s.msg);
     b.load();
     let lines = b.screen(140);
-    // A task's row: autopilot's mark before its name, the timing in the columns at the right edge, what it does under it
-    let at = lines.iter().position(|l| l.contains("✈ Coordinator")).unwrap_or_else(|| panic!("{lines:#?}"));
+    // A task's row: autopilot's mark in the marks' column, the timing in the columns at the right edge, what it does under it
+    let at = lines.iter().position(|l| l.contains("◎   Coordinator")).unwrap_or_else(|| panic!("{lines:#?}"));
     assert!(lines[at].ends_with("0 of 5 added  next in 10m") && lines[at].chars().count() == 140 && lines[at + 1].trim_start_matches(['▌', ' ']).starts_with("On · wakes every 6h + events"), "{lines:#?}");
     // Narrow: the columns give way, the least needed first; when it next wakes goes to the end of the line under it
     let (narrow, narrower) = (b.screen(40), b.screen(26));
-    assert!(line_with(&narrow, "✈ Coordinator").map(|l| l.ends_with(" next in 10m") && !l.contains("added")).unwrap_or(false), "{narrow:#?}");
-    let at = narrower.iter().position(|l| l.contains("✈ Coordinator")).unwrap();
+    assert!(line_with(&narrow, "◎   Coordinator").map(|l| l.ends_with(" next in 10m") && !l.contains("added")).unwrap_or(false), "{narrow:#?}");
+    let at = narrower.iter().position(|l| l.contains("◎   Coordinator")).unwrap();
     assert!(!narrower[at].contains("next") && narrower[at + 1].contains("On · wakes every") && narrower[at + 1].chars().count() <= 26, "{narrower:#?}");
     // Tab again says it is on; ctrl+x turns it off; again says it is off
     b.press(&["tab"]); assert!(b.text().contains("is on autopilot already"), "{}", b.text());
@@ -63,8 +63,8 @@ fn the_main_row_sums_up_the_others_and_a_repos_heading_has_its_own_line() {
     assert!(line_with(&lines, "Coordinator").unwrap().contains("Coordinator · 1 other on"), "{lines:#?}");
     b.press(&["alt+s"]); b.load();
     let lines = b.screen(140);
-    let head = line_with(&lines, "✈ proj").unwrap_or_else(|| panic!("{lines:#?}"));
-    assert!(head.contains("▾ ✈ proj · PRJ") && head.trim_end().ends_with("0 of 5 added  next in 10m"), "{head}");
+    let head = line_with(&lines, "◎ ▾ proj").unwrap_or_else(|| panic!("{lines:#?}"));
+    assert!(head.contains("◎ ▾ proj · PRJ") && head.trim_end().ends_with("0 of 5 added  next in 10m"), "{head}");
     // at `needs you`, the main row says so
     sw::autopilot::record::change(&proj(&w), |ap, _| { ap.put("needsYou", true); true }).unwrap();
     b.load();
@@ -72,7 +72,7 @@ fn the_main_row_sums_up_the_others_and_a_repos_heading_has_its_own_line() {
     // Its mark and its state word in red, as a task's that needs you; nothing on the list in a colour of its own
     let inked = b.inked(140);
     let has = |what: &str, bold: bool| inked.iter().any(|l| l.0.iter().any(|p| p.t == what && p.c == Ink::Red && p.bold == bold));
-    assert!(has("✈", true) && has("Needs you", false) && b.text().contains("Needs you · its last wakes went unanswered"), "{inked:?}");
+    assert!(has("◎", true) && has("Needs you", false) && b.text().contains("Needs you · its last wakes went unanswered"), "{inked:?}");
     assert!(inked.iter().all(|l| l.0.iter().all(|p| p.c != Ink::Pilot)), "the theme's own inks only");
 }
 
@@ -81,7 +81,7 @@ fn on_an_empty_board_the_main_coordinators_row_and_its_line_show() {
     let w = pilot_world();
     ok(&["autopilot", "on", "--goal", "Docs", "--autopilot.hours", "00:00-00:01"]);
     let mut b = board(&w); assert!(b.s.sel.is_empty(), "nothing selected");
-    let lines = b.screen(140); let at = lines.iter().position(|l| l.contains("✈ Coordinator")).unwrap_or_else(|| panic!("{lines:#?}"));
+    let lines = b.screen(140); let at = lines.iter().position(|l| l.contains("◎   Coordinator")).unwrap_or_else(|| panic!("{lines:#?}"));
     assert!(lines[at].ends_with("waits for its hours") && lines[at + 1].trim() == "Asleep · its hours are 00:00-00:01", "{lines:#?}");
 }
 
@@ -114,7 +114,7 @@ fn a_coordinators_panel_beside_the_list_and_whole_and_nothing_of_autopilot_while
     assert!(t.contains("proj coordinator") && t.contains("Status") && t.contains("Settings") && !t.contains("autopilot"), "off: nothing of autopilot: {t}");
     ok(&["autopilot", "on", "--project", "proj", "--goal", "Docs stay current", "--autopilot.tasksPerDay", "3"]);
     tick(&w); tick(&w); b.load(); let t = b.screen(160).join("\n");
-    assert!(t.contains("· ✈ autopilot on") && t.contains("Goal") && t.contains("Docs stay current") && t.contains("0 of 3 added · 0 of 2 under way"), "{t}");
+    assert!(t.contains("· ◎ autopilot on") && t.contains("Goal") && t.contains("Docs stay current") && t.contains("0 of 3 added · 0 of 2 under way"), "{t}");
     assert!(t.contains("3 tasks a day") && t.contains("* this time only"), "this time's value is marked: {t}");
     b.press(&["alt+t"]); let t = b.screen(160).join("\n");
     assert!(t.contains("Wakes") && t.contains("autopilot was turned on") && t.contains("answered"), "whole, with its last wakes: {t}");
@@ -153,7 +153,7 @@ fn the_web_board_has_the_same_row_line_and_buttons() {
     ok(&["autopilot", "on", "--goal", "Docs"]);
     let snap = web(&w, "board", json!({}));
     let main = snap.at("list").arr("groups").iter().find(|g| g.b("main")).cloned().unwrap_or_else(|| panic!("{snap}"));
-    assert_eq!(main.s("name"), "Coordinator"); let p = main.at("pilot"); assert!(p.arr("mark").iter().map(|x| x.t("t")).collect::<String>() == "✈" && p.arr("under").iter().map(|x| x.t("t")).collect::<String>().starts_with("On · wakes every 6h"), "{main}");
+    assert_eq!(main.s("name"), "Coordinator"); let p = main.at("pilot"); assert!(p.arr("mark").iter().map(|x| x.t("t")).collect::<String>() == "◎" && p.arr("under").iter().map(|x| x.t("t")).collect::<String>().starts_with("On · wakes every 6h"), "{main}");
     assert_eq!(p.arr("cols").len(), 2, "today's adds and when it next wakes: {main}");
     let snap = web(&w, "pick", json!({ "id": main_id(""), "open": true }));
     assert!(snap.at("panel").b("coordinator"), "{}", snap.at("panel"));
@@ -186,7 +186,7 @@ fn another_machines_coordinator_shows_its_line_and_takes_its_keys_there_and_an_o
     sw::board::update::update(&mut b.s, sw::board::update::Event::Machines(sw::remote::machines()));
     for m in sw::remote::machines() { let a = sw::remote::ask_list(&m, 20000); sw::board::update::update(&mut b.s, sw::board::update::Event::Remote { label: m.label.clone(), answer: a }); }
     b.press(&["alt+m"]); assert_eq!(b.s.scope, "*");
-    let lines = b.screen(160); let at = lines.iter().position(|l| l.contains("▸ ✈ vm-b")).unwrap_or_else(|| panic!("{lines:#?}"));
+    let lines = b.screen(160); let at = lines.iter().position(|l| l.contains("◎ ▸ vm-b")).unwrap_or_else(|| panic!("{lines:#?}"));
     assert!(lines[at].contains("──") && lines[at].ends_with("1 of 5 added  last #3"), "its rule, then its columns: {lines:#?}");
     assert!(lines[at + 1].contains("Working · woke for its timer"), "{lines:#?}");
     assert!(line_with(&lines, "Coordinator").unwrap().contains("1 other on"), "the main row sums up every machine's: {lines:#?}");

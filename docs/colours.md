@@ -136,7 +136,7 @@ and dark), since the web UI has no purple among its status colours.
 ## A coordinator on autopilot has the theme's colours; its wakes are orange
 
 A coordinator on [autopilot](autopilot.md) has no colour of its own on the list: its row reads as a task's, in the
-theme's own colours. Its mark `✈` is red at `needs you` and `could not start` (those words on its line too), yellow while
+theme's own colours. Its mark `◎` is red at `needs you` and `could not start` (those words on its line too), yellow while
 it works, quiet while asleep and plain text else; its columns are in the fainter grey, its line in the brighter one, as
 a task's. The main Coordinator's sum of the others (`2 others on`) is grey, its `1 needs you` red.
 

@@ -185,7 +185,8 @@ fn run_one(job: Job) -> Done {
             Job::AutoFire { id } => { let a = crate::automations::list::find(&id)?; let f = crate::automations::fire::fire(&id, crate::automations::told::Cause::Run, crate::clock::now())?; let (w, ink) = crate::automations::show::fired_words(&a, &f); Done::say(w, ink) }
             Job::Pilot { to, on } => {
                 let co = crate::coordinator::co::Co::of(&crate::herdr::cli::current_socket(), &to);
-                if on { green(crate::autopilot::switch::on(&co, None, &[])?) } else { Done::say(crate::autopilot::switch::off(&co)?, Ink::Yellow) }
+                // On says nothing: its heading shows it (view/pilot.rs).
+                if on { crate::autopilot::switch::on(&co, None, &[])?; Done::default() } else { Done::say(crate::autopilot::switch::off(&co)?, Ink::Yellow) }
             }
             Job::AutoRemove { id, name } => { crate::automations::list::remove(&id)?; Done::say(format!("Removed the automation \"{name}\"."), Ink::Muted).and(Then::AutoGone) }
             Job::Set { id, name, value, whose } => super::job_far::set(&id, &name, value, &whose)?,

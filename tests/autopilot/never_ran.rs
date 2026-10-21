@@ -47,7 +47,7 @@ fn tab_on_another_machines_repo_whose_coordinator_never_ran_sends_autopilot_on_a
     assert!(b.text().contains("is not on autopilot"), "off, not an older version: {}", b.text());
     f.answers("vm-b", "do", &json!({ "ok": true, "msg": "Autopilot on for the web coordinator." }));
     b.press(&["tab"]);
-    assert!(!b.text().contains("older version"), "{}", b.text());
+    assert!(!b.text().contains("older version") && b.s.msg.is_empty(), "on says nothing: {}", b.text());
     let (who, what, req) = f.asked().pop().unwrap();
     assert_eq!((who.as_str(), what.as_str(), req.s("action"), req.s("to")), ("vm-b", "do", "autopilot-on", "project:web"));
     // there, the door turns it on and the keeper starts it, as a first message would

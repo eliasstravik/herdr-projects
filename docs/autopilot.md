@@ -45,7 +45,8 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
   that is given `ask` shows `needs you`.
 - **`on` while it is on** changes what it names (a new goal is saved, a value given replaces this time's of that name,
   the rest stay) and wakes it. From `needs you` it starts again with a clean count.
-- **Turning on wakes it**, as soon as any turn of yours is over.
+- **Turning on wakes it**, as soon as any turn of yours is over. On the board it says nothing: the coordinator's row
+  shows it (below). The command says what it turned on, with its goal.
 - **Off** drops this time's values and every reason it had to wake. A turn under way is not cut off (its chat is yours
   too), but from then on every write of that turn is refused: `autopilot was turned off`.
 - **`off --all` is this machine only.** Another machine's coordinators are turned off there, or one by one with
@@ -62,20 +63,23 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
 - **A heading stands for its coordinator**: a machine's heading with every machine shown (`Alt+M`), a repo's heading
   when grouped by repo (`Alt+S`). Grouped by status, or on one machine, those coordinators have no row: change the
   grouping to reach them, as to talk to them.
-- **While it is on, its row reads as a task's row**: autopilot's mark `✈` before its name, where a task has its mark
-  and an automation its arrow; the timing in the columns on the right, where a task keeps its progress and its time; and
-  what it does now on the line under its name, as a live task's second line.
+- **While it is on, its row reads as a task's row**: autopilot's mark `◎` all the way left, in the column where a task
+  has its mark and an automation its arrow, with the fold caret one step in, where a task's tag starts; the timing in
+  the columns on the right, where a task keeps its progress and its time; and what it does now on the line under its
+  name, as a live task's second line.
 
   ```
-     ✈ Coordinator · 2 others on · 1 needs you                    0 of 5 added  next in 1h
+   ◎   Coordinator · 2 others on · 1 needs you                    0 of 5 added  next in 1h
        On · woke 12m ago: HSW-92 merged
 
-   ▾ ✈ herdr-projects · HSW                               2 of 5 added  ✓ HSW-92  next in 40m
+   ◎ ▾ herdr-projects · HSW                               2 of 5 added  ✓ HSW-92  next in 40m
        Working · woke for HSW-92 merged
+   ✓ HSW-92  Sync never loses data
   ```
 
-  - **The mark** takes the colour of its state, as a task's does: red at `needs you` and `could not start` (bold, as a
-    task that waits for you), yellow while `working`, quiet while `asleep`, plain text else. No colour of its own.
+  - **The mark** is one column wide, of the family of a task's marks (`◐ ◇ ○ ✓`), never an emoji. It takes the colour
+    of its state, as a task's does: red at `needs you` and `could not start` (bold, as a task that waits for you),
+    yellow while `working`, quiet while `asleep`, plain text else. No colour of its own.
   - **The columns**: today's adds against `autopilot.tasksPerDay` (`2 of 5 added`), the last task it added with that
     task's mark and tag (as an automation shows the task it made), and when it next wakes (`next in 40m`, `waits for its
     hours`). They end at the list's right edge, where a task's time does. Where the list is narrow they give way, the
