@@ -70,7 +70,7 @@ fn settings_the_built_in_values_your_own_one_tasks_own() {
     assert_eq!(t.at("settings"), &json!({}));
     assert_eq!(set_value("worker.agent", &json!("codex"), &Scope::task(&task(t.s("id")))).unwrap().value, json!("codex"));
     assert_eq!(unset_value("worker.agent", &Scope::task(&task(t.s("id")))).unwrap().value, json!("claude"));
-    for s in SETTINGS.iter() { assert!(!s.name.is_empty() && !s.doc.is_empty() && !s.builtin.is_null() && [Kind::Work, Kind::Board, Kind::Repo].contains(&s.kind), "{}", s.name); }
+    for s in SETTINGS.iter() { assert!(!s.name.is_empty() && !s.doc.is_empty() && !s.builtin.is_null() && [Kind::Work, Kind::Board, Kind::Repo, Kind::Coord].contains(&s.kind), "{}", s.name); }
 }
 
 #[test]

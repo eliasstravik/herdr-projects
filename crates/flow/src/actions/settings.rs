@@ -13,7 +13,7 @@ use crate::store::tasks::{find, get};
 pub struct Where { pub task: Option<String>, pub repo: Option<String>, pub automation: Option<String>, pub coord: Option<String> }
 /// Returns what the command line prints: the value for --json, and the text.
 pub fn settings_command(cmd: &str, pos: &[String], w: &Where, value: Option<Value>) -> Res<(Value, String)> {
-    if [&w.task, &w.repo, &w.automation, &w.coord].iter().filter(|x| x.is_some()).count() > 1 { crate::fail!("{cmd} takes one of --task, --repo, --automation and a coordinator's flag, not several."); }
+    if [&w.task, &w.repo, &w.automation, &w.coord].iter().filter(|x| x.is_some()).count() > 1 { crate::fail!("{cmd} takes one of --task, --repo and --automation{}, not several.", if w.coord.is_some() { " (or a coordinator's flag)" } else { "" }); }
     if let Some(a) = &w.automation { return crate::automations::command::settings_for(cmd, pos, a, value); }
     let co = match &w.coord { Some(k) => Some(coordinator_of(k)?), None => None };
     let id = if cmd == "show" { w.task.clone().or_else(|| pos.get(1).cloned()) } else { w.task.clone() };
