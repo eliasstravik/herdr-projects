@@ -29,7 +29,7 @@ fn merged(w: &World, n: i64, before: impl FnOnce(&Obj)) -> Obj {
     sw::actions::finish_line::approve(&id, None, false).unwrap();
     let t = settle(&id);
     assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
-    assert!(kept(&t).contains("in use again"), "{}", kept(&t)); assert!(open(w, &t)); assert!(t.b("tidy"));
+    assert!(kept(&t).contains("its space is in use"), "{}", kept(&t)); assert!(open(w, &t)); assert!(t.b("tidy"));
     sw::runner::JOBS.with(|j| j.borrow_mut().clear());
     t
 }
@@ -165,7 +165,7 @@ fn a_helper_the_agent_keeps_in_its_own_process_group_does_not_keep_a_merged_task
     // a command on the terminal in the agent's own group is at work: kept until it ends
     let t = merged_with(&w, "child");
     let (id, p) = (t.t("id"), t.at("link").t("pane"));
-    assert!(kept(&task(&id)).contains("in use again"), "{}", kept(&task(&id))); assert!(open_and_kept(&w, &t));
+    assert!(kept(&task(&id)).contains("its space is in use"), "{}", kept(&task(&id))); assert!(open_and_kept(&w, &t));
     pane(&w, &p, |p| p["child"] = json!(false));
     assert_eq!(pass(&w, &id), 1);
     assert!(gone(&w, &t));
@@ -204,6 +204,7 @@ fn real_programs_a_helper_is_wired_to_the_agent_and_a_command_left_running_is_no
     // a command with its input and output put away, or into a file: no helper, at work
     let mut null = sleep(Stdio::null(), Stdio::null());
     assert_eq!(wired(&null, &[me, null.id() as i64]), Some(false));
+    assert_eq!(sw::herdr::procs::real_wiring(null.id() as i64, &[me, null.id() as i64]), sw::herdr::procs::Wiring::Elsewhere, "and the words say why");
     let file = std::fs::File::create(std::env::temp_dir().join(format!("hp-wired-{me}.log"))).unwrap();
     let mut logged = sleep(Stdio::piped(), Stdio::from(file));
     assert_eq!(wired(&logged, &[me, logged.id() as i64]), Some(false));
