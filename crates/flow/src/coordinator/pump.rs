@@ -106,7 +106,7 @@ fn ensure(api: &Herdr, co: &Co) -> Res<(Obj, bool)> {
     while taken.contains(&name) { name = format!("{}-{n}", co.agent_name()); n += 1; }
     let began = now();
     change(co, |c| { c.put("starting", began); true })?;
-    let args = start::start_args(&k, &start::StartOpts { model: run.t("model"), effort: run.t("effort"), access: if run.b("access") { run.t("access") } else { "full".into() }, fast: run.b("fast").then_some(true), resume: resume.clone().unwrap_or_default(), session: session.clone().unwrap_or_default(), extra: launch, ..Default::default() })?;
+    let args = start::start_args_profile(&k, &start::StartOpts { model: run.t("model"), effort: run.t("effort"), access: if run.b("access") { run.t("access") } else { "full".into() }, fast: run.b("fast").then_some(true), resume: resume.clone().unwrap_or_default(), session: session.clone().unwrap_or_default(), extra: launch, ..Default::default() }, run.s("profile"))?;
     let mut blocked = false;
     match api.agent_start(&name, &k, pane.s("pane_id"), &args, 60000) {
         Ok(_) => { settle(api, pane.s("pane_id"), &std::iter::once(crate::agents::kinds::program(&k).to_string()).chain(args).collect::<Vec<_>>().join(" ")); }

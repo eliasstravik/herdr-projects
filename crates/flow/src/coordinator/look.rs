@@ -120,5 +120,5 @@ pub fn summary(co: impl Into<Co>) -> Value {
     let co = co.into();
     let v = look(&co);
     json!({ "name": co.name(), "state": v.state, "agent": v.run.as_ref().map(|r| r.t("kind")).unwrap_or_default(), "model": v.run.as_ref().map(|r| r.t("model")).unwrap_or_default(), "effort": v.run.as_ref().map(|r| r.t("effort")).unwrap_or_default(),
-        "oneOff": v.one_off, "default": describe(v.def.as_ref()), "pane": v.pane, "queued": v.queue, "error": v.error, "said": v.said })
+        "profile": v.run.as_ref().map(|r| r.t("profile")).unwrap_or_default(), "oneOff": v.one_off, "default": describe(v.def.as_ref()), "pane": v.pane, "queued": v.queue, "error": v.error, "said": v.said })
 }

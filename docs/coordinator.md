@@ -137,3 +137,22 @@ leaves.
 - On a Herdr that will not move a pane, your next message closes its pane in the old space and starts it again in the
   tab, in the same conversation. `stop`, `restart` and `new` do the same.
 - Only its own pane is ever closed. If you put panes or tabs of your own in that space, it stays open with those.
+
+A native Hermes profile can be selected for one coordinator:
+`herdr-projects coordinator --project REPO new --agent hermes --profile builder`.
+The literal profile name is saved in that coordinator's choice, shown in status, and passed as
+`hermes --profile builder chat` on startup and on same-conversation restarts. Other project,
+machine and top-level coordinators keep their own choices. A plain `new` uses the existing default.
+Without `--profile`, startup behavior is unchanged; existing full-access flags still apply.
+Hermes owns the profile's model and configuration unless a model is explicitly selected.
+
+Profile names must follow Hermes' native lowercase id rules: 1–64 letters, digits, `_` or `-`,
+starting with a letter or digit. Reserved names `hermes`, `test`, `tmp`, `root`, and `sudo` are
+refused; `default` is allowed. Names are preserved literally, never normalized. Profiles are only
+accepted for Hermes; the profile must already be configured in Hermes by its owner.
+
+Selecting a profile starts a new conversation. Switching from Codex to Hermes never resumes a
+Codex conversation id in Hermes. The old program's saved chats remain on disk, while the board's
+current conversation display starts fresh. Do this owner operation only when the coordinator is
+idle or blocked and has no queued or pending messages; the command refuses otherwise. Normal
+`new` semantics are unchanged. Installation, profile configuration and rollout remain owner operations.

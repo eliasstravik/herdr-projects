@@ -55,7 +55,7 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
                                                 the board's tab: what it adds from this message gets an agent at once
   herdr-projects coordinator where             where the human was when they last wrote to it from the board (for the Coordinator itself)
   herdr-projects coordinator restart           start its program again, in the same conversation
-  herdr-projects coordinator new [--agent KIND[/MODEL]] [--effort E]
+  herdr-projects coordinator new [--agent KIND[/MODEL]] [--effort E] [--profile NAME]
                                                 a fresh one; with options, that choice is for this one only
   herdr-projects coordinator stop              close it; the next message starts it again where it left off (words still waiting go in then)
   herdr-projects coordinator --machine …       the same for this machine's machine coordinator

@@ -156,7 +156,19 @@ fn coordinator(a: &Args, here: &std::path::Path) -> Res<(Value, String)> {
         "where" => return Ok((json!({ "where": state::get(&socket).map(|c| c.at("where").clone()).unwrap_or(json!([])) }), r::where_text(&socket))),
         "tell" => { if rest.is_empty() { crate::fail!("coordinator needs the text. Try: herdr-projects help"); } r::send(here, &rest, a.flags.b("delegate"), "", &socket)?; }
         "restart" => { r::restart(&socket)?; }
-        "new" | "fresh" => { r::fresh(who::pick_of(&flag("agent"), &flag("effort"))?, &socket)?; }
+        "new" | "fresh" => {
+            let pick = if a.flags.contains_key("profile") {
+                let profile = a.flags.get("profile").and_then(Value::as_str).unwrap_or("");
+                let pick = who::pick_profile(&flag("agent"), &flag("effort"), profile)?;
+                let v = look::look(&socket);
+                let c = state::get(&socket).unwrap_or_default();
+                if !["none", "idle", "exited", "blocked"].contains(&v.state.as_str()) || v.queue > 0 || c.b("typed") || c.b("want") || state::pumping(&c) {
+                    crate::fail!("Wait for the coordinator to be idle or blocked with no queued or pending messages before selecting a profile.");
+                }
+                pick
+            } else { who::pick_of(&flag("agent"), &flag("effort"))? };
+            r::fresh(pick, &socket)?;
+        }
         "stop" => { r::stop(&socket)?; }
         "status" => {}
         _ => crate::fail!("coordinator takes: tell <text>, where, restart, new, stop. Try: herdr-projects help"),
@@ -168,7 +180,7 @@ fn coordinator(a: &Args, here: &std::path::Path) -> Res<(Value, String)> {
         "new" | "fresh" => format!("a new {name} is starting"),
         "stop" => format!("the {name} is stopped; the next message starts it again"),
         _ => format!("{name}: {} · {}{} · default: {}{}{}", s.s("state"),
-            [s.t("agent"), if s.b("model") { s.t("model") } else { "default model".into() }, if s.b("effort") { s.t("effort") } else { "default effort".into() }].join(" · "),
+            [if s.b("profile") { format!("{} · profile {}", s.s("agent"), s.s("profile")) } else { s.t("agent") }, if s.b("model") { s.t("model") } else { "default model".into() }, if s.b("effort") { s.t("effort") } else { "default effort".into() }].join(" · "),
             if s.b("oneOff") { " (for this one only)" } else { "" }, s.s("default"), if s.b("error") { format!("\n{}", s.s("error")) } else { String::new() }, if s.b("said") { format!("\n\n{}", s.s("said")) } else { String::new() }),
     };
     Ok((s, text))

@@ -35,11 +35,18 @@ pub fn pick_of(agent: &str, effort: &str) -> Res<Option<Obj>> {
     extra(&mut c, base.b("fast"), base.s("access"));
     Ok(Some(c))
 }
+/// A native Hermes profile belongs to this choice alone; other programs' model and effort stay behind.
+pub fn pick_profile(agent: &str, effort: &str, profile: &str) -> Res<Option<Obj>> {
+    let mut c = pick_of(agent, effort)?.or_else(choice).unwrap_or_default();
+    crate::agents::start::validate_profile(c.s("kind"), profile)?;
+    c.put("profile", profile);
+    Ok(Some(c))
+}
 pub fn describe(k: Option<&Obj>) -> String {
-    match k { Some(k) => format!("{} · {} · {}", k.s("kind"), if k.b("model") { k.s("model") } else { "default model" }, if k.b("effort") { k.s("effort") } else { "default effort" }), None => "off".into() }
+    match k { Some(k) => format!("{} · {} · {}", if k.b("profile") { format!("{} · profile {}", k.s("kind"), k.s("profile")) } else { k.t("kind") }, if k.b("model") { k.s("model") } else { "default model" }, if k.b("effort") { k.s("effort") } else { "default effort" }), None => "off".into() }
 }
 pub fn same_choice(a: &Obj, b: &Obj) -> bool {
-    a.s("kind") == b.s("kind") && a.s("model") == b.s("model") && a.s("effort") == b.s("effort") && a.b("fast") == b.b("fast") && (if a.b("access") { a.s("access") } else { "full" }) == (if b.b("access") { b.s("access") } else { "full" })
+    a.s("profile") == b.s("profile") && a.s("kind") == b.s("kind") && a.s("model") == b.s("model") && a.s("effort") == b.s("effort") && a.b("fast") == b.b("fast") && (if a.b("access") { a.s("access") } else { "full" }) == (if b.b("access") { b.s("access") } else { "full" })
 }
 /// Can the box talk to a Coordinator here? It needs a running herdr to live in, and its program installed.
 pub fn ready(socket: &str) -> bool {

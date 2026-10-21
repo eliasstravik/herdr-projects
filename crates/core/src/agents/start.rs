@@ -28,7 +28,13 @@ pub struct StartOpts { pub model: String, pub effort: String, pub fast: Option<b
 /// conversation; `session` names a new one; `extra` are the hook and standing-rule arguments; `plan` replaces the
 /// access flags with the program's own plan mode.
 pub fn start_args(k: &str, o: &StartOpts) -> Res<Vec<String>> {
+    start_args_profile(k, o, "")
+}
+/// Start with a literal native Hermes profile, before the chat subcommand.
+pub fn start_args_profile(k: &str, o: &StartOpts, profile: &str) -> Res<Vec<String>> {
+    if !profile.is_empty() { validate_profile(k, profile)?; }
     let mut out: Vec<String> = kind(k).map(|a| super::kinds::fill(a.lead, "")).unwrap_or_default(); // `hermes chat`
+    if !profile.is_empty() { out.splice(0..0, ["--profile".into(), profile.into()]); }
     if !o.resume.is_empty() { out.extend(resume_args(k, &o.resume)); } // first: Codex's `resume` is a subcommand
     if o.resume.is_empty() { out.extend(session_args(k, &o.session)); out.extend(fresh_args(k)); }
     let access = access_args(k, if o.access.is_empty() { "full" } else { &o.access });
@@ -64,3 +70,13 @@ pub fn role_of(role: &str, get: &dyn Fn(&str) -> Value) -> Role {
 }
 /// Your own words for a role, as they are added after the board's own fixed rules.
 pub fn own_words(t: &str) -> String { if t.is_empty() { String::new() } else { format!("The human's own instructions for you follow. The board's rules above stay as they are; where two of these disagree, the later one wins.\n\n{t}") } }
+
+/// Hermes' native profile id contract (hermes_cli.profiles.validate_profile_name): keep the literal id.
+pub fn validate_profile(k: &str, name: &str) -> Res<()> {
+    let valid = !name.is_empty() && name.len() <= 64
+        && name.bytes().next().is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        && name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_')
+        && !["hermes", "test", "tmp", "root", "sudo"].contains(&name);
+    if k != "hermes" || !valid { crate::fail!("--profile needs Hermes and a valid native profile name: lowercase letters, digits, '-' or '_', starting with a letter or digit, at most 64 characters; reserved names are refused."); }
+    Ok(())
+}

@@ -62,7 +62,7 @@ fn takes(cmd: &str, sub: &str) -> Option<Takes> {
         "set" | "unset" | "show" => f(WHERE),
         "models" => f(&[]),
         "automations" | "automation" => match sub { "add" | "new" => s(AUTO_ADD), "change" | "edit" => f(AUTO_CHANGE), _ => f(&[]) },
-        "coordinator" => match sub { "tell" => f(&["delegate", "machine", "project"]), "new" | "fresh" => f(&["agent", "effort", "machine", "project"]), _ => f(&["machine", "project"]) },
+        "coordinator" => match sub { "tell" => f(&["delegate", "machine", "project"]), "new" | "fresh" => f(&["agent", "effort", "profile", "machine", "project"]), _ => f(&["machine", "project"]) },
         "sweep" => f(&["dry"]),
         "machines" | "web-ui" | "remove-extras" | "reopen" | "version" | "install" | "update" | "doctor" => f(&[]),
         "voice" => f(&["from"]),

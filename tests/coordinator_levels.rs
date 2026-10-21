@@ -172,3 +172,83 @@ fn a_project_coordinators_agent_name_is_one_herdr_takes_for_any_repo_name() {
         assert_eq!(n, want); assert!(ok.is_match(&n), "{n}");
     }
 }
+
+#[test]
+fn native_hermes_profile_is_literal_persisted_and_resumed_per_project() {
+    let w = coord_world();
+    let p = Co::project(&w.socket, "proj");
+    cli(&w, &["coordinator", "new", "--project", "proj", "--agent", "hermes", "--profile", "builder"]); drain();
+    let a = args(&agent(&w, "sw-coordinator-proj"));
+    assert_eq!(&a[..3], &["--profile", "builder", "chat"]);
+    assert!(a.contains(&"--yolo".into()));
+    assert_eq!(state::get(&p).unwrap().at("run").s("profile"), "builder");
+    assert!(cli(&w, &["coordinator", "--project", "proj"]).1.contains("profile builder"));
+    w.script(json!({ "coordinator": [{ "session": "hermes-builder-chat" }] }));
+    tell(&w, &p, "hello");
+    cli(&w, &["coordinator", "restart", "--project", "proj"]); drain();
+    let a = args(&agent(&w, "sw-coordinator-proj"));
+    assert_eq!(&a[..3], &["--profile", "builder", "chat"]);
+    assert_eq!(after(&a, "--resume"), "hermes-builder-chat");
+    assert!(!a.contains(&"-m".into()));
+    assert!(state::get(&w.socket).is_none());
+    assert!(state::get(Co::machine(&w.socket)).is_none());
+}
+
+#[test]
+fn invalid_native_profiles_refuse_before_any_state_or_tabs_are_written() {
+    let w = coord_world();
+    for (kind, profile) in [("codex", "builder"), ("hermes", "../builder"), ("hermes", "Builder"), ("hermes", "root"), ("hermes", "test"), ("hermes", "a/b"), ("hermes", "")] {
+        let before = w.state();
+        let a = sw::cli::flags::parse(&["coordinator", "new", "--project", "proj", "--agent", kind, "--profile", profile].map(String::from));
+        assert!(sw::cli::tasks::command("coordinator", &a).is_err(), "{kind}: {profile}");
+        assert_eq!(w.state(), before);
+        assert!(state::get(Co::project(&w.socket, "proj")).is_none());
+    }
+}
+
+#[test]
+fn native_profile_switch_keeps_old_chats_and_refuses_pending_messages() {
+    let w = coord_world();
+    let p = Co::project(&w.socket, "proj");
+    sw::store::settings::change::set_value("coordinator.agent", &json!("codex/gpt-x"), &sw::store::settings::lookup::Scope::you()).unwrap();
+    w.script(json!({ "coordinator": [{ "session": "old-codex-chat" }] }));
+    tell(&w, &p, "old question");
+    look(&p);
+    let old = state::get(&p).unwrap();
+    let history = std::path::PathBuf::from(std::env::var("CODEX_HOME").unwrap()).join("sessions/2026/rollout-old-codex-chat.jsonl");
+    std::fs::create_dir_all(history.parent().unwrap()).unwrap();
+    std::fs::write(&history, format!("{}\n", json!({ "type": "session_meta", "payload": { "id": "old-codex-chat", "cwd": w.root.display().to_string() } }))).unwrap();
+    assert_eq!(sw::coordinator::pump::active(&p, &old).as_deref(), Some("old-codex-chat"));
+    let saved = read(&history);
+    state::change(&p, |c| { c.put("queue", json!([{ "text": "pending", "said": "pending" }])); true }).unwrap();
+    let before = state::get(&p).unwrap();
+    let a = sw::cli::flags::parse(&["coordinator", "new", "--project", "proj", "--agent", "hermes", "--profile", "builder"].map(String::from));
+    assert!(sw::cli::tasks::command("coordinator", &a).is_err());
+    assert_eq!(state::get(&p).unwrap(), before);
+    assert_eq!(read(&history), saved);
+    state::change(&p, |c| { c.put("queue", json!([])); true }).unwrap();
+    sw::cli::tasks::command("coordinator", &a).unwrap(); drain();
+    let a = args(&agent(&w, "sw-coordinator-proj"));
+    assert!(!a.contains(&"--resume".into()));
+    assert!(!a.contains(&"-m".into()));
+    assert_eq!(read(&history), saved);
+    let one = sw::coordinator::who::pick_profile("hermes", "", "builder").unwrap().unwrap();
+    let two = sw::coordinator::who::pick_profile("hermes", "", "reviewer").unwrap().unwrap();
+    assert!(!sw::coordinator::who::same_choice(&one, &two));
+}
+
+#[test]
+fn native_profile_refuses_busy_coordinator_without_interrupting_it() {
+    let w = coord_world();
+    let p = Co::project(&w.socket, "proj");
+    tell(&w, &p, "hello");
+    w.patch(|st| { for pane in st["panes"].as_array_mut().unwrap() {
+        if pane.at("agent").is_object() { pane["agent"]["status"] = json!("working"); pane["agent"]["agent_status"] = json!("working"); }
+    } });
+    let a = sw::cli::flags::parse(&["coordinator", "new", "--project", "proj", "--agent", "hermes", "--profile", "builder"].map(String::from));
+    let before = w.state();
+    assert!(sw::cli::tasks::command("coordinator", &a).is_err());
+    assert_eq!(w.state().at("panes"), before.at("panes"));
+    assert_eq!(w.state().at("tabs"), before.at("tabs"));
+    assert!(!state::get(&p).unwrap().b("want"));
+}
