@@ -10,9 +10,5 @@ html.sw-dock .pane-column { box-sizing: border-box; padding-top: var(--sw-dock-t
 html.sw-dock .pane-slot .tab-strip-row, html.sw-dock .pane-slot .tab-strip { display: none !important; }
 /* Under the web UI's menus and popovers (10 and up), over its page. */
 html.sw-dock .sw-board { z-index: 9; }
-/* Send + start over the web UI's box, for the Coordinator (dock.js places it): a chip of the web UI's one-tap replies. */
-.sw-also-float { position: fixed; z-index: 9; box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, .25)); }
-.sw-also-float[hidden] { display: none; }
-.sw-also-float { --sw-text: var(--text, #d8d0c3); font: var(--fw-regular, 400) var(--fs-sm, 13px)/1.2 var(--font-ui, system-ui, sans-serif); }
 /* The board's question, its More menu and its machine picker cover the whole page, the web UI's chat too. */
 html.sw-dock .sw-board .sw-scrim { position: fixed; }

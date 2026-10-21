@@ -85,22 +85,23 @@ fn the_page_docks_that_chat_in_place_and_puts_the_web_ui_back_when_the_board_clo
 }
 
 #[test]
-fn a_coordinators_words_in_the_web_uis_box_go_through_the_board_and_tab_puts_an_agent_on_what_it_adds() {
-    // enter (as the web UI's Settings say) and its Send, before the web UI's own handlers; tab where it applies
-    assert!(DOCK.contains(r#"import { sendsOn } from "./compose.js";"#) && DOCK.contains("if (!(tab || sendsOn(e)) || !box?.matches?.(BOX) || !box.closest(COMPOSER) || !box.value.trim()) return;"));
-    // the web UI's own menu (its `/` commands, its `@` files) open: Enter and Tab pick from it, as they do there
+fn a_coordinators_words_in_the_web_uis_box_go_through_the_board_and_tab_stays_the_web_uis_own() {
+    // enter (as the web UI's Settings say) and its Send, before the web UI's own handlers; tab is the web UI's own
+    assert!(DOCK.contains(r#"import { sendsOn } from "./compose.js";"#) && DOCK.contains("if (!sendsOn(e) || !box?.matches?.(BOX) || !box.closest(COMPOSER) || !box.value.trim()) return;"));
+    assert!(!DOCK.contains("\"Tab\""));
+    // the web UI's own menu (its `/` commands, its `@` files) open: Enter picks from it, as it does there
     assert!(DOCK.contains("    if (menuOpen(box)) return;\n    const r = route();"));
     assert!(DOCK.contains(r#"const menuOpen = (box) => box.getAttribute("aria-expanded") === "true" || !!box.closest(COMPOSER)?.querySelector(".composer-menu");"#));
-    // a file still on its way: nothing goes (its path is not in the words yet), Send + start waits too
+    // a file still on its way: nothing goes (its path is not in the words yet)
     assert!(DOCK.contains(r#"const uploading = (box) => !!box.closest(COMPOSER)?.querySelector(".composer-attachment.is-uploading");"#));
-    assert!(DOCK.contains("    if (!uploading(box)) sendVia(box, r, tab);") && DOCK.contains("    if (!uploading(box)) sendVia(box, r, false);") && DOCK.contains("if (sending || uploading(box)) return;") && DOCK.contains("also.disabled = uploading(b);"));
+    assert!(DOCK.matches("    if (!uploading(box)) sendVia(box, r);").count() == 2 && DOCK.contains("if (sending || uploading(box)) return;"));
     // the files the words carried go with them: their tiles let go by the web UI's own remove, once the board took them
     assert!(DOCK.contains(r#"tiles = [...(box.closest(COMPOSER)?.querySelectorAll(".composer-attachment.is-ready") || [])];"#) && DOCK.contains(r#"for (const t of tiles) if (t.isConnected) t.querySelector("button")?.click();"#));
-    assert!(DOCK.contains("if (!r || (tab && !r.delegate)) return;") && DOCK.contains(r#"document.addEventListener("keydown", onKey, true);"#) && DOCK.contains(r#"document.addEventListener("click", onSend, true);"#));
+    assert!(DOCK.contains("    if (!r) return;") && DOCK.contains(r#"document.addEventListener("keydown", onKey, true);"#) && DOCK.contains(r#"document.addEventListener("click", onSend, true);"#));
     // the words leave the web UI's box only once the board took them, as its framework reads an input event
     assert!(DOCK.contains("if (box.value === text) setBox(box, \"\"); // kept: the board did not take them, so they stay") && DOCK.contains(r#"box.dispatchEvent(new Event("input", { bubbles: true }));"#));
-    // Send + start stands over the web UI's box while it holds a coordinator's words, and never takes its focus
-    assert!(DOCK.contains(r#"const also = h("button.sw-also.sw-also-float", { type: "button", hidden: true }, "Send + start");"#) && DOCK.contains(r#"also.addEventListener("pointerdown", (e) => e.preventDefault());"#));
+    // no Send + start over the web UI's box: the coordinator decides itself what to start
+    assert!(!DOCK.contains("Send + start") && CHAT.contains("? { send: (text) => onSend(text, false, {"));
     // a coordinator's (the Coordinator, a machine's or a repo's); a task's agent's go as the web UI sends them
     assert!(CHAT.contains("route: () => (snapNow?.chat && now && (!now.reply || coordHead) && snapNow.role === \"drive\""));
     // the web UI's box with a phone's keyboard up: the board steps aside to its bar

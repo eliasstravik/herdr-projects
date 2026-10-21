@@ -122,7 +122,7 @@ fn the_chats_bar_has_a_switch_hide_full_screen_and_a_grip_and_the_boards_own_con
     assert!(CSS.contains(".sw-turn-said.is-mine .sw-said-text { max-width: 80%;"));
     // its parts are no automation's mark: that one is `.sw-turn`, a 0.72em ring
     assert!(BOARD_CSS.contains(".sw-turn { display: inline-block; position: relative; width: 0.72em;") && !SAID.contains("div.sw-turn\""));
-    // tab sends, and puts an agent on what it adds, where that applies; otherwise it moves on as tab does
+    // tab sends, and puts an agent on what it adds, where that applies (no Coordinator); otherwise it moves on as tab does
     assert!(COMPOSE.contains(r#"if (e.key === "Tab" && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && !e.isComposing && box.value.trim() && onTab()) e.preventDefault();"#));
     assert!(CHAT.contains("onTab: () => { if (also.hidden || busy) return false; go(true); return true; }"));
     // a thumb's size on touch

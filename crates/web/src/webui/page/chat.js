@@ -191,7 +191,7 @@ export function chatEl({ onSend, onPress, onDock }) {
   dock = dockFor({ boardOf: () => el.closest(".sw-board"), onChange: () => layout(), onTyping: (on) => { webTyping = on; layout(); },
     // A coordinator's words in the web UI's box (the Coordinator's, a machine's or a repo's) go through the board; a
     // task's agent's as the web UI sends them.
-    route: () => (snapNow?.chat && now && (!now.reply || coordHead) && snapNow.role === "drive" ? { delegate: labels.delegate || "", send: (text, delegate) => onSend(text, delegate, { id: now.id, reply: now.reply, scope: now.scope || "" }) } : null) });
+    route: () => (snapNow?.chat && now && (!now.reply || coordHead) && snapNow.role === "drive" ? { send: (text) => onSend(text, false, { id: now.id, reply: now.reply, scope: now.scope || "" }) } : null) });
   // Above a phone's keyboard the board's own box stays whole, and the line you type on in view (room.js).
   room = roomFor({ chat: el, said: said.el, box });
   return {

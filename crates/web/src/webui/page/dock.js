@@ -8,7 +8,7 @@
 // board's own chat stands in. Closing the board puts the web UI back on the pane it showed before.
 /* global document, window, location, history, PopStateEvent, MutationObserver, ResizeObserver, requestAnimationFrame,
    setTimeout, clearTimeout, HTMLTextAreaElement, Event */
-import { h, setHome } from "./dom.js";
+import { setHome } from "./dom.js";
 import { sendsOn } from "./compose.js";
 
 // The web UI's places this leans on (herdr-web-ui 0.4.12: App.tsx, PaneTerminal.tsx, Composer.tsx there).
@@ -47,24 +47,18 @@ const uploading = (box) => !!box.closest(COMPOSER)?.querySelector(".composer-att
 
 // `boardOf()`: the board's element. `onChange()`: the web UI's chat came or went under the board, or its box changed
 // height. `onTyping(on)`: a phone's keyboard is up for the web UI's box, or no longer. `route()`: how the words in the
-// web UI's box go where the board sends them itself ({ delegate: what tab and Send + start say they do, or "" where
-// they do not apply; send(text, delegate) → kept }), or null where the web UI sends them as it does (a task's agent).
-// The Coordinator's go through the board, as its own box sends them: with where you were (the repo, the open task),
-// waiting while it is busy, and tab putting an agent on what it adds.
+// web UI's box go where the board sends them itself ({ send(text) → kept }), or null where the web UI sends them as it
+// does (a task's agent). The Coordinator's go through the board, as its own box sends them: with where you were (the
+// repo, the open task), and waiting while it is busy. It decides itself what to start, so there is no second way to send.
 export function dockFor({ boardOf, onChange, onTyping, route }) {
   let want = null, on = false, home = null, homeSearch = "", shown = "", wait = 0, typing = false, queued = false, boxH = -1;
   const mine = () => !!want && here(want) && !!document.querySelector(CHAT) && !!document.querySelector(COLUMN);
-  // Send + start, for the Coordinator: a chip of the board's over the web UI's box, at its right, while it holds words.
-  const also = h("button.sw-also.sw-also-float", { type: "button", hidden: true }, "Send + start");
-  also.addEventListener("pointerdown", (e) => e.preventDefault()); // the box keeps the focus, and a phone its keyboard
-  also.addEventListener("click", () => { const b = theBox(), r = route(); if (b && r?.delegate && b.value.trim()) sendVia(b, r, true); });
-  document.body.append(also);
   // What the board covers, given to the web UI's pane column as room to leave: down to the foot of the board's bar, or
   // on a wide screen the width of the board's column under the bar.
   const fit = () => {
     queued = false;
     const board = boardOf(), col = document.querySelector(COLUMN);
-    if (!on || !board || !col) { also.hidden = true; return; }
+    if (!on || !board || !col) return;
     const b = board.getBoundingClientRect(), side = board.classList.contains("is-side");
     const bar = board.querySelector(".sw-chat")?.getBoundingClientRect();
     // (The column's own box: the room it leaves is inside it, so measuring again never moves it.)
@@ -74,7 +68,7 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
     const composer = document.querySelector(COMPOSER), ch = Math.round(composer?.getBoundingClientRect().height || 0);
     if (composer && !composer.dataset.swSized) { composer.dataset.swSized = "1"; sizes?.observe(composer); }
     if (ch !== boxH) { boxH = ch; html.style.setProperty("--sw-composer-h", `${ch}px`); onChange(); }
-    keys(); chip();
+    keys();
   };
   const soon = () => { if (!queued) { queued = true; requestAnimationFrame(fit); } };
   // Typing in the web UI's box with a phone's keyboard up (the web UI marks the page): the board steps aside to its bar.
@@ -82,21 +76,11 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
     const box = document.activeElement, now = on && !!box?.matches?.(BOX) && !!box.closest(COMPOSER) && html.hasAttribute("data-keyboard");
     if (now !== typing) { typing = now; onTyping(now); soon(); }
   };
-  const chip = () => {
-    const b = on ? theBox() : null, d = b && b.value.trim() ? route()?.delegate : "", surface = b?.closest(".composer-surface") || b;
-    also.hidden = !d;
-    if (!d) return;
-    also.disabled = uploading(b);
-    const r = surface.getBoundingClientRect();
-    also.title = `${d[0].toUpperCase()}${d.slice(1)} (Tab)`;
-    also.style.right = `${Math.max(8, Math.round(window.innerWidth - r.right + 12))}px`;
-    also.style.bottom = `${Math.round(window.innerHeight - r.top + 8)}px`;
-  };
   const set = (now) => {
     if (now === on) return;
     on = now; boxH = -1;
     html.classList.toggle("sw-dock", on);
-    if (!on) { for (const v of ["--sw-dock-top", "--sw-dock-left", "--sw-composer-h"]) html.style.removeProperty(v); also.hidden = true; if (typing) { typing = false; onTyping(false); } }
+    if (!on) { for (const v of ["--sw-dock-top", "--sw-dock-left", "--sw-composer-h"]) html.style.removeProperty(v); if (typing) { typing = false; onTyping(false); } }
     onChange();
     soon();
   };
@@ -112,26 +96,26 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
   window.visualViewport?.addEventListener("resize", soon);
   const blur = () => setTimeout(soon);
   document.addEventListener("focusin", soon); document.addEventListener("focusout", blur); document.addEventListener("input", soon, true);
-  // Enter (as the web UI's Settings → Chat says) and its Send, for the Coordinator: sent by the board. Tab: sent as the
-  // board's tab sends, putting an agent on what it adds. Before the web UI's own handlers, which never see them then.
+  // Enter (as the web UI's Settings → Chat says) and its Send, for the Coordinator: sent by the board, before the web
+  // UI's own handlers, which never see them then. Tab is the web UI's own.
   const onKey = (e) => {
     if (!on) return;
-    const box = e.target, tab = e.key === "Tab" && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && !e.isComposing;
-    if (!(tab || sendsOn(e)) || !box?.matches?.(BOX) || !box.closest(COMPOSER) || !box.value.trim()) return;
-    // The web UI's own menu (its `/` commands, its `@` files) is open: Enter and Tab pick from it, as they do there.
+    const box = e.target;
+    if (!sendsOn(e) || !box?.matches?.(BOX) || !box.closest(COMPOSER) || !box.value.trim()) return;
+    // The web UI's own menu (its `/` commands, its `@` files) is open: Enter picks from it, as it does there.
     if (menuOpen(box)) return;
     const r = route();
-    if (!r || (tab && !r.delegate)) return;
+    if (!r) return;
     // Nothing goes while a file is on its way, as the web UI's own Send waits: the keys do nothing until it is there.
     e.preventDefault(); e.stopPropagation();
-    if (!uploading(box)) sendVia(box, r, tab);
+    if (!uploading(box)) sendVia(box, r);
   };
   const onSend = (e) => {
     if (!on || !e.target?.closest?.(`${COMPOSER} .composer-send`)) return;
     const box = theBox(), r = route();
     if (!box || !r || !box.value.trim()) return;
     e.preventDefault(); e.stopPropagation();
-    if (!uploading(box)) sendVia(box, r, false);
+    if (!uploading(box)) sendVia(box, r);
   };
   document.addEventListener("keydown", onKey, true);
   document.addEventListener("click", onSend, true);
@@ -139,11 +123,11 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
   // the files they carried (their tiles, by the web UI's own remove, as its own Send lets them go). Files attached
   // while they were on their way stay, for the next words.
   let sending = false;
-  async function sendVia(box, r, delegate) {
+  async function sendVia(box, r) {
     if (sending || uploading(box)) return;
     const text = box.value, tiles = [...(box.closest(COMPOSER)?.querySelectorAll(".composer-attachment.is-ready") || [])];
     sending = true;
-    const kept = await r.send(text, delegate);
+    const kept = await r.send(text);
     sending = false;
     if (!kept) {
       if (box.value === text) setBox(box, ""); // kept: the board did not take them, so they stay
@@ -172,7 +156,7 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
     fit: soon,
     // The board closed: the web UI back on the pane it showed before, if it still shows the one the board went to.
     destroy() {
-      marks.disconnect(); sizes?.disconnect(); clearTimeout(wait); also.remove();
+      marks.disconnect(); sizes?.disconnect(); clearTimeout(wait);
       window.removeEventListener("resize", soon); window.visualViewport?.removeEventListener("resize", soon);
       document.removeEventListener("focusin", soon); document.removeEventListener("focusout", blur); document.removeEventListener("input", soon, true);
       document.removeEventListener("keydown", onKey, true); document.removeEventListener("click", onSend, true);

@@ -50,14 +50,14 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
     // words are locked to it while the list may be scrolled to others, and the box's edge names no one.
     let head = crate::board::update::coords::talking(s);
     if !s.value().is_empty() {
-        if let Some(c) = &head { return (vec![Hint { key: enter, words: format!("send to the {}", c.name), stays: false, short: "send".into(), shortest: "send".into(), lit: c.name.clone(), tint: c.ink() }, plain(tab, "send, and put an agent on what it adds"), line, put], chat_key); }
+        if let Some(c) = &head { return (vec![Hint { key: enter, words: format!("send to the {}", c.name), stays: false, short: "send".into(), shortest: "send".into(), lit: c.name.clone(), tint: c.ink() }, line, put], chat_key); }
         if let (true, Some(r)) = (s.reply, r) {
             let (fresh, t) = (!r.b("host") && ["todo", "progress"].contains(&r.s("stage")), draft_task(s, r));
             let (w, short) = if crate::board::update::actions::has_agent(r) { (format!("send to {t}'s agent"), format!("send to {t}")) } else if fresh { (format!("send, and start an agent on {t}"), format!("send to {t}")) } else if s.data.can_dispatch || r.b("host") { (format!("send to the Coordinator, about {t}"), "send to the Coordinator".into()) } else { (format!("add to {t}'s description"), format!("add to {t}")) };
             return (vec![Hint { key: enter, words: w, stays: false, short, shortest: "send".into(), ..Default::default() }, line, put], chat_key);
         }
         let (coordinator, short) = far_coordinator(s).map(|m| (format!("send to the Coordinator on {m}"), format!("send to {m}"))).unwrap_or_else(|| ("send to the Coordinator".into(), "send to the Coordinator".into()));
-        if s.talks_to_coord() { return (vec![Hint { key: enter, words: coordinator, stays: false, short, shortest: "send".into(), ..Default::default() }, plain(tab, "send, and put an agent on what it adds"), line, put], chat_key); }
+        if s.talks_to_coord() { return (vec![Hint { key: enter, words: coordinator, stays: false, short, shortest: "send".into(), ..Default::default() }, line, put], chat_key); }
         return (vec![plain(enter.clone(), "add it as a task"), plain(tab, "add it and put an agent on it"), line, put], chat_key);
     }
     // The popup closes on its last esc: it says so, last on the line (not while esc would hide the chat's message).

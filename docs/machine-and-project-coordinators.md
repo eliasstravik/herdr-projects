@@ -19,7 +19,7 @@ The Coordinator stays as it is. The others sit beside it: talking to one never t
 - **A repo with no tasks in view keeps its heading**, folded (`0 tasks`), when it was used in the last 14 days (a task,
   archived ones too) or has a project coordinator, so `Space` still reaches it. Older repos, and repos whose folder is gone, have none.
 - The chat names it (`herdr-projects coordinator  idle`), and so does the box: `Send message to herdr-projects
-  coordinator`. `Enter` sends, `Tab` sends and starts an agent on every task it adds, as with the Coordinator.
+  coordinator`. `Enter` sends, and it decides what to start, as the Coordinator does.
 - **It follows the selection**, as a task's agent does: move to another heading and you talk to that one's
   coordinator, move to a task and you talk to its agent. `Space` again goes back to the Coordinator.
 - A status group's heading (`to do`, `done`) has none. `Space` there says so.

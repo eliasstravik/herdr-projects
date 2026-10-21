@@ -15,7 +15,8 @@ measured against the original.
 
 - **Enter sends, shift+enter is a new line**, on a phone too. If the web UI's Settings → Chat has "Enter sends" turned
   off, ctrl or cmd with enter sends here as well. A keyboard that composes letters keeps its enter.
-- **Tab, or Send + start**, sends and puts an agent on what it adds (more below).
+- **Tab, or Send + start**, only on a machine with no Coordinator: adds your words as a task and puts an agent on it
+  (more below). A coordinator gets your words with enter alone, and decides itself what to start.
 - **The grip** on the card's top edge makes the box taller: drag it up (up to half the window, 480 px at most).
   Double-click or tap it twice for the automatic height. With the keyboard: up and down a line (two with shift), and
   Home. The height is kept in this browser.
@@ -119,7 +120,7 @@ real phone.
 | who gets your words: the Coordinator (and on which machine, where another one's shows) or a task's agent, with the task named | said by the switch over the box ([the web UI](web-ui.md)), not in it. The box's own hint says it too while empty (`Send message to Coordinator`) |
 | the lock that keeps a draft with who it was typed for | a filled chip in the lower left, beside the add button, only while the page shows somebody else: `To: HSW-34 agent · not who is shown above`. Attaching a file locks it as typing does |
 | the box's colour by who you type to ([colours](colours.md)) | the card's border: the plain text colour for the Coordinator, the task's status colour for its agent. The web UI's border is grey and turns to its accent on focus; here the border already says who, so focus draws a ring of that same colour round it |
-| the two ways to send | the round button and enter send. **Send + start** and tab, while there are words and it applies, send and put an agent on what it adds. **Send + start** is a chip of the web UI's (the shape of its one-tap replies). Each says in its tooltip what it does with the words |
+| the two ways to send | the round button and enter send. **Send + start** and tab, while there are words and no Coordinator to send them to, add them as a task and put an agent on it. **Send + start** is a chip of the web UI's (the shape of its one-tap replies). Each says in its tooltip what it does with the words |
 | who you talk to (the Coordinator or the task's agent), and the conversation | the chat's bar over the conversation: the switch of the two you can talk to, Call, Hide and Full screen; the conversation over the box, drawn as the web UI draws its own ([the web board's chat](web-chat.md)) |
 | the notice after sending | above the chat, as before |
 | a draft is never lost | it is kept with who it is for, also over a reload. While a message is on its way the words stay in the box and a second enter does nothing. Words the board could not take stay in the box |

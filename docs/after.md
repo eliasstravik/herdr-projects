@@ -10,8 +10,7 @@ herdr-projects delegate gtm-agent/4 --after gtm-skills/12,gtm-skills/13
 ```
 
 Or tell the Coordinator: "then", "once that is merged", "after HSW-12", "after ELA-3 on vm-str" become an `--after` on
-the task it adds or delegates. It adds `--delegate` (queues it) only when you asked for the task to be started, or sent
-the message with `Tab`.
+the task it adds or delegates. It adds `--delegate` (queues it) only when you asked for the task to be started.
 
 `--after` is only a condition: the task may not start before the tasks it names are done. Starting it is still `Tab`
 (`delegate`), as for any task.

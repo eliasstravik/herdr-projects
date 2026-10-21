@@ -7,8 +7,7 @@ It is one long-lived agent chat, not a call per message: everything you type goe
 Each machine and each repo has a coordinator of its own too, beside this one: `Space` on its heading
 ([machine and project coordinators](machine-and-project-coordinators.md)).
 
-- `Enter` sends your message.
-- `Tab` sends it and **starts an agent on every task it adds** from that message.
+- `Enter` sends your message. **It decides itself what to start**: say "and start it" and it puts an agent on what it adds.
 - `Alt+C` shows and hides its latest message on the board.
 
 From a shell:
@@ -16,7 +15,7 @@ From a shell:
 ```
 herdr-projects coordinator                     how it stands
 herdr-projects coordinator tell <text>         send it a message
-herdr-projects coordinator tell <text> --delegate   the same as Tab
+herdr-projects coordinator tell <text> --delegate   and start every task it adds
 herdr-projects coordinator restart             start it again, same conversation
 herdr-projects coordinator new                 a fresh conversation
 herdr-projects coordinator new [--agent KIND[/MODEL]] [--effort E]    a different one, this once
@@ -48,16 +47,16 @@ own).
 
 A board opened from the Coordinator's own pane stays in the repo it was last in: that pane's folder is nobody's repo.
 
-## `Tab`: "and start it right away"
+## Starting what it adds
 
-A message sent with `Tab` has every task the Coordinator adds from it delegated at once, however many, with nothing
-more to confirm.
+You just send your message; the Coordinator works out what to do with it. It adds the tasks, and starts them when you
+ask for that in your words ("fix the login page and start it"). On autopilot it starts what it adds by itself
+([autopilot](autopilot.md)). `Tab` with words typed does nothing: there is no second way to send.
 
-- This does not depend on the Coordinator remembering. The message carries one line under your words saying it was
-  sent with `Tab` (the board's chat shows your words alone). And the board does it too: a task the Coordinator adds
-  during the turn of a `Tab` message is delegated by `add` itself.
+- `coordinator tell <text> --delegate` from a shell has every task it adds from that message delegated at once, however
+  many, with nothing more to confirm. The message carries one line under your words saying so (the board's chat shows
+  your words alone), and a task the Coordinator adds during that message's turn is delegated by `add` itself.
 - A message that adds nothing (a question, a status check, a word about an existing task) delegates nothing extra.
-- A message sent with `Enter` adds its tasks, and delegates them only when you asked for that.
 
 ## What it says it did
 
