@@ -8,7 +8,7 @@ use crate::store::settings_list::SETTINGS;
 
 /// Positional arguments, flags (`--flag value`, `--flag` true, `--no-flag` false), and each flag as it was typed.
 pub struct Args { pub pos: Vec<String>, pub flags: Obj, pub typed: Obj }
-const BOOL: [&str; 14] = ["json", "archived", "all", "delegate", "force", "help", "skill", "research", "chat", "every-repo", "anyway", "now", "clear", "machine"];
+const BOOL: [&str; 15] = ["json", "archived", "all", "done", "delegate", "force", "help", "skill", "research", "chat", "every-repo", "anyway", "now", "clear", "machine"];
 pub fn parse(argv: &[String]) -> Args {
     let (mut pos, mut flags, mut typed) = (vec![], Obj::new(), Obj::new());
     let mut i = 0;
@@ -55,7 +55,8 @@ fn takes(cmd: &str, sub: &str) -> Option<Takes> {
         "add" | "new" => s(ADD),
         "list" | "ls" => f(LIST),
         "report" => f(&["state", "kind", "msg", "title", "progress", "eta", "desc", "repo"]),
-        "describe" | "rename" | "tell" | "stop" | "start" | "pick" | "review" | "retry" | "fix" | "finish" | "details" | "pin" | "archive" | "restore" | "unarchive" | "clear" => f(&[]),
+        "describe" | "rename" | "tell" | "stop" | "start" | "pick" | "review" | "retry" | "fix" | "finish" | "details" | "pin" | "restore" | "unarchive" | "clear" => f(&[]),
+        "archive" => f(&["done", "repo"]),
         "delegate" => s(&["research", "chat", "after", "now"]),
         "after" => f(&["clear"]),
         "approve" => f(&["anyway"]),

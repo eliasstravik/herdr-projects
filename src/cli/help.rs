@@ -36,6 +36,8 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
                                                 on a chat-only task: end the conversation, as it is
   herdr-projects details <id>                  failure details, review, next steps, and what it used against its limits
   herdr-projects pin|archive|restore|clear <id>
+  herdr-projects archive --done [--repo NAME]  archive every done task of that repo (or of every repo) in one go; one
+                                                that works, waits, is to do or is pinned stays, and is counted
   herdr-projects set <name> <value> [--repo NAME | --task ID | --automation NAME]
                                       change a setting: for you, for your entry for one repo, for one task, or for an automation
   herdr-projects unset <name> [--repo NAME | --task ID]

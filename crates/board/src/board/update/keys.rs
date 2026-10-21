@@ -101,6 +101,7 @@ fn answer(s: &mut State, p: &Press, esc: bool, close: bool, fx: &mut Vec<Effect>
         if !super::ask::still_valid(s, &a.valid) { s.ask = None; s.flash(format!("It changed while you were asked, so nothing was merged. Look at it again, then {}.", key_name("yes")), Ink::Yellow); return; }
         s.ask = None;
         if a.yes == Job::WebUiLink { s.flash("Pointing the web UI's link at the board's front door…", Ink::Muted); } // it takes a moment
+        if matches!(a.yes, Job::ArchiveDone { .. }) { s.flash("Archiving the done tasks…", Ink::Muted); } // so does closing their spaces
         return act::go(s, a.yes, fx);
     }
     if is(p, K::SayNo) { if let Some(no) = a.no { s.ask = None; return act::go(s, no, fx); } }
@@ -125,7 +126,7 @@ pub fn run(s: &mut State, k: K, r: Option<&Obj>, fx: &mut Vec<Effect>) {
         K::SendBack => if let Some(r) = r { act::send_back(s, r, fx) },
         K::NextAttempt => if let Some(r) = r { act::next_attempt(s, r) },
         K::Stop => if let Some(r) = r { act::stop(s, r, fx) },
-        K::Archive => match r { Some(r) => act::archive_selected(s, r, fx), None => s.flash("Select a task to archive or restore.", Ink::Muted) },
+        K::Archive => match r { Some(r) => act::archive_selected(s, r, fx), None if super::heads::selected(s).is_some() => super::archive_done::ask(s), None => s.flash("Select a task to archive or restore.", Ink::Muted) },
         K::Pin => if let Some(r) = r { act::pin(s, r, fx) },
         K::Settings => super::edit::open(s, r, fx),
         K::Undo => act::undo(s, fx),
