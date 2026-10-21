@@ -137,7 +137,6 @@ mod coordinator_place;
 mod coordinator_restart;
 mod coordinator_rules;
 mod coordinator_sessions;
-mod coordinator_settings;
 mod coordinator_stop;
 mod detached_jobs;
 mod disk_space;

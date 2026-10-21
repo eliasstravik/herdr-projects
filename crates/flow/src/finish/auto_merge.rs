@@ -14,8 +14,9 @@ use crate::store::repos::folder_of;
 use crate::store::settings::lookup::setting;
 use crate::store::tasks::{update, Change, Task};
 
-/// Does this task merge by itself? Asked each time: the setting is read right before the merge.
-pub fn by_itself(t: &Obj) -> bool { setting("merge.by", Some(t)) == json!("itself") }
+/// Does this task merge by itself? Asked each time: the setting is read right before the merge. A task autopilot added
+/// whose change touches the repo's own settings file never does while `autopilot.repoFileWaits` held when it was added.
+pub fn by_itself(t: &Obj) -> bool { setting("merge.by", Some(t)) == json!("itself") && !crate::autopilot::care::held_for_you(t) }
 /// Is this task's work reviewed at all?
 pub fn reviewed(t: &Obj) -> bool { setting("review.when", Some(t)) != json!("never") }
 /// Green to merge: checked, reviewed past the gate (or not to be reviewed at all), up to date with main, and nothing
