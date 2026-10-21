@@ -27,7 +27,10 @@ pub fn look(co: &Co, ap: &mut Obj, board: &[Obj], when: &str, approve: bool, ret
     let mut next = Obj::new();
     let mut out = vec![];
     let wants = |w: &str| when.split_whitespace().any(|x| x == w);
-    for t in board.iter().filter(|t| in_area(co, t)) {
+    // The oldest first, then by number: the reasons of one wake are said in the order things happened.
+    let mut area: Vec<&Obj> = board.iter().filter(|t| in_area(co, t)).collect();
+    area.sort_by(|a, b| (a.i("created"), a.s("host"), a.i("n"), a.s("id")).cmp(&(b.i("created"), b.s("host"), b.i("n"), b.s("id"))));
+    for t in area {
         let id = t.t("id");
         // Another machine's task of its own, seen over: its slot is free also once that machine is heard no more.
         if t.b("host") && super::care::over(t) && task_rec(ap, &id).map(|r| !r.b("over")).unwrap_or(false) { with_task(ap, &id, |r| { r.put("over", true); }); }
