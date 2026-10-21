@@ -110,7 +110,7 @@ fn the_chats_bar_has_a_switch_hide_full_screen_and_a_grip_and_the_boards_own_con
     // the grip on the bar sets the chat's share of the screen, kept in this browser, a quarter to four fifths
     assert!(CHAT.contains(r#"const SPLIT = "sw-chat-split", LEAST = 0.25, MOST = 0.8, START = 0.46, STEP = 0.05;"#) && CHAT.contains("const end = () => { for (const [n, fn] of [[\"pointermove\", move], [\"pointerup\", end], [\"pointercancel\", end]]) grip.removeEventListener(n, fn); keepSplit(split); };"));
     // docked, the board ends where the web UI's chat begins: its share under the list, or hidden only the web UI's box
-    assert!(CHAT.contains("if (docked && sized) board.style.setProperty(\"--sw-top-h\", `${Math.round(open ? H - Math.max(boxH + 140, split * H) : H - boxH)}px`);"));
+    assert!(CHAT.contains("if (docked && sized) board.style.setProperty(\"--sw-top-h\", `${Math.max(0, Math.round(open ? H - Math.max(boxH + 140, split * H) : H - boxH))}px`);"));
     // side by side where the window beside the web UI's sidebar is wide enough
     assert!(CHAT.contains("const side = !full && open && window.innerWidth - (parseFloat(board.style.left) || 0) >= SIDE;") && CSS.contains(".sw-board.is-side .sw-chat { position: fixed; top: 0; right: 0;"));
     // the board's own conversation, where the web UI has none: your words a card on the right, theirs plain prose,

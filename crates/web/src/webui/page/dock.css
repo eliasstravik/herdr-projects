@@ -12,3 +12,5 @@ html.sw-dock .pane-slot .tab-strip-row, html.sw-dock .pane-slot .tab-strip { dis
 html.sw-dock .sw-board { z-index: 9; }
 /* The board's question, its More menu and its machine picker cover the whole page, the web UI's chat too. */
 html.sw-dock .sw-board .sw-scrim { position: fixed; }
+/* Typing in its box with the board's chat hidden, the box gives way to the board's list (keep.js): no taller than that. */
+html.sw-dock.sw-web-room .pane-frame.is-current .composer-text { max-height: min(10lh, var(--sw-web-room, 10lh)); }

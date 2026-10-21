@@ -132,7 +132,7 @@ export function chatEl({ onSend, onPress, onDock }) {
     // Docked, the board ends where the web UI's chat begins: the chat's share of the screen under it, or with the chat
     // hidden only the web UI's box. With its own chat, the conversation's height is that share.
     const H = appHeight(), boxH = parseFloat(html.style.getPropertyValue("--sw-composer-h")) || 0;
-    if (docked && sized) board.style.setProperty("--sw-top-h", `${Math.round(open ? H - Math.max(boxH + 140, split * H) : H - boxH)}px`);
+    if (docked && sized) board.style.setProperty("--sw-top-h", `${Math.max(0, Math.round(open ? H - Math.max(boxH + 140, split * H) : H - boxH))}px`);
     else board.style.removeProperty("--sw-top-h");
     board.style.setProperty("--sw-chat-share", `${Math.round(split * H)}px`);
     grip.hidden = !sized || !open;

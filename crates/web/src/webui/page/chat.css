@@ -114,3 +114,13 @@
 /* Where not even one line fits so (a phone on its side): all but the box steps aside, its grip and files' tiles too. */
 .sw-board.sw-typing.sw-cramped .sw-chat > :not(.sw-own), .sw-board.sw-typing.sw-cramped .sw-said-box, .sw-board.sw-typing.sw-cramped .sw-files, .sw-board.sw-typing.sw-cramped .sw-grip { display: none; }
 .sw-board.sw-typing.sw-cramped .sw-composer { --sw-grip-h: 0px; }
+/* Typing with the chat hidden, the list stays in view (keep.js): where the box (at its one line) leaves it too little,
+   the board's header and chips step aside, then the chat's bar and what stands over the box. */
+.sw-board.sw-tight > :is(.sw-head, .sw-chips, .sw-find-row, .sw-note) { display: none; }
+.sw-board.sw-tight { padding-top: env(safe-area-inset-top, 0px); }
+.sw-board.sw-tighter .sw-chat > :not(.sw-own), .sw-board.sw-tighter .sw-files, .sw-board.sw-tighter .sw-grip { display: none; }
+.sw-board.sw-tighter .sw-composer { --sw-grip-h: 0px; }
+/* Then the box's controls stand beside its line, not under it: the card is one row. */
+.sw-board.sw-tighter .sw-card { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "files files files" "left text right"; align-items: center; }
+.sw-board.sw-tighter .sw-input { padding: var(--space-2, 8px) var(--space-2, 8px); }
+.sw-board.sw-tighter .sw-controls-left, .sw-board.sw-tighter .sw-controls-right { padding-block: var(--space-1, 4px); }

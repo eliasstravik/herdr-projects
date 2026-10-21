@@ -10,6 +10,7 @@
    setTimeout, clearTimeout, HTMLTextAreaElement, Event */
 import { setHome } from "./dom.js";
 import { sendsOn } from "./compose.js";
+import { keepList, STEPS } from "./keep.js";
 
 // The web UI's places this leans on (herdr-web-ui 0.4.12: App.tsx, PaneTerminal.tsx, Composer.tsx there).
 const COLUMN = ".pane-column", CHAT = ".pane-frame.is-current .terminal-stack.is-chat", COMPOSER = ".pane-frame.is-current .composer";
@@ -71,6 +72,22 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
     const app = html.style.getPropertyValue("--app-height");
     if (ch !== boxH || app !== appH) { boxH = ch; appH = app; html.style.setProperty("--sw-composer-h", `${ch}px`); onChange(); }
     keys();
+    // With the chat hidden the list stays in view, also while you type in the web UI's box: it gives way (keep.js).
+    const box = theBox();
+    if (box && board.classList.contains("sw-chat-hidden")) keepList(board, box, (n) => room(box, n), () => Math.max(0, board.scrollHeight - board.clientHeight), typing); else unkeep();
+    marks.takeRecords(); // (what this measure changed on the page is its own: nothing to measure again for)
+  };
+  // (Made shorter with the caret at the end of the words, it scrolls to keep that line in view, as typing does.)
+  const room = (box, n) => {
+    if (!html.classList.contains("sw-web-room")) html.classList.add("sw-web-room");
+    if (html.style.getPropertyValue("--sw-web-room") === `${n}px`) return;
+    html.style.setProperty("--sw-web-room", `${n}px`);
+    if (document.activeElement === box && box.selectionEnd >= box.value.length) box.scrollTop = box.scrollHeight;
+  };
+  const unkeep = () => {
+    const board = boardOf();
+    if (board && STEPS.some((c) => board.classList.contains(c))) board.classList.remove(...STEPS);
+    if (html.classList.contains("sw-web-room")) { html.classList.remove("sw-web-room"); html.style.removeProperty("--sw-web-room"); }
   };
   const soon = () => { if (!queued) { queued = true; requestAnimationFrame(fit); } };
   // Typing in the web UI's box with a phone's keyboard up (the web UI marks the page): the board steps aside to its bar.
@@ -82,7 +99,7 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
     if (now === on) return;
     on = now; boxH = -1; appH = "";
     html.classList.toggle("sw-dock", on);
-    if (!on) { for (const v of ["--sw-dock-top", "--sw-dock-left", "--sw-composer-h"]) html.style.removeProperty(v); if (typing) { typing = false; onTyping(false); } }
+    if (!on) { for (const v of ["--sw-dock-top", "--sw-dock-left", "--sw-composer-h"]) html.style.removeProperty(v); unkeep(); if (typing) { typing = false; onTyping(false); } }
     onChange();
     soon();
   };

@@ -7,6 +7,7 @@
 // window does not leave out.
 /* global window, document, navigator, getComputedStyle, requestAnimationFrame, ResizeObserver, MutationObserver,
    setTimeout */
+import { keepList, STEPS } from "./keep.js";
 // The least the conversation is shown at: about two lines of it and its padding (less is not worth reading). How much
 // smaller than the window the visible part must be for a keyboard to be up. The strip iOS 26 floats
 // over the page: its top stands 73 px over the foot of the visible window (measured on an iPhone's screenshot), so the
@@ -43,13 +44,14 @@ export function roomFor({ chat, said, box }) {
     const board = chat.closest(".sw-board");
     if (!board) return;
     const mine = document.activeElement === box, on = mine && keyboard();
-    // With the chat hidden it stays hidden while you type: the board stays in view over the box, which only keeps
-    // clear of the keyboard. Only Show (or Full screen) opens it.
-    const shut = board.classList.contains("sw-chat-hidden");
+    // With the chat hidden it stays hidden while you type: the board stays in view over the box, which keeps clear of
+    // the keyboard and gives way to the list (keep.js). Only Show (or Full screen) opens it.
+    const shut = board.classList.contains("sw-chat-hidden"), docked = board.classList.contains("is-docked");
     // Measured again from the start: the field is as tall as its words for a moment, so where it was scrolled to is
     // put back after (or it would end scrolled up from the caret's line).
     const top = box.scrollTop;
     board.classList.toggle("sw-typing", on && !shut); board.classList.toggle("sw-keys", on); board.classList.remove("sw-cramped");
+    if (!docked) board.classList.remove(...STEPS); // (docked, they are dock.js's, for the web UI's box)
     said.classList.remove("is-squeezed"); box.style.removeProperty("--sw-room");
     if (on) {
       // What of the board is under the keyboard (where it was not made as short as what is over it), and the strip.
@@ -63,10 +65,12 @@ export function roomFor({ chat, said, box }) {
     const card = box.closest(".sw-card") || box, foot = box.closest(".sw-own") || chat;
     const over = () => card.getBoundingClientRect().bottom - (Math.min(chat.getBoundingClientRect().bottom, board.getBoundingClientRect().bottom) - px(getComputedStyle(foot).paddingBottom));
     const cap = () => { const o = over(); if (o > 0.5) box.style.setProperty("--sw-room", `${Math.max(px(getComputedStyle(box).minHeight), Math.floor(box.offsetHeight - o))}px`); };
-    cap();
+    // The chat hidden: the field has what the list leaves (less what the chat runs over the board's foot).
+    if (shut && !docked) keepList(board, box, (n) => box.style.setProperty("--sw-room", `${n}px`), () => Math.max(0, over()), on);
+    else cap();
     // Not even one line fits over the keyboard (a phone on its side): all but the box steps aside, the files' tiles
-    // too (they stay attached: their paths are in the words), and the board too where the chat is hidden.
-    if (on && over() > 0.5) { board.classList.add("sw-typing", "sw-cramped"); box.style.removeProperty("--sw-room"); cap(); }
+    // too (they stay attached: their paths are in the words).
+    if (on && !shut && over() > 0.5) { board.classList.add("sw-cramped"); box.style.removeProperty("--sw-room"); cap(); }
     box.scrollTop = top;
     // The caret's line in view where the field changed under it: its height, or words put in (a file's path, dictation).
     if (!mine) height = 0; else if (box.clientHeight !== height || box.value !== words) { height = box.clientHeight; showCaret(); }
