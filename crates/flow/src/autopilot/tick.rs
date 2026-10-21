@@ -77,6 +77,8 @@ pub fn tick(co: &Co, board: &[Obj], now: i64) {
             ap.put("pending", p); ap.put("endAt", now); ap.put("failedAt", now); ap.put("couldNot", why);
         }
         // What happened, and the timer.
+        // Asking first now: a wake not typed in yet is taken back, its reasons kept for when it may wake again.
+        if ask_first && waiting(c, ap) { pull_back(c, ap, true); }
         let happened = events(co, ap, board, &when, approve, retries);
         let mut pending = merged(ap.arr("pending"), &happened);
         // The timer counts from when its last wake ended, or from its last look that found nothing new; missed ticks

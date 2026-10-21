@@ -261,11 +261,37 @@ fn a_task_it_added_on_another_machine_keeps_its_slot_until_seen_over_and_is_look
     assert!(ok(&["tell", "vm-b:web/7", "Use the existing index"]).contains("vm-b: Sent to the agent"));
     let (_, what, req) = f.asked().pop().unwrap();
     assert_eq!((what.as_str(), req.s("action"), req.s("id"), req.s("text")), ("do", "tell", "web/7", "Use the existing index"));
+    // what its agent asks is read there: `details` goes to vm-b's door, which answers with the task whole and its note
+    f.answers("vm-b", "do", &json!({ "ok": true, "msg": "", "details": { "task": { "id": "web/7", "msg": "Which index do you mean?" }, "closingNote": "" } }));
+    assert!(ok(&["details", "vm-b:web/7"]).contains("Which index do you mean?"));
+    assert_eq!(f.asked().pop().unwrap().2.s("action"), "details");
     // seen merged there: its slot is free, also once vm-b is heard no more
     far_list(&f, json!({}), json!([{ "id": "web/7", "title": "Fix their docs", "stage": "done", "mergedAt": sw::clock::now(), "created": sw::clock::now(), "autopilot": { "coordinator": "main", "machine": sw::remote::check::hostname() } }]));
     let _ = sw::remote::ask_list(&sw::remote::machines()[0], 20000);
     in_pane(&w, ""); minutes(1); tick(&w); minutes(4);
     in_pane(&w, &pane_of(&main));
     assert_eq!(sw::autopilot::limits::today(&main, &record(&main), &sw::autopilot::limits::board_tasks(), sw::clock::now()).under_way, 0);
+    in_pane(&w, "");
+}
+
+#[test]
+fn the_door_answers_details_with_the_closing_note_and_a_task_delegated_later_on_another_machine_keeps_its_slot() {
+    let (w, f) = far_world();
+    let id = w.add("Here");
+    std::fs::write(sw::flow::task::note_file(&task(&id)), "Asked which index.").unwrap();
+    let a = sw::remote::door("do", &json!({ "action": "details", "id": id })).unwrap();
+    assert_eq!(a.at("details").s("closingNote"), "Asked which index.");
+    let main = sw::coordinator::co::Co::top(&w.socket);
+    w.script(json!({ "coordinator": [{ "status": "working" }] }));
+    ok(&["autopilot", "on", "--goal", "Docs", "--autopilot.every", "none", "--autopilot.startAtOnce", "no"]);
+    tick(&w);
+    in_pane(&w, &pane_of(&main));
+    f.answers("vm-b", "add", &json!({ "ok": true, "id": "web/8", "msg": "web/8: added on vm-b" }));
+    ok(&["add", "Later", "--repo", "web", "--on", "vm-b"]);
+    let under = || sw::autopilot::limits::today(&main, &record(&main), &sw::autopilot::limits::board_tasks(), sw::clock::now()).under_way;
+    assert_eq!(under(), 0, "added, not started");
+    f.answers("vm-b", "do", &json!({ "ok": true, "msg": "web/8: an agent is on it" }));
+    ok(&["delegate", "vm-b:web/8"]);
+    assert_eq!(under(), 1, "started there: its slot stands while vm-b is not heard");
     in_pane(&w, "");
 }

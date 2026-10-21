@@ -174,6 +174,7 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
         for m in c.arr("queue").to_vec() {
             // Asked to stop (or restart, or begin anew) while an earlier message went in: that comes first.
             if get(co).map(|c| c.b("want")).unwrap_or(false) { break; }
+            if m.b("autopilot") && crate::autopilot::record::words(co, "coordinator.access") == "ask" { continue; } // it would wait at a permission prompt: the tick takes it back
             let ag = api.agent_get(c.s("pane")).ok().flatten();
             let run = get(co).map(|c| c.i("startedAt")).unwrap_or(0);
             let seq = ag.as_ref().map(|a| a.at("completion_seq").clone()).unwrap_or(Value::Null);

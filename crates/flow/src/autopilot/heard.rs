@@ -10,7 +10,7 @@ use std::path::PathBuf;
 pub const FRESH: i64 = 3 * 60000;
 fn file() -> PathBuf { data_dir().join("autopilot-heard.json") }
 /// The few fields of a task autopilot reads (care.rs, events.rs, look.rs).
-const KEPT: [&str; 12] = ["id", "title", "repo", "stage", "state", "kind", "created", "mergedAt", "archivedAt", "autopilot", "coordinator", "startedOnce"];
+const KEPT: [&str; 13] = ["id", "title", "repo", "stage", "state", "kind", "msg", "created", "mergedAt", "archivedAt", "autopilot", "coordinator", "startedOnce"];
 /// A board heard a machine's list: its tasks are kept, under its label.
 pub fn heard(label: &str, answer: &Value) {
     if !answer.at("tasks").is_array() || label.is_empty() { return; }

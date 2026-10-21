@@ -44,7 +44,11 @@ pub fn guard(cmd: &str, pos: &[String], flags: &Obj, agent: Option<(&Obj, &str)>
     if !ap.b("on") { return refused(&format!("{cmd}"), "Autopilot was turned off: this turn may only read the board now."); }
     let board = super::limits::board_tasks();
     let id = pos.get(1).cloned().unwrap_or_default();
-    let task = || super::limits::find_task(&id);
+    // Another machine's task of its own that no board heard lately: known by its record alone, where it stands unknown.
+    let task = || super::limits::find_task(&id).or_else(|e| match (crate::after::far::split(&id), task_rec(&ap, &id)) {
+        (Some((label, _)), Some(_)) => Ok(obj(json!({ "id": id, "host": label, "stage": "unknown", "autopilot": { "coordinator": key_of(&co) } }))),
+        _ => Err(e),
+    });
     let approve_yes = words(&co, "autopilot.approve") == "yes";
     let left = |t: &Obj| task_rec(&ap, t.s("id")).map(|r| r.b("left")).unwrap_or(false);
     match cmd {
@@ -110,11 +114,14 @@ pub fn guard(cmd: &str, pos: &[String], flags: &Obj, agent: Option<(&Obj, &str)>
 /// After a command of an autopilot turn went through: what it did, in its record (a retry counted, a task of yours
 /// it started now its to look after).
 pub fn note(co: &Co, cmd: &str, pos: &[String]) {
-    let Some(id) = pos.get(1).and_then(|i| super::limits::find_task(i).ok()).map(|t| t.t("id")) else { return };
+    // (another machine's task no board heard lately: by the id it was named with)
+    let Some(id) = pos.get(1).and_then(|i| super::limits::find_task(i).ok().map(|t| t.t("id")).or_else(|| crate::after::far::split(i).map(|_| i.clone()))) else { return };
     let _ = change(co, |ap, _| {
         match cmd {
             "retry" => { super::record::with_task(ap, &id, |r| { let n = r.i("retries") + 1; r.put("retries", n); }); true }
-            "delegate" if task_rec(ap, &id).is_none() => { super::record::own_task(ap, &id, "started", crate::clock::now()); true }
+            "delegate" if task_rec(ap, &id).is_none() => { super::record::own_task(ap, &id, "started", crate::clock::now()); super::record::with_task(ap, &id, |r| { r.put("started", true); }); true }
+            // One of its own, started now (another machine's counts as under way while no board hears it).
+            "delegate" => { super::record::with_task(ap, &id, |r| { r.put("started", true); r.del("over"); }); true }
             _ => false,
         }
     });

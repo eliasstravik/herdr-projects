@@ -261,3 +261,20 @@ fn ask_first_access_holds_its_wakes_while_it_shows_needs_you() {
     ok(&["unset", "coordinator.access", "--project-coordinator", "proj"]); tick(&w);
     assert_eq!(prompts_of(&w, &co).len(), 2);
 }
+
+#[test]
+fn ask_first_access_takes_a_wake_not_typed_in_yet_back_out_of_the_queue() {
+    let w = pilot_world();
+    let co = proj(&w);
+    on_and_quiet(&w, &co, &["--autopilot.every", "none", "--autopilot.gap", "1m"]);
+    let blocked = |st: &str| w.patch(|s| { for p in s["panes"].as_array_mut().unwrap() { if p.at("agent").s("name").starts_with("sw-coordinator") { p["agent"]["status"] = json!(st); } } });
+    w.add("One"); minutes(2);
+    sw::autopilot::tick::autopilot_tick(&w.socket, sw::clock::now()); // queued, not typed in yet
+    blocked("blocked");
+    let q = || sw::coordinator::state::get(&co).unwrap().arr("queue").len();
+    assert_eq!(q(), 1);
+    ok(&["set", "coordinator.access", "ask", "--project-coordinator", "proj"]);
+    tick(&w);
+    assert_eq!(q(), 0); assert_eq!(record(&co).arr("pending").len(), 1, "its reasons kept");
+    assert_eq!(prompts_of(&w, &co).len(), 1);
+}
