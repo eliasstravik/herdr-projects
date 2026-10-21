@@ -7,19 +7,31 @@ pub mod tasks;
 
 use crate::err::Res;
 use crate::json::*;
-use crate::store::{keys::{repo_keys, say_ids}, move_home::home_at_start, settings::migrate::move_settings, tasks::list};
+use crate::store::{keys::{repo_keys, say_ids}, move_home::home_at_start, repos::{git_root, primary_root}, settings::migrate::move_settings, tasks::list};
 use flags::{parse, refuse_unknown, Args};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Where the board is "in". Run as a command: the current folder. Run as the plugin's pane (whose own working
-/// directory is the plugin folder): the folder of the pane you opened it from; for a worktree workspace, its primary repo.
+/// directory is the plugin folder): the folder of the pane you opened it from (plugin_folder).
 pub fn context_folder() -> PathBuf {
     if crate::util::env_set("HERDR_PLUGIN_ID") {
         let c: Value = serde_json::from_str(&std::env::var("HERDR_PLUGIN_CONTEXT_JSON").unwrap_or_default()).unwrap_or(Value::Null);
-        for d in [c.at("worktree").s("repo_root"), c.s("focused_pane_cwd"), c.s("workspace_cwd")] { if !d.is_empty() && std::path::Path::new(d).exists() { return d.into(); } }
-        return crate::store::files::user_home();
+        return plugin_folder(&c).unwrap_or_else(crate::store::files::user_home);
     }
     std::env::current_dir().unwrap_or_else(|_| crate::store::files::user_home())
+}
+/// The folder of herdr's plugin context: the focused pane's, as a linked worktree's primary repo. The space's own repo
+/// (`worktree.repo_root`, which herdr keeps as the repo the space started in) only while the pane is in the space's
+/// checkout: a pane that `cd`'d into another repo is in that one. No pane folder: the space's repo, then its folder.
+pub fn plugin_folder(c: &Value) -> Option<PathBuf> {
+    let there = |d: &str| (!d.is_empty() && Path::new(d).exists()).then(|| PathBuf::from(d));
+    let (wt, real) = (c.at("worktree"), |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()));
+    let Some(pane) = there(c.s("focused_pane_cwd")) else { return there(wt.s("repo_root")).or_else(|| there(c.s("workspace_cwd"))) };
+    if let (Some(root), Some(checkout)) = (there(wt.s("repo_root")), there(wt.s("checkout_path"))) {
+        if real(&pane).starts_with(real(&checkout)) { return Some(root); }
+    }
+    let main = primary_root(&pane);
+    Some(if main != git_root(&pane) { main } else { pane })
 }
 /// Is the caller the agent of a task? Its shell runs in the task's worker pane (or its reviewer's). The board's own
 /// pane is the plugin's and the Coordinator's pane belongs to no task, so neither is ever taken for a worker.
