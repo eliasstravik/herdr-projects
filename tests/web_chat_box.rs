@@ -55,7 +55,7 @@ fn sending_keeps_the_focus_in_the_box_so_a_phone_keeps_its_keyboard() {
 fn who_gets_the_words_is_said_while_empty_too_and_a_second_enter_while_the_first_is_on_its_way_does_nothing() {
     // sends once: busy while the board has not answered; the words stay until it has them; kept words stay
     assert!(CHAT.contains("if (!text.trim() || busy || files.busy()) return;") && CHAT.contains("busy = true; sync();"));
-    assert!(CHAT.contains(r#"const kept = await onSend(text, delegate, to ? { id: to.id, reply: to.reply, scope: to.scope || "" } : null);"#));
+    assert!(CHAT.contains(r#"const kept = await onSend(files.expand(text), delegate, to ? { id: to.id, reply: to.reply, scope: to.scope || "" } : null);"#));
     // only what was sent leaves the box: words typed after it stay; changed inside it, all stays, and that is said
     assert!(CHAT.contains(r#"box.value = edited ? box.value : box.value.slice(text.length).replace(/^\s+/, ""); files.clear(sent);"#));
     assert!(CHAT.contains("if (!box.value.trim() && !files.count()) to = null;"));

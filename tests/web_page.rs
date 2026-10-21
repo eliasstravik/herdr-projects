@@ -66,7 +66,7 @@ fn the_pages_styles_nothing_under_13px_targets_a_thumb_can_hit_and_a_draft_kept_
     assert!(full.contains("@media (pointer: coarse) { .sw-chatbar .icon-button { min-width: var(--touch-target, 40px); min-height: var(--touch-target, 40px); } .sw-who-pick::before { content: \"\"; position: absolute; inset: -4px 0; } }"));
     assert!(has(CSS, r"\.sw-row\.is-selected \{[^}]*box-shadow: inset 3px 0 0 var\(--accent"), "the selected row has a bar in its gutter, not a tint alone");
     // The draft is kept with who it is for: a reload brings both back, so the words never go to whoever shows then.
-    for part in ["sessionStorage.setItem(TO, JSON.stringify(to))", "if (box.value.trim()) to = savedTo();", "keep(box.value, to)", "scope: to.scope || \"\"", "scope: snap.flags?.scope || \"\""] { assert!(CHAT.contains(part), "{part}"); }
+    for part in ["sessionStorage.setItem(TO, JSON.stringify(to))", "if (box.value.trim()) to = savedTo();", "keep(files.expand(box.value), to)", "scope: to.scope || \"\"", "scope: snap.flags?.scope || \"\""] { assert!(CHAT.contains(part), "{part}"); }
     assert!(CHAT.contains("`To: ${to.label}"));
     // a merge has no filled yes: `danger` leaves both answers plain
     assert!(SHEETS.contains(r#"n === 0 && !ask.danger ? ".btn-primary" : """#));

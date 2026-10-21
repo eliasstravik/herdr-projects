@@ -551,6 +551,8 @@ It looks the same for the Coordinator and for a task's agent, at every window wi
 2. **One rounded box**: the newest thing said in that conversation, in grey, under a line that names who said it
    (`Coordinator:`, `Agent:`, `Reviewer:`, `You:`); then an empty line; then the line you type on (the prompt is only
    `❯`).
+   - A picture you paste stands on it as `[Image 1]`, not as its path; what is sent has the path
+     ([pictures pasted](image-paste.md)).
    - While that line is empty, it says in grey who gets your message, by the name of their tab:
      `Send message to Coordinator`, or `Send message to Agent`. Nothing else is in it.
    - The box's frame and its `❯` say it by colour too: the plain text colour for the Coordinator, the task's status

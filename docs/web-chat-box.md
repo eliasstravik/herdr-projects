@@ -49,8 +49,10 @@ Measured against **herdr-web-ui 0.4.8** (see [how](#how-it-was-measured)):
     too (the card's border turns to the accent while files are over it).
   - Each file stands as a tile above the message (a picture's thumbnail, else its name), saying Uploading, Attached or
     Failed, with a cross to take it out.
-  - Its path goes into the message as `@<path> `, at its start, in the order the files were picked, which is how the
-    agent reads it. Send waits while one is on its way.
+  - It goes into the message at its start, in the order the files were picked: a picture as `[Image 1] ` (numbered per
+    message; backspace after it takes it out whole, its tile with it), any other file as `@<path> `. What is sent names
+    each as `@<path>`, which is how the agent reads it ([pictures pasted](image-paste.md)). Send waits while one is on
+    its way.
   - The web UI's limits: 8 MB a file (a bigger one says so in a band over the box), three on their way at a time, and as
     many at once as its Settings → Chat → Files at once says.
   - The file is kept where whoever gets the words can read it: in the Coordinator's own folder (a heading's
@@ -108,7 +110,7 @@ however long the words get (`crates/web/src/webui/page/room.js`):
   every two seconds) never moves where the box is scrolled to.
 - **Where not even one line fits** (a phone on its side, the keyboard leaving 200 px), all of the chat but the box steps
   aside too (with the chat shown; hidden, see above): the chat's bar, the conversation, the grip and the attached files' tiles. The files stay
-  attached (their paths are in the words) and come back with the room.
+  attached (they are in the words) and come back with the room.
 - **On an iPhone the box also stands clear of the strip iOS floats over the page** while its keyboard is up (its arrows
   and Done): iOS counts it as part of the visible window, so the box keeps 72 px more room at its foot. That strip was
   measured on an iPhone's screenshot (iOS 26): its top stands 73 px over the foot of the visible window.

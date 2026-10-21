@@ -50,7 +50,7 @@ export function chatEl({ onSend, onPress, onDock }) {
     const sent = files.ids();
     voice.forget(); // sent as it is: a tidied version of dictated words that comes later is not put in
     mine(text);
-    const kept = await onSend(text, delegate, to ? { id: to.id, reply: to.reply, scope: to.scope || "" } : null);
+    const kept = await onSend(files.expand(text), delegate, to ? { id: to.id, reply: to.reply, scope: to.scope || "" } : null);
     busy = false;
     if (closed) return; // the board closed while it was on its way: a new box has the draft now
     if (!kept) {
@@ -59,7 +59,7 @@ export function chatEl({ onSend, onPress, onDock }) {
       box.value = edited ? box.value : box.value.slice(text.length).replace(/^\s+/, ""); files.clear(sent);
       if (edited) say("Sent as it was. Your changes made while it was sending stayed here and were not sent.");
       if (!box.value.trim() && !files.count()) to = null;
-      keep(box.value, to); grow();
+      keep(files.expand(box.value), to); grow();
     }
     files.place(); sync();
   };
@@ -76,7 +76,7 @@ export function chatEl({ onSend, onPress, onDock }) {
   // A voice call with whoever the chat talks to: its button in the box beside the mic, its row under the bar (callbtn.js).
   // Docked, the button is in the web UI's box, beside its mic (dock.js); with the board's own chat, in the board's box.
   const phone = callEl();
-  const { el: compose, card, box, to: chip, send, also, grow, files, voice, say, destroy } = composeEl({ onSend: go, onInput: () => { if (closed) return; sync(); keep(box.value, to); }, onTab: () => { if (also.hidden || busy) return false; go(true); return true; }, whom, hold: () => busy, onGrow: () => room?.fit(), call: phone.btn });
+  const { el: compose, card, box, to: chip, send, also, grow, files, voice, say, destroy } = composeEl({ onSend: go, onInput: () => { if (closed) return; sync(); keep(files.expand(box.value), to); }, onTab: () => { if (also.hidden || busy) return false; go(true); return true; }, whom, hold: () => busy, onGrow: () => room?.fit(), call: phone.btn });
   box.value = saved();
   if (box.value.trim()) to = savedTo(); // a reload brings the words back with who they were for
 
@@ -244,7 +244,7 @@ export function chatEl({ onSend, onPress, onDock }) {
       box.disabled = snap.role !== "drive";
       if (snap.role !== "drive") box.placeholder = "This device can only watch";
       grow(); sync();
-      if (to) keep(box.value, to); // locked just now (words that were there before the board answered): kept with them
+      if (to) keep(files.expand(box.value), to); // locked just now (words that were there before the board answered): kept with them
       layout();
     },
   };

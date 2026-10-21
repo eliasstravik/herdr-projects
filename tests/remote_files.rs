@@ -70,6 +70,24 @@ fn a_dropped_path_goes_too_bare_escaped_or_quoted_and_a_path_that_is_no_file_her
 }
 
 #[test]
+fn a_picture_herdr_pasted_goes_too_and_the_words_name_it_where_it_landed() {
+    // The board's box sends `[Image 1]` as the path herdr pasted: a file of this machine, in herdr's own temp folder.
+    let w = world();
+    let far = Far::new(&w.base);
+    let dir = w.base.join("T").join("herdr-clipboard-images-501");
+    std::fs::create_dir_all(&dir).unwrap();
+    let shot = dir.join("client-327-clipboard-1792608324073248000-0.png");
+    std::fs::write(&shot, b"\x89PNG").unwrap();
+    far.answers("vm-a", "keep", &json!({ "ok": true, "path": "/home/me/proj/.herdr-projects/files/paste-1.png" }));
+    far.answers("vm-a", "do", &json!({ "ok": true, "msg": "sent" }));
+    assert!(tell(&format!("what is this {} ", shot.display())).ok);
+    let a = asked(&far);
+    assert_eq!(a.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(), ["keep", "do"], "{a:?}");
+    assert_eq!(a[0].1.s("kind"), "image/png");
+    assert_eq!(a[1].1.s("text"), "what is this /home/me/proj/.herdr-projects/files/paste-1.png ");
+}
+
+#[test]
 fn a_file_that_cannot_go_stops_the_words_and_says_why() {
     let w = world();
     let far = Far::new(&w.base);

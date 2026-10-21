@@ -143,7 +143,8 @@ Board settings (how many agents at once, the Watcher, the Coordinator) stay with
 ## Files you attach go with your words
 
 Words for another machine's agent or Coordinator may name a file of this machine: one you attached (`@<path>`), or one
-you dropped in the terminal (`/Users/you/Desktop/Screen\ Shot.png`, or in quotes). Before the words go, the board sends
+you dropped in the terminal (`/Users/you/Desktop/Screen\ Shot.png`, or in quotes), or a picture you pasted, which the
+box shows as `[Image 1]` ([pictures pasted](image-paste.md)). Before the words go, the board sends
 each such file over its own SSH link to that machine, and the words name it where it landed there. You copy nothing.
 
 - **Where it lands:** for a task's agent, in that task's working folder there, under `.herdr-projects/files/`. For a

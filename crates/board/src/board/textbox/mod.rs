@@ -1,7 +1,9 @@
 //! The box at the bottom you type in: the board's own, as no Ratatui text box wraps words, keeps undo and a kill ring
 //! and edits by written characters (a letter with its marks, an emoji, a flag) the way pi-tui's editor did, which the
 //! board's keys and docs/keys.md assume. Lines of text, a cursor, undo; keys.rs says what each key does, view.rs draws
-//! it within the room the board gives it. A paste comes in whole and is never taken for keys.
+//! it within the room the board gives it. A paste comes in whole and is never taken for keys; a picture's path pasted
+//! stands as `[Image 1]` (images.rs).
+pub mod images;
 pub mod keys;
 pub mod view;
 pub mod wrap;
@@ -10,10 +12,12 @@ use crate::text::grapheme_width;
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Clone, Debug, PartialEq)]
-struct Snap { lines: Vec<String>, line: usize, col: usize }
+struct Snap { lines: Vec<String>, line: usize, col: usize, images: Vec<String> }
 #[derive(Clone, Debug, Default)]
 pub struct TextBox {
     lines: Vec<String>, line: usize, col: usize,
+    /// The paths of this message's pictures, as pasted: `[Image n]` stands for the n-th.
+    images: Vec<String>,
     undo: Vec<Snap>, typing: bool,
     kill: Vec<String>, killed_last: bool, yank_at: Option<(usize, usize, usize)>,
     /// The column up and down keep to across lines of other lengths.
@@ -24,15 +28,24 @@ pub struct TextBox {
     pub above: usize, pub below: usize, pub viewport_top: usize,
 }
 impl TextBox {
-    pub fn text(&self) -> String { if self.lines.is_empty() { String::new() } else { self.lines.join("\n") } }
+    /// The words as they are sent: each picture's chip is its path again.
+    pub fn text(&self) -> String { self.expand(&self.raw()) }
+    /// The words as the box shows them, with the chips.
+    pub fn raw(&self) -> String { if self.lines.is_empty() { String::new() } else { self.lines.join("\n") } }
     pub fn is_empty(&self) -> bool { self.lines.iter().all(|l| l.is_empty()) }
     fn ensure(&mut self) { if self.lines.is_empty() { self.lines.push(String::new()); } }
-    fn snap(&self) -> Snap { Snap { lines: self.lines.clone(), line: self.line, col: self.col } }
+    fn snap(&self) -> Snap { Snap { lines: self.lines.clone(), line: self.line, col: self.col, images: self.images.clone() } }
     fn push_undo(&mut self) { let s = self.snap(); if self.undo.last() != Some(&s) { self.undo.push(s); if self.undo.len() > 200 { self.undo.remove(0); } } }
-    /// Replace the whole text; the cursor goes to its end. Undoable, as a change made by the board.
+    /// Replace the whole text; the cursor goes to its end. Undoable, as a change made by the board. It is a new
+    /// message: the pictures' paths in it are its chips, numbered from 1.
     pub fn set_text(&mut self, s: &str) {
         let norm = normalize(s);
         if norm != self.text() { self.push_undo(); }
+        // What was cut stays what it said, chips or not.
+        let kill: Vec<String> = self.kill.iter().map(|k| self.expand(k)).collect();
+        self.kill = kill;
+        self.images.clear();
+        let norm = self.collapse(&norm, false);
         self.lines = norm.split('\n').map(String::from).collect();
         self.line = self.lines.len() - 1; self.col = self.lines[self.line].len();
         self.typing = false; self.pref = None; self.killed_last = false; self.yank_at = None;
@@ -40,11 +53,13 @@ impl TextBox {
     }
     pub fn cursor(&self) -> (usize, usize) { (self.line, self.col) }
     fn cur(&self) -> &str { self.lines.get(self.line).map(|s| s.as_str()).unwrap_or("") }
-    /// Text typed or pasted at the cursor. A paste is one step of undo.
+    /// Text typed or pasted at the cursor. A paste is one step of undo; one of pictures' paths only is their chips.
     pub fn insert(&mut self, s: &str) {
         let s = normalize(s);
         if s.is_empty() { return; }
         self.push_undo();
+        self.ensure();
+        let s = self.pasted(&s);
         self.insert_raw(&s);
         self.typing = false;
     }
@@ -65,11 +80,12 @@ impl TextBox {
         self.insert_raw(&c.to_string());
     }
     pub fn newline(&mut self) { self.push_undo(); self.typing = false; self.insert_raw("\n"); }
-    pub fn undo(&mut self) { if let Some(s) = self.undo.pop() { self.lines = s.lines; self.line = s.line; self.col = s.col; } self.typing = false; self.pref = None; }
+    pub fn undo(&mut self) { if let Some(s) = self.undo.pop() { self.lines = s.lines; self.line = s.line; self.col = s.col; self.images = s.images; } self.typing = false; self.pref = None; }
 
     // ---- moving ------------------------------------------------------------------------------------------------------
-    fn prev_g(&self) -> usize { self.cur()[..self.col].grapheme_indices(true).last().map(|(i, _)| i).unwrap_or(0) }
-    fn next_g(&self) -> usize { let l = self.cur(); l[self.col..].graphemes(true).next().map(|g| self.col + g.len()).unwrap_or(l.len()) }
+    // A chip is one character to these.
+    fn prev_g(&self) -> usize { self.chip_before(self.col).unwrap_or_else(|| self.cur()[..self.col].grapheme_indices(true).last().map(|(i, _)| i).unwrap_or(0)) }
+    fn next_g(&self) -> usize { let l = self.cur(); self.chip_after(self.col).unwrap_or_else(|| l[self.col..].graphemes(true).next().map(|g| self.col + g.len()).unwrap_or(l.len())) }
     pub fn left(&mut self) { self.pref = None; if self.col > 0 { self.col = self.prev_g(); } else if self.line > 0 { self.line -= 1; self.col = self.cur().len(); } }
     pub fn right(&mut self) { self.pref = None; if self.col < self.cur().len() { self.col = self.next_g(); } else if self.line + 1 < self.lines.len() { self.line += 1; self.col = 0; } }
     pub fn home(&mut self) { self.pref = None; self.col = 0; }
@@ -78,6 +94,7 @@ impl TextBox {
         let gs: Vec<(usize, &str)> = self.cur()[..self.col].grapheme_indices(true).collect();
         let mut n = gs.len();
         while n > 0 && gs[n - 1].1.chars().all(char::is_whitespace) { n -= 1; }
+        if let Some(c) = self.chip_before(gs.get(n).map(|g| g.0).unwrap_or(self.col)) { return c; }
         let punct = n > 0 && is_punct(gs[n - 1].1);
         while n > 0 && !gs[n - 1].1.chars().all(char::is_whitespace) && is_punct(gs[n - 1].1) == punct { n -= 1; }
         gs.get(n).map(|g| g.0).unwrap_or(if n == 0 { 0 } else { self.col })
@@ -87,6 +104,7 @@ impl TextBox {
         let gs: Vec<(usize, &str)> = l[self.col..].grapheme_indices(true).map(|(i, g)| (self.col + i, g)).collect();
         let mut n = 0;
         while n < gs.len() && gs[n].1.chars().all(char::is_whitespace) { n += 1; }
+        if let Some(c) = self.chip_after(gs.get(n).map(|g| g.0).unwrap_or(l.len())) { return c; }
         let punct = n < gs.len() && is_punct(gs[n].1);
         while n < gs.len() && !gs[n].1.chars().all(char::is_whitespace) && is_punct(gs[n].1) == punct { n += 1; }
         gs.get(n).map(|g| g.0).unwrap_or(l.len())
@@ -159,10 +177,10 @@ impl TextBox {
     }
     /// The cursor to the next (or previous) place this character stands.
     pub fn jump(&mut self, c: char, forward: bool) {
-        let all = self.text();
+        let all = self.raw();
         let at: usize = self.lines[..self.line].iter().map(|l| l.len() + 1).sum::<usize>() + self.col;
         let found = if forward { all[(at + 1).min(all.len())..].find(c).map(|i| at + 1 + i) } else { all[..at].rfind(c) };
-        if let Some(i) = found { let mut n = i; for (k, l) in self.lines.iter().enumerate() { if n <= l.len() { self.line = k; self.col = n; break; } n -= l.len() + 1; } }
+        if let Some(i) = found { let mut n = i; for (k, l) in self.lines.iter().enumerate() { if n <= l.len() { self.line = k; self.col = n; break; } n -= l.len() + 1; } self.out_of_chip(); }
     }
     // ---- up and down, through the lines as they wrap ---------------------------------------------------------------
     /// The visual lines: (logical line, chunk).
@@ -202,6 +220,7 @@ impl TextBox {
         let more = v.get(to as usize + 1).map(|x| x.0 == *tn).unwrap_or(false);
         if more && col >= tc.end && tc.end > tc.start { col = line[tc.start..tc.end].grapheme_indices(true).last().map(|(i, _)| tc.start + i).unwrap_or(tc.start); }
         self.line = *tn; self.col = col;
+        self.out_of_chip();
         true
     }
 }

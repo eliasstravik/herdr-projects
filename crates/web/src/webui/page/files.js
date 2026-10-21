@@ -2,8 +2,10 @@
 // round add button in the lower left picks any files, and a picture pasted into the box or files dropped on it are
 // taken too. Each stands as a tile above the message (a picture's thumbnail, else its name), saying where it stands,
 // with a cross that takes it out. Each goes to the board (webui/attach.rs), for whoever the words are for, and is kept
-// where they can read it; its path goes into the message as `@<path> `, at its start, in the order the files were
-// picked, which is how the agent reads it, as in the web UI. Its limits are the web UI's: 8 MB a file, three on their
+// where they can read it; it goes into the message at its start, in the order the files were picked: a picture as
+// `[Image 1] `, `[Image 2] ` (numbered per message; backspace takes it out whole, its tile with it), any other file as
+// `@<path> `, as in the web UI. What is sent names each picture as `@<path>`, which is how the agent reads it (`expand`,
+// docs/image-paste.md). Its limits are the web UI's: 8 MB a file, three on their
 // way at a time, and as many at once as its Settings → Chat → Files at once says.
 /* global window, localStorage, URL */
 import { h, icon, post } from "./dom.js";
@@ -11,6 +13,9 @@ import { h, icon, post } from "./dom.js";
 const MOST = 8 * 1024 * 1024, AT_ONCE = 3, LONGEST = 20000;
 const PREVIEW = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"];
 export const mention = (path) => `@${path} `;
+// A picture in the words: `[Image n]`, its path only in what is sent.
+export const chip = (n) => `[Image ${n}]`;
+const CHIP = /^\[Image (\d+)\] $/u;
 // How many files one pick, paste or drop takes: the web UI's own setting, where it keeps it (20 unless set).
 export const perPick = () => { try { const n = JSON.parse(localStorage.getItem("herdr-web-ui:settings") || "{}").attachLimit; return Number.isFinite(n) ? Math.min(50, Math.max(1, Math.round(n))) : 20; } catch { return 20; } };
 const mb = (n) => `${Math.ceil((n / (1024 * 1024)) * 10) / 10} MB`;
@@ -36,6 +41,8 @@ export function filesEl({ box, whom, hold = () => false, changed, say }) {
   const input = h("input", { type: "file", multiple: true, hidden: true });
   const add = h("button.icon-button.sw-attach", { type: "button", "aria-label": "Attach files", title: "Attach files" }, icon("plus"));
   const busy = () => list.some((f) => f.state === "uploading");
+  // The next picture's number: one more than the highest still in the words' files, so each message counts from 1.
+  const nextChip = () => 1 + Math.max(0, ...[...placed.values()].map((m) => Number(CHIP.exec(m)?.[1] || 0)));
   const draw = () => {
     strip.hidden = !list.length;
     strip.replaceChildren(...list.map((f) => h(`div.sw-file.is-${f.state}`,
@@ -54,7 +61,7 @@ export function filesEl({ box, whom, hold = () => false, changed, say }) {
     while (waiting.length) {
       const { id, path } = waiting[0], f = list.find((x) => x.id === id);
       if (!f) { waiting.shift(); continue; }
-      const m = mention(path), out = leading(box.value, m, [...placed].filter(([p]) => p < id).map(([, x]) => x));
+      const m = f.file.type.startsWith("image/") ? `${chip(nextChip())} ` : mention(path), out = leading(box.value, m, [...placed].filter(([p]) => p < id).map(([, x]) => x));
       if (!out.length) break; // no room for it whole: it waits for room, and Send waits with it
       const [a, b] = [box.selectionStart, box.selectionEnd];
       box.value = out.text;
@@ -95,7 +102,7 @@ export function filesEl({ box, whom, hold = () => false, changed, say }) {
     if (f.url) URL.revokeObjectURL(f.url);
     const m = placed.get(f.id);
     placed.delete(f.id);
-    if (m) box.value = box.value.replace(m, "");
+    if (m) box.value = box.value.includes(m) ? box.value.replace(m, "") : box.value.replace(m.trimEnd(), "");
     draw(); place(); // the room it leaves may be what a finished file waits for
   }
   add.addEventListener("click", () => input.click());
@@ -104,6 +111,22 @@ export function filesEl({ box, whom, hold = () => false, changed, say }) {
   box.addEventListener("paste", (e) => {
     const files = [...(e.clipboardData?.items || [])].filter((i) => i.kind === "file").map((i) => i.getAsFile()).filter(Boolean);
     if (files.length) { e.preventDefault(); take(files); }
+  });
+  // Backspace just after a picture's chip, or delete just before it, takes the picture out whole, its tile with it.
+  box.addEventListener("keydown", (e) => {
+    if ((e.key !== "Backspace" && e.key !== "Delete") || e.isComposing || e.altKey || e.ctrlKey || e.metaKey || box.selectionStart !== box.selectionEnd) return;
+    const at = box.selectionStart, v = box.value;
+    for (const f of list) {
+      const m = placed.get(f.id);
+      if (!m || !CHIP.test(m)) continue;
+      const c = m.trimEnd(), i = e.key === "Backspace" ? (v.slice(0, at).endsWith(c) ? at - c.length : -1) : (v.startsWith(c, at) ? at : -1);
+      if (i < 0) continue;
+      e.preventDefault();
+      box.value = v.slice(0, i) + v.slice(i + c.length);
+      box.setSelectionRange(i, i);
+      placed.delete(f.id);
+      return remove(f);
+    }
   });
   box.addEventListener("compositionstart", () => { box.dataset.composing = "1"; });
   box.addEventListener("compositionend", () => { delete box.dataset.composing; setTimeout(place, 0); });
@@ -120,6 +143,8 @@ export function filesEl({ box, whom, hold = () => false, changed, say }) {
     strip, input, add, busy, dropOn,
     count: () => list.length,
     place, ids: () => list.map((f) => f.id),
+    // The words as they are sent and kept: each picture's chip is `@<path>` again.
+    expand: (text) => list.reduce((t, f) => { const m = placed.get(f.id); return m && CHIP.test(m) && f.path ? t.replace(m.trimEnd(), () => `@${f.path}`) : t; }, text),
     // Sent: the tiles of the files sent (`ids`: those there when it went; none: all) go; the files stay where they
     // were kept, for the agent to read. One attached while it was on its way stays, for the next message.
     clear(ids) {
