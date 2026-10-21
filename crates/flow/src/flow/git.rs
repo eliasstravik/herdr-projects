@@ -3,7 +3,7 @@ use crate::clock::now;
 use crate::err::Res;
 use crate::json::*;
 use crate::store::files::{data_dir, read_obj, read_text, write_json};
-use crate::store::repos::{folder_of, git_out};
+use crate::store::repos::{folder_of, git_out, stopped};
 use crate::store::tasks::{update_wait, Change, Task};
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -27,7 +27,8 @@ pub fn gh(args: &[&str], cwd: &Path, timeout_ms: u64) -> GhOut {
     if let Some(f) = FAKE_GH.with(|x| x.borrow().clone()) { return f(&a); }
     crate::runner::user_env();
     let child = Command::new("gh").args(&a).current_dir(cwd).env("GH_PROMPT_DISABLED", "1").env("GIT_TERMINAL_PROMPT", "0").stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn();
-    match child.map_err(|e| e.to_string()).and_then(|c| crate::herdr::cli::wait_with_timeout(c, timeout_ms).map_err(|e| e.message)) {
+    let late = |e: crate::herdr::cli::HerdrError| if e.code == "timeout" { stopped(&format!("gh {}", args.iter().take(2).copied().collect::<Vec<_>>().join(" ")), timeout_ms) } else { e.message };
+    match child.map_err(|e| e.to_string()).and_then(|c| crate::herdr::cli::wait_with_timeout(c, timeout_ms).map_err(late)) {
         Ok(r) => GhOut { status: r.status, stdout: r.stdout, stderr: r.stderr },
         Err(e) => GhOut { status: -1, stdout: String::new(), stderr: e },
     }

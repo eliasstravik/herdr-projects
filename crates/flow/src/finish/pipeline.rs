@@ -16,7 +16,7 @@ use crate::runner::{claim, is_aborted, release, sh, Guard};
 use crate::store::failures::{bound_detail, failure_patch, is_auth_failure};
 use crate::store::fetch;
 use crate::store::keys::{repo_keys, task_ref};
-use crate::store::repos::{branch_of, cwd_of, folder_of, git_out, git_slow};
+use crate::store::repos::{branch_of, cwd_of, folder_of, git_out, git_slow, TIMED_OUT};
 use crate::store::reviews::{current_review, passed_review};
 use crate::store::settings::lookup::work;
 use crate::store::settings::values::{command_of, ms};
@@ -181,7 +181,10 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
             t = g.set(|t| { t.put("stage", "pushing"); t.put("msg", "Pushing the branch"); })?;
             // The branch is the board's own and an agent may have rebuilt it: overwrite what was pushed before, but only
             // while the remote still holds what was last seen here.
-            git_slow(tp, &["push", "-u", "--force-with-lease", "origin", t.s("branch")], 120000)?;
+            // As long as `merge.pushTimeout` allows: a repo's pre-push hook may run its tests.
+            let limit = ch.s("merge.pushTimeout").to_string();
+            let most = match ms(&limit) { 0 => u64::MAX, l => l as u64 };
+            git_slow(tp, &["push", "-u", "--force-with-lease", "origin", t.s("branch")], most).map_err(|e| if e.msg.contains(TIMED_OUT) { crate::err::Error::new(format!("{} (merge.pushTimeout): a slow pre-push hook? Raise it with herdr-projects set merge.pushTimeout 10m --repo {}", e.msg, t.s("repo"))) } else { e })?;
             let ph = git_out(tp, &["rev-parse", &format!("refs/remotes/origin/{}", t.s("branch"))])?;
             g.set(|t| t.put("prHead", ph.clone()))?;
             let mut url = t.t("pr");
