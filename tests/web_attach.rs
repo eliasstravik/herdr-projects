@@ -109,8 +109,14 @@ fn the_box_attaches_as_the_web_uis_does_the_add_button_tiles_paste_drop_and_the_
     // a picture stands in the words as `[Image n] `, numbered per message, and is sent and kept as its `@path`;
     // backspace after it (delete before it) takes it out whole, its tile with it (docs/image-paste.md)
     assert!(FILES.contains("export const chip = (n) => `[Image ${n}]`;") && FILES.contains(r#"f.file.type.startsWith("image/") ? `${chip(nextChip())} ` : mention(path)"#));
-    assert!(FILES.contains(r#"t.replace(m.trimEnd(), () => `@${f.path}`)"#) && FILES.contains(r#"(e.key !== "Backspace" && e.key !== "Delete")"#) && FILES.contains("return remove(f);"));
+    assert!(FILES.contains(r#"t.replace(m.trimEnd(), () => `@${f.path}`)"#) && FILES.contains(r#"(e.key !== "Backspace" && e.key !== "Delete")"#) && FILES.contains("placed.delete(c.f.id);\n    remove(c.f);"));
     assert!(CHAT.contains("await onSend(files.expand(text), delegate") && CHAT.contains("keep(files.expand(box.value), to); }"));
+    // the caret never stands inside a chip, a selection takes one whole; a chip changed all the same takes its picture
+    // out, tile and all, and says so; one still in words changed while they went is its path again (never a label
+    // that names nothing)
+    assert!(FILES.contains("if (one) { if (a > c.at && a < c.end) a = b = back ? c.at : c.end; continue; }") && FILES.contains(r#"[[document, "selectionchange"], [box, "selectionchange"], [box, "select"], [box, "keyup"], [box, "pointerup"], [box, "focus"]]"#));
+    assert!(FILES.contains("const lost = list.filter((f) => CHIP.test(placed.get(f.id) || \"\") && !whole.has(f.id));") && FILES.contains("was taken out of the message."));
+    assert!(FILES.contains("for (const f of gone) { const m = placed.get(f.id); if (m && CHIP.test(m) && f.path) box.value = box.value.replace(m.trimEnd(), () => `@${f.path}`); }"));
     // sent to the board for whoever the words are for; attaching locks that as typing does; no send while one is on its way
     assert!(FILES.contains(r#"post("attach", { name: file.name || "", type: file.type || "", data: base64("#) && FILES.contains("to: whom() });"));
     assert!(CHAT.contains("holding = typing || files.count() > 0;") && CHAT.contains("if (!holding) to = null; else if (!to && now) to = { ...now };"));

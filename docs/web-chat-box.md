@@ -50,7 +50,8 @@ Measured against **herdr-web-ui 0.4.8** (see [how](#how-it-was-measured)):
   - Each file stands as a tile above the message (a picture's thumbnail, else its name), saying Uploading, Attached or
     Failed, with a cross to take it out.
   - It goes into the message at its start, in the order the files were picked: a picture as `[Image 1] ` (numbered per
-    message; backspace after it takes it out whole, its tile with it), any other file as `@<path> `. What is sent names
+    message; one character to the caret and to backspace, which takes it out whole, its tile with it), any other
+    file as `@<path> `. What is sent names
     each as `@<path>`, which is how the agent reads it ([pictures pasted](image-paste.md)). Send waits while one is on
     its way.
   - The web UI's limits: 8 MB a file (a bigger one says so in a band over the box), three on their way at a time, and as

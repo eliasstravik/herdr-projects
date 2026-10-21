@@ -30,9 +30,19 @@ place, so the agent opens the picture as before.
 The box under the web board's list where the web UI has no chat of its own to show
 ([the web board's chat box](web-chat-box.md)) does the same with a picture you paste, drop or pick: it goes into the
 message as `[Image 1] ` (its thumbnail stands above the message, as before), and what is sent names it as
-`@<path>`, which is how the agent reads it. Backspace just after the chip, or delete just before it, takes the picture
-out whole, its tile with it; the tile's cross takes the chip out too. Any other file still goes in as `@<path> `. The
-draft kept in the browser has the paths, so after a reload it shows them (the tiles are gone by then).
+`@<path>`, which is how the agent reads it. The chip is one character there too:
+
+- **The caret never stands inside it.** A click, a tap or an arrow that would put it there puts it before or after
+  the chip, the way it was going; a selection that starts or ends inside one takes the whole chip.
+- **Backspace just after it, or delete just before it,** takes the picture out whole, its tile with it; the tile's
+  cross takes the chip out too.
+- **A chip changed all the same** (cut in part some other way) is no longer the picture: its picture is taken out,
+  tile and all, and the band over the box says `[Image 1] was taken out of the message.` A tile always means its
+  picture is sent.
+- **Words you change while they are on their way** stay in the box, as before; a picture of theirs that was sent
+  stands there as its `@<path>` again, so what stays still names it.
+
+Any other file still goes in as `@<path> `. The draft kept in the browser has the paths, so after a reload it shows them (the tiles are gone by then).
 
 The web UI's own chat, docked under the board most of the time ([the web board's chat](web-chat.md)), is the web UI's:
 it puts the `@<path>` in its box itself.
