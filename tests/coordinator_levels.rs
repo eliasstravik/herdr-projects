@@ -67,10 +67,12 @@ fn a_machine_coordinator_is_named_after_its_machine_and_kept_beside_the_coordina
     tell(&w, &m, "still there?");
     assert_eq!(after(&args(&agent(&w, "sw-coordinator-machine")), "--resume"), session);
     assert_eq!(look(&m).said, "Back again.");
-    // herdr's sidebar names it as the board does
+    // herdr's sidebar names it as the board does (cut to the sidebar's room where the machine's name is long)
     sw::coordinator::sidebar::tell_sidebar(&m);
     let meta = w.state().arr("metadata").last().map(|m| m.arr("args").iter().map(text).collect::<Vec<_>>().join(" ")).unwrap_or_default();
-    assert!(meta.contains(&format!("--display-agent {name} · idle")) && meta.contains(&format!("--title {name}")), "{meta}");
+    let (full, shown) = (format!("{name} · idle"), meta.split("--display-agent ").nth(1).and_then(|r| r.split(" --").next()).unwrap_or(""));
+    assert!(shown == full || shown.strip_suffix('…').is_some_and(|s| full.starts_with(s)), "{meta}");
+    assert!(meta.contains(&format!("--title {name} ")), "{meta}");
 }
 
 #[test]

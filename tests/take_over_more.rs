@@ -132,15 +132,20 @@ fn real_programs_herdr_superworks_own_processes_are_stopped_and_no_other() {
     // macOS kills a copy of its own program at its start until it is signed again (here: signed for this machine only)
     #[cfg(target_os = "macos")]
     assert!(std::process::Command::new("codesign").args(["-s", "-", "-f"]).arg(&old).status().unwrap().success());
-    let mut keeper = std::process::Command::new(&old).args(["-c", "read -t 30"]).stdin(std::process::Stdio::piped()).spawn().unwrap();
+    let mut keeper = std::process::Command::new(&old).args(["-c", "echo up; read -t 30"]).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).spawn().unwrap();
+    let pid = keeper.id();
     let _quiet = keeper.stdin.take(); // held open here, so it waits on nothing and starts no other program
+    // Marked once it runs, as an old keeper is: `ps` then names it by its file.
+    let mut up = String::new();
+    std::io::BufRead::read_line(&mut std::io::BufReader::new(keeper.stdout.take().unwrap()), &mut up).unwrap();
+    assert_eq!(up, "up\n");
     let mut other = std::process::Command::new("/bin/sleep").arg("30").spawn().unwrap();
     let mark = |c: &std::process::Child| { let pid = c.id() as i64; serde_json::json!({ "pid": pid, "start": sw::store::files::proc_start(pid) }).to_string() };
     put(&data.join("keeper.json"), &mark(&keeper));
     put(&data.join("serve.json"), &mark(&other)); // whatever runs under that number now is not herdr-superwork's
-    let pid = keeper.id();
     let reaped = std::thread::spawn(move || { let mut k = keeper; k.wait().unwrap() }); // as its own parent would: it is gone once it ends
-    assert_eq!(sw::take_over::live::Live.stop_old(&data), vec!["keeper".to_string()]);
+    let seen = String::from_utf8_lossy(&std::process::Command::new("ps").args(["-p", &pid.to_string(), "-o", "args="]).output().unwrap().stdout).into_owned();
+    assert_eq!(sw::take_over::live::Live.stop_old(&data), vec!["keeper".to_string()], "ps says {seen:?}");
     use std::os::unix::process::ExitStatusExt;
     assert_eq!(reaped.join().unwrap().signal(), Some(libc::SIGTERM), "{pid}");
     assert!(other.try_wait().unwrap().is_none());
