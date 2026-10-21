@@ -26,7 +26,8 @@ thread_local! { static FAKE: RefCell<Option<Rc<dyn Fake>>> = const { RefCell::ne
 pub fn set_fake(f: Option<Rc<dyn Fake>>) { FAKE.with(|x| *x.borrow_mut() = f); }
 pub fn fake() -> Option<Rc<dyn Fake>> { FAKE.with(|x| x.borrow().clone()) }
 
-pub fn bin() -> String { std::env::var("HERDR_BIN_PATH").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| "herdr".into()) }
+/// The herdr program: `HERDR_BIN_PATH`, else `herdr` on PATH, else where it is found without it (find.rs).
+pub fn bin() -> String { std::env::var("HERDR_BIN_PATH").ok().filter(|s| !s.is_empty()).or_else(super::find::herdr_elsewhere).unwrap_or_else(|| "herdr".into()) }
 fn config_home() -> PathBuf { std::env::var("XDG_CONFIG_HOME").ok().filter(|s| !s.is_empty()).map(PathBuf::from).unwrap_or_else(|| crate::store::files::user_home().join(".config")) }
 /// The session a plain command talks to: the pane it runs in, else the default session.
 pub fn current_socket() -> String {
