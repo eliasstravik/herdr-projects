@@ -20,6 +20,7 @@ mod agent_models;
 mod agent_start_failed;
 mod agent_start_prompt;
 mod agent_versions;
+mod archive_done;
 mod attempts;
 mod attempts_more;
 mod attempts_rest;
