@@ -81,9 +81,10 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
     hours`). They end at the list's right edge, where a task's time does. Where the list is narrow they give way, the
     adds first, then the last task; when it next wakes then goes to the end of the line under the name.
   - **The line under the name** starts with its state word, then what goes with it: `On · woke 12m ago: …` (or
-    `On · wakes every 1h + events` before its first wake), `Working · woke for …`, `At its limit · 3 of 3 added · 1 of 2
-    under way`, `Asleep · its hours are 09:00-17:00`, `Needs you · its last wakes went unanswered`, `Could not start ·
-    …`. In the brighter grey a task's line has; `Needs you` and `Could not start` in red.
+    `On · wakes every 1h + events` before its first wake), `Working · woke for …`, `At its limit · 2 of 2 under way:
+    waits for one to finish` (or `no adds left today`), `Asleep · its hours are 09:00-17:00`, `Needs you · its last
+    wakes went unanswered`, `Could not start · …`. In the brighter grey a task's line has; `Needs you` and
+    `Could not start` in red.
   - **A machine's heading** keeps its rule: it runs from the name to the columns.
 
   Off, nothing of autopilot shows, as a task shows nothing of an agent before one is on it. A machine on an older

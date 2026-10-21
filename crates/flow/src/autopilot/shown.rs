@@ -45,8 +45,8 @@ pub fn next_words(co: &Co, ap: &Obj, now: i64) -> String {
 pub fn last_added(ap: &Obj) -> String { tasks(ap).into_iter().filter(|t| t.s("by") == "added").max_by_key(|t| t.i("at")).map(|t| say_id(t.s("id"), &repo_keys())).unwrap_or_default() }
 /// The task id of the last task it added, as kept ("" none): its row finds that task's mark by it.
 pub fn last_id(ap: &Obj) -> String { tasks(ap).into_iter().filter(|t| t.s("by") == "added").max_by_key(|t| t.i("at")).map(|t| t.t("id")).unwrap_or_default() }
-/// What it does now, in a sentence that starts with its state: `Working · woke for HSW-92 merged`, `At its limit · 3
-/// of 3 added · 2 of 2 under way`, `On · woke 12m ago: its timer, and the board changed`. "" while it is off.
+/// What it does now, in a sentence that starts with its state: `Working · woke for HSW-92 merged`, `At its limit · 2
+/// of 2 under way: waits for one to finish`, `On · woke 12m ago: its timer, and the board changed`. "" while it is off.
 pub fn activity(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String {
     let st = state_word(co, ap, board, now);
     let last = ap.arr("wakes").last().filter(|w| w.b("why"));
@@ -57,7 +57,7 @@ pub fn activity(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String {
         "could not start" => ap.t("couldNot"),
         "working" => { let why = super::wake::why_words(ap.at("wake").arr("reasons")); if why.is_empty() { "a wake's turn is under way".into() } else { format!("woke for {why}") } }
         "asleep" => format!("its hours are {}", words(co, "autopilot.hours")),
-        "at its limit" => today(co, ap, board, now).say(),
+        "at its limit" => { let t = today(co, ap, board, now); if t.slots_left() { "no adds left today".into() } else { format!("{} of {} under way: waits for one to finish", t.under_way, t.at_once) } }
         _ => last.map(|w| format!("woke {} ago: {}", age(now - w.i("at")), w.s("why"))).unwrap_or_else(|| format!("wakes {}", triggers(co))),
     };
     let mut word = st.to_string();
