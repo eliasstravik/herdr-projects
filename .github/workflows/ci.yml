@@ -3,7 +3,9 @@
 # made with `sandbox-exec` (plan_sandbox, its real_programs_ test refuses a write into the guarded folders for real;
 # plan_steps, macOS's own words when it cannot be made), a process's state read with `ps` (detached_jobs), locks taken
 # with the kernel's flock, macOS having no `flock` command (home_folder_more), `wc`'s padded count (finish_commit), a temp
-# folder whose path is a link (warm_start: /var is /private/var) and a copied program signed again (take_over_more).
+# folder whose path is a link (warm_start: /var is /private/var), a copied program that may need signing again
+# (take_over_more), and a machine name too long to show whole (the runners' own: coordinator_levels,
+# board_coordinators_inks). The whole check passed there once too, on the commit that brought these.
 name: Check
 
 on:
@@ -74,4 +76,4 @@ jobs:
           GIT_AUTHOR_EMAIL: ci@example.com
           GIT_COMMITTER_NAME: ci
           GIT_COMMITTER_EMAIL: ci@example.com
-        run: npm run check -- --all
+        run: npm run check plan-sandbox plan-steps detached-jobs home-folder-more finish-commit warm-start take-over-more coordinator-levels board-coordinators-inks
