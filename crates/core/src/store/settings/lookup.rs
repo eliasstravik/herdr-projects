@@ -1,8 +1,9 @@
 //! The one lookup. A work setting is looked up in one order and the nearest answer wins:
 //!   this task -> your entry for this repo -> you -> the repo's own file -> built in
 //! A board setting is yours only: you -> built in. A repo's own fact (its key) is said for that repo only: your entry
-//! for the repo -> the repo's own file, as it is in the repo's folder now -> built in. No setting has a lookup of its
-//! own. A setting is read when its step starts: callers ask here at that moment and keep nothing.
+//! for the repo -> the repo's own file, as it is in the repo's folder now -> built in. A coordinator's setting:
+//! this time -> this coordinator -> you -> built in (coord.rs). No setting has a lookup of its own. A setting is read when its step starts: callers ask here at that moment and keep nothing.
+use super::coord::{once_names, Coord};
 use super::places::{read, repo_file, yours, Mine, Problem};
 use super::values::{fits, known, NONE};
 use crate::err::Res;
@@ -15,13 +16,14 @@ use std::cell::OnceCell;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-/// Whose settings: one task's, a repo's (by its name on the board), or yours.
+/// Whose settings: one task's, a repo's (by its name on the board), one coordinator's, or yours.
 #[derive(Clone, Default)]
-pub struct Scope<'a> { pub task: Option<&'a Task>, pub repo: String }
+pub struct Scope<'a> { pub task: Option<&'a Task>, pub repo: String, pub coord: Option<Coord> }
 impl<'a> Scope<'a> {
     pub fn you() -> Self { Scope::default() }
-    pub fn task(t: &'a Task) -> Self { Scope { task: Some(t), repo: String::new() } }
-    pub fn repo(name: &str) -> Self { Scope { task: None, repo: name.to_string() } }
+    pub fn task(t: &'a Task) -> Self { Scope { task: Some(t), ..Default::default() } }
+    pub fn repo(name: &str) -> Self { Scope { repo: name.to_string(), ..Default::default() } }
+    pub fn coord(c: Coord) -> Self { Scope { coord: Some(c), ..Default::default() } }
 }
 fn repo_name_of(t: &Task) -> String { let r = t.s("repo"); if !r.is_empty() { r.to_string() } else { t.s("id").split('/').next().unwrap_or("").to_string() } }
 /// A task in no repo skips the repo places, and where it works, how it is checked and how it lands mean nothing to it.
@@ -35,7 +37,7 @@ impl Place {
     /// What this place says: read only when a setting gets that far down.
     pub fn values(&self) -> &Obj { self.values.get_or_init(|| self.load.as_ref().map(|f| f()).unwrap_or_default()) }
 }
-pub struct Places { pub work: Vec<Place>, pub board: Vec<Place>, pub repo: Vec<Place>, pub no_repo: bool, pub problems: Vec<Problem> }
+pub struct Places { pub work: Vec<Place>, pub board: Vec<Place>, pub repo: Vec<Place>, pub coord: Vec<Place>, pub no_repo: bool, pub problems: Vec<Problem> }
 fn builtin() -> Place { Place::now("builtin", "built in", SETTINGS.iter().map(|s| (s.name.clone(), s.builtin.clone())).collect()) }
 
 /// The places that count for a scope, worked out once for all the settings asked of it.
@@ -73,7 +75,15 @@ pub fn places_of(scope: &Scope, mine: &Mine) -> Places {
     if !name.is_empty() { if let Some(r) = mine.repos.get(&name) { own.push(Place::now("repo", format!("your entry for {name}"), r.clone())); } }
     if !name.is_empty() { if let Some(root) = known_repos().get(&name) { let root = PathBuf::from(text(root)); own.push(Place::later("file", "the repo's file", move || repo_file(&root, None).0)); } }
     own.push(builtin());
-    Places { work, board: vec![Place::now("you", "you", mine.you.clone()), builtin()], repo: own, no_repo: task.is_some() && !repo_places, problems }
+    // A coordinator's: what autopilot holds for this time, then its own entry, then you.
+    let mut coord = vec![];
+    if let Some(c) = &scope.coord {
+        if !c.once.is_empty() { let (v, p) = read(&Value::Object(c.once.clone()), "this time", &once_names(), "cannot be said for this time"); problems.extend(p); coord.push(Place::now("once", "this time", v)); }
+        if let Some(o) = mine.coords.get(&c.key) { coord.push(Place::now("coord", c.place(), o.clone())); }
+    }
+    coord.push(Place::now("you", "you", mine.you.clone()));
+    coord.push(builtin());
+    Places { work, board: vec![Place::now("you", "you", mine.you.clone()), builtin()], repo: own, coord, no_repo: task.is_some() && !repo_places, problems }
 }
 
 #[derive(Clone, Debug)]
@@ -84,7 +94,7 @@ pub struct Found { pub name: String, pub value: Value, pub place: String, pub fr
 pub fn lookup_at(name: &str, scope: &Scope, at: &Places) -> Res<Found> {
     let entry = known(name)?;
     if at.no_repo && needs_repo(name) { return Ok(Found { name: name.into(), value: entry.builtin.clone(), place: "builtin".into(), from: "built in".into(), applies: false, parts: vec![], skipped: vec![] }); }
-    let list = match entry.kind { Kind::Work => &at.work, Kind::Board => &at.board, Kind::Repo => &at.repo };
+    let list = match entry.kind { Kind::Work => &at.work, Kind::Board => &at.board, Kind::Repo => &at.repo, Kind::Coord => &at.coord };
     let mut said: Vec<&Place> = list.iter().filter(|p| p.values().contains_key(name)).collect();
     // An effort and an access are right or wrong for one program: an answer that does not fit the program the role has
     // is not counted, and the next place down is asked (the built-in one fits every program). Except `auto`: the next

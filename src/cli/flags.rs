@@ -8,7 +8,7 @@ use crate::store::settings_list::SETTINGS;
 
 /// Positional arguments, flags (`--flag value`, `--flag` true, `--no-flag` false), and each flag as it was typed.
 pub struct Args { pub pos: Vec<String>, pub flags: Obj, pub typed: Obj }
-const BOOL: [&str; 15] = ["json", "archived", "all", "done", "delegate", "force", "help", "skill", "research", "chat", "every-repo", "anyway", "now", "clear", "machine"];
+const BOOL: [&str; 17] = ["json", "archived", "all", "done", "delegate", "force", "help", "skill", "research", "chat", "every-repo", "anyway", "now", "clear", "machine", "main-coordinator", "machine-coordinator"];
 pub fn parse(argv: &[String]) -> Args {
     let (mut pos, mut flags, mut typed) = (vec![], Obj::new(), Obj::new());
     let mut i = 0;
@@ -38,7 +38,7 @@ const fn f(flags: &'static [&'static str]) -> Takes { Takes { flags, settings: f
 const fn s(flags: &'static [&'static str]) -> Takes { Takes { flags, settings: true } }
 const ADD: &[&str] = &["desc", "description", "repo", "delegate", "research", "chat", "after"];
 const LIST: &[&str] = &["archived", "all", "query"];
-const WHERE: &[&str] = &["repo", "task", "automation"];
+const WHERE: &[&str] = &["repo", "task", "automation", "main-coordinator", "machine-coordinator", "project-coordinator"];
 const AUTO_ADD: &[&str] = &["prompt", "desc", "schedule", "when", "every-repo", "if", "repo", "research", "chat"];
 const AUTO_CHANGE: &[&str] = &["name", "prompt", "schedule", "when", "every-repo", "if", "research", "chat"];
 /// One command per line, beside the commands it belongs with, never at the end. A command with subcommands names
@@ -63,6 +63,7 @@ fn takes(cmd: &str, sub: &str) -> Option<Takes> {
         "set" | "unset" | "show" => f(WHERE),
         "models" => f(&[]),
         "automations" | "automation" => match sub { "add" | "new" => s(AUTO_ADD), "change" | "edit" => f(AUTO_CHANGE), _ => f(&[]) },
+        "autopilot" => match sub { "on" => s(&["machine", "project", "goal"]), "off" => f(&["machine", "project", "all"]), _ => f(&[]) },
         "coordinator" => match sub { "tell" => f(&["delegate", "machine", "project"]), "new" | "fresh" => f(&["agent", "effort", "machine", "project"]), _ => f(&["machine", "project"]) },
         "sweep" => f(&["dry"]),
         "machines" | "web-ui" | "remove-extras" | "reopen" | "version" | "install" | "update" | "doctor" => f(&[]),
@@ -72,7 +73,7 @@ fn takes(cmd: &str, sub: &str) -> Option<Takes> {
         _ => return None,
     })
 }
-fn has_subs(cmd: &str) -> bool { ["automations", "automation", "coordinator"].contains(&cmd) }
+fn has_subs(cmd: &str) -> bool { ["automations", "automation", "coordinator", "autopilot"].contains(&cmd) }
 /// The flags of a command that it does not know, as typed. A name with a dot is a setting where settings are taken.
 pub fn unknown_flags(cmd: &str, flags: &Obj, typed: &Obj, sub: &str) -> Vec<String> {
     let Some(t) = takes(cmd, sub) else { return vec![] };

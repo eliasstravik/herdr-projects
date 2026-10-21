@@ -86,7 +86,7 @@ pub fn set(id: &str, name: &str, value: Option<String>, whose: &Whose) -> crate:
 fn set_mine(name: &str, value: Option<String>, repo: &str) -> crate::err::Res<Done> {
     use crate::actions::settings::{settings_command, Where};
     let cmd = if value.is_some() { "set" } else { "unset" };
-    let w = Where { task: None, repo: (!repo.is_empty()).then(|| repo.to_string()), automation: None };
+    let w = Where { task: None, repo: (!repo.is_empty()).then(|| repo.to_string()), automation: None, coord: None };
     let (j, _) = settings_command(cmd, &[cmd.to_string(), name.to_string()], &w, value.map(|v| json!(v)))?;
     let label = entry_of(name).map(|e| e.label.to_string()).unwrap_or_else(|| name.to_string());
     let shown = match j.at("value") { Value::Bool(true) => "on".to_string(), Value::Bool(false) => "off".to_string(), v => say(v).lines().next().unwrap_or("").to_string() };

@@ -9,7 +9,7 @@ use sw::actions::settings::{settings_command, Where};
 use sw::board::keys::{is, key_name, Press, K};
 use sw::board::remap::read;
 
-fn you() -> Where { Where { task: None, repo: None, automation: None } }
+fn you() -> Where { Where { task: None, repo: None, automation: None, coord: None } }
 fn set(v: &str) -> Result<String, String> {
     settings_command("set", &["set".into(), "board.keys".into()], &you(), Some(json!(v))).map(|r| r.1).map_err(|e| e.msg)
 }
@@ -82,7 +82,7 @@ fn it_is_yours_only_a_hand_written_mistake_is_left_out_and_the_page_keeps_the_bu
     let (j, shown) = settings_command("show", &["show".into()], &you(), None).unwrap();
     assert!(shown.contains("Your keys not counted (the key keeps its own chord):\n  board.keys: chatMessage=ctrl+l: ctrl+l is yes's key already"), "{shown}");
     assert!(j.to_string().contains("ctrl+l is yes's key already"));
-    let e = settings_command("set", &["set".into(), "board.keys".into()], &Where { task: None, repo: Some("proj".into()), automation: None }, Some(json!("side=alt+o"))).unwrap_err().msg;
+    let e = settings_command("set", &["set".into(), "board.keys".into()], &Where { task: None, repo: Some("proj".into()), automation: None, coord: None }, Some(json!("side=alt+o"))).unwrap_err().msg;
     assert!(e.contains("board.keys is a board setting: it is yours only"), "{e}");
     std::fs::write(w.root.join(".herdr-projects.json"), r#"{ "board.keys": "side=alt+o" }"#).unwrap();
     let (_, said) = sw::store::settings::places::repo_file(&w.root, None);

@@ -43,7 +43,7 @@ pub fn settings_table() -> Result<String, String> { crate::board::remap::as_buil
 fn built_settings_table() -> Result<String, String> {
     for s in SETTINGS.iter() { if s.doc.is_empty() { return Err(format!("crates/core/src/store/settings_list.rs: the setting \"{}\" has no `doc`", s.name)); } }
     let shown = |v: &Value| format!("`{}`", match v { Value::Array(a) => a.iter().map(text).collect::<Vec<_>>().join(", "), v => text(v) });
-    let place = |s: &crate::store::settings_list::Entry| match s.kind { Kind::Board => "you only", Kind::Repo => "repo entry, repo file", Kind::Work if s.repo => "task, repo entry, you, repo file", Kind::Work => "task, repo entry, you" };
+    let place = |s: &crate::store::settings_list::Entry| match s.kind { Kind::Board => "you only", Kind::Repo => "repo entry, repo file", Kind::Work if s.repo => "task, repo entry, you, repo file", Kind::Work => "task, repo entry, you", Kind::Coord if s.name == "autopilot.goal" => "coordinator", Kind::Coord if s.name.starts_with("autopilot.") => "this time, coordinator, you", Kind::Coord => "coordinator, you" };
     let rows: Result<Vec<Vec<String>>, String> = SETTINGS.iter().map(|s| Ok(vec![format!("`{}`", s.name), shown(&s.builtin), place(s).to_string(), key_words(&s.doc)?])).collect();
     Ok(table(&["Setting", "Built in", "Can be said by", "Means"], rows?))
 }

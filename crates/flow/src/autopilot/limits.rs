@@ -1,0 +1,30 @@
+//! One way to count, everywhere (the panel, the wake, `autopilot`): the tasks it **added** today of
+//! `autopilot.tasksPerDay`, and its tasks **under way** of `autopilot.tasksAtOnce`. No room: the tasks at once are
+//! full, or today's adds are used up and it has none of your to-do tasks it may start (`autopilot.scope all`).
+use super::care::{under_way_count, yours_to_start};
+use super::record::{count, day_of, words};
+use crate::coordinator::co::Co;
+use crate::json::*;
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Today { pub added: i64, pub per_day: i64, pub under_way: usize, pub at_once: i64 }
+/// Its counts now. A record of another day counts nothing yet.
+pub fn today(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> Today {
+    let added = if ap.s("day") == day_of(now) { ap.i("added") } else { 0 };
+    Today { added, per_day: count(co, "autopilot.tasksPerDay"), under_way: under_way_count(ap, board), at_once: count(co, "autopilot.tasksAtOnce") }
+}
+impl Today {
+    pub fn adds_left(&self) -> bool { self.added < self.per_day }
+    pub fn slots_left(&self) -> bool { (self.under_way as i64) < self.at_once }
+    /// "2 of 5 added · 1 of 2 under way".
+    pub fn say(&self) -> String { format!("{} of {} added · {} of {} under way", self.added, self.per_day, self.under_way, self.at_once) }
+    /// The same in a sentence, as the wake says it.
+    pub fn sentence(&self) -> String { format!("{} of {} tasks added, {} of {} under way", self.added, self.per_day, self.under_way, self.at_once) }
+}
+/// Room to do anything new: a free slot, and an add left today or one of your to-do tasks it may start.
+pub fn room(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> bool {
+    let t = today(co, ap, board, now);
+    t.slots_left() && (t.adds_left() || (words(co, "autopilot.scope") == "all" && yours_to_start(co, board) > 0))
+}
+/// Every task of this machine, as kept (archived ones too: an archived task is over).
+pub fn board_tasks() -> Vec<Obj> { crate::store::tasks::list(crate::store::tasks::ListOpts { include_archived: true, ..Default::default() }) }

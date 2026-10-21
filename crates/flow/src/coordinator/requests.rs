@@ -62,15 +62,21 @@ fn herdr_up(socket: &str) -> Res<()> {
     Ok(())
 }
 /// Say something to the Coordinator. It is started (or started again, in the same conversation) when it is not there.
-pub fn send(cwd: &Path, text: &str, delegate: bool, about: &str, co: impl Into<Co>) -> Res<Obj> {
+pub fn send(cwd: &Path, text: &str, delegate: bool, about: &str, co: impl Into<Co>) -> Res<Obj> { send_as(cwd, text, delegate, about, co, Value::Null) }
+/// The same, from `sender` (a task's agent or reviewer that ran `coordinator tell`: `{ task, role }`), which the turn it
+/// starts is marked with (autopilot/turn.rs). Words that would pass for an autopilot wake are marked as none: only the
+/// board writes a wake. A wake not typed in yet waits behind these words.
+pub fn send_as(cwd: &Path, text: &str, delegate: bool, about: &str, co: impl Into<Co>, sender: Value) -> Res<Obj> {
     let co = co.into();
     herdr_up(&co.socket)?;
     let root = known(&co)?;
     let ctx = context(root.as_deref().unwrap_or(cwd), delegate, about)?;
+    let text = &crate::autopilot::wake::escape(text);
     let c = change(&co, |c| {
         let mut q = c.arr("queue").to_vec();
-        q.push(json!({ "id": crate::util::uuid(), "text": if delegate { format!("{text}\n\n{}", tab_note()) } else { text.to_string() }, "said": text, "where": ctx, "at": now() }));
+        q.push(json!({ "id": crate::util::uuid(), "text": if delegate { format!("{text}\n\n{}", tab_note()) } else { text.to_string() }, "said": text, "where": ctx, "at": now(), "sender": sender }));
         c.put("queue", q); c.put("error", ""); c.put("stopped", false);
+        crate::autopilot::wake::yield_to_you(c);
         true
     })?;
     kick(&co);

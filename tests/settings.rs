@@ -39,7 +39,7 @@ fn one_order_for_every_work_setting_this_task_your_entry_for_the_repo_you_the_re
     use sw::store::settings_list::{entry_of, names, Kind};
     for name in names() {
         let t = task(&id);
-        let scope = match entry_of(name).unwrap().kind { Kind::Work => Scope::task(&t), Kind::Repo => Scope::repo("proj"), Kind::Board => you() };
+        let scope = match entry_of(name).unwrap().kind { Kind::Work => Scope::task(&t), Kind::Repo => Scope::repo("proj"), Kind::Board => you(), Kind::Coord => Scope::coord(sw::store::settings::coord::Coord::of("main")) };
         assert_eq!(unset_value(name, &scope).unwrap_or_else(|e| panic!("{name}: {}", e.msg)).name, name);
     }
     // the same one function answers for every setting: another repo's entry is not this task's

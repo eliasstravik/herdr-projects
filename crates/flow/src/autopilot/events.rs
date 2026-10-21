@@ -1,0 +1,53 @@
+//! The board events that wake a coordinator on autopilot (`autopilot.when`), in its area: `done` (a task was merged or
+//! done), `stuck` (a task it may look after starts to need looking after: once, not again while it stays so) and
+//! `added` (a task was added by anyone but this coordinator). Each is read off the tasks as they stand and fired once:
+//! what was seen is kept in its record (`seen`), and the first look after it was turned on only takes note. A task
+//! that starts to need looking after once its retries are used is left to you instead, and wakes nothing.
+use super::care::{added_by, in_area, may_look_after, need_of};
+use super::record::{task_rec, with_task};
+use crate::coordinator::co::Co;
+use crate::json::*;
+
+/// What is so of a task now, one mark per thing that wakes.
+fn marks_of(ap: &Obj, t: &Obj, approve: bool) -> Vec<String> {
+    let mut out = vec!["added".to_string()];
+    if t.b("mergedAt") || t.s("stage") == "done" { out.push("done".into()); }
+    if may_look_after(ap, t) { if let Some(w) = need_of(t, approve) { out.push(format!("stuck:{w}")); } }
+    out
+}
+/// A reason to wake, as kept: why (`on`, `timer`, `done`, `stuck`, `added`, `asked`), the task, and its words.
+pub fn reason(why: &str, task: &str, words: &str) -> Value { json!({ "why": why, "task": task, "words": words }) }
+/// The task as its reason names it: `HSW-84`.
+fn tag(id: &str) -> String { crate::store::keys::say_id(id, &crate::store::keys::repo_keys()) }
+/// What happened since the last look: the reasons it wakes for (of those `when` names), the tasks now left to you,
+/// and what is seen now. `retries`: autopilot.retries.
+pub fn look(co: &Co, ap: &mut Obj, board: &[Obj], when: &str, approve: bool, retries: i64) -> Vec<Value> {
+    let first = !ap.at("seen").is_object();
+    let seen = ap.o("seen").cloned().unwrap_or_default();
+    let mut next = Obj::new();
+    let mut out = vec![];
+    let wants = |w: &str| when.split_whitespace().any(|x| x == w);
+    for t in board.iter().filter(|t| in_area(co, t)) {
+        let id = t.t("id");
+        let marks = marks_of(ap, t, approve);
+        let had: Vec<String> = seen.get(&id).map(strings).unwrap_or_default();
+        next.put(&id, marks.clone());
+        if first || t.b("archivedAt") { continue; }
+        for m in marks.iter().filter(|m| !had.contains(m)) {
+            match m.split(':').next().unwrap_or("") {
+                "added" if !added_by(co, t) && wants("added") => out.push(reason("added", &id, &format!("{} was added", tag(&id)))),
+                "done" if wants("done") => out.push(reason("done", &id, &format!("{} {}", tag(&id), if t.b("mergedAt") { "merged" } else { "is done" }))),
+                "stuck" => {
+                    let w = m.split(':').nth(1).unwrap_or("");
+                    // Failing or asking again once its retries are used: yours from now on.
+                    let used = task_rec(ap, &id).map(|r| r.i("retries")).unwrap_or(0);
+                    if w != "yes" && used >= retries { with_task(ap, &id, |r| { r.put("left", true); }); continue; }
+                    if wants("stuck") { out.push(reason("stuck", &id, &format!("{} {}", tag(&id), match w { "asks" => "asks a question", "yes" => "waits for a yes", _ => "failed" }))); }
+                }
+                _ => {}
+            }
+        }
+    }
+    ap.put("seen", next);
+    out
+}

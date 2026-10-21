@@ -1,4 +1,4 @@
-//! Changing a setting: `set` and `unset`, for you, for your entry for a repo, or for one task. Every value is checked
+//! Changing a setting: `set` and `unset`, for you, for your entry for a repo, for one coordinator, or for one task. Every value is checked
 //! first; several changes to one task are all checked before any is saved, so a refused request changes nothing.
 use super::lookup::{in_repo, lookup, Found, Scope};
 use super::places::{write_yours, yours};
@@ -20,7 +20,8 @@ fn role_of(name: &str) -> &str { name.split('.').next().unwrap_or("") }
 fn allowed(name: &str, scope: &Scope) -> Res<&'static Entry> {
     let e = known(name)?;
     let (task, repo) = (scope.task, scope.repo.as_str());
-    if e.kind == Kind::Board && (task.is_some() || !repo.is_empty()) {
+    if let Some(why) = super::coord::refusal(e, scope) { return refuse(why); }
+    if e.kind == Kind::Board && (task.is_some() || !repo.is_empty() || scope.coord.is_some()) {
         return refuse(format!("{name} is a board setting: it is yours only and cannot be set {}. Set it for yourself: herdr-projects set {name} <value>", if task.is_some() { "on a task" } else { "for a repo" }));
     }
     if e.kind == Kind::Repo && repo.is_empty() {
@@ -81,6 +82,7 @@ pub fn checked(pairs: &[(String, Value)], scope: &Scope) -> Res<Obj> {
 fn save(values: &[(String, Option<Value>)], scope: &Scope) -> Res<Option<Task>> {
     if values.iter().any(|(n, _)| n == "limit.time") { keep_run_times(); } // a run under way keeps the limit it started with
     let Some(task) = scope.task else {
+        if let Some(c) = &scope.coord { for (name, v) in values { super::places::write_at(name, v.as_ref(), &c.path())?; } return Ok(None); }
         for (name, v) in values { write_yours(name, v.as_ref(), &scope.repo)?; }
         return Ok(None);
     };

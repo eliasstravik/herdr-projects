@@ -74,10 +74,10 @@ fn a_key_you_or_the_repos_file_gave_is_kept_and_unset_goes_back_to_the_made_one(
     let t = add_in(&crm, "Theirs"); assert_eq!(short(&t), "OC-1"); assert!(entry("open-crm").is_null());
     // Taken away: back to the repo's file's, or to the made one; never none.
     unset_value("repo.key", &Scope::repo("proj")).unwrap(); assert_eq!(entry("proj"), json!("PRJ")); assert_eq!(find("mine-1").unwrap().s("id"), id);
-    let said = sw::actions::settings::settings_command("unset", &["unset".into(), "repo.key".into()], &sw::actions::settings::Where { task: None, repo: Some("proj".into()), automation: None }, None).unwrap().1;
+    let said = sw::actions::settings::settings_command("unset", &["unset".into(), "repo.key".into()], &sw::actions::settings::Where { task: None, repo: Some("proj".into()), automation: None, coord: None }, None).unwrap().1;
     assert_eq!(said, "repo.key for proj: PRJ  (your entry for proj)\nA repo always has a key: proj is back to the one the board made from its name. Another: herdr-projects set repo.key <KEY> --repo proj");
     set_value("repo.key", &json!("XY"), &Scope::repo("open-crm")).unwrap();
-    let said = sw::actions::settings::settings_command("unset", &["unset".into(), "repo.key".into()], &sw::actions::settings::Where { task: None, repo: Some("open-crm".into()), automation: None }, None).unwrap().1;
+    let said = sw::actions::settings::settings_command("unset", &["unset".into(), "repo.key".into()], &sw::actions::settings::Where { task: None, repo: Some("open-crm".into()), automation: None, coord: None }, None).unwrap().1;
     assert_eq!(said, "repo.key for open-crm: OC  (the repo's file)\nA repo always has a key: open-crm is back to the one its own file says.");
     let e = set_value("repo.key", &json!("none"), &Scope::repo("proj")).unwrap_err().msg;
     assert_eq!(e, "repo.key cannot be none: every repo has a short key. To go back to the one the board made from its name: herdr-projects unset repo.key --repo proj");
@@ -176,7 +176,7 @@ fn a_key_a_repo_ever_went_by_names_its_tasks_for_good_however_it_changed_and_no_
     assert_eq!(find("aa-1").unwrap().s("id"), a, "an old name never comes to name another repo's task");
     assert_eq!(short(&b), "BETA-1"); assert_eq!(read(&beta.join(".herdr-projects.json")), json!({ "repo": { "key": "AA" } }).to_string());
     assert!(entry("beta").is_null(), "nothing is written for it in your settings");
-    let shown = sw::actions::settings::settings_command("show", &["show".into()], &sw::actions::settings::Where { task: None, repo: Some("beta".into()), automation: None }, None).unwrap().1;
+    let shown = sw::actions::settings::settings_command("show", &["show".into()], &sw::actions::settings::Where { task: None, repo: Some("beta".into()), automation: None, coord: None }, None).unwrap().1;
     assert!(has(&shown, r"\n {2}repo\.key +AA +not used: another repo has or had the same key; its tasks go by BETA(\n|$)"), "{shown}");
     // `set` refuses a key another repo had, whichever way it had it; the same goes for one another repo has now.
     let e = set_value("repo.key", &json!("GG"), &Scope::repo("beta")).unwrap_err().msg;

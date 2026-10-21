@@ -3,7 +3,8 @@
 //! are all made from this list. A new setting is one entry here, beside the ones of its area.
 //!
 //! An entry: `name` (everywhere: config.json, the command line, a task), `kind` (work: task -> your entry for the repo
-//! -> you -> the repo's file -> built in; board: yours only; repo: a fact about one repo), `ty` (what a value is:
+//! -> you -> the repo's file -> built in; board: yours only; repo: a fact about one repo; coordinator: this time ->
+//! this coordinator -> you -> built in, store/settings/coord.rs), `ty` (what a value is:
 //! settings/values.rs), `builtin`, `values` (a choice's words), `none` (an agent or a time that may be `none`), `min`
 //! (a count's smallest), `repo` (one of the facts the repo's own file may hold), `adds` (its values add up across the
 //! places), `label` (its plain name on the settings page), `means` (a few words beside what the row may be), `doc`.
@@ -11,10 +12,10 @@ use crate::json::{json, Value};
 use std::sync::LazyLock;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Kind { Work, Board, Repo }
-impl Kind { pub fn name(self) -> &'static str { match self { Kind::Work => "work", Kind::Board => "board", Kind::Repo => "repo" } } }
+pub enum Kind { Work, Board, Repo, Coord }
+impl Kind { pub fn name(self) -> &'static str { match self { Kind::Work => "work", Kind::Board => "board", Kind::Repo => "repo", Kind::Coord => "coordinator" } } }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Ty { Switch, Choice, Time, Count, Tokens, Agent, Agents, Effort, Access, Text, List, Machines, Notify, Key, Attempts, Keys, Branch, From }
+pub enum Ty { Switch, Choice, Time, Count, Tokens, Agent, Agents, Effort, Access, Text, List, Machines, Notify, Key, Attempts, Keys, Branch, From, Pilot }
 
 #[derive(Clone, Debug)]
 pub struct Entry {
@@ -42,8 +43,8 @@ fn role(name: &str, who: &str, agent: &str, kind: Kind) -> Vec<Entry> {
     let mut a = e(&format!("{name}.agent"), &format!("{cap} program"), kind, Ty::Agent, json!(agent), &agent_doc);
     a.none = name == "coordinator";
     let mut text = e(&format!("{name}.instructions"), &format!("{cap} instructions"), kind, Ty::Text, json!("none"),
-        &format!("your own words for {who}, added after the board's own fixed rules{}", if kind == Kind::Work { ". They add up across the places, broadest first, and the agent is told that later ones win" } else { "" }));
-    text.adds = kind == Kind::Work;
+        &format!("your own words for {who}, added after the board's own fixed rules{}", match kind { Kind::Work => ". They add up across the places, broadest first, and the agent is told that later ones win", Kind::Coord => ". They add up across the places, broadest first: yours, then this coordinator's own", _ => "" }));
+    text.adds = matches!(kind, Kind::Work | Kind::Coord);
     vec![a,
         e(&format!("{name}.effort"), &format!("{cap} effort"), kind, Ty::Effort, json!("default"), &format!("{who}'s effort level: one its program accepts (checked against `{name}.agent`), or `default` for the program's own")),
         e(&format!("{name}.fast"), &format!("{cap} fast mode"), kind, Ty::Switch, json!(false), &format!("{who} in its program's fast mode: a faster service tier that uses more of your allowance. Only Codex has one; for another program it does nothing, and `show` says so")),
@@ -59,7 +60,25 @@ pub static SETTINGS: LazyLock<Vec<Entry>> = LazyLock::new(|| {
     s.push(e("worker.fallback", "Agent's fallback", Work, Ty::Agents, json!("none"), "who takes over when the working agent cannot go on: a list of agents tried in order (`codex, claude/claude-opus-5-5`; a model after a slash, as in `worker.agent`), or `none`. It takes over in the same worktree, with the task, what was done so far and the open findings, when the agent's provider is down (after the board's own tries), the agent is out of allowance or logged out, or its work still fails the review or the check after `review.rounds` rounds. With the list used up the task waits for you. Nobody extra runs until then. More: [the fallback agent](fallback.md)"));
     s.extend(role("reviewer", "the reviewer", "codex", Work));
     s.push(e("reviewer.fallback", "Reviewer's fallback", Work, Ty::Agents, json!("none"), "who takes over when the reviewer cannot go on: a list of agents tried in order (`codex, claude/claude-opus-5-5`; a model after a slash, as in `reviewer.agent`), or `none`. It reviews in its place when the reviewer's provider is down (after the board's own tries), the reviewer is out of allowance or logged out, or its program is not installed here; it then reviews the later rounds of that task too. With the list used up the review fails as before. Nobody extra runs until then. More: [the fallback agent](fallback.md)"));
-    s.extend(role("coordinator", "the Coordinator, the agent you talk to in the chat", "claude", Board));
+    s.extend(role("coordinator", "the Coordinator, the agent you talk to in the chat", "claude", Coord));
+    // a coordinator on autopilot (crates/flow/src/autopilot/, docs/autopilot.md): this time -> this coordinator -> you -> built in
+    s.push(e("autopilot.goal", "Goal", Coord, Ty::Text, json!("none"), "what a coordinator on autopilot works toward, in your words. Autopilot cannot be on without one. Said for one coordinator only: never for you, never for this time. More: [autopilot](autopilot.md)"));
+    s.push(e("autopilot.every", "Wakes every", Coord, Ty::Time, json!("6h"), "autopilot's timer, or `none`: a timer wake happens only if the board changed in its area since its last wake ended (the free look, which costs nothing), or a new day began with room").none());
+    s.push(e("autopilot.gap", "Least time between wakes", Coord, Ty::Time, json!("10m"), "the least time between the end of one wake's turn, or of a turn a message of yours started, and the next wake; reasons that come meanwhile are kept and merged into one wake"));
+    s.push(e("autopilot.wakesPerDay", "Wakes a day", Coord, Ty::Count, json!(24), "the most wakes in one day (this machine's time zone), counted when a wake is typed in; reasons after that wait for the next day").min(1));
+    s.push(e("autopilot.when", "Wakes on", Coord, Ty::Pilot, json!("done stuck added"), "the board events that wake it, or `none`: `done` a task in its area was merged or done; `stuck` a task it may look after starts to need looking after (it failed, or its agent asks a question); `added` a task was added in its area by anyone but this coordinator"));
+    s.push(e("autopilot.hours", "Awake hours", Coord, Ty::Pilot, json!("any"), "when it may wake: `any`, or days and hours in this machine's time zone (`mon-fri 09:00-18:00`, `22:00-06:00`, `sat,sun 10:00-16:00`). Outside them its reasons wait"));
+    s.push(e("autopilot.tasksPerDay", "Tasks a day", Coord, Ty::Count, json!(5), "the most tasks it adds in one day (this machine's time zone)").min(0));
+    s.push(e("autopilot.tasksAtOnce", "Tasks at once", Coord, Ty::Count, json!(2), "the most tasks under way that it added or started: from start (or adding, when chained) until merged, done, stopped or archived; waiting for you counts. Under `autopilot.scope all`, your tasks it started count").min(1));
+    s.push(e("autopilot.mayChange", "May set", Coord, Ty::Pilot, json!("none"), "which task settings it may give the tasks it adds: exact names (`worker.effort`) and areas (`review.*`), or `none`. Never `merge.*`, `limit.*` or `autopilot.*`; a bare `*` is refused. A setting it is not allowed is not applied, and its answer names it"));
+    s.push(e("autopilot.scope", "May touch", Coord, Ty::Choice, json!("own"), "`own`: it looks after only the tasks it added. `all`: it may also start your to-do tasks in its area, on its own machine, and then looks after them. A task of yours it did not start is never its to look after").values(&["own", "all"]));
+    s.push(e("autopilot.approve", "May say yes", Coord, Ty::Choice, json!("no"), "whether it may say yes (a plan, a merge) for the tasks it may look after. `no`: your `merge.by` alone decides. `yes`: it can merge under `merge.by you`, the one setting that overrides `merge.by`. Never for a task held by `autopilot.repoFileWaits`, never `--anyway`").values(&["no", "yes"]));
+    s.push(e("autopilot.switchOthers", "May switch others", Coord, Ty::Choice, json!("no"), "whether, on its own, it may turn other coordinators' autopilot on (only with that one's saved goal and settings). Turning off is always allowed; its rules use this to judge whether an unasked off of another is fine").values(&["no", "yes"]));
+    s.push(e("autopilot.releases", "May add releases", Coord, Ty::Choice, json!("no"), "whether it may add a release task (a version bump, a tag, a publish). `no`: it says when it thinks one is due. A rule it is told, as a task's purpose cannot be checked by code").values(&["no", "yes"]));
+    s.push(e("autopilot.retries", "Retries", Coord, Ty::Count, json!(1), "how many times it may retry one task before that task is left to you (`0`: at its first failure or question). Answering a question uses none").min(0));
+    s.push(e("autopilot.startAtOnce", "Starts tasks at once", Coord, Ty::Choice, json!("yes"), "`yes`: every task it adds is started at once, or chained after one of its own. `no`: it may leave tasks to do").values(&["yes", "no"]));
+    s.push(e("autopilot.needsYouAfter", "Needs you after", Coord, Ty::Count, json!(3), "after this many unanswered wakes in a row (a wake whose turn did not end within 15 minutes), its row says `needs you` and no more wakes are sent until you turn it on again").min(1));
+    s.push(e("autopilot.repoFileWaits", "Settings file waits", Coord, Ty::Choice, json!("yes"), "`yes`: a task it added whose change touches the repo's own `.herdr-projects.json` never merges by itself, whatever `merge.by` or `autopilot.approve` say: it waits for your own yes, its row saying why").values(&["yes", "no"]));
     // the Watcher
     s.push(e("watcher.agent", "Watcher's program", Board, Ty::Agent, json!("claude/claude-haiku-5-5"), "the Watcher: a small model behind the \"doing now\" line, the progress guess and the minutes left. `none`: none of the three. A program with no headless one-shot is refused ([agents](agents.md)). More: [the Watcher](watcher.md)").none());
     s.push(e("watcher.every", "Watcher looks every", Board, Ty::Time, json!("60s"), "the least time between two looks of the Watcher at one working agent. One hidden model call covers every agent whose look is due, one call runs at a time on the machine, a screen that has not changed costs none, and a busy machine is looked at up to five times less often"));
@@ -127,6 +146,8 @@ pub fn names() -> Vec<&'static str> { SETTINGS.iter().map(|s| s.name.as_str()).c
 pub fn entry_of(name: &str) -> Option<&'static Entry> { SETTINGS.iter().find(|s| s.name == name) }
 pub fn work() -> Vec<&'static str> { SETTINGS.iter().filter(|s| s.kind == Kind::Work).map(|s| s.name.as_str()).collect() }
 pub fn board() -> Vec<&'static str> { SETTINGS.iter().filter(|s| s.kind == Kind::Board).map(|s| s.name.as_str()).collect() }
+/// A coordinator's settings: `coordinator.*` and `autopilot.*`.
+pub fn coord() -> Vec<&'static str> { SETTINGS.iter().filter(|s| s.kind == Kind::Coord).map(|s| s.name.as_str()).collect() }
 /// The facts a repo's own committed file may hold, and no more.
 pub fn repo_facts() -> Vec<&'static str> { SETTINGS.iter().filter(|s| s.repo).map(|s| s.name.as_str()).collect() }
 /// These mean nothing for a task in no repo.

@@ -44,7 +44,7 @@ pub fn review_brief(t: &Obj, b: &Brief) -> String {
         where_, plan_rule,
         if b.check.is_empty() { String::new() } else if t.b("checkShort") { format!("This repo's check is `{}`. On this round the board ran its shorter form, `{}` (what the change since the full check reaches), and that passed on this commit; the full check runs on GitHub before the merge. Run tests only through these.", b.check, t.s("checkShort")) } else { format!("This repo's check is `{}`; it passed on this commit. Run tests only through it.", b.check) },
         "You are here to review, not to fix. Do not change, commit, push or merge anything in the repository. Whatever you alter in the code is discarded when you finish.".into(),
-        reviewer_board_rule(), crate::temp::rule(t), automation_rule(t), evidence,
+        reviewer_board_rule(), crate::temp::rule(t), automation_rule(t), crate::autopilot::allow::told(t), evidence,
         format!("Task: {}", t.s("title")), if desc.is_empty() { String::new() } else { format!("Details:\n{desc}") },
         format!("What the agent says it did:\n{said}"), change_line,
         format!("First answer one fixed question, true or false: {} All of it, and working. That answer is `meets`. It decides nothing by itself: whatever makes you answer false, report it as a finding with the severity it deserves. Only an answer of false with no finding at all is counted as a critical finding.", gate::QUESTION),

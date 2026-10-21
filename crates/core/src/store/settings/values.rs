@@ -248,6 +248,7 @@ fn check_ty(e: &Entry, v: &Value) -> Res<Value> {
             Ok(json!(k))
         }
         Ty::Keys => super::key_map::check(e, v),
+        Ty::Pilot => super::pilot_values::check(e, v),
         Ty::Notify => {
             let Value::String(s) = v else { return refuse(format!("{name} must be none, bell, or a command.")) };
             let w = s.trim();

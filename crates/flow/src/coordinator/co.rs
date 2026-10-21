@@ -24,6 +24,8 @@ impl Co {
     pub fn to(&self) -> String { match &self.level { Level::Top => String::new(), Level::Machine => "machine".into(), Level::Project(r) => format!("project:{r}") } }
     pub fn key(&self) -> String { match &self.level { Level::Top => self.socket.clone(), Level::Machine => format!("{}{SEP}machine", self.socket), Level::Project(r) => format!("{}{SEP}project{SEP}{r}", self.socket) } }
     pub fn is_top(&self) -> bool { self.level == Level::Top }
+    /// Its own entry in config.json's `coordinators` (store/settings/coord.rs): "main", "machine", "project:<repo>".
+    pub fn settings_key(&self) -> String { match &self.level { Level::Top => "main".into(), Level::Machine => "machine".into(), Level::Project(r) => format!("project:{r}") } }
     pub fn repo(&self) -> Option<&str> { match &self.level { Level::Project(r) => Some(r), _ => None } }
     /// What the human reads, on the board, its tab and herdr's sidebar: "Coordinator", "vm-str coordinator",
     /// "herdr-projects coordinator" ("~ coordinator" for the home folder's).

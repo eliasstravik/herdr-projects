@@ -43,6 +43,7 @@ pub fn rules(t: &Obj) -> String {
         format!("If you come across unrelated work that should be done (a bug elsewhere, a follow-up), do not do it and do not add it as a task: mention it in a short \"Also noticed\" list at the end of your closing note{}, one line each with the file it is in, and carry on. Nothing else is done with it. There is no command for suggesting a task any more: where this task's description asks for \"suggestions on this task\", that list is what it gets.", if research { " and of your report" } else { " (and of your report, if you write one)" }) },
         agent_board_rule(),
         crate::automations::told::automation_rule(t),
+        crate::autopilot::allow::told(t),
         if chat { String::new() } else { r::report_rule(t) },
         format!("Before you stop, also write {} to {} (the board's own folder for this task, not the folder you work in). It is the board's fallback when it cannot read your last message.", if chat { "your last message to the human" } else { "your closing summary (or your question to the human)" }, note_file(t).display()),
     ];

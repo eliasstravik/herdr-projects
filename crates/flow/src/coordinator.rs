@@ -10,6 +10,7 @@ pub mod place;
 pub mod pump;
 pub mod requests;
 pub mod rules;
+pub mod rules_autopilot;
 pub mod rules_place;
 pub mod sidebar;
 pub mod state;

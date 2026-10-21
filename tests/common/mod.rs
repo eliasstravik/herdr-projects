@@ -9,6 +9,7 @@ pub mod fixtures;
 pub mod gh;
 pub mod herdr;
 pub mod panes;
+pub mod pilot;
 pub mod worktrees;
 
 use serde_json::{json, Value};

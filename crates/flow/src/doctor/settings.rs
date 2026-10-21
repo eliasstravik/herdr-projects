@@ -17,7 +17,7 @@ use crate::store::tasks::{list, Task};
 /// Whose settings: yours (no repo, no task), your entry for a repo, or a task at work. `label`: how a line names it,
 /// `flag`: what `set` is given for it.
 pub struct At { pub label: String, pub flag: String, pub repo: String, pub task: Option<Task> }
-impl At { pub fn scope(&self) -> Scope<'_> { Scope { task: self.task.as_ref(), repo: self.repo.clone() } } }
+impl At { pub fn scope(&self) -> Scope<'_> { Scope { task: self.task.as_ref(), repo: self.repo.clone(), ..Default::default() } } }
 /// Yours first, then each repo you said something for, then each task that is not done or archived.
 pub fn places() -> Vec<At> {
     let mut v = vec![At { label: String::new(), flag: String::new(), repo: String::new(), task: None }];

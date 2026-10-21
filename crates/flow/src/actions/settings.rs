@@ -1,4 +1,4 @@
-//! The settings' commands: set, unset and show, for you, for your entry for a repo, or for one task.
+//! The settings' commands: set, unset and show, for you, for your entry for a repo, for one coordinator, or for one task.
 use crate::board::remap;
 use crate::err::Res;
 use crate::json::*;
@@ -9,16 +9,17 @@ use crate::store::settings::show::{problems, rows, show_text};
 use crate::store::settings::values::{check, say};
 use crate::store::tasks::{find, get};
 
-/// Which of you, a repo or a task a command means.
-pub struct Where { pub task: Option<String>, pub repo: Option<String>, pub automation: Option<String> }
+/// Which of you, a repo, a coordinator (its key: "main", "machine", "project:<repo>") or a task a command means.
+pub struct Where { pub task: Option<String>, pub repo: Option<String>, pub automation: Option<String>, pub coord: Option<String> }
 /// Returns what the command line prints: the value for --json, and the text.
 pub fn settings_command(cmd: &str, pos: &[String], w: &Where, value: Option<Value>) -> Res<(Value, String)> {
-    if [&w.task, &w.repo, &w.automation].iter().filter(|x| x.is_some()).count() > 1 { crate::fail!("{cmd} takes one of --task, --repo and --automation, not several."); }
+    if [&w.task, &w.repo, &w.automation, &w.coord].iter().filter(|x| x.is_some()).count() > 1 { crate::fail!("{cmd} takes one of --task, --repo, --automation and a coordinator's flag, not several."); }
     if let Some(a) = &w.automation { return crate::automations::command::settings_for(cmd, pos, a, value); }
+    let co = match &w.coord { Some(k) => Some(coordinator_of(k)?), None => None };
     let id = if cmd == "show" { w.task.clone().or_else(|| pos.get(1).cloned()) } else { w.task.clone() };
     let task = match &id { Some(id) => Some(find(id)?), None => None };
-    let scope = match (&task, &w.repo) { (Some(t), _) => Scope::task(t), (None, Some(r)) => Scope::repo(r), _ => Scope::you() };
-    let place = match (&task, &w.repo) { (Some(t), _) => format!(" for {}", t.s("id")), (None, Some(r)) => format!(" for {r}"), _ => String::new() };
+    let scope = match (&task, &w.repo, &co) { (Some(t), _, _) => Scope::task(t), (None, Some(r), _) => Scope::repo(r), (None, None, Some(c)) => crate::autopilot::record::scope_of(c), _ => Scope::you() };
+    let place = match (&task, &w.repo, &co) { (Some(t), _, _) => format!(" for {}", t.s("id")), (None, Some(r), _) => format!(" for {r}"), (None, None, Some(c)) => format!(" for the {}", c.name()), _ => String::new() };
     if cmd == "show" {
         if !scope.repo.is_empty() && !known_repos().contains_key(&scope.repo) {
             let names: Vec<String> = known_repos().keys().cloned().collect();
@@ -55,4 +56,12 @@ pub fn settings_command(cmd: &str, pos: &[String], w: &Where, value: Option<Valu
     let mut j = obj(json!({ "name": r.name, "value": r.value, "from": r.from }));
     if !note.is_empty() { j.put("note", note); }
     Ok((Value::Object(j), text))
+}
+/// The coordinator a settings command names, by its key: a project coordinator's repo must be one the board knows.
+fn coordinator_of(key: &str) -> Res<crate::coordinator::co::Co> {
+    let socket = crate::herdr::cli::current_socket();
+    let Some(repo) = key.strip_prefix("project:") else { return Ok(crate::autopilot::record::co_of(&socket, key)) };
+    let repos = known_repos();
+    let Some(name) = repos.keys().find(|k| k.eq_ignore_ascii_case(repo)) else { crate::fail!("No repo \"{repo}\" on the board, so it has no project coordinator. Known: {}.", if repos.is_empty() { "none yet".into() } else { repos.keys().cloned().collect::<Vec<_>>().join(", ") }) };
+    Ok(crate::coordinator::co::Co::project(&socket, name))
 }

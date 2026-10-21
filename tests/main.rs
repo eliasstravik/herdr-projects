@@ -37,6 +37,7 @@ mod automations_open;
 mod automations_place;
 mod automations_rest;
 mod automations_triggers;
+mod autopilot;
 mod board_actions;
 mod board_actions_rest;
 mod board_ask_bottom;

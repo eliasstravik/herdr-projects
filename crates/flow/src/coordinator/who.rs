@@ -4,13 +4,20 @@ use crate::agents::installed::installed;
 use crate::agents::start::{effort_for, role_of};
 use crate::err::Res;
 use crate::json::*;
-use crate::store::settings::lookup::setting;
+use super::co::Co;
+use crate::store::settings::coord::Coord;
+use crate::store::settings::lookup::{lookup, Scope};
+use crate::store::settings::places::yours;
 use crate::store::settings::values::{agent_of, check, models_fit};
 use crate::store::settings_list::entry_of;
 
-/// The default: the five `coordinator.` settings, yours only. `coordinator.agent: none`: no Coordinator.
-pub fn choice() -> Option<Obj> {
-    let who = role_of("coordinator", &|n| setting(n, None));
+/// The default: the five `coordinator.` settings, yours. `coordinator.agent: none`: no Coordinator.
+pub fn choice() -> Option<Obj> { choice_with(&Scope::you()) }
+/// One coordinator's: its own settings, then yours (store/settings/coord.rs). A fresh chat reads them when it starts.
+pub fn choice_of(co: &Co) -> Option<Obj> { choice_with(&Scope::coord(Coord::of(&co.settings_key()))) }
+fn choice_with(scope: &Scope) -> Option<Obj> {
+    let mine = yours();
+    let who = role_of("coordinator", &|n| lookup(n, scope, &mine).map(|f| f.value).unwrap_or(Value::Null));
     if who.kind.is_empty() { return None; }
     let mut c = obj(json!({ "kind": who.kind, "model": who.model, "effort": effort_for(&who.kind, &who.model, &who.effort) }));
     extra(&mut c, who.fast, &who.access);

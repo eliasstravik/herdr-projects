@@ -8,7 +8,7 @@ use super::co::Co;
 use super::rules::rules_of;
 use super::rules_place::{intro_line_of, put_rules};
 use super::state::{change, dir_of, get, home, pumping};
-use super::who::{choice, OFF_WORDS};
+use super::who::{choice_of, OFF_WORDS};
 use crate::agents::{adapter, installed, start, start_failed};
 use crate::clock::now;
 use crate::err::Res;
@@ -79,7 +79,7 @@ fn ensure(api: &Herdr, co: &Co) -> Res<(Obj, bool)> {
     if c.b("run") { active(co, &c); c = get(co).unwrap_or_default(); }
     std::fs::create_dir_all(home(co))?;
     // Its standing rules are files in its folder, brought up to date before every message.
-    let who = c.o("run").cloned().or_else(|| c.o("pick").cloned()).or_else(choice);
+    let who = c.o("run").cloned().or_else(|| c.o("pick").cloned()).or_else(|| choice_of(co));
     let text = rules_of(co, &crate::flow::send::shim().display().to_string());
     if let Some(w) = &who { let _ = put_rules(co, w.s("kind"), &text); }
     let mut pane = if c.b("pane") { api.pane_get(c.s("pane")) } else { None };
@@ -90,7 +90,7 @@ fn ensure(api: &Herdr, co: &Co) -> Res<(Obj, bool)> {
     c = get(co).unwrap_or_default();
     if api.agent_get(pane.s("pane_id"))?.is_some() { return Ok((c, false)); }
     // Its program is not running: start it. The same conversation when there was one and the program can reopen it.
-    let run = match c.o("run").cloned().or_else(|| c.o("pick").cloned().map(|mut p| { p.put("oneOff", true); p })).or_else(choice) { Some(r) => r, None => crate::fail!("{OFF_WORDS}") };
+    let run = match c.o("run").cloned().or_else(|| c.o("pick").cloned().map(|mut p| { p.put("oneOff", true); p })).or_else(|| choice_of(co)) { Some(r) => r, None => crate::fail!("{OFF_WORDS}") };
     let k = run.t("kind");
     if !installed::installed(&k) { crate::fail!("\"{k}\" is not installed here, so it cannot be the {}.", co.name()); }
     let saved = !crate::agents::kinds::kind(&k).map(|a| a.reads_turn).unwrap_or(false) || adapter::transcript(&k, c.s("session"), &home(co)).is_some();
@@ -164,7 +164,9 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
                 continue;
             }
         } else if c.arr("queue").is_empty() || c.b("stopped") { break; }
+        let run_was = get(co).map(|c| c.i("startedAt")).unwrap_or(0);
         let (_, blocked) = ensure(&api, co)?;
+        let started = get(co).map(|c| c.i("startedAt")).unwrap_or(0) != run_was; // a wake that started it: its run counts as at rest
         if blocked { break; } // the tick tries again
         if get(co).map(|c| c.b("error")).unwrap_or(false) { change(co, |c| { c.put("error", ""); true })?; }
         c = get(co).unwrap_or_default();
@@ -211,6 +213,9 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
                 c.put("where", trimmed(&l));
                 c.put("mark", json!({ "run": run, "seq": seq, "rest": at_rest }));
                 c.put("intro", false); c.put("sentAt", now()); c.put("last", m.at("said").clone()); c.put("over", over.clone()); c.put("overId", over_id.clone());
+                // Who its turn is on: a task's agent that sent it (coordinator tell), and an autopilot wake (autopilot/).
+                c.put("typedFrom", m.at("sender").clone());
+                if m.b("autopilot") { crate::autopilot::wake::typed(c, &m, started); }
                 true
             })?;
             // Typed is not sent: if it still sits at its prompt, enter is pressed again (never the words).

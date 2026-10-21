@@ -1,5 +1,5 @@
-//! The places a setting can be said in, as they are on disk: your file (with your entry for each repo in it), a
-//! task's own, and the repo's own committed file. Reading one checks every value: a mistake made by hand is a
+//! The places a setting can be said in, as they are on disk: your file (with your entry for each repo and each
+//! coordinator's own entry in it), a task's own, and the repo's own committed file. Reading one checks every value: a mistake made by hand is a
 //! problem with its setting's name, and that one setting is simply not said there.
 use super::values::{check, nearest};
 use crate::json::*;
@@ -47,7 +47,7 @@ pub fn read(o: &Value, place: &str, allowed: &[&str], why: &str) -> (Obj, Vec<Pr
 
 // ---- you, and your entry for each repo: one file ----------------------------------------------------------------------
 #[derive(Clone, Debug, Default)]
-pub struct Mine { pub you: Obj, pub repos: BTreeMap<String, Obj>, pub problems: Vec<Problem> }
+pub struct Mine { pub you: Obj, pub repos: BTreeMap<String, Obj>, pub coords: BTreeMap<String, Obj>, pub problems: Vec<Problem> }
 static LAST: Mutex<Option<(String, Arc<Mine>)>> = Mutex::new(None);
 /// Your settings. Asked for every setting that is looked up: the file is read again only when it changed on disk.
 pub fn yours() -> Arc<Mine> {
@@ -67,10 +67,11 @@ fn read_yours() -> Mine {
     };
     let mut mine = raw.as_object().cloned().unwrap_or_default();
     let repos = mine.shift_remove("repos").unwrap_or(Value::Null);
-    let not_repo: Vec<&str> = names().into_iter().filter(|n| entry_of(n).map(|e| e.kind != Kind::Repo).unwrap_or(false)).collect();
-    let (you, mut problems) = read(&Value::Object(mine), "your settings", &not_repo, "is one repo's own: say it under \"repos\", in that repo's entry");
+    let coordinators = mine.shift_remove("coordinators").unwrap_or(Value::Null);
+    let not_repo: Vec<&str> = names().into_iter().filter(|n| entry_of(n).map(|e| e.kind != Kind::Repo).unwrap_or(false) && *n != super::coord::GOAL).collect();
+    let (you, mut problems) = read(&Value::Object(mine), "your settings", &not_repo, "is said for one coordinator only: under \"coordinators\", in its entry (or `set … --project-coordinator <repo>`)");
     if broken { problems.push(Problem { place: "your settings".into(), name: String::new(), why: "it is not valid JSON, so nothing in it counts".into() }); }
-    let not_board: Vec<&str> = names().into_iter().filter(|n| entry_of(n).map(|e| e.kind != Kind::Board).unwrap_or(false)).collect();
+    let not_board: Vec<&str> = names().into_iter().filter(|n| entry_of(n).map(|e| e.kind != Kind::Board && e.kind != Kind::Coord).unwrap_or(false)).collect();
     let mut entries = BTreeMap::new();
     if let Some(map) = repos.as_object() {
         for (repo, o) in map {
@@ -79,14 +80,28 @@ fn read_yours() -> Mine {
             problems.extend(p);
         }
     }
-    Mine { you, repos: entries, problems }
+    // Each coordinator's own entry: a coordinator's settings, and nothing else.
+    let mut coords = BTreeMap::new();
+    let own = crate::store::settings_list::coord();
+    for (key, o) in super::coord::entries_of(&coordinators) {
+        let (v, p) = read(&o, &format!("your settings for {}", super::coord::entry_words(&key)), &own, "is not a coordinator's setting: say it outside \"coordinators\"");
+        coords.insert(key, v);
+        problems.extend(p);
+    }
+    Mine { you, repos: entries, coords, problems }
 }
 /// Change one setting in your file: a value, or None to take it out. Everything else in the file stays as it is.
 pub fn write_yours(name: &str, value: Option<&Value>, repo: &str) -> crate::err::Res<()> {
+    write_at(name, value, &if repo.is_empty() { vec![] } else { vec!["repos".to_string(), repo.to_string()] })
+}
+/// The same at any place in your file: `[]` your own, `["repos", <repo>]`, `["coordinators", "main"]`. A place left
+/// with nothing in it goes, and so does each part above it that it leaves empty.
+pub fn write_at(name: &str, value: Option<&Value>, path: &[String]) -> crate::err::Res<()> {
     let mut file = read_obj(&config_file()).unwrap_or_default();
     let parts: Vec<&str> = name.split('.').collect();
     {
-        let at: &mut Obj = if repo.is_empty() { &mut file } else { file.obj_mut("repos").obj_mut(repo) };
+        let mut at: &mut Obj = &mut file;
+        for p in path { at = at.obj_mut(p); }
         at.shift_remove(name); // the dotted spelling, where a hand wrote it that way
         fn drop(o: &mut Obj, parts: &[&str]) {
             if parts.len() == 1 { o.shift_remove(parts[0]); return; }
@@ -99,10 +114,11 @@ pub fn write_yours(name: &str, value: Option<&Value>, repo: &str) -> crate::err:
             o.insert(parts[parts.len() - 1].to_string(), v.clone());
         }
     }
-    if !repo.is_empty() {
-        let empty = file.o("repos").and_then(|r| r.o(repo)).map(|r| r.is_empty()).unwrap_or(true);
-        if empty { if let Some(Value::Object(r)) = file.get_mut("repos") { r.shift_remove(repo); if r.is_empty() { file.shift_remove("repos"); } } }
+    fn prune(o: &mut Obj, path: &[String]) {
+        let Some((first, rest)) = path.split_first() else { return };
+        if let Some(Value::Object(inner)) = o.get_mut(first) { prune(inner, rest); if inner.is_empty() { o.shift_remove(first); } }
     }
+    prune(&mut file, path);
     write_json(&config_file(), &Value::Object(file))
 }
 
