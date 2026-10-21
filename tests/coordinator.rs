@@ -1,5 +1,5 @@
 //! The Coordinator: one long-lived agent you talk to in the chat, started once in a tab of its own in the home space,
-//! your words going in exactly as typed (tab: and put an agent on what it adds), its reply in the chat's box in place of
+//! your words going in exactly as typed (enter alone: it decides what to start), its reply in the chat's box in place of
 //! what you said, alt+c only shows or hides that message, and where each message was sent from said to it.
 use crate::common;
 use common::board::open;
@@ -30,7 +30,10 @@ fn the_box_talks_to_one_long_lived_coordinator_started_once_with_nothing_held_ba
     assert!(has(&t, r"\n *\n[ ▌]· Coordinator  not started: your first message starts it *\n╭─[^\n]*╮\n│ ❯ Send message to Coordinator +│\n╰─+╯\n[ ▌] \? all keys *$"), "{t}");
     assert!(!has(&t, "claude|default model|default effort|last message|new task|reply to"));
     s.typed("build a login page");
-    assert!(s.text().contains("│ ❯ build a login page") && s.text().contains("enter send to the Coordinator · tab send, and put an agent on what it adds · shift+enter new line · esc put away"), "{}", s.text());
+    assert!(s.text().contains("│ ❯ build a login page") && s.text().contains("enter send to the Coordinator · shift+enter new line · esc put away"), "{}", s.text());
+    // tab is no second way to send: the Coordinator decides itself what to start, so the words stay where they are
+    s.press(&["tab"]);
+    assert!(s.s.value() == "build a login page" && sw::coordinator::state::get(&socket).unwrap_or_default().arr("queue").is_empty());
     s.press(&["enter"]);
     assert_eq!(s.s.value(), "", "{}", s.s.msg);
     assert_eq!(sw::coordinator::state::get(&socket).unwrap_or_default().arr("queue").len(), 1);
@@ -64,16 +67,16 @@ fn the_box_talks_to_one_long_lived_coordinator_started_once_with_nothing_held_ba
     assert_eq!(sw::store::files::read_obj(&sw::store::files::data_dir().join("view.json")).unwrap().s("chat"), "closed");
     s.press(&["esc"]); assert!(!s.s.chat_open && s.s.ask.is_none() && !s.closed);
     s.press(&["alt+c"]); assert!(s.s.chat_open && s.text().contains("Added proj/1."));
-    // The next thing you type goes to the same agent in the same conversation; tab asks it to delegate.
+    // The next thing you type goes to the same agent in the same conversation, as typed: it decides what to start.
     s.press(&["alt+c"]);
-    s.typed("and start it"); s.press(&["tab"]);
+    s.typed("and start it"); s.press(&["enter"]);
     drain();
     assert_eq!(agents(&w).len(), 1);
     assert_eq!(calls(&w).iter().filter(|c| c.starts_with("agent start")).count(), 1);
     let p = agents(&w)[0].at("agent").arr("prompts").to_vec();
     assert_eq!(p.len(), 2);
-    assert!(text(&p[1]).starts_with("and start it\n\n[Sent with tab on the board: start every task you add from this message right away, without asking."), "{}", text(&p[1]));
-    assert!(has(&sw::coordinator::requests::where_text(&socket), r#"2 messages[^\n]*\n- "build a login page"[^\n]*It was sent with enter[^\n]*\n- "and start it"[^\n]*It was sent with tab: put an agent on every task you add from it, without asking\.$"#));
+    assert_eq!(text(&p[1]), "and start it");
+    assert!(has(&sw::coordinator::requests::where_text(&socket), r#"2 messages[^\n]*\n- "build a login page"[^\n]*It was sent with enter[^\n]*\n- "and start it"[^\n]*It was sent with enter[^\n]*$"#));
     // Hidden, a new reply is said on the chat's one line; shown again, it is there.
     s.load(); assert!(!s.s.chat_open);
     assert!(!s.text().contains("Delegated proj/1.") && has(&s.text(), r"\n[ ▌]○ Coordinator  new reply *\n"), "{}", s.text());

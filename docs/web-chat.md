@@ -80,10 +80,9 @@ address names that pane's chat view (`?ws=…&pane=…&view=chat#board`), so Bac
   [the Coordinator](coordinator.md)), and words wait while it is busy.
   - Enter (or what the web UI's Settings → Chat says sends) and the round Send. While the web UI's own menu is open (its
     `/` commands, its `@` files), Enter and Tab pick from it, as they do there.
-  - **Tab, or Send + start** (a chip over the box while it holds words): sends and puts an agent on every task it adds.
   - The words leave the box once the board took them, and the files they carried with them; words it did not take
     stay, with their files. While a file is still uploading nothing goes, as the web UI's own Send waits.
-  - A message sent with Send + start shows in the web UI's transcript with the line the board adds under it.
+  - There is no second way to send: the coordinator decides what to start. Tab is the web UI's own there.
 - Escape in the web UI's box and its menus is the web UI's own.
 
 ## Above a phone's keyboard

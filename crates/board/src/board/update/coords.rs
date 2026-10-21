@@ -61,15 +61,15 @@ pub fn flip(s: &mut State) -> bool {
     s.reply = true; s.reply_id = s.sel.clone(); s.panel_top = 0;
     true
 }
-/// What you typed, for that coordinator: here, or on its machine. `delegate`: sent with tab.
-pub fn send(s: &mut State, t: &Target, text: &str, delegate: bool, fx: &mut Vec<Effect>) {
+/// What you typed, for that coordinator: here, or on its machine. It decides itself what to start.
+pub fn send(s: &mut State, t: &Target, text: &str, fx: &mut Vec<Effect>) {
     if text.is_empty() { return; }
     if t.host.is_empty() {
         if !s.data.can_dispatch { return s.flash(format!("No coordinator can run here, so nothing was sent. {}", crate::coordinator::who::OFF_WORDS), Ink::Yellow); }
-        fx.push(Effect::Run(Job::CoordSend { cwd: s.ctx.cwd.clone(), text: text.into(), delegate, about: String::new(), to: t.to.clone() }));
+        fx.push(Effect::Run(Job::CoordSend { cwd: s.ctx.cwd.clone(), text: text.into(), delegate: false, about: String::new(), to: t.to.clone() }));
     } else {
         let Some(m) = s.remotes.get(&t.host).map(|m| m.machine.clone()) else { return s.flash(format!("{} is not on this board any more. Nothing was sent.", t.host), Ink::Yellow) };
-        fx.push(Effect::Run(Job::Dispatch { machine: m, text: text.into(), delegate, about: String::new(), to: t.to.clone() }));
+        fx.push(Effect::Run(Job::Dispatch { machine: m, text: text.into(), delegate: false, about: String::new(), to: t.to.clone() }));
     }
     super::chat::note_coord(s, t, text);
     s.input.set_text("");

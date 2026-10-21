@@ -45,10 +45,10 @@ fn esc_hides_but_never_shows_the_chat_and_a_task_with_no_agent_is_talked_about_t
     s.press(&["alt+c"]); assert!(s.s.chat_open && s.text().contains("Added proj/1."));
     // With a draft, esc puts the words away and the message stays up; only the next esc hides it.
     s.typed("half");
-    assert!(has(&s.text(), r"│ Added proj/1\. +│\n│ +│\n│ ❯ half +│\n╰─+╯\n[ ▌] enter send to the Coordinator · tab send, and put an agent on what it adds · shift\+enter new line · esc put away *$"), "{}", s.text());
+    assert!(has(&s.text(), r"│ Added proj/1\. +│\n│ +│\n│ ❯ half +│\n╰─+╯\n[ ▌] enter send to the Coordinator · shift\+enter new line · esc put away *$"), "{}", s.text());
     s.press(&["esc"]); assert_eq!(s.s.value(), ""); assert!(s.s.chat_open);
     s.text(); s.press(&["esc"]); assert!(!s.s.chat_open && s.s.closing.is_none());
-    s.typed("and start it"); s.press(&["tab"]); drain();
+    s.typed("and start it"); s.press(&["enter"]); drain();
     assert_eq!(get(&w).s("last"), "and start it"); assert_eq!(get(&w).s("over"), "Added proj/1.", "what it had last said when the words went in");
     // With a task open that has no agent to reply to, the words go to the Coordinator with that task named.
     let t = w.add("Write the docs");

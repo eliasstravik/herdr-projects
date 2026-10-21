@@ -37,7 +37,7 @@ pub fn has_agent(r: &Obj) -> bool { is_agent(r) && (r.b("host") || crate::flow::
 // ---- enter and tab ---------------------------------------------------------------------------------------------------
 pub fn enter(s: &mut State, text: &str, r: Option<&Obj>, fx: &mut Vec<Effect>) {
     if text.is_empty() { if let Some(r) = r { open_agent(s, r, fx); } return; } // with nothing typed, enter opens the selected task's agent
-    if let Some(t) = super::coords::talking(s) { let w = s.value(); return super::coords::send(s, &t, w.trim(), false, fx); }
+    if let Some(t) = super::coords::talking(s) { let w = s.value(); return super::coords::send(s, &t, w.trim(), fx); }
     // Who gets it is who the chat names: the selected task's agent after space, the Coordinator otherwise.
     if s.reply { if let Some(r) = r {
         if r.b("archivedAt") { return s.flash(read_only(), Ink::Yellow); }
@@ -57,8 +57,8 @@ pub fn enter(s: &mut State, text: &str, r: Option<&Obj>, fx: &mut Vec<Effect>) {
     s.input.set_text("");
 }
 pub fn tab(s: &mut State, text: &str, r: Option<&Obj>, fx: &mut Vec<Effect>) {
-    if let Some(t) = super::coords::talking(s).filter(|_| !text.is_empty()) { let w = s.value(); return super::coords::send(s, &t, w.trim(), true, fx); }
-    if !text.is_empty() { if (s.reply && r.is_some()) || s.mode != crate::board::state::Mode::New { return; } let w = s.value(); dispatch(s, w.trim(), true, None, fx); s.input.set_text(""); return; }
+    // Words for a coordinator go with enter alone, and it decides what to start: the delegate key does nothing with them.
+    if !text.is_empty() { if super::coords::talking(s).is_some() || s.talks_to_coord() || (s.reply && r.is_some()) || s.mode != crate::board::state::Mode::New { return; } let w = s.value(); dispatch(s, w.trim(), true, None, fx); s.input.set_text(""); return; }
     let Some(r) = r else { return };
     if r.b("archivedAt") { return s.flash(read_only(), Ink::Yellow); }
     let n = name(s, r);
