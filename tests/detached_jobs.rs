@@ -4,10 +4,11 @@ use crate::common;
 use common::*;
 use std::time::{Duration, Instant};
 
-/// A process's state letter in /proc (`Z`: a zombie, ended and nobody waited for it), None once it is gone.
+/// A process's state letter as `ps` gives it, on Linux and macOS alike (`Z`: a zombie, ended and nobody waited for
+/// it), None once it is gone.
 fn state(pid: u32) -> Option<char> {
-    let s = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
-    s[s.rfind(')')? + 2..].chars().next()
+    let o = std::process::Command::new("ps").args(["-o", "stat=", "-p", &pid.to_string()]).output().ok()?;
+    String::from_utf8_lossy(&o.stdout).trim().chars().next()
 }
 fn until(done: impl Fn() -> bool) -> bool { let end = Instant::now() + Duration::from_secs(20); while Instant::now() < end { if done() { return true; } std::thread::sleep(Duration::from_millis(10)); } done() }
 

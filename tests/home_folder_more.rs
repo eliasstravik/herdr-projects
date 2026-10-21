@@ -10,8 +10,9 @@ use sw::store::move_home::{move_home, swap_now};
 use util::*;
 
 fn hold(f: &Path) -> std::fs::File { use std::os::fd::AsRawFd; let h = std::fs::File::open(f).unwrap(); assert_eq!(unsafe { libc::flock(h.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) }, 0); h }
-/// Whether another program finds the file locked.
-fn taken(f: &Path) -> bool { Command::new("flock").args(["--exclusive", "--nonblock"]).arg(f).arg("true").status().unwrap().code() == Some(1) }
+/// Whether another program finds the file locked: a flock belongs to one opening of the file, so the file opened again
+/// here is asked as another program would ask (with no `flock` command, which macOS has not).
+fn taken(f: &Path) -> bool { use std::os::fd::AsRawFd; let Ok(h) = std::fs::File::open(f) else { return false }; unsafe { libc::flock(h.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) != 0 } }
 
 #[test]
 fn the_lock_file_in_the_place_in_use_is_never_replaced_or_removed_and_the_new_places_copy_goes_only_while_nobody_holds_it() {
@@ -72,16 +73,15 @@ fn real_programs_a_lock_file_that_was_replaced_between_opening_it_and_locking_it
     let w = world_with(Opts::default());
     let file = sw::store::files::data_dir().join("locks").join(format!("{}.lock", sw::store::files::base64url(b"x")));
     put(&file, "", None);
-    // Someone holds the file; while this process waits for it (the file open, not yet locked), another file takes its
-    // place at the path, and then the holder lets go of the old one.
-    let f = file.display().to_string();
-    let mut holder = Command::new("flock").arg("--exclusive").arg(&file).args(["sh", "-c", &format!("sleep 0.25; : > '{f}.new'; mv '{f}.new' '{f}'; sleep 0.1")]).spawn().unwrap();
-    for _ in 0..200 { if taken(&file) { break; } std::thread::sleep(std::time::Duration::from_millis(5)); }
-    let was = ino(&file);
+    // Someone holds the file (a thread of this test, on an opening of its own); while this process waits for it (the
+    // file open, not yet locked), another file takes its place at the path, and then the holder lets go of the old one.
+    let (was, lock) = (ino(&file), hold(&file));
+    let (at, new) = (file.clone(), file.with_extension("new"));
+    let holder = std::thread::spawn(move || { let ms = std::time::Duration::from_millis; std::thread::sleep(ms(250)); put(&new, "", None); std::fs::rename(&new, &at).unwrap(); std::thread::sleep(ms(100)); drop(lock); });
     let (seen, held) = sw::store::files::with_lock_wait("x", 5000, || Ok((ino(&file), taken(&file)))).unwrap();
     assert_ne!(seen, was); assert!(held, "what it holds is the file at the path, so nobody else can take that");
     assert!(!taken(&file)); // and let go again
-    let _ = holder.kill(); let _ = holder.wait();
+    holder.join().unwrap();
     drop(w);
 }
 
@@ -93,8 +93,7 @@ fn real_programs_the_old_command_runs_at_every_moment_of_a_real_move_and_a_lock_
     put(&launcher, "#!/bin/sh\necho ran\n", None);
     use std::os::unix::fs::PermissionsExt; std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755)).unwrap();
     let lock = h.data.join("locks/dGFzaw.lock");
-    let mut holder = Command::new("flock").arg("--exclusive").arg(&lock).args(["sleep", "30"]).spawn().unwrap();
-    for _ in 0..200 { if taken(&lock) { break; } std::thread::sleep(std::time::Duration::from_millis(10)); }
+    let holder = hold(&lock);
     // At each of the two steps in which paths change places, before and after it, the old command is started.
     let ran = std::cell::RefCell::new(vec![]);
     let old = || ran.borrow_mut().push(String::from_utf8_lossy(&Command::new(&launcher).output().map(|o| o.stdout).unwrap_or_default()).into_owned());
@@ -104,5 +103,5 @@ fn real_programs_the_old_command_runs_at_every_moment_of_a_real_move_and_a_lock_
     assert_eq!(*ran.borrow(), vec!["ran\n"; 4]);
     assert!(is_link(&h.data) && is_dir(&h.to.join("data")));
     assert!(taken(&lock) && taken(&PathBuf::from(&h.to).join("data/locks/dGFzaw.lock"))); // still the holder's, by either path
-    let _ = holder.kill(); let _ = holder.wait();
+    drop(holder);
 }

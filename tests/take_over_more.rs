@@ -129,6 +129,9 @@ fn real_programs_herdr_superworks_own_processes_are_stopped_and_no_other() {
     std::fs::create_dir_all(old.parent().unwrap()).unwrap();
     // a copy of bash, not of sleep: a multi-call coreutils (uutils, Ubuntu 25.10+) runs as whatever its file name says
     std::fs::copy("/bin/bash", &old).unwrap();
+    // macOS kills a copy of its own program at its start until it is signed again (here: signed for this machine only)
+    #[cfg(target_os = "macos")]
+    assert!(std::process::Command::new("codesign").args(["-s", "-", "-f"]).arg(&old).status().unwrap().success());
     let mut keeper = std::process::Command::new(&old).args(["-c", "read -t 30"]).stdin(std::process::Stdio::piped()).spawn().unwrap();
     let _quiet = keeper.stdin.take(); // held open here, so it waits on nothing and starts no other program
     let mut other = std::process::Command::new("/bin/sleep").arg("30").spawn().unwrap();
