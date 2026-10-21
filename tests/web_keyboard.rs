@@ -17,7 +17,7 @@ fn typing_with_the_keyboard_up_the_header_steps_aside_and_the_conversation_takes
     // the page is served, and the chat keeps its room, measured again whenever the box's height is set
     assert!(PAGE.contains(r#"("room.js", include_str!("page/room.js")),"#));
     assert!(CHAT.contains(r#"import { roomFor } from "./room.js";"#) && CHAT.contains("room = roomFor({ chat: el, said: said.el, box });") && CHAT.contains("room.destroy();"));
-    assert!(CHAT.contains("onGrow: () => room?.fit()") && COMPOSE.contains("onGrow = () => {} }) {") && has(COMPOSE, r"else \{ box\.style\.height = .auto.; box\.style\.height = `\$\{box\.scrollHeight\}px`; \}\s*box\.scrollTop = top;\s*onGrow\(\);"));
+    assert!(CHAT.contains("onGrow: () => room?.fit()") && COMPOSE.contains("onGrow = () => {}, call = null }) {") && has(COMPOSE, r"else \{ box\.style\.height = .auto.; box\.style\.height = `\$\{box\.scrollHeight\}px`; \}\s*box\.scrollTop = top;\s*onGrow\(\);"));
     // a keyboard is up: the web UI's own mark, or a visible window much shorter than the page (not only zoomed in)
     assert!(ROOM.contains(r#"html.hasAttribute("data-keyboard") || (!!vv && Math.abs(vv.scale - 1) < 0.01 && window.innerHeight - vv.height > KEYBOARD)"#));
     assert!(ROOM.contains(r#"const mine = document.activeElement === box, on = mine && keyboard();"#) && ROOM.contains(r#"board.classList.toggle("sw-typing", on);"#));

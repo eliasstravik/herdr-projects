@@ -12,7 +12,7 @@ const DOC: &str = include_str!("../docs/web-chat-box.md");
 #[test]
 fn the_mic_is_the_web_uis_tapped_held_or_its_shortcut_with_its_pill_and_escape_that_cancels() {
     assert!(VOICE.contains(r#"h("button.sw-mic", { type: "button", "aria-label": "Dictate (hold)", title: "Dictate (hold)", "aria-pressed": "false" }, icon("mic"))"#));
-    assert!(COMPOSE.contains("files.input, files.add, voice.el, to)") && COMPOSE.contains("note, voice.pill, card)"));
+    assert!(COMPOSE.contains("files.input, files.add, voice.el, call, to)") && COMPOSE.contains("note, voice.pill, card)"));
     // a press starts (or finishes); held this long, letting go finishes; the click after a release is not a second
     // press
     assert!(VOICE.contains("const HOLD_MS = 300, MAX_SECONDS = 120, MAX_BYTES = 10 * 1024 * 1024"));
