@@ -72,6 +72,7 @@ Coordinator's closing line use them too):
 | `delegate` | `started` |
 | `clear` | `removed` |
 | `archive`, `restore` | `archived`, `restored` |
+| `archive --done [--repo NAME]` | `Archived 50 done tasks of mstars.`, and what it left out: `Left out: 1 done but pinned, 2 working.` |
 | `approve` | `approved` |
 
 `approve` refuses work whose last review failed, and says what the review found. `approve <id> --anyway` merges it all

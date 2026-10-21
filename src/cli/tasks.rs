@@ -1,7 +1,7 @@
 //! The commands on tasks and settings: each returns what --json prints and what a person reads.
 use super::flags::{pick_choices, Args};
 use super::{caller, context_folder};
-use crate::actions::{archive, filing, finish_line, settings::{settings_command, Where}, start, talk};
+use crate::actions::{archive, archive_done, filing, finish_line, settings::{settings_command, Where}, start, talk};
 use crate::board::keys::key_name;
 use crate::err::Res;
 use crate::flow::live::board;
@@ -110,7 +110,17 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
         "finish" => said(finish_line::finish_anyway(&need(1, "an id")?)?),
         "details" => { let d = tidy(finish_line::details(&need(1, "an id")?)?); let s = serde_json::to_string_pretty(&d).unwrap_or_default(); (d, s) }
         "pin" => { let t = filing::pin(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: {}", t.s("id"), if t.b("pinned") { "pinned" } else { "unpinned" })) }
-        "archive" => { let t = archive::archive(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: archived", t.s("id"))) }
+        // A round of work is over: every done task of a repo (or of every repo) in one go.
+        "archive" if flags.b("done") => {
+            if pos.len() > 1 { crate::fail!("archive --done takes no id: it archives every done task (of --repo NAME). Try: herdr-projects help"); }
+            if flags.has("repo") && flag("repo").is_none() { crate::fail!("--repo needs a repo's name: herdr-projects archive --done --repo NAME"); }
+            let r = archive_done::archive_done(flag("repo").as_deref())?;
+            (r.json(), r.said)
+        }
+        "archive" => {
+            if flags.has("repo") { crate::fail!("--repo goes with --done: herdr-projects archive --done --repo NAME"); }
+            let t = archive::archive(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: archived", t.s("id")))
+        }
         "restore" | "unarchive" => { let t = archive::restore(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: restored", t.s("id"))) }
         "clear" => {
             let (id, kept) = archive::clear(&need(1, "an id")?)?;

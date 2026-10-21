@@ -17,6 +17,8 @@ pub enum Job {
     Stop { id: String, said: String },
     Pin { id: String, name: String, key: String },
     Archive { id: String, said: String }, Restore { id: String, said: String },
+    /// Every done task of this machine's repo `repo`, in one go; `said` follows what it says it did.
+    ArchiveDone { repo: String, said: String },
     Clear { id: String, name: String },
     Pick { id: String, letter: String },
     /// What you typed, for this machine's Coordinator; with no Coordinator, a task (or words added to one's description).
@@ -154,6 +156,7 @@ fn run_one(job: Job) -> Done {
             Job::Stop { id, said } => { talk::stop(&id)?; Done::say(said, Ink::Yellow) }
             Job::Pin { id, name, key } => { let t = filing::pin(&id)?; Done::say(if t.b("pinned") { format!("Pinned {name} to the top. {key} unpins it.") } else { format!("Unpinned {name}.") }, Ink::Muted) }
             Job::Archive { id, said } => { archive::archive(&id)?; Done::say(said, Ink::Green).and(Then::Archived(id)) }
+            Job::ArchiveDone { repo, said } => { let r = crate::actions::archive_done::archive_done(Some(&repo))?; Done::say(format!("{}{said}", r.said), if r.failed.is_empty() { Ink::Green } else { Ink::Yellow }) }
             Job::Restore { id, said } => { archive::restore(&id)?; Done::say(said, Ink::Green).and(Then::Left(id)) }
             Job::Clear { id, name } => {
                 let (_, kept) = archive::clear(&id)?;
