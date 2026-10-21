@@ -263,6 +263,8 @@ pub fn details(id: &str) -> Res<Value> {
         "pr": if t.b("pr") { t.at("pr").clone() } else { Value::Null },
         "worktree": if t.b("worktree") { t.at("worktree").clone() } else { Value::Null },
         "branch": if t.b("branch") { t.at("branch").clone() } else { Value::Null },
+        "kept": if t.b("kept") { t.at("kept").clone() } else { Value::Null },
+        "inUse": if t.at("tidy").b("inUse") { t.at("tidy").at("inUse").clone() } else { Value::Null }, // what keeps its space in use, every thing
         "limits": limits_detail(&t, now()),
     }));
     // Waiting for a free slot: its place in the queue, and in words ("waiting for a free slot, Q#2").

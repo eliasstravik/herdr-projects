@@ -20,7 +20,7 @@ fn herr(code: &str, message: impl Into<String>) -> HerdrError { HerdrError { cod
 /// What a run of the program gave: its status, its output, its error output.
 pub struct Ran { pub status: i32, pub stdout: String, pub stderr: String }
 /// A stand-in for herdr, for tests: answers each command line as the program would.
-pub trait Fake { fn run(&self, args: &[String], input: &str) -> Ran; fn kids(&self, _pid: i64) -> Vec<i64> { vec![] } fn wired_to(&self, pid: i64, group: &[i64]) -> Option<bool> { super::procs::real_wired_to(pid, group) } fn kill(&self, _pid: i64) {} fn ask(&self, _method: &str, _params: &Value) -> Result<Value, HerdrError> { Err(herr("no_server", "no herdr")) } }
+pub trait Fake { fn run(&self, args: &[String], input: &str) -> Ran; fn kids(&self, _pid: i64) -> Vec<i64> { vec![] } fn wired_to(&self, pid: i64, group: &[i64]) -> Option<bool> { super::procs::real_wired_to(pid, group) } fn wiring(&self, pid: i64, group: &[i64]) -> super::procs::Wiring { use super::procs::Wiring as W; match self.wired_to(pid, group) { Some(true) => W::Agent, Some(false) => W::Elsewhere, None => W::Unknown } } fn command(&self, _pid: i64) -> Option<String> { None } fn kill(&self, _pid: i64) {} fn ask(&self, _method: &str, _params: &Value) -> Result<Value, HerdrError> { Err(herr("no_server", "no herdr")) } }
 thread_local! { static FAKE: RefCell<Option<Rc<dyn Fake>>> = const { RefCell::new(None) }; }
 /// Tests only: herdr is this stand-in on this thread (None: the real program again).
 pub fn set_fake(f: Option<Rc<dyn Fake>>) { FAKE.with(|x| *x.borrow_mut() = f); }
@@ -56,18 +56,18 @@ pub fn launch(socket: Option<&str>, args: &[String], input: &str, timeout_ms: u6
     if let Some(mut si) = child.stdin.take() { let _ = si.write_all(input.as_bytes()); }
     wait_with_timeout(child, timeout_ms)
 }
-/// Waits for a child, reading what it writes; kills it after `timeout_ms`.
+/// Waits for a child, reading what it writes; kills it after `timeout_ms` (one too long to count: never).
 pub fn wait_with_timeout(mut child: std::process::Child, timeout_ms: u64) -> HRes<Ran> {
     use std::io::Read;
     let mut out = child.stdout.take();
     let mut err = child.stderr.take();
     let t_out = std::thread::spawn(move || { let mut s = Vec::new(); if let Some(o) = out.as_mut() { let _ = o.read_to_end(&mut s); } s });
     let t_err = std::thread::spawn(move || { let mut s = Vec::new(); if let Some(o) = err.as_mut() { let _ = o.read_to_end(&mut s); } s });
-    let until = std::time::Instant::now() + Duration::from_millis(timeout_ms);
+    let until = std::time::Instant::now().checked_add(Duration::from_millis(timeout_ms));
     let status = loop {
         match child.try_wait() {
             Ok(Some(st)) => break st.code().unwrap_or(-1),
-            Ok(None) if std::time::Instant::now() >= until => { let _ = child.kill(); let _ = child.wait(); return Err(herr("timeout", "herdr did not answer in time")); }
+            Ok(None) if until.is_some_and(|u| std::time::Instant::now() >= u) => { let _ = child.kill(); let _ = child.wait(); return Err(herr("timeout", "herdr did not answer in time")); }
             Ok(None) => std::thread::sleep(Duration::from_millis(5)),
             Err(e) => return Err(herr("spawn_failed", e.to_string())),
         }

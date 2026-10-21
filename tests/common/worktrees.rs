@@ -22,7 +22,15 @@ pub fn worktree(f: &F, st: &mut Value, verb: &str, flag: &dyn Fn(&str) -> Option
             let ds = dest.display().to_string();
             let exists = git(&root, &["rev-parse", "--verify", &format!("refs/heads/{branch}")]).is_ok();
             let base = flag("--base").unwrap_or_else(|| "HEAD".into());
-            let r = if exists { git(&root, &["worktree", "add", &ds, &branch]) } else { git(&root, &["worktree", "add", "--no-track", "-b", &branch, &ds, &base]) };
+            // As herdr does: plain `-b`, so a branch made from a remote-tracking ref gets its upstream in .git/config.
+            // `createLocked` fails that many creates as git does while another git command holds .git/config: the branch
+            // is made, then the create refused.
+            if st.i("createLocked") > 0 {
+                st["createLocked"] = json!(st.i("createLocked") - 1);
+                let _ = git(&root, &["branch", "--no-track", &branch, &base]);
+                return fail("worktree_create_failed", "error: could not lock config file .git/config: File exists\nerror: unable to write upstream branch configuration");
+            }
+            let r = if exists { git(&root, &["worktree", "add", &ds, &branch]) } else { git(&root, &["worktree", "add", "-b", &branch, &ds, &base]) };
             if let Err(e) = r { return fail("worktree_create_failed", &e); }
             let rs = root.display().to_string();
             if !st.arr("workspaces").iter().any(|w| w.s("cwd") == rs) { F::new_workspace(st, &rs, root.file_name().and_then(|x| x.to_str()), json!({ "checkout_path": rs, "repo_root": rs, "is_linked_worktree": false })); }

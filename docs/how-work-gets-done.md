@@ -16,6 +16,10 @@ All of this runs with the board open or closed.
 - **In a git repo**, the plugin asks Herdr for a worktree space (`herdr worktree create`), on its own branch
   (`work/<n>-<title>`), started from the remote's default branch (or from your commit, with `--workspace.from here`, or
   from another branch at the remote, with `--workspace.from develop`). A task in a repo never works in your checkout.
+- **Tasks of one repo can start at the same moment.** Herdr is handed the commit the task starts from, not
+  `origin/main`, so git writes no upstream into the repo's shared `.git/config` at the start (the push at the finish
+  sets it). Another git command holding that file anyway (`could not lock config file`) is waited out, five tries in
+  under four seconds, and a start that fails still removes the empty branch it made, so the next start takes the name.
 - **The branch's name is `workspace.branch`**, `work/{n}-{slug}` unless you set it: for you, for one repo, or for one
   task, never in the repo's own file. `{n}` is the task's number (`7`, or `7b` for an attempt), `{slug}` its title
   (`fix-the-login`), `{key}` its repo's key and number (`KIC-7`). So `feat/{key}-{slug}` makes `feat/KIC-7-fix-the-login`.
@@ -102,6 +106,10 @@ When the agent's turn ends, the board:
 2. **Pushes the branch and opens a draft pull request**, when there is an `origin` remote and `gh`.
    - A pull request the agent already opened for the task's branch is taken on instead, and goes through the review and
      the merge as usual.
+   - The push may run for `merge.pushTimeout` (2 minutes unless set), the repo's pre-push hook included. A repo whose
+     hook runs its tests needs more: `herdr-projects set merge.pushTimeout 10m --repo <name>`, or `none`. A push that
+     runs out of time is stopped and the finish fails, saying so (`git push did not end within 2m
+     (merge.pushTimeout)`); finish again once it is raised.
    - A branch that brings main nothing gets no pull request: no change was needed, or the work is on main already (the
      agent merged its own pull request, or pushed to main itself). The task is done, and its row says why: "No change
      needed", "Already on main" or "Already merged in #133". Nothing is pushed then, so a repo the task archived on
