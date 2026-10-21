@@ -200,6 +200,7 @@ mod pull_requests_checks;
 mod pull_requests_expected;
 mod pull_requests_merge;
 mod pull_requests_no_checks_permission;
+mod push_timeout;
 mod real_terminal;
 mod rearm;
 mod rearm_stuck;
