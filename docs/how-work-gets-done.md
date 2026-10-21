@@ -16,6 +16,10 @@ All of this runs with the board open or closed.
 - **In a git repo**, the plugin asks Herdr for a worktree space (`herdr worktree create`), on its own branch
   (`work/<n>-<title>`), started from the remote's default branch (or from your commit, with `--workspace.from here`, or
   from another branch at the remote, with `--workspace.from develop`). A task in a repo never works in your checkout.
+- **Tasks of one repo can start at the same moment.** Herdr is handed the commit the task starts from, not
+  `origin/main`, so git writes no upstream into the repo's shared `.git/config` at the start (the push at the finish
+  sets it). Another git command holding that file anyway (`could not lock config file`) is waited out, five tries in
+  under four seconds, and a start that fails still removes the empty branch it made, so the next start takes the name.
 - **The branch's name is `workspace.branch`**, `work/{n}-{slug}` unless you set it: for you, for one repo, or for one
   task, never in the repo's own file. `{n}` is the task's number (`7`, or `7b` for an attempt), `{slug}` its title
   (`fix-the-login`), `{key}` its repo's key and number (`KIC-7`). So `feat/{key}-{slug}` makes `feat/KIC-7-fix-the-login`.
