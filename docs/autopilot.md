@@ -250,8 +250,9 @@ What each means in full is in [the list](settings.md#the-list).
 
 **Each machine runs its own coordinators' autopilot**, with its own settings and limits. This board shows their lines
 and panels as that machine sends them with its tasks, and sends `Tab` and `Ctrl+X` there. `Ctrl+E` on one shows its
-settings whole, to read, and says to change them there. A machine on an older version sends no autopilot, and the keys
-say to update it there.
+settings whole, to read, and says to change them there. Each coordinator with a row is sent, its machine's and every
+repo's that machine knows, one that never ran as off: `Tab` there starts it, as a first message would. A machine on an
+older version sends no autopilot at all, and the keys say to update it there.
 
 **The main Coordinator sees other machines only while a board is open.** The keeper does not ask other machines for
 their tasks. So their tasks reach the main Coordinator's autopilot only as an open board (in a terminal or the web UI)
