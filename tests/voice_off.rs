@@ -23,7 +23,7 @@ fn with_machine(settings: serde_json::Value) -> World { world_with(Opts { repo: 
 fn with_calls_off_the_web_board_has_no_call_button_and_its_page_may_not_reach_elevenlabs() {
     let w = world_off();
     assert_eq!(web(&w, "board", json!({})).at("calls"), &json!(false));
-    assert!(BTN.contains("role = snap.role; calls = snap.calls !== false;") && BTN.contains("btn.hidden = on || !calls;"), "the page hides the button when the board says calls are off");
+    assert!(BTN.contains("role = snap.role; calls = snap.calls !== false;") && BTN.contains("btn.hidden = !calls;"), "the page hides the button when the board says calls are off");
     assert_eq!(page::widen(POLICY), POLICY, "the web UI's own policy, with no ElevenLabs host");
     assert!(!page::widen(POLICY).contains("elevenlabs"));
 }

@@ -6,6 +6,8 @@ const CALL: &str = include_str!("../crates/web/src/webui/page/call.js");
 const BTN: &str = include_str!("../crates/web/src/webui/page/callbtn.js");
 const CSS: &str = include_str!("../crates/web/src/webui/page/call.css");
 const CHAT: &str = include_str!("../crates/web/src/webui/page/chat.js");
+const COMPOSE: &str = include_str!("../crates/web/src/webui/page/compose.js");
+const DOCK: &str = include_str!("../crates/web/src/webui/page/dock.js");
 const SDK: &str = include_str!("../crates/web/src/webui/page/vendor/elevenlabs.js");
 const HEAR: &str = include_str!("../crates/web/src/webui/page/hear.js");
 use sw::webui::voice::page::{widen, HOSTS};
@@ -56,23 +58,32 @@ fn an_update_is_read_only_in_a_pause_never_while_you_talk_or_over_the_voice() {
 }
 
 #[test]
-fn the_toggle_stands_in_the_chats_bar_and_the_call_page_takes_its_ticket_out_of_the_address() {
-    // in the bar beside Hide and Full screen, the call's row under the bar; its word where the bar has room
-    assert!(CHAT.contains(r#"const bar = h("div.sw-chatbar", grip, who, state, h("span.sw-chatbar-space"), phone.btn, hide, grow2);"#));
+fn the_toggle_stands_in_the_box_beside_the_mic_and_the_call_page_takes_its_ticket_out_of_the_address() {
+    // not in the chat's bar: only Hide and Full screen there, the call's row under it
+    assert!(CHAT.contains(r#"const bar = h("div.sw-chatbar", grip, who, state, h("span.sw-chatbar-space"), hide, grow2);"#));
     assert!(CHAT.contains(r#"const el = h("footer.sw-chat", { "aria-label": "Chat" }, bar, phone.strip, note, own);"#));
-    assert!(BTN.contains(r#"btn.replaceChildren(icon("phone"), h("span.sw-call-label", "Call"));"#) && BTN.contains(r#"btn.setAttribute("aria-label", "Call");"#));
-    assert!(CSS.contains("@container (min-width: 521px) { .sw-call-label { display: inline; } }"));
+    // in the board's own box right after the mic, and back there when the web UI's box is gone
+    assert!(COMPOSE.contains(r#"h("div.sw-controls.sw-controls-left", files.input, files.add, voice.el, call, to)"#));
+    assert!(CHAT.contains("call: phone.btn });") && CHAT.contains("if (!docked && voice.el.nextSibling !== phone.btn) voice.el.after(phone.btn);"));
+    // docked: in the web UI's box after its mic (after its add button where there is none), and taken out at the close
+    assert!(DOCK.contains(r#"const LEFT = ".composer-controls-left", AFTER = [":scope > .voice-mic-wrap", ":scope > .composer-attach"];"#));
+    assert!(DOCK.contains("if (next !== guest) left.insertBefore(guest, next);") && DOCK.contains("seat(composer);"));
+    assert!(DOCK.contains(r#"if (guest?.closest(".composer")) guest.remove();"#) && CHAT.contains("guest: phone.btn,"));
+    // an icon of its own, never the mic's, named for the pointer and the screen reader; a press keeps the keyboard up
+    assert!(BTN.contains(r#"btn.replaceChildren(icon(on ? "phoneOff" : "phone"));"#) && BTN.contains(r#": "Start a voice call");"#));
+    assert!(BTN.contains(r#"onpointerdown: (e) => e.preventDefault(), onclick: () => tap() });"#));
+    assert!(CSS.contains("@media (pointer: coarse) { .sw-call { width: var(--touch-target, 40px); height: var(--touch-target, 40px); } }"), "a thumb's size");
     assert!(BTN.contains(r#"if (other) { const out = await post("voice/end""#), "a call from the terminal board is hung up from the web too");
     assert!(BTN.contains("call.start({ client });"));
-    assert!(CSS.contains(".sw-call { flex: none; display: inline-flex;") && CSS.contains("min-height: 40px"), "a thumb's size");
     assert!(sw::webui::page::file("callpage.js").is_none(), "no page of its own: a terminal call has no browser");
     for f in ["call.js", "callbtn.js", "hear.js", "call.css", "vendor/elevenlabs.js", "vendor/rawAudioProcessor.js"] { assert!(sw::webui::page::file(f).is_some(), "{f} is served"); }
 }
 
 #[test]
 fn a_call_on_is_one_row_with_its_way_to_hang_up_and_a_call_over_leaves_only_a_line_that_fades() {
-    // while it rings or is on, the Call button steps aside for the row, whose End (Cancel while it rings) hangs up
-    assert!(BTN.contains("btn.hidden = on || !calls;") && BTN.contains(r#"hang.replaceChildren(icon("phoneOff"), ringing ? "Cancel" : "End");"#));
+    // while it rings or is on, the Call button hangs up where it is, and so does the row's End (Cancel while it rings)
+    assert!(BTN.contains("btn.hidden = !calls;") && BTN.contains(r#"hang.replaceChildren(icon("phoneOff"), ringing ? "Cancel" : "End");"#));
+    assert!(BTN.contains(r#"btn.setAttribute("aria-label", on ? (ringing ? "Cancel the call" : "End the call")"#));
     assert!(BTN.contains(r#"const hang = h("button.btn.sw-call-end", { type: "button", title: "Hang up the call", onclick: () => tap() }"#));
     assert!(BTN.contains(r#"who.textContent = ringing ? "Calling…" : "On call";"#) && BTN.contains("time.textContent = clock("));
     // where it is held, when that is not this browser: the call helper's computer the board names

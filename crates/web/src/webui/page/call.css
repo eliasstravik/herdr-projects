@@ -1,12 +1,24 @@
-/* A voice call in the web board's chat (callbtn.js): the Call button in the chat's bar, the call's row under the bar
-   while it rings or is on, and the short line that fades out when it ended, in the web UI's own look. */
-.sw-call { flex: none; display: inline-flex; align-items: center; gap: var(--space-2, 8px); width: auto; padding: 0 var(--space-2, 8px); color: var(--sw-dim); font: inherit; font-size: var(--fs-md, 14px); }
-/* Its word where the bar has room; on a phone the icon alone, named for the screen reader. */
-.sw-call-label { display: none; }
-@container (min-width: 521px) { .sw-call-label { display: inline; } }
+/* A voice call in the web board's chat (callbtn.js): the Call button in the box you type in, beside the mic, the call's
+   row under the chat's bar while it rings or is on, and the short line that fades out when it ended, in the web UI's own
+   look. */
+/* The button: the mic's twin (voice.css, the web UI's .voice-mic), a quiet round button with the phone; in the board's
+   own box and in the web UI's alike, so drawn with the web UI's own names (in its box the board's are not there). While
+   a call rings or is on it hangs up: red, as a call's End always is. */
+.sw-call { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: var(--control-h, 34px); height: var(--control-h, 34px); margin: 0; padding: 0; border: var(--hairline, 1px) solid transparent; border-radius: var(--radius-pill, 999px); background: transparent; color: var(--text-dim, #9b9183); cursor: pointer; touch-action: manipulation; -webkit-appearance: none; appearance: none; transition: background-color var(--dur-fast, 120ms) var(--ease-out, ease-out), color var(--dur-fast, 120ms) var(--ease-out, ease-out); }
 .sw-call[hidden] { display: none; }
-.sw-call svg, .sw-call-mute svg, .sw-call-end svg { width: 16px; height: 16px; }
-.sw-call:focus-visible, .sw-call-mute:focus-visible, .sw-call-end:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
+.sw-call:disabled { opacity: 0.7; cursor: default; }
+.sw-call[data-state="live"], .sw-call[data-state="ringing"] { color: var(--status-blocked, #ff7b70); background: color-mix(in srgb, var(--status-blocked, #ff7b70) 14%, transparent); }
+@media (hover: hover) {
+  .sw-call[data-state="idle"]:hover:not(:disabled) { background: var(--bg-hover, #2a2621); }
+  .sw-call[data-state="live"]:hover:not(:disabled), .sw-call[data-state="ringing"]:hover:not(:disabled) { background: color-mix(in srgb, var(--status-blocked, #ff7b70) 24%, transparent); }
+}
+/* A finger: the web UI's touch size, still a circle (its red while a call is on shows its edge). */
+@media (pointer: coarse) { .sw-call { width: var(--touch-target, 40px); height: var(--touch-target, 40px); } }
+@media (prefers-reduced-motion: reduce) { .sw-call { transition: none; } }
+.sw-call svg { width: var(--icon-size, 16px); height: var(--icon-size, 16px); }
+.sw-call-mute svg, .sw-call-end svg { width: 16px; height: 16px; }
+.sw-call:focus-visible { outline: var(--ring, 2px solid var(--accent, #f0a830)); outline-offset: var(--ring-offset, 2px); }
+.sw-call-mute:focus-visible, .sw-call-end:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
 .sw-call-strip { display: flex; flex-direction: column; padding: 0 var(--space-3, 12px) var(--space-2, 8px); }
 .sw-call-strip[hidden], .sw-call-row[hidden], .sw-call-ended[hidden], .sw-call-time[hidden] { display: none; }
 /* The row: live is the board's green, ringing its yellow, as a faint wash and its edge; one line where it fits. */
