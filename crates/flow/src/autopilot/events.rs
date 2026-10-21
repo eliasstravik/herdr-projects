@@ -32,7 +32,8 @@ pub fn look(co: &Co, ap: &mut Obj, board: &[Obj], when: &str, approve: bool, ret
         let marks = marks_of(ap, t, approve);
         let had: Vec<String> = seen.get(&id).map(strings).unwrap_or_default();
         next.put(&id, marks.clone());
-        if first || t.b("archivedAt") { continue; }
+        // Never seen and from before it was turned on (another machine's, heard only now): nothing new happened.
+        if first || t.b("archivedAt") || (had.is_empty() && t.i("created") < ap.i("since")) { continue; }
         for m in marks.iter().filter(|m| !had.contains(m)) {
             match m.split(':').next().unwrap_or("") {
                 "added" if !added_by(co, t) && wants("added") => out.push(reason("added", &id, &format!("{} was added", tag(&id)))),

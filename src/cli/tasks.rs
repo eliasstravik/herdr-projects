@@ -48,6 +48,8 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
             // What it is to wait for is checked before it is added: a refused --after adds nothing.
             let after = flag("after").map(|r| crate::after::checked(None, &crate::after::refs_of(&r))).transpose()?;
             let opts = filing::AddOpts { description: flag("desc").or_else(|| flag("description")).unwrap_or_default(), repo: flag("repo").unwrap_or_default(), research, settings, from };
+            // On another machine the board knows (remote/add.rs); in an autopilot turn within its limits (autopilot/add.rs).
+            if let Some(on) = flag("on") { return add_on(&on, &rest(1), opts, flags.b("delegate"), pilot.as_ref()); }
             // In an autopilot turn: within its limits, and started at once by `autopilot.startAtOnce` (autopilot/add.rs).
             let (t, start, dropped) = match &pilot {
                 Some(co) => { let a = crate::autopilot::add::add(co, &here, &rest(1), opts, after.as_deref().unwrap_or(&[]), flags.b("delegate"))?; (a.task, a.start, crate::autopilot::add::dropped_words(&a.dropped)) }
@@ -117,7 +119,7 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
         "pick" => said(crate::attempts::settle::pick(&need(1, "an id")?, &pos.get(2).cloned().unwrap_or_default())?),
         "approve" => said(finish_line::approve(&need(1, "an id")?, None, flags.at("anyway") == &json!(true))?),
         "review" => said(finish_line::send_review(&need(1, "an id")?)?),
-        "retry" => said(finish_line::send_error(&need(1, "an id")?)?),
+        "retry" => said(finish_line::send_error_noted(&need(1, "an id")?, &rest(2))?),
         "fix" => said(finish_line::send_failure(&need(1, "an id")?)?),
         "finish" => said(finish_line::finish_anyway(&need(1, "an id")?)?),
         "details" => { let mut d = tidy(finish_line::details(&need(1, "an id")?)?); if pilot.is_some() { crate::autopilot::history::with_note(&mut d); } let s = serde_json::to_string_pretty(&d).unwrap_or_default(); (d, s) }
@@ -169,6 +171,15 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
     Ok(out)
 }
 mod finish_line_said { pub use crate::actions::shared::Said; }
+fn add_on(on: &str, title: &str, mut o: crate::actions::filing::AddOpts, delegate: bool, pilot: Option<&crate::coordinator::co::Co>) -> Res<(Value, String)> {
+    if let Some(r) = o.research { o.settings.push(("research.only".into(), json!(r))); }
+    let (j, dropped) = match pilot {
+        Some(co) => crate::autopilot::add::add_far(co, on, title, o, delegate)?,
+        None => (crate::remote::add::add_there(on, title, &o.description, &o.repo, &o.settings, delegate, Value::Null)?, vec![]),
+    };
+    let said = format!("{}{}", j.s("msg"), crate::autopilot::add::dropped_words(&dropped));
+    Ok((j, said))
+}
 
 fn coordinator(a: &Args, here: &std::path::Path, me: Option<&(Obj, &str)>) -> Res<(Value, String)> {
     use crate::coordinator::{look, requests as r, state, who};

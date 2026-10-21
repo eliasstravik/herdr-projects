@@ -7,6 +7,7 @@
 //! `id`, a `label`, a `target` (`user@host` or `ssh://user@host:port`), a `session` and `enabled`. The
 //! `board.machines` setting names them by hand instead. The order the board lists them in is herdr's sidebar's
 //! (remote/sidebar.rs).
+pub mod add;
 pub mod automations;
 pub mod carry;
 pub mod check;
@@ -90,6 +91,8 @@ pub fn ask(m: &Machine, what: &str, arg: Option<&Value>, ms: u64) -> Result<Valu
 /// addresses of its machines has them looked up here (remote/sidebar.rs).
 pub fn ask_list(m: &Machine, ms: u64) -> Result<Value, Value> {
     let mut answer = ask(m, "list", None, ms);
+    // What a board heard is what the main Coordinator's autopilot sees of that machine (autopilot/heard.rs).
+    if let Ok(j) = &answer { crate::autopilot::heard::heard(&m.label, j); }
     if let Ok(j) = &mut answer {
         if j.at("tasks").is_array() && j.get("sidebar").is_none() { if let Some(l) = sidebar::asked(m) { j["sidebar"] = l; } }
         if let Some(l) = j.get_mut("sidebar") { sidebar::looked_up(l); }
@@ -146,6 +149,8 @@ pub fn remote_main(a: &[String]) -> i32 {
     println!("{}", serde_json::to_string(&answer).unwrap_or_default());
     0
 }
+/// The asking machine's work settings carried with a task it started or added here.
+pub fn carried_with(id: &str, req: &Value) -> Res<()> { carried(id, req) }
 fn carried(id: &str, req: &Value) -> Res<()> {
     if !req.at("settings").is_object() { return Ok(()); }
     let pairs: Vec<(String, Value)> = req.at("settings").as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -163,6 +168,7 @@ pub fn door_with(what: &str, req: &Value, bytes: &[u8]) -> Res<Value> {
         "list" => Ok(remote_list()),
         "after" => Ok(crate::after::far_ask::door(req)), // the tasks a task of the asking machine waits for (after/far_ask.rs)
         "keep" => carry::kept(req, bytes), // a file that goes with words from the asking machine (remote/carry.rs)
+        "add" => add::door(req), // a task the asking machine adds here (remote/add.rs)
         "hello" => Ok(json!({ "ok": true, "host": check::hostname(), "version": VERSION })), // the check a machine runs on itself (remote/check.rs)
         "do" if automations::is_automation_action(req.s("action")) => automations::automation_do(req), // an automation of this machine, not a task
         "do" if req.s("action").starts_with("autopilot-") => crate::autopilot::far::door(req), // a coordinator's autopilot switched from another machine

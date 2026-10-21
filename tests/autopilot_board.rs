@@ -1,6 +1,8 @@
 //! Autopilot on the board: the main Coordinator's row on top (what it sums up of the others), a coordinator's
 //! autopilot line only while it is on, `Tab` and `Ctrl+X` on a coordinator's row, its panel beside the list and whole
 //! (with its last wakes), its settings page (this time's values while on), the web board's same row, and a frame of it.
+//! And other machines: their coordinators' lines and keys, what the main Coordinator sees of them (only what an open
+//! board heard), and its adds there, their slot taken here and given back when that machine refuses.
 use crate::common;
 use common::board::{open, web, Board};
 use common::pilot::*;
@@ -150,4 +152,84 @@ fn a_frame_of_the_board_with_coordinators_on_autopilot() {
     let want = std::fs::read_to_string(&path).unwrap_or_default();
     if want.is_empty() || std::env::var("UPDATE_FRAMES").is_ok() { std::fs::write(&path, format!("{got}\n")).unwrap(); return; }
     assert_eq!(got, want.trim_end_matches('\n'), "the frame changed: UPDATE_FRAMES=1 npm run check autopilot writes it again");
+}
+
+fn far_world() -> (World, crate::far::Far) {
+    let w = pilot_world_with(json!({ "board.machines": "vm-b" }));
+    let f = crate::far::Far::new(&w.base);
+    (w, f)
+}
+fn far_list(f: &crate::far::Far, pilots: serde_json::Value, tasks: serde_json::Value) {
+    f.answers("vm-b", "list", &json!({ "host": "vm-b", "version": "9.9.9", "coordinator": { "state": "idle" }, "coordinators": { "machine": { "state": "idle" } }, "autopilot": pilots, "tasks": tasks }));
+}
+
+#[test]
+fn another_machines_coordinator_shows_its_line_and_takes_its_keys_there_and_an_older_one_says_to_update() {
+    let (w, f) = far_world();
+    far_list(&f, json!({ "machine": { "on": true, "state": "on", "line": "autopilot on · every 2h + events" } }), json!([]));
+    let mut b = board(&w);
+    sw::board::update::update(&mut b.s, sw::board::update::Event::Machines(sw::remote::machines()));
+    for m in sw::remote::machines() { let a = sw::remote::ask_list(&m, 20000); sw::board::update::update(&mut b.s, sw::board::update::Event::Remote { label: m.label.clone(), answer: a }); }
+    b.press(&["alt+m"]); assert_eq!(b.s.scope, "*");
+    let lines = b.screen(160);
+    assert!(line_with(&lines, "▸ vm-b").map(|l| l.contains("autopilot on · every 2h + events")).unwrap_or(false), "{lines:#?}");
+    assert!(line_with(&lines, "Coordinator").unwrap().contains("1 other on"), "the main row sums up every machine's: {lines:#?}");
+    f.answers("vm-b", "do", &json!({ "ok": true, "msg": "Autopilot off for the vm-b coordinator." }));
+    b.s.sel = sw::board::update::heads::machine_id("vm-b"); b.press(&["ctrl+x"]);
+    let (who, what, req) = f.asked().pop().unwrap();
+    assert_eq!((who.as_str(), what.as_str(), req.s("action"), req.s("to")), ("vm-b", "do", "autopilot-off", "machine"));
+    // a machine on an older version sends no autopilot: the keys say to update it
+    let answer = Ok(json!({ "host": "vm-b", "version": "1.0.0", "tasks": [] }));
+    sw::board::update::update(&mut b.s, sw::board::update::Event::Remote { label: "vm-b".into(), answer });
+    b.press(&["tab"]);
+    assert!(b.text().contains("runs an older version that has no autopilot: update herdr-projects there first"), "{}", b.text());
+    // the door there: Tab and Ctrl+X from another machine's board
+    ok(&["set", "autopilot.goal", "Tidy", "--machine-coordinator"]);
+    let a = sw::remote::door("do", &json!({ "action": "autopilot-on", "id": "", "to": "machine" })).unwrap();
+    assert!(a.b("ok") && sw::autopilot::record::is_on(&sw::coordinator::co::Co::machine(&w.socket)), "{a}");
+}
+
+#[test]
+fn the_main_coordinator_sees_other_machines_only_as_an_open_board_last_heard_them() {
+    let (w, f) = far_world();
+    let main = sw::coordinator::co::Co::top(&w.socket);
+    ok(&["autopilot", "on", "--goal", "Docs", "--autopilot.every", "none", "--autopilot.gap", "1m"]);
+    tick(&w); tick(&w);
+    assert!(sw::autopilot::limits::board_tasks().iter().all(|t| !t.b("host")), "no board heard vm-b: its tasks are not seen");
+    let now = sw::clock::now();
+    far_list(&f, json!({}), json!([{ "id": "web/3", "title": "Theirs", "stage": "todo", "created": now + 1 }]));
+    let _ = sw::remote::ask_list(&sw::remote::machines()[0], 20000); // as an open board asks
+    assert!(sw::autopilot::limits::board_tasks().iter().any(|t| t.s("id") == "vm-b:web/3" && t.s("host") == "vm-b"));
+    minutes(2); tick(&w);
+    assert!(prompts_of(&w, &main).last().unwrap().contains("vm-b:web/3 was added") || prompts_of(&w, &main).last().unwrap().contains("web/3 was added"), "{:?}", prompts_of(&w, &main));
+    assert!(sw::autopilot::events::look(&proj(&w), &mut Default::default(), &sw::autopilot::limits::board_tasks(), "added", false, 1).is_empty(), "never a project coordinator's");
+    minutes(4);
+    assert!(sw::autopilot::limits::board_tasks().iter().all(|t| !t.b("host")), "not heard for three minutes: not seen");
+}
+
+#[test]
+fn an_add_on_another_machine_takes_its_slot_here_carries_the_record_and_gives_the_slot_back_when_refused() {
+    let (w, f) = far_world();
+    let main = sw::coordinator::co::Co::top(&w.socket);
+    w.script(json!({ "coordinator": [{ "status": "working" }] }));
+    ok(&["autopilot", "on", "--goal", "Docs", "--autopilot.every", "none"]);
+    tick(&w);
+    in_pane(&w, &pane_of(&main));
+    f.answers("vm-b", "add", &json!({ "ok": true, "id": "web/7", "msg": "web/7: added on vm-b, an agent is on it" }));
+    let said = ok(&["add", "Fix their docs", "--repo", "web", "--on", "vm-b"]);
+    assert!(said.contains("web/7: added on vm-b"), "{said}");
+    let (_, what, req) = f.asked().pop().unwrap();
+    assert_eq!(what, "add");
+    assert_eq!((req.at("autopilot").s("coordinator"), req.at("autopilot").s("machine"), req.at("autopilot").at("repoFileWaits"), req.b("delegate")), ("main", sw::remote::check::hostname().as_str(), &json!(true), true));
+    assert!(sw::autopilot::record::task_rec(&record(&main), "vm-b:web/7").is_some()); assert_eq!(record(&main).i("added"), 1);
+    // refused there (an older version): the slot and the day's add are given back
+    f.answers("vm-b", "add", &json!({ "ok": false, "msg": "Unknown request add" }));
+    assert!(refused(&["add", "More", "--repo", "web", "--on", "vm-b"]).contains("runs an older version of herdr-projects that cannot add a task from another machine"));
+    assert_eq!(record(&main).i("added"), 1); assert_eq!(record(&main).arr("tasks").len(), 1);
+    in_pane(&w, "");
+    // the door's side: the task is added here with its record, naming the machine that added it
+    let a = sw::remote::door("add", &json!({ "title": "From afar", "repo": "proj", "own": {}, "delegate": false, "from": "laptop", "autopilot": { "coordinator": "main", "name": "Coordinator", "repoFileWaits": false }, "settings": {} })).unwrap();
+    let t = task(a.s("id"));
+    assert_eq!((t.at("autopilot").s("machine"), t.at("autopilot").at("repoFileWaits")), ("laptop", &json!(false)));
+    assert_eq!(t.at("carried").s("from"), "laptop");
 }

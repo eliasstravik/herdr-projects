@@ -36,7 +36,7 @@ const SETTING: &str = "any work setting by its name (--review.when never)";
 pub struct Takes { pub flags: &'static [&'static str], pub settings: bool }
 const fn f(flags: &'static [&'static str]) -> Takes { Takes { flags, settings: false } }
 const fn s(flags: &'static [&'static str]) -> Takes { Takes { flags, settings: true } }
-const ADD: &[&str] = &["desc", "description", "repo", "delegate", "research", "chat", "after"];
+const ADD: &[&str] = &["desc", "description", "repo", "delegate", "research", "chat", "after", "on"];
 const LIST: &[&str] = &["archived", "all", "query"];
 const WHERE: &[&str] = &["repo", "task", "automation", "main-coordinator", "machine-coordinator", "project-coordinator"];
 const AUTO_ADD: &[&str] = &["prompt", "desc", "schedule", "when", "every-repo", "if", "repo", "research", "chat"];

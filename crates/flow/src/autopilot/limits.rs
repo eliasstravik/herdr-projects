@@ -26,5 +26,10 @@ pub fn room(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> bool {
     let t = today(co, ap, board, now);
     t.slots_left() && (t.adds_left() || (words(co, "autopilot.scope") == "all" && yours_to_start(co, board) > 0))
 }
-/// Every task of this machine, as kept (archived ones too: an archived task is over).
-pub fn board_tasks() -> Vec<Obj> { crate::store::tasks::list(crate::store::tasks::ListOpts { include_archived: true, ..Default::default() }) }
+/// Every task of this machine, as kept (archived ones too: an archived task is over), and those of other machines an
+/// open board heard lately (heard.rs), named `label:id` with their machine in `host`.
+pub fn board_tasks() -> Vec<Obj> {
+    let mut all = crate::store::tasks::list(crate::store::tasks::ListOpts { include_archived: true, ..Default::default() });
+    all.extend(super::heard::far_tasks(crate::clock::now()));
+    all
+}

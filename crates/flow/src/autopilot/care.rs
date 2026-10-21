@@ -49,7 +49,8 @@ pub fn touches_repo_file(t: &Obj) -> bool {
 /// May it look after this task: one of its own, not left to you.
 pub fn may_look_after(ap: &Obj, t: &Obj) -> bool { task_rec(ap, t.s("id")).map(|r| !r.b("left")).unwrap_or(false) }
 /// Its own tasks that are under way, of those on the board.
-pub fn under_way_count(ap: &Obj, board: &[Obj]) -> usize { tasks(ap).iter().filter(|r| board.iter().any(|t| t.s("id") == r.s("id") && under_way(t))).count() }
+/// A slot taken for an add on another machine that has not answered yet (add.rs) counts too.
+pub fn under_way_count(ap: &Obj, board: &[Obj]) -> usize { tasks(ap).iter().filter(|r| r.b("pending") || board.iter().any(|t| t.s("id") == r.s("id") && under_way(t))).count() }
 /// Its tasks that need looking after now, with why.
 pub fn needing(ap: &Obj, board: &[Obj], approve: bool) -> Vec<(String, &'static str)> {
     board.iter().filter(|t| may_look_after(ap, t)).filter_map(|t| need_of(t, approve).map(|w| (t.t("id"), w))).collect()
@@ -57,4 +58,9 @@ pub fn needing(ap: &Obj, board: &[Obj], approve: bool) -> Vec<(String, &'static 
 /// Your to-do tasks in its area that it could start (`autopilot.scope all`): never started, nobody's but yours.
 pub fn yours_to_start(co: &Co, board: &[Obj]) -> usize { board.iter().filter(|t| in_area(co, t) && !t.b("host") && t.s("stage") == "todo" && !t.b("archivedAt") && !t.at("autopilot").is_object() && !t.b("startedOnce")).count() }
 /// Did this coordinator add the task (from its own pane, in any turn)?
-pub fn added_by(co: &Co, t: &Obj) -> bool { t.s("coordinator") == key_of(co) && !t.b("host") || t.at("autopilot").s("coordinator") == key_of(co) && t.at("autopilot").s("machine").is_empty() }
+/// A task of another machine is its own when its autopilot record names this machine.
+pub fn added_by(co: &Co, t: &Obj) -> bool {
+    let a = t.at("autopilot");
+    let here = if t.b("host") { a.s("machine") == crate::remote::check::hostname() } else { a.s("machine").is_empty() };
+    (t.s("coordinator") == key_of(co) && !t.b("host")) || (a.s("coordinator") == key_of(co) && here)
+}
