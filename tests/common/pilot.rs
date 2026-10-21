@@ -16,6 +16,12 @@ pub fn pilot_world_with(settings: Value) -> World {
     unsafe { std::env::set_var("HERDR_PROJECTS_COORDINATOR_DIR", &home) };
     sw::store::repos::repo_of(&w.root).unwrap(); // the board knows the repo
     sw::clock::set(Some(1_800_000_000_000));
+    // Every program still counts as installed however far the test moves its clock (its record is dated far ahead:
+    // the board looks again after ten minutes), whatever this machine has on it.
+    let file = sw::store::files::data_dir().join("versions.json");
+    let mut v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    for (_, k) in v.as_object_mut().unwrap() { k["at"] = json!(4_000_000_000_000i64); }
+    std::fs::write(&file, v.to_string()).unwrap();
     w
 }
 pub fn drain() { flush(); sw::runner::drain_jobs(&|job, id, extra| { sw::jobs::run_job(job, id, extra); flush(); }); }
