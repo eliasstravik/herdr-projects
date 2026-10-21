@@ -2,7 +2,8 @@
 //! with every machine shown, a repo's heading grouped by repo) stands for its coordinator. `Tab` there turns autopilot
 //! on, with its saved goal and settings, and `Ctrl+X` turns it off, as those keys put an agent on a task and stop it.
 //! What each shows of its autopilot is what its machine read (data.rs: pilots), this one's or another's (sent with its
-//! tasks); a machine on an older version sends nothing of it, and the keys say to update it there.
+//! tasks); a machine on an older version sends no autopilot at all, and the keys say to update it there. One of its
+//! coordinators missing from what it sent never ran: it is off, and `Tab` starts it.
 use super::coords::{of_head, Target};
 use super::heads::HEAD;
 use super::Effect;
@@ -22,10 +23,12 @@ pub fn main_row(s: &State) -> Option<String> {
     let m = s.remotes.get(&s.scope)?;
     crate::coordinator::far::read(&m.coord).map(|_| main_id(&s.scope))
 }
-/// What its machine read of a coordinator's autopilot (`{ on: false }` while off; Null: its machine sends none).
+/// What its machine read of a coordinator's autopilot (`{ on: false }` while off or never run; Null: its machine sends
+/// no autopilot, an older version).
 pub fn view(s: &State, t: &Target) -> Value {
-    if t.host.is_empty() { return s.data.pilots.at(&t.to).clone(); }
-    s.remotes.get(&t.host).map(|m| m.pilots.at(&t.to).clone()).unwrap_or(Value::Null)
+    let all = if t.host.is_empty() { &s.data.pilots } else { match s.remotes.get(&t.host) { Some(m) => &m.pilots, None => return Value::Null } };
+    if !all.is_object() { return if t.host.is_empty() { json!({ "on": false }) } else { Value::Null }; }
+    match all.at(&t.to) { Value::Null => json!({ "on": false }), v => v.clone() }
 }
 /// It is on autopilot, as its machine read it.
 pub fn on(s: &State, t: &Target) -> bool { view(s, t).b("on") }

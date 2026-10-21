@@ -11,6 +11,9 @@ use sw::json::*;
 use sw::store::settings::lookup::lookup;
 use sw::store::settings::places::yours;
 
+/// One that never ran: sent as off, and `Tab` from another machine starts it.
+mod never_ran;
+
 #[test]
 fn on_needs_a_goal_saves_it_as_the_coordinators_own_and_wakes_it_with_a_message_in_its_chat() {
     let w = pilot_world();
