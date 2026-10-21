@@ -72,7 +72,7 @@ fn a_turn_started_in_the_agents_own_terminal_during_clean_up_keeps_its_terminal_
     delegate(&id);
     let t = settle(&id);
     assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
-    assert!(t.arr("kept")[0].as_str().unwrap().contains("its space is in use again"), "{}", t.at("kept"));
+    assert!(t.arr("kept")[0].as_str().unwrap().contains("its space is in use: a turn in its agent's terminal"), "{}", t.at("kept"));
     assert!(Path::new(t.s("worktree")).exists());
     assert!(!git(&w.root, &["branch", "--list", t.s("branch")]).is_empty());
     assert!(open(&w, &t), "not closed under its agent");
@@ -111,9 +111,9 @@ fn a_terminal_turn_that_starts_before_clean_up_and_ends_during_its_first_wait_st
     };
     let kept = |t: &Obj| t.arr("kept").first().map(text).unwrap_or_default();
     let (t, o) = run(1, false, false); // no hook: a status that was "working" is a turn
-    assert!(kept(&t).contains("its space is in use again"), "{}", kept(&t)); assert!(o); assert!(Path::new(t.s("worktree")).exists());
+    assert!(kept(&t).contains("its space is in use: a turn in its agent's terminal"), "{}", kept(&t)); assert!(o); assert!(Path::new(t.s("worktree")).exists());
     let (t, o) = run(2, true, true); // the hook reported the turn's end
-    assert!(kept(&t).contains("its space is in use again"), "{}", kept(&t)); assert!(o); assert!(Path::new(t.s("worktree")).exists());
+    assert!(kept(&t).contains("its space is in use: a turn in its agent's terminal"), "{}", kept(&t)); assert!(o); assert!(Path::new(t.s("worktree")).exists());
     let (t, o) = run(3, true, false); // only herdr's status trailing the turn that ended the task
     assert!(kept(&t).contains("unmerged work"), "{}", kept(&t)); assert!(!o); assert!(Path::new(t.s("worktree")).exists());
     unsafe { std::env::set_var("HERDR_PROJECTS_SETTLE_MS", "0") };

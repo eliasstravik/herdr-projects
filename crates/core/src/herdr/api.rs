@@ -1,6 +1,6 @@
 //! herdr's commands, bound to one herdr session (by socket path): spaces, tabs, panes, agents and the rest. `None` as
 //! the socket means whatever this process would talk to.
-use super::cli::{args, kids, run, run_raw, HRes, HerdrError};
+use super::cli::{args, run, run_raw, HRes, HerdrError};
 use crate::json::*;
 
 #[derive(Clone, Debug, Default)]
@@ -81,31 +81,15 @@ impl Herdr {
     }
     /// The pid of the shell a pane runs, under which its program runs.
     pub fn shell_pid(&self, id: &str) -> Option<i64> { self.process_info(id).and_then(|i| i.at("shell_pid").as_i64()).filter(|p| *p > 1) }
-    fn process_info(&self, id: &str) -> Option<Value> { self.call(args(&["pane", "process-info", "--pane", id])).ok().map(|r| r.at("process_info").clone()) }
-    /// Is nothing but its shell running in the pane? Unknown counts as busy.
-    pub fn pane_idle(&self, id: &str) -> bool {
-        let Some(i) = self.process_info(id) else { return false };
-        let shell = i.at("shell_pid");
-        if !crate::gate::is_int(shell) { return false; }
-        let sp = shell.as_i64().unwrap_or(-1);
-        i.i("foreground_process_group_id") == sp && i.arr("foreground_processes").iter().all(|p| p.i("pid") == sp) && kids(sp).map(|k| k.is_empty()).unwrap_or(false)
-    }
+    pub(crate) fn process_info(&self, id: &str) -> Option<Value> { self.call(args(&["pane", "process-info", "--pane", id])).ok().map(|r| r.at("process_info").clone()) }
+    /// Is nothing but its shell running in the pane? Unknown counts as busy (what runs instead: busy.rs).
+    pub fn pane_idle(&self, id: &str) -> bool { super::busy::beside_shell(self, id, false).is_empty() }
     /// Does nothing run in the pane but the program `agent` in its foreground (and the shell that started it)? Unknown:
     /// no. Beside the program, its process group may hold only its helpers: one wired to the group itself on its input
     /// and output (an MCP server, procs.rs), or the agent's own program under a wrapper (`codex` installed with npm). A
-    /// command is at work, in the program's group (on the terminal, a file or `/dev/null`) or in a group of its own.
-    pub fn pane_childless(&self, id: &str, agent: &str) -> bool {
-        let Some(i) = self.process_info(id) else { return false };
-        let procs: Vec<&Value> = i.arr("foreground_processes").iter().filter(|p| crate::gate::is_int(p.at("pid"))).collect();
-        let front: Vec<i64> = procs.iter().map(|p| p.i("pid")).collect();
-        if front.is_empty() { return false; }
-        let lead = i.i("foreground_process_group_id");
-        let helper = |p: &Value| p.i("pid") == lead || (!agent.is_empty() && p.s("name") == agent) || super::procs::wired_to(p.i("pid"), &front) == Some(true);
-        if !procs.iter().all(|p| helper(p)) { return false; }
-        for pid in &front { match kids(*pid) { Ok(k) if k.iter().all(|p| front.contains(p)) => {} _ => return false } }
-        if !crate::gate::is_int(i.at("shell_pid")) { return true; }
-        kids(i.i("shell_pid")).map(|k| k.iter().all(|p| front.contains(p))).unwrap_or(false)
-    }
+    /// command is at work, in the program's group (on the terminal, a file or `/dev/null`) or in a group of its own
+    /// (what, in words: busy.rs).
+    pub fn pane_childless(&self, id: &str, agent: &str) -> bool { super::busy::beside_agent(self, id, agent, false).is_empty() }
     /// A pane, with whatever runs in it, into a new tab of another space. Never focused.
     pub fn pane_move(&self, id: &str, workspace: &str, label: &str) -> HRes<Value> {
         let mut a = args(&["pane", "move", id, "--new-tab", "--workspace", workspace]);
