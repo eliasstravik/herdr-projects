@@ -70,7 +70,7 @@ pub fn coord_panel(s: &State, t: &Target, width: usize, full: bool) -> Vec<Inked
     let mut body = vec![Inked::new()];
     let mut n = 0;
     for p in &k.parts { if p.lines.is_empty() { continue; } if n > 0 { body.push(Inked::new()); } body.extend(p.lines.iter().cloned()); n += 1; }
-    if !full { body.push(Inked::new()); body.push(Kit::dim(crate::text::cut(&format!("{} autopilot on · {} off · {} shows it whole", key_name("delegate"), key_name("stop"), key_name("panel")), k.w))); }
+    if !full { body.push(Inked::new()); body.push(Kit::dim(crate::text::cut(&if on { format!("{} turns autopilot off · {} shows it whole", key_name("stop"), key_name("panel")) } else { format!("{} shows it whole", key_name("panel")) }, k.w))); }
     Kit::out(body)
 }
 /// The flag a command names this coordinator by on its machine.

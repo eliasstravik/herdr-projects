@@ -212,7 +212,8 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
                 for x in l.iter_mut() { if x.s("id") == id { if let Some(o) = x.as_object_mut() { o.put("sentAt", now()); } } }
                 c.put("where", trimmed(&l));
                 c.put("mark", json!({ "run": run, "seq": seq, "rest": at_rest }));
-                c.put("intro", false); c.put("sentAt", now()); c.put("last", m.at("said").clone()); c.put("over", over.clone()); c.put("overId", over_id.clone());
+                c.put("intro", false); c.put("sentAt", now());
+                if !m.b("autopilot") { c.put("last", m.at("said").clone()); c.put("over", over.clone()); c.put("overId", over_id.clone()); } // a wake is no words of yours
                 // Who its turn is on: a task's agent that sent it (coordinator tell), and an autopilot wake (autopilot/).
                 c.put("typedFrom", m.at("sender").clone()); c.put("typedId", id.clone());
                 if m.b("autopilot") { crate::autopilot::wake::typed(c, &m, started); }

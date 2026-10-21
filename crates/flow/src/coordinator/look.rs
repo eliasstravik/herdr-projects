@@ -76,7 +76,8 @@ pub fn look(co: impl Into<Co>) -> Look {
     let readable = run.as_ref().map(|r| kind(r.s("kind")).map(|k| k.reads_turn).unwrap_or(false)).unwrap_or(false);
     let said = turn.as_ref().map(|t| t.said.clone()).unwrap_or_default();
     // Your newest words while they are not answered yet: still waiting to go in, or gone in with nothing new said since.
-    let sent = if queue > 0 { c.arr("queue")[queue - 1].t("said") } else if c.b("last") && readable && c.at("over").is_string() && c.s("over") == said && !turn.as_ref().map(|t| t.finished && !t.id.is_empty() && t.id != c.s("overId")).unwrap_or(false) { c.t("last") } else { String::new() };
+    let yours: Vec<&Value> = c.arr("queue").iter().filter(|m| !m.b("autopilot")).collect(); // a wake waiting is no words of yours
+    let sent = if let Some(m) = yours.last() { m.t("said") } else if c.b("last") && readable && c.at("over").is_string() && c.s("over") == said && !turn.as_ref().map(|t| t.finished && !t.id.is_empty() && t.id != c.s("overId")).unwrap_or(false) { c.t("last") } else { String::new() };
     let unseen = turn.as_ref().filter(|t| t.finished && !t.id.is_empty() && !t.said.is_empty() && t.id != c.s("seen")).map(|t| t.id.clone()).unwrap_or_default();
     // The default changed since this one started: it keeps running as it is until you start a new one.
     let stale = c.o("run").map(|r| !r.b("oneOff") && def.as_ref().map(|d| !same_choice(r, d)).unwrap_or(false)).unwrap_or(false);

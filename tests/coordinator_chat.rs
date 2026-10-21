@@ -64,7 +64,7 @@ fn one_chat_for_everyone_space_on_a_task_talks_to_its_agent_otherwise_to_the_coo
     assert!(has(&text, &format!(r"\n *\n {} PRJ-\d+ {}  \S[^\n]*\n╭─[^\n]*╮\n│ Agent: +│\n│ Done\. +│\n│ +│\n│ ❯ Send message to Agent +│\n╰─+╯\n", regex::escape(&row_mark.to_string()), regex::escape(TITLE))), "the row's own mark: {text}");
     let lines: Vec<&str> = text.lines().collect();
     assert!(!has(&lines[lines.len() - 8..lines.len() - 1].join("\n"), &format!("its agent|claude|last message|{chat_key}")), "the key is on the hint line, under the box");
-    assert!(!has(&text, r"The agent said|\n[ ▌]. Coordinator {2}|reply to")); assert!(has(&text, r"space back to the Coordinator *$"), "{text}"); assert_eq!(text.matches("Done.").count(), 1);
+    assert!(!has(&text, r"The agent said|\n[ ▌][^ ] Coordinator {2}|reply to")); // (the chat's line, with its mark: not the main Coordinator's row on top) assert!(has(&text, r"space back to the Coordinator *$"), "{text}"); assert_eq!(text.matches("Done.").count(), 1);
     e.press(&["alt+c"]);
     assert!(has(&wide(&mut e, 160), r"The agent said ─+ *\n[^\n]*Done\.")); assert!(has(&wide(&mut e, 160), &format!(r"\n[ ▌]. PRJ-\d+ {}  [^\n]*\n─+\n❯ Send message to Agent", regex::escape(TITLE))), "{}", wide(&mut e, 160));
     e.press(&["alt+c"]);

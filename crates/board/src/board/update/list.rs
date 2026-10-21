@@ -142,8 +142,9 @@ pub fn relist(s: &mut State) {
     sync_reply(s);
     if s.sel != selected { s.rows = fold_rows(s); } // the done fold for the new selection
 }
-/// Where a selection with nowhere else to go lands: the first task (or automation), a heading only where there is none.
-fn first_row(ids: &[String]) -> String { ids.iter().find(|i| !is_head(i)).or(ids.first()).cloned().unwrap_or_default() }
+/// Where a selection with nowhere else to go lands: the first task (or automation), a heading only where there is none,
+/// never the main Coordinator's row on top (it is reached with ↑).
+fn first_row(ids: &[String]) -> String { ids.iter().find(|i| !is_head(i)).or(ids.iter().find(|i| !super::pilot::is_main(i))).cloned().unwrap_or_default() }
 /// While you talk to a task's agent the chat follows the selection; the task you talk to going away is back to the
 /// Coordinator, never on to a neighbour's agent. On a row with no task, `reply_id` is empty.
 pub fn sync_reply(s: &mut State) {

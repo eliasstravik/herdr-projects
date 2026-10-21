@@ -58,15 +58,20 @@ pub fn list_of(s: &State, t: &Theme) -> Value {
     let push = |groups: &mut Vec<Obj>, row: Value| { if let Some(g) = groups.last_mut() { if let Some(a) = g.get_mut("rows").and_then(|x| x.as_array_mut()) { a.push(row); } } };
     // A folded heading's count: how many rows it hides, in words where automations are among them (`7 tasks, 1 automation`).
     let count = |folded: usize, autos: usize| if autos > 0 { json!(crate::board::update::heads::holds(folded, autos)) } else { json!(folded) };
+    // A coordinator's heading has its autopilot line while that is on (board/view/pilot.rs), and the main Coordinator's
+    // row on top what it sums up of the others.
+    let pilot = |id: &str| crate::board::view::pilot::line_of(s, id).map(|l| pieces(&l)).unwrap_or_default();
+    let coord = |id: &str| crate::board::update::coords::of_head(s, id).is_some();
     for (at, row) in s.rows.iter().enumerate() {
         match row {
+            Row::Head { id, .. } if crate::board::update::pilot::is_main(id) => groups.push(obj(json!({ "name": crate::board::update::coords::of_head(s, id).map(|c| c.name).unwrap_or_default(), "id": id, "main": true, "coord": true, "sum": crate::board::update::coords::of_head(s, id).map(|c| crate::board::update::pilot::others(s, &c)).unwrap_or_default(), "pilot": pilot(id), "folded": false, "count": 0, "color": "text", "repo": false, "rows": [], "more": 0 }))),
             Row::Head { name, id, autos: true, folded, folded_autos, .. } => groups.push(obj(json!({ "name": name, "id": id, "folded": *folded > 0, "count": count(*folded, *folded_autos), "color": "auto", "repo": false, "automations": true, "rows": [], "more": 0 }))),
             // A machine's heading stands over its groups: one with no rows, that a tap folds and unfolds as a group's. One with
             // nothing in view shows folded, `0 tasks`.
-            Row::Head { name, id, machine: true, folded, folded_autos, empty, .. } => groups.push(obj(json!({ "name": name, "id": id, "machine": true, "folded": *folded > 0 || *empty, "count": if *empty { json!("0 tasks") } else { count(*folded, *folded_autos) }, "color": "accent", "repo": false, "rows": [], "more": 0 }))),
+            Row::Head { name, id, machine: true, folded, folded_autos, empty, .. } => groups.push(obj(json!({ "name": name, "id": id, "machine": true, "folded": *folded > 0 || *empty, "count": if *empty { json!("0 tasks") } else { count(*folded, *folded_autos) }, "color": "accent", "repo": false, "coord": coord(id), "pilot": pilot(id), "rows": [], "more": 0 }))),
             // A repo's heading in the plain text colour, as its task titles, its key dimmed. A repo used lately with no task in
             // view shows folded too, `0 tasks`.
-            Row::Head { name, id, folded, folded_autos, empty, .. } => groups.push(obj(json!({ "name": if s.by_repo { repo_label(name) } else { name.clone() }, "key": if s.by_repo { crate::board::tags::heading_key(s, at) } else { String::new() }, "id": id, "folded": *folded > 0 || *empty, "count": if *empty { json!("0 tasks") } else { count(*folded, *folded_autos) }, "color": if s.by_repo { REPO_HEAD_INK.name() } else if !["needs you", "ready to approve", "working", "to do", "done"].contains(&name.as_str()) { "subtext0" } else { group_ink(name).name() }, "repo": s.by_repo, "rows": [], "more": 0 }))),
+            Row::Head { name, id, folded, folded_autos, empty, .. } => groups.push(obj(json!({ "name": if s.by_repo { repo_label(name) } else { name.clone() }, "key": if s.by_repo { crate::board::tags::heading_key(s, at) } else { String::new() }, "id": id, "folded": *folded > 0 || *empty, "count": if *empty { json!("0 tasks") } else { count(*folded, *folded_autos) }, "color": if s.by_repo { REPO_HEAD_INK.name() } else if !["needs you", "ready to approve", "working", "to do", "done"].contains(&name.as_str()) { "subtext0" } else { group_ink(name).name() }, "repo": s.by_repo, "coord": coord(id), "pilot": pilot(id), "rows": [], "more": 0 }))),
             Row::Auto(a) => push(&mut groups, auto_row_of(s, t, a, now)),
             Row::Rec(r) => push(&mut groups, row_of(s, t, r, now)),
             Row::Note(n) => if let Some(g) = groups.last_mut() { g.put("more", crate::re!(r"(\d+) more").captures(n).and_then(|c| c[1].parse::<i64>().ok()).unwrap_or(0)); },

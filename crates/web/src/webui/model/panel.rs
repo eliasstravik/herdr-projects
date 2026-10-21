@@ -79,3 +79,8 @@ pub fn auto_panel_of(s: &mut State, t: &Theme, a: &Obj) -> Value {
     }
     json!({ "id": a.s("row"), "title": a.s("name"), "task": false, "automation": true, "parts": parts })
 }
+/// A coordinator whole (board/view/panel/coord.rs): its chat, and its autopilot while that is on.
+pub fn coord_panel_of(s: &mut State, c: &crate::board::update::coords::Target) -> Value {
+    let lines = crate::board::view::panel::coord::coord_panel(s, c, WIDE, true);
+    json!({ "id": s.sel, "title": c.name, "task": false, "coordinator": true, "parts": parts_of(&lines) })
+}

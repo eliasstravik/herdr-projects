@@ -38,6 +38,7 @@ mod automations_place;
 mod automations_rest;
 mod automations_triggers;
 mod autopilot;
+mod autopilot_board;
 mod autopilot_turn;
 mod autopilot_wake;
 mod board_actions;

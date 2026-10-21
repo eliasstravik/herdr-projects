@@ -1,0 +1,24 @@
+ herdr-projects  proj · PRJ · 1 to do
+
+   Coordinator · 1 other on   autopilot on · every 1h + events · next in 1h
+
+ ▾ proj · PRJ   autopilot on · every 6h + events · next in 6h
+▌○ PRJ-1 Fix the docs index                                                                   0s ago
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ○ Coordinator  idle
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ ❯ Send message to Coordinator                                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+  tab put an agent on this task · space talk about this task · ? all keys

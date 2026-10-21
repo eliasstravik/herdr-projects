@@ -17,7 +17,7 @@ pub fn press_of(id: &str) -> Result<Press, String> {
     if c.is_empty() { if let Some(c) = k.raw.first().and_then(|r| r.chars().next()) { return Ok(Press::char(c)); } }
     if c.is_empty() { Err(format!("The key \"{id}\" cannot be pressed from the web board")) } else { Ok(Press::chord(&c)) }
 }
-fn on_board(s: &State, id: &str) -> bool { s.items.iter().any(|r| r.s("id") == id) || s.jobs.iter().any(|j| j.s("id") == id) || s.autos.iter().any(|a| a.s("row") == id) }
+fn on_board(s: &State, id: &str) -> bool { s.items.iter().any(|r| r.s("id") == id) || s.jobs.iter().any(|j| j.s("id") == id) || s.autos.iter().any(|a| a.s("row") == id) || (crate::board::update::coords::of_head(s, id).is_some() && s.rows.iter().any(|r| matches!(r, crate::board::state::Row::Head { id: h, .. } if h == id))) }
 fn key(c: &mut Client, p: Press) { let fx = update(&mut c.s, Event::Key(p)); effects(c, fx, false); }
 /// A button: the key it stands for, pressed with the text box empty. Words the key puts into the text box (a draft
 /// brought back, words taken back to change) are the page's draft.
@@ -80,7 +80,7 @@ pub fn pick(c: &mut Client, id: &str, open: bool) {
     super::web::reload(c); // the task may be newer than the last look
     if on_board(&c.s, id) { c.s.sel = id.into(); }
     // An automation's row opens the automation, whole; a task's row the task.
-    if c.s.auto().is_some() { c.s.auto_open = open; } else { c.s.full = open && (c.s.current().is_some() || c.s.job().is_some()); }
+    if c.s.auto().is_some() { c.s.auto_open = open; } else { c.s.full = open && (c.s.current().is_some() || c.s.job().is_some() || crate::board::update::pilot::selected(&c.s).is_some()); }
     c.s.panel_top = 0;
     super::web::reload(c);
 }
