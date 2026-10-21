@@ -218,12 +218,10 @@ fn an_add_on_another_machine_takes_its_slot_here_carries_the_record_and_gives_th
     let (_, what, req) = f.asked().pop().unwrap(); assert_eq!(what, "add");
     assert_eq!((req.at("autopilot").s("coordinator"), req.at("autopilot").s("machine"), req.at("autopilot").at("repoFileWaits"), req.b("delegate")), ("main", sw::remote::check::hostname().as_str(), &json!(true), true));
     assert!(sw::autopilot::record::task_rec(&record(&main), "vm-b:web/7").is_some()); assert_eq!(record(&main).i("added"), 1);
-    // refused there (an older version): the slot and the day's add are given back
-    f.answers("vm-b", "add", &json!({ "ok": false, "msg": "Unknown request add" }));
+    f.answers("vm-b", "add", &json!({ "ok": false, "msg": "Unknown request add" })); // refused there (an older version): the slot and the day's add come back
     assert!(refused(&["add", "More", "--repo", "web", "--on", "vm-b"]).contains("runs an older version of herdr-projects that cannot add a task from another machine"));
     assert_eq!(record(&main).i("added"), 1); assert_eq!(record(&main).arr("tasks").len(), 1);
-    in_pane(&w, "");
-    // the door's side: the task is added here with its record, naming the machine that added it
+    in_pane(&w, ""); // the door's side: the task is added here with its record, naming the machine that added it
     let a = sw::remote::door("add", &json!({ "title": "From afar", "repo": "proj", "own": {}, "delegate": false, "from": "laptop", "autopilot": { "coordinator": "main", "name": "Coordinator", "repoFileWaits": false }, "settings": {} })).unwrap();
     let t = task(a.s("id"));
     assert_eq!((t.at("autopilot").s("machine"), t.at("autopilot").at("repoFileWaits"), t.at("carried").s("from")), ("laptop", &json!(false), "laptop"));
@@ -282,7 +280,7 @@ fn an_autopilot_turns_yes_for_another_machines_task_is_checked_there_and_never_f
     let tree = w.base.join("tree"); git(&w.root, &["worktree", "add", "-q", "-b", "work/x", &tree.display().to_string()]);
     std::fs::write(tree.join(".herdr-projects.json"), "{}").unwrap(); git(&tree, &["add", "-A"]); git(&tree, &["commit", "-qm", "x"]);
     sw::store::tasks::set(&id, json!({ "stage": "approval", "worktree": tree.display().to_string() })).unwrap();
-    let a = sw::remote::door("do", &json!({ "action": "approve", "id": id, "autopilot": true })).unwrap(); assert!(!a.b("ok") && a.s("msg").contains(".herdr-projects.json"), "{a}");
+    let a = sw::remote::door("do", &json!({ "action": "pilot-approve", "id": id })).unwrap(); assert!(!a.b("ok") && a.s("msg").contains(".herdr-projects.json"), "{a}");
     assert_eq!(task(&id).s("stage"), "approval");
     // the asking side: an autopilot turn's yes for a task of a machine that cannot check it is refused here
     let main = main_in_wake(&w, &["--autopilot.approve", "yes"]);
@@ -293,6 +291,9 @@ fn an_autopilot_turns_yes_for_another_machines_task_is_checked_there_and_never_f
     // one that can: the yes goes there marked as an autopilot turn's, and that machine refuses what it must
     heard(&f, theirs); f.answers("vm-b", "do", &json!({ "ok": false, "msg": "web/9: refused in an autopilot wake: its change touches the repo's .herdr-projects.json" }));
     assert!(refused(&["approve", "vm-b:web/9"]).contains(".herdr-projects.json"));
-    assert!(f.asked().pop().unwrap().2.b("autopilot"));
+    assert_eq!(f.asked().pop().unwrap().2.s("action"), "pilot-approve", "an action of its own, which only a machine that checks it knows");
+    // one that sends autopilot but has no such check (an earlier version) answers that it knows no such action: refused
+    f.answers("vm-b", "do", &json!({ "ok": false, "msg": "Unknown action pilot-approve" }));
+    assert!(refused(&["approve", "vm-b:web/9"]).contains("cannot check an autopilot turn's yes for its task"));
     in_pane(&w, "");
 }
