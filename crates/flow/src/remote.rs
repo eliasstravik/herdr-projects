@@ -189,6 +189,8 @@ pub fn door_with(what: &str, req: &Value, bytes: &[u8]) -> Res<Value> {
                 "restore" => { archive::restore(&id)?; ok(format!("{id}: restored")) }
                 "delegate" => { carried(&id, req)?; let d = start::delegate_with(&id, vec![], crate::after::Wait { now: req.b("now"), ..Default::default() })?; ok(format!("{id}: {}", crate::after::waiting_words(&d).map(|w| format!("it {w}")).unwrap_or_else(|| "an agent is on it".into()))) }
                 "tell" => { if !t.b("startedOnce") { carried(&id, req)?; } ok(talk::reply(&id, &req.t("text"), crate::status_words::who::YOU)?.msg) }
+                // From another machine's autopilot turn: never for a change to the repo's own settings file, never --anyway.
+                "approve" if req.b("autopilot") && (crate::autopilot::care::touches_repo_file(&t) || crate::autopilot::care::held_for_you(&t) || req.b("anyway")) => Ok(json!({ "ok": false, "msg": format!("{id}: refused in an autopilot wake: its change touches the repo's .herdr-projects.json (or it was --anyway): only the human says yes to that.") })),
                 "approve" => { let seen = if req.at("seen").is_array() { Some((req.at("seen").get(0).cloned().unwrap_or_default(), req.at("seen").get(1).cloned().unwrap_or_default())) } else { None }; ok(finish_line::approve(&id, seen, *req.at("anyway") == json!(true))?.msg) }
                 "pick" => ok(crate::attempts::settle::pick(&id, &req.t("letter"))?.msg),
                 "fix" => ok(finish_line::send_failure(&id)?.msg),

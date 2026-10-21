@@ -17,7 +17,8 @@ pub fn heard(label: &str, answer: &Value) {
     let tasks: Vec<Value> = answer.arr("tasks").iter().filter_map(|t| t.as_object()).map(|t| Value::Object(KEPT.iter().filter(|k| t.has(k)).map(|k| (k.to_string(), t.at(k).clone())).collect())).collect();
     let _ = with_lock("autopilot-heard", || {
         let mut all = read_obj(&file()).unwrap_or_default();
-        all.put(label, json!({ "at": crate::clock::now(), "tasks": tasks }));
+        // A machine that sends autopilot's part knows autopilot: it checks an autopilot turn's yes there (remote.rs).
+        all.put(label, json!({ "at": crate::clock::now(), "tasks": tasks, "knows": answer.at("autopilot").is_object() }));
         write_json(&file(), &Value::Object(all))
     });
 }
@@ -29,7 +30,7 @@ pub fn far_tasks(now: i64) -> Vec<Obj> {
         if now - m.i("at") > FRESH { continue; }
         for t in m.arr("tasks").iter().filter_map(|t| t.as_object()) {
             let mut r = t.clone();
-            r.put("rid", t.t("id")); r.put("id", format!("{label}:{}", t.s("id"))); r.put("host", label.as_str());
+            r.put("rid", t.t("id")); r.put("id", format!("{label}:{}", t.s("id"))); r.put("host", label.as_str()); r.put("knowsAutopilot", m.b("knows"));
             out.push(r);
         }
     }

@@ -95,6 +95,8 @@ pub fn guard(cmd: &str, pos: &[String], flags: &Obj, agent: Option<(&Obj, &str)>
             let t = task()?;
             if flags.b("anyway") { return refused("approve --anyway", "The gate's override is the human's only."); }
             if touches_repo_file(&t) { return refused(&format!("approve {}", t.s("id")), "Its change touches the repo's .herdr-projects.json: only the human says yes to that."); }
+            // Another machine's: only that machine sees its change, and checks the yes there; one that cannot, never.
+            if t.b("host") && !t.b("knowsAutopilot") { return refused(&format!("approve {}", t.s("id")), &format!("{} runs an older version that cannot check an autopilot turn's yes: update herdr-projects there first.", t.s("host"))); }
             if !approve_yes { return refused(&format!("approve {}", t.s("id")), "It may not say yes (autopilot.approve yes would allow it)."); }
             if !may_look_after(&ap, &t) || held_for_you(&t) || need_of(&t, true) != Some("yes") { return refused(&format!("approve {}", t.s("id")), "It may say yes only for a task it may look after that waits for a yes it may give."); }
             Ok(Some(co))

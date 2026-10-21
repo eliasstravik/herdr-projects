@@ -41,7 +41,7 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
     let me = caller();
     let pilot = crate::autopilot::allow::guard(cmd, pos, flags, me.as_ref().map(|(t, r)| (t, *r)))?;
     // Another machine's task (`vm-b:web/7`): the action is that machine's (remote/act.rs).
-    if let Some(out) = crate::remote::act::far_command(cmd, pos, flags)? { if let Some(co) = &pilot { crate::autopilot::allow::note(co, cmd, pos); } return Ok(out); }
+    if let Some(out) = crate::remote::act::far_command(cmd, pos, flags, pilot.is_some())? { if let Some(co) = &pilot { crate::autopilot::allow::note(co, cmd, pos); } return Ok(out); }
     let out = match cmd {
         "add" | "new" => {
             need(1, "a title")?;
