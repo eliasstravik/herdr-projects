@@ -218,6 +218,7 @@ mod review_timeout;
 mod settings;
 mod settings_more;
 mod settings_move;
+mod start_together;
 mod status_kept;
 mod status_kept_board;
 mod store;

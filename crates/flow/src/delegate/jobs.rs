@@ -2,6 +2,7 @@
 //! its first prompt), restarting an exited agent, and reopening a task's space to go into it.
 use super::launch::{again_prompt, agent_now, exists, resumable, start_agent, unsent_prompt};
 use super::rules::{first_prompt, turned_words};
+use super::config_lock::making;
 use super::from::{base_ref, refuse_start};
 use super::worktree::{copy_includes, exclude_rule_dir, free_branch};
 use crate::agents::start_failed as sf;
@@ -102,13 +103,16 @@ fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
                 git_out(&root, &["update-ref", "HEAD", &c])?;
             }
             let branch = free_branch(&root, &t);
+            // The worktree starts from the commit, not from `origin/main`: a branch made from a remote-tracking ref gets
+            // its upstream written into the repo's shared .git/config, which two starts at once fight over. The push
+            // at the finish sets the upstream (`push -u`).
+            let base = if from == "HEAD" { let h = flow::git::head_of(&root); if h.is_empty() { git_out(&root, &["rev-parse", &from])? } else { h } } else { git_out(&root, &["rev-parse", &from])? };
             // An attempt works in a tab of its task's one space; any other task in a space of its own.
-            res = if t.b("attemptOf") { crate::attempts::place::open_place(&api, &root, &t, &branch, &from)? } else { flow::spaces::opening_worktree(&api, &root, || api.worktree_create(&root.display().to_string(), &branch, &from, &label))? };
+            res = making(&root, &branch, &base, || Ok(if t.b("attemptOf") { crate::attempts::place::open_place(&api, &root, &t, &branch, &base)? } else { flow::spaces::opening_worktree(&api, &root, || api.worktree_create(&root.display().to_string(), &branch, &base, &label))? }))?;
             let dir = if res.at("worktree").b("path") { res.at("worktree").t("path") } else { res.at("workspace").at("worktree").t("checkout_path") };
             // The repo's own file, read from the commit the worktree starts from: its facts, and what it was refused.
-            let (facts, refused) = repo_file(&root, Some(&from));
+            let (facts, refused) = repo_file(&root, Some(&base));
             exclude_rule_dir(&root);
-            let base = if from == "HEAD" { let h = flow::git::head_of(&root); if h.is_empty() { git_out(&root, &["rev-parse", &from])? } else { h } } else { git_out(&root, &["rev-parse", &from])? };
             patch = obj(json!({ "worktree": dir, "branch": branch, "from": from, "baseSha": base, "repoFile": facts, "repoRefused": refused, "fresh": true, "ownNote": true }));
             copy = true;
         } else {
