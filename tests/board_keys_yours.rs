@@ -120,8 +120,11 @@ fn mac_writes_opt_where_pc_writes_alt_and_the_keys_stay_the_same() {
     let id = w.add("Make f");
     delegate(&id); settle(&id);
     // auto: by the system the board runs on.
-    let here = if cfg!(target_os = "macos") { "opt+c" } else { "alt+c" };
-    assert_eq!(key_name("chatMessage"), here);
+    assert_eq!(key_name("chatMessage"), "alt+c");
+    sw::board::key_style::system_is(Some(true));
+    assert_eq!(key_name("chatMessage"), "opt+c");
+    set_in("board.keyStyle", "pc").unwrap();
+    assert_eq!(key_name("chatMessage"), "alt+c", "pc says alt on a Mac too");
     set_in("board.keyStyle", "mac").unwrap();
     assert_eq!((key_name("chatMessage"), key_name("yes"), key_name("up")), ("opt+c".to_string(), "ctrl+l".to_string(), "↑".to_string()));
     assert_eq!(say("{chatScrollUp} up, {back} back"), "opt+k up, esc back");

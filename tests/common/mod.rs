@@ -32,6 +32,7 @@ pub fn world() -> World { world_with(Opts { repo: true, ..Default::default() }) 
 pub fn world_with(o: Opts) -> World {
     let one = one_at_a_time();
     sw::clock::set(None);
+    sw::board::key_style::system_is(Some(false)); // `auto` names keys as on a PC, whatever system runs the test
     let base = std::env::temp_dir().join(format!("sw-test-{}-{}", std::process::id(), N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)));
     let _ = std::fs::remove_dir_all(&base);
     std::fs::create_dir_all(base.join("home")).unwrap();
