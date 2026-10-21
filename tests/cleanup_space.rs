@@ -108,7 +108,7 @@ fn clean_up_closes_no_space_with_something_of_yours_running_in_it_nor_one_herdr_
     busy(&w, &mine);
     done(t.s("id"));
     let t = settle(t.s("id"));
-    assert!(kept(&t).contains("in use again"), "{}", kept(&t)); assert!(open(&w, &t)); assert!(Path::new(t.s("worktree")).exists());
+    assert!(kept(&t).contains("its space is in use"), "{}", kept(&t)); assert!(open(&w, &t)); assert!(Path::new(t.s("worktree")).exists());
     assert!(w.state().arr("panes").iter().any(|p| p.s("pane_id") == mine));
     // the same after a merge: the worktree is not pulled from under your command
     let t = ready(&w, 2);
@@ -117,7 +117,7 @@ fn clean_up_closes_no_space_with_something_of_yours_running_in_it_nor_one_herdr_
     finish_line::approve(t.s("id"), None, false).unwrap();
     let t = settle(t.s("id"));
     assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
-    assert!(kept(&t).contains("in use again"), "{}", kept(&t)); assert!(open(&w, &t)); assert!(Path::new(t.s("worktree")).exists());
+    assert!(kept(&t).contains("its space is in use"), "{}", kept(&t)); assert!(open(&w, &t)); assert!(Path::new(t.s("worktree")).exists());
     // herdr does not answer whether the agent works: unknown is not "nobody there"
     let t = ready(&w, 3);
     sw::store::tasks::update(t.s("id"), |c| { c.put("stage", "done"); Ok(sw::store::tasks::Change::Write) }).unwrap();
@@ -125,5 +125,5 @@ fn clean_up_closes_no_space_with_something_of_yours_running_in_it_nor_one_herdr_
     sw::land::cleanup_job(t.s("id"), "merged");
     w.patch(|s| s["agentGetFails"] = json!(false));
     let t = task(t.s("id"));
-    assert!(kept(&t).contains("in use again"), "{}", kept(&t)); assert!(open(&w, &t)); assert!(Path::new(t.s("worktree")).exists());
+    assert!(kept(&t).contains("its space is in use"), "{}", kept(&t)); assert!(open(&w, &t)); assert!(Path::new(t.s("worktree")).exists());
 }
