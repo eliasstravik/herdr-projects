@@ -22,6 +22,7 @@ measured against the original.
   Home. The height is kept in this browser.
 - **+** attaches files. Pasting a picture or dropping files works too.
 - **The mic** dictates.
+- **Call** (the phone, right after the mic) starts a [voice call](voice.md); while one rings or is on, it hangs up.
 - **Escape** goes one step back, as on the terminal board. The draft stays.
 - **Sending keeps the keyboard up** on a phone: the round button and **Send + start** never take the focus from the box,
   as the web UI's Send does, so you can type the next message at once. A tap while the keyboard still composes the last
@@ -121,7 +122,7 @@ real phone.
 | the lock that keeps a draft with who it was typed for | a filled chip in the lower left, beside the add button, only while the page shows somebody else: `To: HSW-34 agent · not who is shown above`. Attaching a file locks it as typing does |
 | the box's colour by who you type to ([colours](colours.md)) | the card's border: the plain text colour for the Coordinator, the task's status colour for its agent. The web UI's border is grey and turns to its accent on focus; here the border already says who, so focus draws a ring of that same colour round it |
 | the two ways to send | the round button and enter send. **Send + start** and tab, while there are words and no Coordinator to send them to, add them as a task and put an agent on it. **Send + start** is a chip of the web UI's (the shape of its one-tap replies). Each says in its tooltip what it does with the words |
-| who you talk to (the Coordinator or the task's agent), and the conversation | the chat's bar over the conversation: the switch of the two you can talk to, Call, Hide and Full screen; the conversation over the box, drawn as the web UI draws its own ([the web board's chat](web-chat.md)) |
+| who you talk to (the Coordinator or the task's agent), and the conversation | the chat's bar over the conversation: the switch of the two you can talk to, Hide and Full screen (Call is in the box, beside the mic); the conversation over the box, drawn as the web UI draws its own ([the web board's chat](web-chat.md)) |
 | the notice after sending | above the chat, as before |
 | a draft is never lost | it is kept with who it is for, also over a reload. While a message is on its way the words stay in the box and a second enter does nothing. Words the board could not take stay in the box |
 | a device that may only watch | the box is faded and says so |

@@ -1,7 +1,8 @@
 // The board's chat docked on the web UI's own chat: while the board is open, the web UI under it shows the chat view of
 // whoever the board's chat talks to (the Coordinator, a heading's coordinator, the selected task's agent), and the
 // board covers only the top of the page: its header, its list and the bar over the chat (chat.js). What you read and
-// type in is the web UI's own transcript and box, with its markdown, tools, files, dictation and Stop. The board says
+// type in is the web UI's own transcript and box, with its markdown, tools, files, dictation and Stop, and the board's
+// Call button put in that box beside its mic (callbtn.js), put back there whenever the web UI draws its box again. The board says
 // where that chat is (its `dock` call); the page goes there in place (the address keeps #board, and Back still closes
 // the board) and moves the web UI's pane column out of the board's way: down under the list, or to the right of it on a
 // wide screen (board.css). Where the web UI has nobody to show, or its page is not the one this was made for, the
@@ -14,6 +15,8 @@ import { sendsOn } from "./compose.js";
 // The web UI's places this leans on (herdr-web-ui 0.4.12: App.tsx, PaneTerminal.tsx, Composer.tsx there).
 const COLUMN = ".pane-column", CHAT = ".pane-frame.is-current .terminal-stack.is-chat", COMPOSER = ".pane-frame.is-current .composer";
 const BOX = "textarea.composer-text";
+// Its box's left controls: the add button, then the mic where dictation is on (VoiceInput.tsx there).
+const LEFT = ".composer-controls-left", AFTER = [":scope > .voice-mic-wrap", ":scope > .composer-attach"];
 // How long the web UI may take to show the chat view it was sent to before the board's own chat stands in.
 const WAIT_MS = 4000;
 const html = document.documentElement;
@@ -48,9 +51,9 @@ const uploading = (box) => !!box.closest(COMPOSER)?.querySelector(".composer-att
 // `boardOf()`: the board's element. `onChange()`: the web UI's chat came or went under the board, or its box changed
 // height. `onTyping(on)`: a phone's keyboard is up for the web UI's box, or no longer. `route()`: how the words in the
 // web UI's box go where the board sends them itself ({ send(text) → kept }), or null where the web UI sends them as it
-// does (a task's agent). The Coordinator's go through the board, as its own box sends them: with where you were (the
+// does (a task's agent). `guest`: the board's button put in the web UI's box, beside its mic, while docked. The Coordinator's go through the board, as its own box sends them: with where you were (the
 // repo, the open task), and waiting while it is busy. It decides itself what to start, so there is no second way to send.
-export function dockFor({ boardOf, onChange, onTyping, route }) {
+export function dockFor({ boardOf, onChange, onTyping, route, guest = null }) {
   let want = null, on = false, home = null, homeSearch = "", shown = "", wait = 0, typing = false, queued = false, boxH = -1;
   const mine = () => !!want && here(want) && !!document.querySelector(CHAT) && !!document.querySelector(COLUMN);
   // What the board covers, given to the web UI's pane column as room to leave: down to the foot of the board's bar, or
@@ -68,7 +71,17 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
     const composer = document.querySelector(COMPOSER), ch = Math.round(composer?.getBoundingClientRect().height || 0);
     if (composer && !composer.dataset.swSized) { composer.dataset.swSized = "1"; sizes?.observe(composer); }
     if (ch !== boxH) { boxH = ch; html.style.setProperty("--sw-composer-h", `${ch}px`); onChange(); }
+    seat(composer);
     keys();
+  };
+  // The guest right after the mic (after the add button where there is no mic); moved only when it is not there, so the
+  // move it makes is seen once and changes nothing more. The web UI's own buttons are never moved.
+  const seat = (composer) => {
+    const left = guest && composer?.querySelector(LEFT);
+    if (!left) return;
+    const after = AFTER.map((q) => left.querySelector(q)).find(Boolean);
+    const next = after ? after.nextSibling : left.firstChild;
+    if (next !== guest) left.insertBefore(guest, next);
   };
   const soon = () => { if (!queued) { queued = true; requestAnimationFrame(fit); } };
   // Typing in the web UI's box with a phone's keyboard up (the web UI marks the page): the board steps aside to its bar.
@@ -161,6 +174,7 @@ export function dockFor({ boardOf, onChange, onTyping, route }) {
       document.removeEventListener("focusin", soon); document.removeEventListener("focusout", blur); document.removeEventListener("input", soon, true);
       document.removeEventListener("keydown", onKey, true); document.removeEventListener("click", onSend, true);
       for (const c of document.querySelectorAll("[data-sw-sized]")) delete c.dataset.swSized;
+      if (guest?.closest(".composer")) guest.remove(); // nothing of the board's stays in the web UI's box
       const back = !!want && here(want) && home !== null;
       want = null; set(false); setHome(null);
       if (back && location.search !== homeSearch) { history.replaceState(history.state, "", `${location.pathname}${homeSearch}${location.hash}`); window.dispatchEvent(new PopStateEvent("popstate", { state: history.state })); }

@@ -1,12 +1,13 @@
-// The call in the web board's chat: the Call button in the chat's bar, which starts a voice call with whoever the
-// chat talks to (call.js; the call follows the chat's switch from then on), and the call's own row under that line while
-// it rings or is on. The row is one design with the button, which steps aside for it: a dot that says it is live, who
-// it is with, where it is held, how long it has run, Mute and End (the way to hang up), and the last thing said. A
-// call started from the terminal board shows there too (the board says so: `snap.call`), and End hangs it up. When a
-// call ends, the row gives way to one short line ("You hung up · 2 min · 19:20") that fades out after a few seconds:
-// nothing about a call that is over stays above the chat. Where the browser does not let the call be heard, Tap to hear
-// asks for the tap; "Can't hear?" plays it another way (hear.js). With voice calls off (`snap.calls`, voice.calls)
-// there is no Call button at all, and a call of this page's that was on ends.
+// The call in the web board's chat: the Call button in the box you type in, beside the mic (in the board's own box,
+// compose.js, or in the web UI's when the chat is docked on it, dock.js), which starts a voice call with whoever the chat
+// talks to (call.js; the call follows the chat's switch from then on), and the call's own row under the chat's bar while
+// it rings or is on. While it rings or is on, the button stays where it is and hangs up (red, a phone put down), as the
+// row's End does. The row: a dot that says it is live, who it is with, where it is held, how long it has run, Mute and
+// End, and the last thing said. A call started from the terminal board shows there too (the board says so:
+// `snap.call`), and End hangs it up. When a call ends, the row gives way to one short line ("You hung up · 2 min ·
+// 19:20") that fades out after a few seconds: nothing about a call that is over stays above the chat. Where the browser
+// does not let the call be heard, Tap to hear asks for the tap; "Can't hear?" plays it another way (hear.js). With voice
+// calls off (`snap.calls`, voice.calls) there is no Call button at all, and a call of this page's that was on ends.
 import { h, icon, client, post } from "./dom.js";
 import * as call from "./call.js";
 import * as hear from "./hear.js";
@@ -25,7 +26,8 @@ export function callEl({ onEnded } = {}) {
   let other = null, role = "drive", otherSince = 0, calls = true;
   // The call that ended last, as one line: { text, at, secs, failed }; shown until its time is up.
   let ended = null, seenEnd = 0, fadeT = 0, goneT = 0, tick = 0;
-  const btn = h("button.icon-button.sw-call", { type: "button", onclick: () => tap() });
+  // (A press never takes the focus from the box: a phone's keyboard stays up, and the button where the tap lands.)
+  const btn = h("button.sw-call", { type: "button", onpointerdown: (e) => e.preventDefault(), onclick: () => tap() });
   const mute = h("button.btn.btn-ghost.sw-call-mute", { type: "button", onclick: () => call.mute() });
   const hang = h("button.btn.sw-call-end", { type: "button", title: "Hang up the call", onclick: () => tap() }, icon("phoneOff"), "End");
   const dot = h("span.sw-call-dot", { "aria-hidden": "true" });
@@ -62,11 +64,13 @@ export function callEl({ onEnded } = {}) {
     const mine = s.state !== "idle";
     const on = mine || !!other;
     const ringing = mine ? s.state === "starting" : other?.state === "ringing";
-    // The button starts a call; while one rings or is on, the row's End hangs it up and the button steps aside.
-    btn.hidden = on || !calls;
-    btn.replaceChildren(icon("phone"), h("span.sw-call-label", "Call"));
-    btn.title = "Call: talk with whoever the chat talks to"; btn.setAttribute("aria-label", "Call");
-    btn.disabled = role !== "drive";
+    // The button starts a call; while one rings or is on, it hangs up, as the row's End does.
+    btn.hidden = !calls;
+    btn.dataset.state = on ? (ringing ? "ringing" : "live") : "idle";
+    btn.replaceChildren(icon(on ? "phoneOff" : "phone"));
+    btn.title = on ? (ringing ? "Cancel the call" : "End the call") : "Voice call: talk with whoever the chat talks to";
+    btn.setAttribute("aria-label", on ? (ringing ? "Cancel the call" : "End the call") : "Start a voice call");
+    btn.disabled = role !== "drive" && !mine;
     hang.disabled = role !== "drive" && !mine;
     hang.replaceChildren(icon("phoneOff"), ringing ? "Cancel" : "End");
     hang.title = ringing ? "Stop calling" : "Hang up the call";

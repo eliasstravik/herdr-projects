@@ -10,9 +10,13 @@ the board's own agents, as if you had typed it in the chat.
 
 ## Starting a call
 
-- **The web board:** the **Call** button in the chat's bar ([the web board's chat](web-chat.md)), beside Hide (on a
-  phone its icon alone). While the call rings or is on, the button gives way to the call's row under the bar, whose **End** (**Cancel** while it rings) hangs up. It uses the microphone and speaker of the
-  phone or computer the page is open on, with the browser's echo cancelling.
+- **The web board:** the **Call** button (a phone) in the chat's box, right beside the mic that dictates
+  ([the web board's chat](web-chat.md)): in the web UI's own box where the chat is docked on it, in the board's own box
+  where that stands in. The mic writes your words into the box; Call talks with the voice agent. Hovered or read aloud,
+  it says `Start a voice call`. While the call rings or is on, the same button turns red and hangs up (`Cancel the
+  call`, `End the call`), and the call's row stands under the chat's bar, whose **End** (**Cancel** while it rings) hangs
+  up too. It uses the microphone and speaker of the phone or computer the page is open on, with the browser's echo
+  cancelling.
 - **The terminal board:** `Ctrl+T` (t for talk). The key again hangs up. The call runs on the computer you sit at, not on the
   machine the board runs on ([below](#from-the-terminal-board)).
 

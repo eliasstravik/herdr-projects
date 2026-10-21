@@ -96,7 +96,7 @@ fn the_box_attaches_as_the_web_uis_does_the_add_button_tiles_paste_drop_and_the_
     // the add button in the lower left, the web UI's quiet round icon button, and its file picker
     assert!(FILES.contains(r#"h("button.icon-button.sw-attach", { type: "button", "aria-label": "Attach files", title: "Attach files" }, icon("plus"))"#));
     assert!(FILES.contains(r#"h("input", { type: "file", multiple: true, hidden: true })"#));
-    assert!(COMPOSE.contains(r#"h("div.sw-card.sw-b-text", grip, files.strip, box, h("div.sw-controls.sw-controls-left", files.input, files.add, voice.el, to), h("div.sw-controls.sw-controls-right", also, send))"#));
+    assert!(COMPOSE.contains(r#"h("div.sw-card.sw-b-text", grip, files.strip, box, h("div.sw-controls.sw-controls-left", files.input, files.add, voice.el, call, to), h("div.sw-controls.sw-controls-right", also, send))"#));
     // a tile: a picture's thumbnail or the file's name, where it stands, a cross that takes it out (and its path)
     assert!(FILES.contains(r#"f.state === "uploading" ? "Uploading" : f.state === "error" ? "Failed" : "Attached""#));
     assert!(FILES.contains("if (m) box.value = box.value.replace(m, \"\");"));

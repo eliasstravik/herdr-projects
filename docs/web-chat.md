@@ -2,7 +2,8 @@
 
 **The chat under the [web board](web-ui.md)'s list is the Herdr web UI's own chat**: the same transcript, box, files,
 dictation, Stop and keyboard handling as when you open that agent from the web UI's sidebar. The board docks it under
-its list and puts one bar over it: who you talk to, how they stand, Call, Hide and Full screen.
+its list and puts one bar over it: who you talk to, how they stand, Hide and Full screen. The board's **Call** button
+stands in the box, beside the mic.
 
 On a phone, and in a narrow window:
 
@@ -14,11 +15,12 @@ On a phone, and in a narrow window:
 │ ▾ to do 4                        │
 │   ○ HP-4  Fix flaky login test   │
 │╭───────────── ═══ ──────────────╮│  the chat's sheet, its grip
-│ [● Coordinator│○ HP-4 agent]☎ ⌄ ⤢│  the bar
+│ [● Coordinator│○ HP-4 agent]  ⌄ ⤢│  the bar
 │                                  │
 │   the web UI's own transcript    │
 │ ┌──────────────────────────────┐ │
 │ │ the web UI's own box         │ │
+│ │ + mic ☎                    ↑ │ │  add, mic, Call · Send
 │ └──────────────────────────────┘ │
 └──────────────────────────────────┘
 ```
@@ -41,8 +43,7 @@ bar heads the chat. On a narrow phone the buttons keep their row, and the switch
 - **How they stand**: each choice has its mark in the board's colours (the dot breathes while it works). Beside it the
   board's words for it (`No agent yet: your message starts one`, a check's progress). On a phone, a word the mark
   already says (`idle`, `working`) steps aside, and a longer one takes a line of its own under the switch.
-- **Call** starts a [voice call](voice.md) with whoever the chat talks to (on a phone only its icon). While a call rings
-  or is on, its row stands under the bar, and the button steps aside for it.
+- **The call's row**: while a [voice call](voice.md) rings or is on, its row stands under the bar, with Mute and End.
 - **Hide** (the chevron) keeps only the box: the list gets the screen. **Show** brings the conversation back. It is the
   board's `alt+c`, so the board remembers which, also over a reload.
 - **Full screen** (the arrows): the board's header and list step aside and the chat has the whole screen under the bar.
@@ -73,6 +74,12 @@ address names that pane's chat view (`?ws=…&pane=…&view=chat#board`), so Bac
   card on the right, theirs plain prose) over [the board's own box](web-chat-box.md).
 
 ## What you type
+
+- **Call** (the phone) stands in the box, right after the mic (after **+** where the mic is off, as on a phone), in the
+  web UI's box and in the board's own alike: the board puts it in the web UI's box while docked, and takes it out again
+  when the board closes. It starts a [voice call](voice.md) with whoever the chat talks to; while the call rings or is
+  on, the same button is red and hangs up. The mic writes your words into the box; Call talks. Each says what it does
+  when hovered and to a screen reader (`Dictate (hold)`, `Start a voice call`).
 
 - **To a task's agent**: the web UI's box sends it, as it does in the web UI, with its queue, its `/` menus and its Stop.
 - **To a coordinator** (the Coordinator, a machine's or a repo's): the web UI's box, but the board sends the words, as
@@ -108,3 +115,9 @@ the front door, in Chromium and WebKit at a phone's sizes (440×956, 393×852, 3
 1440×900), dark and light: the chat hidden and shown, docked and the board's own, full screen and side by side, before
 and after. The switch's left edge and the box's line up, and the last button stands over Send, at every size. Not tried
 on a real phone.
+
+**The Call button in the box** was checked on 2026-10-21 in Chromium at a phone's size (390×844, touch), a tablet's
+(820×1180, touch) and a desktop's (1440×900), with the board's real chat over a copy of the web UI's box (herdr-web-ui
+0.4.12's markup and styles): in the board's own box and in the web UI's, with and without the mic, no call and a call on;
+the web UI drawing its box again, undocking and docking again, and closing the board (nothing left in the web UI's box).
+Not tried against a running web UI or on a real phone.

@@ -21,7 +21,7 @@ fn the_keys_are_the_web_uis_enter_sends_shift_enter_is_a_new_line_and_its_own_se
 
 #[test]
 fn the_box_is_the_web_uis_card_the_message_first_one_row_of_controls_the_grip_and_no_dead_control() {
-    assert!(JS.contains(r#"h("div.sw-card.sw-b-text", grip, files.strip, box, h("div.sw-controls.sw-controls-left", files.input, files.add, voice.el, to), h("div.sw-controls.sw-controls-right", also, send))"#));
+    assert!(JS.contains(r#"h("div.sw-card.sw-b-text", grip, files.strip, box, h("div.sw-controls.sw-controls-left", files.input, files.add, voice.el, call, to), h("div.sw-controls.sw-controls-right", also, send))"#));
     assert!(JS.contains(r#"h("textarea.sw-input", { rows: 1, maxLength: LONGEST"#) && JS.contains("LONGEST = 20000"));
     assert!(JS.contains(r#"h("button.sw-action.sw-send", { type: "button", disabled: true"#) && JS.contains(r#"h("button.sw-also", { type: "button", hidden: true }"#));
     assert!(JS.contains(r#"h("div.sw-composer", { role: "group""#));

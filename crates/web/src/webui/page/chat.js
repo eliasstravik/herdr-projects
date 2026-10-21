@@ -1,6 +1,6 @@
 // The chat under the board's list. Its bar says who you talk to and flips it, as space does on the terminal board (the
-// Coordinator, or the selected task's agent: two choices of one switch), how they stand, and holds Call, Hide and Full
-// screen; under it the call's row while a call rings or is on. Under the bar is the web UI's own chat of whoever it is,
+// Coordinator, or the selected task's agent: two choices of one switch), how they stand, and holds Hide and Full
+// screen; under it the call's row while a call rings or is on. The Call button is in the box you type in, beside the mic. Under the bar is the web UI's own chat of whoever it is,
 // docked there (dock.js), or, where the web UI has none to show, the board's own: the conversation (said.js) and the
 // box (compose.js), with what the box does with your words: who they are for, kept with them until they are sent, and
 // who a file attached is for. The bar's grip sets how much of the screen the chat has. Who it is, what the box says
@@ -73,7 +73,10 @@ export function chatEl({ onSend, onPress, onDock }) {
   };
   // A file attached is for whoever the words are for: attaching one locks that as typing does (sync).
   const whom = () => { const w = to || now; return w ? { id: w.id, reply: w.reply, scope: w.scope || "" } : null; };
-  const { el: compose, card, box, to: chip, send, also, grow, files, voice, say, destroy } = composeEl({ onSend: go, onInput: () => { if (closed) return; sync(); keep(box.value, to); }, onTab: () => { if (also.hidden || busy) return false; go(true); return true; }, whom, hold: () => busy, onGrow: () => room?.fit() });
+  // A voice call with whoever the chat talks to: its button in the box beside the mic, its row under the bar (callbtn.js).
+  // Docked, the button is in the web UI's box, beside its mic (dock.js); with the board's own chat, in the board's box.
+  const phone = callEl();
+  const { el: compose, card, box, to: chip, send, also, grow, files, voice, say, destroy } = composeEl({ onSend: go, onInput: () => { if (closed) return; sync(); keep(box.value, to); }, onTab: () => { if (also.hidden || busy) return false; go(true); return true; }, whom, hold: () => busy, onGrow: () => room?.fit(), call: phone.btn });
   box.value = saved();
   if (box.value.trim()) to = savedTo(); // a reload brings the words back with who they were for
 
@@ -86,9 +89,7 @@ export function chatEl({ onSend, onPress, onDock }) {
   const grow2 = h("button.icon-button.sw-grow", { type: "button", onclick: () => setFull(!full) });
   const grip = h("div.sw-split", { tabIndex: 0, role: "separator", "aria-orientation": "horizontal", "aria-label": "Resize the chat", title: "Drag to give the chat more or less room" });
   const note = h("p.sw-chat-note", { hidden: true });
-  // A voice call with whoever the chat talks to: its button in the bar, its row under it (callbtn.js).
-  const phone = callEl();
-  const bar = h("div.sw-chatbar", grip, who, state, h("span.sw-chatbar-space"), phone.btn, hide, grow2);
+  const bar = h("div.sw-chatbar", grip, who, state, h("span.sw-chatbar-space"), hide, grow2);
   const said = saidEl();
   const own = h("div.sw-own", said.el, compose);
   let labels = { enter: "", delegate: "" };
@@ -125,6 +126,7 @@ export function chatEl({ onSend, onPress, onDock }) {
     board.classList.toggle("is-side", side);
     board.classList.toggle("sw-web-typing", webTyping);
     own.hidden = docked;
+    if (!docked && voice.el.nextSibling !== phone.btn) voice.el.after(phone.btn); // back from the web UI's box
     said.show(!docked && (open || full));
     const sized = !full && !webTyping && !side;
     // Docked, the board ends where the web UI's chat begins: the chat's share of the screen under it, or with the chat
@@ -188,7 +190,7 @@ export function chatEl({ onSend, onPress, onDock }) {
   let asked = "";
   const ask = (whose) => { if (whose === asked) return; asked = whose; onDock(); };
 
-  dock = dockFor({ boardOf: () => el.closest(".sw-board"), onChange: () => layout(), onTyping: (on) => { webTyping = on; layout(); },
+  dock = dockFor({ boardOf: () => el.closest(".sw-board"), onChange: () => layout(), onTyping: (on) => { webTyping = on; layout(); }, guest: phone.btn,
     // A coordinator's words in the web UI's box (the Coordinator's, a machine's or a repo's) go through the board; a
     // task's agent's as the web UI sends them.
     route: () => (snapNow?.chat && now && (!now.reply || coordHead) && snapNow.role === "drive" ? { send: (text) => onSend(text, false, { id: now.id, reply: now.reply, scope: now.scope || "" }) } : null) });
