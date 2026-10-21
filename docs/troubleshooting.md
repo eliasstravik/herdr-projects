@@ -128,9 +128,21 @@ task panel ends in `Kept:` and says why:
 |---|---|---|
 | `(uncommitted changes)` | its checkout has files that were never committed | look at them; reply to the task, or remove the worktree yourself |
 | `(unmerged work on <branch>)` | its branch holds commits that were not merged | merge them, or reply to the task to go on with them |
-| `(its space is in use again)` | a turn in its agent's terminal, a command still running in one of its panes, or an agent Herdr cannot place | nothing: it is tried again about every half minute and closes once the space is free |
+| `(its space is in use: a turn in its agent's terminal)` | you talked to its agent in its own terminal | nothing: it is tried again about every half minute, and closes once the agent has been quiet a while |
+| `(its space is in use beside its agent: <process> (pid <n>) <why>)` | a process runs in the agent's pane that is not one of its helpers; `<why>` says what is wrong with it (below) | end it if it is yours, and the space closes on the next try |
+| `(its space is in use in another of its panes: <process> (pid <n>) runs in it)` | a command runs in another pane of its space | end it, or close that pane |
+| `(its space is in use: herdr cannot tell whether its agent works, …)` | Herdr calls the agent's status unknown, and the rest of the line says what is not settled yet (its screen still moves, its last turn has not ended) | nothing: it closes once the agent has been still a while |
+| `(its space is in use: herdr does not answer for its agent)` (or `for its space`) | Herdr did not answer | nothing: it is tried again |
 | `(its herdr session cannot be reached)` | the Herdr session it ran in is not running | start that session; it is tried again |
 
+- **What `<why>` means**: a process in the agent's own process group is one of its helpers (an MCP server) only when
+  its input and output are wired to the agent and its errors go to no terminal. Otherwise it `streams to the terminal`,
+  `is not wired to its agent` (a file, `/dev/null`, a pipe nobody in the agent's group holds), `has its input or output
+  closed`, or `cannot be looked at` (the system does not say). A process under the agent in a group of its own (a dev
+  server it started) `runs in a group of its own`; one its pane's shell runs `runs in the background of its shell`.
+- **`; and 2 more`**: the line names the first thing only. `herdr-projects details <id>` lists every one, under `inUse`.
+- **It names one of the agent's own helpers** (an MCP server, a language server): that is a bug. Please open an issue
+  with the `Kept:` line and the `inUse` list of `herdr-projects details <id>`.
 - **Nothing says `Kept:`, and the space still stays**: `herdr-projects show <id>` tells whether `workspace.cleanup` was
   turned off, and where. `herdr-projects set workspace.cleanup true` turns it on again.
 - **An agent with MCP servers used to stay `in use` for good**: its servers counted as a command still running. Since
