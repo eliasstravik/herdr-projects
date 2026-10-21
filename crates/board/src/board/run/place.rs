@@ -112,7 +112,7 @@ pub fn show(on: Option<&str>, keep: bool) -> String {
 pub fn task_at(pane: &str) -> Option<Obj> {
     if pane.is_empty() { return None; }
     let socket = current_socket();
-    crate::store::tasks::list(Default::default()).into_iter().find(|t| t.at("link").s("socket") == socket && (t.at("link").s("pane") == pane || t.at("link").at("reviewer").s("pane") == pane))
+    crate::flow::pane_owner::whose(crate::store::tasks::list(Default::default()), &socket, pane).map(|(t, _)| t)
 }
 // ---- the board's own tab -------------------------------------------------------------------------------------------
 pub const BOARD_TAB: &str = "herdr-projects";

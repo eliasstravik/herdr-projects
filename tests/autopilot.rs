@@ -13,6 +13,8 @@ use sw::store::settings::places::yours;
 
 /// One that never ran: sent as off, and `Tab` from another machine starts it.
 mod never_ran;
+/// A pane id herdr handed out again: a done task's old pane given to a coordinator is the coordinator's.
+mod pane_reuse;
 
 #[test]
 fn on_needs_a_goal_saves_it_as_the_coordinators_own_and_wakes_it_with_a_message_in_its_chat() {

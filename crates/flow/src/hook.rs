@@ -10,7 +10,8 @@ pub use reconcile::{reconcile, same_dir};
 use crate::agents::{adapter::find_session, installed::read_turn_of};
 use crate::clock::now;
 use crate::delegate::task_line;
-use crate::flow::{git::{cancel_auto_merge, pr_number}, handled_turn::{reopened, same_turn}, live::see_terminal, sidebar::tell_sidebar, task::{is_agent_task, note_stat}};
+use crate::flow::{git::{cancel_auto_merge, pr_number}, handled_turn::{reopened, same_turn}, live::see_terminal, pane_owner::agents_pane, sidebar::tell_sidebar, task::{is_agent_task, note_stat}};
+use crate::leftovers::sweep::ended;
 use crate::herdr::{cli::current_socket, Herdr};
 use crate::json::*;
 use crate::limits::run::granted;
@@ -46,9 +47,12 @@ fn on_gone(socket: &str, matches: impl Fn(&Task) -> bool) { let api = Herdr::new
 /// The hook looks the pane up by herdr socket path plus pane id (pane ids repeat across herdr sessions) and does
 /// nothing when there is no match. Reviewer panes never trigger the finish line.
 pub fn on_pane(socket: &str, pane: &str) {
-    let Some(t) = mine(socket).into_iter().find(|t| t.at("link").s("pane") == pane) else { return };
+    let named: Vec<Task> = mine(socket).into_iter().filter(|t| t.at("link").s("pane") == pane).collect();
+    let Some(first) = named.iter().find(|t| !ended(t)).or(named.first()) else { return };
     let api = Herdr::new(Some(socket.into()));
-    let Ok(Some(a)) = api.agent_get(pane) else { return reconcile(&t, &api) };
+    let Ok(Some(a)) = api.agent_get(pane) else { return reconcile(first, &api) };
+    // A done task's old pane id, given to another pane since (a coordinator's): what runs there is not its agent.
+    let Some(t) = named.into_iter().find(|t| !ended(t) || agents_pane(t, a.s("terminal_id"))) else { return };
     // Ids can change: a match also requires the pane to be in the task's working folder. No prompt is ever sent to a
     // pane that fails this check.
     let cwd = cwd_of(&t);

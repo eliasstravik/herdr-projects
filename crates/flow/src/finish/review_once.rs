@@ -79,7 +79,7 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
         if taken.contains(&name) { name = format!("{}-{:04}", name.chars().take(27).collect::<String>(), now() % 10000); }
         let started_at = now(); // a turn-end report older than this is from a try of this review that was cut off
         let x = launch_extras(&t, "reviewer", &rkind, round, "", None)?;
-        t = g.set(|t| { t.obj_mut("link").put("reviewer", json!({ "pane": pane, "tab": made.tab, "agent": name, "kind": rkind })); t.put("reviewSession", x.session.clone().map(Value::String).unwrap_or(Value::Null)); })?;
+        t = g.set(|t| { t.obj_mut("link").put("reviewer", json!({ "pane": pane, "tab": made.tab, "terminal": made.terminal, "agent": name, "kind": rkind })); t.put("reviewSession", x.session.clone().map(Value::String).unwrap_or(Value::Null)); })?;
         flow::sidebar::tell_sidebar(&t); // the reviewer's pane has its entry in herdr's sidebar from the start
         let opts = |hook: Vec<String>| start::StartOpts { model: rmodel.clone(), effort: reffort.clone(), fast: Some(who.fast), access: who.access.clone(), session: x.session.clone().unwrap_or_default(), extra: hook, ..Default::default() };
         let start_with = |hook: Vec<String>| -> Res<()> {

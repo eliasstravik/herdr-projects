@@ -3,6 +3,7 @@ pub mod chat;
 pub mod git;
 pub mod handled_turn;
 pub mod live;
+pub mod pane_owner;
 pub mod send;
 pub mod sidebar;
 pub mod sidebar_entry;

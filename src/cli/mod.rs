@@ -33,17 +33,15 @@ pub fn plugin_folder(c: &Value) -> Option<PathBuf> {
     let main = primary_root(&pane);
     Some(if main != git_root(&pane) { main } else { pane })
 }
-/// Is the caller the agent of a task? Its shell runs in the task's worker pane (or its reviewer's). The board's own
-/// pane is the plugin's and the Coordinator's pane belongs to no task, so neither is ever taken for a worker.
+/// Is the caller the agent of a task? Its shell runs in the task's worker pane (or its reviewer's), in a terminal the
+/// task's agent was seen in: herdr gives a closed pane's id to the next pane of its space, a coordinator's too
+/// (flow/pane_owner.rs). The board's own pane is the plugin's and the Coordinator's pane belongs to no task, so neither
+/// is ever taken for a worker.
 pub fn caller() -> Option<(Obj, &'static str)> {
     let (pane, socket) = (crate::util::env_val("HERDR_PANE_ID")?, crate::util::env_val("HERDR_SOCKET_PATH")?);
     if crate::util::env_set("HERDR_PLUGIN_ID") { return None; }
-    for t in list(crate::store::tasks::ListOpts { include_archived: true, attempts: true, ..Default::default() }) { // an attempt of several is its own agent's task
-        if t.at("link").s("socket") != socket { continue; }
-        if t.at("link").s("pane") == pane { return Some((t, "agent")); }
-        if t.at("link").at("reviewer").s("pane") == pane { return Some((t, "reviewer")); }
-    }
-    None
+    // an attempt of several is its own agent's task
+    crate::flow::pane_owner::whose(list(crate::store::tasks::ListOpts { include_archived: true, attempts: true, ..Default::default() }), &socket, &pane)
 }
 fn stdin_json() -> Option<Value> { None }
 
@@ -126,7 +124,7 @@ fn approve_current() {
     let pane = c.t("focused_pane_id");
     if pane.is_empty() { return; }
     let socket = crate::herdr::cli::current_socket();
-    let Some(t) = list(Default::default()).into_iter().find(|t| t.at("link").s("socket") == socket && (t.at("link").s("pane") == pane || t.at("link").at("reviewer").s("pane") == pane)) else { return };
+    let Some((t, _)) = crate::flow::pane_owner::whose(list(Default::default()), &socket, &pane) else { return };
     if t.s("stage") != "approval" { return; }
     let to = crate::board::place::show(None, true);
     let _ = crate::actions::finish_line::ask_approve(t.s("id"), &socket, &to);

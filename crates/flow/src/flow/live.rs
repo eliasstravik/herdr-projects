@@ -37,11 +37,15 @@ pub fn live_of(t: &Task, session: &Session, here: &str) -> Value {
 /// seen in is another's, wherever it is. After herdr restarted, the task's pane is its own again once the hook has read
 /// its agent in the new terminal and herdr said so (hook.rs: `apply`, which keeps it among the task's `terms`).
 pub fn owns_pane(t: &Task, pane: &Value) -> bool {
-    let term = pane.t("terminal_id");
+    let (term, known) = (pane.t("terminal_id"), terminals(t));
+    term.is_empty() || known.is_empty() || known.contains(&term)
+}
+/// The terminals the task's agent was seen in: its `terms` and the one saved with its link.
+pub fn terminals(t: &Task) -> Vec<String> {
     let mut known = if t.at("terms").is_array() { strings(t.at("terms")) } else { vec![] };
     known.push(t.at("link").t("terminal"));
     known.retain(|s| !s.is_empty());
-    term.is_empty() || known.is_empty() || known.contains(&term)
+    known
 }
 /// The show's fields, under names that cannot collide with a task's own (a task has its own `review` and `msg`).
 pub fn pick(out: &mut Obj, s: &Show) {
