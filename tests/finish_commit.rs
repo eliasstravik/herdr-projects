@@ -85,10 +85,11 @@ fn a_lock_whose_holder_committed_it_all_is_no_failure() {
 fn a_new_round_never_shows_the_failure_of_the_round_before_while_it_is_checked() {
     let w = world_with(Opts { repo: true, settings: json!({ "review.rounds": 2 }), ..Default::default() });
     // The check keeps what the task's record said while it ran, one copy a round, then passes on the second round only.
+    // (macOS's `wc` pads its count with spaces: taken off.)
     let seen = w.base.join("seen");
     std::fs::create_dir_all(&seen).unwrap();
     let rec = format!("{}/$HERDR_PROJECTS_ID/task.json", sw::store::files::tasks_dir().display());
-    let cmd = format!("n=$(ls '{0}' | wc -l); cp \"{rec}\" '{0}'/round-$n.json; grep -q good f.txt", seen.display());
+    let cmd = format!("n=$(ls '{0}' | wc -l | tr -d ' '); cp \"{rec}\" '{0}'/round-$n.json; grep -q good f.txt", seen.display());
     sw::store::settings::change::set_value("check.command", &json!(cmd), &sw::store::settings::lookup::Scope::you()).unwrap();
     w.script(json!({ "worker": [{ "files": { "f.txt": "bad\n" }, "commit": "bad", "note": "Did it." }, { "files": { "f.txt": "good\n" }, "commit": "good", "note": "Fixed it." }],
         "reviewer": [{ "verdict": { "meets": true, "findings": [], "text": "Fine." } }] }));

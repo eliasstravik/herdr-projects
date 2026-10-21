@@ -286,6 +286,22 @@ environment, and points Herdr at a socket of its own. When you run the program b
 reach. A repo's own `setup`, `check` and `teardown` commands are shell commands by nature, and run as such in the tests
 about them.
 
+## On macOS too
+
+GitHub runs the whole check on Linux, and on macOS the areas whose tests differ there (`.github/workflows/ci.yml`; the
+whole check passed there too). A test holds on both when it asks what both have:
+
+- a process's state from `ps -o stat= -p <pid>`, not `/proc` (macOS has none);
+- a lock through `libc::flock` in the test itself, not the `flock` command (macOS has none): a flock belongs to one
+  opening of the file, so the file opened again in the test finds it held as another program would;
+- `wc -l`'s count trimmed (macOS pads it with spaces);
+- a temp folder by its real path (`canonicalize`) where a script's `pwd` is compared with it (macOS's is under `/var`,
+  which is `/private/var`);
+- this machine's name as the board shows it, cut where it is long (GitHub's macOS runners' names are over 60 letters);
+- a copy of one of the system's programs only where it runs: a Mac may kill it, or kill it once it is signed again.
+
+A new area of that kind goes in the macOS job's list.
+
 ## Looking at the real thing
 
 Tests read the board as text and as frames. A real terminal or a browser screenshot is only for a task that changes what

@@ -1,6 +1,11 @@
 # Runs the whole check (`npm run check -- --all`: build, made tables, the repo's rules, every test) on every push and
-# pull request, on Linux; and on macOS the tests of what differs there: a plan writer's read-only mount, made with
-# `sandbox-exec` (tests/plan_sandbox.rs, its real_programs_ test refuses a write into the guarded folders for real).
+# pull request, on Linux; and on macOS the check of the areas whose tests differ there: a plan writer's read-only mount,
+# made with `sandbox-exec` (plan_sandbox, its real_programs_ test refuses a write into the guarded folders for real;
+# plan_steps, macOS's own words when it cannot be made), a process's state read with `ps` (detached_jobs), locks taken
+# with the kernel's flock, macOS having no `flock` command (home_folder_more), `wc`'s padded count (finish_commit), a temp
+# folder whose path is a link (warm_start: /var is /private/var), a copied program that may need signing again
+# (take_over_more), and a machine name too long to show whole (the runners' own: coordinator_levels,
+# board_coordinators_inks). The whole check passed there once too, on the commit that brought these.
 name: Check
 
 on:
@@ -51,6 +56,10 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
       - name: Cache the build
         uses: actions/cache@v6
         with:
@@ -61,10 +70,10 @@ jobs:
           key: macos-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: macos-${{ runner.os }}-
 
-      - name: The plan's read-only mount
+      - name: The areas that differ on macOS
         env:
           GIT_AUTHOR_NAME: ci
           GIT_AUTHOR_EMAIL: ci@example.com
           GIT_COMMITTER_NAME: ci
           GIT_COMMITTER_EMAIL: ci@example.com
-        run: cargo test --profile quick --locked --test main plan_sandbox -- --nocapture
+        run: npm run check plan-sandbox plan-steps detached-jobs home-folder-more finish-commit warm-start take-over-more coordinator-levels board-coordinators-inks
