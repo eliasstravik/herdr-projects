@@ -161,6 +161,8 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
     let parts = parts(s, &groups);
     let lay = |keep: usize, todos: usize, s: &State| -> Vec<Row> {
         let mut rows = vec![];
+        // The main Coordinator's row, on top: its coordinator's, as every heading's is (update/pilot.rs).
+        if let Some(id) = super::pilot::main_row(s) { rows.push(Row::Head { name: crate::status_words::COORDINATOR.into(), autos: false, id, machine: false, folded: 0, folded_autos: 0, empty: false }); }
         for p in &parts {
             let autos: Vec<Vec<Obj>> = p.groups.iter().map(|(name, _)| autos_in(s, &p.host, name)).collect();
             let n_autos: usize = autos.iter().map(|a| a.len()).sum();
@@ -209,7 +211,7 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
         rows
     };
     // No task gives way for an automation: theirs are not counted.
-    let lines_of = |rows: &[Row], s: &State| -> usize { rows.iter().enumerate().map(|(n, r)| match r { Row::Head { .. } => heading_height(rows, n), Row::Rec(o) => crate::board::view::row_wrap::row_height(s, o, s.list_width, s.list_tall), Row::Auto(_) => 0, _ => 1 }).sum() };
+    let lines_of = |rows: &[Row], s: &State| -> usize { rows.iter().enumerate().map(|(n, r)| match r { Row::Head { .. } => heading_height(rows, n) + crate::board::view::pilot::extra(s, r, s.list_width), Row::Rec(o) => crate::board::view::row_wrap::row_height(s, o, s.list_width, s.list_tall), Row::Auto(_) => 0, _ => 1 }).sum() };
     let over = |rows: &[Row], s: &State| !s.whole && s.list_room > 0 && lines_of(rows, s) > s.list_room;
     let mut keep = DONE_SHOWN;
     let mut rows = lay(keep, usize::MAX, s);

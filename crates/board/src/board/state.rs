@@ -36,14 +36,19 @@ pub struct Away { pub text: String, pub to: String, pub cwd: String, pub warned:
 #[derive(Clone, Debug, Default)]
 pub struct Back { pub sel: String, pub top: usize, pub filter: String, pub mode: Option<Mode>, pub value: String }
 /// Whose settings the page shows: a task's, an automation's, yours (what every task starts from, as `set` changes
-/// them), or your entry for a repo (`set --repo`).
+/// them), your entry for a repo (`set --repo`), or a coordinator's (its key, "main", "machine", "project:<repo>"),
+/// with what its heading's page showed before ("you", "repo:<repo>", "" nothing more: the main Coordinator's row).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub enum Whose { #[default] Task, Auto, You, Repo(String) }
+pub enum Whose { #[default] Task, Auto, You, Repo(String), Coord(String, String) }
 impl Whose {
-    /// Yours or your entry for a repo: no task's or automation's.
-    pub fn mine(&self) -> bool { matches!(self, Whose::You | Whose::Repo(_)) }
+    /// Yours, your entry for a repo or a coordinator's: no task's or automation's.
+    pub fn mine(&self) -> bool { matches!(self, Whose::You | Whose::Repo(_) | Whose::Coord(..)) }
     /// The repo of your entry for a repo ("" for every other).
     pub fn repo(&self) -> &str { if let Whose::Repo(r) = self { r } else { "" } }
+    /// What the loader is asked to read for the page (data.rs: mine).
+    pub fn wanted(&self) -> String { match self { Whose::Repo(r) => r.clone(), Whose::Coord(k, then) => format!("coord:{k}\t{then}"), _ => String::new() } }
+    /// Under a coordinator's own rows, the place its heading's page showed before.
+    pub fn then(&self) -> Whose { match self { Whose::Coord(_, t) if t == "you" => Whose::You, Whose::Coord(_, t) => t.strip_prefix("repo:").map(|r| Whose::Repo(r.into())).unwrap_or(Whose::Task), w => w.clone() } }
 }
 /// The settings page: whose (a task, an automation's row, or a heading for yours), the picked row, and the setting
 /// being typed for.

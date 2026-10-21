@@ -70,3 +70,12 @@ pub fn off_all(socket: &str) -> Res<String> {
     for co in crate::coordinator::state::all(socket) { if is_on(&co) { off(&co)?; n.push(co.name()); } }
     Ok(if n.is_empty() { "No coordinator on this machine was on autopilot (another machine's are turned off there).".into() } else { format!("Autopilot off for {} on this machine: {}. Another machine's are turned off there.", if n.len() == 1 { "one coordinator".to_string() } else { format!("{} coordinators", n.len()) }, n.join(", ")) })
 }
+/// One of this time's values from the settings page, while autopilot is on: set (checked as `on` checks it) or put back
+/// (None: this time's value goes, and the coordinator's own or yours counts again). No wake.
+pub fn set_once(co: &Co, name: &str, value: Option<Value>) -> Res<String> {
+    let checked = match &value { Some(v) => checked_once(&[(name.to_string(), v.clone())])?, None => Obj::new() };
+    change(co, |ap, _| { let mut o = ap.o("once").cloned().unwrap_or_default(); match checked.get(name) { Some(v) => { o.insert(name.into(), v.clone()); } None => { o.shift_remove(name); } } ap.put("once", o); true })?;
+    let label = crate::store::settings_list::entry_of(name).map(|e| e.label.clone()).unwrap_or_else(|| name.into());
+    Ok(match checked.get(name) { Some(v) => format!("{label}: {}, for this time only (turn autopilot off, or tell the coordinator, to keep it)", say(v)), None => format!("{label}: back to {}", text(&value_of(co, name))) })
+}
+fn value_of(co: &Co, name: &str) -> Value { value(co, name) }

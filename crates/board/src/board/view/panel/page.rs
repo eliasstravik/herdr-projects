@@ -2,7 +2,8 @@
 //! does nothing here, or counts later) and its name as a command takes it, greyed. The line on top says what the
 //! selected row may be. Rows set for this task only are marked `*`; where any other comes from is not said here
 //! (`herdr-projects show` says it). Your own settings (or your entry for a repo) are the same page, full screen, each
-//! row not your own saying where it comes from (built in, you, the repo's file).
+//! row not your own saying where it comes from (built in, you, the repo's file). A coordinator's row: its own rows
+//! first, under `This coordinator`, then those of the place under it under their own headline.
 use crate::board::view::list::hl;
 use crate::board::keys::key_name;
 use crate::board::state::{State, Whose};
@@ -45,7 +46,7 @@ pub fn mine_full(s: &mut State, t: &Theme, width: usize, h: usize) -> Vec<Inked>
     s.panel_length = lines.len();
     s.panel_top = s.edit_line.min(s.panel_top.max((s.edit_line + 1).saturating_sub(s.panel_height))).min(lines.len().saturating_sub(s.panel_height));
     let end = lines.len().min(s.panel_top + s.panel_height);
-    let name = if w.repo().is_empty() { "yours: what every task starts from".to_string() } else { format!("your entry for {}: what its tasks start from", crate::shown::words::repo_label(w.repo())) };
+    let name = match &w { Whose::Coord(..) => crate::board::update::coords::of_head(s, &s.sel).map(|t| format!("the {}'s, then what it shows under it", t.name)).unwrap_or_default(), _ if w.repo().is_empty() => "yours: what every task starts from".to_string(), _ => format!("your entry for {}: what its tasks start from", crate::shown::words::repo_label(w.repo())) };
     let left = Inked::plain(" ").add(Inked::plain("Settings").bold()).add(Inked::of(format!("  {}", crate::text::cut(&name, width.saturating_sub(30).max(8))), Ink::Muted));
     let right = if lines.len() > s.panel_height { Inked::of(format!("lines {}–{end} of {} ", s.panel_top + 1, lines.len()), Ink::Muted) } else { Inked::new() };
     let gap = width.saturating_sub(left.width() + right.width()).max(2);
@@ -59,10 +60,11 @@ pub fn settings_page(s: &mut State, t: &Theme, r: Option<&Obj>, width: usize) ->
     let w = { let e = s.editing.as_mut().unwrap(); e.at = e.at.min(all.len().saturating_sub(1)); e.whose.clone() };
     let typing = s.editing.as_ref().unwrap().typing.clone();
     let at = s.editing.as_ref().unwrap().at;
-    let whose = match &w { Whose::Auto => "this automation only", Whose::Task => "this task only", Whose::You => "set by you", Whose::Repo(_) => "said in your entry for this repo" };
+    let whose = match &w { Whose::Auto => "this automation only", Whose::Task => "this task only", Whose::You => "set by you", Whose::Repo(_) => "said in your entry for this repo", Whose::Coord(..) => match w.then() { Whose::You => "its own: this coordinator's (or this time's, while its autopilot is on), and below it set by you", Whose::Repo(_) => "its own: this coordinator's (or this time's, while its autopilot is on), and below it said in your entry for this repo", _ => "this coordinator's own (or this time's, while its autopilot is on)" } };
+    let coord_on = matches!(w, Whose::Coord(..)) && crate::board::update::edit_coord::on(s, &w);
     let label = |x: &Obj| entry_of(x.s("name")).map(|e| e.label.clone()).unwrap_or_else(|| x.t("name"));
     // Yours: where a row not your own comes from, unless something says more of it.
-    let from = |x: &Obj| if w.mine() && !x.b("own") { x.t("from") } else { String::new() };
+    let from = |x: &Obj| if w.mine() && (!x.b("own") || x.b("once")) { x.t("from") } else { String::new() };
     let place = |x: &Obj| { let said: Vec<String> = [x.t("note"), x.t("later")].into_iter().filter(|w| !w.is_empty()).collect(); if said.is_empty() { from(x) } else { said.join(" · ") } };
     let one = |v: &Value| crate::re!(r"\s*\n\s*").replace_all(&value_say(v), " / ").into_owned();
     let wide = all.iter().map(|x| crate::text::width(&label(x))).max().unwrap_or(0);
@@ -76,8 +78,12 @@ pub fn settings_page(s: &mut State, t: &Theme, r: Option<&Obj>, width: usize) ->
     lines.push(Inked::new());
     let mut group = String::new();
     let star = |l: &str, on: bool| -> Inked { match l.find('*') { Some(i) if on => Inked::plain(&l[..i]).add(Inked::of("*", Ink::Accent)).add(Inked::plain(&l[i + 1..])), _ => Inked::plain(l) } };
+    let mut under = String::new();
     for (n, x) in all.iter().enumerate() {
         let g = x.s("name").split('.').next().unwrap_or("").to_string();
+        // A coordinator's page: its own rows, then the place under it, each under a headline of its own.
+        let part = if !matches!(w, Whose::Coord(..)) { String::new() } else if x.b("coordRow") { "This coordinator".into() } else if w.then() == Whose::You { "Every coordinator and task (you)".into() } else { format!("Your entry for {}", crate::shown::words::repo_label(w.then().repo())) };
+        if part != under { if n > 0 { lines.push(Inked::new()); } lines.push(Inked::plain(" ").add(Inked::plain(part.clone()).bold())); under = part; group = g.clone(); }
         if !group.is_empty() && g != group { lines.push(Inked::new()); }
         group = g;
         let here = n == at;
@@ -89,6 +95,7 @@ pub fn settings_page(s: &mut State, t: &Theme, r: Option<&Obj>, width: usize) ->
     }
     lines.push(Inked::new());
     lines.push(Inked::plain(" ").add(Inked::of("*", Ink::Accent)).add(Inked::of(format!(" {whose}"), Ink::Muted)).cut(width));
+    if coord_on { lines.extend(Inked::of("While its autopilot is on, an autopilot row is saved for this time; turn autopilot off, or tell the coordinator, to keep it. Its goal is always its own.", Ink::Muted).wrap(width.saturating_sub(2).max(10)).into_iter().map(|l| Inked::plain(" ").add(l))); }
     let bad = match (&w, r) { (Whose::Task, Some(r)) => r.at("snap").arr("problems").to_vec(), (w, _) if w.mine() => crate::board::update::edit::mine_read(s, w).map(|v| v.arr("problems").to_vec()).unwrap_or_default(), _ => vec![] };
     if !w.mine() { lines.push(Inked::of(format!(" Your own settings, which every task starts from: {} on a heading", key_name("settings")), Ink::Muted).cut(width)); }
     for bad in bad { lines.push(Inked::of(format!(" Not counted: {}", text(&bad)), Ink::Yellow).cut(width)); }

@@ -65,7 +65,7 @@ fn resizing_keeps_the_chat_on_the_last_line_and_the_working_rows_columns_at_the_
         }
         // All spare height is the list's (a narrow screen's working row is one line taller). The old test made the row
         // a working one after the list was grouped, so it stood under "to do": here it is under its own "working"
-        // heading, two lines more.
-        if rows >= 20 { let tasks = lines[..head].iter().filter(|l| has(l, r"Task number \d+")).count(); assert!(tasks + if columns < 80 { 10 } else { 9 } >= head, "{note}: the list fills the space above the chat: {tasks} in {head}\n{}", lines.join("\n")); }
+        // heading, two lines more; the main Coordinator's row on top two more.
+        if rows >= 20 { let tasks = lines[..head].iter().filter(|l| has(l, r"Task number \d+")).count(); assert!(tasks + if columns < 80 { 12 } else { 11 } >= head, "{note}: the list fills the space above the chat: {tasks} in {head}\n{}", lines.join("\n")); }
     }
 }

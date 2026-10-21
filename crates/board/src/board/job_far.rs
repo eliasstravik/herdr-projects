@@ -67,6 +67,7 @@ pub fn far(m: &Machine, host: &str, action: &str, req: Value, quiet: bool) -> Do
 /// entry for a repo are changed as `set` and `set --repo` change them, with the same checks.
 pub fn set(id: &str, name: &str, value: Option<String>, whose: &Whose) -> crate::err::Res<Done> {
     use crate::automations::list as l;
+    if let Whose::Coord(key, _) = whose { return set_coord(name, value, key); }
     if whose.mine() { return set_mine(name, value, whose.repo()); }
     let (value, from, later) = if *whose == Whose::Auto {
         let r = match &value { Some(v) => l::set_setting(id, name, &json!(v))?, None => l::unset_setting(id, name)? };
@@ -82,6 +83,22 @@ pub fn set(id: &str, name: &str, value: Option<String>, whose: &Whose) -> crate:
     let label = entry_of(name).map(|e| e.label.to_string()).unwrap_or_else(|| name.to_string());
     let shown = match &value { Value::Bool(true) => "on".to_string(), Value::Bool(false) => "off".to_string(), v => say(v).lines().next().unwrap_or("").to_string() };
     Ok(Done::say(format!("{}{}", crate::store::settings::show::saved_words(&label, &shown, &from), if later.is_empty() { String::new() } else { format!(" · {later}") }), Ink::Green).and(Then::Saved(name.to_string())))
+}
+/// One of a coordinator's own rows: while autopilot is on an autopilot value (not its goal) is this time's, else the
+/// coordinator's own, as `set … --project-coordinator <repo>` sets it.
+fn set_coord(name: &str, value: Option<String>, key: &str) -> crate::err::Res<Done> {
+    let co = crate::coordinator::co::Co::of(&crate::herdr::cli::current_socket(), if key == "main" { "" } else { key });
+    if crate::autopilot::record::is_on(&co) && name.starts_with("autopilot.") && name != crate::store::settings::coord::GOAL {
+        let said = crate::autopilot::switch::set_once(&co, name, value.map(|v| json!(v)))?;
+        return Ok(Done::say(said, Ink::Green).and(Then::Saved(name.to_string())));
+    }
+    use crate::actions::settings::{settings_command, Where};
+    let cmd = if value.is_some() { "set" } else { "unset" };
+    let w = Where { task: None, repo: None, automation: None, coord: Some(key.to_string()) };
+    let (j, _) = settings_command(cmd, &[cmd.to_string(), name.to_string()], &w, value.map(|v| json!(v)))?;
+    let label = entry_of(name).map(|e| e.label.to_string()).unwrap_or_else(|| name.to_string());
+    let running = crate::coordinator::state::get(&co).map(|c| c.b("run")).unwrap_or(false) && name.starts_with("coordinator.");
+    Ok(Done::say(format!("{label}: {}, for the {} only{}", say(j.at("value")).lines().next().unwrap_or(""), co.name(), if running { " · from its next fresh chat" } else { "" }), Ink::Green).and(Then::Saved(name.to_string())))
 }
 fn set_mine(name: &str, value: Option<String>, repo: &str) -> crate::err::Res<Done> {
     use crate::actions::settings::{settings_command, Where};

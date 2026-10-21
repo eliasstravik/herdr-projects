@@ -259,7 +259,7 @@ pub fn toggle_side(s: &mut State, fx: &mut Vec<Effect>) {
     s.flash(if s.side { format!("Side panel on. {} hides it.", key_name("side")) } else { format!("Side panel off. {} shows it.", key_name("side")) }, Ink::Muted);
 }
 pub fn fold_panel(s: &mut State) { s.full = false; s.editing = None; s.panel_top = 0; relist(s); }
-pub fn open_panel(s: &mut State) { if s.current().is_none() && s.job().is_none() { return s.flash("Select a task first.", Ink::Muted); } s.full = true; s.panel_top = 0; }
+pub fn open_panel(s: &mut State) { if s.current().is_none() && s.job().is_none() && super::pilot::selected(s).is_none() { return s.flash("Select a task first.", Ink::Muted); } s.full = true; s.panel_top = 0; }
 pub fn scroll_panel(s: &mut State, by: i64) { let last = s.panel_length.saturating_sub(s.panel_height) as i64; s.panel_top = (s.panel_top as i64 + by).clamp(0, last.max(0)) as usize; }
 pub fn free_size(s: &mut State, fx: &mut Vec<Effect>) {
     let by: Vec<i64> = s.held.as_ref().filter(|_| !s.guest).map(|h| h.by.iter().map(|b| b.0).collect()).unwrap_or_default();

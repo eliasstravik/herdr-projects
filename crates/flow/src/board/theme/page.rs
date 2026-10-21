@@ -15,7 +15,7 @@ pub fn vars(r: &Resolved, light: Option<bool>) -> (bool, Vec<(&'static str, Stri
     let light = light.unwrap_or_else(|| own("panel_bg").map(is_light).or_else(|| own("text").map(|t| !is_light(t))).unwrap_or(false));
     let base = Pal::from(&if light { Palette::catppuccin_latte() } else { Palette::catppuccin() });
     let v = |k: &str| hex(own(k).or_else(|| base.get(k).drawn()).unwrap_or(0));
-    let keys = ["panel_bg", "text", "subtext0", "overlay0", "surface0", "surface1", "accent", "green", "red", "yellow", "teal", "peach", "mauve", "review", "check", "todo", "auto", "queue", "sidebar_bg", "selection_bg", "active_row_bg"];
+    let keys = ["panel_bg", "text", "subtext0", "overlay0", "surface0", "surface1", "accent", "green", "red", "yellow", "teal", "peach", "mauve", "review", "check", "todo", "auto", "queue", "pilot", "sidebar_bg", "selection_bg", "active_row_bg"];
     (light, keys.iter().map(|k| (*k, v(k))).collect())
 }
 fn block(r: &Resolved, light: Option<bool>) -> String {

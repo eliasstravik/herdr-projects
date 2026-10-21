@@ -155,13 +155,14 @@ fn draw_at(s: &mut State, t: &Theme, width: usize, rows: usize) -> Screen {
     let top: Vec<Inked> = if s.menu.is_some() { super::menu::menu_lines(s, t, width, h) }
         else if let (Some(a), true) = (&auto, s.auto_open) { super::panel::auto::auto_full(s, t, a, width, h) }
         else if crate::board::update::edit::mine_open(s) { super::panel::page::mine_full(s, t, width, h) }
+        else if let (true, None, Some(c)) = (s.full, &r, crate::board::update::pilot::selected(s)) { super::panel::coord::coord_full(s, &c, width, h) }
         else if s.full && (r.is_some() || shown_job.is_some()) { let x = r.clone().or(shown_job.clone()).unwrap(); super::guard::part(|| super::panel::full_panel(s, t, &x, width, h)).unwrap_or_else(|why| vec![Inked::new(), failed(&format!("The task details could not be shown: {why}"), width)]) }
         else if width >= WIDE && s.side {
             // The task panel on the right, while you have it open, on herdr's sidebar colour when the theme gives it one.
             let pane_w = 38.max(70.min(width * 38 / 100));
             let list_w = width.saturating_sub(pane_w + 3);
             let left = list_part(s, t, list_w, h, width, held.len());
-            let right: Vec<Inked> = super::guard::part(|| if let Some(x) = r.clone().or(shown_job.clone()) { super::panel::panel(s, t, &x, pane_w, false, h) } else if let Some(a) = &auto { super::panel::auto::auto_panel(s, t, a, pane_w, false).0 } else { vec![Inked::new(), Inked::plain(" ").add(Inked::of("Nothing selected.", Ink::Muted))] })
+            let right: Vec<Inked> = super::guard::part(|| if let Some(x) = r.clone().or(shown_job.clone()) { super::panel::panel(s, t, &x, pane_w, false, h) } else if let Some(a) = &auto { super::panel::auto::auto_panel(s, t, a, pane_w, false).0 } else if let Some(c) = crate::board::update::pilot::selected(s) { super::panel::coord::coord_panel(s, &c, pane_w, false) } else { vec![Inked::new(), Inked::plain(" ").add(Inked::of("Nothing selected.", Ink::Muted))] })
                 .unwrap_or_else(|why| std::iter::once(Inked::new()).chain(Inked::of(format!("✗ The task panel could not be shown: {why}"), Ink::Red).wrap(pane_w.saturating_sub(2).max(10)).into_iter().map(|l| Inked::plain(" ").add(l))).collect());
             (0..h).map(|i| left.get(i).cloned().unwrap_or_default().fit(list_w).add(Inked::plain(" ")).add(Inked::of("│", Ink::Dim)).add(Inked::plain(" ").add(right.get(i).cloned().unwrap_or_default()).fit(pane_w + 1).on(Ink::Sidebar))).collect()
         } else { list_part(s, t, width, h, width, held.len()) };

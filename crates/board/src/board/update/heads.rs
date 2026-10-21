@@ -63,7 +63,8 @@ pub fn holds(folded: usize, autos: usize) -> String {
 pub fn selected(s: &State) -> Option<&Row> { if !is_head(&s.sel) { return None; } s.rows.iter().find(|r| matches!(r, Row::Head { id, .. } if *id == s.sel)) }
 /// What enter does on the selected heading, in words: for the hint line ("" nothing).
 pub fn says(s: &State) -> Option<String> {
-    let Some(Row::Head { machine, folded, empty, .. }) = selected(s) else { return None };
+    let Some(Row::Head { machine, folded, empty, id, .. }) = selected(s) else { return None };
+    if super::pilot::is_main(id) { return Some(String::new()); } // the main Coordinator's row folds nothing
     // An empty machine's has nothing to unfold.
     if *empty { return Some(String::new()); }
     let what = if *machine { "this machine" } else if s.by_repo { "this repo" } else { "this group" };
@@ -71,6 +72,7 @@ pub fn says(s: &State) -> Option<String> {
 }
 /// Fold the heading `id`, or unfold it. The selection stays on it.
 pub fn toggle(s: &mut State, id: &str, fx: &mut Vec<Effect>) {
+    if super::pilot::is_main(id) { s.sel = id.to_string(); return s.flash(format!("{} talks to the Coordinator; {} puts it on autopilot.", crate::board::keys::key_name("talk"), crate::board::keys::key_name("delegate")), Ink::Muted); }
     if let Some(Row::Head { name, machine, empty: true, .. }) = s.rows.iter().find(|r| matches!(r, Row::Head { id: h, .. } if h == id)) {
         let talk = crate::board::keys::key_name("talk");
         let say = if *machine { format!("No tasks on {name} yet. {talk} talks to its machine coordinator, which adds them there.") }

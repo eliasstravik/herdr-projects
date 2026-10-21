@@ -42,7 +42,7 @@ fn a_long_message_wraps_inside_the_box_and_takes_the_rows_it_needs_never_the_tex
         assert_eq!(body.len(), 16, "sixteen lines of it at {width} columns: {body:?}");
         assert_eq!(body[0], "Coordinator:"); assert!(body[1].starts_with("Line 1 of what it said"), "{body:?}");
         assert!(!body.join("\n").contains("**"));
-        assert!(c.lines.iter().filter(|l| has(l, r"Task number \d+")).count() >= 3, "the list keeps rows");
+        assert!(c.lines.iter().filter(|l| has(l, r"Task number \d+")).count() >= 2, "the list keeps rows (under the main Coordinator's row)");
     }
     // A window too short for all of it: the message gives up its lines first; who you talk to and the line you type on stay.
     s.rows = 10;

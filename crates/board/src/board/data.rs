@@ -14,9 +14,10 @@ use std::collections::BTreeMap;
 
 /// Another machine, as the board knows it: its tasks as rows, its automations, its Coordinator as it sent it
 /// (coordinator/far.rs) and its machine's and repos' coordinators (`coords`, by level), and why it did not answer; `sidebar`: its herdr list of machines as it last sent it
-/// (remote/sidebar.rs), None from one that sends none.
+/// (remote/sidebar.rs), None from one that sends none; `pilots`: its coordinators' autopilot by level (autopilot/far.rs),
+/// Null from a machine on an older version.
 #[derive(Clone, Debug, Default)]
-pub struct Remote { pub machine: crate::remote::Machine, pub items: Vec<crate::board::state::Rec>, pub autos: Vec<Obj>, pub ok: bool, pub busy: bool, pub fail_at: i64, pub why: Option<Value>, pub version: String, pub coord: Value, pub coords: Value, pub sidebar: Option<Vec<crate::remote::sidebar::Entry>> }
+pub struct Remote { pub machine: crate::remote::Machine, pub items: Vec<crate::board::state::Rec>, pub autos: Vec<Obj>, pub ok: bool, pub busy: bool, pub fail_at: i64, pub why: Option<Value>, pub version: String, pub coord: Value, pub coords: Value, pub pilots: Value, pub sidebar: Option<Vec<crate::remote::sidebar::Entry>> }
 
 #[derive(Clone, Debug, Default)]
 pub struct Data {
@@ -30,6 +31,8 @@ pub struct Data {
     /// The machine's or a repo's coordinator of this machine the chat talks to: its level ("machine",
     /// "project:<repo>"), how it stands, and its screen (update/coords.rs).
     pub sub: Option<(String, Look, String)>,
+    /// This machine's coordinators' autopilot as each shows it, by level ("" the main one, "machine", "project:<repo>").
+    pub pilots: Value,
     pub keys: Keys, pub repos: Vec<String>, pub roots: BTreeMap<String, String>, pub session: String, pub notify: String,
     /// The known repos that keep their heading by repo with no task in view (`used_lately`).
     pub lately: Vec<String>,
@@ -90,7 +93,7 @@ pub fn load(wants: &Wants) -> Data {
         repo: here.0, repo_root: here.1, host: crate::remote::check::hostname(),
         // herdr's approve action and a line left by the board key are for a board in a terminal, never the web board.
         approve: if wants.web { String::new() } else { crate::actions::finish_line::take_approve(&socket, &wants.own_pane) }, heard: if wants.web { None } else { crate::board::run::say::heard(&wants.own_pane, &socket) }, call: crate::voice::call::get(), call_ended: crate::voice::call::last().filter(|c| c.s("state") == "ended").map(|c| (c.t("id"), c.t("why"))),
-        mine: wants.mine.as_ref().map(|r| (r.clone(), mine(r))), loaded: true, seq,
+        mine: wants.mine.as_ref().map(|r| (r.clone(), mine(r))), pilots: crate::autopilot::far::sent(&socket, now), loaded: true, seq,
     }
 }
 /// How long a repo with no task in view keeps its heading by repo after its last use.
@@ -125,8 +128,20 @@ pub fn shown_auto(a: Obj, now: i64) -> Obj {
 /// Your settings (`repo` "") or your entry for a repo, as `show` and `show --repo` read them: every row, and what is
 /// not counted.
 pub fn mine(repo: &str) -> Value {
+    if let Some(rest) = repo.strip_prefix("coord:") { return coord_rows(rest); }
     let scope = if repo.is_empty() { Scope::you() } else { Scope::repo(repo) };
     json!({ "settings": rows(&scope).iter().map(|r| r.json()).collect::<Vec<_>>(), "problems": problems_in(&scope) })
+}
+/// A coordinator's settings page (`key\tthen`, update/edit_coord.rs): its own rows (`own` for its own and this time's,
+/// `once` for this time's), whether autopilot is on, and the rows of the place under them (yours, your entry for a repo).
+fn coord_rows(spec: &str) -> Value {
+    let (key, then) = spec.split_once('\t').unwrap_or((spec, ""));
+    let co = crate::coordinator::co::Co::of(&current_socket(), if key == "main" { "" } else { key });
+    let scope = crate::autopilot::record::scope_of(&co);
+    let own: Vec<Value> = rows(&scope).iter().map(|r| { let mut j = r.json(); j["own"] = json!(r.place == "coord" || r.place == "once"); j["once"] = json!(r.place == "once"); j }).collect();
+    let under = match then { "you" => mine(""), t => t.strip_prefix("repo:").map(mine).unwrap_or(json!({ "settings": [], "problems": [] })) };
+    let mut problems = problems_in(&scope); problems.extend(strings(under.at("problems")));
+    json!({ "coord": own, "settings": under.at("settings"), "problems": problems, "on": crate::autopilot::record::is_on(&co) })
 }
 /// A closer look at one task of this machine.
 pub fn snap(t: &Obj) -> Value {

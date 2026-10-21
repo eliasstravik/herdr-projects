@@ -3,6 +3,7 @@
 //! else. Beside the list (`fit` is the height there) what does not fit gives way, the least needed first; full screen
 //! everything is whole. The parts are in the files beside this one.
 pub mod auto;
+pub mod coord;
 pub mod kit;
 pub mod page;
 pub mod plan;

@@ -31,6 +31,7 @@ impl Target {
 pub fn far_top(s: &State) -> Option<Target> { s.remotes.contains_key(&s.scope).then(|| Target { host: s.scope.clone(), to: String::new(), name: format!("Coordinator on {}", s.scope) }) }
 /// That coordinator as the board read it last: this machine's, or what its machine sent with its tasks.
 pub fn look_of(s: &State, t: &Target) -> Option<crate::coordinator::look::Look> {
+    if t.host.is_empty() && t.to.is_empty() { return Some(s.data.coord.clone()); }
     if t.host.is_empty() { return s.data.sub.as_ref().filter(|x| x.0 == t.to).map(|x| x.1.clone()); }
     let m = s.remotes.get(&t.host)?;
     crate::coordinator::far::read(if t.to.is_empty() { &m.coord } else { m.coords.at(&t.to) })
@@ -40,6 +41,7 @@ pub fn of_head(s: &State, id: &str) -> Option<Target> {
     let rest = id.strip_prefix(HEAD)?;
     let parts: Vec<&str> = rest.split('\t').collect();
     match parts.as_slice() {
+        ["main", host] => Some(Target { host: host.to_string(), to: String::new(), name: if host.is_empty() { crate::status_words::COORDINATOR.into() } else { format!("Coordinator on {host}") } }),
         ["machine", host] => Some(Target { host: host.to_string(), to: "machine".into(), name: crate::coordinator::co::named(&label(s, host)) }),
         ["repo", host, repo] => Some(Target { host: host.to_string(), to: format!("project:{repo}"), name: crate::coordinator::co::named(&crate::shown::words::repo_label(repo)) }),
         _ => None,
@@ -47,8 +49,9 @@ pub fn of_head(s: &State, id: &str) -> Option<Target> {
 }
 /// The heading's coordinator the chat talks to now, if it does.
 pub fn talking(s: &State) -> Option<Target> { if s.reply && is_head(&s.reply_id) && s.reply_id == s.sel { of_head(s, &s.sel) } else { None } }
-/// This machine's coordinator the board should read, as the coordinator code names its level ("" none).
-pub fn wanted(s: &State) -> String { talking(s).filter(|t| t.host.is_empty()).map(|t| t.to).unwrap_or_default() }
+/// This machine's coordinator the board should read, as the coordinator code names its level ("" none): the one the
+/// chat talks to, else the one whose row is selected (its panel shows it).
+pub fn wanted(s: &State) -> String { talking(s).or_else(|| of_head(s, &s.sel)).filter(|t| t.host.is_empty()).map(|t| t.to).unwrap_or_default() }
 /// Is this row still on the board: a task, or a heading.
 pub fn exists(s: &State, id: &str) -> bool { s.items.iter().any(|r| r.s("id") == id) || s.rows.iter().any(|r| matches!(r, Row::Head { id: h, .. } if h == id)) }
 /// Space on a heading: talk to its coordinator. A status group's heading has none: it says where they are.

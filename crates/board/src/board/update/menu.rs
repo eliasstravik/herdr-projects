@@ -15,6 +15,7 @@ pub struct Item { pub id: K, pub group: &'static str, pub key: String, pub label
 const MINE: &str = "your own settings: what every task starts from";
 /// A ctrl or alt key's line for this task right now ("" when it does nothing).
 pub fn label(s: &State, k: K, r: Option<&Obj>) -> String {
+    if r.is_none() { if let Some(w) = super::pilot::menu_label(s, k) { return w; } } // a coordinator's row
     let st = |x: &str| r.map(|r| r.s("stage") == x).unwrap_or(false);
     let next_scope = super::remotes::scope_next(s);
     match k {

@@ -21,6 +21,7 @@ pub mod list;
 pub mod menu;
 pub mod panel;
 pub mod paste;
+pub mod pilot;
 pub mod setup;
 pub mod talk;
 pub mod textbox;

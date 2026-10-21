@@ -18,7 +18,7 @@ fn sources(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
 /// Every ink, by its name in the code, with the ink itself.
 fn ink_named(n: &str) -> Option<Ink> {
     use Ink::*;
-    [Plain, Text, Soft, Muted, Red, Green, Yellow, Teal, Peach, Mauve, Accent, Review, Check, Queue, Todo, Auto, Rule, Dim, Sidebar, Selection].into_iter().find(|i| format!("{i:?}") == n)
+    [Plain, Text, Soft, Muted, Red, Green, Yellow, Teal, Peach, Mauve, Accent, Review, Check, Queue, Todo, Auto, Pilot, Rule, Dim, Sidebar, Selection].into_iter().find(|i| format!("{i:?}") == n)
 }
 
 #[test]
