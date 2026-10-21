@@ -58,17 +58,6 @@ jobs:
         with:
           node-version: 22
 
-      - name: Probe
-        run: |
-          sw_vers; uname -m; file /bin/bash; lipo -info /bin/bash || true
-          d=$(mktemp -d); cp /bin/bash $d/herdr-superwork; $d/herdr-superwork -c 'echo plain-copy'; echo "plain rc=$?"
-          codesign -s - -f $d/herdr-superwork; $d/herdr-superwork -c 'echo resigned'; echo "resigned rc=$?"
-          codesign -dv $d/herdr-superwork 2>&1 || true
-          cp /bin/bash $d/b3; lipo $d/b3 -thin arm64e -output $d/b4 2>&1; codesign -s - -f $d/b4; $d/b4 -c 'echo thin'; echo "thin rc=$?"
-          cp /bin/sleep $d/s2; codesign -s - -f $d/s2; $d/s2 0; echo "sleep rc=$?"
-          ls /opt/homebrew/bin | head -50; which perl python3 cc
-          printf 'int main(){char b[8];return read(0,b,8)<0;}' > $d/w.c; cc -w -o $d/herdr-w $d/w.c && echo | $d/herdr-w; echo "cc rc=$?"
-
       - name: Cache the build
         uses: actions/cache@v6
         with:

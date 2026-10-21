@@ -129,9 +129,12 @@ fn real_programs_herdr_superworks_own_processes_are_stopped_and_no_other() {
     std::fs::create_dir_all(old.parent().unwrap()).unwrap();
     // a copy of bash, not of sleep: a multi-call coreutils (uutils, Ubuntu 25.10+) runs as whatever its file name says
     std::fs::copy("/bin/bash", &old).unwrap();
-    // macOS kills a copy of its own program at its start until it is signed again (here: signed for this machine only)
-    #[cfg(target_os = "macos")]
-    assert!(std::process::Command::new("codesign").args(["-s", "-", "-f"]).arg(&old).status().unwrap().success());
+    // A Mac that kills the copy at its start runs it signed again, for this machine only. Only then: where the copy runs
+    // as it is (GitHub's macOS runners), signed again it is the one killed (Apple's own arm64e programs).
+    let runs = |p: &std::path::Path| std::process::Command::new(p).args(["-c", ":"]).status().is_ok_and(|s| s.success());
+    if cfg!(target_os = "macos") && !runs(&old) {
+        assert!(std::process::Command::new("codesign").args(["-s", "-", "-f"]).arg(&old).status().unwrap().success());
+    }
     let mut keeper = std::process::Command::new(&old).args(["-c", "echo up; read -t 30"]).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).spawn().unwrap();
     let pid = keeper.id();
     let _quiet = keeper.stdin.take(); // held open here, so it waits on nothing and starts no other program
