@@ -172,6 +172,21 @@ herdr-projects set board.keys "chatMessage=ctrl+g, chatScrollUp=ctrl+up, chatScr
 
 The tables below always show the chords the board comes with.
 
+## Key names on a Mac
+
+**On a Mac the `Alt` keys are pressed with Option, and the board can say so.** With `board.keyStyle mac` the hint line,
+the `?` menu and the board's messages write `opt+c` where they wrote `alt+c`, and the menu's group reads `opt: only shows
+or hides`. `Ctrl` stays `ctrl`: a Mac's terminal passes Control on to the board, never Cmd. Only the names change; the
+keys are the same. (The terminal must send Option as `Alt`: "Use Option as Meta key" in Terminal, "Esc+" in iTerm2.)
+
+```
+herdr-projects set board.keyStyle mac
+```
+
+`auto`, the built-in value, goes by the system the board runs on. A board on a Linux machine you reach over SSH from a
+Mac cannot see your keyboard, so it says `alt` there: set `mac` on that machine. `pc` always says `alt`. The tables
+below always use the PC names.
+
 ## All the keys
 
 <!-- made:keys Made by `herdr-projects docs` from crates/flow/src/board/keys.rs. Do not edit between these two lines. -->

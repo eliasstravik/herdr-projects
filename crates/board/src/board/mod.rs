@@ -3,7 +3,7 @@
 //! and draws it on a terminal (run/). The web board takes the same state and events (webui/). The keys are keys.rs;
 //! colours are theme/, both in sw-flow (crates/flow/src/board/).
 // The keys' table and the theme are built in sw-flow, which uses them too; here they are the board's.
-pub use sw_flow::board::{keys, remap, theme};
+pub use sw_flow::board::{key_style, keys, remap, theme};
 pub mod data;
 pub mod job;
 pub mod job_far;

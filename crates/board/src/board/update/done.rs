@@ -35,7 +35,7 @@ pub fn apply(s: &mut State, d: Done, fx: &mut Vec<Effect>) {
                 fx.push(Effect::Save);
                 let title = s.items.iter().find(|r| r.s("id") == id).map(|r| crate::shown::words::clean(if r.b("title") { r.s("title") } else { r.s("id") })).unwrap_or_else(|| id.clone());
                 s.flash(if s.guest || s.viewed { format!("Opened {id}'s agent in herdr's own window. In the web UI, pick it in the sidebar: “{title}”.") }
-                    else { format!("Opened {id}'s agent. {}", if s.ctx.board_key.is_empty() { "The board stays here.".to_string() } else { format!("{} brings you back to the board.", s.ctx.board_key) }) }, Ink::Green);
+                    else { format!("Opened {id}'s agent. {}", if s.ctx.board_key.is_empty() { "The board stays here.".to_string() } else { format!("{} brings you back to the board.", crate::board::key_style::spell(&s.ctx.board_key)) }) }, Ink::Green);
             }
             Then::OpenedThere { id, host, agent } => {
                 fx.push(Effect::Save);
@@ -64,7 +64,7 @@ pub fn apply(s: &mut State, d: Done, fx: &mut Vec<Effect>) {
 fn leave(s: &mut State, fx: &mut Vec<Effect>) {
     if s.ctx.leave_ms <= 0 || s.told >= 3 { fx.push(Effect::Save); fx.push(Effect::Close); return; }
     s.told += 1; s.leaving = true;
-    s.flash(format!("Opening the agent. {} brings the board back.", if s.ctx.board_key.is_empty() { "herdr-projects".to_string() } else { s.ctx.board_key.clone() }), Ink::Green);
+    s.flash(format!("Opening the agent. {} brings the board back.", if s.ctx.board_key.is_empty() { "herdr-projects".to_string() } else { crate::board::key_style::spell(&s.ctx.board_key) }), Ink::Green);
     s.closing = None;
     s.leave_at = s.now + s.ctx.leave_ms;
     fx.push(Effect::Save);

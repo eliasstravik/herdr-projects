@@ -3,7 +3,7 @@
 //! is whole (a long one wraps under itself); where the menu is longer than its room it scrolls, and says so.
 use super::fields::AUTO_MARK;
 use super::list::hl;
-use crate::board::keys::{pair, say, GROUPS, KEYS};
+use crate::board::keys::{group_name, pair, say, GROUPS, KEYS};
 use crate::board::state::State;
 use crate::board::tags::name_say;
 use crate::board::theme::Theme;
@@ -27,7 +27,7 @@ pub fn menu_lines(s: &mut State, t: &Theme, width: usize, h: usize) -> Vec<Inked
     let mut picked = (0usize, 0usize);
     for (group, gname) in GROUPS {
         if !lines.is_empty() { lines.push(Inked::new()); }
-        lines.push(Inked::plain(" ").add(Inked::of(gname, Ink::Soft)));
+        lines.push(Inked::plain(" ").add(Inked::of(group_name(group, gname), Ink::Soft)));
         if group == "plain" { for (k, d) in &plain { lines.extend(entry(k, d)); } }
         for (n, it) in list.iter().enumerate() {
             if it.group != group { continue; }
