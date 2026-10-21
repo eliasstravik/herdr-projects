@@ -40,6 +40,8 @@ pub fn add(co: &Co, here: &Path, title: &str, mut o: AddOpts, after: &[String], 
         if words(co, "autopilot.startAtOnce") == "yes" { if let Some(x) = after.iter().find(|a| super::record::task_rec(&ap, a).is_none()) { crate::refuse!("Refused in an autopilot wake: add --after {x}. A task it adds waits only for its own tasks (autopilot.startAtOnce yes)."); } }
         // Only what it may set is set; the rest is said, not applied.
         let may = words(co, "autopilot.mayChange");
+        // `--research` is research.only said short: it keeps to the same rule.
+        if let Some(r) = o.research.take() { o.settings.push((crate::research::RESEARCH.into(), json!(r))); }
         let (kept, dropped): (Vec<(String, Value)>, Vec<(String, Value)>) = o.settings.drain(..).partition(|(n, _)| may_change(&may, n));
         o.settings = kept;
         o.repo = repo.clone();

@@ -29,7 +29,8 @@ fn refused(what: &str, rule: &str) -> Res<Option<Co>> { no(format!("Refused in a
 pub fn guard(cmd: &str, pos: &[String], flags: &Obj, agent: Option<(&Obj, &str)>) -> Res<Option<Co>> {
     if let Some((t, role)) = agent {
         if switches(cmd, pos) { return no(format!("A task's {role} can never switch autopilot or change a coordinator's settings: only the human does, by a key, a command of theirs, or by telling a coordinator.")); }
-        let mine = cmd == "report" && pos.get(1).map(|id| find(id).map(|x| x.s("id") == t.s("id")).unwrap_or(false)).unwrap_or(true);
+        // A report with no id is its own task's only for its agent: for anyone else it adds a task (cli/tasks.rs).
+        let mine = cmd == "report" && pos.get(1).map(|id| find(id).map(|x| x.s("id") == t.s("id")).unwrap_or(false)).unwrap_or(role == "agent");
         if t.at("autopilot").is_object() && !reads(cmd, pos) && !mine {
             return no(format!("This task was added by autopilot: its {role} may read the board and `report` on its own task, nothing else."));
         }
@@ -55,7 +56,8 @@ pub fn guard(cmd: &str, pos: &[String], flags: &Obj, agent: Option<(&Obj, &str)>
         "add" | "new" => Ok(Some(co)),
         "delegate" => {
             let t = task()?;
-            let yours = !t.at("autopilot").is_object() && task_rec(&ap, t.s("id")).is_none();
+            // Not its own (the human's, or another coordinator's autopilot's): only a to-do task of yours it may start.
+            let yours = task_rec(&ap, t.s("id")).is_none();
             if left(&t) { return refused(&format!("delegate {}", t.s("id")), "That task is left to the human now."); }
             if yours && !super::care::is_yours_to_start(&co, &t) {
                 return refused(&format!("delegate {}", t.s("id")), "It may start only its own tasks (autopilot.scope all also lets the nearest coordinator on autopilot with it start the human's to-do tasks in its area: the repo's, then the machine's, then the main Coordinator).");

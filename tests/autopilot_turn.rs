@@ -39,7 +39,8 @@ fn add_keeps_to_its_area_its_limits_and_what_it_may_set_and_starts_the_task_at_o
     // its tasks at once are full (2): the next add of the day is refused, and so are adds elsewhere
     let other = w.base.join("other"); std::fs::create_dir_all(&other).unwrap(); git(&other, &["init", "-q", "-b", "main"]); sw::store::repos::repo_of(&other).unwrap();
     assert!(refused(&["add", "Elsewhere", "--repo", "other"]).contains("adds tasks only in its own area"));
-    ok(&["add", "Second", "--repo", "proj"]);
+    let said = ok(&["add", "Second", "--repo", "proj", "--research"]); // `--research` is research.only, which mayChange (review.*) does not allow
+    assert!(said.contains("Not applied (autopilot.mayChange does not allow it): research.only") && !said.contains("research only"), "{said}");
     assert!(refused(&["add", "Third", "--repo", "proj"]).contains("Today's tasks are used: 2 of 2 added"));
     in_pane(&w, "");
 }
@@ -69,6 +70,8 @@ fn delegate_retry_tell_stop_and_archive_keep_to_the_tasks_it_may_look_after() {
         let yours = w.add("Yours");
         in_pane(&w, &pane_of(&co));
         assert!(refused(&["delegate", &yours]).contains("It may start only its own tasks"));
+        let mains = sw::autopilot::add::add(&sw::coordinator::co::Co::top(&w.socket), &w.root, "The Coordinator's", Default::default(), &[], false).unwrap().task.t("id");
+        assert!(refused(&["delegate", &mains]).contains("It may start only its own tasks"), "another coordinator's autopilot task is not its own");
         assert!(refused(&["stop", &yours]).contains("only the tasks it added"));
         assert!(refused(&["tell", &yours, "hi"]).contains("tasks it may look after"));
         ok(&["add", "Mine", "--repo", "proj"]);
@@ -258,6 +261,9 @@ fn the_agents_of_autopilots_tasks_may_read_and_report_on_their_own_task_and_noth
     assert!(refused(&["report", &other, "--state", "done"]).contains("This task was added by autopilot"));
     ok(&["list"]); ok(&["details", &id]);
     ok(&["report", &id, "--state", "blocked", "--kind", "question", "--msg", "Which index?"]);
+    // its reviewer: `report --title` with no id would add a task, which is no report on its own
+    sw::store::tasks::update(&id, |t| { t.obj_mut("link").obj_mut("reviewer").put("pane", "w9:p8"); Ok(sw::store::tasks::Change::Write) }).unwrap(); in_pane(&w, "w9:p8");
+    assert!(refused(&["report", "--title", "Unbounded new task", "--repo", "proj"]).contains("This task was added by autopilot"));
     in_pane(&w, "");
 }
 
