@@ -195,6 +195,10 @@ The task panel shows most of this already. `herdr-projects details <id>` prints 
 
 - **`herdr-projects` is not found**: open the board once from Herdr (the plugin's action "Open the work board"), then add
   `~/.herdr-projects/data/bin` to your PATH ([installing](install.md#the-command-on-your-path)).
+- **`herdr` is not found although it is installed**: a command run over plain SSH (`ssh host herdr-projects …`) gets
+  no login shell, so its PATH often lacks `~/.local/bin`. When PATH has no `herdr`, the board looks in
+  `~/.local/bin`, `~/.cargo/bin`, `~/bin`, `/usr/local/bin` and `/opt/homebrew/bin`, then in a login shell's PATH. Herdr
+  somewhere else: set `HERDR_BIN_PATH` to its full path.
 - **The board key does nothing**: a popup of another plugin may be open (close it first), or the key is not bound. The
   board offers the key on its first screen ([installing](install.md#the-first-run)).
 - **The board looks cut off or half empty**: another Herdr window on the same session (a second device, a browser tab)

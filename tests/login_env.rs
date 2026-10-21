@@ -1,9 +1,12 @@
 //! What the keeper takes from a login shell when herdr's server started it without: the SSH agent (`SSH_AUTH_SOCK`,
 //! `SSH_AGENT_PID`) for its `git fetch` and `git push` over SSH, only for a process with no agent of its own, only a
-//! socket that is there, and with only its names remembered in `env.json`.
+//! socket that is there, and with only its names remembered in `env.json`. And herdr, found without PATH (herdr_find).
 use crate::common;
 use common::*;
 use sw::login_env::{remembered, ssh_agent};
+
+/// herdr found when PATH lacks it: the usual install spots, then a login shell's PATH.
+mod herdr_find;
 
 fn pair(k: &str, v: &str) -> (String, String) { (k.to_string(), v.to_string()) }
 
