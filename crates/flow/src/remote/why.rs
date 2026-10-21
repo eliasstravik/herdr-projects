@@ -38,7 +38,7 @@ fn tail(text: &str) -> String {
 fn on_path(what: &str) -> Vec<String> {
     vec![format!("{what} must be on the PATH that a login shell gets when nobody types into it: the board runs `$SHELL -lc` over SSH."),
         "A PATH set in ~/.bashrc does not count where that file stops early for such a shell (its \"if not running interactively, return\" line).".into(),
-        "On that machine, either set the PATH in the profile file (~/.profile or ~/.bash_profile for bash, ~/.zprofile for zsh), or link the program into a folder that is on it already:".into(),
+        "On that machine, either set the PATH in the profile file (~/.profile or ~/.bash_profile for bash, ~/.zprofile for zsh, ~/.config/fish/config.fish outside its `status is-interactive` block for fish), or link the program into a folder that is on it already:".into(),
         format!("  ln -s \"$(command -v {})\" ~/.local/bin/   (or /usr/local/bin)", if what == "node" { "node" } else { "herdr-projects" })]
 }
 /// How an SSH call ended, as `ask` saw it.
@@ -61,7 +61,7 @@ pub fn why_not(end: &Ended, label: &str, target: &str) -> Value {
         return make("connect", &if how.is_empty() { "ssh could not connect".into() } else { format!("cannot connect ({how})") }, vec![format!("This machine cannot reach {name} ({target}){}.", if how.is_empty() { "; what ssh said is below".into() } else { format!(": {how}") }), "Check that it is on and on the network, and that its name and port are right (herdr machine list, or the board.machines setting).".into()]);
     }
     // The shell on the other side ran, and did not find the program (127, in every shell's own words).
-    let missing = Regex::new(r#"(?m)(?:^|[\s:'"`])(herdr-projects|node)['"`]?: (?:command )?not found|command not found: (herdr-projects|node)|env: ['‘`]?(node)['’`]?: No such file or directory"#).unwrap();
+    let missing = Regex::new(r#"(?m)(?:^|[\s:'"`])(herdr-projects|node)['"`]?: (?:command )?not found|(?:command not found|Unknown command): (herdr-projects|node)|env: ['‘`]?(node)['’`]?: No such file or directory"#).unwrap();
     let what = missing.captures(&all).and_then(|c| c.get(1).or(c.get(2)).or(c.get(3)).map(|m| m.as_str().to_string()));
     let path = |w: &str| on_path(w);
     match what.as_deref() {

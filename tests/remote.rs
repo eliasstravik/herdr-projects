@@ -19,6 +19,7 @@ fn why_a_machine_did_not_answer_each_with_what_to_do() {
         ("bash", end(127, "", "bash: line 1: herdr-projects: command not found\n"), "path", "herdr-projects is not found there"),
         ("dash", end(127, "", "sh: 1: herdr-projects: not found\n"), "path", "herdr-projects is not found there"),
         ("zsh", end(127, "", "zsh:1: command not found: herdr-projects\n"), "path", "herdr-projects is not found there"),
+        ("fish", end(127, "", "fish: Unknown command: herdr-projects\nherdr-projects remote list\n^~~~~~~~~~~~^\n"), "path", "herdr-projects is not found there"),
         ("noNode", end(127, "", "env: 'node': No such file or directory\n"), "path", "node is not found there"),
         ("oldNode", end(1, "", "SyntaxError: Unexpected token 'with'\n    at compileSourceTextModule\n\nNode.js v18.19.1\n"), "path", r"its node is too old \(18\)"),
         ("banner", end(0, "Welcome to vm-a\nLast login: today\n", ""), "answer", "something else than the board's answer"),
@@ -69,7 +70,22 @@ fn real_programs_the_door_answers_one_line_of_json_and_actions_run_where_the_tas
     assert_eq!(found.iter().map(|m| (m.target.clone(), m.label.clone())).collect::<Vec<_>>(), vec![("exedev@vm-a".to_string(), "vm-a".to_string()), (format!("{}@vm-b", sw::store::files::me()), "vm-b".to_string())]);
     let (cmd, args) = sw::remote::ssh_command(&sw::remote::Machine { target: "exedev@vm-a".into(), session: "work".into(), ..Default::default() }, "herdr-projects remote list", false);
     assert_eq!(cmd, "ssh"); assert!(args.iter().any(|a| a == "BatchMode=yes"));
-    assert_eq!(args.last().unwrap(), r#"exec "${SHELL:-/bin/sh}" -lc 'HERDR_SESSION=work herdr-projects remote list'"#);
+    assert_eq!(args.last().unwrap(), r#"exec /bin/sh -c 'export HERDR_SESSION=work; exec "${SHELL:-/bin/sh}" -lc "$0"' 'herdr-projects remote list'"#);
     let (_, at) = sw::remote::attach_command(&sw::remote::Machine { target: "exedev@vm-a".into(), ..Default::default() }, "w4:p1; rm -rf /");
-    assert!(at.iter().any(|a| a == "-t")); assert!(at.last().unwrap().ends_with("herdr agent attach w4:p1rm-rf'"), "{:?}", at.last());
+    assert!(at.iter().any(|a| a == "-t")); assert_eq!(at.last().unwrap(), r#"exec /bin/sh -c 'exec "${SHELL:-/bin/sh}" -lc "$0"' 'herdr agent attach w4:p1rm-rf'"#);
+}
+
+/// The line sshd hands a machine's login shell, run as sshd runs it (`<shell> -c <line>`, that shell as $SHELL) by
+/// every shell this machine has: fish too, when it is here. The command arrives whole, its session with it.
+#[test]
+fn real_programs_the_ssh_line_reads_alike_in_every_login_shell() {
+    let w = world_with(Opts::default());
+    let line = sw::remote::login_line("work", r#"printf "[%s] [%s] [%s]" "$HERDR_SESSION" "two  spaces" eyJhIjoxfQ==; printf "\n""#);
+    let path = std::env::var("PATH").unwrap_or_default();
+    let found: Vec<std::path::PathBuf> = ["sh", "dash", "bash", "zsh", "fish"].iter().filter_map(|s| std::env::split_paths(&path).map(|d| d.join(s)).find(|p| p.is_file())).collect();
+    assert!(!found.is_empty());
+    for shell in found {
+        let o = std::process::Command::new(&shell).arg("-c").arg(&line).env_clear().env("HOME", &w.base).env("PATH", &path).env("SHELL", &shell).stdin(std::process::Stdio::null()).output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&o.stdout), "[work] [two  spaces] [eyJhIjoxfQ==]\n", "{}: {}", shell.display(), String::from_utf8_lossy(&o.stderr));
+    }
 }

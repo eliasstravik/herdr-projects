@@ -25,7 +25,7 @@ use why::{read_answer, why_not, Ended};
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Machine { pub id: String, pub target: String, pub session: String, pub label: String }
 fn b64(v: &Value) -> String { crate::util::base64(serde_json::to_string(v).unwrap_or_default().as_bytes()) }
-fn clean(s: &str, extra: &str) -> String { s.chars().filter(|c| c.is_ascii_alphanumeric() || extra.contains(*c)).collect() }
+pub(crate) fn clean(s: &str, extra: &str) -> String { s.chars().filter(|c| c.is_ascii_alphanumeric() || extra.contains(*c)).collect() }
 
 /// The board's name for a machine herdr names `raw`: no user, no domain, nothing but letters, digits, `_.-`.
 pub fn short_label(raw: &str) -> String { raw.rsplit('@').next().unwrap_or("").split('.').next().unwrap_or("").chars().map(|c| if c.is_ascii_alphanumeric() || "_.-".contains(c) { c } else { '-' }).collect() }
@@ -45,16 +45,25 @@ pub fn machines() -> Vec<Machine> {
 }
 /// Its own known-hosts file, so an old saved key elsewhere cannot get in the way; one shared connection per machine,
 /// so asking again every few seconds costs almost nothing. The remote side runs through a login shell so PATH is set.
+/// `remote` holds no single quote (what it carries is cleaned or base64), so it reads alike in single quotes everywhere.
 pub fn ssh_command(m: &Machine, remote: &str, tty: bool) -> (String, Vec<String>) {
-    let session = if !m.session.is_empty() && m.session != "default" { format!("HERDR_SESSION={} ", clean(&m.session, "_.-")) } else { String::new() };
-    if let Ok(s) = std::env::var("HERDR_PROJECTS_SSH") { return (s, vec![m.target.clone(), format!("{session}{remote}")]); } // a stand-in, for tests
+    debug_assert!(!remote.contains('\''), "{remote}");
+    let session = if !m.session.is_empty() && m.session != "default" { clean(&m.session, "_.-") } else { String::new() };
+    if let Ok(s) = std::env::var("HERDR_PROJECTS_SSH") { return (s, vec![m.target.clone(), format!("{}{remote}", if session.is_empty() { String::new() } else { format!("HERDR_SESSION={session} ") })]); } // a stand-in, for tests
     let d = data_dir();
     let mut a: Vec<String> = if tty { vec!["-t".into()] } else { vec!["-o".into(), "BatchMode=yes".into()] };
     for o in ["ConnectTimeout=6", "StrictHostKeyChecking=accept-new"] { a.extend(["-o".into(), o.into()]); }
     a.extend(["-o".into(), format!("UserKnownHostsFile={}", d.join("known_hosts").display()), "-o".into(), "ControlMaster=auto".into(), "-o".into(), format!("ControlPath={}", d.join("ssh-%C").display()), "-o".into(), "ControlPersist=120".into(), "-o".into(), "LogLevel=ERROR".into()]);
     a.push(m.target.clone());
-    a.push(format!("exec \"${{SHELL:-/bin/sh}}\" -lc '{session}{remote}'"));
+    a.push(login_line(&session, remote));
     ("ssh".into(), a)
+}
+/// What sshd hands the machine's own login shell, whichever it is (bash, zsh, fish, …): only `exec`, a path and two
+/// words in single quotes, which every shell reads alike. The rest is /bin/sh's (fish cannot read `${`): it starts the
+/// login shell with the command, handed in as its `$0`, and the session.
+pub fn login_line(session: &str, remote: &str) -> String {
+    let export = if session.is_empty() { String::new() } else { format!("export HERDR_SESSION={session}; ") };
+    format!("exec /bin/sh -c '{export}exec \"${{SHELL:-/bin/sh}}\" -lc \"$0\"' '{remote}'")
 }
 /// Run a command to its end or its time, as an SSH call is read.
 pub fn run_ended(mut c: std::process::Command, ms: u64) -> Ended {

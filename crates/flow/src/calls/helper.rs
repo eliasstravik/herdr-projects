@@ -44,7 +44,7 @@ fn handle(v: &Value, machine: &str, pipe: &Arc<Pipe>, hangup: &mut Arc<AtomicBoo
 fn listen_to(m: Machine) {
     let mut wait = 5;
     loop {
-        let (cmd, args) = ssh_command(&m, &format!("herdr-projects voice listen --from {}", crate::util::shq(&this_computer())), false);
+        let (cmd, args) = ssh_command(&m, &format!("herdr-projects voice listen --from {}", crate::remote::clean(&this_computer(), "_.-")), false);
         let started = std::time::Instant::now();
         if let Ok(mut ch) = Command::new(cmd).args(args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() {
             let input = Arc::new(Mutex::new(ch.stdin.take()));

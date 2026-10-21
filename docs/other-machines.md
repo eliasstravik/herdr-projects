@@ -40,9 +40,13 @@ not running interactively, return" line, so a PATH set below that line is not fo
 
 Fix it either way:
 
-- set the PATH in the profile file: `~/.profile` or `~/.bash_profile` for bash, `~/.zprofile` for zsh;
+- set the PATH in the profile file: `~/.profile` or `~/.bash_profile` for bash, `~/.zprofile` for zsh,
+  `~/.config/fish/config.fish` for fish (outside its `if status is-interactive` block);
 - or link the launcher into a folder a login shell already has:
   `ln -s ~/.herdr-projects/data/bin/herdr-projects ~/.local/bin/`.
+
+Any login shell does, fish too: the board hands it only words every shell reads alike, and lets `/bin/sh` start it
+with the command.
 
 Test it from the machine the board is on. All is well when it ends with a line of JSON:
 
