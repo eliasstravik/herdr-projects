@@ -45,7 +45,7 @@
                 headings
    ← →          fold the
                 heading; on a
- ↓ 170 more
+ ↓ 178 more
 ──────────────────────────────
 ❯ Add a task
 ──────────────────────────────

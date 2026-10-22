@@ -3,8 +3,8 @@
 //! herdr does, so with no theme set it is herdr's default, Catppuccin, exactly as herdr shows it. herdr does not hand
 //! its theme to plugins, and a herdr opened from another machine paints with that machine's config: the board's own
 //! `board.theme` setting names a theme by hand then. The board's own colours are only for what herdr has no state for:
-//! "review" (a blue), "todo" (a dim grey), "check" (herdr's subtext0), "queue" (a pink), "auto" (a purple) and
-//! "pilot" (an orange) (picks.rs). The greys are herdr's, made readable (greys.rs). With NO_COLOR set nothing is painted: marks, words
+//! "review" (a blue), "todo" (a dim grey), "check" (herdr's subtext0), "queue" (a pink) and "auto" (a
+//! purple) (picks.rs). The greys are herdr's, made readable (greys.rs). With NO_COLOR set nothing is painted: marks, words
 //! and reverse video still say everything.
 pub mod answers;
 pub mod greys;
@@ -39,7 +39,7 @@ impl C {
 pub struct Pal {
     pub accent: C, pub panel_bg: C, pub sidebar_bg: C, pub active_row_bg: C, pub selection_bg: C, pub surface0: C, pub surface1: C, pub surface_dim: C,
     pub overlay0: C, pub overlay1: C, pub text: C, pub subtext0: C, pub mauve: C, pub green: C, pub yellow: C, pub red: C, pub blue: C, pub teal: C, pub peach: C,
-    pub review: C, pub check: C, pub todo: C, pub auto: C, pub queue: C, pub pilot: C,
+    pub review: C, pub check: C, pub todo: C, pub auto: C, pub queue: C,
 }
 pub const TOKENS: [&str; 19] = ["accent", "panel_bg", "sidebar_bg", "active_row_bg", "selection_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"];
 impl Pal {
@@ -47,12 +47,12 @@ impl Pal {
         let c = C::of;
         Pal { accent: c(p.accent), panel_bg: c(p.panel_bg), sidebar_bg: c(p.sidebar_bg), active_row_bg: c(p.active_row_bg), selection_bg: c(p.selection_bg), surface0: c(p.surface0), surface1: c(p.surface1), surface_dim: c(p.surface_dim),
             overlay0: c(p.overlay0), overlay1: c(p.overlay1), text: c(p.text), subtext0: c(p.subtext0), mauve: c(p.mauve), green: c(p.green), yellow: c(p.yellow), red: c(p.red), blue: c(p.blue), teal: c(p.teal), peach: c(p.peach),
-            review: C::Own, check: C::Own, todo: C::Own, auto: C::Own, queue: C::Own, pilot: C::Own }
+            review: C::Own, check: C::Own, todo: C::Own, auto: C::Own, queue: C::Own }
     }
     pub fn get(&self, k: &str) -> C {
         match k { "accent" => self.accent, "panel_bg" => self.panel_bg, "sidebar_bg" => self.sidebar_bg, "active_row_bg" => self.active_row_bg, "selection_bg" => self.selection_bg, "surface0" => self.surface0, "surface1" => self.surface1,
             "surface_dim" => self.surface_dim, "overlay0" => self.overlay0, "overlay1" => self.overlay1, "text" => self.text, "subtext0" => self.subtext0, "mauve" => self.mauve, "green" => self.green, "yellow" => self.yellow,
-            "red" => self.red, "blue" => self.blue, "teal" => self.teal, "peach" => self.peach, "review" => self.review, "check" => self.check, "todo" => self.todo, "auto" => self.auto, "queue" => self.queue, "pilot" => self.pilot, _ => C::Own }
+            "red" => self.red, "blue" => self.blue, "teal" => self.teal, "peach" => self.peach, "review" => self.review, "check" => self.check, "todo" => self.todo, "auto" => self.auto, "queue" => self.queue, _ => C::Own }
     }
     pub fn set(&mut self, k: &str, v: C) {
         let slot = match k { "accent" => &mut self.accent, "panel_bg" => &mut self.panel_bg, "sidebar_bg" => &mut self.sidebar_bg, "active_row_bg" => &mut self.active_row_bg, "selection_bg" => &mut self.selection_bg, "surface0" => &mut self.surface0,
@@ -108,7 +108,6 @@ pub fn resolve(cfg: &toml::Table, light: Option<bool>, want: &str, seen: Seen) -
     pal.todo = greys::todo_grey(&pal, ground, text);
     pal.auto = picks::auto_purple(&pal);
     pal.queue = picks::queue_pink(&pal, ground);
-    pal.pilot = picks::pilot_orange(&pal);
     let symbols = st(ui, "status_indicators") != Some("dots");
     Resolved { name: canon, pal, ground, symbols }
 }
@@ -137,7 +136,7 @@ impl Theme {
     pub fn ink(&self, i: Ink) -> C {
         let p = &self.pal;
         match i { Ink::Plain => C::Own, Ink::Text => p.text, Ink::Soft => p.subtext0, Ink::Muted => p.overlay0, Ink::Red => p.red, Ink::Green => p.green, Ink::Yellow => p.yellow, Ink::Teal => p.teal, Ink::Peach => p.peach,
-            Ink::Mauve => p.mauve, Ink::Accent => p.accent, Ink::Review => p.review, Ink::Check => p.check, Ink::Queue => p.queue, Ink::Todo => p.todo, Ink::Auto => p.auto, Ink::Pilot => p.pilot, Ink::Rule => p.surface1, Ink::Dim => p.surface_dim,
+            Ink::Mauve => p.mauve, Ink::Accent => p.accent, Ink::Review => p.review, Ink::Check => p.check, Ink::Queue => p.queue, Ink::Todo => p.todo, Ink::Auto => p.auto, Ink::Rule => p.surface1, Ink::Dim => p.surface_dim,
             Ink::Sidebar => p.sidebar_bg, Ink::Selection => p.row() }
     }
     /// A colour made quieter, for a mark that is finished with: measured, so it is still seen.

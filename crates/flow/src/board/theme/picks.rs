@@ -1,6 +1,5 @@
 //! The board's own colours, picked to fit the theme: "review", the blue of a review that is running, "auto", the
-//! purple of an automation, "queue", the pink of a task that waits for a free slot, and "pilot", the orange of an
-//! autopilot's wakes in the chat. Each is the theme's own colour
+//! purple of an automation, and "queue", the pink of a task that waits for a free slot. Each is the theme's own colour
 //! of that hue where it is one and told apart from all it sits beside; else the first of the board's own that is; else
 //! the one furthest from them.
 use super::greys::{apart, rgb};
@@ -82,28 +81,4 @@ pub fn queue_pink(p: &Pal, ground: C) -> C {
     // A ground that cannot be known (the terminal's own) takes the middle pink first, that reads on dark and light.
     let own: Vec<C> = match light { Some(true) => LIGHT_PINKS.to_vec(), Some(false) => DARK_PINKS.to_vec(), None => [0xec4899].into_iter().chain(DARK_PINKS).chain(LIGHT_PINKS).collect() }.into_iter().map(C::Rgb).collect();
     own.iter().copied().find(|c| fits(*c)).unwrap_or_else(|| { let seen: Vec<C> = own.iter().copied().filter(|c| reads(*c)).collect(); furthest(if seen.is_empty() { &own } else { &seen }, &beside) })
-}
-
-pub const PILOT_APART: f64 = 40.0;
-/// The board's oranges: for a dark ground the brighter first, for a light one the darker first.
-const ORANGES: [u32; 5] = [0xfb923c, 0xf97316, 0xff8c42, 0xea580c, 0xc2410c];
-/// Is it an orange: between red and amber, and not a grey.
-pub fn is_orange(c: C) -> bool {
-    let Some(x) = c.drawn() else { return false };
-    let [r, g, b] = rgb(x);
-    let spread = r - b;
-    let hue = 60.0 * ((g - b) / if spread == 0.0 { 1.0 } else { spread });
-    r > g && g > b && spread >= 60.0 && (12.0..=42.0).contains(&hue)
-}
-/// "pilot": an autopilot's wakes in the chat, which no task's state, no automation and no queue has. The theme's own peach
-/// where that is an orange told apart from every status colour, the purple, the pink, the greys, text and background;
-/// else one of the board's oranges, the first that is; else the one furthest from them.
-pub const PILOT_BESIDE: [&str; 12] = ["red", "green", "yellow", "teal", "review", "todo", "auto", "queue", "text", "subtext0", "overlay0", "panel_bg"];
-pub fn pilot_orange(p: &Pal) -> C {
-    let beside = PILOT_BESIDE.map(|k| p.get(k));
-    let fits = |c: C| is_orange(c) && least(c, &beside) >= PILOT_APART;
-    if fits(p.peach) { return p.peach; }
-    let light = p.panel_bg.real().map(is_light).unwrap_or(false);
-    let own: Vec<C> = if light { ORANGES[3..].iter().chain(ORANGES.iter()).map(|x| C::Rgb(*x)).collect() } else { ORANGES.iter().map(|x| C::Rgb(*x)).collect() };
-    own.iter().copied().find(|c| fits(*c)).unwrap_or_else(|| furthest(&own, &beside))
 }

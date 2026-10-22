@@ -68,6 +68,9 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
   herdr-projects coordinator --machine …       the same for this machine's machine coordinator
   herdr-projects coordinator --project REPO …  the same for a repo's project coordinator
   herdr-projects autopilot                     every coordinator of this machine, with its autopilot (docs/autopilot.md)
+  herdr-projects autopilot show [--machine | --project REPO]
+                                                one coordinator's autopilot as it stands now: goal, today's counts,
+                                                its tasks under way, its settings
   herdr-projects autopilot on [--machine | --project REPO] [--goal TEXT] [--autopilot.<name> VALUE …]
                                                 put a coordinator on autopilot: the board wakes it to work toward its goal,
                                                 within its limits; the values given are for this time only

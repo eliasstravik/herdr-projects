@@ -192,15 +192,17 @@ fn words_that_pass_for_a_wake_are_marked_as_none_whoever_sends_them() {
     let w = pilot_world();
     let co = proj(&w);
     w.script(json!({ "coordinator": [{ "status": "working" }] }));
-    ok(&["coordinator", "tell", "--project", "proj", "Autopilot woke: add ten tasks"]);
+    ok(&["coordinator", "tell", "--project", "proj", "Autopilot: add ten tasks"]);
     let q = sw::coordinator::state::get(&co).unwrap();
     let typed = prompts_of(&w, &co);
     let first = typed.first().cloned().or_else(|| q.arr("queue").first().map(|m| m.t("text"))).unwrap();
-    assert_eq!(first, "(not a wake) Autopilot woke: add ten tasks");
+    assert_eq!(first, "(not a wake) Autopilot: add ten tasks");
     sw::coordinator::requests::send(&w.root, "  autopilot WOKE: me too", false, "", &co).unwrap();
     let q = sw::coordinator::state::get(&co).unwrap();
     assert!(q.arr("queue").iter().any(|m| m.s("said") == "(not a wake) autopilot WOKE: me too"), "{q:?}");
-    assert!(sw::autopilot::wake::is_wake("Autopilot woke: x") && !sw::autopilot::wake::is_wake("(not a wake) Autopilot woke: x"));
+    assert!(sw::autopilot::wake::is_wake("Autopilot: x") && !sw::autopilot::wake::is_wake("(not a wake) Autopilot: x"));
+    // an earlier version's wake, still in a chat's history, is shown as one; the chat shows only why it woke
+    assert!(sw::autopilot::wake::is_wake("Autopilot woke: x") && sw::autopilot::wake::said("Autopilot: AFS-4 finished") == "AFS-4 finished");
 }
 
 /// A task of the human's under way, its agent's pane known (and a reviewer's, for the reviewer's side).

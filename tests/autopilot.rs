@@ -29,7 +29,7 @@ fn on_needs_a_goal_saves_it_as_the_coordinators_own_and_wakes_it_with_a_message_
     // the first tick sends the wake of turning on: it starts the coordinator, in its own chat, and is typed in
     tick(&w);
     let p = prompts_of(&w, &co);
-    assert_eq!(p, vec!["Autopilot woke: autopilot was turned on. Goal: Keep the docs current. Today: 0 of 5 tasks added, 0 of 2 under way. May set: nothing. May touch: own.".to_string()]);
+    assert_eq!(p, vec!["Autopilot: Turned on".to_string()], "only why it woke: its goal and limits it reads with autopilot show");
     assert_eq!(record(&co).i("woke"), 1);
     assert!(record(&co).at("wake").b("typedAt"));
     // its turn ended (the scripted one ends at once): the next look sees it answered
@@ -40,11 +40,16 @@ fn on_needs_a_goal_saves_it_as_the_coordinators_own_and_wakes_it_with_a_message_
     // nothing more to say: no second wake
     minutes(30); tick(&w);
     assert_eq!(prompts_of(&w, &co).len(), 1);
+    // what the wake leaves out it reads as it stands now: its goal, today's counts, what is under way, its settings
+    let shown = ok(&["autopilot", "show", "--project", "proj"]);
+    assert!(shown.contains("Goal: Keep the docs current") && shown.contains("Today: 0 of 5 added · 0 of 2 under way") && shown.contains("Under way: none") && shown.contains("May set: nothing") && shown.contains("no releases"), "{shown}");
+    ok(&["set", "autopilot.goal", "Keep the docs short", "--project-coordinator", "proj"]);
+    assert!(ok(&["autopilot", "show", "--project", "proj"]).contains("Goal: Keep the docs short"), "a change between wakes is read at the next");
     // off drops this time's values; the goal stays its own
     assert!(ok(&["autopilot", "off", "--project", "proj"]).starts_with("Autopilot off for the proj coordinator."));
     assert_eq!(record(&co).at("once"), &json!({}));
     assert!(!record(&co).b("on"));
-    assert_eq!(sw::autopilot::record::words(&co, "autopilot.goal"), "Keep the docs current");
+    assert_eq!(sw::autopilot::record::words(&co, "autopilot.goal"), "Keep the docs short");
     assert!(ok(&["autopilot", "off", "--project", "proj"]).contains("is not on autopilot"));
 }
 
@@ -141,7 +146,7 @@ fn quiet_on(w: &World, extra: &[&str]) -> Co {
     tick(w); tick(w);
     co
 }
-fn wakes(w: &World, co: &Co) -> usize { prompts_of(w, co).iter().filter(|p| p.starts_with("Autopilot woke:")).count() }
+fn wakes(w: &World, co: &Co) -> usize { prompts_of(w, co).iter().filter(|p| p.starts_with("Autopilot:")).count() }
 
 #[test]
 fn with_no_room_only_a_task_that_needs_looking_after_wakes_it() {
@@ -176,7 +181,7 @@ fn under_approve_yes_a_task_waiting_for_its_yes_wakes_it_but_not_one_held_for_yo
     let mine = sw::autopilot::add::add(&co, &w.root, "Mine", Default::default(), &[], false).unwrap().task.t("id");
     tick(&w);
     sw::store::tasks::set(&mine, json!({ "stage": "approval" })).unwrap(); minutes(2); tick(&w);
-    assert!(prompts_of(&w, &co).last().unwrap().contains(&format!("{} waits for a yes", short(&mine))));
+    assert!(prompts_of(&w, &co).last().unwrap().contains(&format!("{} is ready to approve", short(&mine))));
     let held = sw::autopilot::add::add(&co, &w.root, "Held", Default::default(), &[], false).unwrap().task.t("id");
     let tree = w.base.join("tree"); git(&w.root, &["worktree", "add", "-q", "-b", "work/held", &tree.display().to_string()]);
     std::fs::write(tree.join(".herdr-projects.json"), "{}").unwrap(); git(&tree, &["add", "-A"]); git(&tree, &["commit", "-qm", "x"]);
@@ -230,7 +235,8 @@ fn every_coordinators_rules_say_what_a_wake_is_and_hold_every_exception_for_one(
     for co in [Co::top(&w.socket), Co::machine(&w.socket), proj(&w)] {
         let rules = sw::coordinator::rules::rules_of(&co, "board");
         assert_eq!(rules.matches(sw::coordinator::rules_autopilot::EXCEPT).count(), 3, "{rules}");
-        assert!(rules.contains("An autopilot wake is a message that starts with the exact words \"Autopilot woke:\""));
+        assert!(rules.contains("An autopilot wake is a message that starts with the exact words \"Autopilot:\""));
+        assert!(rules.contains("first read your autopilot as it stands now: board autopilot show") && rules.contains("never from memory"), "{rules}");
         assert!(rules.contains("doing nothing is fine, never invent work") && rules.contains("Never add release tasks"));
         assert!(rules.contains("board autopilot off --all, which covers this machine only"));
     }

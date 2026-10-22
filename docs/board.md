@@ -67,8 +67,8 @@ sidebar ([other machines](other-machines.md)); a click on it does the same. Ever
   shown is kept with the board's view. Each filter keeps the grouping (`Alt+S`) and the headings of what it shows; a
   machine or a repo with nothing that matches has none.
 - **A machine's row and a project's row are their coordinator's**, read as a task's row: the same marks (`○` idle,
-  `◐` working, `?` asks you, `✗` could not start, `∞` autopilot), the time on the right, what it does or asks under
-  it. The top row is `All machines` or the one machine shown. The list reads all machines → machine → project → task
+  `◐` working, `?` asks you, `✗` could not start), the time on the right, what it does or asks under
+  it; on autopilot, `[autopilot]` after its name and what autopilot does under it. The top row is `All machines` or the one machine shown. The list reads all machines → machine → project → task
   by how far in each row stands. `Space` talks to it, `Alt+O` goes into it, `Enter` (or `←` `→`) folds and unfolds it, `Ctrl+S` /
   `Ctrl+X` start and stop it, `Ctrl+O` is its autopilot ([machine and project coordinators](machine-and-project-coordinators.md)).
 - **Where the window is narrow** the names are shorter (`Coords`, `Needs`, `Autos`), then shortest (`Co`, `Need`,
@@ -179,13 +179,12 @@ Each state has a mark of its own, so no two are told apart by colour alone:
 | `◆` | ready to approve |
 | `✓` | done |
 | `○` | to do |
-| `∞` | a coordinator on [autopilot](autopilot.md), on a machine's or a project's row |
 
 The `?` menu has the list too.
 
 - **A machine's row and a project's row** (and `All machines`) carry their coordinator's state with these same marks:
-  `○` idle (also never ran, or stopped), `◐` it works, `?` it asks you (`!` it wants your OK), `✗` it could not start,
-  `∞` it is on autopilot. The others (`◑ ◆ ✓ ◌ ◇`) are never a coordinator's
+  `○` idle (also never ran, or stopped), `◐` it works, `?` it asks you (`!` it wants your OK), `✗` it could not start.
+  On [autopilot](autopilot.md) it keeps that mark, with `[autopilot]` after its name. The others (`◑ ◆ ✓ ◌ ◇`) are never a coordinator's
   ([machine and project coordinators](machine-and-project-coordinators.md)).
 
 - **Only a moon says someone works**: `◐` and `◑`, an agent or its reviewer.

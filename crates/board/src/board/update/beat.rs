@@ -46,7 +46,7 @@ fn left_chats(s: &State, fx: &mut Vec<Effect>) {
         fx.push(Effect::Run(crate::board::job::Job::ChatLeft { id: r.t("id") }));
     }
 }
-pub fn ink_of(kind: &str) -> Ink { match kind { "red" => Ink::Red, "green" => Ink::Green, "yellow" => Ink::Yellow, "peach" => Ink::Peach, "pilot" => Ink::Pilot, _ => Ink::Muted } }
+pub fn ink_of(kind: &str) -> Ink { match kind { "red" => Ink::Red, "green" => Ink::Green, "yellow" => Ink::Yellow, "peach" => Ink::Peach, _ => Ink::Muted } }
 /// `board.notify: bell`: the terminal bell, once for each task that newly needs you, is ready to approve or failed.
 /// What was already so when the board opened rings nothing.
 fn ring(s: &mut State, first: bool, fx: &mut Vec<Effect>) {

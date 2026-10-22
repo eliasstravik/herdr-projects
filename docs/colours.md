@@ -15,9 +15,8 @@ too, and with `NO_COLOR` the board still reads.
 | dim grey | to do, and queued: waits for a free slot, or for other tasks (its own mark, `◌`) |
 | light grey | the board runs its own check |
 | purple | an automation |
-| orange | an autopilot's wakes in the chat |
 | the base colour | every name: a machine's, a project's, a task's title |
-| the fainter grey | what goes with a name: counts (`2 machines · 5 tasks`, `7 tasks`), keys (`HP`, `HOME`), times, and tags after a title (`[auto]`, `[research]`, `[chat]`, `×3`) |
+| the fainter grey | what goes with a name: counts (`2 machines · 5 tasks`, `7 tasks`), keys (`HP`, `HOME`), times, and tags after a title or a name (`[auto]`, `[research]`, `[chat]`, `[autopilot]`, `×3`) |
 
 ## The board is in Herdr's theme
 
@@ -112,23 +111,13 @@ stands. One that is off is quiet as a done task is: its mark dimmed, its words g
 On the web Board it is a purple of the board's own (`#a855f7`, pulled towards the page's text colour so it reads on light
 and dark), since the web UI has no purple among its status colours.
 
-## A coordinator on autopilot has the theme's colours; its wakes are orange
+## Autopilot has no colour of its own
 
-A coordinator on [autopilot](autopilot.md) has no colour of its own on the list: its machine's or project's row has the
-mark `∞` in the theme's own colours, as a task's mark is: red at `needs you`, yellow while it works, quiet while asleep
-and plain text else. The top row's `∞` is the coordinator of all machines' (or the only machine's).
-
-**Colour is not the only clue**: `∞` is a shape no task's mark has, its panel's state word says where it stands, and
-nothing of autopilot shows while it is off. With `NO_COLOR` that still stands.
-
-Its wakes in the chat, under the name `Autopilot`, are an orange, so they are never read as your words:
-
-- It is **the theme's own `peach`** where that is an orange told apart from every status colour, the automations'
-  purple, the queue's pink, both greys, plain text and the background. The tests measure that in every built-in theme.
-- Else it is the first of the board's oranges that is: `#fb923c`, `#f97316`, `#ff8c42`, `#ea580c`, `#c2410c`, the darker
-  ones first on a light theme.
-
-On the web Board it is the board's `#f97316`, pulled towards the page's text colour, as the purple and the pink are.
+A coordinator on [autopilot](autopilot.md) keeps its row's own mark, in its own colour, as when it is off. Autopilot
+shows only in the board's own patterns: a dimmed `[autopilot]` after the row's name, as a task's `[research]`; a status
+line under the row in the grey of a task's (`Autopilot · next check-in in 12m · 3 of 20 today`, `Working on HSW-92`,
+`Needs you · …`); and `1 on autopilot` in its machine's summary. Its wakes in the chat stand under the name `Autopilot`,
+as the board's own words stand under `Board`, in the same greys. With `NO_COLOR` all of it still reads.
 
 ## The greys are quiet but always readable
 
@@ -221,7 +210,6 @@ your words are in the base colour you type in, theirs grey.
 | needs you (asks you, wants your OK) | red |
 | failed, could not start | red |
 | ready to approve, under review, queued | that status's colour |
-| a coordinator on autopilot | its `∞` mark's colour: red at `needs you`, amber while it works, else base |
 | nobody: a new task where no coordinator can run, find | the base colour |
 
 - The lit step of the ladder is in the same colour, reversed. It is the same wherever there is such a box: under the

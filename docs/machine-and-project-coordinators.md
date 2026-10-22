@@ -18,17 +18,19 @@ coordinator.
 ## A coordinator's row reads as a task's
 
 - **The same marks as tasks**, in the marks' column left of the caret: `○` idle (also one that never ran, or was
-  stopped), `◐` working, `?` it asks you (`!` it wants your OK), `✗` it could not start, `∞` it is on
-  [autopilot](autopilot.md) (in the colour of where that stands: red at `needs you`, amber while it works, quiet while
-  asleep). What needs you and what went wrong come before `∞`. None of a task's other marks (`◑ ◆ ✓ ◌ ◇`) is a
+  stopped), `◐` working, `?` it asks you (`!` it wants your OK), `✗` it could not start, on [autopilot](autopilot.md) too:
+  autopilot has no mark or colour of its own. None of a task's other marks (`◑ ◆ ✓ ◌ ◇`) is a
   coordinator's, and an idle coordinator is not counted in To do. Where no coordinator can run
   (`coordinator.agent none`), this machine's rows have no mark.
 - **The same right side as tasks: only the time.** `3m` while it works, `1h ago` otherwise, nothing when it never ran.
   No state words, no role word.
 - **The same second line as tasks**: what it does while it works, or its question while it waits for you. It goes when
-  it stops: no old news. Its latest message shows in the chat box when you select its row.
+  it stops: no old news. On autopilot the line says what autopilot does, in the same grey: `Autopilot · next check-in
+  in 12m · 3 of 20 today`, `Working on HSW-92 · 3 of 20 today`, `Checking in · HSW-92 finished`, `Needs you · …`. Its latest message shows in the chat box when you select its row.
 - **Its name**, a home folder as `~` (on another machine too), with no rule to the edge. The top row says what it holds,
-  open or folded: `4 machines · 420 tasks`, `9 projects · 30 tasks`.
+  open or folded: `4 machines · 420 tasks`, `9 projects · 30 tasks`. A coordinator on autopilot has a dimmed
+  `[autopilot]` after its name, as a task has `[research]`; a machine's summary (and the top row's) says how many of its
+  coordinators are: `33 tasks, 1 automation, 1 on autopilot`.
 - **The list reads all machines → machine → project → task by how far in each row stands.**
 - In a narrow pane the names shorten; the mark and the time stay.
 
@@ -115,7 +117,7 @@ As a task's row stands for the task:
 - `Ctrl+S`, with nothing typed, starts its coordinator (in its own conversation), `Ctrl+X` stops it, as they put an
   agent on a task and stop it. Here or on its machine.
 - `Ctrl+O` puts it on [autopilot](autopilot.md) with its saved goal and settings, and takes it off again. While on,
-  its row's mark is `∞`.
+  its row has `[autopilot]` after its name and what autopilot does under it.
 - `Ctrl+A` on a project's row archives the whole project, its tasks with it, and stops its coordinator; in the archive
   it restores it ([archiving a project](board.md#archiving-a-project)).
 - While one of these takes a moment, its row says `Starting…` or `Stopping…` with the working mark, as a task's does,

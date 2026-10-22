@@ -15,7 +15,8 @@ fn marks_of(ap: &Obj, t: &Obj, approve: bool) -> Vec<String> {
     if may_look_after(ap, t) { if let Some(w) = need_of(t, approve) { out.push(format!("stuck:{w}")); } }
     out
 }
-/// A reason to wake, as kept: why (`on`, `timer`, `done`, `stuck`, `added`, `asked`), the task, and its words.
+/// A reason to wake, as kept: why (`on`, `timer`, `done`, `stuck`, `added`), the task, and its words in plain words
+/// (`AFS-4 finished`, `AFS-4 is stuck`, `AFS-4 has a question`, `AFS-4 is ready to approve`, `AFS-4 was added`).
 pub fn reason(why: &str, task: &str, words: &str) -> Value { json!({ "why": why, "task": task, "words": words }) }
 /// The task as its reason names it: `HSW-84`.
 fn tag(id: &str) -> String { crate::store::keys::say_id(id, &crate::store::keys::repo_keys()) }
@@ -42,13 +43,13 @@ pub fn look(co: &Co, ap: &mut Obj, board: &[Obj], when: &str, approve: bool, ret
         for m in marks.iter().filter(|m| !had.contains(m)) {
             match m.split(':').next().unwrap_or("") {
                 "added" if !added_by(co, t) && wants("added") => out.push(reason("added", &id, &format!("{} was added", tag(&id)))),
-                "done" if wants("done") => out.push(reason("done", &id, &format!("{} {}", tag(&id), if t.b("mergedAt") { "merged" } else { "is done" }))),
+                "done" if wants("done") => out.push(reason("done", &id, &format!("{} finished", tag(&id)))),
                 "stuck" => {
                     let w = m.split(':').nth(1).unwrap_or("");
                     // Failing or asking again once its retries are used: yours from now on.
                     let used = task_rec(ap, &id).map(|r| r.i("retries")).unwrap_or(0);
                     if w != "yes" && used >= retries { with_task(ap, &id, |r| { r.put("left", true); }); continue; }
-                    if wants("stuck") { out.push(reason("stuck", &id, &format!("{} {}", tag(&id), match w { "asks" => "asks a question", "yes" => "waits for a yes", _ => "failed" }))); }
+                    if wants("stuck") { out.push(reason("stuck", &id, &format!("{} {}", tag(&id), match w { "asks" => "has a question", "yes" => "is ready to approve", _ => "is stuck" }))); }
                 }
                 _ => {}
             }

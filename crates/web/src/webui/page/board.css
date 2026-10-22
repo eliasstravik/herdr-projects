@@ -18,7 +18,6 @@
   /* An automation: a purple, which no status of the web UI has. The board's own, pulled towards the page's text
      colour as the teal is, so it reads on light and dark alike. */
   --sw-auto: color-mix(in srgb, #a855f7 78%, var(--text, #d8d0c3));
-  --sw-pilot: color-mix(in srgb, #f97316 80%, var(--text, #d8d0c3));
   /* A task that waits for a free slot: a pink, which no status of the web UI has either. The board's own, pulled
      towards the page's text colour as the purple is. */
   --sw-queue: color-mix(in srgb, #ec4899 80%, var(--text, #d8d0c3));
@@ -195,6 +194,8 @@
 .sw-hline { display: flex; align-items: center; gap: var(--space-3, 12px); min-width: 0; }
 .sw-hline .sw-mark { line-height: 1; }
 .sw-head-mark { display: contents; }
+/* A coordinator's status line while on autopilot: a task's grey second line, under its name (past the mark and the caret). */
+.sw-head-says { margin-left: calc(2.25 * var(--fs-md, 14px) + 16px); -webkit-line-clamp: 1; }
 /* The caret folds: a thumb's target around its one letter. A status group's stands in the marks' column. */
 .sw-caret { flex: none; display: inline-grid; place-items: center; width: 1.25em; height: var(--touch-target, 40px); margin: calc(-1 * var(--space-1, 4px)) calc(-1 * var(--space-1, 4px)); padding: 0 var(--space-1, 4px); box-sizing: content-box; border: 0; background: none; color: var(--sw-dim); font: inherit; font-weight: var(--fw-regular, 400); cursor: pointer; }
 .sw-caret:not(.sw-head-caret) { margin-left: calc(-1 * var(--space-2, 8px) - var(--space-1, 4px)); width: 1em; }
@@ -263,7 +264,7 @@ a.sw-tag:hover { text-decoration: underline; }
 /* The board's colour names. */
 .sw-c-red { color: var(--sw-red); } .sw-c-green { color: var(--sw-green); } .sw-c-yellow { color: var(--sw-yellow); }
 .sw-c-teal { color: var(--sw-teal); } .sw-c-review, .sw-c-blue { color: var(--sw-review); } .sw-c-check, .sw-c-text { color: var(--sw-check); }
-.sw-c-plain { color: var(--sw-text); } .sw-c-auto { color: var(--sw-auto); } .sw-c-pilot { color: var(--sw-pilot); } .sw-c-queue { color: var(--sw-queue); } .sw-c-overlay0, .sw-c-subtext0, .sw-c-surface_dim { color: var(--sw-dim); } .sw-c-surface1 { color: var(--sw-line); } .sw-c-todo { color: var(--sw-todo); } .sw-c-accent, .sw-c-peach { color: var(--accent, #f0a830); }
+.sw-c-plain { color: var(--sw-text); } .sw-c-auto { color: var(--sw-auto); } .sw-c-queue { color: var(--sw-queue); } .sw-c-overlay0, .sw-c-subtext0, .sw-c-surface_dim { color: var(--sw-dim); } .sw-c-surface1 { color: var(--sw-line); } .sw-c-todo { color: var(--sw-todo); } .sw-c-accent, .sw-c-peach { color: var(--accent, #f0a830); }
 .sw-b { font-weight: var(--fw-semibold, 600); } .sw-d { opacity: 0.9; } /* a quiet mark: no fainter, or it falls under 3 to 1 on the light palettes */
 
 /* When the web UI's menu is not found: the Board, floating. */

@@ -67,8 +67,6 @@ fn who_of(s: &mut State, t: &Theme, r: Option<&Obj>) -> Option<Who> {
     let v = s.data.coord.clone();
     let screen = s.data.coord_screen.clone();
     let mut c = coord_who(t, &v, &screen, !v.unseen.is_empty() && !s.chat_open);
-    let main = crate::board::update::coords::Target { name: crate::status_words::COORDINATOR.into(), ..Default::default() };
-    c.mark = super::pilot::in_chat(s, &main, &v, c.mark);
     c.always = !v.error.is_empty() && s.err_hid != v.error;
     Some(c)
 }
@@ -90,7 +88,6 @@ fn far_who(s: &mut State, t: &Theme, far: &str) -> Who {
         let turn = v.talk.last().map(|x| x.text.clone()).unwrap_or_default();
         let target = crate::board::update::coords::Target { host: far.into(), to: String::new(), name: name.clone() };
         let w = Who { name, turn, ..coord_who(t, &v, "", false) };
-        let w = Who { mark: super::pilot::in_chat(s, &target, &v, w.mark.clone()), ..w };
         return super::coords::with_sent(s, &target, &v, w);
     }
     let m = &s.remotes[far];
@@ -148,7 +145,7 @@ pub fn chat_message(s: &mut State, c: Option<&Who>, width: usize, max: usize) ->
     if max < 1 { return vec![]; }
     // Inside the box all looks the same whoever it talks to: your words in the colour you type them in, theirs grey; only
     // its frame takes their colour.
-    let paint = |by: bool, l: Inked, p: &Part| if by && p.tone == "pilot" { l.recolor(Ink::Pilot) } else if by { l.recolor(Ink::Muted) } else if !p.tone.is_empty() { l.recolor(crate::board::update::beat::ink_of(&p.tone)) } else if p.mine || p.by == "You" { l.recolor(Ink::Plain) } else { l.recolor(Ink::Soft) };
+    let paint = |by: bool, l: Inked, p: &Part| if by { l.recolor(Ink::Muted) } else if !p.tone.is_empty() { l.recolor(crate::board::update::beat::ink_of(&p.tone)) } else if p.mine || p.by == "You" { l.recolor(Ink::Plain) } else { l.recolor(Ink::Soft) };
     let (lines, starts) = super::chat_text::part_lines(&c.parts, width.max(1), &paint);
     // The newest thing said alone, whoever said it: the rest of the conversation is above it.
     let latest = starts.get(opens_at(&c.parts)).copied().unwrap_or(0);

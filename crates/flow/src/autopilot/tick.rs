@@ -7,7 +7,7 @@
 //! A reason that is only the timer goes only when the free look (look.rs) finds the board changed.
 use super::care::needing;
 use super::events::{look as events, reason};
-use super::limits::{board_tasks, room, today};
+use super::limits::{board_tasks, room};
 use super::look::snapshot;
 use super::record::{change, count, roll, words};
 use super::wake::{merged, pull_back, queue, rewrite, text_of, waiting};
@@ -39,7 +39,7 @@ pub fn tick(co: &Co, board: &[Obj], now: i64) {
     let look = seen(co, &c);
     let (approve, retries, when) = (words(co, "autopilot.approve") == "yes", count(co, "autopilot.retries"), words(co, "autopilot.when"));
     let (gap, every, per_day, after) = (ms(&words(co, "autopilot.gap")), ms(&words(co, "autopilot.every")), count(co, "autopilot.wakesPerDay"), count(co, "autopilot.needsYouAfter"));
-    let (goal, may, scope, hours) = (words(co, "autopilot.goal"), words(co, "autopilot.mayChange"), words(co, "autopilot.scope"), words(co, "autopilot.hours"));
+    let hours = words(co, "autopilot.hours");
     // A coordinator that asks before it acts would wait at a permission prompt: it shows `needs you`, and sleeps.
     let ask_first = words(co, "coordinator.access") == "ask";
     let mut kick = false;
@@ -90,7 +90,7 @@ pub fn tick(co: &Co, board: &[Obj], now: i64) {
         // One wake in the queue at most: one not typed in yet takes the new reasons in.
         if waiting(c, ap) {
             let all = merged(ap.at("wake").arr("reasons"), &pending);
-            let text = text_of(&all, &goal, &today(co, ap, board, now), &may, &scope);
+            let text = text_of(&all);
             rewrite(c, ap, &text, &all); ap.put("pending", Vec::<Value>::new());
             return true;
         }
@@ -102,7 +102,7 @@ pub fn tick(co: &Co, board: &[Obj], now: i64) {
         if !room(co, ap, board, now) && needing(ap, board, approve).is_empty() { return true; }
         // A reason that is only the timer goes only when the board changed since its last wake ended.
         if pending.iter().all(|r| r.s("why") == "timer") && ap.s("snap") == snapshot(co, ap, board, now) { ap.put("pending", Vec::<Value>::new()); return true; }
-        let text = text_of(&pending, &goal, &today(co, ap, board, now), &may, &scope);
+        let text = text_of(&pending);
         queue(c, ap, &text, &pending); kick = true;
         ap.put("pending", Vec::<Value>::new());
         true

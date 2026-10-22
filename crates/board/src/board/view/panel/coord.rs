@@ -8,7 +8,7 @@ use crate::board::keys::key_name;
 use crate::board::state::State;
 use crate::board::update::coords::{look_of, Target};
 use crate::board::update::pilot::view;
-use crate::board::view::pilot::PILOT_MARK;
+use crate::board::view::pilot::PILOT_TAG;
 use crate::json::*;
 use crate::shown::ink::{Ink, Inked};
 use crate::shown::words::when;
@@ -20,7 +20,7 @@ pub fn coord_panel(s: &State, t: &Target, width: usize, full: bool) -> Vec<Inked
     let on = v.b("on");
     let look = look_of(s, t);
     let mut title: Vec<Inked> = k.wrap(&t.name).into_iter().map(|l| l.bold()).collect();
-    if on { if let Some(l) = title.last_mut() { *l = l.clone().add(Inked::of(format!(" · {PILOT_MARK} autopilot on"), Ink::Muted)); } }
+    if on { if let Some(l) = title.last_mut() { *l = l.clone().add(Inked::of(format!(" {PILOT_TAG}"), Ink::Muted)); } }
     k.part(title);
     let mut st = vec![k.head("Status", None)];
     let chat = look.as_ref().map(|l| l.state.clone()).unwrap_or_else(|| "none".into());

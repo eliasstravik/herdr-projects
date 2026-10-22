@@ -76,7 +76,7 @@
                 heading
    space        talk to this row's agent, and back to the
                 top row's coordinator
- ↓ 65 more
+ ↓ 67 more
 
 ────────────────────────────────────────────────────────────
 ❯ Add a task

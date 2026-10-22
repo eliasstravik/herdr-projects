@@ -78,11 +78,12 @@ pub fn unread_lines(s: &State, width: usize) -> Vec<Inked> {
 /// column, `▾` open, `▸` folded (then with how many tasks and automations it holds: `7 tasks, 1 automation`; a machine
 /// with nothing in view: `0 tasks`).
 /// A repo's heading has its key beside its name, dimmed (`gtm-agent · AGT`): the first thing to go where room is short.
-/// A machine's or a project's row (and `All machines`) is its coordinator's, drawn as a task's row (view/pilot.rs). The
-/// top row says what it holds, open or folded: `4 machines · 420 tasks`, `9 projects · 30 tasks`.
-fn heading(s: &State, t: &Theme, rows: &[Row], at: usize, width: usize) -> Inked {
+/// A machine's or a project's row (and `All machines`) is its coordinator's, drawn as a task's row (view/pilot.rs), with
+/// a status line under it while on autopilot. The top row says what it holds, open or folded: `4 machines · 420 tasks`,
+/// `9 projects · 30 tasks`.
+fn heading(s: &State, t: &Theme, rows: &[Row], at: usize, width: usize) -> Vec<Inked> {
     let r = &rows[at];
-    let Row::Head { id, .. } = r else { return Inked::new() };
+    let Row::Head { id, .. } = r else { return vec![Inked::new()] };
     let caret = if id.is_empty() { Inked::plain("  ") } else { Inked::of(if r.shut() { "▸ " } else { "▾ " }, Ink::Muted) };
     let (named, row) = heading_words(s, t, rows, at);
     super::pilot::placed(caret, named, row, width)
@@ -97,10 +98,16 @@ pub fn heading_words(s: &State, t: &Theme, rows: &[Row], at: usize) -> (Inked, O
     let key = if s.by_repo || (project && s.archive_view) { crate::board::tags::heading_key(s, at) } else { String::new() };
     let named = if *autos { Inked::of(name.clone(), Ink::Auto) } else if *machine || top { Inked::of(name.clone(), MACHINE_INK).bold() } else if s.by_repo || project { Inked::of(crate::board::update::heads::repo_shown(s, id.split('\t').nth(1).unwrap_or(""), name), REPO_HEAD_INK) } else { Inked::of(name.clone(), group_ink(name)) };
     let mut named = if key.is_empty() { named } else { named.add(Inked::of(format!(" · {key}"), Ink::Muted)) };
-    // What a folded row holds: its tasks and automations; under Coordinators its projects' coordinators.
+    // Its coordinator on autopilot: a tag after its name, dimmed as a task's `[research]` (view/pilot.rs).
+    let shown = super::pilot::shown(s, t, id);
+    if shown.as_ref().is_some_and(|x| x.on) { named = named.add(Inked::of(format!(" {}", super::pilot::PILOT_TAG), Ink::Muted)); }
+    // What a folded row holds: its tasks and automations; under Coordinators its projects' coordinators. A machine's
+    // row and the top row also say how many of the coordinators they stand over are on autopilot.
     let holds = if crate::board::update::shows::coords(s) { format!("{folded} project coordinator{}", if *folded == 1 { "" } else { "s" }) } else { crate::board::update::heads::holds(*folded, *folded_autos) };
-    if top { named = named.add(Inked::of(format!("  {}", top_says(s)), Ink::Muted)); } else if r.shut() { named = named.add(Inked::of(format!("  {holds}"), Ink::Muted)); }
-    (named, super::pilot::shown(s, t, id))
+    let pilots = crate::board::update::pilot::on_under(s, id);
+    let pilots = |sep: &str| if pilots == 0 { String::new() } else { format!("{sep}{pilots} on autopilot") };
+    if top { named = named.add(Inked::of(format!("  {}{}", top_says(s), pilots(" · ")), Ink::Muted)); } else if r.shut() { named = named.add(Inked::of(format!("  {holds}{}", pilots(", ")), Ink::Muted)); }
+    (named, shown)
 }
 /// What the top row holds: every machine's (`4 machines · 420 tasks`), or the one machine's (`9 projects · 30 tasks`).
 fn top_says(s: &State) -> String {
@@ -168,9 +175,11 @@ pub fn list_lines(s: &mut State, t: &Theme, width: usize, h: usize, screen: usiz
             Row::Head { id, .. } => {
                 // Every row sits tight, a heading too: its indent and its ink say its level. An open one at the foot of
                 // what shows goes; a folded one is a row.
-                let text = heading(s, t, &rows, k, width);
+                // A coordinator's status line (on autopilot) is the second line of its row, as a task's is.
+                let all = heading(s, t, &rows, k, width);
                 let sel = !id.is_empty() && *id == s.sel;
-                lines.push(L { head: !r.shut() && holds(k), sel, id: id.clone(), ..line(pad(n_in, text)) });
+                let n = all.len();
+                for (m, text) in all.into_iter().enumerate() { lines.push(L { head: !r.shut() && holds(k), sel, id: id.clone(), n: m, rest: n - m, ..line(pad(n_in, text)) }); }
             }
             Row::Note(n) => lines.push(line(pad(n_in, Inked::plain("   ").add(Inked::of(n.clone(), Ink::Muted))))),
             Row::Rec(_) | Row::Auto(_) => {

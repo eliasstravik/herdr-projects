@@ -58,7 +58,8 @@ fn tab_on_another_machines_repo_whose_coordinator_never_ran_sends_autopilot_on_a
     assert!(a.b("ok") && sw::autopilot::record::is_on(&proj), "{a}");
     tick(&w);
     assert!(!pane_of(&proj).is_empty(), "its coordinator started: {:?}", sw::coordinator::state::get(&proj));
-    assert!(prompts_of(&w, &proj).iter().any(|p| p.contains("Tidy")), "{:?}", prompts_of(&w, &proj));
+    assert_eq!(prompts_of(&w, &proj), vec!["Autopilot: Turned on".to_string()]);
+    assert!(ok(&["autopilot", "show", "--project", "proj"]).contains("Goal: Tidy"), "its goal, as it reads it");
 }
 
 #[test]

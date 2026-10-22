@@ -59,8 +59,8 @@ pub fn list_of(s: &State, t: &Theme) -> Value {
     // A folded heading's count: how many rows it hides, in words where automations are among them (`7 tasks, 1 automation`).
     let count = |folded: usize, autos: usize| if autos > 0 { json!(crate::board::update::heads::holds(folded, autos)) } else { json!(folded) };
     // A machine's or a project's row: its coordinator's state as a task's mark, where it says something, and its time
-    // (board/view/pilot.rs); null else. Never a second line: what it says is in the chat.
-    let pilot = |x: Option<crate::board::view::pilot::Shown>| x.map(|x| json!({ "mark": pieces(&x.mark), "label": x.label, "cols": if x.time.is_empty() { vec![] } else { vec![pieces(&x.time)] }, "under": [] })).unwrap_or(Value::Null);
+    // (board/view/pilot.rs), and while on autopilot its status line (`under`), as a task's second line; null else.
+    let pilot = |x: Option<crate::board::view::pilot::Shown>| x.map(|x| json!({ "mark": pieces(&x.mark), "label": x.label, "cols": if x.time.is_empty() { vec![] } else { vec![pieces(&x.time)] }, "under": pieces(&x.under) })).unwrap_or(Value::Null);
     let coord = |id: &str| crate::board::update::coords::of_head(s, id).is_some();
     // How far in each row stands (board/update/depth.rs): all machines → machine → project → task.
     let deep = crate::board::update::depth::depths(&s.rows);

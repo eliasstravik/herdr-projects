@@ -1,8 +1,8 @@
 //! A coordinator's autopilot as it is shown, in the same words on its row, in its panel, on the command line and to
 //! another machine: nothing while it is off. On, its state word (shown first wins: `needs you`, `could not start`,
 //! `working`, `asleep`, `at its limit`, `on`), its line (`autopilot on · every 1h + events · last HSW-92 · next in
-//! 40m`), what it does now in a sentence (its row's second line: `On · woke 12m ago: HSW-92 merged`), its goal, today's
-//! counts, its settings in plain words (`*` on this time's) and its last wakes.
+//! 40m`), its row's status line, as a task's (`Autopilot · next check-in in 12m · 3 of 20 today`, `Working on HSW-92`),
+//! its goal, today's counts, its settings in plain words (`*` on this time's) and its last wakes.
 use super::care::needing;
 use super::limits::{board_tasks, room, today};
 use super::record::{get, scope_of, tasks, words};
@@ -45,24 +45,30 @@ pub fn next_words(co: &Co, ap: &Obj, now: i64) -> String {
 pub fn last_added(ap: &Obj) -> String { tasks(ap).into_iter().filter(|t| t.s("by") == "added").max_by_key(|t| t.i("at")).map(|t| say_id(t.s("id"), &repo_keys())).unwrap_or_default() }
 /// The task id of the last task it added, as kept ("" none): its row finds that task's mark by it.
 pub fn last_id(ap: &Obj) -> String { tasks(ap).into_iter().filter(|t| t.s("by") == "added").max_by_key(|t| t.i("at")).map(|t| t.t("id")).unwrap_or_default() }
-/// What it does now, in a sentence that starts with its state: `Working · woke for HSW-92 merged`, `At its limit · 2
-/// of 2 under way: waits for one to finish`, `On · woke 12m ago: its timer, and the board changed`. "" while it is off.
-pub fn activity(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String {
+/// Its tasks under way now, as the board names them (`AFS-2`).
+fn busy_with(ap: &Obj, board: &[Obj]) -> Vec<String> {
+    tasks(ap).iter().filter(|r| board.iter().any(|t| t.s("id") == r.s("id") && super::care::under_way(t))).map(|r| say_id(r.s("id"), &repo_keys())).collect()
+}
+/// Its row's status line, as a task's row says what it does under its name: `Autopilot · next check-in in 12m · 3 of
+/// 20 today`, `Working on AFS-2 · 3 of 20 today` while one of its tasks is under way, `Checking in · AFS-4 finished`
+/// in a wake's turn, `Needs you · …`. "" while it is off.
+pub fn status(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String {
     let st = state_word(co, ap, board, now);
-    let last = ap.arr("wakes").last().filter(|w| w.b("why"));
-    let rest = match st {
-        "" => return String::new(),
-        "needs you" if words(co, "coordinator.access") == "ask" => "coordinator.access is ask: it would wait at every prompt".to_string(),
-        "needs you" => "its last wakes went unanswered".into(),
-        "could not start" => ap.t("couldNot"),
-        "working" => { let why = super::wake::why_words(ap.at("wake").arr("reasons")); if why.is_empty() { "a wake's turn is under way".into() } else { format!("woke for {why}") } }
-        "asleep" => format!("its hours are {}", words(co, "autopilot.hours")),
-        "at its limit" => { let t = today(co, ap, board, now); if t.slots_left() { "no adds left today".into() } else { format!("{} of {} under way: waits for one to finish", t.under_way, t.at_once) } }
-        _ => last.map(|w| format!("woke {} ago: {}", age(now - w.i("at")), w.s("why"))).unwrap_or_else(|| format!("wakes {}", triggers(co))),
-    };
-    let mut word = st.to_string();
-    word[..1].make_ascii_uppercase();
-    if rest.is_empty() { word } else { format!("{word} · {rest}") }
+    let t = today(co, ap, board, now);
+    let day = format!("{} of {} today", t.added, t.per_day);
+    let busy = busy_with(ap, board);
+    let join = |parts: Vec<String>| parts.into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ");
+    match st {
+        "" => String::new(),
+        "needs you" if words(co, "coordinator.access") == "ask" => "Needs you · coordinator.access is ask: it would wait at every prompt".into(),
+        "needs you" => "Needs you · its last check-ins went unanswered".into(),
+        "could not start" => join(vec!["Could not start".into(), ap.t("couldNot")]),
+        "working" => join(vec!["Checking in".into(), super::wake::why_words(ap.at("wake").arr("reasons"))]),
+        _ if !busy.is_empty() => join(vec![format!("Working on {}", if busy.len() > 2 { format!("{}, {} and {} more", busy[0], busy[1], busy.len() - 2) } else { busy.join(" and ") }), day]),
+        "asleep" => join(vec!["Autopilot".into(), format!("asleep outside {}", words(co, "autopilot.hours")), day]),
+        "at its limit" => join(vec!["Autopilot".into(), "at today's limit".into(), day]),
+        _ => join(vec!["Autopilot".into(), next_words(co, ap, now).replace("next in", "next check-in in"), day]),
+    }
 }
 /// Today's adds against their limit, for its row's column: `2 of 5 added`.
 pub fn added_words(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String { let t = today(co, ap, board, now); format!("{} of {} added", t.added, t.per_day) }
@@ -101,6 +107,6 @@ pub fn view(co: &Co, now: i64) -> Value {
     let wakes: Vec<Value> = ap.arr("wakes").iter().rev().cloned().collect();
     json!({ "on": true, "state": state_word(co, &ap, &board, now), "line": line_of(co, &ap, &board, now), "goal": words(co, "autopilot.goal"),
         "today": today(co, &ap, &board, now).say(), "couldNot": ap.at("couldNot"), "next": next_words(co, &ap, now), "last": last_added(&ap),
-        "lastId": last_id(&ap), "activity": activity(co, &ap, &board, now), "added": added_words(co, &ap, &board, now),
+        "lastId": last_id(&ap), "status": status(co, &ap, &board, now), "added": added_words(co, &ap, &board, now),
         "settings": settings_of(co).into_iter().map(|(l, v, o)| json!({ "label": l, "value": v, "once": o })).collect::<Vec<_>>(), "wakes": wakes })
 }

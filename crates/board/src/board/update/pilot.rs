@@ -20,6 +20,18 @@ pub fn view(s: &State, t: &Target) -> Value {
 }
 /// It is on autopilot, as its machine read it.
 pub fn on(s: &State, t: &Target) -> bool { view(s, t).b("on") }
+/// How many coordinators a machine's row stands over are on autopilot (its own and its projects'), or the top row
+/// `All machines` over every machine; 0 for any other heading. What its summary says: `33 tasks, 1 on autopilot`.
+pub fn on_under(s: &State, id: &str) -> usize {
+    let of = |p: &Value| p.as_object().map(|o| o.values().filter(|v| v.b("on")).count()).unwrap_or(0);
+    let parts: Vec<&str> = id.strip_prefix(super::heads::HEAD).unwrap_or("").split('\t').collect();
+    match parts.as_slice() {
+        ["all"] => of(&s.data.pilots) + s.remotes.values().map(|m| of(&m.pilots)).sum::<usize>(),
+        ["machine", ""] => of(&s.data.pilots),
+        ["machine", host] => s.remotes.get(*host).map(|m| of(&m.pilots)).unwrap_or(0),
+        _ => 0,
+    }
+}
 /// The coordinator of the selected row, if the row is one.
 pub fn selected(s: &State) -> Option<Target> { of_head(s, &s.sel) }
 /// The coordinator the start, stop and autopilot keys act on: the selected row's; with no machine's, project's or

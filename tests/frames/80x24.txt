@@ -92,7 +92,7 @@
 
  ctrl: does something
    ctrl+l       yes: approve the merge, say yes, retry, take it as it is
- ↓ 46 more
+ ↓ 47 more
 
 ────────────────────────────────────────────────────────────────────────────────
 ❯ Add a task

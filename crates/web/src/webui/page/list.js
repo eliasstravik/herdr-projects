@@ -52,8 +52,9 @@ export function listEl(list, opts) {
 }
 // A heading, drawn as the terminal board draws it (board/view/list.rs): the top row (All machines, or the machine
 // shown), a machine's, a project's, a status group's or the automations'. A machine's and a project's row is its
-// coordinator's, read as a task's row: its mark in the marks' column (○ idle, ◐ working, ? asks you, ✗ could not start,
-// ∞ autopilot), its time on the right, never a second line. A status group's caret stands in the marks' column. Its
+// coordinator's, read as a task's row: its mark in the marks' column (○ idle, ◐ working, ? asks you, ✗ could not start),
+// its time on the right, and while on autopilot a dimmed [autopilot] after its name (in its words) and what autopilot
+// does under it, in a task's grey second line (`Autopilot · next check-in in 12m · 3 of 20 today`). A status group's caret stands in the marks' column. Its
 // words come in their inks: the name in the base colour (a machine's and the top row's bold), a status group's in its
 // colour, what goes with it dimmed. A tap folds it to its one line, and unfolds it; the selected coordinator's row has
 // an Open button that shows the coordinator whole.
@@ -65,6 +66,7 @@ function headEl(g, selected, { onFold, onOpen, onPick, actions = [], onPress }) 
   const mark = p ? h("span.sw-head-mark", { role: "img", "aria-label": p.label || "no state" }, m ? markEl(m.t, m.c, !!m.d) : h("span.sw-mark")) : null;
   const words = h("span.sw-head-words", ink(g.words));
   const time = p?.cols?.length ? h("span.sw-time.sw-head-time", p.cols.map((c) => ink(c))) : null;
+  const under = p?.under?.length ? h("span.sw-says.sw-head-says", ink(p.under)) : null;
   // Selected: Open shows its coordinator whole. A project with none to open (archived, in the archive) has its buttons
   // here instead (Restore this project).
   const open = !selected ? null : g.coord ? h("span.sw-head-acts", h("button.btn.sw-open", { type: "button", "aria-label": `Open ${g.name}`, onclick: (e) => { e.stopPropagation(); onOpen(g.id); } }, "Open", icon("right")))
@@ -76,7 +78,7 @@ function headEl(g, selected, { onFold, onOpen, onPick, actions = [], onPress }) 
   if (!g.coord && !g.repo) return h(`div.sw-hrow.is-${kind}.is-fold${selected ? ".is-selected" : ""}`, { data: { id: g.id }, style: `--d:${g.depth || 0}`, onclick: () => onFold(g.id) }, h("span.sw-hline", caret(".sw-head-caret"), words, time));
   return h(`div.sw-hrow.is-${kind}${selected ? ".is-selected" : ""}`, { data: { id: g.id }, style: `--d:${g.depth || 0}`, role: "option", "aria-selected": selected ? "true" : "false", tabIndex: 0,
     onclick: () => { if (!selected) onPick(g.id); }, onkeydown: (e) => { if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return; e.preventDefault(); if (selected && e.key === "Enter") onOpen(g.id); else onPick(g.id); } },
-    h("span.sw-hline", mark, caret(""), words, time, open?.classList.contains("sw-head-acts") ? open : null), open?.classList.contains("sw-head-acts") ? null : open);
+    h("span.sw-hline", mark, caret(""), words, time, open?.classList.contains("sw-head-acts") ? open : null), under, open?.classList.contains("sw-head-acts") ? null : open);
 }
 // Machines whose tasks could not be read: one notice over the list, each machine a line with what to do behind it.
 // Dismissed, it stays away in this browser until another machine stops answering or one answers for another reason.

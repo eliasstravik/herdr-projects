@@ -36,8 +36,8 @@ there. `herdr-projects doctor` names messages that wait in a queue for more than
 ## Its row, and its settings
 
 **Its row is the top row**: `All machines`, or the only machine. It reads as every coordinator's row does: its mark
-(`○` idle, `◐` working, `?` it asks you, `∞` on [autopilot](autopilot.md)), its time on the right, what it does under
-it ([machine and project coordinators](machine-and-project-coordinators.md)). With one other machine picked, the top
+(`○` idle, `◐` working, `?` it asks you), its time on the right, what it does under it (on
+[autopilot](autopilot.md), `[autopilot]` after its name and what autopilot does under it) ([machine and project coordinators](machine-and-project-coordinators.md)). With one other machine picked, the top
 row is that machine's, and this one is not on the board.
 
 - `Space` there talks to it; `Space` on another row talks to that row's agent, and again comes back here. `Alt+O` goes

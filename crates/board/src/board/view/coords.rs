@@ -46,7 +46,6 @@ pub fn sub_who(s: &mut State, t: &Theme, target: &Target) -> Who {
         let (v, screen) = if target.to.is_empty() { (s.data.coord.clone(), s.data.coord_screen.clone()) } else { s.data.sub.as_ref().filter(|x| x.0 == target.to).map(|x| (x.1.clone(), x.2.clone())).unwrap_or_else(|| (none(), String::new())) };
         let fresh = !v.unseen.is_empty() && !s.chat_open;
         let mut c = renamed(coord_who(t, &v, &screen, fresh), target);
-        c.mark = super::pilot::in_chat(s, target, &v, c.mark);
         c.always = !v.error.is_empty() && s.err_hid != v.error;
         return with_sent(s, target, &v, c);
     }
@@ -60,7 +59,6 @@ pub fn sub_who(s: &mut State, t: &Theme, target: &Target) -> Who {
     }
     let v = crate::coordinator::far::read(if target.to.is_empty() { &m.coord } else { m.coords.at(&target.to) }).unwrap_or_else(none);
     let turn = v.talk.last().map(|x| x.text.clone()).unwrap_or_default();
-    let mut c = Who { turn, ..renamed(coord_who(t, &v, "", false), target) };
-    c.mark = super::pilot::in_chat(s, target, &v, c.mark);
+    let c = Who { turn, ..renamed(coord_who(t, &v, "", false), target) };
     with_sent(s, target, &v, c)
 }

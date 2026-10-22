@@ -1,5 +1,5 @@
-//! One way to count, everywhere (the panel, the wake, `autopilot`): the tasks it **added** today of
-//! `autopilot.tasksPerDay`, and its tasks **under way** of `autopilot.tasksAtOnce`. No room: the tasks at once are
+//! One way to count, everywhere (the panel, its row's status line, `autopilot` and `autopilot show`): the tasks it
+//! **added** today of `autopilot.tasksPerDay`, and its tasks **under way** of `autopilot.tasksAtOnce`. No room: the tasks at once are
 //! full, or today's adds are used up and it has none of your to-do tasks it may start (`autopilot.scope all`).
 use super::care::{under_way_count, yours_to_start};
 use super::record::{count, day_of, words};
@@ -18,8 +18,6 @@ impl Today {
     pub fn slots_left(&self) -> bool { (self.under_way as i64) < self.at_once }
     /// "2 of 5 added · 1 of 2 under way".
     pub fn say(&self) -> String { format!("{} of {} added · {} of {} under way", self.added, self.per_day, self.under_way, self.at_once) }
-    /// The same in a sentence, as the wake says it.
-    pub fn sentence(&self) -> String { format!("{} of {} tasks added, {} of {} under way", self.added, self.per_day, self.under_way, self.at_once) }
 }
 /// Room to do anything new: a free slot, and an add left today or one of your to-do tasks it may start.
 pub fn room(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> bool {

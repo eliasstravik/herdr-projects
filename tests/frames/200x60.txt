@@ -233,9 +233,9 @@
    ✓            done
    ○            to do
    ⟳            an automation (dimmed while it is off; the word after it says on or off)
-   ∞            a coordinator on autopilot (a machine's or a project's row; else ○ ◐ ? ✗ as a task's)
    65% 2m left  how far it is, and the time left; the time after it is how long it has worked, or how long ago it stopped
    R#2          the review it is on or last had, coloured by where it stands: passed, failed, the reviewer working
+   PR#16        its pull request: green when its checks pass, red when they fail
  ↓ 3 more
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
