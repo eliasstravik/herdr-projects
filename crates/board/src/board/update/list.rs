@@ -65,22 +65,30 @@ pub fn relist(s: &mut State) {
         let hay = format!("{} {} {} {} {} {} {} {} {} {}", tags(s, r).join(" "), r.s("id"), r.s("title"), r.s("msg"), r.t("state"), r.s("app"), if r.b("archivedAt") { "archived" } else { "" }, r.s("description"), r.at("failure").s("title"), r.at("failure").s("detail"));
         hay.to_lowercase().contains(&f)
     }).collect() };
+    // In the archive, an archived project of this machine stands under its own heading whatever the grouping, with
+    // its tasks; alone (`0 tasks`) when it has none, but not while a find narrows the list.
+    let projects: Vec<String> = s.data.archived.iter().filter(|p| super::heads::archived_head(s, "", p)).cloned().collect();
+    let in_project = |r: &Rec| host_of(r).is_empty() && projects.iter().any(|p| p == repo_name(r));
+    let project_groups: Vec<(String, Vec<Rec>)> = projects.iter().map(|p| (p.clone(), shown.iter().filter(|r| host_of(r).is_empty() && repo_name(r) == p).cloned().collect::<Vec<_>>())).filter(|(_, l)| f.is_empty() || !l.is_empty()).collect();
+    let rest: Vec<Rec> = shown.iter().filter(|r| !in_project(r)).cloned().collect();
     s.grouped = if s.by_machine {
         // By machine: each machine's tasks under its heading alone (heads.rs: parts), by how much they need you.
-        vec![("tasks".to_string(), shown.clone()), (AUTOMATIONS.to_string(), vec![])]
+        project_groups.into_iter().chain([("tasks".to_string(), rest), (AUTOMATIONS.to_string(), vec![])]).collect()
     } else if s.by_repo {
         let mut names: Vec<String> = vec![];
         for r in &shown { let g = repo_name(r).to_string(); if !names.contains(&g) { names.push(g); } }
         for a in &s.autos { let g = a.t("repo"); if !names.contains(&g) { names.push(g); } }
         // A repo used lately with no task in view keeps its heading, for its project coordinator (heads.rs: empty_repo).
         if s.scope.is_empty() || s.scope == "*" { for g in &s.data.lately { if super::heads::empty_repo(s, "", g) && !names.contains(g) { names.push(g.clone()); } } }
+        for (g, _) in &project_groups { if !names.contains(g) { names.push(g.clone()); } }
         let here = s.data.repo.clone();
         names.sort_by(|a, b| if *a == here { std::cmp::Ordering::Less } else if *b == here { std::cmp::Ordering::Greater } else { a.to_lowercase().cmp(&b.to_lowercase()).then(b.cmp(a)) });
         names.into_iter().map(|g| { let list = shown.iter().filter(|r| repo_name(r) == g).cloned().collect(); (g, list) }).collect()
     } else {
-        let mut g: Vec<(String, Vec<Rec>)> = vec![("archived".to_string(), shown.iter().filter(|r| r.b("archivedAt")).cloned().collect::<Vec<_>>()), ("pinned".to_string(), shown.iter().filter(|r| r.b("pinned") && !r.b("archivedAt")).cloned().collect())];
+        let mut g: Vec<(String, Vec<Rec>)> = project_groups;
+        g.extend([("archived".to_string(), rest.iter().filter(|r| r.b("archivedAt")).cloned().collect::<Vec<_>>()), ("pinned".to_string(), rest.iter().filter(|r| r.b("pinned") && !r.b("archivedAt")).cloned().collect())]);
         for name in GROUPS {
-            let mut rows: Vec<Rec> = shown.iter().filter(|r| group_of(r) == name && !r.b("pinned") && !r.b("archivedAt")).cloned().collect();
+            let mut rows: Vec<Rec> = rest.iter().filter(|r| group_of(r) == name && !r.b("pinned") && !r.b("archivedAt")).cloned().collect();
             // The queued tasks stand last under `working`: those that wait for a free slot in the order they get one
             // (Q#1 first), then those queued after other tasks.
             rows.sort_by_key(|r| if r.s("stage") == "queued" && queued(r) { (1, r.i("queuePlace")) } else if queued(r) { (2, 0) } else { (0, 0) });
@@ -184,7 +192,7 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
             let autos: Vec<Vec<Obj>> = p.groups.iter().map(|(name, _)| autos_in(s, &p.host, name)).collect();
             let n_autos: usize = autos.iter().map(|a| a.len()).sum();
             let n: usize = p.groups.iter().map(|(_, recs)| recs.len()).sum::<usize>() + n_autos;
-            let bare = |name: &str, recs: &[Rec], autos: &[Obj]| recs.is_empty() && autos.is_empty() && super::heads::empty_repo(s, &p.host, name);
+            let bare = |name: &str, recs: &[Rec], autos: &[Obj]| recs.is_empty() && autos.is_empty() && (super::heads::empty_repo(s, &p.host, name) || super::heads::archived_head(s, &p.host, name));
             let has_bare = p.groups.iter().zip(&autos).any(|((name, recs), a)| bare(name, recs, a));
             // A machine's heading, with every machine shown: folded, its one line stands for all its groups. One with
             // nothing in view shows folded (`0 tasks`), so that its machine coordinator is still a space away.
@@ -207,14 +215,14 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
             }
             if n == 0 && !has_bare { continue; }
             for ((name, recs), autos) in p.groups.iter().zip(&autos) {
-                // A repo used lately with nothing in view: its heading alone, folded (`0 tasks`).
+                // A repo used lately with nothing in view (or an archived one, in the archive): its heading alone, folded (`0 tasks`).
                 let empty = bare(name, recs, autos);
                 if recs.is_empty() && autos.is_empty() && !empty { continue; }
                 let id = group_id(s, &p.host, name);
                 let shut = super::heads::folded(s, &id) && !empty;
                 let own = !s.by_repo && name == AUTOMATIONS;
                 // By machine, the machine's heading is the tasks' own: no group heading under it but its automations'.
-                if !(s.by_machine && name != AUTOMATIONS) { rows.push(Row::Head { name: name.clone(), autos: own, id, machine: false, folded: if shut { recs.len() + autos.len() } else { 0 }, folded_autos: if shut { autos.len() } else { 0 }, empty }); }
+                if !(s.by_machine && name != AUTOMATIONS) || super::heads::archived_head(s, &p.host, name) { rows.push(Row::Head { name: name.clone(), autos: own, id, machine: false, folded: if shut { recs.len() + autos.len() } else { 0 }, folded_autos: if shut { autos.len() } else { 0 }, empty }); }
                 if shut || empty { continue; }
                 let mut list = recs.clone();
                 list.sort_by(|a, b| (if s.by_repo || s.by_machine { rank(a).cmp(&rank(b)) } else { std::cmp::Ordering::Equal })
