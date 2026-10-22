@@ -1,8 +1,8 @@
 //! The chat box names who it talks to: a ladder in its top edge from the top row down (`All machines › vm-str › gtm ›
 //! GTM-14`) with the current step lit, and its edge in the status colour of whoever it talks to (its label already says
 //! who): base idle or never started, amber working, red when it needs you or failed, as the board's marks. After the lit
-//! step, dimmed, the kind of agent it is: `Agent`, `Reviewer`, `Project coordinator`, `Machine coordinator`, `Machine
-//! coordinator (all machines)`; the empty box says the same (`Send message to the project coordinator`). Inside it only the reply. One that never ran invites a first message.
+//! step, dimmed, the kind of agent it is: `Agent`, `Reviewer`, `Project coordinator`, `Machine coordinator`, `Machines
+//! coordinator` (all machines); the empty box says the same (`Send message to the project coordinator`). Inside it only the reply. One that never ran invites a first message.
 use crate::board::state::{Mode, State};
 use crate::board::update::coords::{look_of, talking, Target};
 use crate::board::update::top;
@@ -33,7 +33,7 @@ impl Title {
 pub fn whom_of(s: &State, t: &Target) -> String { Title { steps: vec![], edge: Ink::Text, fresh: false, kind: coordinator_kind(s, t) }.whom() }
 /// The kind of agent a coordinator is, as the box's edge says it after its name.
 fn coordinator_kind(s: &State, t: &Target) -> &'static str {
-    if t.to.starts_with("project:") { "Project coordinator" } else if t.host.is_empty() && t.to.is_empty() && s.scope == "*" { "Machine coordinator (all machines)" } else { "Machine coordinator" }
+    if t.to.starts_with("project:") { "Project coordinator" } else if t.host.is_empty() && t.to.is_empty() && s.scope == "*" { "Machines coordinator" } else { "Machine coordinator" }
 }
 /// The kind of agent a task's chat talks to: its agent, or its reviewer while the review is the one talking.
 fn task_kind(r: &Obj) -> &'static str {

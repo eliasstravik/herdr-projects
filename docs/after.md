@@ -39,9 +39,10 @@ stays under **to do** with its `○`. It never starts by itself, not even once t
 A task tabbed with `--after` while those tasks are not all done is queued, exactly like a task waiting for a free slot
 ([the board](board.md)):
 
-- the pink `◌` and the queue's colour, under **working** with the queued tasks (after those waiting for a slot);
-- its line says `queued after AGT-2` (or `queued after SKL-4, SKL-5`), naming the ones not done yet by their key, as
-  everywhere else (`vm-str:ELA-3` for a task of another machine);
+- the `◌` in the dim grey of to do, under **working** with the queued tasks (after those waiting for a slot);
+- its line says `Queued after AGT-2` (or `Queued after SKL-4, SKL-5`), naming the ones not done yet by their key, as
+  everywhere else (`vm-str:ELA-3` for a task of another machine), in the quiet grey of any task's line and cut where
+  any other line is;
 - it has no place in the queue (`Q#2`) yet: it waits for tasks, not for a slot;
 - the task panel's State says `queued after AGT-2`, and a `Starts after` line lists each task (`(done)` beside those
   that are). `details` has an `after` part, and `list` shows it beside the title;

@@ -96,7 +96,7 @@ fn the_boxs_edge_follows_the_status_of_whoever_it_talks_to_and_names_are_in_the_
         s.press(&["space"]);
         all(&mut s, "❯", Ink::Text, false);
         s.press(&["space"]); assert!(!s.s.reply);
-        assert!(s.text().contains("╭─  All machines  · Machine coordinator (all machines) ─"), "{}", s.text());
+        assert!(s.text().contains("╭─  All machines  · Machines coordinator ─"), "{}", s.text());
     }
 }
 
@@ -128,7 +128,7 @@ fn the_boxs_edge_names_the_kind_of_agent_dimmed_after_its_lit_step_and_the_empty
     update(&mut s.s, Event::Remote { label: "otherbox".into(), answer: Ok(json!({ "host": "otherbox", "version": "9.0.0", "coordinator": { "state": "idle" }, "coordinators": { "machine": { "state": "idle", "talk": [{ "you": false, "text": "Quiet." }] } }, "tasks": [] })) });
     while s.s.scope != "*" { s.press(&["alt+m"]); }
     s.s.sel = sw::board::update::top::all_id(); s.load();
-    dim(&mut s, "Machine coordinator (all machines)");
+    dim(&mut s, "Machines coordinator");
     s.s.sel = machine_id("otherbox"); s.load(); s.press(&["space"]);
     dim(&mut s, "Machine coordinator");
     assert!(s.text().contains("❯ Send message to the machine coordinator"), "{}", s.text());

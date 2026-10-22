@@ -85,7 +85,7 @@ fn the_page_gets_marks_without_colour_links_as_links_and_never_a_key_of_the_term
     let w = world();
     let t = sw::webui::web::theme();
     let at = |stage: &str| sw::webui::ink::first(&sw::board::view::fields::mark(t, &obj(json!({ "state": "working", "stage": stage }))));
-    assert_eq!(at("working"), json!({ "t": "●", "c": "yellow" })); assert_eq!(at("reviewing"), json!({ "t": "◑", "c": "review" })); assert_eq!(at("queued"), json!({ "t": "◌", "c": "queue" }));
+    assert_eq!(at("working"), json!({ "t": "●", "c": "yellow" })); assert_eq!(at("reviewing"), json!({ "t": "◑", "c": "review" })); assert_eq!(at("queued"), json!({ "t": "◌", "c": "todo" }));
     for stage in ["starting", "setup", "checking", "pushing", "merging"] { assert_eq!(at(stage).s("t"), "◇", "{stage}"); }
     for kind in ["working", "review", "board", "queue", "blocked", "done", "idle", "error"] { assert_ne!(sw::board::theme::marks::web_mark(kind, ""), sw::board::theme::marks::web_mark("unknown", ""), "{kind}"); }
     let linked = sw::shown::ink::Inked::plain("a ").add(sw::shown::ink::Inked::plain("PR#3").link("https://x.y/z"));

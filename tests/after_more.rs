@@ -21,7 +21,7 @@ fn the_board_shows_what_a_task_waits_for_and_its_key_asks_before_it_starts_one_e
     let mut b = open(&w.root, 40);
     b.s.sel = id.clone(); b.load();
     let text = b.screen(120).join("\n");
-    assert!(has(&text, r"\n▌  ◌ PRJ-2 +Take it in +0s *│[^\n]*\n▌ +queued after PRJ-1 "), "{text}");
+    assert!(has(&text, r"\n▌  ◌ PRJ-2 +Take it in +0s *│[^\n]*\n▌ +Queued after PRJ-1 "), "{text}");
     assert!(has(&text, r"│  State +◌ queued after PRJ-1 · for 0s *\n[^\n]*│  Starts after +PRJ-1 *\n"), "{text}");
     // The key that puts an agent on a task asks first: it starts by itself once the other is done.
     b.press(&["ctrl+s"]);
@@ -36,7 +36,7 @@ fn the_board_shows_what_a_task_waits_for_and_its_key_asks_before_it_starts_one_e
     let told = prompts(&w, t.at("link").s("pane")).join("\n");
     assert!(told.contains("the human started it before they all were") && told.contains("- PRJ-1 \"Change the skill\" (repo proj): not done yet."), "{told}");
     let text = b.screen(120).join("\n");
-    assert!(!text.contains("queued after PRJ-1") && !text.contains("Starts after"), "{text}");
+    assert!(!text.to_lowercase().contains("queued after prj-1") && !text.contains("Starts after"), "{text}");
 }
 
 #[test]
@@ -101,7 +101,7 @@ fn the_web_board_says_the_same_and_its_button_asks_before_it_starts_one_early() 
     let said = |p: &Value| p.as_array().map(|a| a.iter().map(|x| x.t("t")).collect::<String>()).unwrap_or_default();
     let s = common::board::web(&w, "pick", json!({ "id": id, "open": true }));
     let row = s.at("list").arr("groups").iter().flat_map(|g| g.arr("rows").to_vec()).find(|r| r.s("id") == id).unwrap();
-    assert_eq!(said(row.at("says")), "queued after PRJ-1");
+    assert_eq!(said(row.at("says")), "Queued after PRJ-1");
     let fact = s.at("panel").arr("parts").iter().find(|p| p.s("head") == "Status").and_then(|p| p.arr("items").iter().find(|x| x.s("label") == "Starts after").cloned()).unwrap_or_default();
     assert_eq!(said(&fact.at("lines")[0]), "PRJ-1");
     let s = common::board::web(&w, "press", json!({ "id": "delegate" }));

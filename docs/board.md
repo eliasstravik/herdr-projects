@@ -282,7 +282,7 @@ The highlight of the selected task covers all its lines. `↑` and `↓` go task
 ## Colours on a row
 
 **Each colour has one meaning.** Amber: the agent is working. Blue: the reviewer is working. Green: it passed and is
-ready for you. Red: it failed, or it needs you. Pink: queued. Grey: the board's own step, or to do. Which colours are
+ready for you. Red: it failed, or it needs you. Grey: the board's own step, queued, or to do. Which colours are
 Herdr's and which the board's, and how the board follows Herdr's theme: [colours](colours.md).
 
 - **While the reviewer works**, the row's mark, bar, percent, minutes left and `R#` tag are blue, and so are the same
@@ -291,9 +291,9 @@ Herdr's and which the board's, and how the board follows Herdr's theme: [colours
 - **The board's own steps** are no moon but a `◇`: starting, setting up, running the check, pushing and merging, and the
   waits on the way: for the check's turn, for its turn to merge, and for GitHub's checks on its pull request
   (`Waiting for GitHub checks · 2 of 3 passed`).
-- **A task waiting for a free slot** has an empty, dotted ring, `◌`, in a pink of its own ([below](#a-task-that-waits-for-a-free-slot)).
+- **A task waiting for a free slot** has an empty, dotted ring, `◌`, in the dim grey of to do ([below](#a-task-that-waits-for-a-free-slot)).
 - **An agent or reviewer whose turn was cut off**, waiting to try again, keeps its moon: it is still the one on the task.
-- So: a blue `◑` with a bar is a running review, an amber `◐` the agent at work, a `◇` the board on it, a pink `◌` not
+- So: a blue `◑` with a bar is a running review, an amber `◐` the agent at work, a `◇` the board on it, a grey `◌` not
   started yet, and a green `◆` ready for your yes.
 - **A group's heading keeps its group's colour**: a task under review is filed under `working`.
 - **To do** (its heading and its `○`) is a dim grey of its own, never the plain text colour, and always readable: every
@@ -336,7 +336,7 @@ background ([colours](colours.md)). The time of a task that is not done is drawn
 ## A task that waits for a free slot
 
 At most `board.agents` agents work at once. A task started while every slot is taken waits its turn: its row has the
-mark `◌` in pink, says `Waiting for a free slot` on its second line, and shows its place in the queue where a working
+mark `◌` in the dim grey of to do, says `Waiting for a free slot` on its second line, and shows its place in the queue where a working
 task has its percent: `Q#1` gets the next free slot, `Q#2` the one after.
 
 ```

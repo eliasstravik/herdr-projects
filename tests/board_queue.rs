@@ -1,4 +1,4 @@
-//! Tasks that wait for a free slot: their own mark (◌) and colour, and their place in the queue (Q#1 gets the next
+//! Tasks that wait for a free slot: their own mark (◌) in the calm grey of to do, and their place in the queue (Q#1 gets the next
 //! slot) the same on the row, the task panel, `list` and `details`, herdr's sidebar and the web Board; last under
 //! `working`, in the order they start; and the places move up when a slot frees.
 use crate::common;
@@ -11,7 +11,7 @@ use sw::shown::ink::Ink;
 fn line_of<'a>(lines: &'a [String], title: &str) -> (usize, &'a String) { lines.iter().enumerate().find(|(_, l)| l.contains(title)).unwrap_or_else(|| panic!("no row {title}:\n{}", lines.join("\n"))) }
 
 #[test]
-fn tasks_that_wait_for_a_free_slot_have_their_own_mark_colour_and_place_in_the_queue_everywhere() {
+fn tasks_that_wait_for_a_free_slot_have_their_own_mark_and_place_in_the_queue_everywhere() {
     let w = world_with(Opts { repo: true, settings: json!({ "board.agents": 1, "review.when": "never" }), ..Default::default() });
     w.script(json!({ "worker": [{ "files": { "1.txt": "1\n" }, "commit": "1", "note": "One." }, { "status": "working" }] }));
     let (a, b, c) = (w.add("First at work"), w.add("Second waits"), w.add("Third waits"));
@@ -20,9 +20,9 @@ fn tasks_that_wait_for_a_free_slot_have_their_own_mark_colour_and_place_in_the_q
     // The place is the order they get a slot: the first to wait first.
     assert_eq!((row(&b).i("queuePlace"), row(&c).i("queuePlace")), (1, 2));
     assert!(!row(&a).has("queuePlace"));
-    // Their own colour and mark, and their place where a task at work has its percent.
+    // Their own mark in the grey of to do (no colour of their own: nothing is wrong), and their place where a task at work has its percent.
     let r = sw::shown::states::as_row(&row(&c));
-    assert_eq!(sw::shown::states::status_ink(&r), Ink::Queue);
+    assert_eq!(sw::shown::states::status_ink(&r), Ink::Todo);
     assert_eq!(sw::shown::row_says::row_fields(&r, sw::clock::now()).percent.text(), "Q#2");
     assert_eq!(sw::shown::states::standing(&r), "waiting for a free slot, Q#2");
     let mut bd = open(&w.root, 40);
@@ -50,7 +50,7 @@ fn tasks_that_wait_for_a_free_slot_have_their_own_mark_colour_and_place_in_the_q
     let s = web(&w, "board", json!({}));
     let rows: Vec<Value> = s.at("list").arr("groups").iter().flat_map(|g| g.arr("rows").iter().cloned()).collect();
     let wc = rows.iter().find(|x| x.s("id") == c).unwrap();
-    assert_eq!((wc.s("mark"), wc.s("color"), wc.s("percent")), ("◌", "queue", "Q#2"));
+    assert_eq!((wc.s("mark"), wc.s("color"), wc.s("percent")), ("◌", "todo", "Q#2"));
     // A slot frees: the first in the queue starts, and the one after it moves up.
     settle(&a);
     sw::housekeeping::housekeeping(&w.socket, sw::housekeeping::Force::Yes);

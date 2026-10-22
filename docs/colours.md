@@ -12,8 +12,7 @@ too, and with `NO_COLOR` the board still reads.
 | green | ready to approve |
 | blue | under review |
 | teal | done |
-| pink | queued: waits for a free slot, or for other tasks |
-| dim grey | to do |
+| dim grey | to do, and queued: waits for a free slot, or for other tasks (its own mark, `◌`) |
 | light grey | the board runs its own check |
 | purple | an automation |
 | orange | an autopilot's wakes in the chat |
@@ -65,8 +64,7 @@ The board has colours of its own only for what Herdr has no state for:
 |---|---|---|
 | under review | blue | the theme's `blue` where that is told apart from all it sits beside, else the board's `#3b82f6` ([the board](board.md)) |
 | ready to approve | green | the theme's `green` |
-| queued: waits for a free slot, or tabbed and waits for other tasks to be done | pink | one of the board's own pinks, the first told apart from every other status colour, the automations' purple, the greys, text and background ([below](#a-queued-task-is-pink)) |
-| to do | dim grey | the theme's grey for greyed-out words (`overlay0`), made readable as said below, where that is told apart from the green and the blue; else another grey. With the terminal's own colours it is a grey mixed from the terminal's own background and text colour, measured |
+| to do, and queued | dim grey | the theme's grey for greyed-out words (`overlay0`), made readable as said below, where that is told apart from the green and the blue; else another grey. With the terminal's own colours it is a grey mixed from the terminal's own background and text colour, measured ([below](#a-queued-task-is-grey)) |
 
 - They are told apart from each other in every built-in theme (the tests measure it).
 - "To do" is a dim grey in the list (the heading, the `○` mark, the task's number) and in the box alike: dimmer than plain
@@ -74,37 +72,18 @@ The board has colours of its own only for what Herdr has no state for:
 - While the board runs its own check, the mark is a plain light grey, the theme's `subtext0`
   ([the check's progress](check-progress.md)).
 
-## A queued task is pink
+## A queued task is grey
 
-A task started while every slot of `board.agents` is taken has a colour no other state has: pink. It is used for its `◌`,
-its place in the queue (`Q#2`), the State line in the task panel, and its agent's text box.
+A queued task is calm: nothing is wrong and nobody needs to act. A task started while every slot of `board.agents` is
+taken, or tabbed with `--after` while the tasks it waits for are not all done ([one task after another](after.md)), has
+the dim grey of "to do" for its `◌`, its place in the queue (`Q#2`), the State line in the task panel and its agent's
+text box. Its row's second line, `Waiting for a free slot` or `Queued after SKL-6`, is the same quiet grey as any other
+task's line, and is cut where any other line is. A task that only waits for others, never tabbed, stays "to do", and its
+row says nothing of the wait.
 
-A task tabbed with `--after` while the tasks it waits for are not all done is queued too, in the same pink: its `◌`, its
-State line, its box, and its line `queued after SKL-6` ([one task after another](after.md)). A task that only waits for
-others, never tabbed, stays the dim grey of "to do", and its row says nothing of the wait.
-
-Pink is the colour furthest from all the others: amber works, red needs you, green is ready, teal is done, blue is under
-review, grey is to do, purple is an automation.
-
-Herdr's themes have no pink of their own (only Dracula's `mauve` is one, and that is the automations' colour there). So
-it is one of the board's: the first of its pinks that is told apart from every colour above, from plain text, both greys
-and the background, and stands at least 3 to 1 against the background, what a mark needs. Its nearest neighbour is red,
-the colour of "needs you", so the measure keeps it well away from the theme's red.
-
-| Theme | The pink |
-|---|---|
-| Nord, One Dark, Solarized, Kanagawa, Vesper | `#f472b6`, the first of the pinks for a dark background |
-| Tokyo Night, Gruvbox, Rosé Pine | `#ff6ec7`: `#f472b6` is too near one of their colours |
-| Catppuccin (Herdr's default), Dracula | `#ec4899`: the two brighter ones are too near their red, a pink-ish one |
-| Catppuccin Latte, Gruvbox light, One Light, Rosé Pine Dawn | `#db2777`, darker, for a light background |
-| Tokyo Night Day, Kanagawa Lotus | `#c2188b` |
-| Solarized Light | `#9d174d` |
-| `terminal` | `#ec4899`: the terminal's sixteen colours have no pink, and their magenta is the automations'. A middle pink reads on a dark terminal and a light one alike |
-
-**Colour is not the only clue**: the `◌` is a dotted ring no other state has, and `Q#2`, `Waiting for a free slot` and
-`queued after SKL-6` are words. With `NO_COLOR` they still say it.
-
-On the web Board it is the board's own `#ec4899`, pulled towards the page's text colour, as the purple is.
+**Colour is not the only clue**: the `◌` is a dotted ring no other state has (to do is the plain `○`), and `Q#2`,
+`Waiting for a free slot` and `Queued after SKL-6` are words. With `NO_COLOR` they still say it. The web Board shows it
+the same way.
 
 ## An automation is purple
 

@@ -57,8 +57,9 @@ pub fn sentence(r: &Obj) -> Inked {
     let msg = if r.b("plain") || ["working", "needs you", "under review", "idle"].contains(&raw.as_str()) { String::new() } else { raw };
     // Done says nothing more, except why it is done without a pull request (finish/already.rs).
     if r.s("state") == "done" { return if r.s("stage") == "done" && r.b("doneWhy") { quiet(words(r.s("doneWhy"))) } else { Inked::new() }; }
-    // Queued after other tasks: in the queue's colour. Only to wait for them, never started: nothing (after.rs).
-    if super::queue::waits_after(r) { return Inked::of(super::queue::words(r), Ink::Queue); }
+    // Queued after other tasks: "Queued after HSW-6", quiet as any other line. Only to wait for them, never started:
+    // nothing (after.rs).
+    if super::queue::waits_after(r) { let w = super::queue::words(r); return quiet(format!("{}{}", w[..1].to_uppercase(), &w[1..])); }
     // Near a limit: how much is used, before what it is doing, so it is never the part cut off.
     if r.at("limits").b("near") && r.s("state") == "working" { return Inked::of(r.at("limits").t("near"), Ink::Peach).add(quiet(if msg.is_empty() { msg } else { format!(" · {msg}") })); }
     if needs_you(r) {
