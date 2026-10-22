@@ -109,8 +109,11 @@ fn a_frame_of_the_board_with_coordinators_on_autopilot() {
     let mut b = open(&w.root, 16); b.s.side = false; b.press(&["alt+s"]); b.load(); // wide, and narrow
     // The hostname differs by machine, and so does the filler after it on a line of the box: that filler goes.
     let host = sw::remote::check::hostname();
-    let canon = |x: &String| { let x = x.replace(&host, "HOST"); if !x.starts_with(['╭', '│']) || !x.contains("HOST") { return x; } let key = if x.contains("HOST's coordinator") { "HOST's coordinator" } else { "HOST" }; format!("{}{key} {}", &x[..x.find(key).unwrap()], if x.starts_with('╭') { "╮" } else { "│" }) };
-    let got = [b.screen(100), b.screen(56)].map(|l| l.iter().map(canon).collect::<Vec<_>>().join("\n")).join("\n\n");
+    // On the narrow screen the top row's summary is cut where the hostname's length says: it is left out there.
+    let canon = |x: &String, narrow: bool| { let x = x.replace(&host, "HOST");
+        if let Some(at) = x.find("HOST [autopilot]  ").filter(|_| narrow) { return format!("{}HOST [autopilot]  …", &x[..at]); }
+        if !x.starts_with(['╭', '│']) || !x.contains("HOST") { return x; } let key = if x.contains("HOST's coordinator") { "HOST's coordinator" } else { "HOST" }; format!("{}{key} {}", &x[..x.find(key).unwrap()], if x.starts_with('╭') { "╮" } else { "│" }) };
+    let got = [(b.screen(100), false), (b.screen(56), true)].map(|(l, n)| l.iter().map(|x| canon(x, n)).collect::<Vec<_>>().join("\n")).join("\n\n");
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/frames/autopilot.txt");
     let want = std::fs::read_to_string(&path).unwrap_or_default();
     if want.is_empty() || std::env::var("UPDATE_FRAMES").is_ok() { std::fs::write(&path, format!("{got}\n")).unwrap(); return; }
