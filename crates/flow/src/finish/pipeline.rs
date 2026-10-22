@@ -172,7 +172,9 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
     };
     t = g.set(|t| t.put("doneWhy", why.clone().map(Value::from).unwrap_or(Value::Null)))?;
     if let Some(w) = &why { note = format!("{note} {w}."); }
-    if !tree.is_empty() && ch.b("merge.pr") && !research && why.is_none() {
+    // A task that has a pull request pushes to it also with `merge.pr` turned off since: it merges through that pull
+    // request, at the commit checked here, so what was merged in after its review must be on it (#307).
+    if !tree.is_empty() && (ch.b("merge.pr") || t.b("pr")) && !research && why.is_none() {
         let tp = Path::new(&tree);
         let base = [t.s("baseSha"), t.s("from")].into_iter().find(|s| !s.is_empty()).unwrap_or("HEAD").to_string();
         let pushed = (|| -> Res<Option<String>> {
