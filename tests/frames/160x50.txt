@@ -162,6 +162,7 @@
    esc          back, one step at a time (as a popup, the board closes on the last one)
    ?            this menu
    y  n         answer a question: y yes, n or esc no (enter never confirms)
+   /            typed first: pick a skill of whom you talk to
 
  ctrl: does something
    ctrl+l       yes: approve the merge, say yes, retry, take it as it is
@@ -194,8 +195,7 @@
    ◌            queued: for a free slot (Q#1 next) or after other tasks
    ?            asks you
    !            asks for your OK
-   @            needs a login
- ↓ 10 more
+ ↓ 11 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

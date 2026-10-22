@@ -524,6 +524,7 @@ are sent from another machine, so a count would not be true). All of that is in 
 - **If the task you talk to goes away** (removed), you are back with the Coordinator, never on a neighbour's agent.
 - **On a machine's or a repo's heading**, `Space` talks to that machine's or that repo's own coordinator
   ([machine and project coordinators](machine-and-project-coordinators.md)).
+- **Type `/`** to pick one of their skills or commands from a list over the box ([skills in the chat](skills.md)).
 
 ### What the chat is made of
 

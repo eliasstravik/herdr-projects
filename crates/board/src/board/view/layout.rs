@@ -91,7 +91,9 @@ fn draw_at(s: &mut State, t: &Theme, width: usize, rows: usize) -> Screen {
     let mut chat = chat_lines(who.as_ref(), width, rows_n < 16);
     let head_n = chat.len();
     let auto = s.auto().cloned();
-    s.chat_folded = (s.full || s.auto_open || s.menu.is_some() || rows_n < 14) && !who.as_ref().map(|w| w.always).unwrap_or(false);
+    // The skill list over the box (skills.rs) takes the message's room while it shows.
+    let picks = super::guard::part(|| super::skills::skill_lines(s, t, width, rows_n / 3)).unwrap_or_default();
+    s.chat_folded = (s.full || s.auto_open || s.menu.is_some() || !picks.is_empty() || rows_n < 14) && !who.as_ref().map(|w| w.always).unwrap_or(false);
     let framed = !s.chat_folded && s.ask.is_none() && chat_up(s, who.as_ref()) && who.as_ref().map(|w| w.said).unwrap_or(false) && width >= 8;
     // What just happened, on a line of its own: the hints below it stay readable.
     let stale = if s.stale.is_empty() { String::new() } else if !s.ctx.can_reload { "herdr-projects was updated: close the board and open it again for the new version.".into() } else { "herdr-projects was updated: the new version loads when nothing is half typed.".into() };
@@ -123,6 +125,7 @@ fn draw_at(s: &mut State, t: &Theme, width: usize, rows: usize) -> Screen {
         message_n = message.len();
         if message_n > 0 { let (l, c) = chat_box(s, width, draft_rows.max(1) as usize, r.as_ref(), &message); input = l; cursor = c; }
     }
+    if !picks.is_empty() { cursor = cursor.map(|(l, c)| (l + picks.len(), c)); input = picks.into_iter().chain(input).collect(); }
     // A question has no hints: its box ends on the window's last line, with no empty hint line under it.
     let hint_n = usize::from(s.ask.is_none());
     let extra_rows = (rows_n as i64 - input.len() as i64 - 1 - hint_n as i64 - said.len() as i64 - head_n as i64).max(0) as usize;

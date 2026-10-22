@@ -44,7 +44,7 @@
                 tasks and
                 headings
    pgup pgdn    a page of
- ↓ 153 more
+ ↓ 157 more
  + New task  added word for w…
 ──────────────────────────────
 ❯ Add a task

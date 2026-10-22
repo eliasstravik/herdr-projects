@@ -132,6 +132,7 @@
    esc          back, one step at a time (as a popup, the board closes on the last one)
    ?            this menu
    y  n         answer a question: y yes, n or esc no (enter never confirms)
+   /            typed first: pick a skill of whom you talk to
 
  ctrl: does something
    ctrl+l       yes: approve the merge, say yes, retry, take it as it is
@@ -154,8 +155,7 @@
    alt+t        show the whole task, full screen
    alt+a        show the archive
    alt+s        group by repo: see which repo each task is in
-   alt+d        show all done
- ↓ 21 more
+ ↓ 22 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

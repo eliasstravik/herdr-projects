@@ -29,7 +29,7 @@ pub fn open_with(cwd: &std::path::Path, rows: usize, popup: bool) -> Board {
 }
 impl Board {
     pub fn load(&mut self) {
-        let d = load(&Wants { ids: vec![self.s.sel.clone(), self.s.reply_id.clone()], cwd: self.s.ctx.cwd.clone(), own_pane: String::new(), web: false, coord: sw::board::update::coords::wanted(&self.s), mine: sw::board::update::edit::wanted(&self.s) });
+        let d = load(&Wants { ids: vec![self.s.sel.clone(), self.s.reply_id.clone()], cwd: self.s.ctx.cwd.clone(), own_pane: String::new(), web: false, coord: sw::board::update::coords::wanted(&self.s), mine: sw::board::update::edit::wanted(&self.s), skills: sw::board::update::skills::wanted(&self.s) });
         let fx = update(&mut self.s, Event::Loaded(Box::new(d)));
         self.effects(fx);
     }

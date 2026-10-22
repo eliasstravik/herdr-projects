@@ -23,6 +23,7 @@ pub fn handle(s: &mut State, p: &Press, fx: &mut Vec<Effect>) {
     let before = s.value();
     s.top_free = false; // a key brings the view back to the selected task
     press(s, p, fx);
+    super::skills::after(s, fx);
     // One printable character that did not go into the text box was a key of the board (?, space, y, n).
     s.lone_at = if p.ch.is_some() && before == s.value() { s.now } else { 0 };
     super::list::sync_reply(s);
@@ -46,6 +47,7 @@ fn press(s: &mut State, p: &Press, fx: &mut Vec<Effect>) {
     if s.editing.is_some() && super::edit::key(s, p, fx) { return; } // the settings page takes its own keys
     if s.auto().is_some() && super::autos::key(s, p, fx) { return; } // and so does an automation's row
     s.stick.clear();
+    if super::skills::key(s, p) { return; } // the skill list over the text box takes its keys first
     let text = s.value().trim().to_string();
     let r = s.current().cloned();
     if esc {

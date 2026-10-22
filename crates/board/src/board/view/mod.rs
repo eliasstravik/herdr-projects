@@ -23,6 +23,7 @@ pub mod panel;
 pub mod paste;
 pub mod pilot;
 pub mod setup;
+pub mod skills;
 pub mod talk;
 pub mod textbox;
 pub mod layout;

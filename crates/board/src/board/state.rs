@@ -128,6 +128,9 @@ pub struct State {
     pub filter: String, pub msg: String, pub msg_kind: Ink,
     pub chat_open: bool, pub chat_folded: bool, pub just_sent: HashMap<String, Sent>, pub chat_at: Option<ChatAt>, pub chat_fit: Option<ChatFit>, pub chat_rows: Option<(usize, usize)>,
     pub input: TextBox,
+    /// The skill list over the text box (update/skills.rs): the one picked, for the draft it was picked in, and the
+    /// draft esc closed the list on.
+    pub skill_at: (String, usize), pub skill_closed: String,
     pub editing: Option<Editing>, pub edit_line: usize,
     pub setup: Option<Setup>, pub paste_text: String,
     /// The paste screen's first line shown, how far down it can go and how many lines it shows (set as it is drawn).
@@ -169,7 +172,7 @@ impl State {
             side: false, full: false, panel_top: 0, panel_height: 1, panel_length: 0, width: 120,
             mode: Mode::New, menu: None, ask: None, by_repo: false, draft_away: None, auto_open: false, auto_at: -1, folded: Default::default(), scope: String::new(),
             filter: String::new(), msg: String::new(), msg_kind: Ink::Muted, chat_open: true, chat_folded: false, just_sent: HashMap::new(), chat_at: None, chat_fit: None, chat_rows: None,
-            input: TextBox::default(), editing: None, edit_line: 0, setup: None, paste_text: String::new(), paste_at: 0, paste_more: 0, paste_room: 1, closing: None, leaving: false, leave_at: 0,
+            input: TextBox::default(), skill_at: (String::new(), 0), skill_closed: String::new(), editing: None, edit_line: 0, setup: None, paste_text: String::new(), paste_at: 0, paste_more: 0, paste_room: 1, closing: None, leaving: false, leave_at: 0,
             attempt_at: HashMap::new(), pending: HashMap::new(), list_room: 0, list_tall: false, list_width: 0, fold_sel: String::new(), unread_top: 0, unread_max: 0, list_at: None, list_ids: vec![],
             told: 0, rang: 0, err_hid: String::new(), told_reply: String::new(), lone_at: 0, prefixed: 0, stale: String::new(), left: String::new(),
             held: None, guest: false, viewed: false, off_note: String::new(), size: Default::default(), chat_key_shown: false, web_ui_asked: false, tags_gone: false, now: crate::clock::now(), ticks: 0, osc_sent: HashMap::new(), call_link: None, call_switch: (String::new(), 0),

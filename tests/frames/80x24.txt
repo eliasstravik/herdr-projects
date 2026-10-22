@@ -87,11 +87,11 @@
                 last one)
    ?            this menu
    y  n         answer a question: y yes, n or esc no (enter never confirms)
+   /            typed first: pick a skill of whom you talk to
 
  ctrl: does something
    ctrl+l       yes: approve the merge, say yes, retry, take it as it is
-   ctrl+r       send it back: tell the agent to fix it, or to continue
- ↓ 43 more
+ ↓ 44 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────

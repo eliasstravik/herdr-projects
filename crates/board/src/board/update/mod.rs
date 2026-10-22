@@ -107,5 +107,6 @@ pub mod pilot;
 pub mod remotes;
 pub mod setup;
 pub mod size;
+pub mod skills;
 pub mod web;
 pub mod web_ui;

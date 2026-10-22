@@ -9,6 +9,7 @@ pub mod job;
 pub mod job_far;
 pub mod run;
 pub mod screens;
+pub mod skills;
 pub mod state;
 pub mod tags;
 pub mod textbox;

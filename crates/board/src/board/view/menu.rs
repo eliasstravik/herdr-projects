@@ -28,7 +28,8 @@ pub fn menu_lines(s: &mut State, t: &Theme, width: usize, h: usize) -> Vec<Inked
     for (group, gname) in GROUPS {
         if !lines.is_empty() { lines.push(Inked::new()); }
         lines.push(Inked::plain(" ").add(Inked::of(group_name(group, gname), Ink::Soft)));
-        if group == "plain" { for (k, d) in &plain { lines.extend(entry(k, d)); } }
+        // Not a key of the board: typed first in the text box, it lists the skills of whom the chat talks to (skills.rs).
+        if group == "plain" { for (k, d) in &plain { lines.extend(entry(k, d)); } lines.extend(entry("/", "typed first: pick a skill of whom you talk to")); }
         for (n, it) in list.iter().enumerate() {
             if it.group != group { continue; }
             if n as i64 != at { lines.extend(entry(&it.key, &it.label)); continue; }

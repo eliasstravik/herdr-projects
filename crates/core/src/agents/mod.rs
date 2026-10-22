@@ -17,6 +17,7 @@ pub mod read_turn;
 pub mod roles;
 pub mod scratch;
 pub mod screen_text;
+pub mod skills;
 pub mod start;
 pub mod start_failed;
 pub mod talk;

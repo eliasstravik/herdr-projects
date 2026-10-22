@@ -7,6 +7,9 @@ use common::*;
 use serde_json::json;
 use sw::board::keys::key_name;
 
+/// Skills in the text box: typing `/` lists those of whoever the chat talks to.
+mod skills;
+
 fn coord_world() -> World {
     let w = world_with(Opts { repo: true, settings: json!({ "coordinator.agent": "claude", "review.when": "never" }), ..Default::default() });
     let home = w.base.join("home-coord"); std::fs::create_dir_all(&home).unwrap();

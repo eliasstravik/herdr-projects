@@ -102,6 +102,7 @@
    esc          back, one step at a time (as a popup, the board closes on the last one)
    ?            this menu
    y  n         answer a question: y yes, n or esc no (enter never confirms)
+   /            typed first: pick a skill of whom you talk to
 
  ctrl: does something
    ctrl+l       yes: approve the merge, say yes, retry, take it as it is
@@ -114,8 +115,7 @@
    ctrl+z       undo
    ctrl+f       find: show only the tasks that match
    ctrl+c       twice: close the board
-   ctrl+t       a voice call with whoever the chat talks to
- ↓ 32 more
+ ↓ 33 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────────────────────────

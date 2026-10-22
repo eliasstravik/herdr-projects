@@ -192,6 +192,7 @@
    esc          back, one step at a time (as a popup, the board closes on the last one)
    ?            this menu
    y  n         answer a question: y yes, n or esc no (enter never confirms)
+   /            typed first: pick a skill of whom you talk to
 
  ctrl: does something
    ctrl+l       yes: approve the merge, say yes, retry, take it as it is
@@ -235,7 +236,6 @@
    PR#16        its pull request: green when its checks pass, red when they fail
    [auto]       made by an automation; [research]: research only, nothing is merged
    [chat]       a conversation: it changes nothing and ends when you say
-
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
