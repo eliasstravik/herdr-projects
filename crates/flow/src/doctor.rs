@@ -1,14 +1,16 @@
 //! `herdr-projects doctor`: the health check. One file in doctor/ per area (the program and its launcher, herdr's
 //! plugin, the agent programs, the model and effort settings, plan approval's read-only mount, other machines, free
-//! disk space, leftovers it could clean); older installs are take_over/look.rs. Each area hands back what it found: a
-//! fact that is fine, or a problem in one plain line with what to do. The areas are asked at the same time, so the
-//! check takes as long as its slowest one; it exits 1 when there is a problem (docs/troubleshooting.md).
+//! disk space, leftovers it could clean, messages that wait undelivered for a coordinator); older installs are
+//! take_over/look.rs. Each area hands back what it found: a fact that is fine, or a problem in one plain line with what
+//! to do. The areas are asked at the same time, so the check takes as long as its slowest one; it exits 1 when there is
+//! a problem (docs/troubleshooting.md).
 pub mod agents;
 pub mod disk;
 pub mod machines;
 pub mod plan;
 pub mod plugin;
 pub mod program;
+pub mod queue;
 pub mod settings;
 pub mod stale;
 
@@ -46,6 +48,7 @@ pub fn doctor_main() -> i32 {
     let launcher = crate::flow::send::launcher_file();
     let launcher_text = std::fs::read_to_string(&launcher).ok();
     let old = old_installs(crate::take_over::look::looked_here());
+    let now = crate::clock::now();
     let all = std::thread::scope(|s| {
         let herdr = s.spawn(plugin::ask);
         let progs = s.spawn(|| agents::named().into_iter().map(|(k, by)| std::thread::spawn(move || agents::ask(&k, by))).collect::<Vec<_>>().into_iter().filter_map(|h| h.join().ok()).collect::<Vec<_>>());
@@ -54,6 +57,7 @@ pub fn doctor_main() -> i32 {
         let far = s.spawn(machines::ask);
         let disks = s.spawn(disk::ask);
         let left = s.spawn(|| stale::ask(&stale::cache_dir()));
+        let waits = s.spawn(|| queue::ask(&crate::herdr::cli::current_socket(), now));
         let herdr = herdr.join().unwrap_or_default();
         let here = program::here(launcher, launcher_text, plugin::root_of(&herdr));
         let mut all = program::check(&here);
@@ -64,6 +68,7 @@ pub fn doctor_main() -> i32 {
         all.extend(machines::check(far.join().unwrap_or_default().as_ref()));
         all.extend(disk::check(&disks.join().unwrap_or_default()));
         all.extend(stale::check(&left.join().unwrap_or_default()));
+        all.extend(queue::check(&waits.join().unwrap_or_default(), now));
         all
     });
     let all: Vec<Found> = all.into_iter().chain(old).collect();
