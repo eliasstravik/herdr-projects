@@ -105,7 +105,8 @@ But their rules name none of these commands, and say plainly: **do nothing to th
 - An explicit instruction in the task's own description, or in a message from you, counts. So a task that says "add a
   task for each failing page and delegate it" has its agent do that.
 - Work it merely comes across is never made a task. It goes in a short **Also noticed** list at the end of its closing
-  note or report, and nothing else is done with it. A reviewer's `preexisting` finding is the same thing in a review: a
+  note or report, and nothing else is done with it: the board keeps that list on the finished task, as its
+  [follow-ups](follow-ups.md), for you to add as a task or dismiss. A reviewer's `preexisting` finding is the same thing in a review: a
   note ([the gate](gate.md)).
 - For its own task, its rules tell it to report itself `blocked` and nothing else (the finish line marks its work
   done). But a `report` of `done`, `idle` or `error` from it is taken like anyone's.

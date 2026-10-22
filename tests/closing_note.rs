@@ -8,6 +8,9 @@ use sw::flow::task::{note_file, note_stat, old_note_file, review_dir, OLD_RULE_D
 use sw::json::*;
 use sw::store::files::dir_of;
 
+/// What a note leaves open, kept on the task once it is done: its follow-ups.
+mod followups;
+
 fn write(file: &Path, text: &str, ahead: u64) {
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
     std::fs::write(file, text).unwrap();

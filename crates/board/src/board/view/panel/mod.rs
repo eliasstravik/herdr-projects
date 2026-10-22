@@ -4,6 +4,7 @@
 //! everything is whole. The parts are in the files beside this one.
 pub mod auto;
 pub mod coord;
+pub mod followups;
 pub mod kit;
 pub mod page;
 pub mod plan;
@@ -75,6 +76,7 @@ pub fn panel(s: &mut State, t: &Theme, r: &Obj, width: usize, full: bool, fit: u
     each(&mut k, "Attempts", &|k| plan::attempts(k, &c, r));
     each(&mut k, "Report", &|k| { reviews::report(k, &c, r); false });
     each(&mut k, "Reviews", &|k| reviews::reviews(k, &c, r));
+    each(&mut k, "Follow-ups", &|k| followups::followups(k, &c, r));
     // What the agent said, or the reviewer while the task is under review: the newest words of its conversation.
     if agent && !(r.s("state") == "error" && r.s("stage") != "nosummary") && !super::chat::chat_shows(s, r) {
         let pv = super::talk::preview(r);

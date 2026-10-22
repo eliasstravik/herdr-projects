@@ -57,6 +57,7 @@ fn landed(id: &str, g: &mut Guard, t: &Task, msg: &str, head: &str, commit: &str
         if t.b("pr") { t.put("prMerged", true); t.put("prState", "merged"); }
     })?;
     flow::sidebar::tell_sidebar(&d);
+    crate::followups::act::on_merged(id); // `followups.add todo`: what it left open becomes tasks
     tidy(id, "always");
     Ok(())
 }

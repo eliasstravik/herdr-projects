@@ -42,7 +42,8 @@ pub fn look(co: &Co, ap: &mut Obj, board: &[Obj], when: &str, approve: bool, ret
         for m in marks.iter().filter(|m| !had.contains(m)) {
             match m.split(':').next().unwrap_or("") {
                 "added" if !added_by(co, t) && wants("added") => out.push(reason("added", &id, &format!("{} was added", tag(&id)))),
-                "done" if wants("done") => out.push(reason("done", &id, &format!("{} {}", tag(&id), if t.b("mergedAt") { "merged" } else { "is done" }))),
+                // What it left open is said with it, so the wake can bring it up (followups/).
+                "done" if wants("done") => out.push(reason("done", &id, &format!("{} {}{}", tag(&id), if t.b("mergedAt") { "merged" } else { "is done" }, crate::followups::wake_words(t)))),
                 "stuck" => {
                     let w = m.split(':').nth(1).unwrap_or("");
                     // Failing or asking again once its retries are used: yours from now on.

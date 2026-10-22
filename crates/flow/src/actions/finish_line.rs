@@ -268,6 +268,7 @@ pub fn details(id: &str) -> Res<Value> {
         "kept": if t.b("kept") { t.at("kept").clone() } else { Value::Null },
         "inUse": if t.at("tidy").b("inUse") { t.at("tidy").at("inUse").clone() } else { Value::Null }, // what keeps its space in use, every thing
         "limits": limits_detail(&t, now()),
+        "followups": crate::followups::detail(&t), // what its closing note left open, and what became of each
     }));
     // Waiting for a free slot: its place in the queue, and in words ("waiting for a free slot, Q#2").
     if let Some(n) = crate::flow::live::queue_place(&t) { let mut q = t.clone(); q.put("queuePlace", n); out.put("queue", json!({ "place": n, "words": crate::shown::queue::words(&q) })); }

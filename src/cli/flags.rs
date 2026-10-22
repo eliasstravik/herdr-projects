@@ -59,6 +59,7 @@ fn takes(cmd: &str, sub: &str) -> Option<Takes> {
         "archive" => f(&["done", "repo"]),
         "delegate" => s(&["research", "chat", "after", "now"]),
         "after" => f(&["clear"]),
+        "followups" | "followup" => f(&["repo"]),
         "approve" => f(&["anyway"]),
         "set" | "unset" | "show" => f(WHERE),
         "models" => f(&[]),

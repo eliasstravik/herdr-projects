@@ -236,7 +236,9 @@ fn finish_steps(id: &str, g: &mut Guard, mut t: Task, ev: Option<Value>, force: 
     let said = if finished { turn.as_ref().map(|x| x.said.clone()).unwrap_or_default() } else if let Some(n) = &fresh_note { n.1.clone() } else { t.t("said") };
     if let Some(n) = &fresh_note { let _ = std::fs::write(dir_of(id).join("closing.md"), format!("{}\n", n.1)); }
     let agent_session = a.as_ref().map(|a| a.at("agent_session").t("value")).unwrap_or_default();
-    t = g.set(|t| { keep(t); t.put("expectedWake", Value::Null); t.put("said", said.clone()); if !agent_session.is_empty() && !t.b("session") { t.put("session", agent_session.clone()); } })?;
+    // What it leaves open (followups/), from its note, or from its last message where it wrote none.
+    let left = fresh_note.as_ref().map(|n| n.1.clone()).unwrap_or_else(|| said.clone());
+    t = g.set(|t| { keep(t); crate::followups::record(t, &left); t.put("expectedWake", Value::Null); t.put("said", said.clone()); if !agent_session.is_empty() && !t.b("session") { t.put("session", agent_session.clone()); } })?;
     // Only a kind on the closing-note fallback asks by ending its note with a question: that is where its rules put one.
     if !finished && fresh_note.is_some() && said.trim_end().ends_with('?') {
         g.set(|t| { t.put("stage", "asks"); t.put("kind", "question"); let last = said.lines().filter(|l| !l.trim().is_empty()).last().unwrap_or("").to_string(); t.put("msg", one_line(&last, 2048)); })?;

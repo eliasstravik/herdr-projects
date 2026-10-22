@@ -41,6 +41,7 @@ pub fn rules(t: &Obj) -> String {
         if chat { c::CHAT_WAIT.into() } else { WAIT_RULE.into() },
         if chat { "Work that should be done (a follow-up, a bug you come across) you suggest in words in your answer: do not do it and do not add it as a task. Nothing else is done with it.".into() } else {
         format!("If you come across unrelated work that should be done (a bug elsewhere, a follow-up), do not do it and do not add it as a task: mention it in a short \"Also noticed\" list at the end of your closing note{}, one line each with the file it is in, and carry on. Nothing else is done with it. There is no command for suggesting a task any more: where this task's description asks for \"suggestions on this task\", that list is what it gets.", if research { " and of your report" } else { " (and of your report, if you write one)" }) },
+        if chat { String::new() } else { crate::followups::STILL_OPEN_RULE.into() },
         agent_board_rule(),
         crate::automations::told::automation_rule(t),
         crate::autopilot::allow::told(t),

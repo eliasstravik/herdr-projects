@@ -17,6 +17,7 @@ pub mod doctor;
 pub mod extras;
 pub mod finish;
 pub mod flow;
+pub mod followups;
 pub mod hook;
 pub mod housekeeping;
 pub mod install;
