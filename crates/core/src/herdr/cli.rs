@@ -20,7 +20,7 @@ fn herr(code: &str, message: impl Into<String>) -> HerdrError { HerdrError { cod
 /// What a run of the program gave: its status, its output, its error output.
 pub struct Ran { pub status: i32, pub stdout: String, pub stderr: String }
 /// A stand-in for herdr, for tests: answers each command line as the program would.
-pub trait Fake { fn run(&self, args: &[String], input: &str) -> Ran; fn kids(&self, _pid: i64) -> Vec<i64> { vec![] } fn wired_to(&self, pid: i64, group: &[i64]) -> Option<bool> { super::procs::real_wired_to(pid, group) } fn wiring(&self, pid: i64, group: &[i64]) -> super::procs::Wiring { use super::procs::Wiring as W; match self.wired_to(pid, group) { Some(true) => W::Agent, Some(false) => W::Elsewhere, None => W::Unknown } } fn command(&self, _pid: i64) -> Option<String> { None } fn kill(&self, _pid: i64) {} fn ask(&self, _method: &str, _params: &Value) -> Result<Value, HerdrError> { Err(herr("no_server", "no herdr")) } }
+pub trait Fake { fn run(&self, args: &[String], input: &str) -> Ran; fn kids(&self, _pid: i64) -> Vec<i64> { vec![] } fn wired_to(&self, pid: i64, group: &[i64]) -> Option<bool> { super::procs::real_wired_to(pid, group) } fn wiring(&self, pid: i64, group: &[i64]) -> super::procs::Wiring { use super::procs::Wiring as W; match self.wired_to(pid, group) { Some(true) => W::Agent, Some(false) => W::Elsewhere, None => W::Unknown } } fn command(&self, _pid: i64) -> Option<String> { None } fn kill(&self, _pid: i64) {} fn ask(&self, _method: &str, _params: &Value) -> Result<Value, HerdrError> { Err(herr("no_server", "no herdr")) } fn found(&self) -> bool { true } }
 thread_local! { static FAKE: RefCell<Option<Rc<dyn Fake>>> = const { RefCell::new(None) }; }
 /// Tests only: herdr is this stand-in on this thread (None: the real program again).
 pub fn set_fake(f: Option<Rc<dyn Fake>>) { FAKE.with(|x| *x.borrow_mut() = f); }
@@ -28,6 +28,12 @@ pub fn fake() -> Option<Rc<dyn Fake>> { FAKE.with(|x| x.borrow().clone()) }
 
 /// The herdr program: `HERDR_BIN_PATH`, else `herdr` on PATH, else where it is found without it (find.rs).
 pub fn bin() -> String { std::env::var("HERDR_BIN_PATH").ok().filter(|s| !s.is_empty()).or_else(super::find::herdr_elsewhere).unwrap_or_else(|| "herdr".into()) }
+/// Whether the herdr program `bin` names can be run from this process (a test's stand-in says so itself).
+pub fn found() -> bool {
+    if let Some(f) = fake() { return f.found(); }
+    let b = bin();
+    if b.contains('/') { super::find::runs(Path::new(&b)) } else { super::find::in_dirs(&b, &std::env::var("PATH").unwrap_or_default()).is_some() }
+}
 fn config_home() -> PathBuf { std::env::var("XDG_CONFIG_HOME").ok().filter(|s| !s.is_empty()).map(PathBuf::from).unwrap_or_else(|| crate::store::files::user_home().join(".config")) }
 /// The session a plain command talks to: the pane it runs in, else the default session.
 pub fn current_socket() -> String {

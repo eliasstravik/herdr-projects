@@ -65,7 +65,8 @@ fn herdr_up(socket: &str) -> Res<()> {
 pub fn send(cwd: &Path, text: &str, delegate: bool, about: &str, co: impl Into<Co>) -> Res<Obj> { send_as(cwd, text, delegate, about, co, Value::Null) }
 /// The same, from `sender` (a task's agent or reviewer that ran `coordinator tell`: `{ task, role }`), which the turn it
 /// starts is marked with (autopilot/turn.rs). Words that would pass for an autopilot wake are marked as none: only the
-/// board writes a wake. A wake not typed in yet waits behind these words.
+/// board writes a wake. A wake not typed in yet waits behind these words. Where herdr cannot be found, the words are
+/// queued all the same and the answer is an error that says so (not_delivered).
 pub fn send_as(cwd: &Path, text: &str, delegate: bool, about: &str, co: impl Into<Co>, sender: Value) -> Res<Obj> {
     let co = co.into();
     herdr_up(&co.socket)?;
@@ -79,8 +80,14 @@ pub fn send_as(cwd: &Path, text: &str, delegate: bool, about: &str, co: impl Int
         crate::autopilot::wake::yield_to_you(c);
         true
     })?;
+    // Where this process cannot run herdr, neither can the pump it would start: the message is kept, and said to wait.
+    if !crate::herdr::cli::found() { crate::fail!("{}", not_delivered(&co.name())); }
     kick(&co);
     Ok(c)
+}
+/// What `tell` says when herdr cannot be found from here: the message is queued, not delivered, and why.
+pub fn not_delivered(name: &str) -> String {
+    format!("Queued for the {name}, but not delivered: the herdr program was not found here (not on PATH, not in {}, not on a login shell's PATH). The message waits in the queue and goes in once herdr-projects runs where herdr is found (the board and its keeper, in herdr). To deliver from here, set HERDR_BIN_PATH to herdr's full path.", crate::herdr::find::SPOTS.join(", "))
 }
 /// A project coordinator's repo, which must be one this machine knows: it works in its folder.
 fn known(co: &Co) -> Res<Option<std::path::PathBuf>> {

@@ -8,6 +8,9 @@ use serde_json::json;
 use sw::board::keys::key_name;
 use sw::json::*;
 
+/// tell where herdr cannot be found: queued, not delivered, and said so.
+mod undelivered;
+
 pub fn coord_world() -> World {
     let w = world_with(Opts { repo: true, settings: json!({ "coordinator.agent": "claude", "review.when": "never" }), ..Default::default() });
     let home = w.base.join("home-coord");
