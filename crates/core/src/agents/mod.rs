@@ -3,6 +3,7 @@
 pub mod access;
 pub mod adapter;
 pub mod codex_trust;
+pub mod transcript;
 pub mod efforts;
 pub mod hand_limits;
 pub mod helpers;

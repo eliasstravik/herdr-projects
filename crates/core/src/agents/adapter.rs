@@ -4,6 +4,7 @@
 use super::homes::*;
 use super::kinds::fill;
 use super::read_turn::{find_file, head_of, when};
+pub use super::transcript::transcript;
 use crate::err::Res;
 use crate::json::*;
 use crate::util::{shq, uuid};
@@ -91,22 +92,8 @@ pub fn standing(kind: &str, text: &str, dir: &Path) -> Res<Vec<String>> {
     Ok(fill(a.standing, &f.display().to_string()))
 }
 pub fn has_standing(kind: &str) -> bool { kind == "codex" || super::kinds::kind(kind).map(|a| !a.standing.is_empty()).unwrap_or(false) }
-fn real(p: &Path) -> PathBuf { fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()) }
-fn dashed(p: &Path) -> String { p.display().to_string().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect() }
-/// Where a conversation is saved.
-pub fn transcript(kind: &str, session: &str, cwd: &Path) -> Option<PathBuf> {
-    match kind {
-        "claude" => {
-            let direct = claude_home().join("projects").join(dashed(&real(cwd))).join(format!("{session}.jsonl"));
-            if direct.exists() { return Some(direct); }
-            let want = format!("{session}.jsonl");
-            find_file(&claude_home().join("projects"), &|n| n == want, 1).into_iter().next()
-        }
-        "codex" => { let want = format!("{session}.jsonl"); find_file(&codex_home().join("sessions"), &|n| n.ends_with(&want), 4).into_iter().next() }
-        "pi" => { let want = format!("_{session}.jsonl"); find_file(&pi_home().join("sessions"), &|n| n.ends_with(&want), 1).into_iter().next() }
-        _ => None,
-    }
-}
+pub(super) fn real(p: &Path) -> PathBuf { fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()) }
+pub(super) fn dashed(p: &Path) -> String { p.display().to_string().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect() }
 fn mtime_ms(f: &Path) -> Option<i64> { fs::metadata(f).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64) }
 fn first_line(s: &str) -> &str { s.split('\n').next().unwrap_or("") }
 /// The newest conversation saved in a folder since a time: the program's own "new chat" command starts another one.
@@ -250,3 +237,4 @@ pub fn trust(kind: &str, root: &Path) -> bool {
     }
 }
 pub fn can_trust(kind: &str) -> bool { matches!(kind, "claude" | "codex") }
+
