@@ -72,6 +72,9 @@ pub fn agent(f: &F, verb: &str, arg2: &str, argv: &[String], flag: &dyn Fn(&str)
         }
         "prompt" => {
             if st["panes"][pi]["agent"].s("status") == "blocked" { return fail("agent_blocked", "agent is blocked"); }
+            // `lost`: that many prompts come back as sent and leave nothing at all in the pane. herdr typed into a program
+            // that was not reading yet: the box stays empty, nothing is submitted, and no work is going on.
+            if st.i("lost") > 0 { st["lost"] = json!(st.i("lost") - 1); let p = st["panes"][pi].clone(); return ok(json!({ "type": "agent_prompted", "agent": F::agent_out(&p) })); }
             let typed = read_named(&argv.get(3).cloned().unwrap_or_default());
             let box_ = st["panes"][pi]["agent"].at("box").clone();
             let text = if box_.is_string() { format!("{}\n{typed}", text_of(&box_)) } else { typed };
