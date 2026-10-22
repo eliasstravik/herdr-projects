@@ -117,7 +117,7 @@ pub fn delegate_with(id: &str, asked: Vec<(String, Value)>, w: Wait) -> Res<Task
         t.obj_mut("link").put("socket", socket.clone());
         t.put("mergeIntent", Value::Null); t.put("failure", Value::Null); t.put("expectedWake", Value::Null); t.put("turnOpen", false); t.put("waiting", Value::Null);
         if t.at("review").is_object() { t.obj_mut("review").put("stale", true); }
-        for k in ["checkFails", "reviewRounds", "prRounds", "syncRepairs"] { t.put(k, 0); }
+        for k in ["checkFails", "reviewRounds", "prRounds", "syncRepairs", "retried"] { t.put(k, 0); }
         if let Some(d) = &deps { t.put("after", d.clone()); }
         after::on_delegate(t, w.now);
         Ok(Change::Write)
@@ -142,7 +142,7 @@ pub fn start_queued(socket: &str) -> Vec<String> {
         for w in waiting {
             if busy >= max { break; }
             if crate::leftovers::room::still_waiting(w) { continue; } // no room on the disk yet: no runner for it
-            let t = update(w.s("id"), |t| { if t.s("stage") != "queued" { return Ok(Change::Keep); } t.put("stage", "starting"); t.put("msg", ""); Ok(Change::Write) })?;
+            let t = update(w.s("id"), |t| { if t.s("stage") != "queued" { return Ok(Change::Keep); } crate::hook::ask_start(t); t.put("msg", ""); Ok(Change::Write) })?;
             if t.s("stage") != "starting" { continue; }
             busy += 1;
             started.push(t.t("id"));
