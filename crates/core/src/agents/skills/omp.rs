@@ -1,14 +1,15 @@
 //! omp's skills and commands (the web UI's server/skills/omp.ts): skills as `/skill:name`, found in the folders of the
 //! places omp reads (its own `.omp` and agent folder, Claude Code's, `.agent`/`.agents`, Codex's, OpenCode's, the
-//! project's `.github`, the Claude Code plugins installed and turned on, its `customDirectories` and managed skills),
-//! each place on unless its config.yml's `skills` turn it off; commands as `/name` from the same places' `commands`
-//! folders (a plugin's as `/plugin:name`); and prompt templates as `/name`. A name of its own commands is left out.
-//! Not read here, as nothing on disk says it: plugins installed as npm packages and extensions.
+//! project's `.github`, the Claude Code plugins installed and turned on, its extensions and npm plugins
+//! (omp_plugins.rs), its `customDirectories` and managed skills), each place on unless its config.yml's `skills` turn
+//! it off; commands as `/name` from the same places' `commands` folders (a plugin's as `/plugin:name`); and prompt
+//! templates as `/name`. A name of its own commands is left out.
 use super::read::{commands, json_file, skills, texts, yaml_file, Found, Walk};
 use super::{env, path_in, Place, Skill};
 use serde_json::{Map, Value};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use super::omp_plugins::{extensions, portable, portable_skill, targets_portable};
+use std::path::{Path, PathBuf};
 
 /// Its own commands, and the screens it opens: no skill or command by one of these names is listed.
 const OWN: [&str; 90] = [
@@ -62,7 +63,7 @@ pub fn list(p: &Place) -> Vec<Skill> {
     for d in up.iter().rev() { for f in ["settings.json", "settings.local.json"] { on.extend(obj(json_file(&d.join(".claude").join(f)).get("enabledPlugins").unwrap_or(&Value::Null))); } }
     let omp_project = up.iter().find(|d| d.join(".omp").exists() || d.join(".git").exists()).cloned().unwrap_or_else(|| cwd.clone()).join(".omp").join("plugins");
     let mut market: Vec<Root> = vec![];
-    for (dir, claude_list, project_scope) in [(claude_dir.join("plugins"), true, false), (config_root.join("plugins"), false, false), (omp_project, false, true)] {
+    for (dir, claude_list, project_scope) in [(claude_dir.join("plugins"), true, false), (config_root.join("plugins"), false, false), (omp_project.clone(), false, true)] {
         for (id, list) in obj(json_file(&dir.join("installed_plugins.json")).get("plugins").unwrap_or(&Value::Null)) {
             for e in list.as_array().into_iter().flatten() {
                 let Some(path) = e.get("installPath").and_then(Value::as_str) else { continue };
@@ -73,6 +74,13 @@ pub fn list(p: &Place) -> Vec<Skill> {
             }
         }
     }
+    // Its extensions and npm plugins; which plugins are portable ones, and which keep the older layout.
+    let ext: Vec<Root> = extensions(&[(native_project.path.clone(), false), (native_user.path.clone(), true)], &[(config_root.join("plugins"), true), (omp_project, false)], cwd, home)
+        .into_iter().map(|(path, user)| r(path, user, "omp-plugins")).collect();
+    let portables: Vec<Root> = market.iter().chain(&ext).filter(|s| portable(&s.path)).cloned().collect();
+    let is_portable = |s: &Root| portables.iter().any(|x| x.path == s.path);
+    let legacy_ext: Vec<Root> = ext.iter().filter(|s| !targets_portable(&s.path)).cloned().collect();
+    let legacy_market: Vec<Root> = market.iter().filter(|s| !targets_portable(&s.path)).cloned().collect();
     let plugin_dirs = |s: &Root, kind: &str| -> Vec<PathBuf> {
         let m = json_file(&s.path.join(".claude-plugin").join("plugin.json"));
         let declared = m.get(kind).or_else(|| if kind == "commands" { m.get("slash-commands") } else { None }).map(texts).unwrap_or_default();
@@ -92,8 +100,9 @@ pub fn list(p: &Place) -> Vec<Skill> {
     let included = sk.get("includeSkills").map(texts).unwrap_or_default();
     let disabled: Vec<String> = [settings.get("disabledExtensions"), here.get("disabledExtensions")].into_iter().flatten().flat_map(texts).collect();
     let mut seen_files = HashSet::new();
-    let mut add_skills = |dirs: Vec<PathBuf>, out: &mut Vec<Skill>| {
+    let mut add_skills = |dirs: Vec<PathBuf>, spec: Option<&Path>, out: &mut Vec<Skill>| {
         for d in dirs { for f in skills(&d, Walk::One, true) {
+            if spec.is_some_and(|root| !portable_skill(&f, root)) { continue; }
             let n = f.name.trim().to_string();
             if n.is_empty() || n.starts_with('.') || f.fields.get("enabled") == Some(&Value::Bool(false)) || disabled.contains(&format!("skill:{n}"))
                 || ignored.iter().any(|g| glob(g, &n)) || (!included.is_empty() && !included.iter().any(|g| glob(g, &n))) { continue; }
@@ -102,16 +111,19 @@ pub fn list(p: &Place) -> Vec<Skill> {
         } }
     };
     if !off(&sk, "enabled") && !off(&sk, "enableSkillCommands") {
-        for d in sk.get("customDirectories").map(texts).unwrap_or_default() { add_skills(vec![path_in(cwd, home, &d)], &mut out); }
-        let all: Vec<Root> = native_skills.iter().chain(&claude).chain(&market).chain(&agents).chain(&codex).chain(&opencode).chain(std::iter::once(&github)).cloned().collect();
-        for s in all.iter().filter(|s| enabled(s)) { add_skills(if s.plugin.is_some() { plugin_dirs(s, "skills") } else { vec![s.path.join("skills")] }, &mut out); }
-        add_skills(vec![agent.join("managed-skills")], &mut out);
+        for d in sk.get("customDirectories").map(texts).unwrap_or_default() { add_skills(vec![path_in(cwd, home, &d)], None, &mut out); }
+        let all: Vec<Root> = native_skills.iter().chain(&legacy_ext).chain(&claude).chain(&portables).chain(&legacy_market).chain(&agents).chain(&codex).chain(&opencode).chain(std::iter::once(&github)).cloned().collect();
+        for s in all.iter().filter(|s| enabled(s)) {
+            let spec = is_portable(s);
+            add_skills(if s.plugin.is_some() && !spec { plugin_dirs(s, "skills") } else { vec![s.path.join("skills")] }, spec.then_some(s.path.as_path()), &mut out);
+        }
+        add_skills(vec![agent.join("managed-skills")], None, &mut out);
     }
     let mut taken: HashSet<String> = own.iter().map(|s| s.to_string()).collect();
     let short = |f: &Found| -> String { match f.s("description") { Some(d) => d.trim().to_string(), None => { let a = f.about.clone(); if a.chars().count() > 60 { format!("{}...", a.chars().take(60).collect::<String>()) } else { a } } } };
     let mut add = |name: String, about: String, out: &mut Vec<Skill>| { if taken.insert(name.clone()) { out.push(Skill { typed: format!("/{name}"), about: super::read::brief(&about) }); } };
     let claude_cmds = vec![r(claude_dir.clone(), true, "claude"), r(cwd.join(".claude"), false, "claude")];
-    let cmd_scopes: Vec<Root> = [native_project.clone(), native_user.clone()].into_iter().chain(claude_cmds).chain(market.clone()).chain(agents.clone()).chain(codex.clone()).chain(opencode.clone()).collect();
+    let cmd_scopes: Vec<Root> = [native_project.clone(), native_user.clone()].into_iter().chain(legacy_ext.clone()).chain(claude_cmds).chain(legacy_market).chain(agents.clone()).chain(codex.clone()).chain(opencode.clone()).collect();
     for s in cmd_scopes {
         if ["claude", "opencode"].contains(&s.provider) && off(&cm, &format!("enable{}{}", if s.provider == "claude" { "Claude" } else { "Opencode" }, lvl(&s))) { continue; }
         let dirs = if s.plugin.is_some() { plugin_dirs(&s, "commands") } else { vec![s.path.join("commands")] };
@@ -122,7 +134,7 @@ pub fn list(p: &Place) -> Vec<Skill> {
             if s.provider == "claude" && f.name.contains(':') { add(f.name.clone(), short(&f), &mut out); }
         } }
     }
-    for s in [native_user, native_project].into_iter().chain(agents).chain(codex).chain(std::iter::once(github)) {
+    for s in [native_user, native_project].into_iter().chain(legacy_ext).chain(agents).chain(codex).chain(std::iter::once(github)) {
         let dir = s.path.join("prompts");
         for f in commands(&dir, s.provider == "native") {
             let file = f.path.file_name().map(|x| x.to_string_lossy().to_string()).unwrap_or_default();

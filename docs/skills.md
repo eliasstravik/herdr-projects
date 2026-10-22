@@ -59,7 +59,7 @@ The same as the Herdr web UI lists, read from the same places:
 | Devin | `/name` by the skill's folder: Devin's own skills folders, Windsurf's, Claude Code's and Copilot's (as its `config.json` lets it read them), and its plugins' as `/plugin:name`. A name two places have says the place: `/claude:review` |
 | Grok | `/name`: the project's `.grok/skills` and `.claude/skills`, yours in `~/.grok/skills` (or `$GROK_HOME`) and `~/.claude/skills`, the paths of its `config.toml`, and its plugins'. What git or its `[skills] ignore` leaves out is left out |
 | Hermes | `/name` in its own spelling (`Web Tool` is `/web-tool`): `~/.hermes/skills` (or `$HERMES_HOME`) and its other skill folders, a project's only where its `config.yaml` trusts it, its skill bundles and its quick commands |
-| omp | `/skill:name` from every place it reads (its own folders, Claude Code's, `.agents`, Codex's, OpenCode's, `.github`, the Claude Code plugins turned on), as its `config.yml` lets it; its commands and prompts as `/name` |
+| omp | `/skill:name` from every place it reads (its own folders, Claude Code's, `.agents`, Codex's, OpenCode's, `.github`, the Claude Code plugins turned on, the extensions its `settings.json` names and its npm plugins), as its `config.yml` lets it; its commands and prompts as `/name` |
 | Antigravity (agy) | `/name`: the project's `.agents` skills (and those its `skills.json` names), yours in `~/.gemini/config/skills` and its plugins', and the ones it comes with |
 
 - Each shows what it does in its first sentence: the rest of a skill's description says when to use it, which is for the

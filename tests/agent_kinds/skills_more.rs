@@ -97,6 +97,34 @@ fn omp_offers_skills_as_skill_name_from_every_place_it_reads_its_commands_and_it
 }
 
 #[test]
+fn omp_offers_the_skills_of_its_extensions_and_npm_plugins_and_a_portable_plugins_only_where_they_keep_the_spec() {
+    let w = world_with(Opts { repo: true, ..Default::default() });
+    let (agent, home) = (w.base.join("pi"), w.base.join("home"));
+    // an extension its settings.json names, with a command
+    skill(&w.base.join("ext/skills"), "ext-check", "From an extension");
+    write(&w.base.join("ext/commands/ext-run.md"), "Run the extension\n");
+    write(&agent.join("settings.json"), &json!({ "extensions": [w.base.join("ext")] }).to_string());
+    // npm plugins in its plugins folder: one for omp, one turned off in its lock file, one that is no omp plugin
+    let plugins = home.join(".omp/plugins");
+    write(&plugins.join("package.json"), &json!({ "dependencies": { "npm-plugin": "1.0.0", "off-plugin": "1.0.0", "other": "1.0.0" } }).to_string());
+    write(&plugins.join("omp-plugins.lock.json"), &json!({ "plugins": { "off-plugin": { "enabled": false } } }).to_string());
+    for (n, pkg) in [("npm-plugin", json!({ "name": "npm-plugin", "omp": {} })), ("off-plugin", json!({ "name": "off-plugin", "omp": {} })), ("other", json!({ "name": "other" }))] {
+        write(&plugins.join("node_modules").join(n).join("package.json"), &pkg.to_string());
+        skill(&plugins.join("node_modules").join(n).join("skills"), &format!("{n}-check"), "From npm");
+    }
+    // a portable plugin: a skill that keeps the spec counts, one with a field the spec has not does not
+    let port = plugins.join("node_modules/npm-plugin");
+    write(&port.join("plugin.json"), &json!({ "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "npm-plugin" }).to_string());
+    write(&port.join("skills/odd/SKILL.md"), "---\nname: odd\ndescription: Not the spec's\nextra: yes\n---\n");
+    let l = offered("omp", &w.root);
+    assert_eq!(typed(&l), vec!["/ext-run", "/skill:ext-check", "/skill:npm-plugin-check"]);
+    assert_eq!(about(&l, "/skill:ext-check"), "From an extension");
+    // turned off in the project's plugin overrides
+    write(&w.root.join(".omp/plugin-overrides.json"), &json!({ "disabled": ["npm-plugin"] }).to_string());
+    assert_eq!(typed(&offered("omp", &w.root)), vec!["/ext-run", "/skill:ext-check"]);
+}
+
+#[test]
 fn agy_offers_the_projects_yours_and_the_ones_it_comes_with_less_its_own_commands() {
     let w = world_with(Opts { repo: true, ..Default::default() });
     let gemini = w.base.join("home/.gemini");

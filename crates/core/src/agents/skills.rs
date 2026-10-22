@@ -10,6 +10,7 @@ pub mod devin;
 pub mod grok;
 pub mod hermes;
 pub mod omp;
+pub mod omp_plugins;
 pub mod opencode;
 pub mod pi;
 pub mod read;
