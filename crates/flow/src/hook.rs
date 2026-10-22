@@ -4,7 +4,9 @@
 //! Verified on herdr 0.9.3: plugin hooks do fire on agent status changes; HERDR_PLUGIN_EVENT_JSON carries
 //! {event, data: {pane_id, workspace_id, agent_status, agent}}; an agent exiting to its shell fires
 //! pane.agent_detected (released) and a status change to "unknown"; herdr does not replay missed events.
+mod lost;
 mod reconcile;
+pub use lost::{ask_start, retry_lost, GRACE_MS};
 pub use reconcile::{reconcile, same_dir};
 
 use crate::agents::{adapter::find_session, installed::read_turn_of};
