@@ -37,7 +37,13 @@ pub fn transcript(kind: &str, session: &str, cwd: &Path) -> Option<PathBuf> {
     let known = FOUND.lock().unwrap().get(&key).cloned();
     match known {
         Some((Some(f), at)) if at.elapsed() < FRESH && f.is_file() => return Some(f),
-        Some((None, at)) if at.elapsed() < MISS_FRESH => return None,
+        // A miss is believed only after the places a new conversation is saved first are looked at again (cheap): a
+        // hook can come before its conversation is written, and a coordinator looks before its first prompt.
+        Some((None, at)) if at.elapsed() < MISS_FRESH => {
+            let f = quick(kind, session, cwd)?;
+            FOUND.lock().unwrap().insert(key, (Some(f.clone()), Instant::now()));
+            return Some(f);
+        }
         _ => {}
     }
     let found = locate(kind, session, cwd);
@@ -62,24 +68,35 @@ pub(super) fn pi_saved(cwd: &Path, was: Option<&Path>) -> Vec<PathBuf> {
     all.sort_by_cached_key(|p| std::cmp::Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok()));
     all
 }
-fn locate(kind: &str, session: &str, cwd: &Path) -> Option<PathBuf> {
+/// The newest of a folder's sub-folders by name (codex saves under `YYYY/MM/DD`).
+fn last_dir(d: &Path) -> Option<PathBuf> {
+    std::fs::read_dir(d).ok()?.flatten().filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false)).map(|e| e.path()).max()
+}
+/// Where a new conversation is saved, looked at without a search: the folder for the cwd (claude, pi) or today's
+/// folder (codex).
+fn quick(kind: &str, session: &str, cwd: &Path) -> Option<PathBuf> {
     match kind {
-        "claude" => {
-            let direct = claude_home().join("projects").join(dashed(&real(cwd))).join(format!("{session}.jsonl"));
-            if direct.exists() { return Some(direct); }
+        "claude" => Some(claude_home().join("projects").join(dashed(&real(cwd))).join(format!("{session}.jsonl"))).filter(|f| f.is_file()),
+        "codex" => {
             let want = format!("{session}.jsonl");
-            find_file(&claude_home().join("projects"), &|n| n == want, 1).into_iter().next()
+            let day = last_dir(&last_dir(&last_dir(&codex_home().join("sessions"))?)?)?;
+            find_file(&day, &|n| n.ends_with(&want), 0).into_iter().next()
         }
-        "codex" => { let want = format!("{session}.jsonl"); find_file(&codex_home().join("sessions"), &|n| n.ends_with(&want), 4).into_iter().next() }
         "pi" => {
             let want = format!("_{session}.jsonl");
-            let root = pi_home().join("sessions");
-            let given = lexical(cwd);
-            for dir in [given.clone(), real(&given)] {
-                if let Some(f) = find_file(&root.join(pi_dir(&dir)), &|n| n.ends_with(&want), 0).into_iter().next() { return Some(f); }
-            }
-            find_file(&root, &|n| n.ends_with(&want), 1).into_iter().next()
+            let (root, given) = (pi_home().join("sessions"), lexical(cwd));
+            [given.clone(), real(&given)].iter().find_map(|d| find_file(&root.join(pi_dir(d)), &|n| n.ends_with(&want), 0).into_iter().next())
         }
+        _ => None,
+    }
+}
+/// Every place a program may have saved a conversation: a search of its whole sessions folder.
+fn locate(kind: &str, session: &str, cwd: &Path) -> Option<PathBuf> {
+    if let Some(f) = quick(kind, session, cwd) { return Some(f); }
+    match kind {
+        "claude" => { let want = format!("{session}.jsonl"); find_file(&claude_home().join("projects"), &|n| n == want, 1).into_iter().next() }
+        "codex" => { let want = format!("{session}.jsonl"); find_file(&codex_home().join("sessions"), &|n| n.ends_with(&want), 4).into_iter().next() }
+        "pi" => { let want = format!("_{session}.jsonl"); find_file(&pi_home().join("sessions"), &|n| n.ends_with(&want), 1).into_iter().next() }
         _ => None,
     }
 }
@@ -137,10 +154,13 @@ mod transcript_tests {
     fn a_miss_is_remembered_briefly() {
         let h = home("miss", 0);
         assert_eq!(transcript("pi", "sw-late", Path::new("/tmp/hp-project")), None);
-        let f = save(&h, "--tmp-hp-project--", "sw-late");
-        assert_eq!(transcript("pi", "sw-late", Path::new("/tmp/hp-project")), None, "a miss is not searched again at once");
+        let f = save(&h, "--tmp-elsewhere--", "sw-late");
+        assert_eq!(transcript("pi", "sw-late", Path::new("/tmp/hp-project")), None, "a miss is not searched for everywhere at once");
         FOUND.lock().unwrap().get_mut(&("pi".to_string(), "sw-late".to_string())).unwrap().1 -= MISS_FRESH;
         assert_eq!(transcript("pi", "sw-late", Path::new("/tmp/hp-project")), Some(f), "and is searched again after a while");
+        assert_eq!(transcript("pi", "sw-new", Path::new("/tmp/hp-project")), None);
+        let own = save(&h, "--tmp-hp-project--", "sw-new");
+        assert_eq!(transcript("pi", "sw-new", Path::new("/tmp/hp-project")), Some(own), "one saved in its own folder is found at once");
     }
     #[test]
     fn a_remembered_answer_is_used_without_searching() {
@@ -181,11 +201,11 @@ mod transcript_tests {
     #[test]
     fn newest_first_from_its_own_folders_only() {
         let h = home("saved", 3);
+        let at = |f: &PathBuf, secs: u64| { fs::File::options().write(true).open(f).unwrap().set_modified(std::time::UNIX_EPOCH + Duration::from_secs(secs)).unwrap(); };
         let old = save(&h, "--tmp-hp-project--", "sw-old");
-        std::thread::sleep(Duration::from_millis(20));
         let moved = save(&h, "--tmp-hp-before--", "sw-was");
-        std::thread::sleep(Duration::from_millis(20));
         let new = save(&h, "--tmp-hp-project--", "sw-new");
+        at(&old, 1_000_000); at(&moved, 2_000_000); at(&new, 3_000_000);
         let got = pi_saved(Path::new("/tmp/hp-project/"), Some(Path::new("/tmp/hp-before")));
         assert_eq!(got, vec![new, moved, old], "newest first, other folders left out");
     }
