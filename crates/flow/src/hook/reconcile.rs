@@ -1,13 +1,12 @@
 //! Reconcile compares a linked task with herdr: pane gone, pane alive with no agent, a finished turn nobody handled,
-//! a runner marker whose process is dead. A task whose pane id no longer matches, or now names another's pane, is
-//! linked again.
+//! a runner lost before its step was done (hook/lost.rs). A task whose pane id no longer matches, or now names
+//! another's pane, is linked again.
 use super::apply;
 use crate::clock::now;
 use crate::flow::task::is_agent_task;
 use crate::herdr::Herdr;
 use crate::json::*;
-use crate::runner::spawn_runner;
-use crate::store::{failures::failure_patch, files::{marker_alive, RUNNER_STAGES}, repos::cwd_of, tasks::{update_wait, Change, Task}};
+use crate::store::{repos::cwd_of, tasks::{update_wait, Change, Task}};
 use crate::submit::check_sent;
 use std::path::Path;
 
@@ -15,11 +14,13 @@ pub fn same_dir(a: &str, b: &Path) -> bool {
     if a.is_empty() || b.as_os_str().is_empty() { return false; }
     match (std::fs::canonicalize(a), std::fs::canonicalize(b)) { (Ok(x), Ok(y)) => x == y, _ => Path::new(a) == b }
 }
-fn upd(id: &str, f: impl FnOnce(&mut Task) -> bool) { let _ = update_wait(id, 10000, |t| Ok(if f(t) { Change::Write } else { Change::Keep })); }
+pub(super) fn upd(id: &str, f: impl FnOnce(&mut Task) -> bool) { let _ = update_wait(id, 10000, |t| Ok(if f(t) { Change::Write } else { Change::Keep })); }
 
 pub fn reconcile(t: &Task, api: &Herdr) {
     if !is_agent_task(t) || t.b("archivedAt") { return; }
     let id = t.s("id");
+    // A runner lost before its step was done: tried again once, then failed; also before the task's agent is there.
+    if super::lost::retry_lost(t) { return; }
     let mut pane = api.pane_get(t.at("link").s("pane")).filter(|p| crate::flow::live::owns_pane(t, p)); // its id handed to another: gone
     if pane.is_none() { pane = relink(t, api); }
     let agent = pane.as_ref().and_then(|p| api.agent_get(p.s("pane_id")).ok().flatten());
@@ -37,30 +38,6 @@ pub fn reconcile(t: &Task, api: &Herdr) {
     };
     let cwd = cwd_of(t);
     if !same_dir(a.s("cwd"), &cwd) && !same_dir(a.s("foreground_cwd"), &cwd) { return; }
-    // A runner marker whose pid is dead is cleared and the step retried once.
-    if t.at("runner").is_object() && !marker_alive(t.at("runner")) {
-        let dead = t.at("runner").clone();
-        let Ok(cur) = update_wait(id, 10000, |t| {
-            if !t.at("runner").is_object() || marker_alive(t.at("runner")) { return Ok(Change::Keep); }
-            t.put("runner", Value::Null); let r = t.i("retried") + 1; t.put("retried", r);
-            Ok(Change::Write)
-        }) else { return };
-        let stage = cur.t("stage");
-        let auto = stage == "merging" && cur.b("autoMerge");
-        if !cur.b("runner") && cur.i("retried") <= 1 && RUNNER_STAGES.contains(&stage.as_str()) {
-            let job = if stage == "merging" { "land" } else if stage == "starting" || stage == "setup" { "delegate" } else { "pipeline" };
-            if job == "delegate" { upd(id, |t| { t.put("stage", "starting"); true }); }
-            if job == "pipeline" { upd(id, |t| { t.put("stage", "checking"); true }); }
-            if !auto { spawn_runner(job, id, &[]); }
-        } else if !cur.b("runner") && RUNNER_STAGES.contains(&stage.as_str()) && !auto {
-            upd(id, |t| {
-                t.put("stage", "failed"); t.put("msg", "A workflow step stopped unexpectedly");
-                for (k, v) in failure_patch(&obj(json!({ "stage": "workflow", "title": "A workflow step stopped unexpectedly", "detail": format!("The {} step ended without finishing, twice.", dead.s("job")), "next": "Reply to the agent or delegate again to retry.", "auth": false }))) { t.insert(k, v); }
-                true
-            });
-        }
-        return;
-    }
     check_sent(id, Some(&a), api); // text typed in a while ago and not taken yet gets its enter again
     apply(id, &a, api); // covers hooks missed while herdr restarted
 }
