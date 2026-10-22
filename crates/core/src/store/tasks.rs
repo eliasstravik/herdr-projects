@@ -118,6 +118,7 @@ pub fn save(t: &Task) -> Res<()> { write_json(&task_file(t.s("id")), &Value::Obj
 /// A new task in the repo of `folder`, as to do.
 pub fn create(folder: &Path, title: &str, description: &str, owner: Option<&str>) -> Res<Task> {
     let (name, root) = repos::repo_of(folder)?;
+    super::archived_repos::refuse_archived(&name)?;
     let t = titles::titled(title, description);
     if t.title.is_empty() { crate::fail!("A task needs a title."); }
     with_lock(&format!("seq:{name}"), || {

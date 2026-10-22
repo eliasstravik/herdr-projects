@@ -1,9 +1,10 @@
 //! What a chat shows of a conversation: only its words. What a task's agent said, or its reviewer while the task is
 //! under review, and what was sent to it, each under a line that names whose words they are: the agent's or the
 //! reviewer's, yours, the Coordinator's or the board's. Never the program's screen (no tool call, no spinner, no
-//! input box), but for a program whose conversation cannot be read: then only the words on its screen. Read from the
-//! task's `snap` (data.rs), this machine's or another's.
+//! input box), but for a program whose conversation cannot be read: then only the words on its screen. A picture in
+//! what was sent stands as `[Image 1]`. Read from the task's `snap` (data.rs), this machine's or another's.
 use crate::board::keys::key_name;
+use crate::board::textbox::images::labelled;
 use crate::json::*;
 use crate::shown::words::brief;
 
@@ -15,20 +16,24 @@ pub struct Talk { pub who: String, pub name: String, pub parts: Vec<Part>, pub d
 /// Who typed what was sent to the program, by the name the chat gives them; as the Coordinator's chat has it, your own
 /// words are "You". (A machine that does not say who typed it says "you" for all of it.)
 fn sender(who: &str) -> &'static str { match who { "board" => "Board", "coordinator" => "Coordinator", _ => "You" } }
-/// What was sent is a brief or a prompt, often long: its beginning stands for it.
-fn sent(text: &str) -> String { brief(text, 600, " …") }
+/// What was sent is a brief or a prompt, often long: its beginning stands for it. A picture in it stands as its chip,
+/// `[Image 1]`, as it did in the box (textbox/images.rs).
+fn sent(text: &str) -> String { brief(&labelled(text), 600, " …") }
 /// Your own words stand once: where the conversation already ends with them, that part is yours.
 pub fn with_mine(parts: Vec<Part>, mine: &str) -> Vec<Part> {
     if mine.is_empty() { return parts; }
     let said: Vec<Part> = parts.into_iter().filter(|p| p.note.is_empty()).collect();
     let words = mine.trim();
     let head: String = words.chars().take(200).collect();
-    let same = said.last().map(|l| l.sent && (if l.whole.is_empty() { &l.text } else { &l.whole }).contains(&head)).unwrap_or(false);
+    // Where the program wrote its own name for a picture it took in (`[Image #39]`), the words are compared with each
+    // picture as its chip; else as they are, so other pictures with the same words are another message.
+    let chipped: String = labelled(words).chars().take(200).collect();
+    let same = said.last().map(|l| { let w = if l.whole.is_empty() { &l.text } else { &l.whole }; l.sent && (w.contains(&head) || w.contains("[Image #") && labelled(w).contains(&chipped)) }).unwrap_or(false);
     // A command (`/clear`) is answered by what it did, which the program writes down at once: it stands with its answer.
     let done = words.starts_with('/') && said.len() >= 2 && said[said.len() - 2].sent && said[said.len() - 2].text == words && !said[said.len() - 1].sent;
     if done { return said; }
     let mut out: Vec<Part> = if same { said[..said.len() - 1].to_vec() } else { said };
-    out.push(Part { by: "You".into(), text: words.into(), mine: true, sent: true, ..Default::default() });
+    out.push(Part { by: "You".into(), text: labelled(words), whole: words.into(), mine: true, sent: true, ..Default::default() });
     out
 }
 /// The part a chat's box opens on, and the only one it holds until you scroll up: the newest thing said, whoever said

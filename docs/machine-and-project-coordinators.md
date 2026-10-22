@@ -82,8 +82,8 @@ uncounted.
   message starts it.
 - `Enter` sends, and a coordinator decides itself what to start.
 - **A repo with no tasks in view keeps its row**, folded (`0 tasks`), when it was used in the last 14 days (a task,
-  archived ones too) or has a project coordinator, so `Space` still reaches it. Older repos, and repos whose folder is
-  gone, have none.
+  archived ones too) or has a project coordinator, so `Space` still reaches it. Older repos, repos whose folder is
+  gone, and [archived projects](board.md#archiving-a-project) have none.
 
 ## What each one is
 
@@ -116,6 +116,8 @@ As a task's row stands for the task:
   agent on a task and stop it. Here or on its machine.
 - `Ctrl+O` puts it on [autopilot](autopilot.md) with its saved goal and settings, and takes it off again. While on,
   its row's mark is `∞`.
+- `Ctrl+A` on a project's row archives the whole project, its tasks with it, and stops its coordinator; in the archive
+  it restores it ([archiving a project](board.md#archiving-a-project)).
 - While one of these takes a moment, its row says `Starting…` or `Stopping…` with the working mark, as a task's does,
   and nothing is said under the chat when it worked ([what a key shows at once](under-way.md)).
 

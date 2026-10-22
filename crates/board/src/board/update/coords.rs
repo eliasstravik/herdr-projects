@@ -44,6 +44,8 @@ pub fn of_head(s: &State, id: &str) -> Option<Target> {
         ["machine", ""] if super::top::alone(s) => Some(Target { host: String::new(), to: String::new(), name: super::top::coordinator_of(&label(s, "")) }),
         // A machine on an older version has its top-level coordinator only: its row talks to that one.
         ["machine", host] => { let old = s.remotes.get(*host).is_some_and(|m| m.ok && !m.coords.is_object()); Some(Target { host: host.to_string(), to: if old { String::new() } else { "machine".into() }, name: super::top::coordinator_of(&label(s, host)) }) }
+        // An archived project has no coordinator to talk to until it is restored.
+        ["repo", host, repo] if super::heads::archived_head(s, host, repo) => None,
         ["repo", host, repo] => Some(Target { host: host.to_string(), to: format!("project:{repo}"), name: super::top::coordinator_of(&super::heads::repo_shown(s, host, repo)) }),
         _ => None,
     }

@@ -41,6 +41,8 @@ pub struct Data {
     pub keys: Keys, pub repos: Vec<String>, pub roots: BTreeMap<String, String>, pub session: String, pub notify: String,
     /// The known repos that keep their heading by repo with no task in view (`used_lately`).
     pub lately: Vec<String>,
+    /// This machine's archived projects (store/archived_repos.rs): off the board, each a heading in the archive.
+    pub archived: Vec<String>,
     /// The repo the board is in (where it was opened, or where a draft was typed), its folder, and the tasks' file.
     pub repo: String, pub repo_root: String,
     /// This machine's name, for its heading on the board of every machine.
@@ -83,9 +85,11 @@ pub fn load(wants: &Wants) -> Data {
     for r in items.iter_mut() { if wants.ids.iter().any(|w| w == r.s("id")) { let s = snap(r); r.put("snap", s); } }
     let now = crate::clock::now();
     let roots: BTreeMap<String, String> = known_repos().iter().map(|(k, v)| (k.clone(), text(v))).collect();
-    let lately = used_lately(&items, &roots, &socket, now);
+    let archived: Vec<String> = crate::store::archived_repos::archived_repos().keys().cloned().collect();
+    // An archived project keeps no row: not for its last use, its coordinator or its automations.
+    let lately = used_lately(&items, &roots, &socket, now).into_iter().filter(|r| !archived.contains(r)).collect();
     let items = items.into_iter().map(std::sync::Arc::new).collect();
-    let autos: Vec<Obj> = automations().into_iter().map(|a| shown_auto(a, now)).collect();
+    let autos: Vec<Obj> = automations().into_iter().filter(|a| !archived.iter().any(|r| r == a.s("repo"))).map(|a| shown_auto(a, now)).collect();
     let jobs: Vec<Obj> = dispatches();
     // A finished instruction is forgotten without a word: its row goes, and what it did is on the board.
     for j in &jobs { if j.s("state") == "done" { clear_dispatch(j.s("id")); } }
@@ -96,10 +100,10 @@ pub fn load(wants: &Wants) -> Data {
     let here = repo_here(&wants.cwd);
     let looks = looks(&socket, &wants.looks);
     // A project's whose repo folder is gone has no row: as a repo's heading, it would lead nowhere.
-    let coords = crate::coordinator::state::all(&socket).into_iter().filter(|c| !c.is_top() && c.repo().is_none_or(|r| roots.get(r).is_some_and(|f| std::path::Path::new(f).is_dir()))).map(|c| c.to()).collect();
+    let coords = crate::coordinator::state::all(&socket).into_iter().filter(|c| !c.is_top() && c.repo().is_none_or(|r| roots.get(r).is_some_and(|f| std::path::Path::new(f).is_dir()) && !archived.iter().any(|a| a == r))).map(|c| c.to()).collect();
     let skills = crate::board::skills::read(&wants.skills, &socket, &coord, sub.as_ref());
     Data {
-        items, autos, jobs, coord, coord_screen, sub, looks, coords, can_dispatch: crate::coordinator::who::ready(&socket), keys: repo_keys(), repos: roots.keys().cloned().collect(), roots, lately,
+        items, autos, jobs, coord, coord_screen, sub, looks, coords, can_dispatch: crate::coordinator::who::ready(&socket), keys: repo_keys(), repos: roots.keys().cloned().collect(), roots, lately, archived,
         session: session_name(&socket), notify: setting("board.notify", None).as_str().unwrap_or("").to_string(),
         repo: here.0, repo_root: here.1, host: crate::remote::check::hostname(),
         // herdr's approve action and a line left by the board key are for a board in a terminal, never the web board.
