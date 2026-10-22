@@ -11,4 +11,5 @@ pub mod plan;
 pub mod settings;
 pub mod shared;
 pub mod start;
+pub mod stop_ends;
 pub mod talk;

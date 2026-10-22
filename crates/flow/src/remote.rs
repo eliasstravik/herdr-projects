@@ -200,7 +200,7 @@ pub fn door_with(what: &str, req: &Value, bytes: &[u8]) -> Res<Value> {
                 "review" => ok(finish_line::send_review(&id)?.msg),
                 "finish" => ok(finish_line::finish_anyway(&id)?.msg),
                 "pin" => { let p = filing::pin(&id)?; ok(format!("{id}: {}", if p.b("pinned") { "pinned" } else { "unpinned" })) }
-                "stop" => { talk::stop(&id)?; ok(format!("{id}: stopped.")) }
+                "stop" => { let s = talk::stop(&id)?; ok(talk::stopped(&format!("{id}: stopped."), &s.msg)) }
                 // Where a task stands, whole, with its closing note: for a coordinator elsewhere that looks after it.
                 "details" => { let mut d = tidy(finish_line::details(&id)?); crate::autopilot::history::with_note(&mut d); Ok(json!({ "ok": true, "msg": "", "details": d })) }
                 // Going into a task from another machine: reopen its space and restart its exited agent here first,

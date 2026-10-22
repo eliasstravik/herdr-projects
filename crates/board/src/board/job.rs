@@ -168,7 +168,7 @@ fn run_one(job: Job) -> Done {
             Job::SendFailure { id } => green(finish_line::send_failure(&id)?.msg),
             Job::SendError { id } => green(finish_line::send_error(&id)?.msg),
             Job::SendReview { id } => green(finish_line::send_review(&id)?.msg),
-            Job::Stop { id, said } => { talk::stop(&id)?; Done::say(said, Ink::Yellow) }
+            Job::Stop { id, said } => { let s = talk::stop(&id)?; Done::say(talk::stopped(&said, &s.msg), Ink::Yellow) }
             Job::Pin { id, name, key } => { let t = filing::pin(&id)?; Done::say(if t.b("pinned") { format!("Pinned {name} to the top. {key} unpins it.") } else { format!("Unpinned {name}.") }, Ink::Muted) }
             Job::Archive { id, said } => { archive::archive(&id)?; Done::say(said, Ink::Green).and(Then::Archived(id)) }
             Job::ArchiveProject { repo, said } => { let (r, _) = crate::actions::archive_project::archive_project(&repo)?; Done::say(format!("{r}{said}"), if r.contains("Still on the board") { Ink::Yellow } else { Ink::Green }) }

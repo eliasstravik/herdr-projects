@@ -75,6 +75,14 @@ Coordinator's closing line use them too):
 | `archive --done [--repo NAME]` | `Archived 50 done tasks of mstars.`, and what it left out: `Left out: 1 done but pinned, 2 working.` |
 | `archive --repo NAME`, `restore --repo NAME` | `Archived mstars and its 6 tasks.`, `Restored mstars and its 6 tasks.`, and the tasks it stopped first ([archiving a project](board.md#archiving-a-project)) |
 | `approve` | `approved` |
+| `stop` | `stopped`, and what it ended beside the agent: `proj/12: stopped. Ended what it started: bun …/check (pid 812).` |
+
+`stop` interrupts the agent and keeps it, so a reply goes on, and ends what it started for the task: every process
+in its terminal below its shell but the agent and its helpers (an MCP server wired to it), the whole tree, and your
+processes that run from the task's worktree or temporary folder. Never your own checkout, another task's worktree, or
+what runs in the task's other panes (yours, its reviewer's). One started for the task that works elsewhere now is named
+for you to end, not ended: `Still running, end it yourself: node …/x.js (pid 9), in /srv/app.` So is what runs from its
+folders when herdr does not say what runs in its panes: then the agent and your shells there cannot be told apart.
 
 `approve` refuses work whose last review failed, and says what the review found. `approve <id> --anyway` merges it all
 the same. It is for when the human said so in so many words.

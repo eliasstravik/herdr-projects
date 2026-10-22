@@ -2,7 +2,8 @@
 //! output are wired to the agent's group itself, a pipe or a socket whose other end a process of that group holds, and
 //! its errors go to no terminal. A command left running is not: its streams are the terminal, a file or `/dev/null`.
 //! Unknown (the system cannot be asked, the process is another user's): not a helper. What it is wired to instead is
-//! said in words when it keeps a space in use (busy.rs).
+//! said in words when it keeps a space in use (busy.rs). Ending a process, and whether it still runs, go through a
+//! test's stand-in for its own processes.
 use std::process::Command;
 
 fn tty(s: &str) -> bool { s.starts_with("/dev/pts/") || s.starts_with("/dev/tty") || s == "/dev/console" }
@@ -30,9 +31,20 @@ pub fn wiring(pid: i64, group: &[i64]) -> Wiring {
 }
 pub fn real_wired_to(pid: i64, group: &[i64]) -> Option<bool> { real_wiring(pid, group).wired() }
 pub fn real_wiring(pid: i64, group: &[i64]) -> Wiring { if cfg!(target_os = "linux") { linux(pid, group) } else { lsof(pid, group) } }
+/// Ask a process to end (`sig`): false where it cannot be (gone, another user's). A test's stand-in ends its own.
+pub fn signal(pid: i64, sig: i32) -> bool {
+    if let Some(f) = super::cli::fake() { if f.alive(pid).is_some() { f.kill(pid); return true; } }
+    pid > 1 && unsafe { libc::kill(pid as i32, sig) } == 0
+}
+/// Does the process still run? A zombie that only waits for its parent to read it does not.
+pub fn running(pid: i64) -> bool {
+    if let Some(a) = super::cli::fake().and_then(|f| f.alive(pid)) { return a; }
+    if !crate::store::files::pid_alive(pid) { return false; }
+    !std::fs::read_to_string(format!("/proc/{pid}/stat")).ok().and_then(|s| s.rfind(')').map(|i| s[i + 2..].starts_with('Z'))).unwrap_or(false)
+}
 /// A process's command line, where the system tells (`ps`).
 pub fn command(pid: i64) -> Option<String> {
-    if let Some(f) = super::cli::fake() { return f.command(pid); }
+    if let Some(c) = super::cli::fake().and_then(|f| f.command(pid)) { return Some(c); }
     let o = Command::new("ps").args(["-o", "args=", "-p", &pid.to_string()]).output().ok()?;
     Some(String::from_utf8_lossy(&o.stdout).trim().to_string()).filter(|s| !s.is_empty())
 }

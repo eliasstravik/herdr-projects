@@ -17,12 +17,9 @@ fn line_of(pid: i32) -> Vec<i32> {
     v
 }
 /// This process and the ones it runs under.
-fn own_line() -> Vec<i32> { line_of(std::process::id() as i32) }
+pub fn own_line() -> Vec<i32> { line_of(std::process::id() as i32) }
 /// A process that is gone, or a zombie that only waits for its parent to read it.
-fn ended(pid: i32) -> bool {
-    if !crate::store::files::pid_alive(pid as i64) { return true; }
-    std::fs::read_to_string(format!("/proc/{pid}/stat")).ok().and_then(|s| s.rfind(')').map(|i| s[i + 2..].starts_with('Z'))).unwrap_or(false)
-}
+fn ended(pid: i32) -> bool { !crate::herdr::procs::running(pid as i64) }
 #[cfg(target_os = "linux")]
 fn running_from(dir: &Path) -> Vec<i32> {
     use std::os::unix::fs::MetadataExt;
@@ -61,11 +58,41 @@ pub fn in_folder_but(dir: &Path, under: Option<i32>) -> Vec<i32> {
 pub fn stop_in(dir: &Path) -> usize {
     if std::fs::symlink_metadata(dir).map(|m| m.file_type().is_symlink()).unwrap_or(true) { return 0; } // never through a link
     let pids = in_folder(dir);
+    end(&pids);
+    pids.len()
+}
+/// End processes: asked to end, then, a few seconds on, ended. Those that still run.
+pub fn end(pids: &[i32]) -> Vec<i32> {
     for sig in [libc::SIGTERM, libc::SIGKILL] {
         let left: Vec<i32> = pids.iter().copied().filter(|p| !ended(*p)).collect();
         if left.is_empty() { break; }
-        for p in &left { unsafe { libc::kill(*p, sig); } }
+        for p in &left { crate::herdr::procs::signal(*p as i64, sig); }
         for _ in 0..30 { if left.iter().all(|p| ended(*p)) { break; } std::thread::sleep(std::time::Duration::from_millis(100)); }
     }
-    pids.len()
+    pids.iter().copied().filter(|p| !ended(*p)).collect()
 }
+/// This user's processes started for a task, wherever they run now: their temporary folder (`TMPDIR`, which only a
+/// task's agent and reviewers get, temp.rs) is in `tmp`. This program's own runs are left out. Linux only.
+pub fn started_in(tmp: &Path) -> Vec<i32> {
+    if !cfg!(target_os = "linux") { return vec![]; }
+    let real = std::fs::canonicalize(tmp).unwrap_or_else(|_| tmp.to_path_buf());
+    let own = own_line();
+    let me = crate::agents::scratch::uid();
+    let mut out = vec![];
+    for e in std::fs::read_dir("/proc").into_iter().flatten().flatten() {
+        use std::os::unix::fs::MetadataExt;
+        let Some(pid) = e.file_name().to_str().and_then(|n| n.parse::<i32>().ok()) else { continue };
+        if own.contains(&pid) || e.metadata().map(|m| m.uid() != me).unwrap_or(true) || ended(pid) { continue; }
+        if this_program(pid) { continue; }
+        let Ok(env) = std::fs::read(e.path().join("environ")) else { continue };
+        if env.split(|b| *b == 0).any(|v| v.strip_prefix(b"TMPDIR=").map(|d| { let d = PathBuf::from(&*String::from_utf8_lossy(d)); inside(&d, tmp) || inside(&d, &real) }).unwrap_or(false)) { out.push(pid); }
+    }
+    out
+}
+/// Does the process run this program (the board's own runs: a keeper, a task's runner)? Linux only.
+pub fn this_program(pid: i32) -> bool {
+    let exe = |p: &str| std::fs::read_link(p).ok();
+    cfg!(target_os = "linux") && exe("/proc/self/exe").is_some() && exe(&format!("/proc/{pid}/exe")) == exe("/proc/self/exe")
+}
+/// Does the process run under one of `under` (the shells of a task's panes)?
+pub fn runs_under(pid: i32, under: &[i32]) -> bool { line_of(pid).iter().any(|p| under.contains(p)) }

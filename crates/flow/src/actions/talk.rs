@@ -2,6 +2,7 @@
 use super::plan::{awaits_plan, plan_reply, sent_back};
 use super::shared::{is_agent_stage, say, Said};
 use super::start::delegate;
+use super::stop_ends::{end_launched, Ended};
 use crate::agents::installed::interrupt_key;
 use crate::attempts::words::standing_of;
 use crate::clock::now;
@@ -117,23 +118,28 @@ fn kill_runner(t: &Task) {
     }
 }
 /// Stop: the stage is set first and the pane's state_change_seq recorded, then the interrupt key is sent, so a late
-/// hook cannot undo the stop. Your stop of a task that was asking you is you stepping in: its next round asks again, once.
-pub fn stop(id: &str) -> Res<Task> { stop_as(id, true) }
+/// hook cannot undo the stop; then what the agent started is ended, the agent kept (stop_ends.rs): `msg` says what went,
+/// and what still runs for you to end. Your stop of a task that was asking you is you stepping in: its next round asks
+/// again, once.
+pub fn stop(id: &str) -> Res<Said> { stop_as(id, true).map(|(t, e)| say(t, e.said())) }
+/// A stop's own words (`proj/12: stopped`), then what it ended and what still runs.
+pub fn stopped(first: &str, msg: &str) -> String { if msg.is_empty() { first.to_string() } else { format!("{}. {msg}", first.trim_end_matches('.')) } }
 /// The board's own stop (at a limit): not you stepping in, so a merge it was on its way to asks nothing more.
-pub fn board_stop(id: &str) -> Res<Task> { stop_as(id, false) }
-fn stop_as(id: &str, yours: bool) -> Res<Task> {
+pub fn board_stop(id: &str) -> Res<Task> { stop_as(id, false).map(|(t, _)| t) }
+fn stop_as(id: &str, yours: bool) -> Res<(Task, Ended)> {
     let cur = find(id)?;
     assert_unarchived(&cur)?;
     let cid = cur.t("id");
-    if cur.s("stage") == "progress" { return update(&cid, |t| { t.put("stage", "todo"); t.put("app", Value::Null); t.put("msg", ""); Ok(Change::Write) }); }
+    let none = |t: Task| (t, Ended::default());
+    if cur.s("stage") == "progress" { return update(&cid, |t| { t.put("stage", "todo"); t.put("app", Value::Null); t.put("msg", ""); Ok(Change::Write) }).map(none); }
     // Every attempt stops with its task; one that waits for a pick, or is being compared, simply stops there.
     if !cur.arr("attempts").is_empty() && !cur.b("picked") && ["attempts", "pick", "reviewing"].contains(&cur.s("stage")) {
-        let n = now();
-        for c in attempts_of(&cur) { if ["works", "needs", "waits"].contains(&standing_of(&c, n)) { let _ = stop_as(c.s("id"), yours); } }
+        let (n, mut ended) = (now(), Ended::default());
+        for c in attempts_of(&cur) { if ["works", "needs", "waits"].contains(&standing_of(&c, n)) { if let Ok((_, e)) = stop_as(c.s("id"), yours) { ended.add(e); } } }
         let t = update(&cid, |t| { t.put("stage", "stopped"); t.put("stoppedAt", now()); t.put("msg", ""); t.put("comparing", Value::Null); t.put("watch", Value::Null); Ok(Change::Write) })?;
         kill_runner(&t);
         if t.at("link").at("reviewer").b("pane") { flow::tabs::close_reviewer_tab(&flow::task::h(&t), t.at("link").at("reviewer")); }
-        return Ok(get(&cid).unwrap_or(t));
+        return Ok((get(&cid).unwrap_or(t), ended));
     }
     if !flow::task::is_agent_task(&cur) || ["queued", "after"].contains(&cur.s("stage")) {
         return update(&cid, |t| {
@@ -143,9 +149,10 @@ fn stop_as(id: &str, yours: bool) -> Res<Task> {
             t.put("stage", if agent { "stopped" } else { "todo" }); if !agent { t.put("app", Value::Null); } t.put("msg", "");
             if was_waiting { t.put("stoppedWaiting", true); } // a task that waits for this one is told it was stopped (after.rs)
             Ok(Change::Write)
-        });
+        }).map(none);
     }
-    let a = if flow::live::assert_live(&cur).is_ok() { flow::task::h(&cur).agent_get(cur.at("link").s("pane")).ok().flatten() } else { None };
+    let live = flow::live::assert_live(&cur).is_ok();
+    let a = if live { flow::task::h(&cur).agent_get(cur.at("link").s("pane")).ok().flatten() } else { None };
     let t = update(&cid, |t| {
         let seq = a.as_ref().map(|a| a.at("state_change_seq").clone()).filter(|v| !v.is_null()).unwrap_or_else(|| if t.at("last").has("seq") { t.at("last").at("seq").clone() } else { json!(0) });
         if yours && (t.b("mergeIntent") || t.s("stage") == "approval") { t.put("requireApproval", true); }
@@ -157,7 +164,8 @@ fn stop_as(id: &str, yours: bool) -> Res<Task> {
     kill_runner(&t);
     if crate::plan::open(&t) && t.at("plan").b("locked") { crate::plan::lock::set_locked(&cid, false); } // stopped in its plan step: writable again until it starts once more
     if let Some(a) = &a { if ["working", "blocked", "unknown"].contains(&a.s("agent_status")) { let _ = flow::task::h(&t).agent_keys(t.at("link").s("pane"), &[interrupt_key(t.s("agent"))]); } }
+    let ended = if live { end_launched(&t, a.as_ref().map(|a| a.s("agent"))) } else { Ended::default() };
     if t.at("link").at("reviewer").b("pane") { flow::tabs::close_reviewer_tab(&flow::task::h(&t), t.at("link").at("reviewer")); }
     flow::sidebar::tell_sidebar(&t);
-    Ok(get(&cid).unwrap_or(t))
+    Ok((get(&cid).unwrap_or(t), ended))
 }
