@@ -46,8 +46,8 @@ passes.
 4. **Runs the tests**, with the names you gave, in several processes at once (`scripts/run-tests.sh`,
    [below](#several-processes-at-once)).
 
-It compiles through the build cache every worktree shares, and takes this task's share of the cores, not all of them
-(both below).
+It compiles through the build cache every worktree shares, and takes its share of the cores: all of them when it runs
+alone, half when two run (both below).
 
 The old program's check had to find names used and never defined, and which test files a change reached through its
 imports. The compiler does the first now (such a file does not build), and a build is one whole: there are no separate
@@ -125,10 +125,10 @@ seconds, on 4 threads or on 16 alike. So the check runs it as several processes 
 A process that failed is printed whole, as cargo test would have printed it. Each process has worlds of its own (a
 world's folder is named by the process), and the turns are only within it.
 
-**How many:** twice this task's share of the cores ([below](#its-share-of-the-cores)), since a process whose tests take
-turns uses about half a core. On 16 cores and five agents that is 8 processes, and the whole check about 15 seconds; five
-checks at once each take about 20. `HERDR_PROJECTS_TEST_PROCS` sets another number (1: everything in one process, as
-before).
+**How many:** twice its share of the cores when the tests start ([below](#its-share-of-the-cores)), since a process whose
+tests take turns uses about half a core. A lone check on 16 cores runs 32 processes a test program: its tests take 15 to
+20 seconds, against 44 to 56 on the 2 cores of the old fixed share. `HERDR_PROJECTS_TEST_PROCS` sets another number (1:
+everything in one process, as before).
 
 ### Builds take turns
 
@@ -143,12 +143,21 @@ cache: [sccache](https://github.com/mozilla/sccache), one pinned version checked
 
 - The workspace setup (`scripts/setup.sh`, `workspace.setup` in `.herdr-projects.json`) installs it with
   `scripts/build-cache.sh` and builds through it. The check compiles through it when it is there.
-- It lives in `~/.cache/herdr-projects` with its cache (2 GB at most, oldest dropped first) and a server of its own (a
-  socket there, so another sccache of yours is left alone). That is outside every worktree, so removing a worktree
+- It lives in `~/.cache/herdr-projects` with its cache (2 GB at most, oldest dropped first) and one server for every
+  worktree (a socket there, so another sccache of yours is left alone). The check starts the server only when none
+  answers, one start at a time: `sccache --start-server` starts another beside a running one and takes the socket from
+  it, which had given every check a server of its own. That is outside every worktree, so removing a worktree
   (`workspace.cleanup`) frees that worktree's `target/` and nothing shared.
 - Where it is not installed (CI, which keeps its own cache; another platform; no network), builds go on as before, each
   worktree alone.
 - `HERDR_PROJECTS_NO_CACHE=1` turns it off. A `RUSTC_WRAPPER` of your own wins.
+- **Is it hit?** `sh scripts/build-cache.sh --stats`: the counts of its server since it started (it stops after ten idle
+  minutes, and its counts with it). Each build compiles in its own process (`SCCACHE_CLIENT_SIDE`), so `Compile
+  requests` stays 0 however much is hit: read `Cache hits (Rust)` against `Cache misses (Rust)`. A fresh build of the
+  program in an empty `target/` measured 101 hits and 15 misses (the program's own crates, and the compiler macros).
+- **Nothing that changes from run to run goes in a `CARGO_` variable.** Cargo hands the compiler every variable whose
+  name starts with `CARGO_`, and sccache keys each compile on them: the same build with `CARGO_BUILD_JOBS` set and not
+  set measured 0 hits against 101. So the check gives cargo its share of the cores as `-j`, never in that variable.
 - The builds link with mold where it is installed ([linking](linking.md)).
 
 What it keeps is what a task does not change: the libraries. A fresh worktree finds most of them there. A few it builds
@@ -191,14 +200,39 @@ line (`target/quick`), and only what changed since is built again.
 
 ### Its share of the cores
 
-A task's build and tests take the machine's cores divided by `board.agents` (how many agents work at once; 4 when it is
-not set), rounded up. `scripts/share-cores.sh` sets `CARGO_BUILD_JOBS` and `RUST_TEST_THREADS`, for the check and the
-setup. Tasks working at once then share the machine instead of each asking for all of it. Set either yourself to use
-another number. A machine with no settings file (CI, a fresh clone) takes the 4.
+A check's build and tests take the machine's cores shared out between the checks running on it now: a lone check takes
+all of them, two take half each (rounded up), and none takes fewer than one. The workspace setup's build counts as one
+too. It used to be the cores divided by `board.agents`, however many ran: two cores on a 16-core machine with ten
+agents, also for a check that ran alone.
+
+- **Who is running:** each running check (and setup) writes a file in `~/.cache/herdr-projects/running/`, named by its
+  process and holding when that process started, and removes it when it ends. One that was killed leaves its file
+  behind: a file whose process is gone, or whose number now belongs to a process that started at another time, is not
+  counted and is removed by the next check that looks.
+- **When it counts:** before each build and again when the tests start (`scripts/share-cores.sh`, `sc_share`), so a
+  check that started alone and finds another running when it gets to its tests takes half from there, and one that
+  started beside another takes all again once that one is done. A build already running keeps the count it started
+  with.
+- **Where it goes:** cargo gets it as `-j` (not `CARGO_BUILD_JOBS`: [the build cache](#one-build-cache-for-every-worktree)
+  keys on that), the tests as `RUST_TEST_THREADS` and twice that many processes
+  ([above](#several-processes-at-once)).
+- **Yours wins:** `CARGO_BUILD_JOBS` or `RUST_TEST_THREADS` set yourself is used instead of the share (cargo still gets
+  it as `-j`). `HERDR_PROJECTS_TEST_PROCS` sets the number of test processes.
+- **Measured** on vm-str (16 cores, other agents working beside it, no other check running), three runs each, the old
+  share of 2 cores against all 16:
+
+  | | 2 cores (before) | 16 cores (now) |
+  |---|---|---|
+  | the whole check after a change to `crates/core` (every crate builds again) | 56–68 s | 26–30 s |
+  | its tests alone | 44–56 s | 15–20 s |
+  | building the test programs in an empty `target/` (a fresh worktree's first check) | 76–77 s | 56–61 s |
+
+  The build gains least: the crates build one on top of the other, and the test program is one big crate.
 
 A check that stops early says why on stderr (`The check stopped while building the program (exit 101).`), also when the
-step that stopped it said nothing. `tests/check_script.rs` starts the check in an empty home, with no settings and no
-build cache, so a fresh machine always gets past its start.
+step that stopped it said nothing. `tests/check_script.rs` starts the check in an empty home, with no build cache, so a
+fresh machine always gets past its start, and on a machine of three cores with other checks running, live and dead, to
+see the share it gives cargo and the tests.
 
 ### It tells the board where it is
 

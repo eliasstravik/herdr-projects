@@ -3,7 +3,8 @@
 # published sha256, kept with its cache in ~/.cache/herdr-projects (outside every worktree, so removing one frees
 # nothing shared). `sh scripts/build-cache.sh` installs it (the workspace setup does); `. scripts/build-cache.sh` in a
 # script that runs cargo (scripts/check.sh, scripts/setup.sh) compiles through it when it is installed, and changes
-# nothing when it is not (CI, offline, another platform). How and why: docs/testing.md.
+# nothing when it is not (CI, offline, another platform); `sh scripts/build-cache.sh --stats` shows how often it was hit
+# since its server started. How and why: docs/testing.md.
 bc_version=0.18.0
 bc_dir="${XDG_CACHE_HOME:-$HOME/.cache}/herdr-projects"
 bc_bin="$bc_dir/sccache-$bc_version/sccache"
@@ -37,12 +38,31 @@ bc_use() {
 }
 # The server is started here, before cargo, never by rustc's first call: worktrees set up at the same moment would
 # each start one, and every start that loses the race to bind the socket fails its compile ("Server startup failed:
-# File exists"). A start that loses here is retried, and finds the winner's server running.
+# File exists"). And only when none answers: `--start-server` starts another beside a running one and takes the socket
+# from it, so every check had a server of its own, with counts of its own, and the old ones ran on until they idled
+# out. One at a time (a folder as the lock; one left by a start that was killed goes after a minute), it asks for the
+# counts, which only a running server answers (its log says `request_stats`; with none it prints zeros all the same),
+# and starts one when none did; a start that fails is tried again.
+bc_running() { SCCACHE_LOG=sccache::commands=debug "$bc_bin" --show-stats 2>&1 >/dev/null | grep -q request_stats; }
 bc_serve() {
-  for bc_try in 1 2 3 4 5; do
-    "$bc_bin" --start-server >/dev/null 2>&1 && return 0
+  bc_lock="$bc_dir/sccache.lock"
+  for bc_try in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    mkdir "$bc_lock" 2>/dev/null && break
+    [ -z "$(find "$bc_lock" -maxdepth 0 -mmin +1 2>/dev/null)" ] || rmdir "$bc_lock" 2>/dev/null || true
     sleep 1
   done
-  return 1
+  bc_ok=1
+  for bc_try in 1 2 3 4 5; do
+    { bc_running || "$bc_bin" --start-server >/dev/null 2>&1; } && { bc_ok=0; break; }
+    sleep 1
+  done
+  rmdir "$bc_lock" 2>/dev/null || true
+  return $bc_ok
 }
-case "$0" in *build-cache.sh) bc_install ;; *) bc_use ;; esac
+# Its own server's counts, not those of another sccache of yours. Each build compiles in its own process, so `Compile
+# requests` stays 0: what was hit is `Cache hits (Rust)` against `Cache misses (Rust)`.
+bc_stats() {
+  [ -x "$bc_bin" ] || { echo "The shared build cache is not installed: sh scripts/build-cache.sh" >&2; return 1; }
+  bc_use && "$bc_bin" --show-stats
+}
+case "$0" in *build-cache.sh) if [ "$1" = --stats ]; then bc_stats; else bc_install; fi ;; *) bc_use ;; esac

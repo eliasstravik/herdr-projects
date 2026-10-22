@@ -3,9 +3,9 @@
 # that makes a world sets the process's environment, so in one process those tests take turns, and the only way to run
 # them side by side is more processes. `sh scripts/run-tests.sh [names]`: no name runs every test; a name that is an
 # area (`board-panel`: tests/board_panel.rs and tests/board_panel_*.rs) runs those files, any other name the tests whose
-# own names hold it. How many processes: HERDR_PROJECTS_TEST_PROCS, else twice this task's share of the cores
-# (scripts/share-cores.sh), as a process that takes turns uses about half a core. For the shorter check of a fix round
-# (scripts/check.sh --since): `=name` runs exactly that file's tests, and `--units` every test outside tests/ (those in
+# own names hold it. How many processes: HERDR_PROJECTS_TEST_PROCS, else twice its share of the cores, counted when the
+# tests start among the checks running then (scripts/share-cores.sh), as a process that takes turns uses about half a
+# core. For the shorter check of a fix round (scripts/check.sh --since): `=name` runs exactly that file's tests, and `--units` every test outside tests/ (those in
 # src/ and the doc tests). docs/testing.md.
 set -e
 mods=""; words=""; units=""
@@ -20,15 +20,18 @@ for n in "$@"; do
   done
   [ -n "$found" ] || words="$words $n"
 done
-procs="${HERDR_PROJECTS_TEST_PROCS:-$(( ${RUST_TEST_THREADS:-1} * 2 ))}"
-case "$procs" in ''|0*|*[!0-9]*) procs=1 ;; esac
+. scripts/share-cores.sh
 # Built once, compile errors shown as cargo shows them; the test programs' paths come from cargo's own report (not the
 # program itself, which cargo builds for the tests too).
+sc_join
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
-cargo test --profile quick --quiet --no-run --message-format=json-render-diagnostics > "$tmp/built"
+trap 'rm -rf "$tmp"; sc_leave' EXIT
+sc_cargo test --profile quick --quiet --no-run --message-format=json-render-diagnostics > "$tmp/built"
 bins=$(grep '"profile":{[^}]*"test":true' "$tmp/built" | sed -n 's/.*"executable":"\([^"]*\)".*/\1/p')
 [ -n "$bins" ] || { echo "cargo built no test program." >&2; exit 101; }
+sc_share
+procs="${HERDR_PROJECTS_TEST_PROCS:-$((sc_threads * 2))}"
+case "$procs" in ''|0*|*[!0-9]*) procs=1 ;; esac
 # The tests each program is to run, by their exact names: an area's files (in the one test program, tests/main.rs),
 # the tests whose names hold a word, or all. `settings::` as a filter would also run `web_settings::`: areas are
 # picked by their exact module.
@@ -55,13 +58,13 @@ started=$(date +%s)
 doc=0
 # shellcheck disable=SC2086
 if [ -n "$units" ] || [ -z "$mods" ] || [ -n "$words" ]; then
-  cargo test --profile quick --quiet --doc -- $words > "$tmp/doc.out" 2>&1 || { cat "$tmp/doc.out"; exit 101; }
+  sc_cargo test --profile quick --quiet --doc -- $words > "$tmp/doc.out" 2>&1 || { cat "$tmp/doc.out"; exit 101; }
   doc=$(sed -n 's/^test result: [A-Za-z]*\. \([0-9]*\) passed.*/\1/p' "$tmp/doc.out" | tail -1)
 fi
 n=0
 while [ "$n" -lt "$i" ]; do
   # shellcheck disable=SC2046
-  ( rc=0; "$(cat "$tmp/$n.bin")" -q --exact $(cat "$tmp/$n.names") > "$tmp/$n.out" 2>&1 || rc=$?; echo "$rc" > "$tmp/$n.rc" ) &
+  ( rc=0; RUST_TEST_THREADS=$sc_threads "$(cat "$tmp/$n.bin")" -q --exact $(cat "$tmp/$n.names") > "$tmp/$n.out" 2>&1 || rc=$?; echo "$rc" > "$tmp/$n.rc" ) &
   n=$((n + 1))
 done
 wait
