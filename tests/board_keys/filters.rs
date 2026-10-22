@@ -125,7 +125,7 @@ fn space_on_a_machines_row_or_a_projects_row_talks_to_its_coordinator_and_coordi
     // one machine shown: its own only, and the count is its
     while s.s.scope != "otherbox" { s.press(&["alt+m"]); }
     assert_eq!(heads(&s), vec!["otherbox".to_string(), "far".into()], "that machine's row and its project's; its own Coordinator has none");
-    assert!(s.screen(160)[1].starts_with(" otherbox ▾ │ ") && regex::Regex::new(r"Coordinators 2 ").unwrap().is_match(&s.screen(160)[1]), "{:?}", s.screen(160));
+    assert!(s.screen(160)[1].starts_with(" otherbox │ ") && regex::Regex::new(r"Coordinators 2 ").unwrap().is_match(&s.screen(160)[1]), "{:?}", s.screen(160));
     // a click on the machine item goes round as alt+m does
     s.lines();
     let (y, x, _, _) = *s.s.show_hits.iter().find(|h| h.3 == sw::board::view::shows_row::MACHINE).unwrap();
@@ -252,12 +252,13 @@ fn ctrl_s_starts_a_coordinator_ctrl_x_stops_it_and_ctrl_o_is_its_autopilot() {
     s.press(&["alt+s"]);
     s.s.sel = group_id(&s.s, "", "proj"); s.load();
     assert!(s.text().contains("ctrl+s start · ctrl+x stop · ctrl+o autopilot"), "{}", s.text());
-    let j = jobs(s.hold("ctrl+s")); assert!(j.contains("CoordRun") && j.contains("project:proj") && j.contains("on: true"), "{j}");
-    let j = jobs(s.hold("ctrl+x")); assert!(j.contains("CoordRun") && j.contains("on: false"), "{j}");
-    let j = jobs(s.hold("ctrl+o")); assert!(j.contains("Pilot") && j.contains("project:proj") && j.contains("on: true"), "{j}");
+    // (a held job never answers: what it put under way on the row is let go before the next key)
+    let j = jobs(s.hold("ctrl+s")); assert!(j.contains("CoordRun") && j.contains("project:proj") && j.contains("on: true"), "{j}"); s.s.pending.clear();
+    let j = jobs(s.hold("ctrl+x")); assert!(j.contains("CoordRun") && j.contains("on: false"), "{j}"); s.s.pending.clear();
+    let j = jobs(s.hold("ctrl+o")); assert!(j.contains("Pilot") && j.contains("project:proj") && j.contains("on: true"), "{j}"); s.s.pending.clear();
     // the top row's coordinator (the only machine's is the top-level one), on its row and on a status group's heading
     s.s.sel = machine_id(""); s.load();
-    let j = jobs(s.hold("ctrl+s")); assert!(j.contains("CoordRun") && j.contains("to: \"\""), "{j}");
+    let j = jobs(s.hold("ctrl+s")); assert!(j.contains("CoordRun") && j.contains("to: \"\""), "{j}"); s.s.pending.clear();
     s.press(&["alt+s", "alt+s"]); s.s.sel = group_id(&s.s, "", "to do"); s.load();
     let j = jobs(s.hold("ctrl+s")); assert!(j.contains("CoordRun") && j.contains("to: \"\""), "{j}");
     s.press(&["alt+s"]);
@@ -266,7 +267,7 @@ fn ctrl_s_starts_a_coordinator_ctrl_x_stops_it_and_ctrl_o_is_its_autopilot() {
     update(&mut s.s, Event::Remote { label: "otherbox".into(), answer: Ok(json!({ "host": "otherbox", "version": "9.0.0", "coordinator": { "state": "idle" }, "coordinators": {}, "autopilot": {}, "tasks": [] })) });
     to_all(&mut s);
     s.s.sel = machine_id("otherbox"); s.load();
-    let j = jobs(s.hold("ctrl+s")); assert!(j.contains("coordinator-start") && j.contains("otherbox"), "{j}");
+    let j = jobs(s.hold("ctrl+s")); assert!(j.contains("coordinator-start") && j.contains("otherbox"), "{j}"); s.s.pending.clear();
     let j = jobs(s.hold("ctrl+x")); assert!(j.contains("coordinator-stop"), "{j}");
     // on a task, ctrl+o says what it is for
     s.press(&["alt+s"]);

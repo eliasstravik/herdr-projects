@@ -65,6 +65,9 @@ impl Job {
             | Job::Restore { id, .. } | Job::Clear { id, .. } | Job::Pick { id, .. } | Job::Describe { id, .. } | Job::OpenAgent { id, .. } => id.clone(),
             Job::AutoTurn { id, .. } | Job::AutoFire { id } | Job::AutoRemove { id, .. } => format!("auto:{id}"),
             Job::Far { host, action, req, .. } if action.starts_with("auto-") => format!("{host}:auto:{}", req.s("id")),
+            // A coordinator's row, by its coordinator (coords.rs: Target::key): started, stopped, autopilot, gone into.
+            Job::CoordRun { to, .. } | Job::Pilot { to, .. } | Job::CoordOpen { to, .. } => format!("co:\t{to}"),
+            Job::Far { host, action, req, .. } if action.starts_with("coordinator-") || action.starts_with("autopilot-") => format!("co:{host}\t{}", req.s("to")),
             Job::Far { host, req, .. } => format!("{host}:{}", req.s("id")),
             _ => String::new(),
         }

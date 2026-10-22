@@ -191,6 +191,8 @@ impl State {
     pub fn all(&self) -> bool { !self.scope.is_empty() }
     /// A message stays until the next key press; an error (red) stays until esc dismisses it.
     pub fn flash(&mut self, text: impl Into<String>, kind: Ink) {
+        // Never a green confirmation under the chat: what was done shows where it was done.
+        if kind == Ink::Green { return; }
         let said = crate::text::clean(&text.into());
         let said = if crate::re!(r"herdr-projects \w").is_match(&said) { said } else { crate::store::keys::tag_ids(&said, &self.data.repos, &self.data.keys) };
         self.msg = said; self.msg_kind = kind; self.web.msg_n += 1;

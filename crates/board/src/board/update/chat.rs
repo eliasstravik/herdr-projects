@@ -76,7 +76,7 @@ pub fn sync_coord(s: &mut State, fx: &mut Vec<Effect>) {
     let unseen = s.data.coord.unseen.clone();
     if unseen.is_empty() { return; }
     if !s.reply && s.chat_open && s.setup.is_none() { fx.push(Effect::Run(crate::board::job::Job::CoordSeen { unseen, to: String::new() })); s.data.coord.unseen.clear(); }
-    else if s.reply && s.told_reply != unseen && s.msg.is_empty() { s.told_reply = unseen; s.flash(format!("The Coordinator replied. {} goes back to it.", crate::board::keys::key_name("talk")), crate::shown::ink::Ink::Green); }
+    else if s.reply && s.told_reply != unseen && s.msg.is_empty() { s.told_reply = unseen; let who = super::top::top(s).map(|t| crate::board::update::top::sentence(&t.name)).unwrap_or_else(|| "The coordinator".into()); s.flash(format!("{who} replied. {} goes back to it.", crate::board::keys::key_name("talk")), crate::shown::ink::Ink::Muted); }
 }
 /// Scroll the message `by` lines (up when negative). Down again from the end of a conversation that was opened (or
 /// of a message scrolled through) closes it to the newest message alone, from its start. Nothing but what shows

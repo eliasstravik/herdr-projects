@@ -51,7 +51,7 @@ fn the_board_says_so_top_left_when_another_view_holds_its_panes_size_and_stops_w
         s.press(&["ctrl+k"]);
         use std::os::unix::process::ExitStatusExt;
         assert_eq!(view.wait().unwrap().signal(), Some(libc::SIGTERM));
-        assert!(s.text().contains("Ended the remote view of this pane."), "{}", s.text());
+        assert!(!s.text().contains("Ended the remote view of this pane."), "no confirmation line: the view ended, as its signal says: {}", s.text());
     }
     // The size is the window's again: gone at the next look.
     look(&mut s, 120, 34);

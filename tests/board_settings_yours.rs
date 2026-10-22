@@ -51,7 +51,7 @@ fn the_settings_key_on_this_machines_heading_changes_your_own_settings_and_a_tas
     assert_eq!(shown(&Scope::you(), "merge.method"), ("merge".into(), "you".into(), true));
     let task = sw::store::tasks::get(&id).unwrap();
     assert_eq!(shown(&Scope::task(&task), "merge.method"), ("merge".into(), "you".into(), false), "a task with no answer of its own follows");
-    assert!(b.text().contains("Merge method: merge"), "{}", b.text());
+    assert!(!b.text().contains("Merge method: merge"), "no confirmation under the chat: the row shows it: {}", b.text());
     let t = b.screen(120).join("\n");
     assert!(t.lines().any(|l| l.contains("› * Merge method") && l.contains("merge.method")), "the row is marked as yours: {t}");
     // ctrl+u puts it back to built in.

@@ -62,7 +62,7 @@ pub fn on(co: &Co, goal: Option<&str>, once: &[(String, Value)]) -> Res<String> 
 pub fn off(co: &Co) -> Res<String> {
     if !is_on(co) { return Ok(format!("The {} is not on autopilot.", co.name())); }
     change(co, |ap, c| { pull_back(c, ap, false); ap.put("on", false); ap.put("once", Obj::new()); ap.put("pending", Vec::<Value>::new()); ap.put("needsYou", false); ap.put("wake", Value::Null); true })?;
-    Ok(format!("Autopilot off for the {}. Its chat stays; {} turns it on again.", co.name(), crate::board::keys::key_name("delegate")))
+    Ok(format!("Autopilot off for the {}. Its chat stays; {} turns it on again.", co.name(), crate::board::keys::key_name("autopilot")))
 }
 /// Every coordinator of this machine off. Another machine's are turned off there.
 pub fn off_all(socket: &str) -> Res<String> {

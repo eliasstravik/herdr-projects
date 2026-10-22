@@ -44,7 +44,7 @@ fn other_machines_tasks_show_with_the_machines_name_and_an_action_goes_to_the_ma
     let s = call("press", json!({ "id": "archive" }), None);
     let did = far.asked().into_iter().filter(|a| a.1 == "do").last().unwrap();
     assert_eq!((did.0.as_str(), did.2.s("action"), did.2.s("id")), ("vm-a", "archive", "far/1"));
-    assert_eq!(s.at("msg").s("text"), "far/1: archived.");
+    assert!(!s.at("msg").s("text").contains("archived."), "no confirmation: {}", s.at("msg"));
 }
 
 #[test]

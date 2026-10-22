@@ -61,11 +61,11 @@ fn pinning_and_archiving_leave_the_selection_where_you_were_and_an_emptied_group
     s.s.sel = b.clone(); s.load(); relist(&mut s.s);
     s.press(&["ctrl+p"]);
     assert!(!task(&b).b("pinned")); assert!(under(&s, PINNED).is_empty()); assert_eq!(s.s.sel, c);
-    // Archived, the task leaves the list: the row below it, and the message says so.
+    // Archived, the task leaves the list: the row below it (no confirmation line under the chat).
     s.s.sel = b.clone(); s.load(); relist(&mut s.s);
     s.press(&["ctrl+a"]);
     assert!(task(&b).b("archivedAt")); assert_eq!(s.s.sel, a);
-    assert!(s.s.msg.contains("Now on"), "{}", s.s.msg);
+    assert!(!s.s.msg.contains("Now on"), "no confirmation line: the row is gone, the selection is on the next: {}", s.s.msg);
     // Undo brings it back; the selection stays on the row you are on.
     s.press(&["ctrl+z"]); assert!(!task(&b).b("archivedAt")); assert_eq!(s.s.sel, a);
 }

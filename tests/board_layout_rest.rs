@@ -41,10 +41,12 @@ fn a_longer_message_from_the_coordinator_grows_the_chat_block_upwards_and_it_sta
     says(&mut s, &(1..=6).map(|i| format!("Line {i} of what it said.")).collect::<Vec<_>>().join("\n"));
     let long = pinned(&mut s, 84, &me, "long message");
     assert_eq!(long.0, short.0 - 5, "its five more lines, taken from the list");
-    // Under the edge that names it, its message alone (no label), an empty line, the line you type on.
-    let boxed: Vec<String> = s.screen(120)[long.0 + 1..long.0 + 9].iter().map(|l| regex::Regex::new(r" +│$").unwrap().replace(l, "").into_owned()).collect();
-    let mut want: Vec<String> = (1..=6).map(|i| format!("│ Line {i} of what it said.")).collect();
-    want.extend(["│".to_string(), "│ ❯ Send message to the machine coordinator".to_string()]);
+    // Under the edge that names it, an empty row, its message alone (no label, two cells in), an empty line, the line
+    // you type on, an empty row.
+    let boxed: Vec<String> = s.screen(120)[long.0 + 1..long.0 + 11].iter().map(|l| regex::Regex::new(r" +│$").unwrap().replace(l, "").into_owned()).collect();
+    let mut want: Vec<String> = vec!["│".to_string()];
+    want.extend((1..=6).map(|i| format!("│  Line {i} of what it said.")));
+    want.extend(["│".to_string(), "│  ❯ Send message to the machine coordinator".to_string(), "│".to_string()]);
     assert_eq!(boxed, want);
     for rows in [200, 30, 84] { pinned(&mut s, rows, &me, "long message, resized"); }
     assert_eq!(pinned(&mut s, 84, &me, "long message, back"), long);

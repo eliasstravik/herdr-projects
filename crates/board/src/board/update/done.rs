@@ -16,10 +16,9 @@ pub fn apply(s: &mut State, d: Done, fx: &mut Vec<Effect>) {
         let mark = s.items.iter().find(|r| r.s("id") == d.about).map(|r| super::chat::turn_mark(r));
         if let (Some(m), Some(x)) = (mark, s.just_sent.get_mut(&d.about)) { x.over = m; }
     }
-    if let Some((text, ink)) = d.flash {
-        // Plainly sent to the agent: the box shows your words; said only while the chat is hidden.
-        if ink == Ink::Plain { if !s.chat_open { s.flash(text, Ink::Green); } } else { s.flash(text, ink); }
-    }
+    // What a job says when it worked is never a line under the chat: its row says what is under way while it runs
+    // (pending.rs), and what it did shows. What went wrong, or wants a look (red, yellow), is said.
+    if let Some((text, ink)) = d.flash { if ![Ink::Green, Ink::Plain, Ink::Muted].contains(&ink) { s.flash(text, ink); } }
     for t in d.then {
         match t {
             Then::Sel(id) => { s.sel = id.clone(); s.stick = id; } // held until a load brings it (list.rs: relist)
@@ -34,14 +33,14 @@ pub fn apply(s: &mut State, d: Done, fx: &mut Vec<Effect>) {
             Then::Opened(id) => {
                 fx.push(Effect::Save);
                 let title = s.items.iter().find(|r| r.s("id") == id).map(|r| crate::shown::words::clean(if r.b("title") { r.s("title") } else { r.s("id") })).unwrap_or_else(|| id.clone());
-                s.flash(if s.guest || s.viewed { format!("Opened {id}'s agent in herdr's own window. In the web UI, pick it in the sidebar: “{title}”.") }
-                    else { format!("Opened {id}'s agent. {}", if s.ctx.board_key.is_empty() { "The board stays here.".to_string() } else { format!("{} brings you back to the board.", crate::board::key_style::spell(&s.ctx.board_key)) }) }, Ink::Green);
+                // Only where to find it, when it is not in front of you: no line that says it was done.
+                if s.guest || s.viewed { s.flash(format!("Opened {id}'s agent in herdr's own window. In the web UI, pick it in the sidebar: “{title}”."), Ink::Muted); }
             }
             Then::OpenedThere { id, host, agent } => {
                 fx.push(Effect::Save);
                 let title = s.items.iter().find(|r| r.s("id") == id).map(|r| crate::shown::words::clean(if r.b("title") { r.s("title") } else { r.s("rid") })).unwrap_or_else(|| id.clone());
                 let what = if agent { "its agent" } else { "its terminal (its agent has exited)" };
-                s.flash(format!("{host}: {what} is in front there. Pick {host} in herdr's sidebar to go to it: “{title}”; Local there brings you back here."), Ink::Green);
+                s.flash(format!("{host}: {what} is in front there. Pick {host} in herdr's sidebar to go to it: “{title}”; Local there brings you back here."), Ink::Muted);
             }
             Then::Attach { command, args, .. } => fx.push(Effect::Attach { command, args }),
             Then::CallRang { id } => s.call_link = Some((id, s.now)),
@@ -64,7 +63,7 @@ pub fn apply(s: &mut State, d: Done, fx: &mut Vec<Effect>) {
 fn leave(s: &mut State, fx: &mut Vec<Effect>) {
     if s.ctx.leave_ms <= 0 || s.told >= 3 { fx.push(Effect::Save); fx.push(Effect::Close); return; }
     s.told += 1; s.leaving = true;
-    s.flash(format!("Opening the agent. {} brings the board back.", if s.ctx.board_key.is_empty() { "herdr-projects".to_string() } else { crate::board::key_style::spell(&s.ctx.board_key) }), Ink::Green);
+    s.flash(format!("Opening the agent. {} brings the board back.", if s.ctx.board_key.is_empty() { "herdr-projects".to_string() } else { crate::board::key_style::spell(&s.ctx.board_key) }), Ink::Muted);
     s.closing = None;
     s.leave_at = s.now + s.ctx.leave_ms;
     fx.push(Effect::Save);

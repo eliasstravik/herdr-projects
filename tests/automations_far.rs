@@ -104,8 +104,8 @@ fn other_machines_automations_are_in_the_list_with_their_machine_named_and_are_c
     s.press(&["right"]); assert!(t(&mut s, 140).contains("Theirs nightly  every 5m"));
     s.s.sel = "vm-b:auto:0a1b2c3d".into(); s.load(); assert_eq!(s.s.auto().unwrap().s("host"), "vm-b");
     assert_eq!(s.screen(140).last().unwrap(), "  enter open this automation · space turn this automation off · ctrl+s fire it now · ctrl+x remove it · ctrl+e its settings · ? all keys");
-    // each key is sent to that machine, and its answer is what the board says
-    s.press(&["space"]); assert_eq!(asked(&f), json!({ "action": "auto-turn", "id": "0a1b2c3d", "on": false })); assert!(t(&mut s, 120).contains("done there")); assert_eq!(automation(mine.s("id")).unwrap().at("on"), &json!(true));
+    // each key is sent to that machine; what it answers when it worked is not said under the chat
+    s.press(&["space"]); assert_eq!(asked(&f), json!({ "action": "auto-turn", "id": "0a1b2c3d", "on": false })); assert!(!t(&mut s, 120).contains("done there")); assert_eq!(automation(mine.s("id")).unwrap().at("on"), &json!(true));
     s.press(&["ctrl+s"]); assert_eq!(asked(&f), json!({ "action": "auto-run", "id": "0a1b2c3d" }));
     // ctrl+e opens its settings, the page a task has: the rows are that machine's, and each change is made there
     s.press(&["ctrl+e"]);
@@ -113,7 +113,7 @@ fn other_machines_automations_are_in_the_list_with_their_machine_named_and_are_c
     let text = t(&mut s, 120);
     like(&text, r"^ Settings {2}Theirs nightly"); like(&text, r"\n▌› {3}Agent's program +claude +worker\.agent\n"); like(&text, r"\n {3}\* Merged by +itself +merge\.by\n"); like(&text, r"\n {5}Review when +always +review\.when\n");
     assert_eq!(s.screen(120).last().unwrap(), "  ↑ ↓ move · enter change · ctrl+u put back · esc back to the task");
-    s.press(&["down", "enter"]); assert_eq!(asked(&f), json!({ "action": "auto-set", "id": "0a1b2c3d", "name": "review.when", "value": "repos" })); assert!(t(&mut s, 120).contains("done there"));
+    s.press(&["down", "enter"]); assert_eq!(asked(&f), json!({ "action": "auto-set", "id": "0a1b2c3d", "name": "review.when", "value": "repos" })); assert!(!t(&mut s, 120).contains("done there"));
     s.press(&["down", "ctrl+u"]); assert_eq!(asked(&f), json!({ "action": "auto-set", "id": "0a1b2c3d", "name": "merge.by", "value": null }));
     s.press(&["down", "enter"]); s.typed("20m"); s.press(&["enter"]); assert_eq!(asked(&f), json!({ "action": "auto-set", "id": "0a1b2c3d", "name": "check.timeout", "value": "20m" }));
     assert_eq!(sw::store::tasks::list(Default::default()).len(), 1, "typed words never became a task");

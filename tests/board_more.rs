@@ -34,13 +34,13 @@ fn a_long_message_wraps_inside_the_box_and_takes_the_rows_it_needs_never_the_tex
     coordinator_says(&mut s, &said.join("\n"));
     let me = sw::board::update::heads::label(&s.s, "");
     for width in [44, 80, 200] {
-        let c = s.chat(width);
+        let c = crate::board_chat::chat(&mut s, width);
         let body = &c.boxed[..c.boxed.len() - 2];
         assert!(has(&c.boxed[c.boxed.len() - 2], &format!(r"^ +({} )?more ↓$", regex::escape(&key_name("chatScrollDown")))), "{:?}", c.boxed);
         assert!(c.boxed.last().unwrap().starts_with("❯ Send message to "), "{:?}", c.boxed);
-        // With its box it takes two thirds of the 30 rows: 16 lines of it, under the box's edge, which names who it is.
-        // It starts at its beginning, under no label: the edge says whose it is.
-        assert_eq!(body.len(), 16, "sixteen lines of it at {width} columns: {body:?}");
+        // With its box it takes two thirds of the 30 rows: 14 lines of it (the box's empty rows take two), under the
+        // box's edge, which names who it is. It starts at its beginning, under no label: the edge says whose it is.
+        assert_eq!(body.len(), 14, "fourteen lines of it at {width} columns: {body:?}");
         assert!(c.lines.iter().any(|l| l.starts_with("╭─") && l.contains(&format!(" {me} "))), "{:?}", c.lines);
         assert!(body[0].starts_with("Line 1 of what it said"), "{body:?}");
         assert!(!body.join("\n").contains("**"));
@@ -49,7 +49,7 @@ fn a_long_message_wraps_inside_the_box_and_takes_the_rows_it_needs_never_the_tex
     }
     // A window too short for all of it: the message gives up its lines first; who you talk to and the line you type on stay.
     s.rows = 10;
-    let c = s.chat(80);
+    let c = crate::board_chat::chat(&mut s, 80);
     // folded: the box's edge names who (its ladder), and the line you type on stays
     assert_eq!(c.lines.len(), 10); assert_eq!(c.boxed, vec!["❯ Send message to the machine coordinator".to_string()], "{:?}", c.lines);
     assert!(c.lines.iter().any(|l| l.starts_with("╭─") && l.contains(&sw::shown::words::clean(&sw::remote::check::hostname()))), "{:?}", c.lines);
@@ -70,12 +70,12 @@ fn a_very_narrow_window_keeps_the_box_whole_with_the_message_in_it() {
     w.script(json!({ "coordinator": [{ "said": "Six tasks are in progress and nothing waits on you." }] }));
     let mut s = open(&w.root, 34);
     // Nothing said yet: the box's edge says who it is, and the placeholder is cut with …, inside the box.
-    for width in [27, 24, 16] { let c = s.chat(width); assert!(c.framed, "at {width}"); assert_eq!(c.boxed.len(), 1); assert!(has(&c.boxed[0], "^❯ A.*…$"), "at {width}: {:?}", c.boxed); }
+    for width in [27, 24, 16] { let c = crate::board_chat::chat(&mut s, width); assert!(c.framed, "at {width}"); assert_eq!(c.boxed.len(), 1); assert!(has(&c.boxed[0], "^❯ A.*…$"), "at {width}: {:?}", c.boxed); }
     let me = sw::board::update::heads::label(&s.s, "");
-    assert!(s.chat(80).boxed[0] == "❯ Ask it something, e.g. \"what's left to do here?\"" && s.chat(80).lines.iter().any(|l| l.starts_with("╭─") && l.contains(&format!(" {me} "))), "never ran: {:?}", s.chat(80).lines);
+    assert!(crate::board_chat::chat(&mut s, 80).boxed[0] == "❯ Ask it something, e.g. \"what's left to do here?\"" && crate::board_chat::chat(&mut s, 80).lines.iter().any(|l| l.starts_with("╭─") && l.contains(&format!(" {me} "))), "never ran: {:?}", crate::board_chat::chat(&mut s, 80).lines);
     s.typed("hi"); s.press(&["enter"]); drain(); s.load();
     for width in [60, 24, 23, 20, 19, 12, 8] {
-        let c = s.chat(width);
+        let c = crate::board_chat::chat(&mut s, width);
         let body = &c.boxed[..c.boxed.len() - 2];
         assert!(c.framed, "the box is there at {width} columns"); assert_eq!(c.lines.len(), 34);
         assert!(c.lines.iter().all(|l| sw::text::width(l) <= width), "nothing is wider than {width} columns");
@@ -85,7 +85,7 @@ fn a_very_narrow_window_keeps_the_box_whole_with_the_message_in_it() {
     }
     // Typed words wrap inside it too.
     s.typed("a reply that is longer than the box is wide");
-    for width in [24, 12] { let c = s.chat(width); assert!(c.framed && c.lines.iter().all(|l| sw::text::width(l) <= width)); assert!(has(&c.boxed.join(" "), "❯ a +reply"), "{:?}", c.boxed); }
+    for width in [24, 12] { let c = crate::board_chat::chat(&mut s, width); assert!(c.framed && c.lines.iter().all(|l| sw::text::width(l) <= width)); assert!(has(&c.boxed.join(" "), "❯ a +reply"), "{:?}", c.boxed); }
 }
 
 /// A key as crossterm reads what a terminal sends (esc and a letter, or the kitty protocol's CSI u: the same event).

@@ -41,7 +41,11 @@ impl B {
         let lines = self.screen(width);
         let top = lines.iter().rposition(|l| has(l, "^╭─.*╮$")).expect("a box");
         let end = lines.iter().rposition(|l| has(l, "^╰─+╯$")).expect("a box's end");
-        let inside: Vec<String> = lines[top + 1..end].iter().map(|l| { let c: Vec<char> = l.chars().collect(); c[2..c.len() - 2].iter().collect::<String>().trim_end().to_string() }).collect();
+        let mut inside: Vec<String> = lines[top + 1..end].iter().map(|l| { let c: Vec<char> = l.chars().collect(); c[2..c.len() - 2].iter().collect::<String>().trim_end().to_string() }).collect();
+        // Its room to breathe (view/textbox.rs: chat_box): the second cell of padding, an empty row under its top edge
+        // and one over its bottom edge.
+        if width >= 30 { inside = inside.iter().map(|l| l.strip_prefix(' ').unwrap_or(l).to_string()).collect(); }
+        if inside.len() > 2 && inside[0].is_empty() && inside.last().is_some_and(|l| l.is_empty()) { inside.remove(0); inside.pop(); }
         let at = inside.iter().rposition(|l| has(l, r"^( *((alt\+j )?more )?↓)?$")).unwrap();
         // Whose it is is the box's edge (view/chat_title.rs): inside, the message alone.
         let message: Vec<String> = inside[..at].to_vec();
@@ -52,11 +56,11 @@ impl B {
 
 #[test]
 fn the_chats_box_grows_with_the_answer_up_to_two_thirds_of_the_window_and_shrinks_back_the_selected_task_stays_in_view() {
-    let mut b = B::new(30, 30);
-    // 40 lines in a window of 30 rows: the box takes 20 of them (its edge naming whose it is, then 16 of the
-    // message), from the answer's first line.
+    let mut b = B::new(33, 30);
+    // 40 lines in a window of 33 rows: the box takes 22 of them (its edge naming whose it is, an empty row, then 16 of
+    // the message, where there is more, the line you type on, an empty row, its bottom), from the answer's first line.
     let c = b.chat(120);
-    assert_eq!(c.end - c.top + 1, 20); assert_eq!(c.message.len(), 16);
+    assert_eq!(c.end - c.top + 1, 22); assert_eq!(c.message.len(), 16);
     assert_eq!(c.message[0], "Line 1 of the answer."); assert_eq!(c.message.last().unwrap(), "Line 16 of the answer.");
     assert!(!c.up); assert!(c.down, "the box says there is more under it");
     // The list gave up the rows, and still shows the task that is selected, wherever it is.
@@ -69,10 +73,10 @@ fn the_chats_box_grows_with_the_answer_up_to_two_thirds_of_the_window_and_shrink
     b.said.text = answer(12); let c = b.chat(120);
     assert_eq!(c.message.len(), 12); assert!(!c.up && !c.down);
     b.said.text = "Done.".into(); let c = b.chat(120);
-    assert_eq!(c.message, vec!["Done."]); assert_eq!(c.end - c.top + 1, 5, "its edge naming whose it is, the message, an empty line, the line you type on, its bottom");
+    assert_eq!(c.message, vec!["Done."]); assert_eq!(c.end - c.top + 1, 7, "its edge naming whose it is, an empty row, the message, an empty line, the line you type on, an empty row, its bottom");
     // A taller window shows more of a long one: two thirds of 60 rows.
     b.said.text = answer(40); b.b.rows = 60; let c = b.chat(120);
-    assert_eq!(c.end - c.top + 1, 40); assert_eq!(c.message.len(), 36);
+    assert_eq!(c.end - c.top + 1, 40); assert_eq!(c.message.len(), 34);
     // Under the whole task, which is there to be read itself, the chat folds to its head line: the page has the lines.
     b.b.rows = 30; b.key(&["alt+t"]); b.screen(120);
     assert!(b.b.s.full); assert!(b.b.s.chat_fit.is_none()); assert!(b.b.s.chat_rows.is_none());
@@ -80,11 +84,11 @@ fn the_chats_box_grows_with_the_answer_up_to_two_thirds_of_the_window_and_shrink
 
 #[test]
 fn alt_k_and_alt_j_scroll_a_message_longer_than_its_box_with_a_draft_too_the_box_says_where_there_is_more_a_new_message_keeps_the_place() {
-    let mut b = B::new(30, 30);
+    let mut b = B::new(33, 30);
     let (up, down) = (regex::escape(&key_name("chatScrollUp")), regex::escape(&key_name("chatScrollDown")));
     // The box names the key where there is more: under the message at first, on its top edge too once scrolled.
     let c = b.chat(120);
-    assert!(has(&c.lines[c.top], "^╭─[^\n]*╮$")); assert!(has(&c.lines[c.end - 2], &format!(" {down} more ↓ │$")), "{}", c.lines[c.end - 2]);
+    assert!(has(&c.lines[c.top], "^╭─[^\n]*╮$")); assert!(has(&c.lines[c.end - 3], &format!(" {down} more ↓  │$")), "{}", c.lines[c.end - 3]);
     // Down half a box at a time, to the end and no further.
     b.key(&["alt+j"]); let c = b.chat(120);
     assert_eq!(c.message[0], "Line 9 of the answer."); assert!(c.up && c.down);
@@ -146,7 +150,7 @@ fn alt_k_and_alt_j_scroll_a_message_longer_than_its_box_with_a_draft_too_the_box
 
 #[test]
 fn the_mouse_wheel_scrolls_the_chat_under_the_pointer_also_while_you_type_elsewhere_it_does_what_the_arrows_do() {
-    let mut b = B::new(30, 30);
+    let mut b = B::new(33, 30);
     let c = b.chat(120);
     // Over the chat (its box, and the line that says who): two lines a step.
     b.wheel(c.top + 3, 1); assert_eq!(b.first(), "Line 3 of the answer.");

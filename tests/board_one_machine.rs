@@ -31,7 +31,7 @@ fn with_no_other_machine_alt_m_asks_for_them_and_shows_every_machine_only_once_t
     assert!(s.s.seeking && s.s.scope.is_empty());
     told(&mut s, vec![machine("otherbox")]);
     assert_eq!(s.s.scope, "*");
-    assert!(s.text().contains("\n All machines ▾ │ "), "the filter row's first item: {}", s.text());
+    assert!(s.text().contains("\n All machines │ "), "the filter row's first item: {}", s.text());
     // two machines: round, every machine first, then each machine by itself in herdr's sidebar order
     let mut round = vec![];
     for _ in 0..3 { s.press(&["alt+m"]); round.push(s.s.scope.clone()); }
@@ -40,7 +40,7 @@ fn with_no_other_machine_alt_m_asks_for_them_and_shows_every_machine_only_once_t
     // the other machine is gone: every machine is this one again, and the board shows this machine's own
     told(&mut s, vec![]);
     assert_eq!(s.s.scope, "");
-    assert!(!s.text().contains("All machines ▾"), "{}", s.text());
+    assert!(!s.text().contains("All machines │"), "{}", s.text());
 }
 
 #[test]
@@ -49,8 +49,8 @@ fn a_board_kept_on_every_machine_says_it_is_asking_and_goes_back_to_this_machine
     w.add("Mine");
     let mut s = open(&w.root, 60);
     s.s.scope = "*".into();
-    assert!(s.text().contains("\n All machines ▾ │ "), "{}", s.text());
+    assert!(s.text().contains("\n All machines │ "), "{}", s.text());
     told(&mut s, vec![]);
     assert_eq!(s.s.scope, "");
-    assert!(!s.text().contains("All machines ▾"), "{}", s.text());
+    assert!(!s.text().contains("All machines │"), "{}", s.text());
 }

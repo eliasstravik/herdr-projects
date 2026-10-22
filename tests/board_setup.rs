@@ -37,7 +37,7 @@ fn the_first_run_is_one_screen_with_both_choices_answered_with_single_keys() {
     assert!(s.s.setup.is_none(), "{}", s.text());
     let config = read(&sw::extras::herdr_config());
     assert!(config.contains("prefix+y"), "{config}");
-    assert!(flat(&s.text()).contains("prefix+y opens the board; herdr's sidebar shows each task's stage"), "{}", s.text());
+    assert!(!flat(&s.text()).contains("prefix+y opens the board; herdr's sidebar shows each task's stage"), "no confirmation under the chat: {}", s.text());
     // esc changes nothing and asks again next time
     let mut s = start(&w, Some(("prefix+b", "")), true);
     s.press(&["esc"]);

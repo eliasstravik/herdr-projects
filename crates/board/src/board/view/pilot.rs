@@ -35,6 +35,12 @@ pub fn shown(s: &State, t: &Theme, id: &str) -> Option<Shown> {
         else if on { let m = Inked::of(PILOT_MARK, match st { "needs you" => Ink::Red, "working" => Ink::Yellow, _ => if working { Ink::Yellow } else { Ink::Plain } }); (match st { "needs you" => m.bold(), "asleep" => m.quiet(), _ => m }, "on autopilot") }
         else if working { (Inked::of(t.mark("working", ""), Ink::Yellow), "working") }
         else { (Inked::of(t.mark("idle", ""), Ink::Muted), "idle") };
+    // Something you did to it is under way (update/pending.rs): its row says so as a task's does, `Starting…`, the
+    // working mark; one that did not work, in red (why is said under the chat, as an error is).
+    if let Some(p) = s.pending.get(&c.key()) {
+        return Some(match &p.failed { Some(why) => Shown { mark: Inked::of(t.mark("error", ""), Ink::Red).bold(), label: "could not do it", time: Inked::of(why.split(':').next().unwrap_or(why).to_string(), Ink::Red) },
+            None => Shown { mark: Inked::of(t.mark("working", ""), Ink::Yellow), label: "under way", time: Inked::of(p.word.clone(), Ink::Muted) } });
+    }
     let time = if working && v.began > 0 { Inked::of(crate::shown::words::age(s.now - v.began), Ink::Yellow) }
         else if v.at > 0 { Inked::of(format!("{} ago", crate::shown::words::age(s.now - v.at)), Ink::Muted) } else { Inked::new() };
     Some(Shown { mark, label, time })

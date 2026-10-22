@@ -91,7 +91,7 @@ fn every_machines_tasks_say_whose_they_are_and_a_far_merge_says_where_it_lands()
     // Alt+M: every machine comes first in its round (this machine where herdr's sidebar has it).
     while s.s.scope != "*" { s.press(&["alt+m"]); }
     // whose board shows is the filter row's first item, never cut
-    for width in [100, 40, 24] { assert!(s.screen(width)[1].starts_with(" All machines ▾"), "at {width}: {}", s.screen(width)[1]); }
+    for width in [100, 40, 24] { assert!(s.screen(width)[1].starts_with(" All machines │"), "at {width}: {}", s.screen(width)[1]); }
     s.s.sel = "otherbox:proj/1".into(); s.load();
     let t = s.screen(100).join("\n");
     // Each machine a step in under All machines, its status groups a step in under that: the row's tag is the number alone.
@@ -131,7 +131,7 @@ fn machine_names_too_long_for_a_line_are_shown_whole_never_cut() {
     for name in long {
         while s.s.scope != name { s.press(&["alt+m"]); }
         let l = s.screen(50)[1].clone();
-        assert!(l.starts_with(&format!(" {name} ▾")), "{l}");
+        assert!(l.starts_with(&format!(" {name} │")), "{l}");
     }
 }
 

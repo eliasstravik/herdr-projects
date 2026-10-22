@@ -36,8 +36,8 @@ fn each_thing_sent_to_a_tasks_agent_is_under_the_name_of_who_sent_it() {
     assert_eq!(sent_by(&r), want);
     // the box: each under the line that names who said it, as in the Coordinator's chat
     s.s.just_sent.clear(); // (the agent here says nothing new after your words, which would stand in the box till then)
-    let mut b = s.chat(120).boxed;
-    for _ in 0..12 { s.press(&["alt+k"]); b.extend(s.chat(120).boxed); }
+    let mut b = crate::board_chat::chat(&mut s, 120).boxed;
+    for _ in 0..12 { s.press(&["alt+k"]); b.extend(crate::board_chat::chat(&mut s, 120).boxed); }
     for name in ["Board:", "Coordinator:"] { assert!(b.iter().any(|l| l == name), "{name} in {b:?}"); }
     assert!(!b.iter().any(|l| l.starts_with("To the")), "{b:?}");
     // the web board: the same names

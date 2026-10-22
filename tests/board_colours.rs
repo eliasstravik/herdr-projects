@@ -55,7 +55,11 @@ fn the_box_edge_is_the_status_colour_of_the_task_it_talks_to_and_plain_text_with
                 let inside = |l: &Inked| Inked(l.0.iter().skip(1).take(l.0.len().saturating_sub(2)).cloned().collect());
                 let prompt = framed.iter().find(|l| l.text().contains('❯')).unwrap();
                 starts(&inside(prompt), Ink::Text, &format!("{what}: the prompt inside the frame"));
-                starts(&inside(&framed[1]), Ink::Plain, &format!("{what}: the message inside the frame"));
+                // an empty row under the top edge and over the bottom one, room to breathe
+                assert!(framed[1].text().trim_matches(['│', ' ']).is_empty() && framed[framed.len() - 2].text().trim_matches(['│', ' ']).is_empty(), "{what}: {:?}", framed.iter().map(|l| l.text()).collect::<Vec<_>>());
+                let message = framed.iter().find(|l| l.text().contains("hello")).unwrap();
+                assert!(message.text().starts_with("│  hello"), "{what}: two cells of padding: {}", message.text());
+                starts(&inside(message), Ink::Plain, &format!("{what}: the message inside the frame"));
                 // No coordinator can run and no task is talked to: plain text, and the box adds tasks.
                 s.reply = false;
                 assert_eq!(box_ink(&s, Some(&r)), Ink::Text, "{what}: no one to talk to");

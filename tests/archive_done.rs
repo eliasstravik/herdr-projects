@@ -96,7 +96,8 @@ fn the_archive_key_on_a_repos_heading_asks_first_then_archives_its_done_tasks_an
     // Yes archives them; the pinned one, the one at work, the waiting one and the to-do stay.
     s.press(&["ctrl+a", "y"]);
     assert!(archived(&ids[0]) && archived(&ids[1]) && ids[2..].iter().all(|id| !archived(id)));
-    assert!(s.s.msg.starts_with("Archived 2 done tasks of proj. Left out: 1 done but pinned, 1 waiting, 1 working, 1 to do.") && s.s.msg.contains(&key_name("archiveView")), "{}", s.s.msg);
+    // no confirmation under the chat when it worked: the two left the list
+    assert!(!s.s.msg.contains("Archived 2 done tasks"), "{}", s.s.msg);
     s.load();
     s.s.sel = head; s.load();
     assert!(!s.screen(120).join("\n").contains("archive its done tasks"), "no hint with nothing done to archive");

@@ -30,10 +30,10 @@ fn the_box_talks_to_one_long_lived_coordinator_started_once_with_nothing_held_ba
     // It opens on the top row, this machine's, whose coordinator the chat talks to: its box's edge names it, and the box
     // invites a first message.
     let (host, top) = (regex::escape(&sw::shown::words::clean(&sw::remote::check::hostname())), regex::escape(&crate::board_chat::top_name()));
-    assert!(has(&t, &format!(r#"\n╭─  {host}  · Machine coordinator ─*╮\n│ ❯ Ask it something, e\.g\. "what's left to do here\?" +│\n╰─+╯\n[^\n]*\? all keys *$"#)), "{t}");
+    assert!(has(&t, &format!(r#"\n╭─  {host}  · Machine coordinator ─*╮\n(?:│ +│\n)?│ +❯ Ask it something, e\.g\. "what's left to do here\?" +│\n(?:│ +│\n)?╰─+╯\n[^\n]*\? all keys *$"#)), "{t}");
     assert!(!has(&t, "claude|default model|default effort|last message|new task|reply to"), "{t}");
     s.typed("build a login page");
-    assert!(s.text().contains("│ ❯ build a login page") && s.text().contains(&format!("enter send to {} · shift+enter new line · esc put away", crate::board_chat::top_name())), "{}", s.text());
+    assert!(s.text().contains("❯ build a login page") && s.text().contains(&format!("enter send to {} · shift+enter new line · esc put away", crate::board_chat::top_name())), "{}", s.text());
     // tab is no second way to send: the Coordinator decides itself what to start, so the words stay where they are
     s.press(&["ctrl+s"]);
     assert!(s.s.value() == "build a login page" && sw::coordinator::state::get(&socket).unwrap_or_default().arr("queue").is_empty());
@@ -41,7 +41,7 @@ fn the_box_talks_to_one_long_lived_coordinator_started_once_with_nothing_held_ba
     assert_eq!(s.s.value(), "", "{}", s.s.msg);
     assert_eq!(sw::coordinator::state::get(&socket).unwrap_or_default().arr("queue").len(), 1);
     s.load();
-    assert!(has(&s.text(), &format!(r"\n╭─  {host}  · Machine coordinator ─*╮\n│ build a login page +│\n│ +│\n│ ❯ Send message to the machine coordinator +│\n╰─+╯\n")), "{}", s.text());
+    assert!(has(&s.text(), &format!(r"\n╭─  {host}  · Machine coordinator ─*╮\n(?:│ +│\n)?│ +build a login page +│\n│ +│\n│ +❯ Send message to the machine coordinator +│\n(?:│ +│\n)?╰─+╯\n")), "{}", s.text());
     drain();
     let st = w.state();
     assert_eq!(st.arr("workspaces").iter().map(|x| x.t("label")).collect::<Vec<_>>(), vec!["~"]);
@@ -61,7 +61,7 @@ fn the_box_talks_to_one_long_lived_coordinator_started_once_with_nothing_held_ba
     s.load();
     for width in [160, 120, 60] {
         let txt = s.screen(width).join("\n");
-        assert!(has(&txt, &format!(r"\n╭─  {host}  [^\n]*╮\n│ Added proj/1\. +│\n│ +│\n│ ❯ Send message to the machine coordinator +│\n╰─+╯\n[ ▌] [^\n]*{} \? all keys *$", if width >= 120 { format!("{} hide the latest message ·", regex::escape(&key_name("chatMessage"))) } else { String::new() })), "at {width}: {txt}");
+        assert!(has(&txt, &format!(r"\n╭─  {host}  [^\n]*╮\n(?:│ +│\n)?│ +Added proj/1\. +│\n│ +│\n│ +❯ Send message to the machine coordinator +│\n(?:│ +│\n)?╰─+╯\n[ ▌] [^\n]*{} \? all keys *$", if width >= 120 { format!("{} hide the latest message ·", regex::escape(&key_name("chatMessage"))) } else { String::new() })), "at {width}: {txt}");
         assert!(s.screen(width).iter().all(|l| sw::text::width(l) <= width));
     }
     assert_eq!(sw::coordinator::look::look(&socket).unseen, "", "a reply you can see counts as seen");

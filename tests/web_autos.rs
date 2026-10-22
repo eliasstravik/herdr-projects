@@ -54,7 +54,7 @@ fn the_web_board_has_the_automations_one_whole_with_its_buttons_and_a_firing_tha
     assert!(common::board::web_as(&w, "test", "press", json!({ "id": "delegate", "role": "watch" })).unwrap_err().contains("This device can only watch"));
     // fire it now: a task is made and started, and the firing is a link to it
     let s = web(&w, "press", json!({ "id": "delegate" }));
-    assert!(s.at("msg").s("text").contains("\"Look for old dependencies\" fired: PRJ-2 was added and an agent is on it."), "{}", s.at("msg"));
+    assert!(!s.at("msg").s("text").contains("fired: PRJ-2 was added"), "no confirmation: the task it made is on the list: {}", s.at("msg"));
     assert_eq!(task("proj/2").s("stage"), "starting"); assert_eq!(s.at("list").s("selected"), one.s("id"));
     sw::automations::fire::fire(a.s("id"), sw::automations::told::Cause::Schedule, sw::clock::now()).unwrap();
     let s = web(&w, "board", json!({}));

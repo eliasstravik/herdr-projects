@@ -70,12 +70,12 @@ fn a_terminal_held_at_another_size_the_board_draws_inside_what_is_shown_and_take
     assert!(has(&lines[55], r"^[ ▌] \S.* · "), "the hints: the last row that is seen: {}", lines[55]);
     assert!(has(&lines[54], r"^[ ▌] Another viewer holds this terminal at 435×58; herdr shows it at 412×56\. The board takes it back\.$"), "{}", lines[54]);
     // The one rounded box ends where what is shown ends: its edge naming who it talks to, the message, an empty line,
-    // the line you type on.
-    assert_eq!(lines[53], format!("╰{}╯", "─".repeat(409))); assert!(has(&lines[52], r"^│ ❯ .* │$")); assert!(has(&lines[51], r"^│ +│$"));
-    assert!(has(&lines[50], r"^│ Tasks 31 and 32 are both waiting\. +│$"), "{}", lines[50]);
+    // the line you type on, an empty row.
+    assert_eq!(lines[53], format!("╰{}╯", "─".repeat(409))); assert!(has(&lines[52], r"^│ +│$")); assert!(has(&lines[51], r"^│ +❯ .* │$")); assert!(has(&lines[50], r"^│ +│$"));
+    assert!(has(&lines[49], r"^│ +Tasks 31 and 32 are both waiting\. +│$"), "{}", lines[49]);
     let me = sw::board::update::heads::label(&s.s, "");
-    assert!(has(&lines[49], r"^╭─ .*╮$") && lines[49].contains(&format!(" {me} ")), "{}", lines[49]);
-    for n in 49..=52 { assert_eq!(sw::text::width(&lines[n]), 411); }
+    assert!(has(&lines[48], r"^│ +│$") && has(&lines[47], r"^╭─ .*╮$") && lines[47].contains(&format!(" {me} ")), "{}", lines[47]);
+    for n in 47..=52 { assert_eq!(sw::text::width(&lines[n]), 411); }
     assert!(has(&pin(&lines), r"Pin the chat to the bottom +█+░+ +55% 12m left {2}PR#3 {2}6m$"), "the columns are back in view: {}", pin(&lines));
     assert!(has(&lines[55], &format!(r"{} hide the latest message · \? all keys *$", regex::escape(&key_name("chatMessage")))), "the chat's key is on the hint line, whole: {}", lines[55]);
     // Held at 435x58 while a taller, narrower window shows it: the width is cut down, the rows are all there are.

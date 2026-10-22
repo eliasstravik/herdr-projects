@@ -49,11 +49,18 @@ pub fn box_lines(s: &mut State, width: usize, max_rows: usize, r: Option<&Obj>) 
     (lines, if focused { Some((1, label.width() + 1)) } else { None })
 }
 /// The text box with the chat open: one rounded box around the latest message, a blank line and the line you type on.
+/// The cells left and right of the text inside the box: two, one in a narrow one.
+fn pad(width: usize) -> usize { if width >= 30 { 2 } else { 1 } }
+/// The width of the text inside the box.
+pub fn inner_width(width: usize) -> usize { width.saturating_sub(2 + 2 * pad(width)) }
+/// An empty line inside the box under its top edge and over its bottom one, where the window has the height for them.
+pub fn airy(s: &State) -> bool { !s.chat_folded }
 pub fn chat_box(s: &mut State, width: usize, max_rows: usize, r: Option<&Obj>, message: &[Inked]) -> (Vec<Inked>, Option<(usize, usize)>) {
-    let inner = width.saturating_sub(4);
+    let (inner, pad) = (inner_width(width), pad(width));
     let ink = box_ink(s, r);
     let edge = |x: &str| Inked::of(x, ink);
-    let row = |l: &Inked| { let x = if l.width() > inner { l.cut(inner) } else { l.clone() }; let w = x.width(); edge("│").add(Inked::plain(" ")).add(x).add(Inked::spaces(inner.saturating_sub(w))).add(Inked::plain(" ")).add(edge("│")) };
+    let row = |l: &Inked| { let x = if l.width() > inner { l.cut(inner) } else { l.clone() }; let w = x.width(); edge("│").add(Inked::spaces(pad)).add(x).add(Inked::spaces(inner.saturating_sub(w))).add(Inked::spaces(pad)).add(edge("│")) };
+    let airy = airy(s);
     let (b, cur) = box_lines(s, inner, max_rows, r);
     let body: Vec<Inked> = b[1..b.len() - 1].to_vec();
     let (above, below) = (s.input.above, s.input.below);
@@ -69,10 +76,13 @@ pub fn chat_box(s: &mut State, width: usize, max_rows: usize, r: Option<&Obj>, m
     let under = if above > 0 { edge(&s.input.rule(gap, true)) } else { Inked::spaces(if down.is_empty() { 0 } else { gap }) }.add(if down.is_empty() { Inked::new() } else { Inked::plain(" ").add(down) });
     // Its top edge names who it talks to (chat_title.rs).
     let mut out = match &title { Some(t) if !(above > 0 && message.is_empty()) => vec![super::chat_title::edge(t, width, up)], _ => vec![edge("╭").add(top).add(edge("╮"))] };
+    // Room to breathe: an empty line under the top edge and over the bottom one (none where height is short).
+    if airy { out.push(row(&Inked::new())); }
     out.extend(message.iter().map(row));
     if !message.is_empty() { out.push(row(&under)); }
     let body_at = out.len();
     out.extend(body.iter().map(row));
+    if airy { out.push(row(&Inked::new())); }
     out.push(edge("╰").add(if below > 0 { edge(&s.input.rule(width.saturating_sub(2), false)) } else { line(width.saturating_sub(2)) }).add(edge("╯")));
-    (out, cur.map(|(l, c)| (body_at + l - 1, c + 2)))
+    (out, cur.map(|(l, c)| (body_at + l - 1, c + 1 + pad)))
 }

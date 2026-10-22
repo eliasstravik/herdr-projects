@@ -1,4 +1,4 @@
-//! The filter row under the header: `vm-str ▾ │ All 48   Coordinators 4   Needs you 3   Working 2   Ready 1   To do 12
+//! The filter row under the header: `vm-str │ All 48   Coordinators 4   Needs you 3   Working 2   Ready 1   To do 12
 //! Done 30   Automations 2`, whose board first (where there is another machine: `All machines`, or one machine),
 //! the one shown lit, the others greyed with their counts (a count of tasks that need you in red). Where it has no
 //! room, the names are said shorter (then shortest), those with nothing in them go, and where that is still too long only the one
@@ -22,7 +22,8 @@ pub fn shows_line(s: &State, _t: &Theme, w: usize) -> (Inked, Vec<(usize, usize,
     let machine = (!s.remotes.is_empty() || s.all()).then(|| {
         let named = if s.scope == "*" { "All machines".to_string() } else { crate::board::update::remotes::shown(s, &s.scope) };
         let ok = s.scope.is_empty() || s.scope == "*" || s.remotes.get(&s.scope).is_some_and(|m| m.ok);
-        Inked::of(format!(" {named} ▾ "), if ok { Ink::Accent } else { Ink::Yellow }).bold()
+        // In the base colour, no caret (yellow while that machine does not answer); a cell of room each side as every item.
+        Inked::of(format!(" {named} "), if ok { Ink::Text } else { Ink::Yellow })
     });
     // Every item keeps a cell of room on each side, lit or not: the lit one's highlight takes it (` Needs you 1 `), and
     // the row does not move when another is lit.

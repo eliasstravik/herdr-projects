@@ -59,7 +59,8 @@ fn the_open_key_on_a_task_goes_into_its_agent_and_the_board_stays_as_it_was_from
         assert!(!s.closed, "the board is not closed: {way}"); assert!(!s.s.leaving, "{way}");
         assert_eq!(focus(&w)[before..].to_vec(), vec![format!("agent {pane}")], "herdr moved to the agent: {way}");
         assert_eq!(s.s.sel, id, "{way}"); assert_eq!(s.s.filter, "greeting", "{way}"); assert_eq!(s.s.data.repo, "proj", "{way}");
-        assert!(has(&s.text().split_whitespace().collect::<Vec<_>>().join(" "), r"Opened (PRJ-1|proj/1)'s agent\. prefix\+w brings you back to the board\."), "{way}: {}", s.text());
+        // no green line under the chat says it was opened: herdr is on the agent
+        assert!(!s.text().contains("Opened "), "{way}: {}", s.text());
         assert_eq!(view_sel("view.json"), id, "where you were is saved: {way}");
         // It still takes keys when you are back, and a second alt+o goes in again.
         s.press(&["alt+o"]);
@@ -129,7 +130,7 @@ fn the_open_key_on_a_task_goes_into_its_agent_and_the_board_stays_as_it_was_from
     let mut s = open(&w.root, 34); s.s.sel = id.clone(); s.load(); relist(&mut s.s);
     let before = focus(&w).len();
     s.press(&["alt+o"]);
-    assert!(!s.closed); assert!(has(&focus(&w)[before..].join(" "), r"^workspace \S+"), "{:?} {}", focus(&w), s.text()); assert!(s.text().contains("The board stays here."), "{}", s.text());
+    assert!(!s.closed); assert!(has(&focus(&w)[before..].join(" "), r"^workspace \S+"), "{:?} {}", focus(&w), s.text()); assert!(!s.text().contains("The board stays here."), "no confirmation line: {}", s.text());
     // Only a board someone opened as herdr's popup closes for an agent: a popup lies over every pane, the agent's too.
     let mut p = open_with(&w.root, 34, true); p.s.sel = id.clone(); p.load(); relist(&mut p.s); p.press(&["alt+o"]);
     assert!(p.closed);

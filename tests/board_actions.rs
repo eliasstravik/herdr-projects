@@ -51,7 +51,7 @@ fn ready_to_approve_the_merge_asks_first_the_menu_acts_remove_asks_and_messages_
     s.press(&["ctrl+l", "N"]); assert!(s.s.ask.is_none() && s.s.value().is_empty());
     s.press(&["ctrl+l", "Y"]); assert!(s.s.value().is_empty());
     assert_eq!(task(&id).s("stage"), "merging");
-    assert!(s.text().contains("PRJ-1: approved, merging"), "{}", s.text());
+    assert!(!s.text().contains("approved, merging"), "no confirmation under the chat: {}", s.text());
     settle(&id); s.load();
     assert!(has(&s.screen(80).join("\n"), r"\n   ▾ done *\n[ ▌]  ✓ PRJ-\d+ +Make f +R#1 +\d"));
     // the ? menu: every key the board has, in three groups, and the / that lists skills in the text box
@@ -68,7 +68,8 @@ fn ready_to_approve_the_merge_asks_first_the_menu_acts_remove_asks_and_messages_
     s.press(&["x", "ctrl+l"]); assert!(s.s.menu.is_some(), "a stray key neither acts nor closes the menu");
     s.press(&["down", "down", "down", "down", "down", "enter"]);
     assert!(task("proj/2").b("archivedAt") && s.s.menu.is_none());
-    assert!(s.text().contains(&format!("Archived PRJ-2 \"Other\". {} undoes it; {} shows the archive. Now on PRJ-1 \"Make f\".", key_name("undo"), key_name("archiveView"))), "{}", s.text());
+    // no confirmation under the chat: the task left the list
+    assert!(!s.text().contains("Archived PRJ-2") && !s.text().contains("Other"), "{}", s.text());
     s.rows = 34;
     s.press(&["alt+a"]);
     assert!(s.text().starts_with(" herdr-projects  archive · 1 archived") && has(&s.text(), r"\n ▾ archived [^\n]*\n[ ▌]. PRJ-2 +Other ") && !s.text().contains("[archived]"), "{}", s.text());
@@ -77,6 +78,8 @@ fn ready_to_approve_the_merge_asks_first_the_menu_acts_remove_asks_and_messages_
     s.s.sel = "proj/2".into(); s.load(); s.press(&["ctrl+p"]); assert_eq!(task("proj/2").at("pinned"), &json!(true));
     s.press(&["ctrl+f"]); assert!(s.text().contains("\nfind ❯ ")); s.typed("make"); s.press(&["enter"]);
     assert!(has(&s.text(), r#"^ herdr-projects  proj · [^\n]*\n +All [^\n]*\n filter "make" · 1 of 2 · esc clears "#), "{}", s.text());
+    // the error from the merge asked about earlier stays (no confirmation took its place): the first esc dismisses it
+    if s.s.msg_kind == sw::shown::ink::Ink::Red && !s.s.msg.is_empty() { s.press(&["esc"]); }
     s.press(&["esc"]); assert_eq!(s.s.filter, "");
     // ctrl+x on a task with no agent running asks to remove it; only y deletes
     s.s.sel = "proj/2".into(); s.load(); s.press(&["ctrl+x"]);
@@ -118,7 +121,7 @@ fn yes_on_something_that_went_wrong_retries_it_and_the_focused_pane_action_asks_
     let tree = std::path::Path::new(t.s("worktree"));
     std::fs::write(tree.join("good.txt"), "ok\n").unwrap(); git(tree, &["add", "-A"]); git(tree, &["commit", "-qm", "good"]);
     s.press(&["ctrl+l"]);
-    assert!(s.text().contains("PRJ-1: trying again"), "{}", s.text()); assert_eq!(task(&id).s("stage"), "checking");
+    assert!(!s.text().contains("trying again"), "no confirmation under the chat: {}", s.text()); assert_eq!(task(&id).s("stage"), "checking");
     let t = settle(&id);
     assert_eq!(t.s("stage"), "approval", "{}", t.at("failure"));
     assert_eq!(prompts(&w, t.at("link").s("pane")).len(), sent, "nothing was sent to the agent");

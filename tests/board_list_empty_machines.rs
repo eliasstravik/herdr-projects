@@ -35,6 +35,7 @@ fn a_machine_with_no_task_has_its_heading_folded_and_space_there_talks_to_its_ma
     assert!(t.contains("space talk to otherbox's coordinator") && t.contains("alt+o go into it") && !t.contains("unfold"), "{t}");
     let fx = s.hold("alt+o");
     assert!(fx.iter().any(|e| matches!(e, Effect::Run(Job::Far { host, action, req, .. }) if host == "otherbox" && action == "coordinator-open" && req.s("to") == "machine")), "{fx:?}");
+    s.s.pending.clear(); // a held job never answers: what it put under way on the row is let go
     s.press(&["space"]);
     assert!(s.s.reply && s.s.reply_id == machine_id("otherbox") && s.s.sel == machine_id("otherbox"), "{}", s.s.msg);
     assert!(has(&s.screen(100).join("\n"), r"\n▌  ○ ▸ otherbox  0 tasks *\n"), "still folded");

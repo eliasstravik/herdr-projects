@@ -89,7 +89,7 @@ fn the_board_finds_itself_in_the_m1s_sidebar_by_the_address_its_tailscale_name_s
     let here = sw::board::update::heads::label(&b.s, "");
     assert_eq!(headings(&b), vec!["Local (elias-macbook-pro-m1)".to_string(), format!("Mac mini ({here})"), "vm-str".into(), "vm-ssa".into(), "vm-not".into(), "vm-kil".into(), "vm-demo".into()]);
     let said = "Local (elias-macbook-pro-m1), vm-str, vm-ssa, vm-not, vm-kil, vm-demo";
-    assert!(b.text().contains("\n All machines ▾ │ "), "the filter row names whose board: {}", b.text());
+    assert!(b.text().contains("\n All machines │ "), "the filter row names whose board: {}", b.text());
     assert_eq!(sw::webui::model::list::list_of(&b.s, &b.theme).at("head").s("machines"), said);
     // the scope key's round, which the web UI's Boards section follows too
     let mut round = vec![];

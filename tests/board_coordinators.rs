@@ -39,7 +39,7 @@ fn space_on_a_repos_heading_talks_to_its_project_coordinator_and_space_again_goe
     assert!(s.s.reply && s.s.reply_id == head);
     let t = s.text();
     // the box names it, from the top row down; it never ran: its box asks for a first message
-    assert!(has(&t, &format!(r"\n╭─ {} ›  proj  · Project coordinator ─+╮\n│ ❯ Ask it something", regex::escape(&host))), "{t}");
+    assert!(has(&t, &format!(r"\n╭─ {} ›  proj  · Project coordinator ─+╮\n│ +│\n│  ❯ Ask it something", regex::escape(&host))), "{t}");
     assert!(t.contains("❯ Ask it something, e.g. \"what's left to do here?\"") && t.contains(&format!("space back to {host}'s coordinator")), "{t}");
     s.typed("what is open here?");
     assert!(s.text().contains("enter send to") && s.text().contains("proj's coordinator"), "{}", s.text());

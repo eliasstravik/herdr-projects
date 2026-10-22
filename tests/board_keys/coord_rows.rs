@@ -1,7 +1,8 @@
 //! The rows of coordinators, read as tasks' rows: the top row (All machines, or the one machine) the board opens on,
 //! a task's marks for where each coordinator stands, its time on the right and its live second line; enter folds a
 //! heading and does nothing on a task, alt+o goes into a row's agent, ← and → fold, ← on a task goes to its heading;
-//! one that asks you stands under Needs you.
+//! one that asks you stands under Needs you; ctrl+s, ctrl+x and ctrl+o say on the row what is under way, never under the
+//! chat when it worked.
 use crate::common;
 use common::board::open;
 use common::*;
@@ -127,4 +128,39 @@ fn machine_and_project_rows_mark_their_coordinators_state_with_a_tasks_marks_or_
     assert!(!text.contains("◈") && !text.contains("◎") && !s.s.rows.iter().any(|r| matches!(r, Row::Head { name, .. } if name == "Coordinator")), "{text}");
     let red = s.inked(120).iter().flat_map(|x| x.0.clone()).filter(|p| p.t == "!" || p.t == "✗").all(|p| p.c == Ink::Red && p.bold);
     assert!(red, "what needs you and what went wrong: red, bold");
+}
+
+/// Ctrl+S, Ctrl+X and Ctrl+O on a coordinator's row: while the job runs its row says so (`Starting…`, `Stopping…`, the
+/// working mark), as a task's does; when it worked nothing is said under the chat; when it failed its row says so in
+/// red and the reason is said under the chat.
+#[test]
+fn a_coordinators_row_says_starting_or_stopping_while_its_job_runs_and_nothing_is_said_when_it_worked() {
+    let w = coord_world("none");
+    w.add("Fix the login");
+    let mut s = open(&w.root, 40); s.s.side = false;
+    s.press(&["alt+s"]);
+    let head = group_id(&s.s, "", "proj");
+    s.s.sel = head.clone(); s.load();
+    let row = |s: &mut common::board::Board| s.screen(120).into_iter().find(|l| l.contains("▾ proj")).unwrap_or_default();
+    for (key, word) in [("ctrl+s", "Starting…"), ("ctrl+x", "Stopping…"), ("ctrl+o", "Starting…")] {
+        // held: the job has not answered yet
+        let fx = s.hold(key); assert!(!jobs(fx).is_empty(), "{key}");
+        let l = row(&mut s);
+        assert!(l.contains("◐ ▾ proj") && l.trim_end().ends_with(word), "{key}: {l}");
+        s.s.pending.clear();
+    }
+    // it worked: nothing under the chat, and the row is its coordinator's own again once the board reads it
+    s.press(&["ctrl+s"]); s.load(); s.load();
+    assert!(s.s.msg.is_empty() || s.s.msg_kind == Ink::Red, "no confirmation line: {:?}", s.s.msg);
+    assert!(!row(&mut s).contains("Starting…"), "{}", row(&mut s));
+    // it failed: the row says so in red, the reason under the chat
+    s.hold("ctrl+x");
+    let mut d = sw::board::job::Done::fail("its pane is gone");
+    d.about = "co:\tproject:proj".into(); d.kind = "CoordRun".into();
+    update(&mut s.s, Event::Done(d));
+    let l = row(&mut s);
+    assert!(l.contains("✗ ▾ proj") && l.trim_end().ends_with("Could not stop"), "{l}");
+    assert!(s.s.msg.contains("its pane is gone") && s.s.msg_kind == Ink::Red, "{:?}", s.s.msg);
+    let red = s.inked(120).into_iter().find(|l| l.text().contains("▾ proj")).unwrap();
+    assert!(red.0.iter().any(|p| p.t.contains("Could not stop") && p.c == Ink::Red), "{red:?}");
 }

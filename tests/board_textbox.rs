@@ -11,6 +11,20 @@ mod images;
 
 fn words(n: usize) -> String { (1..=n).map(|i| format!("word{i}")).collect::<Vec<_>>().join(" ") }
 fn row(c: char) -> String { vec![c.to_string().repeat(4); 7].join(" ") }
+/// The draft in the chat's rounded box, which has room to breathe (view/textbox.rs: chat_box): its text two cells in
+/// from its edge (one in a box under 30 columns), an empty row under its top edge and over its bottom one.
+fn framed_draft(s: &mut common::board::Board, cols: usize) -> common::board::Draft {
+    let mut d = s.draft(cols);
+    let pad = if cols >= 30 { 2 } else { 1 };
+    let inner: Vec<String> = d.lines.iter().map(|l| if l.starts_with('│') && l.ends_with('│') { let c: Vec<char> = l.chars().collect(); c[1 + pad..c.len() - 1 - pad].iter().collect::<String>().trim_end().to_string() } else { l.clone() }).collect();
+    let first = inner.iter().position(|l| l.starts_with("❯ ") || l == "❯").unwrap_or(0);
+    let last = inner.iter().enumerate().position(|(n, l)| n > first && (l.is_empty() || l.starts_with('╰'))).unwrap_or(inner.len());
+    d.rows = inner[first..last].iter().map(|l| l.chars().skip(2).collect::<String>().trim_end().to_string()).collect();
+    let hidden = |l: Option<&String>| l.and_then(|l| regex::Regex::new(r"(\d+) more").unwrap().captures(l).map(|c| c[1].parse::<usize>().unwrap_or(0))).unwrap_or(0);
+    (d.above, d.below) = (hidden(d.lines.get(first.wrapping_sub(1))), hidden(d.lines.get(last)));
+    d.framed = true;
+    d
+}
 
 #[test]
 fn a_long_draft_wraps_between_words_and_the_box_grows_with_it() {
@@ -115,12 +129,12 @@ fn a_reply_to_a_tasks_agent_wraps_in_the_same_box_under_its_latest_message() {
     assert!(s.s.reply);
     let all = words(60);
     s.typed(&all);
-    let d = s.draft(50);
+    let d = framed_draft(&mut s, 50);
     assert_eq!(d.rows.join(" "), all); assert!(d.rows.len() > 5); assert_eq!(d.above + d.below, 0);
     assert_eq!(d.lines.len(), 24); assert!(d.lines.iter().all(|l| sw::text::width(l) <= 50));
     assert!(d.lines.iter().any(|l| regex::Regex::new(r"^╭─ .*PRJ-\d+  · Agent ─*╮$").unwrap().is_match(l)), "who the reply goes to still shows, on the box's edge: {:?}", d.lines);
-    assert!(d.framed); assert!(d.lines.iter().any(|l| regex::Regex::new(r"^│ Made f\. +│$").unwrap().is_match(l)), "the agent's latest message is in the same box: {:?}", d.lines);
+    assert!(d.framed); assert!(d.lines.iter().any(|l| regex::Regex::new(r"^│ +Made f\. +│$").unwrap().is_match(l)), "the agent's latest message is in the same box: {:?}", d.lines);
     s.typed(&format!(" {all} {all}"));
-    let e = s.draft(50);
+    let e = framed_draft(&mut s, 50);
     assert_eq!(e.lines.len(), 24); assert!(e.above > 0); assert_eq!(e.below, 0); assert!(e.lines.last().unwrap().contains("enter send to PRJ-1's agent"));
 }

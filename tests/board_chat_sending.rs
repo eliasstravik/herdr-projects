@@ -75,7 +75,7 @@ fn a_repos_coordinator_here_shows_your_words_at_once_until_its_own_conversation_
     s.run(fx); drain(); s.load();
     let t = s.text();
     // its answer alone, under no label: the box's edge names it
-    assert!(!t.contains("│ proj's coordinator:") && t.contains("│ Proj has one task open.") && !t.contains("sending…"), "{t}");
+    assert!(!t.contains("│ proj's coordinator:") && t.contains("  Proj has one task open.") && !t.contains("sending…"), "{t}");
     assert!(s.s.just_sent.is_empty(), "its conversation has your words now: {:?}", s.s.just_sent);
 }
 

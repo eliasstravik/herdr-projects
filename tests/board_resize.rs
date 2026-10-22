@@ -33,19 +33,21 @@ fn resizing_keeps_the_chat_on_the_last_line_and_the_working_rows_columns_at_the_
         for l in &lines { assert!(width(l) <= columns, "{note}: a line is wider than the window: {l:?}"); }
         // The bottom: the hints on the last row, and right above them the one rounded box, as wide as the window.
         assert!(has(&lines[rows - 1], r"^[ ▌] {1}\S") && !lines[rows - 1].trim_end().ends_with('·'), "{note}: {:?}", lines[rows - 1]);
-        let in_box = |n: usize| { let l = &lines[n]; assert!(has(l, r"^│ .* │$"), "{note}: {l:?}"); assert_eq!(width(l), columns, "{note}"); let c: Vec<char> = l.chars().collect(); c[2..c.len() - 2].iter().collect::<String>().trim_end().to_string() };
+        let in_box = |n: usize| { let l = &lines[n]; assert!(has(l, r"^│ .* │$"), "{note}: {l:?}"); assert_eq!(width(l), columns, "{note}"); let c: Vec<char> = l.chars().collect(); c[2..c.len() - 2].iter().collect::<String>().trim().to_string() };
         // The box's top edge names who you talk to (chat_title.rs), and its first line says who that is.
         let head = lines.iter().position(|l| has(l, r"^╭─.*╮$")).unwrap_or_else(|| panic!("{note}: {}", lines.join("\n")));
         assert_eq!(lines[rows - 2], format!("╰{}╯", "─".repeat(columns - 2)), "{note}\n{}", lines.join("\n"));
-        assert!(in_box(rows - 3).starts_with("❯ "), "{note}");
+        // The line you type on; where the window has the height, an empty row under it and one under the edge.
+        let input = if rows < 14 { rows - 3 } else { rows - 4 };
+        assert!(in_box(input).starts_with("❯ "), "{note}");
         // Under 14 rows the chat folds to the box's edge (no first line), so the list has the lines. (The old test's
         // stand-in for the chat said it must always show, which only a Coordinator that could not start does.)
         if rows < 14 {
             assert_eq!(head, rows - 4, "{note}\n{}", lines.join("\n"));
         } else {
-            assert_eq!(in_box(rows - 4), "", "{note}");
-            // (Under the edge that names it, its message alone.)
-            let said: Vec<String> = (head + 1..rows - 4).map(in_box).collect();
+            assert_eq!(in_box(rows - 3), "", "{note}"); assert_eq!(in_box(rows - 5), "", "{note}"); assert_eq!(in_box(head + 1), "", "{note}");
+            // (Under the edge that names it and its empty row, its message alone.)
+            let said: Vec<String> = (head + 2..rows - 5).map(in_box).collect();
             assert_eq!(said.join(" ").trim(), "Tasks 31 and 32 are both waiting.", "{note}");
         }
         // Who you talk to: one machine's own coordinator, its name on the box's edge. No keys, no program.

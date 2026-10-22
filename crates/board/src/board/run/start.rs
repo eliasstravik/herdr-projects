@@ -48,7 +48,7 @@ pub fn prepare(folder: &std::path::Path) -> (State, Theme, Option<(String, Strin
     let moved = crate::store::move_home::move_note(&home, &envn);
     if !moved.is_empty() { crate::store::move_home::move_told(&home, &envn); }
     let said: Vec<String> = [moved, keys].into_iter().filter(|x| !x.is_empty()).collect();
-    if !said.is_empty() { s.flash(said.join("  "), Ink::Green); }
+    if !said.is_empty() { s.flash(said.join("  "), Ink::Muted); }
     start_setup(&mut s);
     let seen = term::colours_told(asked, 250);
     let theme = Theme::load(seen.light, seen);

@@ -116,6 +116,8 @@ As a task's row stands for the task:
   agent on a task and stop it. Here or on its machine.
 - `Ctrl+O` puts it on [autopilot](autopilot.md) with its saved goal and settings, and takes it off again. While on,
   its row's mark is `∞`.
+- While one of these takes a moment, its row says `Starting…` or `Stopping…` with the working mark, as a task's does,
+  and nothing is said under the chat when it worked ([what a key shows at once](under-way.md)).
 
 **Each has its own settings**, `coordinator.*` and `autopilot.*`, looked up **this coordinator → you → built in**
 ([settings](settings.md)). What you set for yourself counts for every coordinator; one set for this coordinator alone

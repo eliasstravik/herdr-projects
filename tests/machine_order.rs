@@ -131,7 +131,7 @@ fn every_list_of_machines_on_the_board_is_in_the_sidebars_order_and_follows_it_w
     let here = sw::board::update::heads::label(&b.s, "");
     // this machine's own herdr list: its Local first, then the others as herdr lists them, not by name
     assert_eq!(headings(&mut b), vec![here.clone(), "vm-c".into(), "vm-a".into(), "vm-b".into()]);
-    assert!(b.text().contains("\n All machines ▾ │ "), "the filter row names whose board: {}", b.text());
+    assert!(b.text().contains("\n All machines │ "), "the filter row names whose board: {}", b.text());
     let model = sw::webui::model::list::list_of(&b.s, &b.theme);
     assert_eq!(model.at("head").s("machines"), "vm-c, vm-a, vm-b");
     // the scope key goes round in that order too: every machine, then each one, this machine where herdr has it

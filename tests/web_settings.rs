@@ -41,7 +41,7 @@ fn every_setting_of_the_open_task_with_its_label_and_meaning_changed_and_put_bac
     let s = set(&w, &t, "research.only", json!("true"));
     assert_eq!(task(&t).at("settings"), &json!({ "research.only": true }));
     assert_eq!((row(&s, "research.only").s("value"), row(&s, "research.only").at("own"), row(&s, "research.only").s("from")), ("on", &json!(true), ""));
-    assert!(regex::Regex::new(r"^Research only: on, for this task only$").unwrap().is_match(s.at("msg").s("text")), "{}", s.at("msg"));
+    assert!(!s.at("msg").s("text").starts_with("Research only"), "no confirmation: the row says it: {}", s.at("msg"));
     assert!(rows_of(&s).iter().find(|x| x.s("id") == t).unwrap().s("title").contains("Look into the logs [research]"));
     // The task's own panel says the same, in words: every setting it runs with, a `*` after a value set for this task
     // only. No value says where it comes from.

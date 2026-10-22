@@ -44,7 +44,6 @@ pub fn turn_off(s: &mut State, t: &Target, fx: &mut Vec<Effect>) {
     let v = view(s, t);
     if v.is_null() && !t.host.is_empty() { return s.flash(format!("{} runs an older version that has no autopilot: update herdr-projects there first.", t.host), Ink::Yellow); }
     if !v.b("on") { return s.flash(format!("{} is not on autopilot. {} turns it on.", super::top::sentence(&t.name), crate::board::keys::key_name("autopilot")), Ink::Muted); }
-    s.flash(format!("Turning autopilot off for {}…", t.name), Ink::Muted);
     fx.push(job(s, t, false));
 }
 fn job(s: &State, t: &Target, on: bool) -> Effect {
@@ -55,7 +54,6 @@ fn job(s: &State, t: &Target, on: bool) -> Effect {
 /// The start key and the stop key on a coordinator's row: start it in its own conversation, or stop it, as an agent on a
 /// task; here or on its machine.
 pub fn run(s: &mut State, t: &Target, on: bool, fx: &mut Vec<Effect>) {
-    s.flash(format!("{} {}…", if on { "Starting" } else { "Stopping" }, t.name), Ink::Muted);
     if t.host.is_empty() { return fx.push(Effect::Run(Job::CoordRun { to: t.to.clone(), name: t.name.clone(), on })); }
     let m = s.remotes.get(&t.host).map(|m| m.machine.clone()).unwrap_or_default();
     fx.push(Effect::Run(Job::Far { machine: m, host: t.host.clone(), action: if on { "coordinator-start" } else { "coordinator-stop" }.into(), req: json!({ "id": "", "to": t.to }), quiet: false }));
@@ -85,7 +83,6 @@ pub fn menu_label(s: &State, k: crate::board::keys::K) -> Option<String> {
 /// started first when it is not running, another machine's there. A status group's heading has none.
 pub fn go_in(s: &mut State, fx: &mut Vec<Effect>) {
     let Some(t) = selected(s) else { return s.flash(format!("A status group has no agent to go into. {} and {} fold it.", crate::board::keys::key_name("fold"), crate::board::keys::key_name("unfold")), Ink::Muted) };
-    s.flash(format!("Going into {}…", t.name), Ink::Muted);
     if t.host.is_empty() { return fx.push(Effect::Run(Job::CoordOpen { to: t.to.clone(), name: t.name.clone(), popup: s.ctx.popup })); }
     let m = s.remotes.get(&t.host).map(|m| m.machine.clone()).unwrap_or_default();
     fx.push(Effect::Run(Job::Far { machine: m, host: t.host.clone(), action: "coordinator-open".into(), req: json!({ "id": "", "to": t.to, "focus": s.ctx.in_herdr }), quiet: true }));

@@ -106,7 +106,7 @@ fn draw_at(s: &mut State, t: &Theme, width: usize, rows: usize) -> Screen {
     else if !stale.is_empty() { vec![Inked::plain("  ").add(Inked::of(stale, Ink::Muted))] } else { vec![] };
     let said: Vec<Inked> = broke.iter().map(|b| failed(b, width)).chain(said).collect();
     // The text box grows with a draft that wraps, up to half the window: a longer draft scrolls inside it.
-    let box_rows = (rows_n as i64 - 4 - head_n as i64 - if selected_job.is_some() { 1 } else { 0 }).min((rows_n / 2).max(5) as i64).max(1) as usize;
+    let box_rows = (rows_n as i64 - 4 - head_n as i64 - if super::textbox::airy(s) { 2 } else { 0 } - if selected_job.is_some() { 1 } else { 0 }).min((rows_n / 2).max(5) as i64).max(1) as usize;
     let (mut input, mut cursor) = super::guard::part(|| if s.ask.is_some() { (super::ask::ask_lines(s, width, rows_n), None) } else if (framed || super::chat_title::title(s, r.as_ref()).is_some()) && width >= 8 { chat_box(s, width, box_rows, r.as_ref(), &[]) } else { box_lines(s, width, box_rows, r.as_ref()) })
         .unwrap_or_else(|why| (vec![Inked::of("─".repeat(width), Ink::Rule), failed(&format!("The text box could not be shown: {why}"), width), Inked::of("─".repeat(width), Ink::Rule)], None));
     // The message takes the lines it needs: with its box up to two thirds of the window, and only rows the list can
@@ -122,7 +122,7 @@ fn draw_at(s: &mut State, t: &Theme, width: usize, rows: usize) -> Screen {
         draft_rows -= give; spare += give;
         if !w.text.is_empty() && spare < 1 { spare = (spare + 1).min(1); }
         let most = if s.full || s.menu.is_some() { 8.min(rows_n as i64 / 3 - 2) } else { (rows_n as i64 * 2) / 3 - draft_rows - 3 };
-        let message = chat_message(s, Some(w), width.saturating_sub(4), spare.min(most.max(3)).max(0) as usize);
+        let message = chat_message(s, Some(w), super::textbox::inner_width(width), spare.min(most.max(3)).max(0) as usize);
         message_n = message.len();
         if message_n > 0 { let (l, c) = chat_box(s, width, draft_rows.max(1) as usize, r.as_ref(), &message); input = l; cursor = c; }
     }

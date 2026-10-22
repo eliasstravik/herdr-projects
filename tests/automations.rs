@@ -52,7 +52,8 @@ fn the_automations_are_a_group_of_the_main_list_with_keys_that_turn_fire_and_rem
     s.press(&["space"]);
     // tab: fire it now. A task is added and an agent put on it; the selection stays on the automation
     s.press(&["ctrl+s"]);
-    assert!(s.text().contains("\"Look for old dependencies\" fired: PRJ-2 was added and an agent is on it."), "{}", s.text());
+    // nothing said under the chat when it worked: the task it made is on the list
+    assert!(!s.text().contains("fired: PRJ-2 was added"), "{}", s.text());
     assert_eq!(task("proj/2").s("stage"), "starting");
     assert_eq!(s.s.sel, row_id(&all[0]));
     assert!(regex::Regex::new(r"\n[ ▌] *. PRJ-2 Look for old dependencies \[auto\]").unwrap().is_match(&s.text()), "{}", s.text());
@@ -65,7 +66,7 @@ fn the_automations_are_a_group_of_the_main_list_with_keys_that_turn_fire_and_rem
     s.press(&["n"]); assert_eq!(sw::store::automations::automations().len(), 3);
     s.press(&["ctrl+x", "y"]);
     assert_eq!(sw::store::automations::automations().iter().map(|a| a.t("name")).collect::<Vec<_>>(), vec!["Look for old dependencies", "Nightly audit"]);
-    assert!(s.text().contains("Removed the automation \"Release note after a merge\"."));
+    assert!(!s.text().contains("Removed the automation"), "no confirmation under the chat: {}", s.text());
     // find finds them too, by name; the archive has none
     s.press(&["ctrl+f"]); s.typed("nightly"); s.press(&["enter"]);
     let found = s.text();

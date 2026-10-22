@@ -92,13 +92,18 @@ impl Board {
         let sc = sw::board::view::screen(&mut self.s, &self.theme, cols, self.rows);
         self.cols = was;
         let lines: Vec<String> = sc.lines.iter().map(|l| l.text().trim_end().to_string()).collect();
-        let framed = lines.iter().any(|l| l.starts_with("│ ❯ "));
-        let inner: Vec<String> = lines.iter().map(|l| if framed && l.starts_with("│ ") && l.ends_with(" │") { let c: Vec<char> = l.chars().collect(); c[2..c.len() - 2].iter().collect::<String>().trim_end().to_string() } else { l.clone() }).collect();
+        // The framed box keeps one or two cells of room each side of its text (view/textbox.rs: chat_box).
+        let pad = lines.iter().find_map(|l| if l.starts_with("│  ❯ ") { Some(2) } else if l.starts_with("│ ❯ ") { Some(1) } else { None });
+        let framed = pad.is_some();
+        let pad = pad.unwrap_or(1);
+        let inner: Vec<String> = lines.iter().map(|l| if framed && l.starts_with("│ ") && l.ends_with(" │") { let c: Vec<char> = l.chars().collect(); c[1 + pad..c.len() - 1 - pad].iter().collect::<String>().trim_end().to_string() } else { l.clone() }).collect();
         let first = inner.iter().position(|l| l.starts_with("❯ ") || l == "❯").unwrap_or(0);
-        let last = inner.iter().enumerate().position(|(n, l)| n > first && (l.starts_with('─') || l.starts_with('╰'))).unwrap_or(inner.len());
+        let mut last = inner.iter().enumerate().position(|(n, l)| n > first && (l.starts_with('─') || l.starts_with('╰'))).unwrap_or(inner.len());
+        // The empty row of room over the box's bottom edge is not the draft's.
+        if framed && last > first + 1 && inner[last - 1].is_empty() { last -= 1; }
         let hidden = |l: Option<&String>| l.and_then(|l| regex::Regex::new(r"(\d+) more").unwrap().captures(l).map(|c| c[1].parse::<usize>().unwrap_or(0))).unwrap_or(0);
         let rows: Vec<String> = inner[first..last].iter().map(|l| l.chars().skip(2).collect::<String>().trim_end().to_string()).collect();
-        let cursor = sc.cursor.map(|(x, y)| (y as usize - first, x as usize - 2 - if framed { 2 } else { 0 })).unwrap_or((0, 0));
+        let cursor = sc.cursor.map(|(x, y)| (y as usize - first, x as usize - 2 - if framed { 1 + pad } else { 0 })).unwrap_or((0, 0));
         Draft { above: hidden(if first > 0 { inner.get(first - 1) } else { None }), below: hidden(inner.get(last)), rows, cursor, lines, framed }
     }
     /// The screen at another width, each line without the spaces at its end.

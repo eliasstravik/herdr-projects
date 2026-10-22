@@ -16,6 +16,11 @@ working colour. The task panel says the same under Status, as `Now`.
 | `y` when picking an attempt | `Keeping attempt B…` |
 | `Alt+O` | `Opening…` (until its pane opens) |
 | `Space`, `Ctrl+S`, `Ctrl+X` on an automation | `Turning on…`, `Turning off…`, `Firing…`, `Removing…` |
+| `Ctrl+S`, `Ctrl+X`, `Ctrl+O` on a machine's or a project's row (its coordinator, here or on its machine) | `Starting…` (started, or autopilot on), `Stopping…` (stopped, or autopilot off), in the time's place with the working mark |
+| `Alt+O` on a machine's or a project's row | `Opening…` |
+
+**Nothing is said under the chat when it worked**: no confirmation line, for any key. The row shows what is under way,
+then what it became. What went wrong is still said (below).
 
 ## When it ends
 

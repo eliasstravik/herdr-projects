@@ -21,8 +21,13 @@ fn v(a: &[&str]) -> Vec<String> { a.iter().map(|s| s.to_string()).collect() }
 /// The chat as the screen shows it, now that the box's own title says who it talks to (view/chat_title.rs): `who` is
 /// the box's first line (whose it is and what it looks after), `boxed` what is under it, `framed` whether it shows a
 /// message. A box with no title (find, or no coordinator and no task talked to) reads as before.
-pub fn chat(s: &mut common::board::Board, cols: usize) -> common::board::Chat {
-    let mut c = s.chat(cols);
+pub fn chat(s: &mut common::board::Board, cols: usize) -> common::board::Chat { roomy(s.chat(cols), cols) }
+/// The box as its content: without the room to breathe it has (view/textbox.rs: chat_box): the empty row under its top
+/// edge and over its bottom one, and the second cell of padding on the left of a box 30 or more columns wide.
+pub fn roomy(mut c: common::board::Chat, cols: usize) -> common::board::Chat {
+    if !c.framed { return c; }
+    if cols >= 30 { c.boxed = c.boxed.iter().map(|l| l.strip_prefix(' ').unwrap_or(l).to_string()).collect(); }
+    if c.boxed.len() > 2 && c.boxed.first().is_some_and(|l| l.is_empty()) && c.boxed.last().is_some_and(|l| l.is_empty()) { c.boxed.remove(0); c.boxed.pop(); }
     let Some(t) = c.lines.iter().rposition(|l| l.starts_with("╭─ ") && l.ends_with('╮')) else { return c };
     // Who it talks to is the ladder in the box's top edge (its steps, the lit one last); inside, only the reply.
     // After the lit step, the kind of agent (` · Project coordinator`): kept apart (`chat_kind`).
@@ -68,7 +73,7 @@ fn a_task_agents_chat_its_message_then_your_words_in_its_place_then_its_next_mes
     assert!(!c.framed); assert_eq!(c.boxed, v(&["❯ Send message to the agent"]));
     assert!(c.hints.ends_with(&format!("{} show the latest message · space back", key_name("chatMessage"))), "{}", c.hints);
     assert!(!s.text().contains("│ Made g."));
-    s.typed("thanks"); s.press(&["enter"]); assert!(s.text().contains("Sent to the agent"), "with the chat hidden one line says they went");
+    s.typed("thanks"); s.press(&["enter"]); assert!(!s.text().contains("Sent to the agent") && s.s.msg.is_empty(), "no confirmation line under the chat, hidden or not");
     s.press(&["alt+c"]); assert_eq!(chat(&mut s, 120).boxed, v(&["thanks", "", "❯ Send message to the agent"]));
     s.press(&["space"]);
     let c = chat(&mut s, 120);

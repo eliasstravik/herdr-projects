@@ -66,7 +66,7 @@ fn one_header_line_five_groups_a_mark_for_each_state_and_the_task_panel_from_90_
     assert!(!s.s.reply && has(&text, r"\n─[^\n]*\n❯ Add a task"), "{text}");
     s.press(&["space"]); assert!(s.s.reply && s.s.full);
     // The box names the task it talks to by its ladder (the whole task folds the chat to its edge).
-    assert!(has(&s.screen(80).join("\n"), r"\n╭─ [^\n]*› +PRJ-\d+ +· Agent ─+╮\n│ ❯ your message starts an agent on it"), "{}", s.screen(80).join("\n"));
+    assert!(has(&s.screen(80).join("\n"), r"\n╭─ [^\n]*› +PRJ-\d+ +· Agent ─+╮\n│  ❯ your message starts an agent on it"), "{}", s.screen(80).join("\n"));
     s.press(&["alt+t"]); assert!(!s.s.full && s.s.reply, "folding the panel keeps who you talk to");
     s.press(&["alt+t", "space"]); assert!(!s.s.reply && s.s.full, "space never opens or folds the panel");
     s.press(&["space", "esc"]); assert!(!s.s.full && s.s.reply);
@@ -143,7 +143,7 @@ fn typed_words_keep_who_they_are_for_the_wheel_moves_the_view_and_a_click_select
     s.click(y as u16); assert_eq!(s.s.sel, s.s.list_ids[at]); assert_ne!(s.s.sel, second);
     let mine = s.s.sel.clone(); s.press(&["space"]); s.typed("pebbles please");
     // The box names the task (chat_title.rs), and the hint line says who gets the words, by the task's tag.
-    assert!(has(&s.text(), r"\n╭─ [^\n]*›  PRJ-\d+  · Agent ─[^\n]*╮\n│ ❯ pebbles please"), "{}", s.text());
+    assert!(has(&s.text(), r"\n╭─ [^\n]*›  PRJ-\d+  · Agent ─[^\n]*╮\n│ +│\n│  ❯ pebbles please"), "{}", s.text());
     let tag = short(&mine);
     assert!(s.text().contains(&format!("enter send, and start an agent on {tag}")) && !s.text().contains("To: "), "{}", s.text());
     let top = s.s.top; s.wheel(4, 1); s.wheel(4, 1); s.screen(120);
@@ -183,15 +183,14 @@ fn the_list_says_what_it_hides_the_header_where_you_are_and_an_action_what_it_di
     s.press(&["ctrl+f"]); s.typed("zzzq"); assert!(s.text().contains("Nothing matches \"zzzq\"."), "{}", s.text()); s.press(&["esc"]);
     s.s.sel = s.s.steps.iter().find(|x| !x.starts_with("head:")).cloned().unwrap(); s.load();
     let id = s.s.sel.clone();
-    let tag = short(&id);
-    let title = task(&id).t("title");
     let below = s.s.steps[s.s.steps.iter().position(|x| *x == id).unwrap() + 1].clone();
-    s.press(&["ctrl+p"]); assert_eq!(s.s.msg, format!("Pinned {tag} \"{title}\" to the top. {} unpins it.", key_name("pin")));
+    // no confirmation under the chat: the row goes to the pinned group
+    s.press(&["ctrl+p"]); assert!(!s.s.msg.contains("Pinned"), "{}", s.s.msg);
     // The pinned task goes to the top; the selection stays where you were: on the task that was below it.
     assert_eq!(s.s.sel, below); assert!(has(&s.screen(100).join("\n"), r"\n   ▾ pinned *\n [^▌]"));
     s.s.sel = id.clone(); s.load(); sw::board::update::list::relist(&mut s.s);
     // Unpinned, it goes back among the to-dos; the pinned group is empty, so the selection is on the next group's first.
-    s.press(&["ctrl+p"]); assert_eq!(s.s.msg, format!("Unpinned {tag} \"{title}\".")); assert_eq!(s.s.sel, below);
+    s.press(&["ctrl+p"]); assert!(!s.s.msg.contains("Unpinned"), "{}", s.s.msg); assert_eq!(s.s.sel, below);
     s.s.flash("proj/7: started, an agent is on it", Ink::Muted); assert_eq!(s.s.msg, "PRJ-7: started, an agent is on it");
     s.s.flash("Run: herdr-projects approve proj/7 --anyway", Ink::Muted); assert!(s.s.msg.contains("approve proj/7 --anyway"), "a command keeps the id it takes");
     s.press(&["ctrl+r"]); assert_eq!(s.s.msg, "Nothing to send back here."); assert_ne!(s.s.msg_kind, Ink::Red);

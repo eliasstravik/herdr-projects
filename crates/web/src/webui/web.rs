@@ -32,7 +32,7 @@ fn open() -> Client {
     let ctx = Ctx { cwd: last_folder(), web: true, ..Default::default() };
     let keys = crate::store::keys_given::keys_note(); // every repo has a short key: what was given, said once
     let mut s = State::new(ctx, Data::default());
-    if !keys.is_empty() { s.flash(keys, crate::shown::ink::Ink::Green); }
+    if !keys.is_empty() { s.flash(keys, crate::shown::ink::Ink::Muted); }
     // The web board keeps its own few choices, in a file of its own: it never writes the terminal board's.
     // The selection is where the terminal board left it, and so is whose board it shows (this machine, every machine
     // or one), unless a board was picked on the web: that one is the web's own ("scope", kept before, is not: every

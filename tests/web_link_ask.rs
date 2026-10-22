@@ -37,7 +37,7 @@ fn the_terminal_board_asks_once_whether_the_web_uis_link_may_go_through_the_fron
     offer(&mut busy, &[&url]); assert_eq!(busy.s.ask.as_ref().unwrap().q, "Other?"); assert!(!busy.s.web_ui_asked);
     // no: written down, never asked again
     let mut b = common::board::open(&w.root, 30); offer(&mut b, &[&url]); b.press(&["n"]);
-    assert_eq!(extras().s("webUi"), "no"); assert!(b.text().contains("Left as it is"), "{}", b.text());
+    assert_eq!(extras().s("webUi"), "no"); assert!(!b.text().contains("Left as it is"), "no confirmation under the chat: {}", b.text());
     assert!(sw::webui::command::offer().is_empty());
     // yes: done, and the board says how it went (here no web UI is installed, so it says that)
     note(json!({ "webUi": "" }));

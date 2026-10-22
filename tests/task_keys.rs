@@ -103,13 +103,15 @@ fn on_the_board_a_keyed_repos_rows_read_hsw_134_the_panel_the_chat_and_the_messa
     // Find by the tag, in any letter case; and the board's own messages say the short name.
     s.s.sel = nine.clone(); s.press(&["ctrl+f"]); s.typed("hsw-134"); assert_eq!(s.s.sel, big); assert_eq!(row(&mut s, "Number nine"), ""); s.press(&["esc", "esc"]);
     s.s.sel = nine.clone(); s.press(&["ctrl+f"]); s.typed("HSW-9"); assert_eq!(s.s.sel, nine); assert!(!row(&mut s, "Number nine").is_empty()); s.press(&["esc", "esc"]);
-    s.s.sel = big.clone(); s.load(); s.press(&["ctrl+a"]); assert!(s.s.msg.starts_with("Archived HSW-134 \"Number one three four\"."), "{}", s.s.msg); s.press(&["ctrl+z"]);
+    // No line says it was archived; the board's words that name it say the short name (the key again while it is under way).
+    s.s.sel = big.clone(); s.load(); s.hold("ctrl+a"); assert!(!s.s.msg.contains("Archived"), "{}", s.s.msg);
+    s.hold("ctrl+a"); assert!(s.s.msg.contains("Still archiving HSW-134"), "{}", s.s.msg); s.s.pending.clear();
     // What another machine is sent: each task with its repo's key, so its rows there read the same.
     let sent = |id: &str| sw::remote::remote_list().arr("tasks").iter().find(|t| t.s("id") == id).map(|t| t.at("key").clone()).unwrap_or_default();
     assert_eq!(sent(&big), json!("HSW"));
     // Taken away: the key made from the repo's name again, never a bare number.
     unset_value("repo.key", &Scope::repo("proj")).unwrap(); s.s.sel = big.clone(); s.load();
-    assert!(has(&row(&mut s, "Number one three four"), r"^[ ▌]  ○ PRJ-134 Number one three four")); s.press(&["ctrl+a"]); assert!(s.s.msg.starts_with("Archived PRJ-134 \"Number one three four\"."), "{}", s.s.msg);
+    assert!(has(&row(&mut s, "Number one three four"), r"^[ ▌]  ○ PRJ-134 Number one three four")); s.hold("ctrl+a"); s.hold("ctrl+a"); assert!(s.s.msg.contains("Still archiving PRJ-134"), "{}", s.s.msg); s.s.pending.clear();
     assert_eq!(sent(&nine), json!("PRJ"));
 }
 

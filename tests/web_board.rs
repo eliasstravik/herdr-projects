@@ -85,7 +85,7 @@ fn a_button_presses_the_boards_own_key_a_merge_asks_first_and_typed_words_are_se
     assert!(web_as(&w, "desk", "board", json!({})).unwrap().at("ask").is_null(), "the other browser was never asked");
     web_as(&w, "phone", "press", json!({ "id": "yes" })).unwrap();
     let s = web_as(&w, "phone", "press", json!({ "id": "sayYes" })).unwrap();
-    assert!(s.at("ask").is_null()); assert_eq!(s.at("msg").s("kind"), "green"); assert_ne!(task(&id).s("stage"), "approval");
+    assert!(s.at("ask").is_null()); assert_ne!(s.at("msg").s("kind"), "green"); assert_ne!(task(&id).s("stage"), "approval");
     // a watching device presses only what shows or hides
     assert!(web_as(&w, "phone", "press", json!({ "id": "archive", "role": "watch" })).unwrap_err().contains("only watch"));
     assert!(web_as(&w, "phone", "send", json!({ "text": "x", "role": "watch" })).unwrap_err().contains("only watch"));
@@ -94,7 +94,7 @@ fn a_button_presses_the_boards_own_key_a_merge_asks_first_and_typed_words_are_se
     // typed words: with no Coordinator they are added as a task, word for word
     web_as(&w, "phone", "pick", json!({ "id": "", "open": false })).unwrap();
     let s = web_as(&w, "phone", "send", json!({ "text": "Tidy the readme\nand its links" })).unwrap();
-    assert_eq!(s.at("kept"), &json!(false)); assert!(s.at("msg").s("text").ends_with("added"), "{}", s.at("msg"));
+    assert_eq!(s.at("kept"), &json!(false)); assert!(!s.at("msg").s("text").ends_with("added"), "no confirmation: the task is on the list: {}", s.at("msg"));
     let added = sw::store::tasks::list(Default::default()).into_iter().find(|t| t.s("title") == "Tidy the readme").unwrap();
     assert_eq!(added.s("description"), "and its links");
     assert_eq!(web_as(&w, "phone", "send", json!({ "text": "   " })).unwrap().at("kept"), &json!(false));

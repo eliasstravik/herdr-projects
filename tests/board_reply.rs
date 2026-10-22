@@ -19,12 +19,12 @@ fn only_space_flips_who_you_talk_to_and_the_chat_follows_the_selection() {
     let mut s = open(&w.root, 34); s.s.sel = alpha.clone(); s.load(); s.screen(120);
     s.press(&["space"]);
     assert!(s.s.reply && s.s.reply_id == alpha);
-    assert!(has(&s.text(), r"╭─ [^\n]*PRJ-1  · Agent ─*╮\n│ ❯ your message starts an agent on it"), "{}", s.text());
+    assert!(has(&s.text(), r"╭─ [^\n]*PRJ-1  · Agent ─*╮\n(?:│ +│\n)?│ +❯ your message starts an agent on it"), "{}", s.text());
     let ids: Vec<String> = s.s.rows.iter().filter_map(|r| if let Row::Rec(o) = r { Some(o.t("id")) } else { None }).collect();
     let (to_beta, to_alpha) = if ids.iter().position(|x| *x == alpha).unwrap_or(0) > 0 { ("up", "down") } else { ("down", "up") };
     s.press(&[to_beta]);
     assert!(s.s.sel == beta && s.s.reply && s.s.reply_id == beta);
-    assert!(has(&s.text(), r"╭─ [^\n]*PRJ-2  · Agent ─*╮\n│ ❯ your message starts an agent on it") && !s.text().contains("New task"), "{}", s.text());
+    assert!(has(&s.text(), r"╭─ [^\n]*PRJ-2  · Agent ─*╮\n(?:│ +│\n)?│ +❯ your message starts an agent on it") && !s.text().contains("New task"), "{}", s.text());
     s.press(&[to_alpha]); assert_eq!(s.s.reply_id, alpha);
     // find, and leaving it with esc, changes nothing about who you talk to
     s.press(&["ctrl+f"]); s.typed("Alp"); s.press(&["esc"]);
@@ -73,7 +73,7 @@ fn a_reply_put_away_comes_back_as_a_reply_to_the_same_task_never_as_a_new_task()
         s.press(&["up", "up"]); assert_eq!(s.s.sel, id);
         s.press(&["ctrl+z"]);
         assert!(s.s.sel == id && s.s.reply && !s.s.full && s.s.draft_away.is_none());
-        assert!(has(&s.text(), r"╭─ [^\n]*PRJ-\d+  · Agent ─*╮\n(?:[^\n]*\n)*?│ ❯ also say goodbye"), "{}", s.text());
+        assert!(has(&s.text(), r"╭─ [^\n]*PRJ-\d+  · Agent ─*╮\n(?:│ +│\n)?(?:[^\n]*\n)*?│ +❯ also say goodbye"), "{}", s.text());
         w.script(json!({ "worker": [{ "status": "working" }] }));
         let before = sw::store::tasks::list(Default::default()).len();
         s.press(&["enter"]);
@@ -115,7 +115,7 @@ fn a_reply_put_away_comes_back_as_a_reply_to_the_same_task_never_as_a_new_task()
     let mut s5 = open(&w.root, 34);
     s5.press(&["ctrl+z"]); assert!(!s5.s.reply && s5.s.value().is_empty(), "the board reopens with the Coordinator: the reply waits for its task");
     s5.s.sel = id.clone(); s5.load(); s5.press(&["space", "ctrl+z"]); assert_eq!(s5.s.sel, id);
-    assert!(has(&s5.text(), r"╭─ [^\n]*PRJ-\d+  · Agent ─*╮\n(?:[^\n]*\n)*?│ ❯ kept across a reload"), "{}", s5.text());
+    assert!(has(&s5.text(), r"╭─ [^\n]*PRJ-\d+  · Agent ─*╮\n(?:│ +│\n)?(?:[^\n]*\n)*?│ +❯ kept across a reload"), "{}", s5.text());
     unsafe { std::env::remove_var("HERDR_ENV") };
 }
 
@@ -135,7 +135,8 @@ fn a_reply_to_work_that_was_merged_and_cleaned_up_starts_a_new_round() {
     s.press(&["space"]);
     w.script(json!({ "worker": [{ "files": { "g.txt": "g\n" }, "commit": "g", "note": "Did g." }] }));
     s.typed("now add g"); s.press(&["enter"]);
-    assert!(s.text().contains("new round"), "{}", s.text()); assert!(s.s.value().is_empty());
+    // no confirmation line under the chat: the new round shows on its row
+    assert!(!s.text().contains("new round") && s.s.msg.is_empty(), "{}", s.text()); assert!(s.s.value().is_empty());
     let t = settle(&id);
     assert_eq!(t.s("stage"), "approval", "{}", t.at("failure"));
     assert!(!t.s("description").contains("now add g"));

@@ -45,13 +45,13 @@ board shows and how many tasks stand in each group are on the filter row under i
 
 ## The filter row
 
-**`vm-str ▾ │ All 420   Coordinators 12   Needs you 0   Working 1   Ready 0   To do 4   Done 415   Automations 2`**,
+**`vm-str │ All 420   Coordinators 12   Needs you 0   Working 1   Ready 0   To do 4   Done 415   Automations 2`**,
 each filter with its count, as in an agents command center, with plain room between them. The one shown is lit in its own colour, the one its rows and marks have: `Needs you` red,
 `Working` amber, `Ready` green, `Coordinators` the accent, `Automations` the automations' colour, the others plain, with
 a cell of the highlight on each side; every filter keeps that room, so the row does not move when another is lit. The
 others are greyed, a count of tasks that need you in red.
 
-**Whose board comes first**, wherever there is another machine: `All machines ▾`, or the one machine shown (in yellow
+**Whose board comes first**, wherever there is another machine: `All machines`, or the one machine shown, in the base colour with no caret (in yellow
 while it does not answer). `Alt+M` goes round: all machines, then each machine by itself in the order of Herdr's
 sidebar ([other machines](other-machines.md)); a click on it does the same. Every count is the machine's shown.
 
@@ -590,7 +590,9 @@ It looks the same for a coordinator and for a task's agent, at every window widt
    that never ran invites a first message.
    - One thing gets a greyed line of its own above the box: a default that changed while a coordinator runs, with the
      command that starts a new one on it.
-2. **One rounded box**: the newest thing said in that conversation. No label on either side: what you wrote is in the
+2. **One rounded box**, with room to breathe: an empty line under its top edge and over its bottom one, and two cells
+   left and right of the text (one in a narrow box; no empty lines where the window is short). In it the newest thing
+   said in that conversation. No label on either side: what you wrote is in the
    bright colour you type in, what the one the box talks to said in grey (its edge names it). Only someone else is
    named: a reviewer under `Reviewer:`, a wake under `Autopilot:`, the board under `Board:`. Then an empty line; then the line you type on (the prompt is only
    `❯`).

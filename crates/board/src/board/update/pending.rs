@@ -36,6 +36,9 @@ pub fn words(s: &State, j: &Job) -> Option<(String, String)> {
         Job::OpenAgent { .. } => w("Opening", "open"),
         Job::AutoTurn { on, .. } => if *on { w("Turning on", "turn on") } else { w("Turning off", "turn off") },
         Job::AutoFire { .. } => w("Firing", "fire"),
+        // A coordinator's row: started or stopped, its autopilot turned on or off, gone into.
+        Job::CoordRun { on, .. } | Job::Pilot { on, .. } => if *on { w("Starting", "start") } else { w("Stopping", "stop") },
+        Job::CoordOpen { .. } => w("Opening", "open"),
         Job::Far { action, req, .. } => match action.as_str() {
             "delegate" => w("Starting", "start"),
             "tell" => w("Sending", "send"),
@@ -52,6 +55,9 @@ pub fn words(s: &State, j: &Job) -> Option<(String, String)> {
             "reopen" => w("Opening", "open"),
             "auto-turn" => if req.b("on") { w("Turning on", "turn on") } else { w("Turning off", "turn off") },
             "auto-run" => w("Firing", "fire"),
+            "coordinator-start" | "autopilot-on" => w("Starting", "start"),
+            "coordinator-stop" | "autopilot-off" => w("Stopping", "stop"),
+            "coordinator-open" => w("Opening", "open"),
             _ => None,
         },
         _ => None,
@@ -59,10 +65,10 @@ pub fn words(s: &State, j: &Job) -> Option<(String, String)> {
 }
 /// Words to an agent, or going into its pane: these never wait for what is under way on their row.
 fn goes_through(j: &Job) -> bool {
-    matches!(j, Job::Tell { .. } | Job::Describe { .. } | Job::OpenAgent { .. }) || matches!(j, Job::Far { action, .. } if action == "tell" || action == "reopen")
+    matches!(j, Job::Tell { .. } | Job::Describe { .. } | Job::OpenAgent { .. } | Job::CoordOpen { .. }) || matches!(j, Job::Far { action, .. } if action == "tell" || action == "reopen" || action == "coordinator-open")
 }
 /// Going into a pane changes nothing the board reads: its word goes when the job answers.
-fn reads_back(j: &Job) -> bool { !matches!(j, Job::OpenAgent { .. }) && !matches!(j, Job::Far { action, .. } if action == "reopen") }
+fn reads_back(j: &Job) -> bool { !matches!(j, Job::OpenAgent { .. } | Job::CoordOpen { .. }) && !matches!(j, Job::Far { action, .. } if action == "reopen" || action == "coordinator-open") }
 /// What of a row says that something was done to it, for another machine's row, whose reads the board does not count.
 fn mark_of(s: &State, id: &str) -> String {
     let Some(r) = s.items.iter().find(|r| r.s("id") == id).map(|r| &**r).or_else(|| s.autos.iter().find(|a| a.s("row") == id)) else { return "gone".into() };
@@ -98,7 +104,7 @@ pub fn start(s: &mut State, fx: &mut Vec<Effect>) {
             _ => {}
         }
         // A row that is not in view (an archived task restored): the message line says it instead.
-        if !on_screen(s, &id) && s.msg.is_empty() {
+        if !on_screen(s, &id) && !id.starts_with("co:") && s.msg.is_empty() {
             let name = s.items.iter().find(|r| r.s("id") == id).map(|r| super::actions::name(s, r)).unwrap_or_else(|| id.clone());
             s.flash(format!("{} {name}…", word.trim_end_matches('…')), Ink::Muted);
         }
@@ -132,6 +138,9 @@ pub fn read(s: &mut State) {
 }
 /// Another machine answered with its tasks: a row it shows changed, or its second answer since the job, is the real one.
 pub fn polled(s: &mut State, label: &str) -> bool {
+    let before = s.pending.len();
+    // A coordinator of that machine: its answer after the job is what it shows now.
+    s.pending.retain(|id, p| !(p.far && p.answered.is_some() && p.failed.is_none() && id.starts_with(&format!("co:{label}\t"))));
     let ids: Vec<String> = s.pending.iter().filter(|(id, p)| p.far && p.answered.is_some() && p.failed.is_none() && id.starts_with(&format!("{label}:"))).map(|(id, _)| id.clone()).collect();
     let n = s.pending.len();
     for id in ids {
@@ -140,7 +149,7 @@ pub fn polled(s: &mut State, label: &str) -> bool {
         p.polls += 1;
         if p.polls >= 2 || now != p.was { s.pending.remove(&id); }
     }
-    s.pending.len() != n
+    s.pending.len() != n || n != before
 }
 /// The beat: a failure has been said long enough; another machine that never showed what was done is believed anyway.
 pub fn tick(s: &mut State) -> bool {
