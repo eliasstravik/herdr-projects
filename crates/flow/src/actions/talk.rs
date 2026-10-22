@@ -117,8 +117,11 @@ fn kill_runner(t: &Task) {
     }
 }
 /// Stop: the stage is set first and the pane's state_change_seq recorded, then the interrupt key is sent, so a late
-/// hook cannot undo the stop.
-pub fn stop(id: &str) -> Res<Task> {
+/// hook cannot undo the stop. Your stop of a task that was asking you is you stepping in: its next round asks again, once.
+pub fn stop(id: &str) -> Res<Task> { stop_as(id, true) }
+/// The board's own stop (at a limit): not you stepping in, so a merge it was on its way to asks nothing more.
+pub fn board_stop(id: &str) -> Res<Task> { stop_as(id, false) }
+fn stop_as(id: &str, yours: bool) -> Res<Task> {
     let cur = find(id)?;
     assert_unarchived(&cur)?;
     let cid = cur.t("id");
@@ -126,7 +129,7 @@ pub fn stop(id: &str) -> Res<Task> {
     // Every attempt stops with its task; one that waits for a pick, or is being compared, simply stops there.
     if !cur.arr("attempts").is_empty() && !cur.b("picked") && ["attempts", "pick", "reviewing"].contains(&cur.s("stage")) {
         let n = now();
-        for c in attempts_of(&cur) { if ["works", "needs", "waits"].contains(&standing_of(&c, n)) { let _ = stop(c.s("id")); } }
+        for c in attempts_of(&cur) { if ["works", "needs", "waits"].contains(&standing_of(&c, n)) { let _ = stop_as(c.s("id"), yours); } }
         let t = update(&cid, |t| { t.put("stage", "stopped"); t.put("stoppedAt", now()); t.put("msg", ""); t.put("comparing", Value::Null); t.put("watch", Value::Null); Ok(Change::Write) })?;
         kill_runner(&t);
         if t.at("link").at("reviewer").b("pane") { flow::tabs::close_reviewer_tab(&flow::task::h(&t), t.at("link").at("reviewer")); }
@@ -145,6 +148,7 @@ pub fn stop(id: &str) -> Res<Task> {
     let a = if flow::live::assert_live(&cur).is_ok() { flow::task::h(&cur).agent_get(cur.at("link").s("pane")).ok().flatten() } else { None };
     let t = update(&cid, |t| {
         let seq = a.as_ref().map(|a| a.at("state_change_seq").clone()).filter(|v| !v.is_null()).unwrap_or_else(|| if t.at("last").has("seq") { t.at("last").at("seq").clone() } else { json!(0) });
+        if yours && (t.b("mergeIntent") || t.s("stage") == "approval") { t.put("requireApproval", true); }
         t.put("stage", "stopped"); t.put("stoppedAt", now()); t.put("stopSeq", seq); t.put("sawIdleAfterStop", false);
         for k in ["expectedWake", "watch", "mergeIntent", "waiting", "limitStop"] { t.put(k, Value::Null); }
         t.put("turnOpen", false); t.put("msg", "");
