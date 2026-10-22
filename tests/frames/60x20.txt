@@ -1,6 +1,6 @@
 == the list
  herdr-projects  proj
- All 18   Co 1   Need 5   Work 9   Rdy 1   Todo 2   Done 1
+ All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
 
  ▾ working
  ◐ #2     Max length for task titles
@@ -21,7 +21,7 @@
   enter open this task's agent · ? all keys
 == the task beside it
  herdr-projects  proj
- All 18   Co 1   Need 5   Work 9   Rdy 1   Todo 2   Done 1
+ All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
  ▾ working
  ◐ #2     Max length for task titles
           Drafting
@@ -84,7 +84,7 @@
   ↑↓ pick a key · enter press it · esc close the menu
 == a draft
  herdr-projects  proj
- All 18   Co 1   Need 5   Work 9   Rdy 1   Todo 2   Done 1
+ All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
 
  ▾ working
  ◐ #2     Max length for task titles

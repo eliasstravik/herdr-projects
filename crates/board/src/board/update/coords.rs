@@ -52,10 +52,11 @@ pub fn talking(s: &State) -> Option<Target> { if s.reply && is_head(&s.reply_id)
 /// chat talks to, else the one whose row is selected (its panel shows it).
 pub fn wanted(s: &State) -> String { talking(s).or_else(|| of_head(s, &s.sel)).filter(|t| t.host.is_empty()).map(|t| t.to).unwrap_or_default() }
 /// The coordinators of this machine the board reads how they stand of, as the coordinator code names their level: the
-/// selected row's (its panel), and every one ("*") wherever machines' or projects' rows show their marks.
+/// selected row's (its panel), and every one ("*"): machines' and projects' rows show their marks, and the filter row
+/// counts those that run.
 pub fn looks_wanted(s: &State) -> Vec<String> {
     let mut out: Vec<String> = of_head(s, &s.sel).filter(|t| t.host.is_empty() && !t.to.is_empty()).map(|t| vec![t.to]).unwrap_or_default();
-    if super::shows::coords(s) || s.by_repo || s.by_machine || s.scope == "*" { out.push("*".into()); }
+    out.push("*".into());
     out
 }
 /// Is this row still on the board: a task, or a heading.

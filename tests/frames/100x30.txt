@@ -1,6 +1,6 @@
 == the list
  herdr-projects  proj
- All 18   Coordinators 1   Needs you 5   Working 9   Ready 1   To do 2   Done 1   Automations 0
+ All 18   Coordinators 0   Needs you 5   Working 9   Ready 1   To do 2   Done 1   Automations 0
  @ #10    Max length for task titles                                                              1m
           Needs a login
  ! #12    Max length for task titles                                              R#1 PR#123456   1m
@@ -31,7 +31,7 @@
   enter open this task's agent · space talk to the agent · ctrl+x stop the agent · ? all keys
 == the task beside it
  herdr-projects  proj                                       │  #5 Max length for task titles
- All 18   Co 1   Need 5   Work 9   Rdy 1   Todo 2   Done 1  │
+ All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1  │
  @ #10    Max length for task titles                     1m │  Status ─────────────────────────────
           Needs a login                                     │  State        ◐ working · for 1m
  ! #12    Max length for task titles     R#1 PR#123456   1m │  Progress     █████░░░ 60% · 11m left
@@ -124,7 +124,7 @@
   ↑↓ pick a key · enter press it · esc close the menu
 == a draft
  herdr-projects  proj
- All 18   Coordinators 1   Needs you 5   Working 9   Ready 1   To do 2   Done 1   Automations 0
+ All 18   Coordinators 0   Needs you 5   Working 9   Ready 1   To do 2   Done 1   Automations 0
  @ #10    Max length for task titles                                                              1m
           Needs a login
  ! #12    Max length for task titles                                              R#1 PR#123456   1m

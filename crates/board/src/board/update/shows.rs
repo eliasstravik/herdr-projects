@@ -1,8 +1,8 @@
 //! The filter row on top of the board: All · Coordinators · Needs you · Working · Ready · To do · Done · Automations,
 //! each with its count. Tab moves to the next, shift+tab back, a click picks one; the list then shows only the tasks of
 //! that status. Coordinators and Automations are filters as the others are: Coordinators leaves the coordinators' own
-//! rows, which are the machines' rows and the projects' (a project's that was ever talked to), for the machine shown
-//! (the main Coordinator has none); Automations leaves the automations' rows, in the same places and grouping.
+//! rows, which are the machines' rows and the projects', of those that run (started and not stopped, on autopilot, or
+//! failed), for the machine shown (the main Coordinator has none); Automations leaves the automations' rows, in the same places and grouping.
 use super::heads::{machine_id, HEAD};
 use super::list::relist;
 use super::Effect;
@@ -30,7 +30,7 @@ pub fn whole(s: &State) -> bool { group(s) == Some("done") }
 /// automations' its filter shows.
 pub fn counts(s: &State, items: &[std::sync::Arc<Obj>]) -> Vec<usize> {
     let live: Vec<&std::sync::Arc<Obj>> = items.iter().filter(|r| !r.b("archivedAt")).collect();
-    SHOWS.iter().enumerate().map(|(n, (_, g))| match g { Some(g) => live.iter().filter(|r| group_of(r) == *g).count(), None if n == COORDS => coord_rows(s).len(), None if n == AUTOS => super::list::autos_shown(s, "").len(), None => live.len() }).collect()
+    SHOWS.iter().enumerate().map(|(n, (_, g))| match g { Some(g) => live.iter().filter(|r| group_of(r) == *g).count(), None if n == COORDS => coord_rows(s).iter().filter(|r| matches!(r, Row::Head { id, .. } if running(s, id))).count(), None if n == AUTOS => super::list::autos_shown(s, "").len(), None => live.len() }).collect()
 }
 /// Tab: the next filter; shift+tab the one before.
 pub fn step(s: &mut State, p: &Press, fx: &mut Vec<Effect>) {
@@ -61,14 +61,26 @@ fn projects(s: &State, host: &str) -> Vec<String> {
     out.sort_by_key(|r| r.to_lowercase());
     out
 }
+/// The coordinator a heading stands for runs: started and not stopped (working, idle, needs you), on autopilot, or
+/// failed, so that it can be fixed. One stopped or never started is not under Coordinators.
+pub fn running(s: &State, id: &str) -> bool {
+    let Some(t) = super::coords::of_head(s, id) else { return false };
+    if super::pilot::on(s, &t) { return true; }
+    let v = super::coords::look_of(s, &t).unwrap_or_default();
+    !v.error.is_empty() || ["starting", "working", "blocked", "idle"].contains(&v.state.as_str())
+}
 /// The list under Coordinators: for each machine in view its row (its machine coordinator's) and the rows of its
-/// projects with a project coordinator. The main Coordinator has no row: it is who the chat talks to by default.
+/// projects, of the coordinators that run. The main Coordinator has no row: it is who the chat talks to by default.
 pub fn coord_rows(s: &State) -> Vec<Row> {
     let head = |name: String, id: String, machine: bool| Row::Head { name, autos: false, id, machine, folded: 0, folded_autos: 0, empty: false };
     let mut out: Vec<Row> = vec![];
     for h in hosts(s) {
+        let id = machine_id(&h);
+        let projects: Vec<String> = projects(s, &h).into_iter().filter(|r| running(s, &format!("{HEAD}repo\t{h}\t{r}"))).collect();
+        // A machine whose own coordinator does not run: no row, but with every machine shown the heading of its
+        // projects' that do (not counted).
+        if !running(s, &id) && (projects.is_empty() || s.scope != "*") { for r in projects { out.push(head(r.clone(), format!("{HEAD}repo\t{h}\t{r}"), false)); } continue; }
         // A machine's row folds its projects' rows away, as everywhere (enter, heads.rs: toggle).
-        let (id, projects) = (machine_id(&h), projects(s, &h));
         let shut = super::heads::folded(s, &id) && !projects.is_empty();
         out.push(Row::Head { name: super::remotes::shown(s, &h), autos: false, id, machine: true, folded: if shut { projects.len() } else { 0 }, folded_autos: 0, empty: false });
         if shut { continue; }

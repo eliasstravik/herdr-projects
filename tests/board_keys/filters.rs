@@ -39,18 +39,18 @@ fn tab_goes_round_the_filters_lit_in_their_own_colours_and_the_list_shows_only_t
     let mut s = open(&w.root, 40); s.s.side = false;
     let l = s.screen(120);
     assert_eq!(l[0], " herdr-projects  proj · PRJ");
-    assert!(regex::Regex::new(r"^ +All 9 +Coordinators 1   Needs you 1   Working 0   Ready 0   To do 1   Done 7   Automations 0$").unwrap().is_match(&l[1]), "{l:?}");
+    assert!(regex::Regex::new(r"^ +All 9 +Coordinators 0   Needs you 1   Working 0   Ready 0   To do 1   Done 7   Automations 0$").unwrap().is_match(&l[1]), "{l:?}");
     assert!(!l.iter().any(|x| x.starts_with(" ") && x.contains("──")), "no heading has a rule: {l:?}");
     // All is lit in the plain text colour, reversed
     assert_eq!(piece(&mut s, "All 9"), (Ink::Text, true));
     // each item keeps a cell of room on each side, lit or not: lighting another moves nothing
     s.lines(); let before = s.s.show_hits.clone();
     s.press(&["tab"]); s.lines(); assert_eq!(s.s.show_hits, before, "the row does not move");
-    assert_eq!(piece(&mut s, "Coordinators 1"), (Ink::Accent, true));
-    assert!(s.inked(140)[1].0.iter().any(|p| p.inv && p.t == " Coordinators 1 "), "a cell of highlight on each side");
+    assert_eq!(piece(&mut s, "Coordinators 0"), (Ink::Accent, true));
+    assert!(s.inked(140)[1].0.iter().any(|p| p.inv && p.t == " Coordinators 0 "), "a cell of highlight on each side");
     s.press(&["shift+tab"]);
     // tab: Coordinators, lit in the accent colour; then needs you only, in red
-    s.press(&["tab"]); assert_eq!(s.s.show, 1); assert_eq!(piece(&mut s, "Coordinators 1"), (Ink::Accent, true));
+    s.press(&["tab"]); assert_eq!(s.s.show, 1); assert_eq!(piece(&mut s, "Coordinators 0"), (Ink::Accent, true));
     assert!(tasks_shown(&s).is_empty());
     s.press(&["tab"]); assert_eq!(s.s.show, 2); assert_eq!(piece(&mut s, "Needs you 1"), (Ink::Red, true));
     assert_eq!(tasks_shown(&s), vec!["Asks you"]);
@@ -73,8 +73,8 @@ fn tab_goes_round_the_filters_lit_in_their_own_colours_and_the_list_shows_only_t
     assert!(sw::store::tasks::list(Default::default()).iter().all(|t| t.s("stage") != "progress"));
     let view: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(sw::store::files::data_dir().join("view.json")).unwrap()).unwrap();
     assert_eq!(view.at("show"), &json!(2));
-    // narrow: shorter names, then only the one shown
-    assert!(s.screen(76)[1].contains("Coords 1 ") && s.screen(76)[1].contains("Needs 1"), "{:?}", s.screen(76));
+    // narrow: shorter names, the empty ones gone (no coordinator runs), then only the one shown
+    assert!(s.screen(90)[1].contains("Coords 0 ") && s.screen(76)[1].contains("Needs 1") && !s.screen(76)[1].contains("Coords"), "{:?}", s.screen(76));
     assert_eq!(s.screen(30)[1].trim(), "Needs you 1  tab next");
 }
 
@@ -111,7 +111,8 @@ fn space_on_a_machines_row_or_a_projects_row_talks_to_its_coordinator_and_coordi
     if sw::board::update::remotes::place(&s.s, "otherbox") < sw::board::update::remotes::place(&s.s, "") { want = vec!["otherbox".into(), "far".into(), host.clone(), "proj".into()]; }
     assert_eq!(heads(&s), want);
     assert!(tasks_shown(&s).is_empty());
-    assert!(regex::Regex::new(r"Coordinators 4 ").unwrap().is_match(&s.screen(160)[1]), "{:?}", s.screen(160));
+    // this machine's own coordinator never started: its row only heads its project's, which runs, and is not counted
+    assert!(regex::Regex::new(r"Coordinators 3 ").unwrap().is_match(&s.screen(160)[1]), "{:?}", s.screen(160));
     assert!(!s.text().contains("Coordinator on otherbox"), "{}", s.text());
     // a project's row folds nothing there: enter talks to it, as space does
     s.s.sel = format!("head:repo\totherbox\tfar"); s.load();
@@ -276,7 +277,7 @@ fn machine_and_project_rows_mark_their_coordinators_state_with_a_tasks_marks_or_
     let mut s = open(&w.root, 40); s.s.side = false;
     update(&mut s.s, Event::Machines(sw::remote::machines()));
     let answer = json!({ "host": "otherbox", "version": "9.0.0", "coordinator": { "state": "working" }, "tasks": [],
-        "coordinators": { "machine": { "state": "working" }, "project:asks": { "state": "blocked" }, "project:broke": { "state": "none", "error": "no claude" }, "project:quiet": { "state": "idle" }, "project:pilot": { "state": "idle" } },
+        "coordinators": { "machine": { "state": "working" }, "project:asks": { "state": "blocked" }, "project:broke": { "state": "none", "error": "no claude" }, "project:quiet": { "state": "idle" }, "project:pilot": { "state": "idle" }, "project:stopped": { "state": "exited" }, "project:never": { "state": "none" } },
         "autopilot": { "project:pilot": { "on": true, "state": "working" } } });
     update(&mut s.s, Event::Remote { label: "otherbox".into(), answer: Ok(answer) });
     to_all(&mut s); s.press(&["tab"]); assert_eq!(s.s.show, 1);
@@ -286,7 +287,9 @@ fn machine_and_project_rows_mark_their_coordinators_state_with_a_tasks_marks_or_
     assert!(row("otherbox").contains("◐ ▾ otherbox"), "working: {l:#?}");
     assert!(row("asks").contains("! ▾ asks") && row("broke").contains("✗ ▾ broke") && row("pilot").contains("∞ ▾ pilot"), "{l:#?}");
     assert!(row("quiet").contains("    ▾ quiet"), "idle: no mark, the column blank: {l:#?}");
+    // only those that run: a stopped or never started one is not there, nor in the count (this machine's: none run)
     let text = l.join("\n");
+    assert!(!heads(&s).iter().any(|h| h == "stopped" || h == "never") && text.contains("Coordinators 5 "), "{text}");
     assert!(!text.contains("◈") && !text.contains("◎") && !s.s.rows.iter().any(|r| matches!(r, Row::Head { name, .. } if name == "Coordinator")), "{text}");
     let red = s.inked(120).iter().flat_map(|x| x.0.clone()).filter(|p| p.t == "!" || p.t == "✗").all(|p| p.c == Ink::Red && p.bold);
     assert!(red, "what needs you and what went wrong: red, bold");

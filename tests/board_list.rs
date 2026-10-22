@@ -27,7 +27,7 @@ fn one_header_line_five_groups_a_mark_for_each_state_and_the_task_panel_from_90_
     report(&b, "half way", Some(50), None); assert_eq!(task(&b).at("watch"), &json!({ "progress": 50, "eta": 12 }));
     let mut s = open(&w.root, 34);
     let text = s.screen(120).join("\n");
-    assert!(has(&text, r"^ herdr-projects  proj · PRJ +│ *\n All 2   Coords \d+   Working 1   To do 1 +│[^\n]*\n +│"), "{text}");
+    assert!(has(&text, r"^ herdr-projects  proj · PRJ +│ *\n All 2   (Coords \d+   )?Working 1   To do 1 +│[^\n]*\n +│"), "{text}");
     let inks = s.inked(120);
     assert_eq!(ink_of(&inks, "◐"), Some((Ink::Yellow, false)), "a working task's mark is the working colour");
     assert_eq!(ink_of(&inks, "My own task"), Some((Ink::Plain, true)), "its title plain, and bold while it lives");

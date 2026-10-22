@@ -59,7 +59,7 @@ sidebar ([other machines](other-machines.md)); a click on it does the same. Ever
 | Filter | The list shows |
 |---|---|
 | `All` | every task in its group and the automations, as always |
-| `Coordinators` | only each machine's row and its projects' rows (those with a project coordinator): the rows that are coordinators ([machine and project coordinators](machine-and-project-coordinators.md)). The main Coordinator has no row |
+| `Coordinators` | only the coordinators that run (started and not stopped: working, idle, needs you; on autopilot; or failed, so you can fix it): each such machine's row and project's row ([machine and project coordinators](machine-and-project-coordinators.md)). A stopped or never started one is not there, nor in the count; its row stays in the other filters, with no mark. The main Coordinator has no row |
 | `Needs you`, `Working`, `Ready`, `To do` | only the tasks of that group (`Ready` is ready to approve) |
 | `Done` | every done task, not only the latest five |
 | `Automations` | only the automations' rows, in their places |

@@ -30,9 +30,13 @@ heading, grouped by repo) stand for their coordinator, and are one line of the l
 - `Enter` folds it and unfolds it, as any heading; where it has nothing to fold (a repo or a machine with nothing in
   view, a project's row under Coordinators) `Enter` talks to its coordinator, as `Space` does.
 
-**The filter Coordinators** (`Tab` from All, [the filter row](board.md#the-filter-row)) leaves only each machine's row
-and the rows of its projects that have a project coordinator, for the machine shown; its count is how many there are. `Enter` on a
-machine's row there folds its projects' rows away; on any other row there it talks to it.
+**The filter Coordinators** (`Tab` from All, [the filter row](board.md#the-filter-row)) leaves only the coordinators
+that run: started and not stopped (working, idle, needs you), on autopilot, or failed so that you can fix it. Each
+such machine's row and project's row, for the machine shown; its count is how many there are. A stopped or never
+started one is not there and not counted; its row stays in the other filters as a plain row, with no mark. With every
+machine shown, a machine whose own coordinator does not run keeps its row there only as the heading of its projects'
+that do, uncounted. `Enter` on a machine's row there folds its projects' rows away; on any other row there it talks to
+it.
 
 ## Talking to one
 
