@@ -78,20 +78,18 @@ pub fn says(s: &State) -> Option<String> {
     let what = if *machine { "this machine" } else if s.by_repo { "this repo" } else { "this group" };
     Some(format!("{} {what}", if *folded > 0 { "unfold" } else { "fold" }))
 }
-/// A heading with nothing to fold or unfold: the main Coordinator's row, a machine or a repo with nothing in view, and
-/// under Coordinators a project's row, or a machine's with no project's row under it.
+/// A heading with nothing to fold or unfold: a machine or a repo with nothing in view, and under Coordinators a
+/// project's row, or a machine's with no project's row under it.
 fn folds_nothing(s: &State, id: &str) -> bool {
-    if super::pilot::is_main(id) { return true; }
     let Some(at) = s.rows.iter().position(|r| matches!(r, Row::Head { id: h, .. } if h == id)) else { return false };
     let Row::Head { machine, empty, folded, .. } = &s.rows[at] else { return false };
     if *empty { return true; }
     if !super::shows::coords(s) || *folded > 0 { return false; }
-    let next = s.rows[at + 1..].iter().find(|r| !matches!(r, Row::Head { id, .. } if super::pilot::is_main(id)));
-    let projects_under = matches!(next, Some(Row::Head { machine: false, .. }));
+    let projects_under = matches!(s.rows.get(at + 1), Some(Row::Head { machine: false, .. }));
     !*machine || !projects_under
 }
-/// Fold the heading `id`, or unfold it; the selection stays on it. A coordinator's row with nothing to fold (the main
-/// Coordinator's, an empty one, a project's under Coordinators) opens its coordinator in the chat instead, as space does.
+/// Fold the heading `id`, or unfold it; the selection stays on it. A coordinator's row with nothing to fold (an empty
+/// one, a project's under Coordinators) opens its coordinator in the chat instead, as space does.
 pub fn toggle(s: &mut State, id: &str, fx: &mut Vec<Effect>) {
     if folds_nothing(s, id) && super::coords::of_head(s, id).is_some() {
         s.sel = id.to_string();

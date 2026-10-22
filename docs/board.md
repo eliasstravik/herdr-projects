@@ -58,8 +58,8 @@ sidebar ([other machines](other-machines.md)); a click on it does the same. Ever
 
 | Filter | The list shows |
 |---|---|
-| `All` | every task in its group, the automations and the Coordinator's row, as always |
-| `Coordinators` | only the Coordinator's row, each machine's row (with every machine shown, another machine's own Coordinator under it) and its projects' rows (those with a project coordinator): the rows that are coordinators ([machine and project coordinators](machine-and-project-coordinators.md)) |
+| `All` | every task in its group and the automations, as always |
+| `Coordinators` | only each machine's row and its projects' rows (those with a project coordinator): the rows that are coordinators ([machine and project coordinators](machine-and-project-coordinators.md)). The main Coordinator has no row |
 | `Needs you`, `Working`, `Ready`, `To do` | only the tasks of that group (`Ready` is ready to approve) |
 | `Done` | every done task, not only the latest five |
 | `Automations` | only the automations' rows, in their places |
@@ -67,8 +67,9 @@ sidebar ([other machines](other-machines.md)); a click on it does the same. Ever
 - **`Tab` shows the next filter, `Shift+Tab` the one before**, round and round. A click on one shows it. The filter
   shown is kept with the board's view. Each filter keeps the grouping (`Alt+S`) and the headings of what it shows; a
   machine or a repo with nothing that matches has none.
-- **A machine's row and a project's row are their coordinator's**, one line each: its caret and its name, nothing of
-  its coordinator (no mark, no state, no time: the marks' column is task agents'), nothing under it. The list
+- **A machine's row and a project's row are their coordinator's**, one line each: its coordinator's state as a task's
+  mark, only where it says something (`◐` working, `!` needs you, `✗` could not start, `∞` autopilot; none while
+  idle), its caret and its name, nothing under it. The list
   reads machine → project → task by how far in each row stands. `Enter` folds and unfolds it (where it has nothing to
   fold, it talks to its coordinator), `Space` talks to it, `Ctrl+S` / `Ctrl+X` start and stop it, `Ctrl+O` is its
   autopilot.
@@ -154,8 +155,14 @@ Each state has a mark of its own, so no two are told apart by colour alone:
 | `◆` | ready to approve |
 | `✓` | done |
 | `○` | to do |
+| `∞` | a coordinator on [autopilot](autopilot.md), on a machine's or a project's row |
 
 The `?` menu has the list too.
+
+- **A machine's row and a project's row** carry their coordinator's state with these same marks, and only where it
+  says something: `◐` it works, `!` (or `?`, `@`) it needs you, `✗` it could not start, `∞` it is on autopilot. Idle,
+  stopped or never started: no mark at all. The others (`◑ ◆ ✓ ◌ ◇ ○`) are never a coordinator's
+  ([machine and project coordinators](machine-and-project-coordinators.md)).
 
 - **Only a moon says someone works**: `◐` and `◑`, an agent or its reviewer.
 - Every mark is one column wide, and a character every monospace font has. The web board draws the same ones.

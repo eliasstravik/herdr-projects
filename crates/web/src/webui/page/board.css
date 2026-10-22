@@ -173,7 +173,6 @@
 .sw-pilot-mark { font-weight: var(--fw-regular, 400); }
 .sw-pilot-cols { display: inline-flex; flex-wrap: wrap; gap: var(--space-1, 4px) var(--space-3, 12px); margin-left: auto; color: var(--sw-dim); font-size: var(--fs-sm, 13px); font-weight: var(--fw-regular, 400); font-variant-numeric: tabular-nums; }
 .sw-pilot-says { flex-basis: 100%; padding-left: calc(2em + var(--space-2, 8px)); color: var(--sw-dim); font-size: var(--fs-sm, 13px); font-weight: var(--fw-regular, 400); overflow-wrap: anywhere; }
-.sw-main-row { margin-top: var(--space-2, 8px); }
 .sw-group-name.is-selected, .sw-machine-name.is-selected { background: var(--sw-lift); box-shadow: inset 3px 0 0 var(--accent, #f0a830); border-radius: var(--radius-md, 8px); }
 .sw-fold:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
 .sw-count { color: var(--sw-dim); font-weight: var(--fw-regular, 400); letter-spacing: 0; }

@@ -37,7 +37,7 @@ pub struct Away { pub text: String, pub to: String, pub cwd: String, pub warned:
 pub struct Back { pub sel: String, pub top: usize, pub filter: String, pub mode: Option<Mode>, pub value: String }
 /// Whose settings the page shows: a task's, an automation's, yours (what every task starts from, as `set` changes
 /// them), your entry for a repo (`set --repo`), or a coordinator's (its key, "main", "machine", "project:<repo>"),
-/// with what its heading's page showed before ("you", "repo:<repo>", "" nothing more: the main Coordinator's row).
+/// with what its heading's page showed before ("you", "repo:<repo>", "" nothing more).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Whose { #[default] Task, Auto, You, Repo(String), Coord(String, String) }
 impl Whose {

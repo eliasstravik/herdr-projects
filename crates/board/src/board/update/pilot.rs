@@ -1,28 +1,16 @@
-//! Autopilot from the board's side: a coordinator's row (the main Coordinator's on top of the list, a machine's heading
-//! with every machine shown, a repo's heading grouped by repo) stands for its coordinator. The start key there turns
+//! Autopilot from the board's side: a coordinator's row (a machine's heading with every machine shown or grouped by
+//! machine, a repo's heading grouped by repo) stands for its coordinator. The start key there turns
 //! autopilot on, with its saved goal and settings, and `Ctrl+X` turns it off, as those keys put an agent on a task and stop it.
 //! What each shows of its autopilot is what its machine read (data.rs: pilots), this one's or another's (sent with its
 //! tasks); a machine on an older version sends no autopilot at all, and the keys say to update it there. One of its
 //! coordinators missing from what it sent never ran: it is off, and the start key starts it.
 use super::coords::{of_head, Target};
-use super::heads::HEAD;
 use super::Effect;
 use crate::board::job::Job;
 use crate::board::state::State;
 use crate::json::*;
 use crate::shown::ink::Ink;
 
-/// The main Coordinator's row: on top of the list, for the machine whose board shows ("" this one).
-pub fn main_id(host: &str) -> String { format!("{HEAD}main\t{host}") }
-pub fn is_main(id: &str) -> bool { id.starts_with(&format!("{HEAD}main\t")) }
-/// The main Coordinator's row this board shows, if it has one: this machine's while a Coordinator can run here, one
-/// other machine's (its board alone) while it sent one.
-pub fn main_row(s: &State) -> Option<String> {
-    if s.archive_view { return None; }
-    if s.scope.is_empty() || s.scope == "*" { return s.data.can_dispatch.then(|| main_id("")); }
-    let m = s.remotes.get(&s.scope)?;
-    crate::coordinator::far::read(&m.coord).map(|_| main_id(&s.scope))
-}
 /// What its machine read of a coordinator's autopilot (`{ on: false }` while off or never run; Null: its machine sends
 /// no autopilot, an older version).
 pub fn view(s: &State, t: &Target) -> Value {
@@ -34,13 +22,20 @@ pub fn view(s: &State, t: &Target) -> Value {
 pub fn on(s: &State, t: &Target) -> bool { view(s, t).b("on") }
 /// The coordinator of the selected row, if the row is one.
 pub fn selected(s: &State) -> Option<Target> { of_head(s, &s.sel) }
-/// What the main Coordinator's row says of the others: `2 others on · 1 needs you` ("" none on).
-pub fn others(s: &State, main: &Target) -> String {
-    let mut views: Vec<Value> = vec![];
-    let mine = |all: &Value, host: &str, out: &mut Vec<Value>| { for (to, v) in all.as_object().cloned().unwrap_or_default() { if !(host == main.host && to.is_empty()) { out.push(v); } } };
-    if main.host.is_empty() { mine(&s.data.pilots, "", &mut views); }
-    for m in super::remotes::in_view(s) { if s.scope == "*" || m.machine.label == main.host { mine(&m.pilots, &m.machine.label, &mut views); } }
-    crate::autopilot::shown::others_words(&views)
+/// The coordinator the start, stop and autopilot keys act on: the selected row's; with no machine's, project's or
+/// task's row selected (a status group's heading, or nothing), the main Coordinator the chat talks to then, which has
+/// no row of its own.
+pub fn keyed(s: &State) -> Option<Target> {
+    if let Some(t) = selected(s) { return Some(t); }
+    if s.current().is_some() || s.auto().is_some() { return None; }
+    main(s)
+}
+/// The main Coordinator the chat talks to by default: this machine's while one can run here, or that of the one other
+/// machine whose board shows.
+pub fn main(s: &State) -> Option<Target> {
+    if s.archive_view { return None; }
+    if let Some(t) = super::coords::far_top(s) { return Some(t); }
+    (s.scope.is_empty() || s.scope == "*").then(|| Target { host: String::new(), to: String::new(), name: crate::status_words::COORDINATOR.into() }).filter(|_| s.data.can_dispatch)
 }
 /// The start key on a coordinator's row: autopilot on, with its saved goal and settings, and nothing said: its heading shows it.
 /// Already on: it says so; at `needs you`: it resumes.
@@ -79,7 +74,9 @@ pub fn toggle(s: &mut State, t: &Target, fx: &mut Vec<Effect>) {
 /// A ctrl or alt key's line in the ? menu on a coordinator's row, where it does something there of its own.
 pub fn menu_label(s: &State, k: crate::board::keys::K) -> Option<String> {
     use crate::board::keys::K;
-    let t = selected(s)?;
+    let t = keyed(s)?;
+    // The main Coordinator, which has no row: only the start, stop and autopilot keys are its.
+    if selected(s).is_none() && !matches!(k, K::Delegate | K::Stop | K::Pilot) { return None; }
     Some(match k {
         K::Delegate => format!("start the {}", t.name),
         K::Stop => format!("stop the {}", t.name),

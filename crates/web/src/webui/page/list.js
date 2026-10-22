@@ -52,23 +52,23 @@ export function listEl(list, opts) {
 }
 // A heading: a machine's (over its groups) or a group's (over its rows), as the terminal board has them. A tap folds it
 // to its one line, with how many tasks (and automations) it holds, and unfolds it.
-// A heading; the main Coordinator's row on top, on autopilot, is drawn as a task's row: autopilot's
-// mark first, in the marks' column left of the caret, its columns on the right, what it does now on a line under it.
+// A machine's or a project's heading has its coordinator's state as a task's mark (◐ working, ! needs you, ✗ went
+// wrong, ∞ on autopilot), in the marks' column left of the caret; nothing where it is idle.
 // The selected one has an Open button that shows the coordinator whole.
 function headEl(g, selected, onFold, onOpen) {
-  const count = g.main ? null : g.folded ? g.count : g.machine ? null : g.rows.length + g.more;
+  const count = g.folded ? g.count : g.machine ? null : g.rows.length + g.more;
   const p = g.pilot;
   // A repo's heading has its key beside its name, dimmed: `gtm-agent · AGT`.
-  const mark = p ? h("span.sw-pilot-mark", { "aria-label": "on autopilot" }, ink(p.mark)) : null;
+  const mark = p ? h("span.sw-pilot-mark", { "aria-label": p.label || "on autopilot" }, ink(p.mark)) : null;
   const words = [g.key ? h("span", g.name, h("span.sw-repo-key", ` · ${g.key}`)) : g.name,
-    count === null ? null : h("span.sw-count", String(count)), g.sum ? h("span.sw-count", ` · ${g.sum}`) : null];
-  const tag = g.machine || g.main ? "h2.sw-machine-name" : "h3.sw-group-name";
+    count === null ? null : h("span.sw-count", String(count))];
+  const tag = g.machine ? "h2.sw-machine-name" : "h3.sw-group-name";
   const cols = p?.cols?.length ? h("span.sw-pilot-cols", p.cols.map((c) => ink(c))) : null;
-  const under = p ? h("span.sw-pilot-says", ink(p.under)) : null;
+  const under = p?.under?.length ? h("span.sw-pilot-says", ink(p.under)) : null;
   if (!g.id) return h(`${tag}.sw-c-${g.color}${p ? ".sw-on-pilot" : ""}`, mark, words, cols, under);
   const open = g.coord && selected ? h("button.btn.sw-open", { type: "button", "aria-label": `Open ${g.name}`, onclick: (e) => { e.stopPropagation(); onOpen(g.id); } }, "Open", icon("right")) : null;
-  return h(`${tag}.sw-c-${g.color}${selected ? ".is-selected" : ""}${g.main ? ".sw-main-row" : ""}${p ? ".sw-on-pilot" : ""}`,
-    h("button.sw-fold", { type: "button", "aria-expanded": g.folded ? "false" : "true", title: g.main ? "The Coordinator" : g.folded ? "Unfold" : "Fold", onclick: () => onFold(g.id) }, mark, g.main ? null : h("span.sw-caret", { "aria-hidden": "true" }, g.folded ? "▸" : "▾"), words), cols, open, under);
+  return h(`${tag}.sw-c-${g.color}${selected ? ".is-selected" : ""}${p ? ".sw-on-pilot" : ""}`,
+    h("button.sw-fold", { type: "button", "aria-expanded": g.folded ? "false" : "true", title: g.folded ? "Unfold" : "Fold", onclick: () => onFold(g.id) }, mark, h("span.sw-caret", { "aria-hidden": "true" }, g.folded ? "▸" : "▾"), words), cols, open, under);
 }
 // Machines whose tasks could not be read: one notice over the list, each machine a line with what to do behind it.
 // Dismissed, it stays away in this browser until another machine stops answering or one answers for another reason.
@@ -90,7 +90,7 @@ function drawList(list, { opened, onPick, onOpen, onMore, onFold }) {
   const unread = unreadEl(list);
   if (!list.groups.length && !list.jobs.length) return unread.length ? h("div.sw-list", unread, list.empty ? h("p.sw-empty", list.empty) : null) : h("p.sw-empty", list.empty);
   const jobs = list.jobs.length ? h("section.sw-group", h("h3.sw-group-name.sw-c-overlay0", "on their way"), h("ul.sw-rows", list.jobs.map((j) => jobEl(j, { selected: j.id === list.selected, onPick })))) : null;
-  return h("div.sw-list", { role: "listbox", "aria-label": "Tasks" }, unread, jobs, list.groups.map((g) => g.machine || g.main ? headEl(g, g.id === list.selected, onFold, onOpen) : h("section.sw-group",
+  return h("div.sw-list", { role: "listbox", "aria-label": "Tasks" }, unread, jobs, list.groups.map((g) => g.machine ? headEl(g, g.id === list.selected, onFold, onOpen) : h("section.sw-group",
     headEl(g, g.id === list.selected, onFold, onOpen),
     h("ul.sw-rows", g.rows.map((r) => rowEl(r, { selected: r.id === list.selected, opened: r.id === opened, onPick, onOpen }))),
     g.more ? h("button.btn.btn-ghost.sw-more", { type: "button", onclick: () => onMore(g) }, `Show ${g.more} more`) : null)));

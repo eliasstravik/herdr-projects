@@ -16,17 +16,22 @@ The Coordinator stays as it is. The others sit beside it: talking to one never t
 heading, grouped by repo) stand for their coordinator, and are one line of the list:
 
 - **its caret and its name** (a home folder as `~`, on another machine too), with **no rule** to the edge;
-- **nothing of its coordinator**: no mark, no state, no time, nothing under it. The marks' column is for task agents
-  alone. Where its coordinator stands shows in the chat's header when you talk to it (`vm-str coordinator  working`),
-  and in its panel (`Alt+P`).
+- **its coordinator's state as a task's mark**, in the marks' column left of the caret, and only where it says
+  something:
+  - `◐` it works (amber), what it needs from you (`!`, `?`, `@`: red, bold), `✗` it could not start (red, bold),
+    `∞` it is on [autopilot](autopilot.md) (in the colour of where that stands: red at `needs you`, amber while it
+    works, quiet while asleep, plain else). What needs you and what went wrong come before `∞`.
+  - **Idle, stopped or never started: no mark**, the column blank, never a grey mark. None of a task's other marks
+    (`◑ ◆ ✓ ◌ ◇ ○`) is a coordinator's.
+- **nothing else of it**: no time, no columns, nothing under it. What it said is in the chat, whose header names it
+  with the same mark (`∞ vm-str coordinator  working`); its panel (`Alt+P`) has the rest.
 - **The list reads machine → project → task by how far in each row stands**: a machine's row at the left edge, a
   project's row (or a status group's) one step in under it, a project's tasks one step further in.
 - `Enter` folds it and unfolds it, as any heading; where it has nothing to fold (a repo or a machine with nothing in
-  view, a project's row under Coordinators, the Coordinator's row) `Enter` talks to its coordinator, as `Space` does.
+  view, a project's row under Coordinators) `Enter` talks to its coordinator, as `Space` does.
 
-**The filter Coordinators** (`Tab` from All, [the filter row](board.md#the-filter-row)) leaves only the Coordinator's
-row, each machine's row (with every machine shown, another machine's own Coordinator under it) and the rows of its
-projects that have a project coordinator, for the machine shown; its count is how many there are. `Enter` on a
+**The filter Coordinators** (`Tab` from All, [the filter row](board.md#the-filter-row)) leaves only each machine's row
+and the rows of its projects that have a project coordinator, for the machine shown; its count is how many there are. `Enter` on a
 machine's row there folds its projects' rows away; on any other row there it talks to it.
 
 ## Talking to one
@@ -74,8 +79,12 @@ As a task's row stands for the task:
   settings, on a project's your entry for that repo.
 - `Ctrl+S`, with nothing typed, starts its coordinator (in its own conversation), `Ctrl+X` stops it, as they put an
   agent on a task and stop it. Here or on its machine.
-- `Ctrl+O` puts it on [autopilot](autopilot.md) with its saved goal and settings, and takes it off again. Its row
-  shows nothing of that: its panel and the main Coordinator's row (`2 others on`) do.
+- `Ctrl+O` puts it on [autopilot](autopilot.md) with its saved goal and settings, and takes it off again. While on,
+  its row's mark is `∞`.
+
+**The main Coordinator has no row**, anywhere: not on top of the list, not under Coordinators, not under another
+machine's row. It is who the chat talks to when no machine's, project's or task's row is talked to: `Space` on such a row
+talks to that one, and `Space` again goes back to it ([the Coordinator](coordinator.md)).
 
 **Each has its own settings**, `coordinator.*` and `autopilot.*`, looked up **this coordinator → you → built in**
 ([settings](settings.md)). What you set for yourself counts for every coordinator; one set for this coordinator alone

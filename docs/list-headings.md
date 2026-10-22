@@ -20,19 +20,15 @@ machine**, its repos (or status groups) under it, and their tasks under those.
  ▸ vm-ssa  1 task ─────────────────────────────────────────────────
 ```
 
-## The Coordinator's row on top
+## No row for the main Coordinator
 
-**Above every heading is the main Coordinator's row**, wherever a Coordinator can run (and on another machine's board
-shown by itself, that machine's), under All and under Coordinators. It folds nothing: `Enter` there says so. The list
-still opens on its first task: `↑` reaches the top row. The archive has none.
-
-It stands for the [Coordinator](coordinator.md), as a machine's or a project's row stands for its coordinator: `Alt+P`,
-`Alt+T`, `Ctrl+E`, `Ctrl+S` / `Ctrl+X` to start and stop it, and `Ctrl+O` for [autopilot](autopilot.md); the top row also sums up the others on
-autopilot (`Coordinator · 2 others on · 1 needs you`).
+**The main Coordinator has no row of its own.** It is who the chat talks to by default; `Space` on a machine's, a
+project's or a task's row talks to that one instead, and `Space` again goes back to it ([the Coordinator](coordinator.md)).
+A machine's row and a project's row are their coordinators' ([machine and project coordinators](machine-and-project-coordinators.md)).
 
 ## Machine and repo headings
 
-- **A machine's heading** is its name in bold, in the accent colour, nothing after it (no rule, no mark: its coordinator shows in the chat). This machine
+- **A machine's heading** is its name in bold, in the accent colour, nothing after it (no rule); its coordinator's mark, where it has one, is left of its caret. This machine
   shows its own name (its hostname).
 - Machines come in the order of Herdr's machines sidebar ([machine order](machine-order.md)).
 - **Every machine that answered has a heading, also one with no task yet.** It shows folded, `▸ vm-ssa  0 tasks`, and

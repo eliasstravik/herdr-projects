@@ -184,7 +184,7 @@ a repo's entry `you`). `Esc` goes back to the list. On another machine's heading
 
 ## A coordinator in the panel
 
-On a coordinator's row (the Coordinator's on top of the list, a machine's or a project's row) the panel shows that
+On a coordinator's row (a machine's or a project's row) the panel shows that
 coordinator, in the same form:
 
 - **Status**: `State` (its chat's, `idle` or `working`; on [autopilot](autopilot.md), autopilot's word), `Last`, its

@@ -85,7 +85,7 @@ fn press(s: &mut State, p: &Press, fx: &mut Vec<Effect>) {
     if enter && text.is_empty() && super::heads::selected(s).is_some() { let id = s.sel.clone(); return super::heads::toggle(s, &id, fx); }
     if enter { return act::enter(s, &text, r.as_ref(), fx); }
     // On a coordinator's row, with nothing typed: autopilot on (update/pilot.rs).
-    if start && text.is_empty() && r.is_none() { if let Some(t) = super::pilot::selected(s) { return super::pilot::run(s, &t, true, fx); } }
+    if start && text.is_empty() && r.is_none() { if let Some(t) = super::pilot::keyed(s) { return super::pilot::run(s, &t, true, fx); } }
     if start { return act::tab(s, &text, r.as_ref(), fx); }
     // From here on the text box is empty.
     let scroll = is(p, K::Up) || is(p, K::Down);
@@ -130,8 +130,8 @@ pub fn run_as(s: &mut State, k: K, p: &Press, r: Option<&Obj>, fx: &mut Vec<Effe
         K::Yes => if let Some(r) = r { act::yes(s, r, fx) },
         K::SendBack => if let Some(r) = r { act::send_back(s, r, fx) },
         K::NextAttempt => if let Some(r) = r { act::next_attempt(s, r) },
-        K::Stop => match r { Some(r) => act::stop(s, r, fx), None => if let Some(t) = super::pilot::selected(s) { super::pilot::run(s, &t, false, fx) } },
-        K::Pilot => match super::pilot::selected(s).filter(|_| r.is_none()) { Some(t) => super::pilot::toggle(s, &t, fx), None => s.flash(format!("{} turns a coordinator's autopilot on and off: select the Coordinator's row, a machine's or a project's.", key_name("autopilot")), Ink::Muted) },
+        K::Stop => match r { Some(r) => act::stop(s, r, fx), None => if let Some(t) = super::pilot::keyed(s) { super::pilot::run(s, &t, false, fx) } },
+        K::Pilot => match super::pilot::keyed(s).filter(|_| r.is_none()) { Some(t) => super::pilot::toggle(s, &t, fx), None => s.flash(format!("{} turns a coordinator's autopilot on and off: select a machine's or a project's row.", key_name("autopilot")), Ink::Muted) },
         K::Archive => match r { Some(r) => act::archive_selected(s, r, fx), None if super::heads::selected(s).is_some() => super::archive_done::ask(s), None => s.flash("Select a task to archive or restore.", Ink::Muted) },
         K::Pin => if let Some(r) = r { act::pin(s, r, fx) },
         K::Settings => super::edit::open(s, r, fx),
@@ -152,7 +152,7 @@ pub fn run_as(s: &mut State, k: K, p: &Press, r: Option<&Obj>, fx: &mut Vec<Effe
         K::Scope => super::remotes::next_scope(s, fx),
         // Decided by the state, above: nothing of their own here.
         // Its line in the ? menu: as the key itself does with nothing typed (the key goes through the state, above).
-        K::Delegate => match r { Some(r) => act::tab(s, "", Some(r), fx), None => if let Some(t) = super::pilot::selected(s) { super::pilot::run(s, &t, true, fx) } },
+        K::Delegate => match r { Some(r) => act::tab(s, "", Some(r), fx), None => if let Some(t) = super::pilot::keyed(s) { super::pilot::run(s, &t, true, fx) } },
         K::Enter | K::Newline | K::Back | K::SayYes | K::SayNo | K::PutBack => { let _ = entry(k); }
     }
 }

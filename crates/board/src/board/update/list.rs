@@ -151,9 +151,8 @@ pub fn relist(s: &mut State) {
     sync_reply(s);
     if s.sel != selected { s.rows = fold_rows(s); } // the done fold for the new selection
 }
-/// Where a selection with nowhere else to go lands: the first task (or automation), a heading only where there is none,
-/// never the main Coordinator's row on top (it is reached with ↑).
-fn first_row(ids: &[String]) -> String { ids.iter().find(|i| !is_head(i)).or(ids.iter().find(|i| !super::pilot::is_main(i))).cloned().unwrap_or_default() }
+/// Where a selection with nowhere else to go lands: the first task (or automation), a heading only where there is none.
+fn first_row(ids: &[String]) -> String { ids.iter().find(|i| !is_head(i)).or(ids.first()).cloned().unwrap_or_default() }
 /// While you talk to a task's agent the chat follows the selection; the task you talk to going away is back to the
 /// Coordinator, never on to a neighbour's agent. On a row with no task, `reply_id` is empty.
 pub fn sync_reply(s: &mut State) {
@@ -167,14 +166,12 @@ pub fn sync_reply(s: &mut State) {
 /// repo: after their repo's), and fold with their heading.
 pub fn fold_rows(s: &mut State) -> Vec<Row> {
     s.fold_sel = s.sel.clone();
-    // Under Coordinators only the coordinators' rows: the main one, each machine's and its projects' (shows.rs).
+    // Under Coordinators only the coordinators' rows: each machine's and its projects' (shows.rs).
     if super::shows::coords(s) { let rows = super::shows::coord_rows(s); s.steps = rows.iter().filter_map(step_id).collect(); return rows; }
     let groups = s.grouped.clone();
     let parts = parts(s, &groups);
     let lay = |keep: usize, todos: usize, s: &State| -> Vec<Row> {
         let mut rows = vec![];
-        // The main Coordinator's row, on top: its coordinator's, as every heading's is (update/pilot.rs).
-        if let Some(id) = super::pilot::main_row(s).filter(|_| super::shows::keeps_main(s)) { rows.push(Row::Head { name: crate::status_words::COORDINATOR.into(), autos: false, id, machine: false, folded: 0, folded_autos: 0, empty: false }); }
         for p in &parts {
             let autos: Vec<Vec<Obj>> = p.groups.iter().map(|(name, _)| autos_in(s, &p.host, name)).collect();
             let n_autos: usize = autos.iter().map(|a| a.len()).sum();
@@ -224,7 +221,7 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
         rows
     };
     // No task gives way for an automation: theirs are not counted.
-    let lines_of = |rows: &[Row], s: &State| -> usize { let ind = super::depth::indents(rows, s.list_width); rows.iter().enumerate().map(|(n, r)| match r { Row::Head { .. } => heading_height(rows, n) + crate::board::view::pilot::extra(s, r), Row::Rec(o) => crate::board::view::row_wrap::row_height(s, o, s.list_width.saturating_sub(ind[n]), s.list_tall), Row::Auto(_) => 0, _ => 1 }).sum() };
+    let lines_of = |rows: &[Row], s: &State| -> usize { let ind = super::depth::indents(rows, s.list_width); rows.iter().enumerate().map(|(n, r)| match r { Row::Head { .. } => heading_height(rows, n), Row::Rec(o) => crate::board::view::row_wrap::row_height(s, o, s.list_width.saturating_sub(ind[n]), s.list_tall), Row::Auto(_) => 0, _ => 1 }).sum() };
     let over = |rows: &[Row], s: &State| !s.whole && s.list_room > 0 && lines_of(rows, s) > s.list_room;
     let mut keep = DONE_SHOWN;
     let mut rows = lay(keep, usize::MAX, s);

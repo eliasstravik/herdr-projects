@@ -75,7 +75,7 @@
    space        flip who you talk to: the Coordinator, or
                 this task's agent
    esc          back, one step at a time (as a popup, the
- ↓ 61 more
+ ↓ 62 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────

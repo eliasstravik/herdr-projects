@@ -25,20 +25,17 @@ herdr-projects coordinator stop
 Restart and new are commands, not board keys. You can also just ask the Coordinator to do them. `new --agent …` changes
 only the next one: your default stays as it is.
 
-## Its row and its settings
+## No row, and its settings
 
-**The Coordinator has a row of its own, on top of the list**, wherever a Coordinator can run. The list still opens on its
-first task: `↑` reaches it. `Space` there talks to it.
+**The Coordinator has no row of its own** on the list. It is who the chat talks to when no machine's, project's or
+task's row is talked to: `Space` on one of those talks to it instead, and `Space` again comes back here. Where it stands
+is the chat's header (`Coordinator  idle`), with its mark: `∞` while on [autopilot](autopilot.md).
 
-- `Alt+P` shows it beside the list, `Alt+T` whole, in the [task panel](task-panel.md)'s form: how it stands, its last
-  message, its program, model and effort.
-- `Ctrl+E` opens its settings page: its own rows, under `This coordinator`.
+- `Ctrl+S` starts it, `Ctrl+X` stops it and `Ctrl+O` puts it on autopilot and takes it off, where no machine's,
+  project's or task's row is selected (a status group's heading, an empty list).
 - Its settings (`coordinator.*`) are looked up as a task's are: **this coordinator → you → built in**. One set for it
   alone goes in the `coordinators` part of your `config.json` (`set … --main-coordinator`). A change counts from its next
   fresh chat ([settings](settings.md)).
-- `Ctrl+S` there starts it, `Ctrl+X` stops it, as an agent on a task; `Ctrl+O` puts it on [autopilot](autopilot.md) and
-  takes it off. While on, its row reads as a task's (autopilot's mark,
-  its timing on the right, what it does under its name), and it sums up the other coordinators on autopilot: `Coordinator · 2 others on · 1 needs you`.
 
 ## Your message, and where you were
 

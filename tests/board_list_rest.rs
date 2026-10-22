@@ -95,7 +95,7 @@ fn every_machines_tasks_say_whose_they_are_and_a_far_merge_says_where_it_lands()
     s.s.sel = "otherbox:proj/1".into(); s.load();
     let t = s.screen(100).join("\n");
     // Each machine under a heading of its own, its status groups a step in under that: the row's tag is the number alone.
-    assert!(has(&t, r"\n ▾ otherbox *\n   ▾ to do\n▌  ○ #1 +Far away "), "{t}"); assert!(!t.contains("otherbox#1") && !t.contains("otherbox Far away"));
+    assert!(has(&t, r"\n   ▾ otherbox *\n   ▾ to do\n▌  ○ #1 +Far away "), "{t}"); assert!(!t.contains("otherbox#1") && !t.contains("otherbox Far away"));
     s.press(&["ctrl+f"]); s.typed("1");
     assert!(s.s.rows.iter().any(|r| matches!(r, sw::board::state::Row::Rec(o) if o.s("host") == "otherbox")), "find takes the number alone: no machine in it");
     s.press(&["esc"]);

@@ -36,7 +36,7 @@
  plain keys
    ↑ ↓          move
                 bet…
- ↓ 251 more
+ ↓ 252 more
  + New task  added …
 ────────────────────
 ❯ Add a task

@@ -104,12 +104,3 @@ pub fn view(co: &Co, now: i64) -> Value {
         "lastId": last_id(&ap), "activity": activity(co, &ap, &board, now), "added": added_words(co, &ap, &board, now),
         "settings": settings_of(co).into_iter().map(|(l, v, o)| json!({ "label": l, "value": v, "once": o })).collect::<Vec<_>>(), "wakes": wakes })
 }
-/// What the main Coordinator's row sums up of the others: "2 others on", "1 needs you" ("" none on).
-pub fn others_words(views: &[Value]) -> String {
-    let on = views.iter().filter(|v| v.b("on")).count();
-    if on == 0 { return String::new(); }
-    let need = views.iter().filter(|v| v.b("on") && ["needs you", "could not start"].contains(&v.s("state"))).count();
-    let mut out = vec![format!("{on} {} on", if on == 1 { "other" } else { "others" })];
-    if need > 0 { out.push(format!("{need} {} you", if need == 1 { "needs" } else { "need" })); }
-    out.join(" · ")
-}

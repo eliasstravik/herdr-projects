@@ -57,38 +57,22 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
 
 ## Where it shows
 
-- **The main Coordinator has a row of its own, on top of the list**, wherever a Coordinator can run (not under
-  `coordinator.agent none`). **A machine's row and a project's row stand for their coordinator**: a machine's with
-  every machine shown or grouped by machine, a project's grouped by repo; the filter Coordinators (`Tab`) leaves only
-  those ([machine and project coordinators](machine-and-project-coordinators.md)).
-- **While it is on, the main Coordinator's row reads as a task's row**: autopilot's mark `◎` all the way left, in the column where a task
-  has its mark and an automation its arrow, with the fold caret one step in, where a task's tag starts; the timing in
-  the columns on the right, where a task keeps its progress and its time; and what it does now on the line under its
-  name, as a live task's second line.
+- **A machine's row and a project's row stand for their coordinator**: a machine's with every machine shown or grouped
+  by machine, a project's grouped by repo; the filter Coordinators (`Tab`) leaves only those
+  ([machine and project coordinators](machine-and-project-coordinators.md)). The main Coordinator has no row.
+- **While it is on, its row's mark is `∞`**, in the marks' column where a task has its mark, left of the caret. Nothing
+  else of it on the list: no columns, no line under it. The main Coordinator's `∞` is in the chat's header.
 
   ```
-   ◎   Coordinator · 2 others on · 1 needs you                    0 of 5 added  next in 1h
-       On · woke 12m ago: HSW-92 merged
+   ∞ ▾ herdr-projects · HSW
+     ✓ HSW-92  Sync never loses data
   ```
-
-  A machine's or a project's row shows nothing of its coordinator's autopilot, on or off: the marks' column is task
-  agents'. Its panel (`Alt+P`) shows it, and the main Coordinator's row counts it (`2 others on`).
 
   - **The mark** is one column wide, of the family of a task's marks (`◐ ◇ ○ ✓`), never an emoji. It takes the colour
-    of its state, as a task's does: red at `needs you` and `could not start` (bold, as a task that waits for you),
-    yellow while `working`, quiet while `asleep`, plain text else. No colour of its own.
-  - **The columns**: today's adds against `autopilot.tasksPerDay` (`2 of 5 added`), the last task it added with that
-    task's mark and tag (as an automation shows the task it made), and when it next wakes (`next in 40m`, `waits for its
-    hours`). They end at the list's right edge, where a task's time does. Where the list is narrow they give way, the
-    adds first, then the last task; when it next wakes then goes to the end of the line under the name.
-  - **The line under the name** starts with its state word, then what goes with it: `On · woke 12m ago: …` (or
-    `On · wakes every 1h + events` before its first wake), `Working · woke for …`, `At its limit · 2 of 2 under way:
-    waits for one to finish` (or `no adds left today`), `Asleep · its hours are 09:00-17:00`, `Needs you · its last
-    wakes went unanswered`, `Could not start · …`. In the brighter grey a task's line has; `Needs you` and
-    `Could not start` in red.
-
-  Off, nothing of autopilot shows, as a task shows nothing of an agent before one is on it. A machine on an older
-  version sends only its old line: that goes under the name.
+    of its state, as a task's does: red at `needs you` (bold, as a task that waits for you), yellow while `working`,
+    quiet while `asleep`, plain text else. No colour of its own. A coordinator that needs you itself (`!`) or could not
+    start (`✗`) shows that mark instead.
+  - Off, nothing of autopilot shows; an idle coordinator has no mark at all.
 - **The state word**, the first that holds:
 
   | Word | Means |
@@ -100,14 +84,12 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
   | `at its limit` | no room for more tasks, and none of its tasks needs looking after |
   | `on` | waiting for its next reason to wake |
 
-- **The main Coordinator's row sums up the others**, so autopilot is seen in every grouping: `2 others on`, and
-  `1 needs you` when any other shows `needs you` or `could not start`. Nothing when none is on.
 - **Its panel.** `Alt+P` shows the coordinator beside the list in the [task panel](task-panel.md)'s form, `Alt+T` the
   same whole, with its last 20 wakes (when, why, answered). While on: its goal, today's counts
   (`2 of 5 added · 1 of 2 under way`) and its settings in plain words.
 - **Its wakes show in its chat**, under the name `Autopilot`, in autopilot's colour, never as your words.
 - **Its colours** on the list are the theme's own, as a task's ([colours](colours.md)): red where it needs you, yellow
-  while it works. The mark and the state word on its line say the same, so colour is never the only clue.
+  while it works. Its panel's state word says the same, so colour is never the only clue.
 
 ## When it wakes
 

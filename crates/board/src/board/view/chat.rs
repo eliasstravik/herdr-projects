@@ -67,6 +67,8 @@ fn who_of(s: &mut State, t: &Theme, r: Option<&Obj>) -> Option<Who> {
     let v = s.data.coord.clone();
     let screen = s.data.coord_screen.clone();
     let mut c = coord_who(t, &v, &screen, !v.unseen.is_empty() && !s.chat_open);
+    let main = crate::board::update::coords::Target { name: crate::status_words::COORDINATOR.into(), ..Default::default() };
+    c.mark = super::pilot::in_chat(s, &main, &v, c.mark);
     c.always = !v.error.is_empty() && s.err_hid != v.error;
     Some(c)
 }
@@ -87,7 +89,9 @@ fn far_who(s: &mut State, t: &Theme, far: &str) -> Who {
     if let Some(v) = crate::coordinator::far::read(&s.remotes[far].coord) {
         let turn = v.talk.last().map(|x| x.text.clone()).unwrap_or_default();
         let target = crate::board::update::coords::Target { host: far.into(), to: String::new(), name: name.clone() };
-        return super::coords::with_sent(s, &target, &v, Who { name, turn, ..coord_who(t, &v, "", false) });
+        let w = Who { name, turn, ..coord_who(t, &v, "", false) };
+        let w = Who { mark: super::pilot::in_chat(s, &target, &v, w.mark.clone()), ..w };
+        return super::coords::with_sent(s, &target, &v, w);
     }
     let m = &s.remotes[far];
     // An older version there sends nothing of it; a machine with none adds what you type as a task.

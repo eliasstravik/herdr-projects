@@ -1,8 +1,8 @@
 //! The filter row on top of the board: All · Coordinators · Needs you · Working · Ready · To do · Done · Automations,
 //! each with its count. Tab moves to the next, shift+tab back, a click picks one; the list then shows only the tasks of
-//! that status. Coordinators and Automations are filters as the others are: Coordinators leaves the main Coordinator's
-//! row and the coordinators' own rows, which are the machines' rows and the projects' (a project's that was ever talked
-//! to), for the machine shown; Automations leaves the automations' rows, in the same places and grouping.
+//! that status. Coordinators and Automations are filters as the others are: Coordinators leaves the coordinators' own
+//! rows, which are the machines' rows and the projects' (a project's that was ever talked to), for the machine shown
+//! (the main Coordinator has none); Automations leaves the automations' rows, in the same places and grouping.
 use super::heads::{machine_id, HEAD};
 use super::list::relist;
 use super::Effect;
@@ -22,8 +22,6 @@ pub fn coords(s: &State) -> bool { s.show == COORDS && !s.archive_view }
 fn group(s: &State) -> Option<&'static str> { if s.archive_view { None } else { SHOWS.get(s.show).and_then(|x| x.1) } }
 /// A task stays in the list of this filter: every task, or those of its status.
 pub fn keeps_task(s: &State, r: &Obj) -> bool { s.archive_view || (s.show != COORDS && s.show != AUTOS && group(s).is_none_or(|g| group_of(r) == g)) }
-/// The main Coordinator's row on top: under All and under Coordinators.
-pub fn keeps_main(s: &State) -> bool { !s.archive_view && (s.show == 0 || s.show == COORDS) }
 /// Automations stand in the list under All and under Automations.
 pub fn keeps_all(s: &State) -> bool { s.show == 0 || s.show == AUTOS || s.archive_view }
 /// Done shows every done task, not only the latest few.
@@ -63,20 +61,17 @@ fn projects(s: &State, host: &str) -> Vec<String> {
     out.sort_by_key(|r| r.to_lowercase());
     out
 }
-/// The list under Coordinators: the main Coordinator's row, then for each machine in view its row (its machine
-/// coordinator's), another machine's own main Coordinator, and the rows of its projects with a project coordinator.
+/// The list under Coordinators: for each machine in view its row (its machine coordinator's) and the rows of its
+/// projects with a project coordinator. The main Coordinator has no row: it is who the chat talks to by default.
 pub fn coord_rows(s: &State) -> Vec<Row> {
     let head = |name: String, id: String, machine: bool| Row::Head { name, autos: false, id, machine, folded: 0, folded_autos: 0, empty: false };
-    let mut out: Vec<Row> = super::pilot::main_row(s).map(|id| head(crate::status_words::COORDINATOR.into(), id, false)).into_iter().collect();
+    let mut out: Vec<Row> = vec![];
     for h in hosts(s) {
         // A machine's row folds its projects' rows away, as everywhere (enter, heads.rs: toggle).
         let (id, projects) = (machine_id(&h), projects(s, &h));
         let shut = super::heads::folded(s, &id) && !projects.is_empty();
         out.push(Row::Head { name: super::remotes::shown(s, &h), autos: false, id, machine: true, folded: if shut { projects.len() } else { 0 }, folded_autos: 0, empty: false });
         if shut { continue; }
-        // Every machine shown: another machine's own main Coordinator, where it sent one, under its row.
-        let far_main = !h.is_empty() && s.scope == "*" && s.remotes.get(&h).and_then(|m| crate::coordinator::far::read(&m.coord)).is_some();
-        if far_main { out.push(head(crate::status_words::COORDINATOR.into(), super::pilot::main_id(&h), false)); }
         for r in projects { out.push(head(r.clone(), format!("{HEAD}repo\t{h}\t{r}"), false)); }
     }
     out

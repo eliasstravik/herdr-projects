@@ -26,7 +26,7 @@ fn two_machines() -> (World, Board) {
 /// Alt+M round to every machine: it comes first in the round, this machine where herdr's sidebar has it.
 fn every(s: &mut Board) { for _ in 0..4 { if s.s.scope == "*" { return; } s.press(&["alt+m"]); } panic!("alt+m never showed every machine"); }
 /// A machine's row: its coordinator's mark, its caret and its name, with no rule to the edge.
-fn head(name: &str) -> String { format!(r"\n ▾ {name} *\n") }
+fn head(name: &str) -> String { format!(r"\n   ▾ {name} *\n") }
 /// Arrow down until the selection is on this heading (or on this task).
 fn go(s: &mut Board, id: &str) { for _ in 0..40 { if s.s.sel == id { return; } s.press(&["down"]); } for _ in 0..40 { if s.s.sel == id { return; } s.press(&["up"]); } panic!("{id} is not reached with the arrows"); }
 fn machine(host: &str) -> String { format!("head:machine\t{host}") }
@@ -38,9 +38,9 @@ fn every_machine_a_heading_its_repos_under_it_and_rows_with_the_number_alone() {
     every(&mut s); s.press(&["alt+s"]); assert!(s.s.scope == "*" && s.s.by_repo);
     let t = s.screen(100).join("\n");
     let here = sw::shown::words::clean(&sw::remote::check::hostname());
-    assert!(has(&t, &format!(r"{}   ▾ proj · PRJ *\n[ ▌]    ○ PRJ-\d+ +Mine", head(&regex::escape(&here)))), "this machine first, under its own name, its project a step in, its tasks a step further: {t}");
+    assert!(has(&t, &format!(r"{}     ▾ proj · PRJ *\n[ ▌]    ○ PRJ-\d+ +Mine", head(&regex::escape(&here)))), "this machine first, under its own name, its project a step in, its tasks a step further: {t}");
     // The repo the board is in comes first on every machine, as on one.
-    assert!(has(&t, &format!(r"{}   ▾ proj *\n[ ▌]    ○ #151 +Theirs in proj[^\n]*\n\n   ▾ crm *\n[ ▌]    ○ #4 +Theirs in crm", head("otherbox"))), "{t}");
+    assert!(has(&t, &format!(r"{}     ▾ proj *\n[ ▌]    ○ #151 +Theirs in proj[^\n]*\n\n     ▾ crm *\n[ ▌]    ○ #4 +Theirs in crm", head("otherbox"))), "{t}");
     assert!(!t.contains("otherbox#") && !t.contains("otherbox:"), "a row never names its machine, nor a heading the repo's machine: {t}");
     // By status (after by machine): the same machines, their status groups under them.
     s.press(&["alt+s", "alt+s"]);
@@ -58,22 +58,22 @@ fn enter_on_a_heading_folds_it_to_one_line_with_how_many_it_holds_and_unfolds_it
     every(&mut s); s.press(&["alt+s"]);
     // The arrows stop on each heading, which is selected as a row is.
     go(&mut s, &repo("otherbox", "crm"));
-    assert!(s.screen(100).iter().any(|l| has(l, r"^▌ *▾ crm")), "{}", s.text());
+    assert!(s.screen(100).iter().any(|l| has(l, r"^▌ *  ▾ crm")), "{}", s.text());
     assert!(s.text().contains("enter fold this repo"), "the hint line says what enter does there: {}", s.text());
     s.press(&["enter"]);
     let t = s.screen(100).join("\n");
-    assert!(has(&t, r"Theirs in proj[^\n]*\n\n▌  ▸ crm  1 task"), "{t}"); assert!(!t.contains("Theirs in crm") && t.contains("Theirs in proj"));
+    assert!(has(&t, r"Theirs in proj[^\n]*\n\n▌    ▸ crm  1 task"), "{t}"); assert!(!t.contains("Theirs in crm") && t.contains("Theirs in proj"));
     assert_eq!(s.s.sel, repo("otherbox", "crm"), "the selection stays on the heading");
     assert!(s.text().contains("enter unfold this repo"));
     // A machine folds whole; unfolded, its repos are as they were.
     go(&mut s, &machine("otherbox"));
     s.press(&["enter"]);
     let t = s.screen(100).join("\n");
-    assert!(has(&t, r"\n▌▸ otherbox  2 tasks *\n"), "{t}"); assert!(!t.contains("Theirs") && !t.contains("▾ proj\n ○ #151"));
+    assert!(has(&t, r"\n▌  ▸ otherbox  2 tasks *\n"), "{t}"); assert!(!t.contains("Theirs") && !t.contains("▾ proj\n ○ #151"));
     assert!(t.contains("Mine 1"), "the other machine's tasks stay: {t}");
     s.press(&["enter"]);
     let t = s.screen(100).join("\n");
-    assert!(has(&t, r"\n   ▸ crm  1 task *\n") && t.contains("Theirs in proj"), "{t}");
+    assert!(has(&t, r"\n     ▸ crm  1 task *\n") && t.contains("Theirs in proj"), "{t}");
     // By status, and on one machine: its status headings fold the same way.
     s.press(&["alt+s", "alt+s", "alt+m"]); s.s.scope.clear(); sw::board::update::list::relist(&mut s.s);
     let todo = "head:status\t\tto do".to_string();
@@ -142,7 +142,7 @@ fn a_repos_heading_is_its_name_in_plain_bold_text_as_its_titles_and_its_key_mute
     // Each piece of the first line with `on`, with its ink and boldness: blanks left out.
     let pieces = |on: &str| { let l = lines.iter().find(|l| l.text().contains(on)).unwrap_or_else(|| panic!("no {on:?}")); l.0.iter().filter(|p| !p.t.trim().is_empty()).map(|p| (p.t.trim().to_string(), p.c, p.bold)).collect::<Vec<_>>() };
     let head = pieces("▾ proj");
-    // no mark of its coordinator: the marks' column is task agents'
+    // not started: no mark of its coordinator's, the column blank
     assert_eq!(head, vec![("▾".into(), Ink::Muted, false), ("proj".into(), Ink::Plain, true), ("· PRJ".into(), Ink::Muted, false)]);
     let title = pieces("Mine 1").into_iter().find(|p| p.0.contains("Mine 1")).unwrap();
     assert_eq!(title.1, Ink::Plain, "the heading is as loud as the titles under it: {title:?}");

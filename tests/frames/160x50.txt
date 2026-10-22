@@ -195,7 +195,7 @@
    ◌            queued: for a free slot (Q#1 next) or after other tasks
    ?            asks you
    !            asks for your OK
- ↓ 11 more
+ ↓ 12 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

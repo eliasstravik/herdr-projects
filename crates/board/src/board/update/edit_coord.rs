@@ -1,6 +1,6 @@
 //! The settings page of a coordinator's row: that coordinator's own rows first (`coordinator.*` and `autopilot.*`,
 //! under `This coordinator`), then the rows the heading's page showed before (yours on this machine's heading, your
-//! entry for the repo on a repo's; nothing more on the main Coordinator's row). While autopilot is on, a value of an
+//! entry for the repo on a repo's). While autopilot is on, a value of an
 //! autopilot row (but the goal) is saved for this time; while off, as the coordinator's own. Another machine's
 //! coordinator is changed on that machine: the page shows it whole instead, and says so.
 use crate::board::state::{State, Whose};

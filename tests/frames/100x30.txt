@@ -115,7 +115,7 @@
                 your own settings: what every task starts from
    ctrl+z       undo
    ctrl+f       find: show only the tasks that match
- ↓ 34 more
+ ↓ 35 more
 
  + New task  added word for word
 ────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 //! The settings page: every work setting of the selected task (or automation) by its name and its value, `*` on the
 //! ones that are its own. On a heading of this machine, the same page for your own settings, which every task starts
 //! from (on a repo's heading: your entry for that repo), changed as `herdr-projects set` changes them; a coordinator's
-//! row (its heading, the main Coordinator's) has that coordinator's own rows first (edit_coord.rs). Move to a row and
+//! row (its heading) has that coordinator's own rows first (edit_coord.rs). Move to a row and
 //! change it: a switch or a choice goes to its next value, anything else is typed and saved with enter; one key puts a
 //! row back to what it would be without this task's own answer. Only the page's own
 //! keys act while it is open: no key of the list archives, merges or removes the task from here.

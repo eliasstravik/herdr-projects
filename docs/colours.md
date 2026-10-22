@@ -135,13 +135,12 @@ and dark), since the web UI has no purple among its status colours.
 
 ## A coordinator on autopilot has the theme's colours; its wakes are orange
 
-The main Coordinator on [autopilot](autopilot.md) has no colour of its own on the list: its row reads as a task's, in the
-theme's own colours. Its mark `◎` is red at `needs you` and `could not start` (those words on its line too), yellow while
-it works, quiet while asleep and plain text else; its columns are in the fainter grey, its line in the brighter one, as
-a task's. The main Coordinator's sum of the others (`2 others on`) is grey, its `1 needs you` red.
+A coordinator on [autopilot](autopilot.md) has no colour of its own on the list: its machine's or project's row has the
+mark `∞` in the theme's own colours, as a task's mark is: red at `needs you`, yellow while it works, quiet while asleep
+and plain text else. The main Coordinator's `∞` is in the chat's header, in the colour its state gives it there.
 
-**Colour is not the only clue**: the mark is a plane where every task's mark is another shape, its line starts with its
-state word, and nothing of autopilot shows while it is off. With `NO_COLOR` that still stands.
+**Colour is not the only clue**: `∞` is a shape no task's mark has, its panel's state word says where it stands, and
+nothing of autopilot shows while it is off. With `NO_COLOR` that still stands.
 
 Its wakes in the chat, under the name `Autopilot`, are an orange, so they are never read as your words:
 

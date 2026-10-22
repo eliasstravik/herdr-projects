@@ -28,7 +28,7 @@ fn the_box_talks_to_one_long_lived_coordinator_started_once_with_nothing_held_ba
     let mut s = open(&w.root, 34);
     let t = s.text();
     assert!(has(&t, r"\n *\n[ ▌]· Coordinator  not started: your first message starts it *\n╭─[^\n]*╮\n│ ❯ Send message to Coordinator +│\n╰─+╯\n[ ▌] \? all keys *$"), "{t}");
-    assert!(!has(&t, "claude|default model|default effort|last message|new task|reply to"));
+    assert!(!has(&t, "claude|default model|default effort|last message|new task|reply to"), "{t}");
     s.typed("build a login page");
     assert!(s.text().contains("│ ❯ build a login page") && s.text().contains("enter send to the Coordinator · shift+enter new line · esc put away"), "{}", s.text());
     // tab is no second way to send: the Coordinator decides itself what to start, so the words stay where they are

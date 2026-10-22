@@ -112,7 +112,7 @@ fn where_the_board_names_a_repo_its_key_stands_beside_it_dimmed_but_never_twice_
     // Grouped by repo: each heading reads `name · KEY`, the key in the muted ink; the rows start with their tags alone.
     let mut b = common::board::open(&w.root, 30); b.s.side = false; b.press(&["alt+s"]); assert!(b.s.by_repo);
     let text = b.screen(100).join("\n");
-    assert!(has(&text, r"\n ▾ proj · PRJ\n[ ▌]  ○ PRJ-1 Mine ") && has(&text, r"\n ▾ gtm-agent · AGN\n[ ▌]  ○ AGN-1 Theirs "), "{text}");
+    assert!(has(&text, r"\n   ▾ proj · PRJ\n[ ▌]  ○ PRJ-1 Mine ") && has(&text, r"\n   ▾ gtm-agent · AGN\n[ ▌]  ○ AGN-1 Theirs "), "{text}");
     let inked = b.inked(100); let at = b.screen(100).iter().position(|l| l.contains("proj · PRJ")).unwrap();
     assert_eq!(inked[at].0.iter().find(|p| p.t.contains("PRJ")).map(|p| p.c), Some(sw::shown::ink::Ink::Muted));
     // Narrow: the heading is cut to the width, the key first.
