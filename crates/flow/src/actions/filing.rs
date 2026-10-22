@@ -46,7 +46,7 @@ pub fn report(id: &str, r: Report) -> Res<Task> {
     if !r.title.is_empty() && r.state.is_empty() { return rename(cur.s("id"), &r.title); }
     if !["idle", "working", "blocked", "done", "error"].contains(&r.state.as_str()) { crate::fail!("state must be one of: idle, working, blocked, done, error"); }
     // "Mark it idle" on a task whose agent is working means "stop it".
-    if r.state == "idle" && flow::task::is_agent_task(&cur) && is_agent_stage(cur.s("stage")) { return stop(cur.s("id")); }
+    if r.state == "idle" && flow::task::is_agent_task(&cur) && is_agent_stage(cur.s("stage")) { return stop(cur.s("id")).map(|s| s.task); }
     let delegated = flow::task::is_agent_task(&cur) && (is_agent_stage(cur.s("stage")) || ["asks", "nosummary", "approval", "reviewneeds", "failed", "plan"].contains(&cur.s("stage")));
     let mark = if r.state == "done" { flow::spaces::tidy_mark(&cur, "merged", "") } else { None };
     let t = update(cur.s("id"), |t| {

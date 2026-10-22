@@ -13,12 +13,15 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
     let find = |st: &Value, id: &str| st.arr("panes").iter().position(|p| p.s("pane_id") == id);
     match verb {
         "process-info" => {
+            if st.b("processInfoFails") { return fail("timeout", "timed out"); }
+            if flag("--pane").and_then(|id| find(st, &id)).is_some_and(|i| st["panes"][i].b("infoFails")) { return fail("timeout", "timed out"); }
             let Some(pi) = flag("--pane").and_then(|id| find(st, &id)) else { return fail("pane_not_found", "pane not found") };
             let p = &st["panes"][pi];
             let shell = 4194400;
             // The agent is pid 1, with a process under it. `tool`: a command in a group of its own (not listed); in its own
             // group: `helper`, one wired to it (an MCP server); `child`, a command that is not; `wrapped`, the
-            // agent's own program under an npm wrapper
+            // agent's own program under an npm wrapper. `shell`: the pane's shell is that real process; `infoFails`: herdr
+            // does not answer for this pane
             let under = ["tool", "helper", "child", "wrapped"].iter().any(|k| p.b(k));
             let fg = if st.b("pids") && p.at("agent").is_object() { p.at("agent").i("pid") } else if under { 1 } else if p.b("busy") { shell + 1 } else { shell };
             let mut front = vec![json!({ "pid": fg, "name": if p.b("wrapped") { "node" } else if under { "agent" } else if p.b("busy") { "sleep" } else { "bash" } })];
@@ -26,7 +29,7 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
             if p.b("child") { front.push(json!({ "pid": 3, "name": "sleep" })); }
             if p.b("wrapped") { front.push(json!({ "pid": 3, "name": p.at("agent").at("kind") })); }
             let group = if p.b("busy") { shell + 1 } else if under { fg } else { shell };
-            return ok(json!({ "type": "pane_process_info", "process_info": { "pane_id": p.at("pane_id"), "shell_pid": if p.b("job") { 1 } else { shell }, "foreground_process_group_id": group, "foreground_processes": front } }));
+            return ok(json!({ "type": "pane_process_info", "process_info": { "pane_id": p.at("pane_id"), "shell_pid": if p.b("job") { 1 } else if p.b("shell") { p.i("shell") } else { shell }, "foreground_process_group_id": group, "foreground_processes": front } }));
         }
         "layout" => {
             let Some(pi) = flag("--pane").and_then(|id| find(st, &id)) else { return fail("pane_not_found", "pane not found") };
@@ -35,12 +38,14 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
             let own = st.at("layouts").at(p.s("pane_id")).clone();
             return ok(json!({ "type": "pane_layout", "layout": if own.is_object() { own } else { json!({ "area": area, "zoomed": false, "focused_pane_id": p.at("pane_id"), "panes": [{ "pane_id": p.at("pane_id"), "focused": true, "rect": area }], "splits": [], "tab_id": p.at("tab_id"), "workspace_id": p.at("workspace_id") }) } }));
         }
+        "list" if st.b("paneListFails") => return fail("timeout", "timed out"),
         "list" => { let w = flag("--workspace"); let ps: Vec<Value> = st.arr("panes").iter().filter(|p| w.as_deref().map(|w| p.s("workspace_id") == w).unwrap_or(true)).map(F::pane_out).collect(); return ok(json!({ "type": "pane_list", "panes": ps })); }
         _ => {}
     }
     let Some(pi) = find(st, arg2) else { return fail("pane_not_found", &format!("pane {arg2} not found")) };
     let p = st["panes"][pi].clone();
     match verb {
+        "get" if st.b("paneGetFails") => fail("timeout", "timed out"),
         "get" => ok(json!({ "type": "pane_info", "pane": F::pane_out(&p) })),
         "zoom" => { let on = argv.iter().any(|a| a == "--on"); if on { arr(st, "focus").push(json!(format!("pane {arg2}"))); } ok(json!({ "type": "pane_zoom", "zoom": { "pane_id": arg2, "zoomed": on, "focused_pane_id": arg2 } })) }
         "split" => {

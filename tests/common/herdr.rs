@@ -25,9 +25,10 @@ impl Fake for FakeHerdr {
     /// pid 1 is an agent with one process under it: 2, wired to it (an MCP server), or 3, which is not (`child`, `wrapped`)
     fn kids(&self, pid: i64) -> Vec<i64> { if pid != 1 { vec![] } else if self.st.borrow().arr("panes").iter().any(|p| p.b("child") || p.b("wrapped")) { vec![3] } else { vec![2] } }
     fn wired_to(&self, pid: i64, group: &[i64]) -> Option<bool> { self.wiring(pid, group).wired() }
-    /// 2 is wired to the agent; 3 streams to the terminal, or (`child` says) is wired to a file, closed, or cannot be looked at
+    /// 2 is wired to the agent (but a dev server, `tool`); 3 streams to the terminal, or (`child` says) is wired to a
+    /// file, closed, or cannot be looked at
     fn wiring(&self, pid: i64, _group: &[i64]) -> Wiring {
-        if pid == 2 { return Wiring::Agent; }
+        if pid == 2 && !self.st.borrow().arr("panes").iter().any(|p| p.b("tool")) { return Wiring::Agent; }
         match self.st.borrow().arr("panes").iter().find(|p| p.b("child")).map(|p| p.t("child")).as_deref() { Some("file") => Wiring::Elsewhere, Some("closed") => Wiring::Closed, Some("unknown") => Wiring::Unknown, _ => Wiring::Terminal }
     }
     /// 2 is an MCP server, or a dev server the agent left running (`tool`); 3 a command
@@ -35,8 +36,14 @@ impl Fake for FakeHerdr {
         let tool = self.st.borrow().arr("panes").iter().any(|p| p.b("tool"));
         match pid { 2 if tool => Some("node /srv/app/dev-server.js --port 3000".into()), 2 => Some("node /opt/mcp/server.js --stdio".into()), 3 => Some("sleep 600".into()), _ => None }
     }
-    /// Ending a fake agent's process: its pane is at its shell again.
-    fn kill(&self, pid: i64) { for p in self.st.borrow_mut()["panes"].as_array_mut().unwrap() { if p.at("agent").i("pid") == pid { p["agent"] = Value::Null; } } }
+    /// Ending a fake agent's process: its pane is at its shell again. Every process ended is noted (`killed`).
+    fn kill(&self, pid: i64) {
+        let mut st = self.st.borrow_mut();
+        arr(&mut st, "killed").push(json!(pid));
+        for p in st["panes"].as_array_mut().unwrap() { if p.at("agent").i("pid") == pid { p["agent"] = Value::Null; } }
+    }
+    /// 2 and 3 run until they are ended
+    fn alive(&self, pid: i64) -> Option<bool> { [2, 3].contains(&pid).then(|| !self.st.borrow().arr("killed").contains(&json!(pid))) }
     /// The herdr program cannot be found from here (`noProgram`): run where it is not on PATH nor anywhere usual.
     fn found(&self) -> bool { !self.st.borrow().b("noProgram") }
 }
