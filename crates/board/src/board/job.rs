@@ -44,6 +44,8 @@ pub enum Job {
     ChatLeft { id: String },
     /// Into a task's agent: its real herdr pane (`attempt`: the selected attempt's, not the task's).
     OpenAgent { id: String, popup: bool },
+    /// A task's link (`what`: its report, its pull request) in this machine's browser; copied where none opens it.
+    OpenLink { link: String, what: String },
     FreeSize { pids: Vec<i64> },
     /// The first run's answers: which blocks to add to herdr's config.
     Setup { key: Option<String>, sidebar: Option<bool>, file: String },
@@ -111,6 +113,8 @@ pub enum Then {
     /// A setting typed on the settings page was taken: the box it was typed in is emptied. A refused one stays there
     /// to be put right.
     Saved(String),
+    /// Copy this to the clipboard of the terminal the board is in (OSC 52).
+    Copy(String),
     /// A call rang: its id, for the chat to say when no helper took it, or why it ended before it began.
     CallRang { id: String },
 }
@@ -208,6 +212,10 @@ fn run_one(job: Job) -> Done {
             Job::CoordSeen { unseen, to } => { crate::coordinator::requests::seen(&unseen, crate::coordinator::co::Co::of(&crate::herdr::cli::current_socket(), &to)); Done::default() }
             Job::ChatLeft { id } => { crate::finish::chat::left(&id); Done::default() }
             Job::OpenAgent { id, popup } => super::job_far::open_agent(&id, popup),
+            Job::OpenLink { link, what } => match crate::opener::open(&link) {
+                Ok(()) => Done::default(),
+                Err(why) => Done::say(format!("Nothing opens its {what} here ({why}): copied the link instead. {link}"), Ink::Yellow).and(Then::Copy(link)),
+            },
             Job::FreeSize { pids } => {
                 let ended = pids.iter().filter(|p| unsafe { libc::kill(**p as i32, libc::SIGTERM) } == 0).count();
                 if ended > 0 { Done::say(format!("Ended {}. The board has its own size again in a moment.", if ended == 1 { "the remote view of this pane".to_string() } else { format!("{ended} remote views of this pane") }), Ink::Green) }

@@ -11,6 +11,8 @@ use sw::json::*;
 /// The filter row on top and the three groupings of alt+s.
 mod coord_rows;
 mod filters;
+/// The key that opens a task's report or pull request.
+mod open_link;
 
 fn has(text: &str, re: &str) -> bool { regex::Regex::new(re).unwrap().is_match(text) }
 
