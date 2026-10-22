@@ -81,7 +81,8 @@ Coordinator's closing line use them too):
 in its terminal below its shell but the agent and its helpers (an MCP server wired to it), the whole tree, and your
 processes that run from the task's worktree or temporary folder. Never your own checkout, another task's worktree, or
 what runs in the task's other panes (yours, its reviewer's). One started for the task that works elsewhere now is named
-for you to end, not ended: `Still running, end it yourself: node …/x.js (pid 9), in /srv/app.`
+for you to end, not ended: `Still running, end it yourself: node …/x.js (pid 9), in /srv/app.` So is what runs from its
+folders when herdr does not say what runs in its panes: then the agent and your shells there cannot be told apart.
 
 `approve` refuses work whose last review failed, and says what the review found. `approve <id> --anyway` merges it all
 the same. It is for when the human said so in so many words.

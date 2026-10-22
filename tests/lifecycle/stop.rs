@@ -72,3 +72,35 @@ fn what_runs_from_its_worktree_or_temporary_folder_is_ended_your_checkout_is_not
     }
     for c in [&mut yours, &mut away] { let _ = c.kill(); let _ = c.wait(); }
 }
+
+#[test]
+fn where_herdr_does_not_say_what_runs_in_its_panes_what_runs_from_its_worktree_is_named_not_ended() {
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    let t = working(&w, json!({ "child": true }));
+    let mut shell = sleep_in(std::path::Path::new(t.s("worktree")), &[]); // could be your own shell in another of its panes
+    w.patch(|s| s["paneListFails"] = json!(true));
+    let said = sw::actions::talk::stop(t.s("id")).unwrap();
+    assert!(shell.try_wait().unwrap().is_none(), "not ended: {}", said.msg);
+    assert!(said.msg.starts_with("Ended what it started: sleep 600 (pid 3)."), "the agent's own command still goes: {}", said.msg);
+    assert!(said.msg.contains(&format!("sleep 60 (pid {}), in its folders, not ended as herdr does not say what runs in its other panes", shell.id())), "{}", said.msg);
+    let _ = shell.kill(); let _ = shell.wait();
+    drop(w);
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    let t = working(&w, json!({ "child": true }));
+    let mut check = sleep_in(std::path::Path::new(t.s("worktree")), &[]);
+    w.patch(|s| s["processInfoFails"] = json!(true));
+    let said = sw::actions::talk::stop(t.s("id")).unwrap();
+    assert!(check.try_wait().unwrap().is_none() && killed(&w).is_empty(), "nothing ended: {}", said.msg);
+    assert!(said.msg.starts_with("Still running, end it yourself: what runs in its agent's terminal, as herdr does not say what runs in its agent's terminal; "), "{}", said.msg);
+    assert!(said.msg.contains(&format!("sleep 60 (pid {}), in its folders, not ended as herdr does not say what runs in its agent's terminal", check.id())), "{}", said.msg);
+    let _ = check.kill(); let _ = check.wait();
+}
+
+#[test]
+fn what_still_runs_is_named_every_one_and_what_was_ended_is_cut_short() {
+    let names = |a: i32, b: i32| (a..=b).map(|p| format!("x (pid {p})")).collect::<Vec<_>>();
+    let e = sw::actions::stop_ends::Ended { ended: names(1, 8), left: names(101, 108) };
+    let s = e.said();
+    assert!(s.starts_with("Ended what it started: x (pid 1), x (pid 2), x (pid 3), x (pid 4), x (pid 5), and 3 more."), "{s}");
+    assert!((101..=108).all(|p| s.contains(&format!("x (pid {p})"))), "{s}");
+}

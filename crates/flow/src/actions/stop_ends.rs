@@ -14,12 +14,13 @@ use std::path::PathBuf;
 pub struct Ended { pub ended: Vec<String>, pub left: Vec<String> }
 impl Ended {
     pub fn add(&mut self, o: Ended) { self.ended.extend(o.ended); self.left.extend(o.left); }
-    /// In sentences, to follow the stop's own: empty when it ended nothing and nothing is left.
+    /// In sentences, to follow the stop's own: empty when it ended nothing and nothing is left. What it ended may be cut
+    /// short; what still runs never is.
     pub fn said(&self) -> String {
         let few = |v: &[String], sep: &str| if v.len() > 6 { format!("{}{sep}and {} more", v[..5].join(sep), v.len() - 5) } else { v.join(sep) };
         let mut s = vec![];
         if !self.ended.is_empty() { s.push(format!("Ended what it started: {}.", few(&self.ended, ", "))); }
-        if !self.left.is_empty() { s.push(format!("Still running, end it yourself: {}.", few(&self.left, "; "))); }
+        if !self.left.is_empty() { s.push(format!("Still running, end it yourself: {}.", self.left.join("; "))); } // every one, to end by name
         s.join(" ")
     }
 }
@@ -35,34 +36,39 @@ fn folders(t: &Obj) -> Vec<PathBuf> {
 fn cwd(pid: i32) -> Option<String> { std::fs::read_link(format!("/proc/{pid}/cwd")).ok().map(|p| p.display().to_string()) }
 
 /// End what the task's agent started. `agent`: the program herdr sees in its pane (None: no agent there, so nothing in
-/// the pane is ended, only what runs from its folders).
+/// the pane is ended, only what runs from its folders). Where herdr does not say what runs in its panes, nothing in its
+/// folders is ended (the agent and your shells there could not be told apart): each is named instead.
 pub fn end_launched(t: &Obj, agent: Option<&str>) -> Ended {
     let api = crate::flow::task::h(t);
     let link = t.at("link");
     let mut out = Ended::default();
-    let Some(tr) = link.so("pane").and_then(|p| tree(&api, p, agent.unwrap_or(""))) else {
-        if agent.is_some() { out.left.push("what runs in its agent's terminal, which herdr does not say".into()); }
-        return out;
-    };
+    let tr = link.so("pane").and_then(|p| tree(&api, p, agent.unwrap_or("")));
     let own = own_line();
-    let launched: Vec<i32> = if agent.is_some() { tr.launched.iter().map(|p| *p as i32).filter(|p| !own.contains(p)).collect() } else { vec![] };
-    let pane_s: Vec<i32> = tr.own.iter().chain(&tr.launched).map(|p| *p as i32).collect();
+    let launched: Vec<i32> = match (&tr, agent) { (Some(tr), Some(_)) => tr.launched.iter().map(|p| *p as i32).filter(|p| !own.contains(p)).collect(), _ => vec![] };
+    let pane_s: Vec<i32> = tr.iter().flat_map(|tr| tr.own.iter().chain(&tr.launched)).map(|p| *p as i32).collect();
     // what runs in the task's other panes (yours, its reviewer's) is theirs: under their shells
-    let others: Vec<String> = api.panes(link.so("workspace")).unwrap_or_default().iter().map(|p| p.t("pane_id")).chain([link.at("reviewer").t("pane")]).filter(|p| !p.is_empty() && p != link.s("pane")).collect();
-    let shells: Vec<Option<i64>> = others.iter().filter(|p| api.pane_get(p).is_some()).map(|p| api.shell_pid(p)).collect(); // a pane gone holds nothing
-    let mut under: Vec<i32> = tr.shell.into_iter().chain(shells.iter().flatten().copied()).map(|p| p as i32).collect();
+    let others: Option<Vec<String>> = api.panes(link.so("workspace")).ok().map(|ps| ps.iter().map(|p| p.t("pane_id")).chain([link.at("reviewer").t("pane")]).filter(|p| !p.is_empty() && p != link.s("pane")).collect());
+    let shells: Vec<Option<i64>> = others.iter().flatten().filter(|p| api.pane_get(p).is_some()).map(|p| api.shell_pid(p)).collect(); // a pane gone holds nothing
+    let mut under: Vec<i32> = tr.iter().filter_map(|tr| tr.shell).chain(shells.iter().flatten().copied()).map(|p| p as i32).collect();
     under.dedup();
+    let unsaid = if tr.is_none() { Some("herdr does not say what runs in its agent's terminal") } else if others.is_none() || shells.iter().any(|s| s.is_none()) { Some("herdr does not say what runs in its other panes") } else { None };
     let mut from_folders: Vec<i32> = vec![];
-    if shells.iter().any(|s| s.is_none()) { out.left.push("what runs from its worktree, as herdr does not say what runs in its other panes".into()); }
-    else { for d in folders(t) { for p in in_folder(&d) { if !pane_s.contains(&p) && !runs_under(p, &under) && !from_folders.contains(&p) && !this_program(p) { from_folders.push(p); } } } }
+    for d in folders(t) { for p in in_folder(&d) { if !pane_s.contains(&p) && !launched.contains(&p) && !runs_under(p, &under) && !from_folders.contains(&p) && !this_program(p) { from_folders.push(p); } } }
+    if let Some(why) = unsaid {
+        if tr.is_none() && agent.is_some() { out.left.push(format!("what runs in its agent's terminal, as {why}")); }
+        let theirs = |p: i32| agent.is_some_and(|a| !a.is_empty() && crate::herdr::procs::command(p as i64).and_then(|c| c.split_whitespace().next().map(|w| w.rsplit('/').next().unwrap_or(w) == a)).unwrap_or(false));
+        for p in from_folders.drain(..).filter(|p| !theirs(*p)) { out.left.push(format!("{}, in its folders, not ended as {why}", found(p as i64))); }
+    }
     let all: Vec<i32> = launched.iter().chain(&from_folders).copied().collect();
     let named: Vec<(i32, String)> = all.iter().map(|p| (*p, found(*p as i64))).collect();
     let stays = end(&all);
     for (p, w) in named { if stays.contains(&p) { out.left.push(format!("{w}, which would not end")); } else { out.ended.push(w); } }
     // started for the task, but out of its terminal and its folders now: not the board's to end
-    for p in started_in(&crate::temp::of(t)) {
-        if pane_s.contains(&p) || all.contains(&p) || runs_under(p, &under) { continue; }
-        out.left.push(match cwd(p) { Some(d) => format!("{}, in {d}", found(p as i64)), None => found(p as i64) });
+    if unsaid.is_none() {
+        for p in started_in(&crate::temp::of(t)) {
+            if pane_s.contains(&p) || all.contains(&p) || runs_under(p, &under) { continue; }
+            out.left.push(match cwd(p) { Some(d) => format!("{}, in {d}", found(p as i64)), None => found(p as i64) });
+        }
     }
     out
 }

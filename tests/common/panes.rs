@@ -13,6 +13,7 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
     let find = |st: &Value, id: &str| st.arr("panes").iter().position(|p| p.s("pane_id") == id);
     match verb {
         "process-info" => {
+            if st.b("processInfoFails") { return fail("timeout", "timed out"); }
             let Some(pi) = flag("--pane").and_then(|id| find(st, &id)) else { return fail("pane_not_found", "pane not found") };
             let p = &st["panes"][pi];
             let shell = 4194400;
@@ -35,6 +36,7 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
             let own = st.at("layouts").at(p.s("pane_id")).clone();
             return ok(json!({ "type": "pane_layout", "layout": if own.is_object() { own } else { json!({ "area": area, "zoomed": false, "focused_pane_id": p.at("pane_id"), "panes": [{ "pane_id": p.at("pane_id"), "focused": true, "rect": area }], "splits": [], "tab_id": p.at("tab_id"), "workspace_id": p.at("workspace_id") }) } }));
         }
+        "list" if st.b("paneListFails") => return fail("timeout", "timed out"),
         "list" => { let w = flag("--workspace"); let ps: Vec<Value> = st.arr("panes").iter().filter(|p| w.as_deref().map(|w| p.s("workspace_id") == w).unwrap_or(true)).map(F::pane_out).collect(); return ok(json!({ "type": "pane_list", "panes": ps })); }
         _ => {}
     }
