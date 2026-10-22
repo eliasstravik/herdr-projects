@@ -1,6 +1,6 @@
 //! The merge.by setting: a green task merges by itself, the repo's own file can never switch that on, one whose review
-//! fails still asks, and turning it off while a task waits to merge by itself (also before its runner ran) waits for
-//! your yes again.
+//! fails still asks, turning it off while a task waits to merge by itself (also before its runner ran) waits for
+//! your yes again, and a task delegated again asks once only when it was asking you then.
 use crate::common;
 use common::*;
 use serde_json::{json, Value};
@@ -105,4 +105,54 @@ fn auto_merge_turned_off_after_the_board_started_a_merge_before_its_runner_ran_n
     // your own yes is not the board's: it merges with the setting off
     finish_line::approve(&id, None, false).unwrap(); let t = settle(&id);
     assert_eq!(t.s("stage"), "done", "{}", t.at("failure")); assert!(merged(&w, "f.txt"));
+}
+
+#[test]
+fn auto_merge_on_a_task_stopped_mid_work_and_delegated_again_merges_by_itself_on_a_passing_review() {
+    let w = world_with(Opts { repo: true, settings: json!({ "merge.by": "itself", "review.rounds": 2 }), ..Default::default() });
+    let crit = verdict(json!([{ "severity": "critical", "subject": "Deletes the data", "where": "f.txt", "proof": "ran it" }]));
+    w.script(json!({ "worker": [work(1, "f.txt"), { "status": "working" }], "reviewer": [crit] }));
+    let id = w.add("Stopped mid-work");
+    delegate(&id);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "working", "the review was sent back and its agent works on it: {}", t.at("failure"));
+    assert!(t.at("review").is_object() && !t.b("requireApproval"));
+    sw::actions::talk::stop(&id).unwrap(); assert_eq!(task(&id).s("stage"), "stopped"); assert!(!task(&id).b("requireApproval"));
+    w.script(json!({ "worker": [work(2, "f.txt")], "reviewer": [verdict(json!([]))] }));
+    delegate(&id);
+    assert!(!task(&id).b("requireApproval"), "a review it once had is no reason to ask");
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{} {}", t.s("msg"), t.at("failure")); assert_eq!(read(&w.root.join("f.txt")), "2\n");
+}
+
+#[test]
+fn auto_merge_on_a_task_stopped_or_delegated_again_while_it_asked_you_asks_again_once() {
+    let w = world_with(Opts { repo: true, settings: json!({ "merge.by": "itself", "review.rounds": 1 }), ..Default::default() });
+    let crit = verdict(json!([{ "severity": "critical", "subject": "Deletes the data", "where": "a file", "proof": "ran it" }]));
+    let asking = |title: &str, file: &str| -> String {
+        w.script(json!({ "worker": [work(1, file), work(2, file)], "reviewer": [crit.clone(), crit.clone()] }));
+        let id = w.add(title);
+        delegate(&id);
+        let mut t = settle(&id);
+        for _ in 0..2 { if t.s("stage") != "approval" { t = settle(&id); } }
+        assert_eq!((t.t("stage"), t.at("review").at("pass").clone()), ("approval".into(), json!(false)), "{}", t.at("failure"));
+        id
+    };
+    let again = |id: &str, file: &str| {
+        w.script(json!({ "worker": [work(3, file)], "reviewer": [verdict(json!([]))] }));
+        delegate(id);
+        let t = settle(id);
+        assert_eq!((t.t("stage"), t.at("review").at("pass").clone(), t.b("requireApproval")), ("approval".into(), json!(true), true), "{}", t.at("failure"));
+        assert!(t.s("msg").starts_with("Approve to merge?"), "{}", t.s("msg"));
+        pass(&w); assert_eq!(settle(id).s("stage"), "approval"); assert!(!merged(&w, file));
+        // once: your yes merges it
+        finish_line::approve(id, None, false).unwrap(); let t = settle(id);
+        assert_eq!(t.s("stage"), "done", "{}", t.at("failure")); assert!(merged(&w, file));
+    };
+    let stopped = asking("Stopped while asking", "f.txt");
+    sw::actions::talk::stop(&stopped).unwrap();
+    assert_eq!((task(&stopped).t("stage"), task(&stopped).b("requireApproval")), ("stopped".into(), true));
+    again(&stopped, "f.txt");
+    let delegated = asking("Delegated while asking", "g.txt");
+    again(&delegated, "g.txt");
 }

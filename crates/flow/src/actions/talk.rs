@@ -145,6 +145,7 @@ pub fn stop(id: &str) -> Res<Task> {
     let a = if flow::live::assert_live(&cur).is_ok() { flow::task::h(&cur).agent_get(cur.at("link").s("pane")).ok().flatten() } else { None };
     let t = update(&cid, |t| {
         let seq = a.as_ref().map(|a| a.at("state_change_seq").clone()).filter(|v| !v.is_null()).unwrap_or_else(|| if t.at("last").has("seq") { t.at("last").at("seq").clone() } else { json!(0) });
+        if t.b("mergeIntent") || t.s("stage") == "approval" { t.put("requireApproval", true); } // stopped while it asked you: its next round asks again, once
         t.put("stage", "stopped"); t.put("stoppedAt", now()); t.put("stopSeq", seq); t.put("sawIdleAfterStop", false);
         for k in ["expectedWake", "watch", "mergeIntent", "waiting", "limitStop"] { t.put(k, Value::Null); }
         t.put("turnOpen", false); t.put("msg", "");
