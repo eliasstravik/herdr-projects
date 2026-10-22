@@ -47,7 +47,7 @@ fn under_review_the_web_board_another_machine_and_a_dialog_say_what_the_reviewer
     assert_eq!(boxed(&mut s)[..2].to_vec(), vec!["Reviewer:", "One fault left: the header is cut."]);
     // the web board gets the same parts, and its text box says what a message does now
     let side = sw::webui::model::side::side_of(&mut s.s, &s.theme.clone());
-    assert_eq!(side.at("chat").arr("parts").last().unwrap(), &json!({ "by": "Reviewer", "text": "One fault left: the header is cut.", "mine": false, "tone": "", "raw": false }));
+    assert_eq!(side.at("chat").arr("parts").last().unwrap(), &json!({ "by": "Reviewer", "text": "One fault left: the header is cut.", "mine": false, "tone": "", "raw": false, "sent": false }));
     assert_eq!(side.at("chat").at("raw"), &json!(false));
     assert_eq!(side.at("send").s("place"), "Send message to the agent: the review goes on unless the code changes");
     // another machine's task: what that machine sent; one on an older version sends none, and that is said
