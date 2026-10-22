@@ -84,7 +84,9 @@ Every command accepts `--json`. Below, `herdr-projects` stands for that path.
   it) and its temporary files are freed; its worktree, branch and history stay. `restore <id>` brings it back to the
   list and starts nothing. `clear <id>` stops its agent and removes the task; a worktree with unsaved or unmerged work
   is kept on disk, and it says where (only when the human plainly asks). `archive --done [--repo NAME]` archives every done task of that repo (or of every
-  repo) in one go; one that works, waits, is to do or is pinned stays.
+  repo) in one go; one that works, waits, is to do or is pinned stays. `archive --repo NAME` archives a whole project
+  with its tasks (stopping their agents and its coordinator) and `restore --repo NAME` brings it back as it was: only
+  when the human asks.
 
 If you are an agent or a reviewer the board itself started on a task, your rules were given to you at the start, and
 they come first: do nothing to the board beyond your own task unless a human explicitly told you to. An explicit
