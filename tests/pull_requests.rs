@@ -58,7 +58,8 @@ fn pull_requests_failed_checks_wake_the_agent_capped_and_the_blocker_survives_a_
     let w = pr_world(json!({ "review.rounds": 1 }));
     let id = to_approval(&w, "CI fails");
     let t = task(&id);
-    w.script(json!({ "worker": [{ "files": { "f.txt": "fixed\n" }, "commit": "fix", "note": "Fixed CI." }] }));
+    // the agent finds nothing to change: the commit that failed on GitHub is still the one that would merge
+    w.script(json!({ "worker": [{ "note": "Nothing to fix here." }] }));
     w.gh_says(json!({ "view": { "state": "OPEN", "headRefOid": t.at("prHead"), "statusCheckRollup": [{ "name": "build", "conclusion": "FAILURE" }], "comments": [], "reviews": [], "author": { "login": "me" } } }));
     poll_prs();
     let last = pane_prompts(&w, &id).last().cloned().unwrap_or_default();
@@ -66,7 +67,8 @@ fn pull_requests_failed_checks_wake_the_agent_capped_and_the_blocker_survives_a_
     let t = settle(&id);
     assert_eq!(t.s("stage"), "approval"); assert_eq!(t.at("prFailure").s("title"), "Pull request checks failed");
     assert!(t.s("msg").contains("pull request still blocked"), "local success cannot clear failed CI: {}", t.s("msg"));
-    // CI on the new head passes: normal approval wording returns
+    assert_eq!(t.at("prFailure").s("head"), t.s("prHead"));
+    // CI on that head passes: normal approval wording returns
     w.gh_says(json!({ "view": { "state": "OPEN", "headRefOid": task(&id).at("prHead"), "statusCheckRollup": [{ "name": "build", "conclusion": "SUCCESS" }], "comments": [], "reviews": [], "author": { "login": "me" } } }));
     poll_prs();
     let t = task(&id);

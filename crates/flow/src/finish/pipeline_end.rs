@@ -22,8 +22,10 @@ pub struct Ctx<'a> {
     pub tree: &'a str, pub folder: &'a Path, pub root: &'a Path, pub check: &'a str, pub note: String, pub kept: Option<Value>, pub kept_how: Option<Value>,
 }
 fn finished(text: &str) -> String { let f = first_line(text); if f.is_empty() { "Finished".into() } else { f } }
-/// A pull-request blocker found by polling survives a passing local check: remote CI must confirm.
-fn hold_pr_failure(g: &mut Guard, t: &Task) -> Res<bool> {
+/// A pull-request blocker found by polling survives a passing local check: remote CI must confirm. Failed checks of an
+/// older commit than the one pushed now say nothing of it: they are cleared, and GitHub's checks are looked at anew (#309).
+fn hold_pr_failure(g: &mut Guard, t: &mut Task) -> Res<bool> {
+    if crate::land::checks::stale(t, t.s("prHead")) { *t = g.set(|t| { t.put("prFailure", Value::Null); if t.s("prState") == "failing" { t.put("prState", Value::Null); } })?; }
     if !t.b("prFailure") { return Ok(false); }
     let h = g.set(|t| { t.put("stage", "approval"); t.put("failure", Value::Null); let m = format!("Local checks passed; pull request still blocked: {}. Wait for remote confirmation or send the details to the agent", t.at("prFailure").s("title")); t.put("msg", m); })?;
     flow::sidebar::tell_sidebar(&h);
@@ -44,7 +46,7 @@ pub fn after_review(c: Ctx, g: &mut Guard) -> Res<()> {
     let ch = work(Some(&t));
     // Nothing to land: it is simply done, unless work outside a repo is reviewed too (review "always").
     if !to_land && ch.s("review.when") != "always" && !(c.research && ch.s("review.when") != "never") {
-        if hold_pr_failure(g, &t)? { return Ok(()); }
+        if hold_pr_failure(g, &mut t)? { return Ok(()); }
         return done(g, &t, &format!("{}{}", finished(c.text), c.note), None);
     }
     // An adversarial review before it reaches you. Its settings are read now, as the review starts.
@@ -130,7 +132,7 @@ pub fn after_review(c: Ctx, g: &mut Guard) -> Res<()> {
         }
         let stat = change.as_ref().map(|x| x.at("stat").clone()).unwrap_or(Value::Null);
         t = g.set(|t| { t.put("review", review.clone().unwrap_or(Value::Null)); t.put("stat", stat.clone()); t.put("reviewedHead", head_v.clone()); t.obj_mut("mergeIntent").put("verifiedHead", head_v.clone()); })?;
-        if hold_pr_failure(g, &t)? { return Ok(()); }
+        if hold_pr_failure(g, &mut t)? { return Ok(()); }
         g.set(|t| { t.put("stage", "merging"); t.put("msg", "Merging"); })?;
         return crate::land::land_core(id, g);
     }
@@ -140,7 +142,7 @@ pub fn after_review(c: Ctx, g: &mut Guard) -> Res<()> {
     }
     let stat = change.as_ref().map(|x| x.at("stat").clone()).unwrap_or(Value::Null);
     t = g.set(|t| { t.put("review", review.clone().unwrap_or(Value::Null)); t.put("stat", stat.clone()); t.put("reviewedHead", head_v.clone()); t.put("mergeFailed", false); })?;
-    if hold_pr_failure(g, &t)? { return Ok(()); }
+    if hold_pr_failure(g, &mut t)? { return Ok(()); }
     // A task that merges by itself (`merge.by`, read now) still wants a review that passed the gate.
     let skip = c.sync.map(|s| !sync::held_why(s).is_empty()).unwrap_or(false);
     if by_itself(&t) && !t.b("requireApproval") && !t.b("chat") && !skip && (!review_needed || (review.is_some() && passed)) {
