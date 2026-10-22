@@ -33,6 +33,7 @@ with `✗` is a problem, with what to do under it. It exits 1 when there is a pr
 | other machines | one does not answer, runs an older version, or cannot ask this one | what `herdr-projects machines` says ([other machines](other-machines.md)) |
 | disk space | under 10 GB free on a disk that holds the board's data, your repos, worktrees, build caches or temporary files: a task's setup may fail there | free some space, starting with the leftovers below |
 | leftovers | the worktree of a done or archived task (a clean-up keeps one with unsaved work), a worktree on a task branch no task has, one git still lists whose folder is gone, an old warm build in `~/.cache/herdr-projects` | the `git worktree remove`, `git worktree prune` or `rm -rf` it names. It never removes anything itself; `herdr-projects sweep` removes what is provably an ended task's ([disk space](disk-space.md)) |
+| coordinators' queues | a message waits undelivered for more than a minute, as when `coordinator tell` ran where herdr could not be found | open the board in Herdr, which delivers it; in that shell, set `HERDR_BIN_PATH` to herdr's full path ([the Coordinator](coordinator.md)) |
 | older installs | herdr-superwork or herdr-projects 0.2 still in the way | it takes over what it can, and says what is left ([older installs](old-installs.md)) |
 
 Other machines are asked only when there are some, and each for at most 5 seconds. A done task's worktree is no

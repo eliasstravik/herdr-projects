@@ -27,6 +27,12 @@ herdr-projects coordinator stop
 Restart and new are commands, not board keys. You can also just ask the Coordinator to do them. `new --agent …` changes
 only the next one: your default stays as it is.
 
+`coordinator tell` run where herdr cannot be found (an SSH forced command, cron, systemd: herdr is not on PATH, not in
+`~/.local/bin`, `~/.cargo/bin`, `~/bin`, `/usr/local/bin` or `/opt/homebrew/bin`, and not on a login shell's PATH)
+keeps the message in the queue but does not say `sent`: it says the message is queued, not delivered, and why, and exits
+1. The board and its keeper deliver it once they run in herdr; `HERDR_BIN_PATH` set to herdr's full path delivers from
+there. `herdr-projects doctor` names messages that wait in a queue for more than a minute.
+
 ## Its row, and its settings
 
 **Its row is the top row**: `All machines`, or the only machine. It reads as every coordinator's row does: its mark

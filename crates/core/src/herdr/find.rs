@@ -1,6 +1,6 @@
 //! Where the herdr program is when this process's PATH does not have it: a plain `ssh host cmd` gets no login shell,
 //! so `~/.local/bin` and the like are often missing. The usual install spots are looked in, then a login shell's PATH,
-//! once per process. Used by cli.rs (`bin`).
+//! once per process. Used by cli.rs (`bin`, `found`).
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -9,7 +9,7 @@ pub const SPOTS: [&str; 5] = ["~/.local/bin", "~/.cargo/bin", "~/bin", "/usr/loc
 /// The usual spots, `~` being `home`.
 pub fn spots(home: &Path) -> Vec<PathBuf> { SPOTS.iter().map(|s| s.strip_prefix("~/").map(|r| home.join(r)).unwrap_or_else(|| PathBuf::from(s))).collect() }
 
-fn runs(p: &Path) -> bool { use std::os::unix::fs::PermissionsExt; std::fs::metadata(p).map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0).unwrap_or(false) }
+pub fn runs(p: &Path) -> bool { use std::os::unix::fs::PermissionsExt; std::fs::metadata(p).map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0).unwrap_or(false) }
 /// The first of `dirs` (a PATH, `:` between) that has a program `name` that runs.
 pub fn in_dirs(name: &str, dirs: &str) -> Option<PathBuf> { dirs.split(':').filter(|d| !d.is_empty()).map(|d| Path::new(d).join(name)).find(|p| runs(p)) }
 /// Where `name` is: None when `path` has it (the name alone runs it), else the first of `spots` that has it, else the

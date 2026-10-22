@@ -44,6 +44,8 @@ impl Fake for FakeHerdr {
     }
     /// 2 and 3 run until they are ended
     fn alive(&self, pid: i64) -> Option<bool> { [2, 3].contains(&pid).then(|| !self.st.borrow().arr("killed").contains(&json!(pid))) }
+    /// The herdr program cannot be found from here (`noProgram`): run where it is not on PATH nor anywhere usual.
+    fn found(&self) -> bool { !self.st.borrow().b("noProgram") }
 }
 impl FakeHerdr {
     pub fn ws_out(st: &Value, w: &Value) -> Value {
