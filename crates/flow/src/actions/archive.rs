@@ -9,7 +9,8 @@ use crate::store::files::{marker, with_task_lock, SLOT_STAGES};
 use crate::store::repos::folder_of;
 use crate::store::tasks::{find, get, remove, update, update_wait, Change, Task};
 
-/// Archive closes the task's herdr workspace (the agent ends with it) and keeps everything else.
+/// Archive closes the task's own herdr workspace (the agent ends with it) and frees its temporary files; the
+/// worktree, branch and history stay.
 pub fn archive(id: &str) -> Res<Task> {
     let cur = find(id)?;
     if cur.b("archivedAt") { return Ok(cur); }
