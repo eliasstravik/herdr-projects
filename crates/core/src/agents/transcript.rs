@@ -111,11 +111,12 @@ mod transcript_tests {
     use std::fs;
     /// Tests share the process environment and the memo, so they take turns.
     static TURN: Mutex<()> = Mutex::new(());
-    struct Home { root: PathBuf, was: Option<std::ffi::OsString>, _turn: std::sync::MutexGuard<'static, ()> }
+    struct Home { root: PathBuf, was: Option<std::ffi::OsString>, misses: bool, _turn: std::sync::MutexGuard<'static, ()> }
     impl Drop for Home {
         fn drop(&mut self) {
             unsafe { match &self.was { Some(v) => std::env::set_var("PI_CODING_AGENT_DIR", v), None => std::env::remove_var("PI_CODING_AGENT_DIR") } }
             FOUND.lock().unwrap().clear();
+            MISSES.store(self.misses, std::sync::atomic::Ordering::Relaxed);
             let _ = fs::remove_dir_all(&self.root);
         }
     }
@@ -128,7 +129,7 @@ mod transcript_tests {
         let was = std::env::var_os("PI_CODING_AGENT_DIR");
         unsafe { std::env::set_var("PI_CODING_AGENT_DIR", &root); }
         FOUND.lock().unwrap().clear();
-        Home { root, was, _turn: turn }
+        Home { root, was, misses: MISSES.load(std::sync::atomic::Ordering::Relaxed), _turn: turn }
     }
     fn save(h: &Home, dir: &str, session: &str) -> PathBuf {
         let d = h.root.join("sessions").join(dir);
@@ -223,6 +224,7 @@ mod transcript_tests {
     #[ignore]
     fn bench_lookup_3k_dirs() {
         let h = home("bench", 3000);
+        remember_misses();
         save(&h, "--tmp-hp-project--", "sw-b");
         let (sessions, cwd, n) = (h.root.join("sessions"), Path::new("/tmp/hp-project"), 50u32);
         let t = Instant::now();
