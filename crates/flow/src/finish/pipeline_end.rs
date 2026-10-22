@@ -38,6 +38,12 @@ pub fn done(g: &mut Guard, t: &Task, msg: &str, review: Option<&Value>) -> Res<(
     crate::land::tidy(d.s("id"), "merged"); // done with nothing to merge leaves herdr's sidebar like merged work does
     Ok(())
 }
+/// Work that is on main already (the agent merged it itself) closes its issues (`merge.closes`) as a merge does: the
+/// words for its line, after a space. Nothing for work that needed no change.
+fn on_main_closes(t: &Obj, root: &Path) -> String {
+    let closed = if t.s("doneWhy").starts_with("Already") { crate::land::closes::after_landing(t, root, "") } else { String::new() };
+    if closed.is_empty() { closed } else { format!(" {closed}") }
+}
 pub fn after_review(c: Ctx, g: &mut Guard) -> Res<()> {
     let id = c.id;
     let mut t = g.check()?;
@@ -47,7 +53,7 @@ pub fn after_review(c: Ctx, g: &mut Guard) -> Res<()> {
     // Nothing to land: it is simply done, unless work outside a repo is reviewed too (review "always").
     if !to_land && ch.s("review.when") != "always" && !(c.research && ch.s("review.when") != "never") {
         if hold_pr_failure(g, &mut t)? { return Ok(()); }
-        return done(g, &t, &format!("{}{}", finished(c.text), c.note), None);
+        return done(g, &t, &format!("{}{}{}", finished(c.text), c.note, on_main_closes(&t, c.root)), None);
     }
     // An adversarial review before it reaches you. Its settings are read now, as the review starts.
     let ch = work(get(id).as_ref());
@@ -137,7 +143,7 @@ pub fn after_review(c: Ctx, g: &mut Guard) -> Res<()> {
         return crate::land::land_core(id, g);
     }
     if !to_land {
-        let msg = format!("{}{}{}", review.as_ref().map(|r| format!("{} ", gate::sentence(r, "accept"))).unwrap_or_default(), finished(c.text), c.note);
+        let msg = format!("{}{}{}{}", review.as_ref().map(|r| format!("{} ", gate::sentence(r, "accept"))).unwrap_or_default(), finished(c.text), c.note, on_main_closes(&t, c.root));
         return done(g, &t, &msg, review.as_ref());
     }
     let stat = change.as_ref().map(|x| x.at("stat").clone()).unwrap_or(Value::Null);

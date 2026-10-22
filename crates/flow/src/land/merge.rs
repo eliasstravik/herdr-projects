@@ -169,9 +169,17 @@ pub fn land_core(id: &str, g: &mut Guard) -> Res<()> {
         gh(&["pr", "ready", &pr], &root, 60000);
         // GitHub's own checks on it (`merge.checks`): still running it waits, failed it goes back (checks.rs).
         if !super::checks::before_merge(id, g, &t, &root)? { return Ok(()); }
-        // The issues it closes (`merge.closes`) said since it was opened: on its body now. Failing that, they are closed
-        // with gh once it has merged (closes.rs).
-        let _ = super::closes::onto_pr(&t, t.s("pr"), &root);
+        // The issues it closes (`merge.closes`) as said now: on its body, and the board's lines of those it no longer
+        // names off it. A line that could not be added: closed with gh once it has merged. One that could not be taken
+        // off would close an issue the task no longer names: nothing merges (closes.rs).
+        match super::closes::onto_pr(&t, t.s("pr"), &root) {
+            Ok(on) => { g.set(|t| t.put("closesOnPr", json!(on)))?; }
+            Err(why) if !super::closes::stale(&t).is_empty() => {
+                let gone = super::closes::stale(&t).iter().map(|n| format!("Closes #{n}")).collect::<Vec<_>>().join(", ");
+                return fail(g, "Could not take an issue off the pull request", &format!("Pull request: {}\nmerge.closes no longer names: {gone}\n\ngh pr edit:\n{why}\n\nNothing was merged: GitHub would close that issue.", t.s("pr")), "Make sure gh is logged in and reaches GitHub (gh auth status), or take those lines off the pull request's description yourself, then approve again.", no_fix());
+            }
+            Err(_) => {}
+        }
         let mut a = vec!["pr", "merge", pr.as_str()];
         let how_flag = format!("--{how}");
         a.push(&how_flag);

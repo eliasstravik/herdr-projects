@@ -152,9 +152,11 @@ itself: never for you or a repo. `show <id>` lists it with the rest.
 
 - **Through a pull request**, its body gets a `Closes #2203` line for each, so GitHub closes them when it merges into
   the default branch. A pull request the agent opened itself gets the lines it lacks added (`gh pr edit`); so does one
-  opened before the setting was said, right before it merges.
+  opened before the setting was said, right before it merges. Changed or cleared since, the board takes its own lines of
+  the issues no longer named off again before it merges; while it cannot, nothing merges (the task says why).
 - **With no pull request** (a local merge), and through one that merges into another branch than the default, the
   board closes each with `gh issue close` once the merge has landed, with a comment naming the task and the merge commit.
+  So it does for work the agent put on main itself (`Already merged in #133`); work that needed no change closes none.
 
 Nothing is closed on a merge that failed. A close that fails never fails the merge, and an issue closed already is
 fine: the task's line says what was closed (`Merged into main. Closed #2203, #2204.`), or which could not be and why.

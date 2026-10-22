@@ -110,6 +110,19 @@ fn work_the_agent_merged_in_its_own_pull_request_is_done_naming_it() {
 }
 
 #[test]
+fn work_the_agent_merged_itself_closes_the_issues_of_merge_closes() {
+    let w = pr_world();
+    w.gh_says(json!({ "prs": [{ "number": 133, "url": "https://github.com/o/r/pull/133", "state": "MERGED" }] }));
+    w.script(json!({ "worker": [work(squash_to_main())] }));
+    let id = sw::actions::filing::add(&w.root, "Release", sw::actions::filing::AddOpts { settings: vec![("merge.closes".into(), json!("12"))], ..Default::default() }).unwrap().t("id");
+    delegate(&id);
+    let t = settle(&id);
+    assert_eq!(t.s("doneWhy"), "Already merged in #133", "{} {}", t.s("msg"), t.at("failure"));
+    assert!(gh_log(&w).contains("issue close 12 --comment Closed by task"), "{}", gh_log(&w));
+    assert!(t.s("msg").contains("Already merged in #133. Closed #12."), "{}", t.s("msg"));
+}
+
+#[test]
 fn work_that_is_not_on_main_is_never_done_whatever_was_merged_before() {
     let w = pr_world();
     // An older pull request of the branch was merged; the work since is not on main: a new one is opened.

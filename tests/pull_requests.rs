@@ -136,3 +136,45 @@ fn a_pull_request_the_board_opens_closes_the_issues_of_merge_closes_by_its_body(
     assert!(t.s("msg").starts_with("Merged: https://github.com/o/r/pull/7. GitHub closes #12, #13."), "{}", t.s("msg"));
     assert!(!regex::Regex::new("pr edit|issue close").unwrap().is_match(&gh_log(&w)), "GitHub closes them itself: {}", gh_log(&w));
 }
+
+fn body_now(w: &World) -> String { serde_json::from_str::<serde_json::Value>(&sw::flow::git::gh(&["pr", "view", "7", "--json", "body"], &w.root, 1000).stdout).unwrap().t("body") }
+fn closing(w: &World, issues: &str) -> String {
+    w.script(json!({ "worker": [step(1)] }));
+    let id = sw::actions::filing::add(&w.root, "Fix it", sw::actions::filing::AddOpts { settings: vec![("merge.closes".into(), json!(issues))], ..Default::default() }).unwrap().t("id");
+    delegate(&id);
+    assert_eq!(settle(&id).s("stage"), "approval");
+    id
+}
+fn closes(id: &str, issues: &str) { sw::store::settings::change::set_value("merge.closes", &json!(issues), &sw::store::settings::lookup::Scope::task(&task(id))).unwrap(); }
+
+#[test]
+fn an_issue_taken_off_merge_closes_is_taken_off_its_pull_request_before_it_merges() {
+    let w = pr_world(json!({}));
+    let id = closing(&w, "12, 13");
+    closes(&id, "13, 14");
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
+    let body = body_now(&w);
+    assert!(!body.contains("#12") && body.contains("Closes #13") && body.contains("Closes #14"), "{body}");
+    assert!(t.s("msg").contains("GitHub closes #13, #14."), "{}", t.s("msg"));
+    assert!(!gh_log(&w).contains("issue close"), "{}", gh_log(&w));
+}
+
+#[test]
+fn a_cleared_merge_closes_leaves_no_closes_line_and_nothing_merges_while_it_cannot_be_taken_off() {
+    let w = pr_world(json!({}));
+    let id = closing(&w, "12");
+    closes(&id, "none");
+    w.gh_says(json!({ "editFail": "HTTP 502" }));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!((t.s("stage"), t.at("failure").s("title")), ("approval", "Could not take an issue off the pull request"));
+    assert!(t.at("failure").s("detail").contains("HTTP 502") && !gh_log(&w).contains("pr merge"), "{}", gh_log(&w));
+    w.gh_says(json!({}));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
+    assert!(!body_now(&w).contains("Closes"), "{}", body_now(&w));
+    assert!(!t.s("msg").contains("closes") && !gh_log(&w).contains("issue close"), "{}", t.s("msg"));
+}
