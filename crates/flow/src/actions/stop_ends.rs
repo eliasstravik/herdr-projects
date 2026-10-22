@@ -33,6 +33,8 @@ fn folders(t: &Obj) -> Vec<PathBuf> {
     v.push(crate::temp::of(t));
     v.into_iter().filter(|d| std::fs::symlink_metadata(d).map(|m| m.is_dir()).unwrap_or(false)).collect() // never through a link
 }
+/// Is the pane gone, as herdr says in so many words? A pane herdr cannot be asked about is not: it may hold yours.
+fn gone(api: &crate::herdr::Herdr, pane: &str) -> bool { matches!(api.call(crate::herdr::cli::args(&["pane", "get", pane])), Err(e) if e.code == "pane_not_found") }
 fn cwd(pid: i32) -> Option<String> { std::fs::read_link(format!("/proc/{pid}/cwd")).ok().map(|p| p.display().to_string()) }
 
 /// End what the task's agent started. `agent`: the program herdr sees in its pane (None: no agent there, so nothing in
@@ -48,7 +50,7 @@ pub fn end_launched(t: &Obj, agent: Option<&str>) -> Ended {
     let pane_s: Vec<i32> = tr.iter().flat_map(|tr| tr.own.iter().chain(&tr.launched)).map(|p| *p as i32).collect();
     // what runs in the task's other panes (yours, its reviewer's) is theirs: under their shells
     let others: Option<Vec<String>> = api.panes(link.so("workspace")).ok().map(|ps| ps.iter().map(|p| p.t("pane_id")).chain([link.at("reviewer").t("pane")]).filter(|p| !p.is_empty() && p != link.s("pane")).collect());
-    let shells: Vec<Option<i64>> = others.iter().flatten().filter(|p| api.pane_get(p).is_some()).map(|p| api.shell_pid(p)).collect(); // a pane gone holds nothing
+    let shells: Vec<Option<i64>> = others.iter().flatten().filter(|p| !gone(&api, p)).map(|p| api.shell_pid(p)).collect();
     let mut under: Vec<i32> = tr.iter().filter_map(|tr| tr.shell).chain(shells.iter().flatten().copied()).map(|p| p as i32).collect();
     under.dedup();
     let unsaid = if tr.is_none() { Some("herdr does not say what runs in its agent's terminal") } else if others.is_none() || shells.iter().any(|s| s.is_none()) { Some("herdr does not say what runs in its other panes") } else { None };

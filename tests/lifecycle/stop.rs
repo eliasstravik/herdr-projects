@@ -104,3 +104,24 @@ fn what_still_runs_is_named_every_one_and_what_was_ended_is_cut_short() {
     assert!(s.starts_with("Ended what it started: x (pid 1), x (pid 2), x (pid 3), x (pid 4), x (pid 5), and 3 more."), "{s}");
     assert!((101..=108).all(|p| s.contains(&format!("x (pid {p})"))), "{s}");
 }
+
+#[test]
+fn what_runs_in_your_own_pane_of_its_space_is_never_ended_also_when_herdr_cannot_be_asked_about_it() {
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    let t = working(&w, json!({ "child": true }));
+    let tree = std::path::PathBuf::from(t.s("worktree"));
+    // a pane you split off in its space, whose shell (this test's process) runs a command in the worktree
+    let mine = sw::herdr::Herdr::new(None).pane_split(t.at("link").s("pane"), t.s("worktree"), "right", &[]).unwrap().t("pane_id");
+    w.patch(|s| { let p = s["panes"].as_array_mut().unwrap().iter_mut().find(|p| p.s("pane_id") == mine).unwrap(); p["shell"] = json!(std::process::id()); });
+    let mut yours = sleep_in(&tree, &[]);
+    w.patch(|s| s["paneGetFails"] = json!(true)); // herdr cannot say whether that pane is still there
+    let said = sw::actions::talk::stop(t.s("id")).unwrap();
+    assert!(yours.try_wait().unwrap().is_none() && !said.msg.contains(&format!("pid {})", yours.id())), "{}", said.msg);
+    assert_eq!(said.msg, "Ended what it started: sleep 600 (pid 3).");
+    // nor what runs in it at all: then what runs from its folders is named, not ended
+    w.patch(|s| { let p = s["panes"].as_array_mut().unwrap().iter_mut().find(|p| p.s("pane_id") == mine).unwrap(); p["infoFails"] = json!(true); });
+    let said = sw::actions::talk::stop(t.s("id")).unwrap();
+    assert!(yours.try_wait().unwrap().is_none(), "{}", said.msg);
+    assert!(said.msg.contains(&format!("sleep 60 (pid {}), in its folders, not ended as herdr does not say what runs in its other panes", yours.id())), "{}", said.msg);
+    let _ = yours.kill(); let _ = yours.wait();
+}
