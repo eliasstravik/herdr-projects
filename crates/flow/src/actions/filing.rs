@@ -37,12 +37,17 @@ pub fn describe(id: &str, text: &str) -> Res<Task> { let cur = find(id)?; update
 pub fn pin(id: &str) -> Res<Task> { let cur = find(id)?; update(cur.s("id"), |t| { assert_unarchived(t)?; let p = !t.b("pinned"); t.put("pinned", p); Ok(Change::Write) }) }
 
 #[derive(Default)]
-pub struct Report { pub state: String, pub kind: String, pub msg: String, pub title: String, pub progress: Option<Value>, pub eta: Option<Value>, pub as_agent: bool }
+pub struct Report { pub state: String, pub kind: String, pub msg: String, pub title: String, pub progress: Option<Value>, pub eta: Option<Value>, pub own: &'static str }
 fn clamp_pct(p: &Value) -> i64 { (number(p).round() as i64).clamp(0, 100) }
-/// A report: the human (or any agent) says where a task stands. A delegated task's own agent is told to say only that
-/// it is blocked (the finish line marks its work done); `as_agent` marks that the turn after its own "blocked" is not a finish.
+/// A report: the human (or any agent) says where a task stands. `own`: run from the task's own pane, "agent" or
+/// "reviewer" ("" for anyone else). Its own agent may say only that it is blocked, and the turn after that is not a
+/// finish; the finish line marks its work done, so its own done, error or idle is refused (HP-133).
 pub fn report(id: &str, r: Report) -> Res<Task> {
     let cur = find(id)?;
+    if !r.own.is_empty() && ["done", "error", "idle"].contains(&r.state.as_str()) {
+        if r.own == "reviewer" { crate::fail!("{} is the task you review, so you cannot mark it {}. Your review finishes when you end your turn; the board then decides from your findings and merges the work.", cur.s("id"), r.state); }
+        crate::fail!("{} is your own task, so you cannot mark it {}. Your task finishes when you end your turn; the board then checks, reviews and merges it. To wait for the human instead, report it blocked.", cur.s("id"), r.state);
+    }
     if !r.title.is_empty() && r.state.is_empty() { return rename(cur.s("id"), &r.title); }
     if !["idle", "working", "blocked", "done", "error"].contains(&r.state.as_str()) { crate::fail!("state must be one of: idle, working, blocked, done, error"); }
     // "Mark it idle" on a task whose agent is working means "stop it".
@@ -59,7 +64,7 @@ pub fn report(id: &str, r: Report) -> Res<Task> {
             t.put("msg", if m.is_empty() { "Needs you".into() } else { m });
             t.put("turnOpen", false);
             // The end of the turn it says this in is not a finish (finish/waiting.rs).
-            if r.as_agent { let now = crate::clock::now(); t.put("selfBlocked", now); t.put("blocked", json!({ "at": now, "kind": t.at("kind"), "msg": t.at("msg") })); }
+            if r.own == "agent" { let now = crate::clock::now(); t.put("selfBlocked", now); t.put("blocked", json!({ "at": now, "kind": t.at("kind"), "msg": t.at("msg") })); }
             return Ok(Change::Write);
         }
         if delegated && runner_alive(t) { crate::fail!("{} is in the middle of a workflow step. Stop it first.", t.s("id")); }

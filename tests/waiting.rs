@@ -19,7 +19,7 @@ fn pane(w: &World, id: &str, status: &str, complete: bool) {
 }
 /// The agent's own turn-end report, the other.
 fn reported(id: &str, file: &Path) { sw::turn::turn_ended(id, "agent", "tok", 0, &[json!({ "session_id": "s1", "transcript_path": file.display().to_string() }).to_string()]); }
-fn ask(id: &str, msg: &str) { sw::actions::filing::report(id, sw::actions::filing::Report { state: "blocked".into(), kind: "question".into(), msg: msg.into(), as_agent: true, ..Default::default() }).unwrap(); }
+fn ask(id: &str, msg: &str) { sw::actions::filing::report(id, sw::actions::filing::Report { state: "blocked".into(), kind: "question".into(), msg: msg.into(), own: "agent", ..Default::default() }).unwrap(); }
 fn reviewers(w: &World) -> usize { let r = regex::Regex::new(r"-r(-\d+)?$").unwrap(); w.state().arr("panes").iter().filter(|p| r.is_match(p.at("agent").s("name"))).count() }
 fn reviewed(id: &str) -> i64 { let t = task(id); t.arr("reviews").len() as i64 + t.i("reviewRound") }
 fn blocked_at(id: &str) -> i64 { task(id).at("blocked").i("at") }
@@ -72,7 +72,7 @@ fn a_long_turn_its_prompt_far_back_in_the_saved_conversation_its_end_is_still_kn
     line(&file, json!({ "type": "assistant", "uuid": "a-tool", "timestamp": iso(big), "message": { "id": "msg_tool", "role": "assistant", "stop_reason": "tool_use", "content": [{ "type": "tool_use", "id": "t1", "name": "Bash", "input": {} }] } }));
     line(&file, json!({ "type": "user", "uuid": "u-tool", "timestamp": iso(big + 1), "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "t1", "content": "x".repeat(900000) }] } }));
     std::fs::write(Path::new(task(&id).s("worktree")).join("draft.txt"), "half done\n").unwrap(); // unfinished work that a finish would commit and review
-    sw::actions::filing::report(&id, sw::actions::filing::Report { state: "blocked".into(), kind: "permission".into(), msg: "Need your OK to delete the test data".into(), as_agent: true, ..Default::default() }).unwrap();
+    sw::actions::filing::report(&id, sw::actions::filing::Report { state: "blocked".into(), kind: "permission".into(), msg: "Need your OK to delete the test data".into(), own: "agent", ..Default::default() }).unwrap();
     says(&file, blocked_at(&id) + 1, "Waiting for your OK.");
     assert_eq!(sw::agents::read_turn::read_claude(&file, sw::agents::read_turn::TAIL).unwrap().began, 0); // the end of the file holds no prompt
     pane(&w, &id, "done", true); reported(&id, &file);

@@ -35,6 +35,11 @@ and stops counts as finished, and its work is checked and reviewed as it stands.
 
 The command answers the agent with the same: `Reported: you are waiting, not finished, so no check and no review follow this stop.`
 
+Waiting is the only state an agent reports for its own task. `report <id> --state done` (or `error`, or `idle`) run
+from the task's own agent's pane, or its reviewer's, is refused, nothing changes and the command fails: the task
+finishes when the agent ends its turn, and the board then checks, reviews and merges it. Marking a task done with
+nothing merged stays yours (and the Coordinator's, on your word), as does `finish <id>`.
+
 ## A report saved early
 
 A research-only task's result is a report, and saving it finishes nothing. An agent may save an interim report, add to

@@ -1,5 +1,6 @@
 //! More of an agent that waits for the human: a research task's rules, interim report and note that end nothing, a
 //! review stopped by the agent saying it waits, and when a saved conversation's last turn began, for every program.
+//! Its own agent or reviewer cannot mark its task done, failed or idle (HP-133): its turn's end is the finish.
 use crate::common;
 use common::*;
 use serde_json::{json, Value};
@@ -16,7 +17,8 @@ fn pane(w: &World, id: &str, status: &str, complete: bool) {
     on_pane(w, &p);
 }
 fn reported(id: &str, file: &Path) { sw::turn::turn_ended(id, "agent", "tok", 0, &[json!({ "session_id": "s1", "transcript_path": file.display().to_string() }).to_string()]); }
-fn ask(id: &str, msg: &str) { sw::actions::filing::report(id, sw::actions::filing::Report { state: "blocked".into(), kind: "question".into(), msg: msg.into(), as_agent: true, ..Default::default() }).unwrap(); }
+fn ask(id: &str, msg: &str) { sw::actions::filing::report(id, sw::actions::filing::Report { state: "blocked".into(), kind: "question".into(), msg: msg.into(), own: "agent", ..Default::default() }).unwrap(); }
+fn say(id: &str, state: &str, own: &'static str) -> Result<sw::store::tasks::Task, String> { sw::actions::filing::report(id, sw::actions::filing::Report { state: state.into(), msg: "all done".into(), own, ..Default::default() }).map_err(|e| e.msg) }
 fn reviewers(w: &World) -> usize { let r = regex::Regex::new(r"-r(-\d+)?$").unwrap(); w.state().arr("panes").iter().filter(|p| r.is_match(p.at("agent").s("name"))).count() }
 fn at_work(w: &World, research: bool) -> (String, PathBuf) {
     w.script(json!({ "worker": [{ "status": "working" }] }));
@@ -111,4 +113,42 @@ fn a_saved_conversation_says_when_its_last_turn_began_for_every_agent_program() 
     ]), TAIL).unwrap();
     assert_eq!((pi.finished, pi.began), (true, 1000001));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn its_own_agent_cannot_mark_its_task_done_failed_or_idle_and_nothing_changes() {
+    let w = world();
+    let (id, _) = at_work(&w, false);
+    for state in ["done", "error", "idle"] {
+        let e = say(&id, state, "agent").unwrap_err();
+        assert!(e.contains(&format!("{id} is your own task, so you cannot mark it {state}")), "{e}");
+        assert!(e.contains("Your task finishes when you end your turn; the board then checks, reviews and merges it"), "{e}");
+        let t = task(&id);
+        assert_eq!((t.s("stage"), t.s("msg")), ("working", ""), "{state}");
+        assert!(t.at("tidy").is_null());
+    }
+}
+
+#[test]
+fn its_reviewer_cannot_mark_it_done_either() {
+    let w = world();
+    let (id, _) = at_work(&w, false);
+    for state in ["done", "error", "idle"] {
+        let e = say(&id, state, "reviewer").unwrap_err();
+        assert!(e.contains(&format!("{id} is the task you review, so you cannot mark it {state}")), "{e}");
+        assert!(e.contains("Your review finishes when you end your turn"), "{e}");
+        assert_eq!(task(&id).s("stage"), "working", "{state}");
+    }
+}
+
+#[test]
+fn its_own_agent_still_says_it_waits_and_the_human_still_marks_it_done() {
+    let w = world();
+    let (id, _) = at_work(&w, false);
+    let t = sw::actions::filing::report(&id, sw::actions::filing::Report { state: "blocked".into(), kind: "auth".into(), msg: "Need a GitHub login".into(), own: "agent", ..Default::default() }).unwrap();
+    assert_eq!((t.s("stage"), t.s("kind"), t.s("msg")), ("asks", "auth", "Need a GitHub login"));
+    assert!(t.b("selfBlocked"));
+    // The human (or the Coordinator on their word): done, with nothing merged.
+    let t = say(&id, "done", "").unwrap();
+    assert_eq!(t.s("stage"), "done");
 }

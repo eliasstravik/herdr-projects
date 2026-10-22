@@ -43,7 +43,7 @@ fn an_agent_that_reports_itself_blocked_gets_the_right_kind_and_stopping_after_t
     let id = w.add("Needs a token");
     delegate(&id);
     let t = settle(&id);
-    sw::actions::filing::report(&id, sw::actions::filing::Report { state: "blocked".into(), kind: "auth".into(), msg: "NPM_TOKEN is missing".into(), as_agent: true, ..Default::default() }).unwrap();
+    sw::actions::filing::report(&id, sw::actions::filing::Report { state: "blocked".into(), kind: "auth".into(), msg: "NPM_TOKEN is missing".into(), own: "agent", ..Default::default() }).unwrap();
     let pane = t.at("link").t("pane");
     w.patch(|s| { let seq = s.i("seq") + 1; s["seq"] = json!(seq); for p in s["panes"].as_array_mut().unwrap() { if p.s("pane_id") == pane { p["agent"]["status"] = json!("done"); p["agent"]["seq"] = json!(seq); p["agent"]["completion"] = json!(seq); } } });
     let t = settle(&id);
