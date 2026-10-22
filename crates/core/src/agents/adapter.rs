@@ -126,7 +126,7 @@ pub fn latest_session(kind: &str, cwd: &Path, since: i64, was: Option<&Path>) ->
             None
         }
         "pi" => {
-            for f in find_file(&pi_home().join("sessions"), &|n| n.ends_with(".jsonl"), 1) {
+            for f in super::transcript::pi_saved(cwd, was) {
                 if mtime_ms(&f).map(|m| m < since).unwrap_or(true) { return None; }
                 let head = head_of(&f, 8192);
                 let Ok(meta) = serde_json::from_str::<Value>(first_line(&head)) else { continue };

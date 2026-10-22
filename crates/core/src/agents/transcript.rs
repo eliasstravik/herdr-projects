@@ -10,9 +10,12 @@ use std::time::{Duration, Instant};
 
 /// How long a remembered answer is trusted before the search runs again, so a newer copy is picked up in time.
 const FRESH: Duration = Duration::from_secs(300);
+/// How long "not saved anywhere" is believed: a task whose conversation is gone is asked for every tick, and each miss
+/// searches every folder. One that appears later is found within this time.
+const MISS_FRESH: Duration = Duration::from_secs(30);
 /// How many answers are kept; a long-running keeper sees many conversations come and go.
 const CAP: usize = 1024;
-static FOUND: LazyLock<Mutex<HashMap<(String, String), (PathBuf, Instant)>>> = LazyLock::new(Default::default);
+static FOUND: LazyLock<Mutex<HashMap<(String, String), (Option<PathBuf>, Instant)>>> = LazyLock::new(Default::default);
 
 /// `a/./b/../c/` becomes `a/c`, without following links, as pi's path.resolve does.
 fn lexical(p: &Path) -> PathBuf {
@@ -23,7 +26,7 @@ fn lexical(p: &Path) -> PathBuf {
     out
 }
 /// The folder pi saves a directory's conversations in: one leading separator dropped, then `/`, `\\` and `:` become `-`.
-fn pi_dir(cwd: &Path) -> String {
+pub(super) fn pi_dir(cwd: &Path) -> String {
     let s = cwd.display().to_string();
     let s = s.strip_prefix(['/', '\\']).unwrap_or(&s);
     format!("--{}--", s.replace(['/', '\\', ':'], "-"))
@@ -32,18 +35,32 @@ fn pi_dir(cwd: &Path) -> String {
 pub fn transcript(kind: &str, session: &str, cwd: &Path) -> Option<PathBuf> {
     let key = (kind.to_string(), session.to_string());
     let known = FOUND.lock().unwrap().get(&key).cloned();
-    if let Some((f, at)) = known {
-        if at.elapsed() < FRESH && f.is_file() { return Some(f); }
-        FOUND.lock().unwrap().remove(&key);
+    match known {
+        Some((Some(f), at)) if at.elapsed() < FRESH && f.is_file() => return Some(f),
+        Some((None, at)) if at.elapsed() < MISS_FRESH => return None,
+        _ => {}
     }
     let found = locate(kind, session, cwd);
-    if let Some(f) = &found {
-        let mut map = FOUND.lock().unwrap();
-        if map.len() >= CAP { map.retain(|_, (_, at)| at.elapsed() < FRESH); }
-        if map.len() >= CAP { map.clear(); }
-        map.insert(key, (f.clone(), Instant::now()));
-    }
+    let mut map = FOUND.lock().unwrap();
+    if map.len() >= CAP { map.retain(|_, (f, at)| at.elapsed() < if f.is_some() { FRESH } else { MISS_FRESH }); }
+    if map.len() >= CAP { map.clear(); }
+    map.insert(key, (found.clone(), Instant::now()));
     found
+}
+/// pi's conversations for a folder, newest first: only the folders pi saves it under (as given, its real path, and
+/// where it was before a move), unless none of them is there yet, then every folder.
+pub(super) fn pi_saved(cwd: &Path, was: Option<&Path>) -> Vec<PathBuf> {
+    let root = pi_home().join("sessions");
+    let given = lexical(cwd);
+    let mut dirs: Vec<PathBuf> = [Some(given.clone()), Some(real(&given)), was.map(lexical)].into_iter().flatten().map(|d| root.join(pi_dir(&d))).collect();
+    dirs.sort();
+    dirs.dedup();
+    dirs.retain(|d| d.is_dir());
+    let jsonl = |n: &str| n.ends_with(".jsonl");
+    if dirs.is_empty() { return find_file(&root, &jsonl, 1); }
+    let mut all: Vec<PathBuf> = dirs.iter().flat_map(|d| find_file(d, &jsonl, 0)).collect();
+    all.sort_by_cached_key(|p| std::cmp::Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok()));
+    all
 }
 fn locate(kind: &str, session: &str, cwd: &Path) -> Option<PathBuf> {
     match kind {
@@ -117,6 +134,15 @@ mod transcript_tests {
         assert_eq!(transcript("pi", "sw-absent", Path::new("/tmp/hp-project")), None);
     }
     #[test]
+    fn a_miss_is_remembered_briefly() {
+        let h = home("miss", 0);
+        assert_eq!(transcript("pi", "sw-late", Path::new("/tmp/hp-project")), None);
+        let f = save(&h, "--tmp-hp-project--", "sw-late");
+        assert_eq!(transcript("pi", "sw-late", Path::new("/tmp/hp-project")), None, "a miss is not searched again at once");
+        FOUND.lock().unwrap().get_mut(&("pi".to_string(), "sw-late".to_string())).unwrap().1 -= MISS_FRESH;
+        assert_eq!(transcript("pi", "sw-late", Path::new("/tmp/hp-project")), Some(f), "and is searched again after a while");
+    }
+    #[test]
     fn a_remembered_answer_is_used_without_searching() {
         let h = home("memo", 0);
         let first = save(&h, "--tmp-elsewhere--", "sw-m");
@@ -148,9 +174,25 @@ mod transcript_tests {
     fn the_memo_stays_bounded() {
         let h = home("cap", 0);
         save(&h, "--tmp-p--", "sw-c");
-        for i in 0..CAP + 10 { FOUND.lock().unwrap().insert(("pi".into(), format!("x{i}")), (PathBuf::from("/x"), Instant::now())); }
+        for i in 0..CAP + 10 { FOUND.lock().unwrap().insert(("pi".into(), format!("x{i}")), (Some(PathBuf::from("/x")), Instant::now())); }
         assert!(transcript("pi", "sw-c", Path::new("/tmp/p")).is_some());
         assert!(FOUND.lock().unwrap().len() <= CAP);
+    }
+    #[test]
+    fn newest_first_from_its_own_folders_only() {
+        let h = home("saved", 3);
+        let old = save(&h, "--tmp-hp-project--", "sw-old");
+        std::thread::sleep(Duration::from_millis(20));
+        let moved = save(&h, "--tmp-hp-before--", "sw-was");
+        std::thread::sleep(Duration::from_millis(20));
+        let new = save(&h, "--tmp-hp-project--", "sw-new");
+        let got = pi_saved(Path::new("/tmp/hp-project/"), Some(Path::new("/tmp/hp-before")));
+        assert_eq!(got, vec![new, moved, old], "newest first, other folders left out");
+    }
+    #[test]
+    fn every_folder_when_its_own_is_not_there_yet() {
+        let h = home("saved-none", 2);
+        assert_eq!(pi_saved(Path::new("/tmp/hp-nowhere"), None).len(), 2);
     }
     #[test]
     #[ignore]
@@ -168,6 +210,22 @@ mod transcript_tests {
         let t = Instant::now();
         for _ in 0..n { assert!(transcript("pi", "sw-b", cwd).is_some()); }
         let memo = t.elapsed() / n;
-        println!("BENCH dirs=3000 full_walk={walk:?} direct_dir={direct:?} memo_hit={memo:?}");
+        let t = Instant::now();
+        for _ in 0..n { assert!(!pi_saved(cwd, None).is_empty()); }
+        let saved = t.elapsed() / n;
+        let t = Instant::now();
+        for _ in 0..n {
+            let mut v = find_file(&sessions, &|f| f.ends_with(".jsonl"), 1);
+            let mtime = |p: &PathBuf| fs::metadata(p).and_then(|m| m.modified()).ok();
+            v.sort_by(|a, b| mtime(b).cmp(&mtime(a)));
+        }
+        let old_latest = t.elapsed() / n;
+        let t = Instant::now();
+        for _ in 0..n { assert!(!find_file(&sessions, &|f| f.ends_with(".jsonl"), 1).is_empty()); }
+        let all_once = t.elapsed() / n;
+        let t = Instant::now();
+        for _ in 0..n { assert!(transcript("pi", "sw-none", cwd).is_none()); }
+        let miss = t.elapsed() / n;
+        println!("BENCH miss_remembered={miss:?} dirs=3000 full_walk={walk:?} direct_dir={direct:?} memo_hit={memo:?} latest_before={old_latest:?} latest_all_time_read_once={all_once:?} latest_own_folder={saved:?}");
     }
 }
