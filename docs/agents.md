@@ -28,7 +28,9 @@ Why: Herdr reads a login page as a program at rest, so the board types the task 
 ready. Cursor, Devin, Grok, agy and Letta all came up at a login or setup page when tried here.
 
 A folder-trust dialog in a new worktree is a dialog like any other: the task waits for you (`needs you`). Claude Code
-and Codex are told beforehand to trust it ([how work gets done](how-work-gets-done.md)).
+and Codex are told beforehand to trust it ([how work gets done](how-work-gets-done.md)). For Codex the board adds a
+`[projects."<repo>"]` table to `~/.codex/config.toml`, only when the file reads and has no entry for the repo in any
+form (any quotes, a dotted key); an entry that says `untrusted` is left as it is.
 
 If a start still fails, the task says why: [when an agent could not start](could-not-start.md).
 

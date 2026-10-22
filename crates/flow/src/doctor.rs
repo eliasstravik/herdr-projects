@@ -1,10 +1,11 @@
 //! `herdr-projects doctor`: the health check. One file in doctor/ per area (the program and its launcher, herdr's
-//! plugin, the agent programs, the model and effort settings, plan approval's read-only mount, other machines, free
-//! disk space, leftovers it could clean, messages that wait undelivered for a coordinator); older installs are
-//! take_over/look.rs. Each area hands back what it found: a fact that is fine, or a problem in one plain line with what
-//! to do. The areas are asked at the same time, so the check takes as long as its slowest one; it exits 1 when there is
-//! a problem (docs/troubleshooting.md).
+//! plugin, the agent programs and Codex's config.toml, the model and effort settings, plan approval's read-only
+//! mount, other machines, free disk space, leftovers it could clean, messages that wait undelivered for a
+//! coordinator); older installs are take_over/look.rs. Each area hands back what it found: a fact that is fine, or a
+//! problem in one plain line with what to do. The areas are asked at the same time, so the check takes as long as its
+//! slowest one; it exits 1 when there is a problem (docs/troubleshooting.md).
 pub mod agents;
+pub mod codex;
 pub mod disk;
 pub mod machines;
 pub mod plan;
@@ -63,6 +64,7 @@ pub fn doctor_main() -> i32 {
         let mut all = program::check(&here);
         all.extend(plugin::check(&herdr));
         all.extend(agents::check(&progs.join().unwrap_or_default()));
+        all.extend(codex::check());
         all.extend(set.join().unwrap_or_default());
         if let Ok(m) = mount.join() { all.extend(plan::check(&m)); }
         all.extend(machines::check(far.join().unwrap_or_default().as_ref()));

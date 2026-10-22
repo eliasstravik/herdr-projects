@@ -242,7 +242,7 @@ pub fn skill_dir(kind: &str) -> Option<PathBuf> {
 }
 /// Mark a repo as trusted in the program's own settings, so a new worktree starts without its "trust this folder?"
 /// dialog. Claude keeps trust per repository root in ~/.claude.json; Codex in ~/.codex/config.toml (a command-line
-/// override does not count, so the table is appended to the file once).
+/// override does not count, so the table is added to the file once: codex_trust.rs).
 pub fn trust(kind: &str, root: &Path) -> bool {
     let root_s = root.display().to_string();
     match kind {
@@ -254,15 +254,7 @@ pub fn trust(kind: &str, root: &Path) -> bool {
             let tmp = PathBuf::from(format!("{}.{}.sw.tmp", file.display(), std::process::id()));
             write_private(&tmp, &serde_json::to_string_pretty(&j).unwrap_or_default()).is_ok() && fs::rename(&tmp, &file).is_ok()
         }
-        "codex" => {
-            let file = codex_file();
-            let text = match fs::read_to_string(&file) { Ok(t) => t, Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(), Err(_) => return false };
-            let head = format!("[projects.{}]", serde_json::to_string(&root_s).unwrap_or_default());
-            if text.contains(&head) { return true; }
-            if let Some(d) = file.parent() { let _ = fs::create_dir_all(d); }
-            let add = format!("{}\n{head}\ntrust_level = \"trusted\"\n", if !text.is_empty() && !text.ends_with('\n') { "\n" } else { "" });
-            fs::OpenOptions::new().create(true).append(true).open(&file).and_then(|mut f| std::io::Write::write_all(&mut f, add.as_bytes())).is_ok()
-        }
+        "codex" => super::codex_trust::trust(root),
         _ => false,
     }
 }
