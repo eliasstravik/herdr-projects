@@ -23,7 +23,7 @@ fn listed(p: &Value) -> String {
     format!("{} (pid {})", if w.is_empty() { "a process" } else { &w }, p.i("pid"))
 }
 /// One process herdr does not list (a child, a job), in words.
-fn found(pid: i64) -> String {
+pub fn found(pid: i64) -> String {
     let argv: Vec<String> = command(pid).map(|c| c.split_whitespace().map(String::from).collect()).unwrap_or_default();
     format!("{} (pid {pid})", if argv.is_empty() { "a process".into() } else { short(&argv) })
 }

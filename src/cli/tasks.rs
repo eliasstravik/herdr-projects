@@ -116,7 +116,7 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
             (shown_of(t.s("id")), msg)
         }
         "tell" => { let id = need(1, "an id")?; need(2, "the text")?; said(talk::reply(&id, &rest(2), talk::asker())?) }
-        "stop" => { let t = talk::stop(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: stopped", t.s("id"))) }
+        "stop" => { let s = talk::stop(&need(1, "an id")?)?; (shown_of(s.task.s("id")), talk::stopped(&format!("{}: stopped", s.task.s("id")), &s.msg)) }
         "start" => { let t = filing::start_human(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: in progress", t.s("id"))) }
         "pick" => said(crate::attempts::settle::pick(&need(1, "an id")?, &pos.get(2).cloned().unwrap_or_default())?),
         "approve" => said(finish_line::approve(&need(1, "an id")?, None, flags.at("anyway") == &json!(true))?),
