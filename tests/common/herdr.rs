@@ -37,6 +37,8 @@ impl Fake for FakeHerdr {
     }
     /// Ending a fake agent's process: its pane is at its shell again.
     fn kill(&self, pid: i64) { for p in self.st.borrow_mut()["panes"].as_array_mut().unwrap() { if p.at("agent").i("pid") == pid { p["agent"] = Value::Null; } } }
+    /// The herdr program cannot be found from here (`noProgram`): run where it is not on PATH nor anywhere usual.
+    fn found(&self) -> bool { !self.st.borrow().b("noProgram") }
 }
 impl FakeHerdr {
     pub fn ws_out(st: &Value, w: &Value) -> Value {
