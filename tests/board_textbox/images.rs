@@ -110,6 +110,20 @@ fn a_picture_among_words_in_one_paste_is_a_chip_and_the_words_stay() {
     s.paste(&format!("see {} ", herdr(2)));
     assert_eq!(shown(&mut s), "look:see [Image 1] ", "the paste's own words go in as they are");
     assert_eq!(s.s.value(), format!("look:see {} ", herdr(2)));
+    // Words that name a chip already: never a chip by that name, so they are sent as they are.
+    s.s.input.set_text("");
+    let pasted = format!("compare [Image 1] with {} please", herdr(0));
+    s.paste(&pasted);
+    assert_eq!(s.s.value(), pasted, "in the paste");
+    s.s.input.set_text("");
+    s.typed("see [Image 1] and ");
+    s.paste(&herdr(0));
+    assert_eq!(s.s.value(), format!("see [Image 1] and {}", herdr(0)), "in the box");
+    s.s.input.set_text(&format!("[Image 1] then {}", herdr(0)));
+    assert_eq!(s.s.value(), format!("[Image 1] then {}", herdr(0)), "a draft too");
+    s.s.input.set_text("[Image 1] then ");
+    s.typed(&herdr(0));
+    assert_eq!(s.s.value(), format!("[Image 1] then {}", herdr(0)), "and keys");
     // Several in one paste, one per line, as a clipboard of pictures gives them.
     s.s.input.set_text("");
     s.paste(&format!("{}\n{}\n{}", herdr(0), herdr(1), herdr(2)));

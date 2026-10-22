@@ -53,6 +53,9 @@ fn your_words_on_their_way_and_the_same_in_the_conversation_stand_once() {
     let out = with_mine(had, &mine);
     assert_eq!(out.len(), 1, "{out:?}");
     assert_eq!(out[0].text, "[Image 1] look");
+    // Other pictures with the same words: another message, both stand.
+    let had = vec![Part { by: "You".into(), text: "[Image 1] look".into(), whole: format!("{} look", herdr(1)), sent: true, ..Default::default() }];
+    assert_eq!(with_mine(had, &mine).len(), 2);
     // Not yet: yours, its picture a chip.
     let out = with_mine(vec![], &mine);
     assert_eq!((out[0].text.as_str(), out[0].whole.as_str()), ("[Image 1] look", mine.as_str()));

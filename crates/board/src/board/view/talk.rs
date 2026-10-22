@@ -24,9 +24,11 @@ pub fn with_mine(parts: Vec<Part>, mine: &str) -> Vec<Part> {
     if mine.is_empty() { return parts; }
     let said: Vec<Part> = parts.into_iter().filter(|p| p.note.is_empty()).collect();
     let words = mine.trim();
-    // Pictures compared as their chips: the program may have written its own name for one (`[Image #39]`).
-    let head: String = labelled(words).chars().take(200).collect();
-    let same = said.last().map(|l| l.sent && labelled(if l.whole.is_empty() { &l.text } else { &l.whole }).contains(&head)).unwrap_or(false);
+    let head: String = words.chars().take(200).collect();
+    // Where the program wrote its own name for a picture it took in (`[Image #39]`), the words are compared with each
+    // picture as its chip; else as they are, so other pictures with the same words are another message.
+    let chipped: String = labelled(words).chars().take(200).collect();
+    let same = said.last().map(|l| { let w = if l.whole.is_empty() { &l.text } else { &l.whole }; l.sent && (w.contains(&head) || w.contains("[Image #") && labelled(w).contains(&chipped)) }).unwrap_or(false);
     // A command (`/clear`) is answered by what it did, which the program writes down at once: it stands with its answer.
     let done = words.starts_with('/') && said.len() >= 2 && said[said.len() - 2].sent && said[said.len() - 2].text == words && !said[said.len() - 1].sent;
     if done { return said; }

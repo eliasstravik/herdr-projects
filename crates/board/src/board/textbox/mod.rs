@@ -45,7 +45,7 @@ impl TextBox {
         let kill: Vec<String> = self.kill.iter().map(|k| self.expand(k)).collect();
         self.kill = kill;
         self.images.clear();
-        let norm = self.collapse(&norm);
+        let norm = self.collapse(&norm, "");
         self.lines = norm.split('\n').map(String::from).collect();
         self.line = self.lines.len() - 1; self.col = self.lines[self.line].len();
         self.typing = false; self.pref = None; self.killed_last = false; self.yank_at = None;

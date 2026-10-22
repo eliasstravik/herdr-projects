@@ -88,13 +88,18 @@ fn chips(line: &str, known: usize) -> Vec<(usize, usize)> {
 }
 
 impl TextBox {
-    /// `text` with every picture path in it as a chip, the pictures taken as this message's next.
-    pub(super) fn collapse(&mut self, text: &str) -> String {
+    /// Whether the next chip's label stands as words already, in the box (`around`) or in `text`: a chip by that name
+    /// would make those words its path when sent, so the picture stays its path.
+    fn taken(&self, around: &str, text: &str) -> bool { let l = label(self.images.len() + 1); around.contains(&l) || text.contains(&l) }
+    /// `text` with every picture path in it as a chip, the pictures taken as this message's next. `around`: the words
+    /// it goes in among.
+    pub(super) fn collapse(&mut self, text: &str, around: &str) -> String {
         let ws = words(text);
         let pics: Vec<&(usize, usize)> = ws.iter().filter(|(a, b)| is_picture(&text[*a..*b])).collect();
         if pics.is_empty() { return text.to_string(); }
         let (mut out, mut at) = (String::new(), 0);
         for &&(a, b) in &pics {
+            if self.taken(around, text) { break; }
             out.push_str(&text[at..a]);
             self.images.push(text[a..b].to_string());
             out.push_str(&label(self.images.len()));
@@ -118,7 +123,7 @@ impl TextBox {
     /// A paste with pictures' paths in it: their chips, with a space between a chip and the words on either side.
     pub(super) fn pasted(&mut self, s: &str) -> String {
         let had = self.images.len();
-        let out = self.collapse(s.trim());
+        let out = self.collapse(s.trim(), &self.raw());
         if self.images.len() == had { return s.to_string(); }
         let line = self.lines.get(self.line).map(|l| l.as_str()).unwrap_or("");
         let (lead, tail) = (&s[..s.len() - s.trim_start().len()], &s[s.trim_end().len()..]);
@@ -136,7 +141,7 @@ impl TextBox {
         let chip = chips(&line[..end], self.images.len()).last().map(|c| c.1).unwrap_or(0);
         let Some((a, b)) = words(&line[chip..end]).last().map(|(a, b)| (a + chip, b + chip)) else { return };
         let word = &line[a..b];
-        if b != end || !(c.is_whitespace() || is_herdrs(word)) || !is_picture(word) { return; }
+        if b != end || !(c.is_whitespace() || is_herdrs(word)) || !is_picture(word) || self.taken(&self.raw(), "") { return; }
         self.images.push(word.to_string());
         // Never touching the chip before it.
         let gap = if line[..a].chars().last().is_some_and(|c| !c.is_whitespace()) { " " } else { "" };
