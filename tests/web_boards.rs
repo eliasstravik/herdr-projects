@@ -54,6 +54,9 @@ fn a_board_with_nothing_going_on_is_all_quiet_its_archive_left_out_and_with_no_o
     far.tasks("vm-a", "0.2.0", json!([]));
     std::fs::write(sw::store::files::data_dir().join("view.json"), json!({ "cwd": w.root_str(), "scope": "*" }).to_string()).unwrap();
     sw::actions::archive::archive(&w.add("Old")).unwrap();
+    // Which machines there are is only what the test tells: the list a new board asks herdr for on a thread of its own
+    // could come in at any moment (after the second machine, taking it away again), so it goes nowhere.
+    { let c = sw::webui::web::client("t"); c.lock().unwrap().inbox = std::sync::Arc::new(std::sync::Mutex::new(vec![])); }
     // a web UI that names this machine only by its id, or none: the board's own words for it; this machine is the only
     // one, so all machines would be this one again: it is not there
     let told = |fx| { let c = sw::webui::web::client("t"); let mut g = c.lock().unwrap(); let fx = sw::board::update::update(&mut g.s, sw::board::update::Event::Machines(fx)); sw::webui::web::effects(&mut g, fx, false); };
