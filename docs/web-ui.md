@@ -58,12 +58,13 @@ Under it, one entry per machine that has a board, drawn as an agent's entry is:
   dot. Pointing at it says why, in the board's words. All machines adds up the ones that answered and says how many did
   not (`· 1 not reachable`). While a machine is asked for the first time, its entry says `asking…`.
 
-**Picking an entry opens that machine's board** over the main area, with its tasks and its Coordinator, and the entry is
-highlighted as a selected agent is.
+**Picking an entry opens that machine's board** over the main area, with its tasks and its coordinators, and the entry
+is highlighted as a selected agent is.
 
-- It does what choosing that machine in the board's **Other machines** does (the board then says so:
-  `Only vm-str. What you type goes to vm-str.`). The two stay in step: the board's own Other machines, and the board
-  following the web UI to another PC, move the highlight too.
+- It does what choosing that machine on the board's filter row (or its **Other machines**) does. No line confirms it:
+  the filter row's first item names whose board shows, the chat's switch who gets your words. Only where the board moved
+  by itself, following the web UI to another PC, does it say so (`Only vm-str. What you type goes to vm-str.`). The two
+  stay in step: the board's own pick, and the board following the web UI, move the highlight too.
 - On a phone, the drawer closes, as it does when you pick a pane.
 - The section asks every four seconds while the page is in view. The other machines are asked for their tasks every twenty
   seconds at most, as the board asks them.

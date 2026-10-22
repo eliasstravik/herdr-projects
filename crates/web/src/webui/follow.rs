@@ -12,6 +12,9 @@ fn back(c: &mut Client) {
 fn scope(c: &mut Client, to: &str) {
     let mut fx = vec![];
     crate::board::update::remotes::set_scope(&mut c.s, to.to_string(), &mut fx);
+    // It moved by itself, with the web UI: said, unlike a board you picked.
+    let said = crate::board::update::remotes::scope_said(&c.s);
+    c.s.flash(said, Ink::Muted);
     super::web::effects(c, fx, true);
 }
 /// What the front door passes with a call: the web UI's PCs as it last asked (None: it could not say), and the PC the

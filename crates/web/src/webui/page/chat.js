@@ -123,6 +123,10 @@ export function chatEl({ onSend, onPress, onDock }) {
     board.classList.toggle("is-docked", docked);
     board.classList.toggle("sw-chat-full", full);
     board.classList.toggle("sw-chat-hidden", !open && !full);
+    // Nothing said yet (a coordinator that never ran, a task with no agent): the board's own chat is only its bar and
+    // its box, and the list keeps the room an empty conversation would take.
+    const empty = !docked && !!showing && !showing.parts.length && !full;
+    board.classList.toggle("sw-chat-empty", empty);
     board.classList.toggle("is-side", side);
     // Typing in the web UI's box with the chat hidden, the board stays in view over it: the chat stays hidden.
     const stepped = webTyping && (open || full);
@@ -137,7 +141,7 @@ export function chatEl({ onSend, onPress, onDock }) {
     if (docked && sized) board.style.setProperty("--sw-top-h", `${Math.max(0, Math.round(open ? H - Math.max(boxH + 140, split * H) : H - boxH))}px`);
     else board.style.removeProperty("--sw-top-h");
     board.style.setProperty("--sw-chat-share", `${Math.round(split * H)}px`);
-    grip.hidden = !sized || !open;
+    grip.hidden = !sized || !open || empty;
     hide.replaceChildren(icon(open ? "down" : "up"));
     hide.title = open ? "Hide the chat" : "Show the chat"; hide.setAttribute("aria-label", hide.title); hide.setAttribute("aria-pressed", String(!open));
     // Full screen, the same button in the same place goes back (Hide has nothing to hide then).
@@ -226,8 +230,9 @@ export function chatEl({ onSend, onPress, onDock }) {
       // Talking to a machine's or a repo's coordinator (on its heading), not to a task's agent.
       coordHead = !!c.toAgent && !!c.head && !(snap.list?.selected && snap.flags?.onTask !== false && c.task);
       // How they stand, as the terminal's line over the box says it, with the check's progress.
-      const words = cap([c.status, c.progress].filter(Boolean).join(" · "));
-      if (words !== status) { status = words; state.replaceChildren(words); state.title = words; }
+      const words = cap([c.status, c.progress].filter(Boolean).join(" · ")), kind = c.title?.kind || "";
+      // (On a narrow bar the kind of agent starts this line: chat.css.)
+      if (words + kind !== status) { status = words + kind; state.replaceChildren(...(kind ? [h("span.sw-status-kind", `${kind}${words ? " · " : ""}`)] : []), ...(words ? [h("span.sw-status-words", words)] : [])); state.title = [kind, words].filter(Boolean).join(" · "); }
       state.classList.toggle("is-plain", PLAIN.test(c.status || "") && !c.progress);
       open = !!c.open;
       note.hidden = !c.note; note.textContent = c.note;

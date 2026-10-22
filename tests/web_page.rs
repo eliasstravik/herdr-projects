@@ -38,7 +38,7 @@ fn a_rows_tag_has_a_column_of_its_own_and_a_narrow_list_drops_every_tag_at_once(
 #[test]
 fn the_chat_line_shows_only_what_there_is_and_the_boxs_frame_says_who_gets_the_words() {
     // Only what there is: replaceChildren would write a missing part out as the word "null".
-    assert!(CHAT.contains("const mark = markEl(c.mark.t, c.mark.c);") && CHAT.contains(r#"const words = cap([c.status, c.progress].filter(Boolean).join(" · "));"#));
+    assert!(CHAT.contains("const mark = markEl(c.mark.t, c.mark.c);") && CHAT.contains(r#"const words = cap([c.status, c.progress].filter(Boolean).join(" · ")), kind = c.title?.kind || "";"#));
     assert!(CHAT.contains("[choice(c.top, false, null), choice(lit, true, mark)] : [choice(lit, true, mark), choice(c.row, false, rowMark)]"));
     // The box's frame: the plain text colour for the Coordinator, the task's status colour for its agent.
     assert!(CHAT.contains("tone = c.box || \"text\";") && CHAT.contains("card.className = `sw-card sw-b-${to && (moved || !now) ? \"text\" : tone}`;"));

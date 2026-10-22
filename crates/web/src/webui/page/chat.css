@@ -22,7 +22,7 @@
 /* Who you talk to: the web UI's segmented switch (styles.css there: .segmented) of the top row's coordinator and the
    selected row's agent, the one you talk to pressed, its name in the status colour of where it stands (as the box's
    frame); then dimmed the kind of agent it is. With nobody else to talk to, only their name, plainly. */
-.sw-who { flex: 0 1 auto; max-width: 85%; min-width: 0; display: inline-flex; align-items: center; gap: var(--space-2, 8px); }
+.sw-who { flex: 0 1 auto; max-width: 100%; min-width: min-content; display: inline-flex; align-items: center; gap: var(--space-2, 8px); }
 .sw-who-switch { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 2px; padding: 2px; background: var(--bg-elevated, #211e1a); border: var(--hairline, 1px) solid var(--sw-line); border-radius: var(--radius-md, 8px); }
 .sw-who-pick { position: relative; flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--space-2, 8px); height: 32px; padding: 0 var(--space-3, 12px); border: 0; border-radius: calc(var(--radius-md, 8px) - 2px); background: transparent; color: var(--sw-dim); font: inherit; font-size: var(--fs-md, 14px); font-weight: var(--fw-medium, 500); cursor: pointer; }
 .sw-who-pick.is-on { background: var(--bg-hover, #2a2621); color: var(--sw-strong); }
@@ -35,16 +35,21 @@
 .sw-who .sw-mark { width: auto; font-size: var(--fs-sm, 13px); line-height: 1; }
 /* How they stand, in words, beside the switch; on a narrow bar a word the dot already says (idle, working) steps aside,
    and anything more (no agent yet, a check's progress) takes a line of its own under the switch. */
-.sw-who-status { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sw-dim); font-size: var(--fs-sm, 13px); }
+.sw-who-status { flex: 1000 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sw-dim); font-size: var(--fs-sm, 13px); }
 .sw-who-status:empty { display: none; }
+/* The kind of agent stands beside the switch; on a narrow bar it starts the line under it instead, before how they stand. */
+.sw-who-status .sw-status-kind { display: none; }
 @container (max-width: 520px) {
   .sw-chatbar { flex-wrap: wrap; column-gap: 0; }
   /* The buttons keep their row: the switch takes the room they leave (all it needs, before the space between), its
      names cut short where that is less, so that none of them goes under it. */
   .sw-who { flex: 100 1 0; max-width: max-content; }
   .sw-who-switch > .sw-who-pick { padding-inline: var(--space-2, 8px); }
+  .sw-who { min-width: 0; }
+  .sw-who-kind { display: none; }
+  .sw-who-status .sw-status-kind { display: inline; }
   .sw-who-status { order: 9; flex-basis: 100%; padding-left: 2px; }
-  .sw-who-status.is-plain { display: none; }
+  .sw-who-status.is-plain .sw-status-words { display: none; }
 }
 /* The grip at the sheet's top edge, its handle just inside it: dragged, it moves where the list ends and the chat begins. */
 .sw-split { position: absolute; top: -4px; left: 50%; z-index: 2; display: grid; place-items: center; width: 56px; height: 18px; transform: translateX(-50%); cursor: ns-resize; touch-action: none; }
@@ -87,8 +92,9 @@
 .sw-board.is-docked:is(:not(.sw-chat-hidden), .sw-web-typing) .sw-chat::after { content: ""; position: absolute; top: 100%; right: 0; left: 0; height: var(--space-4, 16px); background: linear-gradient(var(--sw-bg), transparent); pointer-events: none; }
 /* With its own chat: the chat has its share of the screen under the list; hidden, only the bar and the box (the list has
    the rest, also while you type in it). */
-.sw-board:not(.is-docked):not(.sw-chat-full):not(.is-side):not(.sw-chat-hidden) .sw-chat { height: var(--sw-chat-share, 46%); max-height: 80%; }
-.sw-board.sw-chat-hidden:not(.is-docked) .sw-chat { height: auto; }
+.sw-board:not(.is-docked):not(.sw-chat-full):not(.is-side):not(.sw-chat-hidden):not(.sw-chat-empty) .sw-chat { height: var(--sw-chat-share, 46%); max-height: 80%; }
+.sw-board.sw-chat-hidden:not(.is-docked) .sw-chat, .sw-board.sw-chat-empty:not(.is-docked):not(.is-side) .sw-chat { height: auto; }
+.sw-board.sw-chat-empty:not(.is-docked):not(.is-side) .sw-said-box { display: none; }
 /* Full screen, and typing in the web UI's box with a phone's keyboard up: the board's header and list step aside (they
    are still there when it goes back). Docked, the board is then only its bar, over the web UI's chat. */
 .sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-shows, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }

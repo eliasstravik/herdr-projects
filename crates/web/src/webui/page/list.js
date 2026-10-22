@@ -67,7 +67,7 @@ function headEl(g, selected, { onFold, onOpen, onPick, actions = [], onPress }) 
   const time = p?.cols?.length ? h("span.sw-time.sw-head-time", p.cols.map((c) => ink(c))) : null;
   // Selected: Open shows its coordinator whole. A project with none to open (archived, in the archive) has its buttons
   // here instead (Restore this project).
-  const open = !selected ? null : g.coord ? h("span.sw-row-acts", h("button.btn.sw-open", { type: "button", "aria-label": `Open ${g.name}`, onclick: (e) => { e.stopPropagation(); onOpen(g.id); } }, "Open", icon("right")))
+  const open = !selected ? null : g.coord ? h("span.sw-head-acts", h("button.btn.sw-open", { type: "button", "aria-label": `Open ${g.name}`, onclick: (e) => { e.stopPropagation(); onOpen(g.id); } }, "Open", icon("right")))
     : actions.length ? h("span.sw-row-acts", actions.map((b) => h("button.btn.sw-open", { type: "button", onclick: (e) => { e.stopPropagation(); onPress?.(b.id); } }, b.label[0].toUpperCase() + b.label.slice(1)))) : null;
   const caret = (cls) => h(`button.sw-caret${cls}`, { type: "button", "aria-expanded": g.folded ? "false" : "true", "aria-label": `${g.folded ? "Unfold" : "Fold"} ${g.name}`, title: g.folded ? "Unfold" : "Fold", onclick: (e) => { e.stopPropagation(); onFold(g.id); } }, g.folded ? "▸" : "▾");
   if (!g.id) return h(`div.sw-hrow.is-${kind}`, { style: `--d:${g.depth || 0}` }, h("span.sw-hline", mark || h("span.sw-mark"), words, time));
@@ -76,7 +76,7 @@ function headEl(g, selected, { onFold, onOpen, onPick, actions = [], onPress }) 
   if (!g.coord && !g.repo) return h(`div.sw-hrow.is-${kind}.is-fold${selected ? ".is-selected" : ""}`, { data: { id: g.id }, style: `--d:${g.depth || 0}`, onclick: () => onFold(g.id) }, h("span.sw-hline", caret(".sw-head-caret"), words, time));
   return h(`div.sw-hrow.is-${kind}${selected ? ".is-selected" : ""}`, { data: { id: g.id }, style: `--d:${g.depth || 0}`, role: "option", "aria-selected": selected ? "true" : "false", tabIndex: 0,
     onclick: () => { if (!selected) onPick(g.id); }, onkeydown: (e) => { if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return; e.preventDefault(); if (selected && e.key === "Enter") onOpen(g.id); else onPick(g.id); } },
-    h("span.sw-hline", mark, caret(""), words, time), open);
+    h("span.sw-hline", mark, caret(""), words, time, open?.classList.contains("sw-head-acts") ? open : null), open?.classList.contains("sw-head-acts") ? null : open);
 }
 // Machines whose tasks could not be read: one notice over the list, each machine a line with what to do behind it.
 // Dismissed, it stays away in this browser until another machine stops answering or one answers for another reason.

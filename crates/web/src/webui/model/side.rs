@@ -44,8 +44,14 @@ pub fn side_of(s: &mut State, t: &Theme) -> Obj {
     let typing = buttons_of(s, r.as_ref(), who.as_ref(), true);
     let place = { let (lines, _) = crate::board::view::textbox::box_lines(s, 300, 3, r.as_ref()); lines.get(1).map(|l| l.text()).unwrap_or_default() };
     let place = crate::re!(r"^\s*❯\s?").replace(&place, "").trim().to_string();
+    // A coordinator's mark in the chat is its row's (board/view/pilot.rs: `○` idle or never ran, `◐`, `?`, `✗`, `∞`), so
+    // the bar and the list say the same.
+    let row_mark = crate::board::view::chat_title::coordinator(s).and_then(|_| {
+        let id = if s.reply && crate::board::update::heads::is_head(&s.reply_id) && s.reply_id == s.sel { s.sel.clone() } else { crate::board::update::top::top_id(s) };
+        crate::board::view::pilot::shown(s, t, &id).map(|x| first(&x.mark)).filter(|m| !m.s("t").trim().is_empty())
+    });
     let chat = who.as_ref().map(|w| json!({
-        "mark": first(&w.mark), "tag": w.tag, "name": w.name, "status": w.status, "progress": w.progress.last().map(|p| p.text()).unwrap_or_default(), "text": w.text,
+        "mark": row_mark.clone().unwrap_or_else(|| first(&w.mark)), "tag": w.tag, "name": w.name, "status": w.status, "progress": w.progress.last().map(|p| p.text()).unwrap_or_default(), "text": w.text,
         "parts": w.parts.iter().map(|x| json!({ "by": x.by, "text": x.text, "mine": x.mine, "tone": x.tone, "raw": x.raw, "sent": x.sent })).collect::<Vec<_>>(),
         // The part it opens on: the newest thing said, whoever said it.
         "from": crate::board::view::talk::opens_at(&w.parts),

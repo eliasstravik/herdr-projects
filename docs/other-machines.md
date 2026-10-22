@@ -5,7 +5,9 @@ machine, then each machine by itself (this one too) in the order of Herdr's side
 SSH. Work never moves between machines.
 
 Which machines you see is the first item of the filter row, in the base colour, with no caret: `All machines` (plain), or `otherbox` (lit, as the filter shown is)
-(in yellow while it does not answer). A click on it goes round too ([the board](board.md#the-filter-row)).
+(in yellow while it does not answer). A click on it goes round too ([the board](board.md#the-filter-row)). No line
+under the chat confirms a pick: that item says whose board shows, the chat box who gets your words. On the web board a
+tap on it lists every board to pick one ([the web UI](web-ui.md)).
 
 ## Set up another machine
 

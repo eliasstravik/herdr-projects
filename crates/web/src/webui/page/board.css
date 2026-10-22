@@ -66,11 +66,16 @@
    on a phone it scrolls sideways, with the shorter names (Needs, Coords, Autos). */
 .sw-shows { flex: none; display: flex; align-items: center; gap: var(--space-1, 4px); padding: var(--space-1, 4px) var(--space-3, 12px); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; border-bottom: var(--hairline, 1px) solid var(--sw-line); container-type: inline-size; }
 .sw-shows::-webkit-scrollbar { display: none; }
+/* With a mouse there is no swipe to scroll it: what does not fit goes on a second line. */
+@media (hover: hover) and (pointer: fine) { .sw-shows { flex-wrap: wrap; overflow-x: visible; } }
 .sw-show { flex: none; display: inline-flex; align-items: center; gap: 0.4em; min-height: var(--touch-target, 40px); padding: 0 var(--space-3, 12px); border: 0; border-radius: var(--radius-pill, 999px); background: none; color: var(--sw-dim); font: inherit; font-size: var(--fs-sm, 13px); white-space: nowrap; cursor: pointer; }
 @media (hover: hover) { .sw-show:not(.is-lit):hover { background: var(--sw-hover); color: var(--sw-text); } }
 .sw-show-n { font-variant-numeric: tabular-nums; }
 .sw-show-short { display: none; }
-@media (max-width: 640px) { .sw-show-long { display: none; } .sw-show-short { display: inline; } .sw-show { padding: 0 var(--space-2, 8px); } }
+/* As the terminal's row gives way: the shorter names first, then the filters with nothing in them go (the one shown and
+   All stay); what is left still scrolls sideways where it must. */
+@container (max-width: 720px) { .sw-show-long { display: none; } .sw-show-short { display: inline; } .sw-show { padding: 0 var(--space-2, 8px); } }
+@container (max-width: 520px) { .sw-show.is-zero { display: none; } }
 /* Lit: in its own colour on a tint of it, as the web UI marks a status (its --status-*-tint), readable on every palette. */
 .sw-show.is-lit { color: var(--sw-lit); font-weight: var(--fw-semibold, 600); background: color-mix(in srgb, var(--sw-lit) 15%, transparent); box-shadow: inset 0 0 0 var(--hairline, 1px) color-mix(in srgb, var(--sw-lit) 45%, transparent); }
 .sw-lit-text, .sw-lit-plain { --sw-lit: var(--sw-strong); } .sw-lit-red { --sw-lit: var(--sw-red); } .sw-lit-yellow { --sw-lit: var(--sw-yellow); } .sw-lit-green { --sw-lit: var(--sw-green); }
@@ -200,6 +205,8 @@
 .sw-hrow:is(.is-top, .is-machine) .sw-head-words .sw-c-overlay0 { font-weight: var(--fw-regular, 400); }
 .sw-hrow:is(.is-group, .is-autos) .sw-head-words { font-size: var(--fs-sm, 13px); font-weight: var(--fw-semibold, 600); }
 .sw-head-time { margin-left: auto; }
+/* The selected coordinator's row: its Open at the end of its one line. */
+.sw-head-acts { flex: none; display: flex; margin: calc(-1 * var(--space-1, 4px)) 0; }
 .sw-count { color: var(--sw-dim); font-weight: var(--fw-regular, 400); letter-spacing: 0; }
 .sw-repo-key { color: var(--sw-dim); font-weight: var(--fw-regular, 400); letter-spacing: 0; white-space: nowrap; }
 .sw-rows { list-style: none; margin: 0; padding: 0; }

@@ -90,8 +90,10 @@ fn with_the_chat_hidden_typing_keeps_it_hidden_and_the_board_in_view() {
     // the keyboard going down after the box let go: the board measured again for the height the web UI's shell leaves
     assert!(DOCK.contains(r#"const app = html.style.getPropertyValue("--app-height");"#) && DOCK.contains("if (ch !== boxH || app !== appH) { boxH = ch; appH = app;"));
     // hidden, the board's own chat is only its bar and its box (its share of the screen is the shown chat's)
-    assert!(CHAT_CSS.contains(".sw-board:not(.is-docked):not(.sw-chat-full):not(.is-side):not(.sw-chat-hidden) .sw-chat { height: var(--sw-chat-share, 46%); max-height: 80%; }"));
-    assert!(CHAT_CSS.contains(".sw-board.sw-chat-hidden:not(.is-docked) .sw-chat { height: auto; }"));
+    assert!(CHAT_CSS.contains(".sw-board:not(.is-docked):not(.sw-chat-full):not(.is-side):not(.sw-chat-hidden):not(.sw-chat-empty) .sw-chat { height: var(--sw-chat-share, 46%); max-height: 80%; }"));
+    assert!(CHAT_CSS.contains(".sw-board.sw-chat-hidden:not(.is-docked) .sw-chat, .sw-board.sw-chat-empty:not(.is-docked):not(.is-side) .sw-chat { height: auto; }"));
+    // nothing said yet: the board's own chat is its bar and its box, the list keeps the room
+    assert!(CHAT.contains("const empty = !docked && !!showing && !showing.parts.length && !full;"));
     // a tap in the box never shows the chat: nothing but its Hide button (and Escape, to hide) presses chatMessage
     assert_eq!(CHAT.matches(r#"onPress("chatMessage")"#).count(), 1);
     assert!(!has(CHAT, r#"addEventListener\("focus(in)?""#) && !has(COMPOSE, r#"addEventListener\("focus(in)?""#));

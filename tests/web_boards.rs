@@ -114,7 +114,7 @@ fn picking_an_entry_shows_that_machines_board_as_other_machines_does_and_the_two
     let s = call("scope", json!({ "to": "vm-a" }), None).unwrap();
     assert_eq!(s.at("flags").s("scope"), "vm-a");
     assert_eq!(s.at("list").at("head").s("only"), "vm-a");
-    assert!(s.at("msg").s("text").contains("Only vm-a"), "said as the board says it: {}", s.at("msg"));
+    assert!(s.at("msg").is_null(), "a board you picked is not confirmed by a line: the filter row says whose it is: {}", s.at("msg"));
     assert_eq!(boards(None).s("scope"), "vm-a", "the section highlights what the board shows");
     // the other way round: the board's own Other machines moves the section's highlight with it
     call("press", json!({ "id": "scope" }), None).unwrap();

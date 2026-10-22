@@ -115,7 +115,7 @@ fn the_chats_bar_has_a_switch_hide_full_screen_and_a_grip_and_the_boards_own_con
     // each with how it stands: the chat's own mark on the one you talk to, a task's row's (or a coordinator's row's) mark on the other
     assert!(CHAT.contains("const rowMark = row ? markEl(row.mark, row.color, row.markDim) : head ? markEl(head.t, head.c, !!head.d) : null;"));
     // how they stand in words beside it; on a narrow bar a word the mark already says steps aside
-    assert!(CHAT.contains(r#"state.classList.toggle("is-plain", PLAIN.test(c.status || "") && !c.progress);"#) && CSS.contains(".sw-who-status.is-plain { display: none; }"));
+    assert!(CHAT.contains(r#"state.classList.toggle("is-plain", PLAIN.test(c.status || "") && !c.progress);"#) && CSS.contains(".sw-who-status.is-plain .sw-status-words { display: none; }"));
     // Hide and Show press alt+c's key, so the board remembers which
     assert!(CHAT.contains(r#"const hide = h("button.icon-button.sw-hide", { type: "button", onclick: () => onPress("chatMessage") });"#) && CHAT.contains(r#"hide.title = open ? "Hide the chat" : "Show the chat";"#));
     // full screen: the board's header and list step aside; its own arrow, Esc or the board's arrow go back

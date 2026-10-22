@@ -47,7 +47,7 @@ function showsEl(shows) {
   const m = shows.machine, out = [];
   if (m) out.push(h(`button.sw-show.sw-show-machine${m.lit ? ".is-lit.sw-lit-text" : ""}${m.ok ? "" : ".is-off"}`, { type: "button", title: "Pick whose tasks to show", "aria-haspopup": "dialog", onclick: () => { picking = true; draw(); } }, h("span.sw-show-name", m.name), icon("down")),
     h("span.sw-show-bar", { "aria-hidden": "true" }));
-  for (const it of shows.items) out.push(h(`button.sw-show${it.lit ? `.is-lit.sw-lit-${it.color}` : ""}`, { type: "button", "aria-pressed": String(it.lit), data: { n: it.n }, onclick: () => { if (!it.lit) call("show", { n: it.n }); } },
+  for (const it of shows.items) out.push(h(`button.sw-show${it.lit ? `.is-lit.sw-lit-${it.color}` : ""}${!it.lit && it.n && !it.count ? ".is-zero" : ""}`, { type: "button", "aria-pressed": String(it.lit), data: { n: it.n }, onclick: () => { if (!it.lit) call("show", { n: it.n }); } },
     h("span.sw-show-long", it.name), h("span.sw-show-short", { "aria-hidden": "true" }, it.short), h(`span.sw-show-n${it.red && !it.lit ? ".sw-c-red" : ""}`, String(it.count))));
   return out;
 }

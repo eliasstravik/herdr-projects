@@ -136,7 +136,8 @@ A project you are done with for now leaves the board whole, and comes back as it
   as a stopped one does. A task you had archived on its own before stays in the archive.
 - **From the shell:** `herdr-projects archive --repo mstars` (`Archived mstars and its 6 tasks. Stopped first:
   MST-4.`) and `herdr-projects restore --repo mstars` (`Restored mstars and its 6 tasks.`). They do not ask.
-- The web board does the same with the same key, on a project's row and in the archive. Only this machine's projects:
+- The web board does the same: select the project's row, then **Archive** among its coordinator's buttons (Open) or in
+  More…; in the archive its row, selected, has **Restore this project** under it. Only this machine's projects:
   another machine's are archived there.
 
 ### The list says what it hides
