@@ -156,6 +156,9 @@ every repo the board merges in. `merge.checks: none` does not look at GitHub's c
 | not reporting, still running after `check.timeout` | waits for you, with that reason |
 | passed, or there are none | merges |
 
+A failure is of one commit: once a repair is pushed, the old commit's failed checks block nothing (also when main is
+merged in before it merges). Only the checks of the commit that would merge count.
+
 Each check is counted once, a workflow for its jobs until GitHub lists them. `details` names what it waits for
 (`checksWaitingFor`).
 
