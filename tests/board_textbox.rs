@@ -8,6 +8,8 @@ use serde_json::json;
 
 /// A picture pasted: `[Image 1]` in the box, its path in what is sent.
 mod images;
+/// A picture in what was sent: `[Image 1]` in the chat too.
+mod images_sent;
 
 fn words(n: usize) -> String { (1..=n).map(|i| format!("word{i}")).collect::<Vec<_>>().join(" ") }
 fn row(c: char) -> String { vec![c.to_string().repeat(4); 7].join(" ") }
