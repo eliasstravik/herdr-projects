@@ -93,7 +93,7 @@ pub fn status(k: &mut Kit, c: &Ctx, r: &Obj) -> (usize, Top, usize, String) {
     // What it needs from you: a part of its own, its headline in the state's colour.
     let said = if c.agent { r.t("said") } else { String::new() };
     let mut told = String::new();
-    if r.b("archivedAt") { k.alert(Ink::Muted, "Archived", &format!("Read-only. {} restores it. Its state and all its data are kept.", key_name("archive")), &[]); }
+    if r.b("archivedAt") { k.alert(Ink::Muted, "Archived", &format!("Read-only. {} restores it. Its agent ended and its temporary files went; its worktree, branch and history are kept.", key_name("archive")), &[]); }
     if let Some(f) = failure.as_ref().filter(|_| waiting_of(r).map(|w| w.s("who") == "agent").unwrap_or(false)) {
         told = f.t("detail");
         let w = waiting_of(r).unwrap();

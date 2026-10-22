@@ -80,8 +80,10 @@ Every command accepts `--json`. Below, `herdr-projects` stands for that path.
   (`--if`: only for a task whose branch, title or repo is like that, `*` anything, `!=` not like); `--repo`,
   `--research`, `--chat` and any work setting (`--worker.agent codex`) as on `delegate`. `automations show|change|on|off|run|firings|remove <name>`;
   its settings later: `set <name> <value> --automation <name>`. There is no webhook trigger. Only when the human asks.
-- `herdr-projects archive <id>` hides a task and keeps everything; `restore <id>` brings it back; `clear <id>` removes it
-  (only when the human plainly asks). `archive --done [--repo NAME]` archives every done task of that repo (or of every
+- `herdr-projects archive <id>` puts a task that is not at work away: its own herdr space closes (its agent ends with
+  it) and its temporary files are freed; its worktree, branch and history stay. `restore <id>` brings it back to the
+  list and starts nothing. `clear <id>` stops its agent and removes the task; a worktree with unsaved or unmerged work
+  is kept on disk, and it says where (only when the human plainly asks). `archive --done [--repo NAME]` archives every done task of that repo (or of every
   repo) in one go; one that works, waits, is to do or is pinned stays.
 
 If you are an agent or a reviewer the board itself started on a task, your rules were given to you at the start, and
