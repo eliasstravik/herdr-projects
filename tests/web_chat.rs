@@ -107,11 +107,14 @@ fn the_chats_bar_has_a_switch_hide_full_screen_and_a_grip_and_the_boards_own_con
     // tap on the other presses the board's own key, as space does on the terminal board; with nobody else, only a name
     // (the top row's coordinator first, the selected row's agent second; no main Coordinator)
     assert!(!TALK.contains("talkNames") && CHAT.contains("const other = c.toAgent ? c.top : c.row;"));
-    assert!(CHAT.contains(r#"onclick: () => { if (!pressed && !busy && now) onPress("talk"); }"#) && CHAT.contains(r#"who.replaceChildren(h("span.sw-who-switch.segmented", top, agent), kind);"#));
+    assert!(CHAT.contains(r#"onclick: () => { if (!pressed && !busy && now) onPress("talk"); }"#) && CHAT.contains(r#"who.replaceChildren(...[h("span.sw-who-switch.segmented", top, agent), kind].filter(Boolean));"#));
     assert!(CHAT.contains("const [top, agent] = c.toAgent ? [choice(c.top, false, null), choice(lit, true, mark)] : [choice(lit, true, mark), choice(c.row, false, rowMark)];") && CHAT.contains(r#"if (!other || other === lit) { who.className = "sw-who is-one";"#));
     // the one you talk to by its name in the status colour of where it stands, then the kind of agent dimmed
     assert!(CHAT.contains("const t = c.title, lit = t?.steps?.length ? t.steps[t.steps.length - 1] : c.name, edge = t?.edge || \"text\";") && CHAT.contains("h(\"span.sw-who-kind\", `· ${t.kind}`)"));
-    assert!(CSS.contains(".sw-who-pick.is-on:is(.sw-e-red, .sw-e-yellow, .sw-e-green, .sw-e-review, .sw-e-queue, .sw-e-teal) .sw-who-name { color: var(--sw-e); }"));
+    assert!(CSS.contains(".sw-who-pick.is-on:is(.sw-e-red, .sw-e-yellow, .sw-e-green, .sw-e-review, .sw-e-queue, .sw-e-teal, .sw-e-check, .sw-e-todo, .sw-e-auto, .sw-e-accent) .sw-who-name { color: var(--sw-e); }"));
+    assert!(CSS.contains(".sw-e-check { --sw-e: var(--sw-check); }"), "a check's name in the check's colour, as the frame");
+    // with no kind (the archive: no title) nothing is written in its place: replaceChildren would write "null"
+    assert!(CHAT.contains("kind].filter(Boolean)") && !CHAT.contains("), kind);"));
     // each with how it stands: the chat's own mark on the one you talk to, a task's row's (or a coordinator's row's) mark on the other
     assert!(CHAT.contains("const rowMark = row ? markEl(row.mark, row.color, row.markDim) : head ? markEl(head.t, head.c, !!head.d) : null;"));
     // how they stand in words beside it; on a narrow bar a word the mark already says steps aside

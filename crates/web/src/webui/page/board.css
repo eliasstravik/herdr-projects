@@ -66,8 +66,8 @@
    on a phone it scrolls sideways, with the shorter names (Needs, Coords, Autos). */
 .sw-shows { flex: none; display: flex; align-items: center; gap: var(--space-1, 4px); padding: var(--space-1, 4px) var(--space-3, 12px); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; border-bottom: var(--hairline, 1px) solid var(--sw-line); container-type: inline-size; }
 .sw-shows::-webkit-scrollbar { display: none; }
-/* With a mouse there is no swipe to scroll it: what does not fit goes on a second line. */
-@media (hover: hover) and (pointer: fine) { .sw-shows { flex-wrap: wrap; overflow-x: visible; } }
+/* Always one row. With a mouse it scrolls sideways with the wheel (board.js) and shows a thin scrollbar. */
+@media (hover: hover) and (pointer: fine) { .sw-shows { scrollbar-width: thin; scrollbar-color: var(--border-strong, #3e3830) transparent; } .sw-shows::-webkit-scrollbar { display: block; height: 4px; } }
 .sw-show { flex: none; display: inline-flex; align-items: center; gap: 0.4em; min-height: var(--touch-target, 40px); padding: 0 var(--space-3, 12px); border: 0; border-radius: var(--radius-pill, 999px); background: none; color: var(--sw-dim); font: inherit; font-size: var(--fs-sm, 13px); white-space: nowrap; cursor: pointer; }
 @media (hover: hover) { .sw-show:not(.is-lit):hover { background: var(--sw-hover); color: var(--sw-text); } }
 .sw-show-n { font-variant-numeric: tabular-nums; }

@@ -189,7 +189,7 @@ export function chatEl({ onSend, onPress, onDock }) {
     const kind = t?.kind ? h("span.sw-who-kind", `· ${t.kind}`) : null;
     const mark = markEl(c.mark.t, c.mark.c);
     const choice = (name, pressed, m) => h(`button.sw-who-pick${pressed ? `.is-on.sw-e-${edge}` : ""}`, { type: "button", "aria-pressed": String(pressed), title: pressed ? `Talking to ${said}` : `Talk to ${name} instead`, onclick: () => { if (!pressed && !busy && now) onPress("talk"); } }, m, h("span.sw-who-name", name));
-    if (!other || other === lit) { who.className = "sw-who is-one"; who.replaceChildren(h(`span.sw-who-pick.is-on.sw-e-${edge}`, { title: said }, mark, h("span.sw-who-name", lit)), kind); return; }
+    if (!other || other === lit) { who.className = "sw-who is-one"; who.replaceChildren(...[h(`span.sw-who-pick.is-on.sw-e-${edge}`, { title: said }, mark, h("span.sw-who-name", lit)), kind].filter(Boolean)); return; }
     // The other one's mark: the selected task's row's, or the selected heading's coordinator's.
     const row = snap.list?.groups?.flatMap((g) => g.rows).find((r) => r.id === snap.list.selected);
     const head = snap.list?.groups?.find((g) => g.id === snap.list.selected)?.pilot?.mark?.find((x) => x.t.trim());
@@ -197,7 +197,7 @@ export function chatEl({ onSend, onPress, onDock }) {
     // The top row's coordinator first, the row's agent second, whichever you talk to now.
     const [top, agent] = c.toAgent ? [choice(c.top, false, null), choice(lit, true, mark)] : [choice(lit, true, mark), choice(c.row, false, rowMark)];
     who.className = "sw-who";
-    who.replaceChildren(h("span.sw-who-switch.segmented", top, agent), kind);
+    who.replaceChildren(...[h("span.sw-who-switch.segmented", top, agent), kind].filter(Boolean));
   }
   // Where the web UI's chat of them is asked again when who it is changes, and while the board's own stands in, when
   // how they stand changes (a Coordinator that has just started).

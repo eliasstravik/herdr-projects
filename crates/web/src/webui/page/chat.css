@@ -26,7 +26,8 @@
 .sw-who-switch { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 2px; padding: 2px; background: var(--bg-elevated, #211e1a); border: var(--hairline, 1px) solid var(--sw-line); border-radius: var(--radius-md, 8px); }
 .sw-who-pick { position: relative; flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--space-2, 8px); height: 32px; padding: 0 var(--space-3, 12px); border: 0; border-radius: calc(var(--radius-md, 8px) - 2px); background: transparent; color: var(--sw-dim); font: inherit; font-size: var(--fs-md, 14px); font-weight: var(--fw-medium, 500); cursor: pointer; }
 .sw-who-pick.is-on { background: var(--bg-hover, #2a2621); color: var(--sw-strong); }
-.sw-who-pick.is-on:is(.sw-e-red, .sw-e-yellow, .sw-e-green, .sw-e-review, .sw-e-queue, .sw-e-teal) .sw-who-name { color: var(--sw-e); }
+.sw-who-pick.is-on:is(.sw-e-red, .sw-e-yellow, .sw-e-green, .sw-e-review, .sw-e-queue, .sw-e-teal, .sw-e-check, .sw-e-todo, .sw-e-auto, .sw-e-accent) .sw-who-name { color: var(--sw-e); }
+.sw-e-check { --sw-e: var(--sw-check); } .sw-e-todo { --sw-e: var(--sw-todo); } .sw-e-auto { --sw-e: var(--sw-auto); } .sw-e-accent { --sw-e: var(--accent, #f0a830); }
 .sw-e-red { --sw-e: var(--sw-red); } .sw-e-yellow { --sw-e: var(--sw-yellow); } .sw-e-green { --sw-e: var(--sw-green); } .sw-e-review { --sw-e: var(--sw-review); } .sw-e-queue { --sw-e: var(--sw-queue); } .sw-e-teal { --sw-e: var(--sw-teal); }
 @media (hover: hover) { .sw-who-pick:not(.is-on):hover { color: var(--sw-text); } }
 .sw-who.is-one .sw-who-pick { padding-left: 0; background: none; cursor: default; font-weight: var(--fw-semibold, 600); }

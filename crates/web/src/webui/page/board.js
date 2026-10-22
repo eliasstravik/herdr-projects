@@ -147,7 +147,8 @@ export function openBoard({ onClose }) {
       h("span.sw-head-space"),
       h("button.icon-button", { type: "button", "aria-label": "Find tasks", title: "Find tasks", onclick: () => { finding = !finding; draw(); if (finding) find.focus(); else if (snap?.flags.filter) { find.value = ""; call("find", { text: "" }); } } }, icon("find")),
       h("button.icon-button", { type: "button", "aria-label": "More", title: "More", "aria-haspopup": "dialog", onclick: () => { menuOpen = true; draw(); } }, icon("more"))),
-    h("nav.sw-shows", { "aria-label": "Filters", hidden: true }),
+    // One row; the wheel scrolls it sideways where it does not fit (a mouse has no sideways swipe).
+    h("nav.sw-shows", { "aria-label": "Filters", hidden: true, onwheel: (e) => { const el = e.currentTarget; if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; e.preventDefault(); el.scrollLeft += e.deltaY; } }),
     h("div.sw-find-row", { hidden: true }, find),
     h("div.sw-chips"),
     h("p.sw-note", { hidden: true, role: "status" }),

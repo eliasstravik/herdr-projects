@@ -47,6 +47,11 @@ fn whose_tasks_show_is_the_filter_rows_first_item_and_a_tap_on_it_picks() {
     assert!(BOARD.contains(r#"onclick: () => { picking = true; draw(); } }, h("span.sw-show-name", m.name), icon("down"))"#));
     assert!(!BOARD.contains("Show only this machine's tasks") && !BOARD.contains("head.machines"), "no chip for whose tasks show");
     assert!(!BOARD.contains("() => press(\"scope\")"), "nothing goes round the machines by itself");
+    // the filter row is one row everywhere: it never wraps; with a mouse the wheel scrolls it sideways
+    let css = include_str!("../crates/web/src/webui/page/board.css");
+    let rules: String = css.lines().filter(|l| l.contains(".sw-shows")).collect();
+    assert!(!rules.contains("flex-wrap: wrap") && rules.contains("overflow-x: auto"), "{rules}");
+    assert!(BOARD.contains("el.scrollLeft += e.deltaY;"));
     assert!(SHEETS.contains("const out = await get(\"boards\");") && SHEETS.contains("\"aria-current\": b.scope === scope ? \"true\" : null"));
     let w = world_with(Opts { repo: true, settings: json!({ "board.machines": "vm-a" }), ..Default::default() });
     let far = Far::new(&w.base);
