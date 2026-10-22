@@ -222,6 +222,14 @@ own worktree:
   every task waiting for your approval is updated, and a task under review the moment its review ends;
 - **after you approve**, once more, as the last safety net. It should rarely find anything.
 
+**Fewer merges while it waits: `merge.sync approve`.** In a busy repo, merging main on every move gives a waiting
+pull request a merge commit, a CI run and a round of bot reviews each time, and only the last merge before landing
+matters. With `herdr-projects set merge.sync approve` (for a task, a repo or all), main is merged in before review and
+after your yes only. While the task waits, the board makes a test merge in memory (`git merge-tree`), which changes
+nothing in its worktree, branch or pull request: a conflict is handled as a real one (below), so you know before you
+approve; a clean one changes nothing. After your yes, main is merged, checked again and the work lands, as always.
+`always` (built in) is the behaviour described above.
+
 **A clean update is silent.** If it changed the commit, the check runs again on the result. The review is not repeated
 when taking main in is all that happened to work that already passed ([below](#a-review-that-passed-is-not-repeated-for-a-merge-of-main)),
 or when the update touched none of the files the task itself changed. The verdict you have stands, and the task does not

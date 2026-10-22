@@ -1,7 +1,9 @@
 //! Main moved while a task waits for your approval (another task merged, or anything else): the board brings the
 //! task's branch up to date by itself, and checks it again. Started by the housekeeping pass. Only a task at rest is
-//! touched: waiting for approval, its worktree clean and on exactly the commit that was reviewed. `force`: main could
-//! not even be asked about (the periodic fetch failed), so look at whatever is known locally.
+//! touched: waiting for approval, its worktree clean and on exactly the commit that was reviewed. Under `merge.sync
+//! approve` nothing is merged here: a test merge only finds out whether main conflicts (sync/probe.rs), and a conflict
+//! is handled as a real one. `force`: main could not even be asked about (the periodic fetch failed), so look at
+//! whatever is known locally.
 use super::shared::{approval_message, fail, failure, FailHow};
 use crate::flow;
 use crate::json::*;
@@ -21,7 +23,9 @@ pub fn sync_job(id: &str, force: bool) {
         // Only a task at rest is merged into. One that is not, or whose main cannot be read, is held as "behind main".
         let mut why = String::new();
         let mut r: Option<sync::Synced> = None;
-        if branch_of(tp) != t.s("branch") { why = format!("its worktree is not on its own branch {}", t.s("branch")); }
+        // Held before its push and review: the rest of the line is still to run, so main is really merged in then.
+        if sync::probe::only_at_approve(&t) && !t.at("syncBlocked").b("rerun") { r = Some(sync::test_main(&t, &tree)); }
+        else if branch_of(tp) != t.s("branch") { why = format!("its worktree is not on its own branch {}", t.s("branch")); }
         else if !flow::git::dirty(tp).is_empty() { why = "its worktree has unsaved files".into(); }
         else if t.b("reviewedHead") && flow::git::head_of(tp) != t.s("reviewedHead") { why = "its branch changed after the review".into(); }
         else { r = Some(sync::sync_main(&t, &tree)); }
@@ -35,7 +39,7 @@ pub fn sync_job(id: &str, force: bool) {
         if r.status == "conflict" { sync::conflict_back(id, &mut g, &tree, &r, &mut |g, failure, seen| { let _ = fail(g, failure, FailHow { keep_intent: false, patch: seen }); }); return Ok(()); }
         // Held before its push and review (unpushed below): the remote answers again, so the rest of the line runs now.
         if t.at("syncBlocked").b("rerun") { return super::pipeline::pipeline(id, &mut g, t.s("summary"), false, "sync", Some(&r)); }
-        if r.status != "merged" { // already current: asked again when main moves
+        if r.status != "merged" { // already current, or (a test merge) it would merge cleanly: asked again when main moves
             let c = g.set(|t| { let was = t.b("syncBlocked"); let p = sync::seen_patch(t, Some(&r)); sync::apply(t, p); if was { t.put("syncBlocked", Value::Null); let m = approval_message(t); t.put("msg", m); } })?;
             flow::sidebar::tell_sidebar(&c);
             return Ok(());

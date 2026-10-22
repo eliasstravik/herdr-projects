@@ -1,6 +1,6 @@
 //! Keeping tasks up to date with a remote's main: main moving there is noticed by the periodic fetch and the updated
 //! branch pushed; a fetch that fails is never a sync, and never fails finished work; with pull requests off, your
-//! local branch is the main.
+//! local branch is the main. Under `merge.sync approve` a waiting task is only test-merged: no merge commit, no push.
 use crate::common;
 use common::*;
 use serde_json::json;
@@ -18,6 +18,10 @@ fn last_prompt(w: &World, id: &str) -> String { prompts(w, task(id).at("link").s
 fn place(t: &Obj) -> String { sw::flow::sidebar::entry_now(t, sw::clock::now()).place }
 /// The remote, and a place where no remote is.
 fn remote(w: &World) -> (String, String) { (w.base.join("origin.git").display().to_string(), w.base.join("gone.git").display().to_string()) }
+fn head(t: &Obj) -> String { git(tree(t), &["rev-parse", "HEAD"]) }
+fn pane_prompts(w: &World, id: &str) -> Vec<String> { prompts(w, task(id).at("link").s("pane")) }
+/// What the task's branch holds at the remote.
+fn pushed(w: &World, t: &Obj) -> String { git(&w.root, &["ls-remote", "--heads", "origin", t.s("branch")]).split('\t').next().unwrap_or("").to_string() }
 /// Someone else pushes to main at the remote: what they pushed.
 fn they_push(w: &World, file: &str, body: &str) -> String {
     let other = w.base.join("other");
@@ -149,4 +153,40 @@ fn when_the_periodic_fetch_fails_nothing_is_known_about_main_waiting_tasks_are_h
     let t = settle(&id);
     assert_eq!(t.s("stage"), "working"); assert_eq!(t.at("failure").s("title"), "Merge conflict with main");
     assert!(last_prompt(&w, &id).contains(&format!("Target commit: {target}")));
+}
+
+#[test]
+fn with_approve_main_moving_at_the_remote_makes_no_merge_and_no_push_while_it_waits_and_always_still_does() {
+    let w = world_with(Opts { repo: true, origin: true, settings: json!({ "review.when": "never", "merge.checks": "none" }), ..Default::default() });
+    w.gh_says(json!({ "origin": w.base.join("origin.git").display().to_string() }));
+    let start = |title: &str, file: &str, how: &str| { w.script(json!({ "worker": [{ "files": { file: format!("{title}\n") }, "commit": title, "note": format!("Did {title}.") }] })); let id = w.add(title); delegate_with(&id, json!({ "merge.sync": how })); assert_eq!(settle(&id).s("stage"), "approval"); id };
+    let busy = start("busy", "busy.txt", "always");
+    let calm = start("calm", "calm.txt", "approve"); // last, so the one pull request the fake gh knows is its own
+    let (before, was) = (task(&calm), pushed(&w, &task(&calm)));
+    assert_eq!(was, head(&before), "its branch was pushed once, before it waited");
+    let target = they_push(&w, "g.txt", "theirs\n");
+    sw::housekeeping::poll_prs();
+    clear_jobs();
+    housekeep(&w);
+    assert_eq!(sync_jobs(), 2, "both look at main");
+    // approve: a test merge only. The branch, the worktree and the pull request are as they were
+    let t = settle(&calm);
+    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure")); assert!(t.at("syncBlocked").is_null() && t.at("failure").is_null());
+    assert_eq!(head(&t), head(&before)); assert!(!holds(tree(&t), &target)); assert_eq!(git(tree(&t), &["status", "--porcelain"]), "");
+    assert_eq!(pushed(&w, &t), was, "nothing pushed");
+    assert_eq!(t.s("syncSeen"), target, "looked at once"); assert_eq!(t.s("syncedTo"), before.s("syncedTo"), "but not taken in");
+    assert_eq!(t.s("msg"), before.s("msg")); assert_eq!(pane_prompts(&w, &calm).len(), 1);
+    // always: merged and pushed as before
+    let b = settle(&busy);
+    assert_eq!(b.s("stage"), "approval", "{}", b.at("failure")); assert!(holds(tree(&b), &target)); assert_eq!(pushed(&w, &b), head(&b)); assert_eq!(b.s("syncedTo"), target);
+    clear_jobs();
+    housekeep(&w);
+    assert_eq!(sync_jobs(), 0, "and neither is asked again until main moves");
+    // after your yes: main is merged in, pushed, and the pull request merges at that commit
+    finish_line::approve(&calm, None, false).unwrap();
+    let t = settle(&calm);
+    assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
+    // merged through its pull request at a commit that holds main, the one pushed after main was merged in
+    let at = gh_log(&w).lines().filter_map(|l| l.strip_prefix("pr merge 7 --squash --match-head-commit ")).last().unwrap_or("").to_string();
+    assert!(w.gh.merged.get()); assert!(!at.is_empty() && common::worktrees::git(&w.base.join("origin.git"), &["merge-base", "--is-ancestor", &target, &at]).is_ok(), "merged at a commit that holds main: {at}");
 }
