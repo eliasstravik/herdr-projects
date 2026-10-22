@@ -1,6 +1,6 @@
-//! Who you type to is said by colour, and colour is never the only clue: the text box's frame (never the prompt or
-//! anything else inside it) is violet when it sends to a task's agent, and its top edge names it (view/chat_title.rs);
-//! herdr's plain text colour where no one is talked to; each status has a colour of its own ("to do" a readable grey of its own); with NO_COLOR the same words
+//! Colour means status only, and colour is never the only clue: the text box's frame (never the prompt or anything else
+//! inside it) is the status colour of the task whose agent it sends to, the base colour for one to do, done or archived,
+//! and its top edge names it (view/chat_title.rs); herdr's plain text colour where no one is talked to; each status has a colour of its own ("to do" a readable grey of its own); with NO_COLOR the same words
 //! stand there with no colour at all.
 use crate::common;
 use common::*;
@@ -29,12 +29,11 @@ fn starts(l: &Inked, ink: Ink, what: &str) { assert_eq!(l.0.iter().find(|p| !p.t
 fn ends(l: &Inked, ink: Ink, what: &str) { assert_eq!(l.0.iter().rev().find(|p| !p.t.trim().is_empty()).map(|p| p.c), Some(ink), "{what}: its right edge: {l:?}"); }
 
 #[test]
-fn the_box_edge_is_violet_for_a_tasks_agent_and_plain_text_with_no_coordinator() {
+fn the_box_edge_is_the_status_colour_of_the_task_it_talks_to_and_plain_text_with_no_coordinator() {
     let w = world();
     let id = w.add("Make f");
     let mut s = State::new(Default::default(), Default::default());
     let base = task(&id);
-    let violet = sw::board::view::chat_title::AGENT_EDGE;
     for typed in ["", "half a sentence"] {
         s.input.set_text(typed);
         for (name, fields, colour) in statuses() {
@@ -44,11 +43,12 @@ fn the_box_edge_is_violet_for_a_tasks_agent_and_plain_text_with_no_coordinator()
                 if !host.is_empty() { r.put("host", host); }
                 let what = format!("{name}{}{}", if host.is_empty() { "" } else { " on another machine" }, if typed.is_empty() { "" } else { ", typing" });
                 if host.is_empty() { assert_eq!(status_ink(&r), colour, "{name}"); }
-                // Talking to a task: the box is a task agent's, violet whatever the task's status (its mark says that).
+                // Talking to a task: the edge is its status colour, as its mark; base for one to do, done or archived.
                 s.reply = true;
-                assert_eq!(box_ink(&s, Some(&r)), violet, "{what}");
+                let edge = if ["to do", "done", "archived"].contains(&name) { Ink::Text } else { colour };
+                assert_eq!(box_ink(&s, Some(&r)), edge, "{what}");
                 let (framed, _) = chat_box(&mut s, 60, 3, Some(&r), &[Inked::plain("hello")]);
-                for l in &framed { starts(l, violet, &what); ends(l, violet, &what); }
+                for l in &framed { starts(l, edge, &what); ends(l, edge, &what); }
                 // its top edge is the ladder; inside, only the message and the line you type on
                 assert!(framed[0].text().starts_with("╭─ ") && framed[0].text().contains(" › "), "{what}: {}", framed[0].text());
                 // inside the frame: the message as it came, the prompt in plain text

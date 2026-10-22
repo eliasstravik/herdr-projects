@@ -123,9 +123,9 @@ fn the_web_board_has_each_tasks_tag_on_its_row_on_the_open_task_and_in_the_chats
     assert_eq!((s.at("panel").s("tag"), s.at("panel").s("title")), ("HSW-134", "Number one three four"));
     let s = web(&w, "press", json!({ "id": "talk" }));
     assert_eq!((s.at("chat").s("tag"), s.at("chat").s("name")), ("HSW-134", "Number one three four"));
-    // The box says who gets your words by its frame too: a task's agent's violet, and the plain text colour where
-    // no coordinator can run.
-    assert_eq!(s.at("chat").s("box"), "auto"); assert!(s.at("send").s("place").contains("starts an agent"), "{}", s.at("send"));
+    // The box's frame is the status colour of whoever gets your words: a task to do (no agent yet) has the base
+    // colour, as where no coordinator can run.
+    assert_eq!(s.at("chat").s("box"), "text"); assert!(s.at("send").s("place").contains("starts an agent"), "{}", s.at("send"));
     assert_eq!(web(&w, "press", json!({ "id": "talk" })).at("chat").s("box"), "text");
     web(&w, "press", json!({ "id": "talk" }));
     web(&w, "pick", json!({ "id": big, "open": false }));

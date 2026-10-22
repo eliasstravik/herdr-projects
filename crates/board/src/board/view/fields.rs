@@ -54,24 +54,16 @@ pub fn row_title(s: &State, r: &Obj) -> String {
     if r.b("archivedAt") && !s.archive_view { t.push_str(" [archived]"); }
     t
 }
-/// The title is plain whatever the task's state: the mark and the heading carry the state's colour. A live task's is
-/// bold. An automation's name is plain, greyed while it is off; the `[auto]` tag is in the automations' colour.
+/// The title is in the base colour whatever the task's state, never bold: colour means status, and the mark carries
+/// it. What is said of it after it (`×3`, `[auto]`, `[research]`, `[chat]`, `[archived]`) is dimmed. An automation's
+/// name is plain, greyed while it is off.
 pub fn name_ink(r: &Obj, s: &str) -> Inked {
     if is_auto(r) { return if auto(r).b("on") { Inked::plain(s) } else { Inked::of(s, Ink::Muted) }; }
-    let bold = ["working", "blocked", "error"].contains(&r.s("state"));
+    let at = crate::re!(r"(?: ×\d+)?(?: \[[a-z]+\])*$").find(s).map(|m| m.start()).unwrap_or(s.len());
     let mut out = Inked::new();
-    if r.at("automation").b("id") {
-        let re = crate::re!(r"\[auto\]( \[archived\])?$");
-        if let Some(m) = re.find(s) {
-            out.push(&s[..m.start()], Ink::Plain);
-            let tag = if r.s("state") == "done" { Inked::of("[auto]", Ink::Auto).quiet() } else { Inked::of("[auto]", Ink::Auto) };
-            out = out.add(tag);
-            out.push(&s[m.start() + 6..], Ink::Plain);
-            return if bold { out.bold() } else { out };
-        }
-    }
-    out.push(s, Ink::Plain);
-    if bold { out.bold() } else { out }
+    out.push(&s[..at], Ink::Plain);
+    if at < s.len() { out.push(&s[at..], Ink::Muted); }
+    out
 }
 /// What a row says on its first line: nothing on a live task's (it says it on its second). An automation says its
 /// trigger there, on a narrow screen (`tall`) under its name instead.

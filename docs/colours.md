@@ -1,8 +1,9 @@
 # Colours
 
-**The board uses Herdr's own theme, and a task's colour says where it stands.** The text box's frame takes the colour of
-whoever you type to. Colour is never the only clue: every state has its own mark and words too, and with `NO_COLOR` the
-board still reads.
+**The board uses Herdr's own theme, and colour means status only.** A mark's colour says where a task or a coordinator
+stands, and the text box's edge takes the status colour of whoever you type to. Names are never coloured: machines,
+projects and tasks are all in the base colour. Colour is never the only clue: every state has its own mark and words
+too, and with `NO_COLOR` the board still reads.
 
 | Colour | Means |
 |---|---|
@@ -16,8 +17,8 @@ board still reads.
 | light grey | the board runs its own check |
 | purple | an automation |
 | orange | an autopilot's wakes in the chat |
-| amber (the box's edge only) | you type to a coordinator: all machines', a machine's or a project's |
-| purple (the box's edge only) | you type to a task's agent |
+| the base colour | every name: a machine's, a project's, a task's title |
+| the fainter grey | what goes with a name: counts (`2 machines · 5 tasks`, `7 tasks`), keys (`HP`, `HOME`), times, and tags after a title (`[auto]`, `[research]`, `[chat]`, `×3`) |
 
 ## The board is in Herdr's theme
 
@@ -109,7 +110,7 @@ On the web Board it is the board's own `#ec4899`, pulled towards the page's text
 
 Automations are not tasks, so nothing of theirs may be mistaken for a status. They have one colour of their own, used
 for the heading `automations` in the list, the mark of each of their rows (`⟳`, dimmed while it is off), the `[auto]`
-tag of a task one made, and the automation's line in the `?` menu.
+mark of an automation's line in the `?` menu. The `[auto]` tag of a task one made is a tag like any other: dimmed.
 
 It is **Herdr's own `mauve`**, the one colour of Herdr's theme no status uses, so it changes with the theme like
 everything else. It is used where it is a purple (from violet to pink) and told apart from the status colours (red,
@@ -214,24 +215,37 @@ The web Board uses the web UI's own colours. Its "to do" and its greyed-out word
 (`--text-dim`), which is 4.5 to 1 or more against the page, its panels and a hovered row on every palette of the web UI
 (measured on herdr-web-ui 0.4.8: 4.5 to 9.9). The board's own teal for done is 3.6 to 1 or more there.
 
+## Names have no colour; the hierarchy is weight and indent
+
+- **Machines** are in bold, in the base colour (`All machines` too). **Projects** are in normal weight, one step in.
+  **Tasks** are in normal weight, another step in. No accent on a machine's name, no colour on a project's or a task's.
+- **What goes with a name is dimmed**: counts, keys, times, and the tags after a title (`[auto]`, `[research]`,
+  `[chat]`, `[archived]`, `×3`).
+- **Status keeps its colours**: the marks, a status group's heading, the filter row's lit filter and the selected row
+  are as they were.
+
 ## The box says who you type to
 
-The text box sends to a coordinator or to a task's agent. Its edge says which kind, at a glance, and its ladder says
-which one ([machine and project coordinators](machine-and-project-coordinators.md#the-chat-box-names-who-it-talks-to)).
-Only the edge: inside it, who said what, what they said and the prompt mark `❯` look the same whoever the box talks to.
+The text box's edge takes the status colour of whoever it talks to, as their mark has it; its ladder already says who
+([machine and project coordinators](machine-and-project-coordinators.md#the-chat-box-names-who-it-talks-to)). Inside it,
+your words are in the base colour you type in, theirs grey.
 
-| The box sends to | Colour of its edge |
+| Who the box talks to | Colour of its edge |
 |---|---|
-| a coordinator: all machines', a machine's or a project's | amber (the theme's yellow) |
-| a task's agent, or a task your message starts an agent on | violet (the automations' purple) |
-| nobody: a new task where no coordinator can run, find | the theme's plain text colour |
+| idle, never started, to do, done | the base colour |
+| working | amber |
+| needs you (asks you, wants your OK) | red |
+| failed, could not start | red |
+| ready to approve, under review, queued | that status's colour |
+| a coordinator on autopilot | its `∞` mark's colour: red at `needs you`, amber while it works, else base |
+| nobody: a new task where no coordinator can run, find | the base colour |
 
 - The lit step of the ladder is in the same colour, reversed. It is the same wherever there is such a box: under the
   list, in the reply view, under the task panel and full screen, in the popup, and on the web Board, where the frame of
   the text field takes the colour.
-- **Colour is never the only clue.** The ladder names who it is (`vm-str › gtm`, `gtm › GTM-14`), the grey words in the empty box say who gets it (`Send message to gtm's coordinator`, `your message starts an agent on
-  it`), and while you type the hint line does (`enter send to HSW-34's agent`). With `NO_COLOR` the board draws no colour
-  at all and reads as it always did.
+- **Colour is never the only clue.** The ladder names who it is (`vm-str › gtm`, `gtm › GTM-14`), the grey words in the
+  empty box say who gets it (`Send message to gtm's coordinator`, `your message starts an agent on it`), and while you
+  type the hint line does (`enter send to HSW-34's agent`). With `NO_COLOR` the board draws no colour at all.
 
 On the web Board, done is a teal of the board's own: the web UI has one colour for done, and it is the green of "ready to
 approve" there, so the two would be one colour.

@@ -584,7 +584,7 @@ It looks the same for a coordinator and for a task's agent, at every window widt
 ```
 
 1. **Its top edge names who you talk to**: a ladder from the top row down (`All machines › vm-str › gtm › GTM-14`),
-   the current step lit, and the edge in its kind's colour: amber for a coordinator, violet for a task's agent
+   the current step lit, and the edge in the status colour of whoever it talks to ([colours](colours.md#the-box-says-who-you-type-to))
    ([machine and project coordinators](machine-and-project-coordinators.md#the-chat-box-names-who-it-talks-to)). One
    that never ran invites a first message.
    - One thing gets a greyed line of its own above the box: a default that changed while a coordinator runs, with the

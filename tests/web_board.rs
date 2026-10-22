@@ -29,14 +29,14 @@ fn the_web_board_shows_the_terminal_boards_list_and_one_task_whole() {
     let s = web(&w, "board", json!({}));
     let got: Vec<Vec<String>> = s.at("list").arr("groups").iter().map(|g| std::iter::once(g.t("name")).chain(g.arr("rows").iter().map(|r| r.t("id"))).collect()).collect();
     assert_eq!(got, want);
-    assert_eq!(s.at("list").arr("groups").iter().map(|g| (g.t("name"), g.t("color"))).collect::<Vec<_>>(), vec![(sw::shown::words::clean(&sw::remote::check::hostname()), "accent".into()), ("ready to approve".into(), "green".into()), ("working".into(), "yellow".into()), ("to do".into(), "todo".into())]); // the top row, this machine's, then its groups
+    assert_eq!(s.at("list").arr("groups").iter().map(|g| (g.t("name"), g.t("color"))).collect::<Vec<_>>(), vec![(sw::shown::words::clean(&sw::remote::check::hostname()), "plain".into()), ("ready to approve".into(), "green".into()), ("working".into(), "yellow".into()), ("to do".into(), "todo".into())]); // the top row, this machine's, then its groups
     let rows = rows_of(&s);
     let (ready, working, todo) = (&rows[0], &rows[1], &rows[2]);
     assert_eq!((ready.s("title"), ready.s("mark"), ready.s("color")), ("Make f", "◆", "green"));
     assert_eq!(said(ready.at("says")), "Pass · 1 minor"); assert_eq!(ready.at("says")[0].s("c"), "green");
     assert_eq!(ready.at("review"), &json!([{ "t": "R#1", "c": "green" }]));
     assert!(regex::Regex::new(r"^\d+s ago$").unwrap().is_match(ready.s("time")), "{}", ready.s("time"));
-    assert_eq!((working.at("progress"), working.s("percent"), said(working.at("says")), working.at("strong"), working.at("live")), (&json!(40.0), "40%", "Drafting".to_string(), &json!(true), &json!(true)));
+    assert_eq!((working.at("progress"), working.s("percent"), said(working.at("says")), working.at("strong"), working.at("live")), (&json!(40.0), "40%", "Drafting".to_string(), &json!(false), &json!(true))); // a title is never bold: colour and weight are not status
     assert_eq!((todo.at("progress"), todo.at("says"), todo.at("live"), todo.s("mark")), (&json!(null), &json!([]), &json!(false), "○"));
     // a page that already has this is told only that
     let again = web(&w, "board", json!({ "have": s.s("mark") }));

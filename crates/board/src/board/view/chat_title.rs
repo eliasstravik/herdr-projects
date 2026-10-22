@@ -1,16 +1,26 @@
 //! The chat box names who it talks to: a ladder in its top edge from the top row down (`All machines › vm-str › gtm ›
-//! GTM-14`) with the current step lit, and its edge in its kind's colour: amber for a coordinator, violet for a task's
-//! agent. Inside it only the reply. One that never ran invites a first message.
+//! GTM-14`) with the current step lit, and its edge in the status colour of whoever it talks to (its label already says
+//! who): base idle or never started, amber working, red when it needs you or failed, as the board's marks. Inside it only the reply. One that never ran invites a first message.
 use crate::board::state::{Mode, State};
 use crate::board::update::coords::{look_of, talking, Target};
 use crate::board::update::top;
 use crate::json::*;
 use crate::shown::ink::{Ink, Inked};
 
-/// A coordinator's edge: amber.
-pub const COORD_EDGE: Ink = Ink::Yellow;
-/// A task's agent's edge: violet.
-pub const AGENT_EDGE: Ink = Ink::Auto;
+/// A coordinator's edge, in the colour of where it stands as its row's mark is: base idle (or never ran), amber working,
+/// red when it needs you or could not start; on autopilot, autopilot's mark's colour.
+fn coordinator_edge(s: &State, t: &Target, v: &crate::coordinator::look::Look) -> Ink {
+    let p = crate::board::update::pilot::view(s, t);
+    let working = ["working", "starting"].contains(&v.state.as_str());
+    if !v.error.is_empty() || p.s("state") == "could not start" || v.state == "blocked" || !v.asks.is_empty() { return Ink::Red; }
+    if p.b("on") { return match p.s("state") { "needs you" => Ink::Red, "working" => Ink::Yellow, _ => if working { Ink::Yellow } else { Ink::Text } }; }
+    if working { Ink::Yellow } else { Ink::Text }
+}
+/// A task's agent's edge: its task's status colour, as its mark has it; base for one with no agent at work (to do,
+/// done, archived).
+fn task_edge(r: &Obj) -> Ink {
+    if r.b("archivedAt") || ["to do", "done"].contains(&crate::shown::states::group_of(r)) { Ink::Text } else { crate::shown::states::status_ink(r) }
+}
 /// Who the chat talks to, as its title says it.
 pub struct Title { pub steps: Vec<String>, pub edge: Ink, pub fresh: bool }
 /// The coordinator the chat talks to: a row's, or the top row's by default (this machine's top-level one).
@@ -32,7 +42,7 @@ pub fn title(s: &State, r: Option<&Obj>) -> Option<Title> {
         let v = look_of(s, &t).unwrap_or_default();
         // Never ran, and nothing on its way to it yet: its box invites a first message.
         let fresh = v.state == "none" && v.talk.is_empty() && v.sent.is_empty() && v.queue == 0 && !s.just_sent.contains_key(&t.key());
-        return Some(Title { steps, edge: COORD_EDGE, fresh });
+        return Some(Title { steps, edge: coordinator_edge(s, &t, &v), fresh });
     }
     let r = r.filter(|_| s.reply && s.reply_id == s.sel)?;
     steps.push(machine(s, r.s("host")));
@@ -40,7 +50,7 @@ pub fn title(s: &State, r: Option<&Obj>) -> Option<Title> {
     let tag = crate::board::tags::number_tag(r, &s.data.keys, &s.scope, false);
     let tag = if tag.is_empty() { crate::text::cut(r.s("title"), 24) } else { tag };
     steps.push(tag.clone());
-    Some(Title { steps, edge: AGENT_EDGE, fresh: false })
+    Some(Title { steps, edge: task_edge(r), fresh: false })
 }
 /// The ladder in the box's top edge, `width` cells wide with its corners: `╭─ All machines › vm-str ›  gtm  ───╮`, the
 /// current step lit in the edge's colour.

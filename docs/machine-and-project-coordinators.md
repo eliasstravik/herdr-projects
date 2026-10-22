@@ -71,7 +71,8 @@ uncounted.
 ```
 
 - **A ladder** in its top edge, from the top row down (`All machines › vm-str › gtm › GTM-14`), the current step lit.
-- **Its edge in its kind's colour**: amber for a coordinator, violet for a task's agent.
+- **Its edge in the status colour of whoever it talks to**, as their mark: base idle or never started, amber working,
+  red when it needs you or failed ([colours](colours.md#the-box-says-who-you-type-to)).
 - **Inside it only the conversation** and the line you type on, with no labels: what you wrote in the bright colour you
   type in, the reply in grey; the edge says who. Only someone else is named (a reviewer, autopilot's wakes, the board).
 - **One that never ran** invites a first message: `Ask it something, e.g. "what's left to do here?"`. Your first

@@ -60,10 +60,10 @@ fn every_row_has_its_tasks_number_after_the_mark_greyed_in_one_column_every_titl
     // What a live task says starts under its title, not under its number.
     let i = l.iter().position(|x| x.contains("Tidy the questions")).unwrap();
     assert_eq!(l[i + 1], format!("{}Running the tests", " ".repeat(8)));
-    // quiet: the grey of greyed-out words, never bold, whatever the task's state; the title is bold, its number is not
+    // quiet: the grey of greyed-out words, never bold, whatever the task's state; the title is the base colour, never bold
     let raw = inked(&mut v, 100, 200);
     for r in &all { let n = format!("#{}", r.s("id").split('/').nth(1).unwrap()); assert!(raw.iter().any(|l| l.0.iter().any(|p| p.t.trim() == n && p.c == Ink::Muted && !p.bold)), "{n}"); }
-    assert!(raw.iter().any(|l| l.0.iter().any(|p| p.t.contains("Tidy the questions") && p.bold)), "the title is bold");
+    assert!(raw.iter().any(|l| l.0.iter().any(|p| p.t.contains("Tidy the questions") && !p.bold && p.c == Ink::Plain)), "the title is plain, not bold");
     // One task alone has a column as wide as its own number.
     let mut alone = board(&all[2..3], false, "");
     assert!(has(&row(&lines(&mut alone, 60, 200), "Rename"), r"^[ ▌]○ #9 Rename the hint line +2h ago$"));

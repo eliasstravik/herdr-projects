@@ -30,7 +30,7 @@ opens on it. The archive has none.
 
 ## Machine and repo headings
 
-- **A machine's heading** is its name in bold, in the accent colour, nothing after it (no rule); its coordinator's mark, where it has one, is left of its caret. This machine
+- **A machine's heading** is its name in bold, in the base colour, nothing after it (no rule); its coordinator's mark, where it has one, is left of its caret. This machine
   shows its own name (its hostname).
 - Machines come in the order of Herdr's machines sidebar ([machine order](machine-order.md)).
 - **Every machine that answered has a heading, also one with no task yet.** It shows folded, `▸ vm-ssa  0 tasks`, and
@@ -41,7 +41,7 @@ opens on it. The archive has none.
 - One whose tasks cannot be read has no heading: it says so above the list, as always.
 - **A row never names its machine.** Its tag is the one it has on its own machine's board: the repo's key and number
   (`HSW-151`, [task numbers](task-numbers.md)). The heading above says whose it is.
-- **A repo's heading** is its name in bold, in the text colour of the task titles under it, with its key beside it,
+- **A repo's heading** is its name in normal weight, in the base colour of the task titles under it, one step in, with its key beside it,
   dimmed (`herdr-projects · HSW`), never `vm-str:herdr-projects`. It is never quieter than its tasks, in any theme, so
   a list of several repos reads as several blocks. It has no rule: the rule is a machine's. On each machine, the repo the board is in comes first.
 - **On one machine** (this machine's board, or one other machine by itself) the machine's row is the top row.

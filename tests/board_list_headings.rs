@@ -139,7 +139,7 @@ fn a_click_on_a_heading_folds_it_and_the_web_board_has_the_same_headings_a_tap_f
 }
 
 #[test]
-fn a_repos_heading_is_its_name_in_plain_bold_text_as_its_titles_and_its_key_muted() {
+fn a_repos_heading_is_its_name_in_plain_text_normal_weight_as_its_titles_and_its_key_muted() {
     let w = world_with(Opts { repo: true, ..Default::default() });
     w.add("Mine 1");
     let mut s = open(&w.root, 30); s.s.side = false;
@@ -149,7 +149,7 @@ fn a_repos_heading_is_its_name_in_plain_bold_text_as_its_titles_and_its_key_mute
     let pieces = |on: &str| { let l = lines.iter().find(|l| l.text().contains(on)).unwrap_or_else(|| panic!("no {on:?}")); l.0.iter().filter(|p| !p.t.trim().is_empty()).map(|p| (p.t.trim().to_string(), p.c, p.bold)).collect::<Vec<_>>() };
     let head = pieces("▾ proj");
     // not started: no mark of its coordinator's, the column blank
-    assert_eq!(head, vec![("▾".into(), Ink::Muted, false), ("proj".into(), Ink::Plain, true), ("· PRJ".into(), Ink::Muted, false)]);
+    assert_eq!(head, vec![("▾".into(), Ink::Muted, false), ("proj".into(), Ink::Plain, false), ("· PRJ".into(), Ink::Muted, false)]); // names have no colour, a project's no weight
     let title = pieces("Mine 1").into_iter().find(|p| p.0.contains("Mine 1")).unwrap();
     assert_eq!(title.1, Ink::Plain, "the heading is as loud as the titles under it: {title:?}");
     // The web board: the heading in plain text too (board.css: .sw-c-plain), its key on its own, dimmed there.

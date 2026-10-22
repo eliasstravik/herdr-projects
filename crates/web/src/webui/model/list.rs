@@ -20,11 +20,11 @@ pub fn row_of(s: &State, t: &Theme, r: &Obj, now: i64) -> Value {
     let live = r.s("state") != "done" && r.at("progress").is_number();
     json!({
         "id": r.s("id"), "label": id_label(if r.b("rid") { r.s("rid") } else { r.s("id") }), "tag": row_tag(r, &s.data.keys), "host": r.s("host"), "title": row_title(s, r),
-        "strong": (["working", "blocked", "error"].contains(&r.s("state"))), "mark": m.s("t"), "markDim": m.b("d"), "markBold": m.b("b"), "color": status_ink(r).name(), "live": is_live(r),
+        "strong": false, "mark": m.s("t"), "markDim": m.b("d"), "markBold": m.b("b"), "color": status_ink(r).name(), "live": is_live(r),
         "says": pieces(&sentence(r)), "progress": if live { json!(r.f("progress").clamp(0.0, 100.0)) } else { Value::Null },
         "percent": f.percent.text().trim(), "eta": f.eta.text(), "review": pieces(&f.review), "pr": pieces(&f.pr), "prUrl": crate::review_page::render::web_url(r.s("pr")),
         "time": format!("{}{}", f.elapsed, if f.ago { " ago" } else { "" }), "quiet": (r.s("state") == "done"),
-        "pinned": r.b("pinned"), "archived": r.b("archivedAt"), "app": r.s("app"), "made": r.at("automation").b("id"), // `made`: by an automation, whose colour its [auto] tag takes
+        "pinned": r.b("pinned"), "archived": r.b("archivedAt"), "app": r.s("app"), "made": r.at("automation").b("id"), // `made`: by an automation (its [auto] tag is dimmed, as every tag is)
     })
 }
 /// One automation's row, in a task row's places: the word on or off where a task has its number, its trigger (and why
@@ -67,7 +67,7 @@ pub fn list_of(s: &State, t: &Theme) -> Value {
             Row::Head { name, id, autos: true, folded, folded_autos, .. } => groups.push(obj(json!({ "name": name, "id": id, "folded": *folded > 0, "count": count(*folded, *folded_autos), "color": "auto", "repo": false, "automations": true, "rows": [], "more": 0 }))),
             // A machine's heading stands over its groups: one with no rows, that a tap folds and unfolds as a group's. One with
             // nothing in view shows folded, `0 tasks`.
-            Row::Head { name, id, machine: true, folded, folded_autos, empty, .. } => groups.push(obj(json!({ "name": name, "id": id, "machine": true, "folded": *folded > 0 || *empty, "count": if *empty { json!("0 tasks") } else { count(*folded, *folded_autos) }, "color": "accent", "repo": false, "coord": coord(id), "pilot": pilot(id), "rows": [], "more": 0 }))),
+            Row::Head { name, id, machine: true, folded, folded_autos, empty, .. } => groups.push(obj(json!({ "name": name, "id": id, "machine": true, "folded": *folded > 0 || *empty, "count": if *empty { json!("0 tasks") } else { count(*folded, *folded_autos) }, "color": "plain", "repo": false, "coord": coord(id), "pilot": pilot(id), "rows": [], "more": 0 }))),
             // A repo's heading in the plain text colour, as its task titles, its key dimmed. A repo used lately with no task in
             // view shows folded too, `0 tasks`.
             Row::Head { name, id, folded, folded_autos, empty, .. } => groups.push(obj(json!({ "name": if s.by_repo { repo_label(name) } else { name.clone() }, "key": if s.by_repo { crate::board::tags::heading_key(s, at) } else { String::new() }, "id": id, "folded": *folded > 0 || *empty, "count": if *empty { json!("0 tasks") } else { count(*folded, *folded_autos) }, "color": if s.by_repo { REPO_HEAD_INK.name() } else if !["needs you", "ready to approve", "working", "to do", "done"].contains(&name.as_str()) { "subtext0" } else { group_ink(name).name() }, "repo": s.by_repo, "coord": coord(id), "pilot": pilot(id), "rows": [], "more": 0 }))),

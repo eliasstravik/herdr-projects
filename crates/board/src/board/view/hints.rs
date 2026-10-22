@@ -70,7 +70,7 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
         // A machine's or a repo's heading: space talks to its coordinator, and back.
         // Space on a row talks to its coordinator; on the one it talks to, back to the top row's (none on the top row).
         let here = crate::board::update::coords::of_head(s, &s.sel);
-        let talk = if super::chat_title::coordinator(s) == here { (s.sel != crate::board::update::top::top_id(s)).then(|| Hint { stays: true, ..hk(K::Talk, &back_words(s)) }) } else { here.filter(|c| head.as_ref() != Some(c)).map(|c| Hint { lit: c.name.clone(), tint: super::chat_title::COORD_EDGE, ..hk(K::Talk, &format!("talk to {}", c.name)) }) };
+        let talk = if super::chat_title::coordinator(s) == here { (s.sel != crate::board::update::top::top_id(s)).then(|| Hint { stays: true, ..hk(K::Talk, &back_words(s)) }) } else { here.filter(|c| head.as_ref() != Some(c)).map(|c| Hint { lit: c.name.clone(), ..hk(K::Talk, &format!("talk to {}", c.name)) }) };
         // Enter folds and unfolds it; the open key goes into its coordinator, where it has one.
         let fold = crate::board::update::heads::fold_says(s);
         let mut v: Vec<Hint> = (!fold.is_empty()).then(|| hk(K::Enter, &fold)).into_iter().collect();

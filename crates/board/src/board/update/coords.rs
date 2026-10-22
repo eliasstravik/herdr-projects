@@ -13,17 +13,13 @@ use crate::shown::ink::Ink;
 /// "project:<repo>"), and its name ("vm-str coordinator").
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Target { pub host: String, pub to: String, pub name: String }
-/// A machine's heading's colour, which its machine coordinator takes too: the theme's accent.
-pub const MACHINE_INK: Ink = Ink::Accent;
-/// A repo's project coordinator's colour: the brighter grey. Its heading is not (REPO_HEAD_INK), so the three
-/// coordinators stay three colours.
-pub const REPO_INK: Ink = Ink::Soft;
-/// A repo's heading's name (grouped by repo): the plain text colour, bold, as loud as the task titles under it.
+/// A machine's heading's colour: the base colour, as every name's (colour means status only); a machine's is bold.
+pub const MACHINE_INK: Ink = Ink::Plain;
+/// A repo's heading's name: the base colour too, in normal weight, as the task titles under it.
 pub const REPO_HEAD_INK: Ink = Ink::Plain;
 impl Target {
-    /// Its colour: on the chat's frame, its name and its labels, and its name in the hints. A machine's coordinator has
-    /// its heading's accent, a repo's the brighter grey. The top-level Coordinator has none of its own (plain text).
-    pub fn ink(&self) -> Ink { if self.to == "machine" { MACHINE_INK } else { REPO_INK } }
+    /// Its colour where it is named: the base colour (colour means status only).
+    pub fn ink(&self) -> Ink { Ink::Plain }
     /// What the chat keeps your words to it under (update/chat.rs), beside the tasks' ids.
     pub fn key(&self) -> String { format!("co:{}\t{}", self.host, self.to) }
 }
