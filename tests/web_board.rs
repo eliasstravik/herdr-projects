@@ -3,6 +3,8 @@
 //! watching device may not do. Also what the page needs to know of every colour name, mark and setting.
 use crate::common;
 use common::board::{open, web, web_as};
+// The web board in the terminal board's design: its own file, a module of this one (tests/main.rs is at its size).
+mod design;
 use common::*;
 use serde_json::json;
 use sw::json::*;

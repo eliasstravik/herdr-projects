@@ -215,6 +215,11 @@ The web Board uses the web UI's own colours. Its "to do" and its greyed-out word
 (`--text-dim`), which is 4.5 to 1 or more against the page, its panels and a hovered row on every palette of the web UI
 (measured on herdr-web-ui 0.4.8: 4.5 to 9.9). The board's own teal for done is 3.6 to 1 or more there.
 
+The rules below hold there too: names in the base colour, the hierarchy by weight and how far in a row stands, the
+filter row's lit filter in its own colour (on a tint of it, as the web UI marks a status), and the chat's frame and the
+name of whoever it talks to in that one's status colour. Inside the board's own conversation your words are the web
+UI's strong text, theirs its dim text.
+
 ## Names have no colour; the hierarchy is weight and indent
 
 - **Machines** are in bold, in the base colour (`All machines` too). **Projects** are in normal weight, one step in.

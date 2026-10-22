@@ -19,29 +19,30 @@
 .sw-chatbar .icon-button { flex: none; color: var(--sw-dim); }
 .sw-chatbar .icon-button svg { width: 18px; height: 18px; }
 .sw-chatbar .icon-button:focus-visible, .sw-who-pick:focus-visible, .sw-split:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
-/* Who you talk to: the web UI's segmented switch (styles.css there: .segmented), the one you talk to pressed, each
-   with how it stands. With nobody else to talk to, only their name, plainly. */
-.sw-who { flex: 0 0 auto; max-width: 75%; min-width: 0; display: inline-flex; align-items: center; gap: 2px; }
-.sw-who.segmented { padding: 2px; background: var(--bg-elevated, #211e1a); border: var(--hairline, 1px) solid var(--sw-line); border-radius: var(--radius-md, 8px); }
+/* Who you talk to: the web UI's segmented switch (styles.css there: .segmented) of the top row's coordinator and the
+   selected row's agent, the one you talk to pressed, its name in the status colour of where it stands (as the box's
+   frame); then dimmed the kind of agent it is. With nobody else to talk to, only their name, plainly. */
+.sw-who { flex: 0 1 auto; max-width: 85%; min-width: 0; display: inline-flex; align-items: center; gap: var(--space-2, 8px); }
+.sw-who-switch { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 2px; padding: 2px; background: var(--bg-elevated, #211e1a); border: var(--hairline, 1px) solid var(--sw-line); border-radius: var(--radius-md, 8px); }
 .sw-who-pick { position: relative; flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--space-2, 8px); height: 32px; padding: 0 var(--space-3, 12px); border: 0; border-radius: calc(var(--radius-md, 8px) - 2px); background: transparent; color: var(--sw-dim); font: inherit; font-size: var(--fs-md, 14px); font-weight: var(--fw-medium, 500); cursor: pointer; }
 .sw-who-pick.is-on { background: var(--bg-hover, #2a2621); color: var(--sw-strong); }
+.sw-who-pick.is-on:is(.sw-e-red, .sw-e-yellow, .sw-e-green, .sw-e-review, .sw-e-queue, .sw-e-teal) .sw-who-name { color: var(--sw-e); }
+.sw-e-red { --sw-e: var(--sw-red); } .sw-e-yellow { --sw-e: var(--sw-yellow); } .sw-e-green { --sw-e: var(--sw-green); } .sw-e-review { --sw-e: var(--sw-review); } .sw-e-queue { --sw-e: var(--sw-queue); } .sw-e-teal { --sw-e: var(--sw-teal); }
 @media (hover: hover) { .sw-who-pick:not(.is-on):hover { color: var(--sw-text); } }
 .sw-who.is-one .sw-who-pick { padding-left: 0; background: none; cursor: default; font-weight: var(--fw-semibold, 600); }
 .sw-who-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sw-who-kind { flex: 0 10 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sw-dim); font-size: var(--fs-sm, 13px); }
 .sw-who .sw-mark { width: auto; font-size: var(--fs-sm, 13px); line-height: 1; }
-/* A machine's or a repo's coordinator: its name in its own colour, a machine's its heading's accent, a repo's the grey. */
-.sw-chat[data-tint="accent"] .sw-who-pick.is-on .sw-who-name { color: var(--accent, #f0a830); }
-.sw-chat[data-tint="subtext0"] .sw-who-pick.is-on .sw-who-name { color: var(--sw-dim); }
 /* How they stand, in words, beside the switch; on a narrow bar a word the dot already says (idle, working) steps aside,
    and anything more (no agent yet, a check's progress) takes a line of its own under the switch. */
-.sw-who-status { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sw-dim); font-size: var(--fs-sm, 13px); }
+.sw-who-status { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sw-dim); font-size: var(--fs-sm, 13px); }
 .sw-who-status:empty { display: none; }
 @container (max-width: 520px) {
   .sw-chatbar { flex-wrap: wrap; column-gap: 0; }
   /* The buttons keep their row: the switch takes the room they leave (all it needs, before the space between), its
      names cut short where that is less, so that none of them goes under it. */
   .sw-who { flex: 100 1 0; max-width: max-content; }
-  .sw-who > .sw-who-pick { padding-inline: var(--space-2, 8px); }
+  .sw-who-switch > .sw-who-pick { padding-inline: var(--space-2, 8px); }
   .sw-who-status { order: 9; flex-basis: 100%; padding-left: 2px; }
   .sw-who-status.is-plain { display: none; }
 }
@@ -56,7 +57,8 @@
 @media (pointer: coarse) { .sw-chatbar .icon-button { min-width: var(--touch-target, 40px); min-height: var(--touch-target, 40px); } .sw-who-pick::before { content: ""; position: absolute; inset: -4px 0; } }
 
 /* The board's own chat, where the web UI has none to show: the conversation over the box, read as the web UI's chat
-   reads (ChatView.css there: your words a card on the right, theirs plain prose), then the box (compose.css). */
+   reads (ChatView.css there: your words a card on the right, theirs plain prose), in the terminal board's inks (yours
+   bright, theirs grey), then the box (compose.css). */
 .sw-own { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 0 var(--space-4, 16px) max(var(--space-4, 16px), calc(env(safe-area-inset-bottom, 0px) - var(--space-4, 16px))); }
 @media (max-width: 480px) { .sw-own { padding-inline: var(--space-3, 12px); } }
 .sw-said-box { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: min(100%, var(--chat-w, 820px)); margin-inline: auto; }
@@ -66,6 +68,9 @@
 .sw-said { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: var(--border-strong, #3e3830) transparent; padding: var(--space-2, 8px) 0 var(--space-3, 12px); color: var(--sw-text); font-size: var(--chat-fs-body, 15px); line-height: var(--lh-prose, 1.65); white-space: pre-wrap; overflow-wrap: anywhere; }
 .sw-said:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: -2px; }
 .sw-turn-said + .sw-turn-said { margin-top: var(--space-4, 16px); }
+/* As in the terminal board's box: no labels on your words or theirs, yours bright as you typed them, theirs grey. */
+.sw-turn-said:not(.is-mine):not([class*="sw-c-"]) .sw-said-text { color: var(--sw-dim); }
+.sw-turn-said.is-mine .sw-said-text { color: var(--sw-strong); }
 .sw-turn-said.is-mine { display: flex; justify-content: flex-end; }
 .sw-turn-said.is-mine .sw-said-text { max-width: 80%; padding: var(--space-2, 8px) var(--space-4, 16px); border: var(--hairline, 1px) solid var(--bubble-border, var(--sw-line)); border-radius: var(--radius-lg, 12px); background: var(--bg-elevated, #211e1a); }
 .sw-by { margin-bottom: 2px; color: var(--sw-dim); font-size: var(--fs-xs, 12px); font-weight: var(--fw-semibold, 600); }
@@ -86,7 +91,7 @@
 .sw-board.sw-chat-hidden:not(.is-docked) .sw-chat { height: auto; }
 /* Full screen, and typing in the web UI's box with a phone's keyboard up: the board's header and list step aside (they
    are still there when it goes back). Docked, the board is then only its bar, over the web UI's chat. */
-.sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }
+.sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-shows, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }
 .sw-board.sw-chat-full:not(.is-docked) .sw-chat { flex: 1; height: auto; border-top: 0; }
 /* With no list over it (full screen, typing, side by side) it is no sheet: square, flat. */
 .sw-board:is(.sw-chat-full, .sw-web-typing, .sw-typing, .is-side) .sw-chat { border-radius: 0; box-shadow: none; }
@@ -105,7 +110,7 @@
    the strip iOS floats over it (--sw-kb-cover). With the chat shown, the board's header, chips and list step aside and
    the conversation takes what is left over the box (under its least it steps aside); hidden, the chat stays hidden and
    the board stays in view over the box. */
-.sw-board.sw-typing > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }
+.sw-board.sw-typing > :is(.sw-head, .sw-shows, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }
 .sw-board.sw-typing .sw-chat { flex: 1; height: auto; min-height: 0; overflow: hidden; border-top: 0; padding-top: env(safe-area-inset-top, 0px); }
 .sw-board.sw-keys .sw-own { padding-bottom: calc(var(--space-2, 8px) + var(--sw-kb-cover, 0px)); }
 .sw-board.sw-typing .sw-said-box { flex: 1 1 0; min-height: 0; overflow: hidden; }
@@ -116,7 +121,7 @@
 .sw-board.sw-typing.sw-cramped .sw-composer { --sw-grip-h: 0px; }
 /* Typing with the chat hidden, the list stays in view (keep.js): where the box (at its one line) leaves it too little,
    the board's header and chips step aside, then the chat's bar and what stands over the box. */
-.sw-board.sw-tight > :is(.sw-head, .sw-chips, .sw-find-row, .sw-note) { display: none; }
+.sw-board.sw-tight > :is(.sw-head, .sw-shows, .sw-chips, .sw-find-row, .sw-note) { display: none; }
 .sw-board.sw-tight { padding-top: env(safe-area-inset-top, 0px); }
 .sw-board.sw-tighter .sw-chat > :not(.sw-own), .sw-board.sw-tighter .sw-files, .sw-board.sw-tighter .sw-grip { display: none; }
 .sw-board.sw-tighter .sw-composer { --sw-grip-h: 0px; }

@@ -26,8 +26,9 @@ fn key(c: &mut Client, p: Press) { let fx = update(&mut c.s, Event::Key(p)); eff
 pub fn press(c: &mut Client, id: &str, drive: bool) -> Result<String, String> {
     if TERMINAL_ONLY.contains(&id) { return Ok(String::new()); }
     let k = by_name(id).ok_or_else(|| format!("No key is called \"{id}\""))?;
-    // A key that does something is for someone who may drive; one that only shows or hides is for a watcher too.
-    if !drive && k.group != Some("alt") { return Err("This device can only watch.".into()); }
+    // A key that does something is for someone who may drive; one that only shows or hides is for a watcher too. Going
+    // into an agent is not only a look: it starts a coordinator that is not running, and reopens a task's space.
+    if !drive && (k.group != Some("alt") || id == "open") { return Err("This device can only watch.".into()); }
     let p = press_of(id)?;
     c.s.input.set_text(""); c.s.lone_at = 0; // a button is no input line: no enter of its own follows it
     key(c, p);
@@ -92,6 +93,18 @@ pub fn fold(c: &mut Client, id: &str) {
     c.s.full = false; c.s.auto_open = false; c.s.editing = None;
     let fx = { let mut fx = vec![]; crate::board::update::heads::toggle(&mut c.s, id, &mut fx); fx };
     effects(c, fx, false);
+}
+/// A tap on the filter row: that filter shown, as tab gets there.
+pub fn show(c: &mut Client, n: usize) {
+    let mut fx = vec![];
+    crate::board::update::shows::set(&mut c.s, n, &mut fx);
+    effects(c, fx, false);
+}
+/// The grouping back to by status (the chip of by repo or by machine, its ×), as the group key gets there going round.
+pub fn by_status(c: &mut Client) {
+    (c.s.by_repo, c.s.by_machine) = (false, false);
+    relist(&mut c.s);
+    super::web::save_prefs(&c.s);
 }
 pub fn find(c: &mut Client, text: &str) {
     c.s.filter = text.trim().chars().take(200).collect();

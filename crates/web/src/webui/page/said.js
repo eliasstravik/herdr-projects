@@ -19,11 +19,11 @@ function prose(text) {
   }
   return out;
 }
-// Who said it, as the web UI says it: nobody's name over your own words or over the one you talk to; the board's, the
-// reviewer's and the like over theirs.
-const OWN = ["You", "Coordinator", "Agent", ""];
+// Who said it, as the terminal board's box says it (view/chat_text.rs): nobody's name over your own words or over the
+// replies of the one you talk to (the bar names them); the reviewer's, autopilot's, the board's and a screen's over theirs.
+const own = (p) => p.mine || p.by === "You" || !p.by || (!p.sent && !p.raw && !p.tone && p.by !== "Reviewer");
 const partEl = (p) => h(`article.sw-turn-said${p.mine ? ".is-mine" : ""}${p.raw ? ".is-raw" : ""}${p.tone ? `.sw-c-${p.tone}` : ""}`,
-  !p.mine && !OWN.includes(p.by) ? h("div.sw-by", p.by) : null,
+  !own(p) ? h("div.sw-by", p.by) : null,
   h("div.sw-said-text", p.raw ? p.text : prose(p.text)));
 
 export function saidEl() {

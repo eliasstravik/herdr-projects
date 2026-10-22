@@ -21,7 +21,8 @@ function item(x, onGo) {
 }
 export function actionsEl(snap, { onPress, onMenu }) {
   const buttons = (snap.actions || []).map((b, n) => h(`button.btn${n === 0 && !QUIET.includes(b.id) ? ".btn-primary" : ""}.sw-act`, { type: "button", onclick: () => onPress(b.id) }, cap(b.label)));
-  if (snap.canOpen && !(snap.actions || []).some((b) => b.id === "enter")) buttons.push(h("button.btn.sw-act", { type: "button", onclick: () => onPress("enter") }, "Open this task's agent"));
+  // Into its agent: the open key, as the hint line has it where it says so (enter only folds and sends now).
+  if (snap.canOpen && !(snap.actions || []).some((b) => b.id === "open")) buttons.push(h("button.btn.sw-act", { type: "button", onclick: () => onPress("open") }, "Open this task's agent"));
   buttons.push(h("button.btn.btn-ghost.sw-act", { type: "button", "aria-haspopup": "dialog", onclick: onMenu }, "More…"));
   return h("div.sw-actions", buttons);
 }

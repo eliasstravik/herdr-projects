@@ -11,10 +11,10 @@ use crate::shown::ink::{Ink, Inked};
 
 /// What a click on the machine item says it is, among the filters' places.
 pub const MACHINE: usize = usize::MAX;
-const SHORT: [&str; 8] = ["All", "Coords", "Needs", "Working", "Ready", "To do", "Done", "Autos"];
+pub const SHORT: [&str; 8] = ["All", "Coords", "Needs", "Working", "Ready", "To do", "Done", "Autos"];
 const TINY: [&str; 8] = ["All", "Co", "Need", "Work", "Rdy", "Todo", "Done", "Au"];
 /// Each filter's own colour, the one its rows and marks have: lit, it is the highlight's.
-const INKS: [Ink; 8] = [Ink::Text, Ink::Accent, Ink::Red, Ink::Yellow, Ink::Green, Ink::Text, Ink::Text, Ink::Auto];
+pub const INKS: [Ink; 8] = [Ink::Text, Ink::Accent, Ink::Red, Ink::Yellow, Ink::Green, Ink::Text, Ink::Text, Ink::Auto];
 /// The row, `w` cells wide, and where each filter landed: (first cell, last cell, which).
 pub fn shows_line(s: &State, _t: &Theme, w: usize) -> (Inked, Vec<(usize, usize, usize)>) {
     // `only`: 0 every filter, 1 those with something in them (and the one shown), 2 the one shown alone.

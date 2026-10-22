@@ -10,12 +10,14 @@ On a phone, and in a narrow window:
 ```
 ┌──────────────────────────────────┐
 │ ←  Board                   🔍  ⋯ │
-│ ▾ needs you 1                    │
+│ (All 6) Coords 1  Needs 1  Work… │  the filter row
+│ ○ ▾ vm-str  1 project · 6 tasks  │
+│   ▾ needs you                    │
 │   ! HP-5  Write a haiku …        │
-│ ▾ to do 4                        │
+│   ▾ to do                        │
 │   ○ HP-4  Fix flaky login test   │
 │╭───────────── ═══ ──────────────╮│  the chat's sheet, its grip
-│ [● Coordinator│○ HP-4 agent]  ⌄ ⤢│  the bar
+│ [○ vm-str│○ HP-4] · Agent   ⌄ ⤢ │  the bar
 │                                  │
 │   the web UI's own transcript    │
 │ ┌──────────────────────────────┐ │
@@ -36,10 +38,14 @@ bar heads the chat. On a narrow phone the buttons keep their row, and the switch
 
 ## The bar
 
-- **Who you talk to**: the web UI's own switch with the two you can talk to, the Coordinator first and the selected
-  task's agent second (`HP-4 agent`; on a machine's or a repo's heading, its coordinator). The one you talk to is
-  pressed; a tap on the other presses the board's own key, as `space` does on the terminal board. With nobody else to
-  talk to (no task selected, an automation's row) it is only their name.
+- **Who you talk to**: the web UI's own switch with the two you can talk to, as `space` flips them on the terminal
+  board: the top row's coordinator first (`All machines`, or the machine shown) and the selected row's agent second
+  (`HP-4`; on a machine's or a project's row, its coordinator: `gtm`). There is no main Coordinator. The one you talk to
+  is pressed, its name in the status colour of where it stands, as the terminal box's lit label (base when idle or never
+  started, amber at work, red when it needs you or failed); after the switch, dimmed, the kind of agent it is: `·
+  Agent`, `· Reviewer` while a review talks, `· Project coordinator`, `· Machine coordinator`. A tap on the other
+  presses the board's own key. With nobody else to talk to (the top row selected, a status group, an automation's row)
+  it is only that one's name.
 - **How they stand**: each choice has its mark in the board's colours (the dot breathes while it works). Beside it the
   board's words for it (`No agent yet: your message starts one`, a check's progress). On a phone, a word the mark
   already says (`idle`, `working`) steps aside, and a longer one takes a line of its own under the switch.
@@ -58,7 +64,7 @@ bar heads the chat. On a narrow phone the buttons keep their row, and the switch
 The board asks where the chat of whoever it talks to is, and the web UI under the board goes there in place: its
 address names that pane's chat view (`?ws=…&pane=…&view=chat#board`), so Back still closes the board.
 
-- **It only looks.** The Coordinator's pane, a machine's or a repo's coordinator's, or the task's agent's pane while an
+- **It only looks.** The top row's coordinator's pane, a machine's or a project's coordinator's, or the task's agent's pane while an
   agent is in it now. Nothing is opened again or started for it: a task whose agent is not in its pane is the board's
   own chat until you ask for more (**Open this task's agent** opens its space again).
 - **The web UI makes room.** Its pane column leaves the board the room the board covers: at its top on a phone and a
@@ -68,8 +74,8 @@ address names that pane's chat view (`?ws=…&pane=…&view=chat#board`), so Bac
   connected there; the board stays the board of the PC the page was on.
 - **Closing the board** puts the web UI back on the pane it showed before.
 - **Picking another pane** in the web UI's own sidebar undocks it.
-- Where the web UI cannot show them, or does not show them within four seconds (a Coordinator not started yet, a task
-  with no agent in its pane, another machine's Coordinator, a web UI this was not made for), **the board's own chat
+- Where the web UI cannot show them, or does not show them within four seconds (a coordinator not started yet, a task
+  with no agent in its pane, another machine's coordinator, a web UI this was not made for), **the board's own chat
   stands in**, in the same place and under the same bar: the conversation as the web UI draws its own (your words a
   card on the right, theirs plain prose) over [the board's own box](web-chat-box.md).
 
@@ -82,8 +88,8 @@ address names that pane's chat view (`?ws=…&pane=…&view=chat#board`), so Bac
   when hovered and to a screen reader (`Dictate (hold)`, `Start a voice call`).
 
 - **To a task's agent**: the web UI's box sends it, as it does in the web UI, with its queue, its `/` menus and its Stop.
-- **To a coordinator** (the Coordinator, a machine's or a repo's): the web UI's box, but the board sends the words, as
-  its own box does. So the Coordinator knows where you were (the repo and the task you had open,
+- **To a coordinator** (the top row's, a machine's or a project's): the web UI's box, but the board sends the words, as
+  its own box does. So the coordinator knows where you were (the repo and the task you had open,
   [the Coordinator](coordinator.md)), and words wait while it is busy.
   - Enter (or what the web UI's Settings → Chat says sends) and the round Send. While the web UI's own menu is open (its
     `/` commands, its `@` files), Enter and Tab pick from it, as they do there.

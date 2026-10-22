@@ -105,17 +105,21 @@ fn the_page_gets_the_two_you_can_talk_to_and_hiding_the_message_is_the_boards_ow
 fn the_chats_bar_has_a_switch_hide_full_screen_and_a_grip_and_the_boards_own_conversation_reads_as_the_web_uis() {
     // who you talk to: the web UI's segmented switch of the two (the Coordinator first), the one you talk to pressed; a
     // tap on the other presses the board's own key, as space does on the terminal board; with nobody else, only a name
-    assert!(TALK.contains("const [is, other] = c.toAgent ? [agent, coord] : [coord, onTask || onHead ? agent : \"\"];") && TALK.contains("`${c.task} agent`"));
-    assert!(CHAT.contains(r#"onclick: () => { if (!pressed && !busy && now) onPress("talk"); }"#) && CHAT.contains(r#"who.className = "sw-who segmented";"#));
-    assert!(CHAT.contains("const [coord, agent] = c.toAgent ? [other, is] : [is, other];") && CHAT.contains(r#"if (!other) { who.className = "sw-who is-one";"#));
-    // each with how it stands: the chat's own mark on the one you talk to, a task's row's mark on its agent
-    assert!(CHAT.contains("const agentMark = row ? markEl(row.mark, row.color, row.markDim) : null;"));
+    // (the top row's coordinator first, the selected row's agent second; no main Coordinator)
+    assert!(!TALK.contains("talkNames") && CHAT.contains("const other = c.toAgent ? c.top : c.row;"));
+    assert!(CHAT.contains(r#"onclick: () => { if (!pressed && !busy && now) onPress("talk"); }"#) && CHAT.contains(r#"who.replaceChildren(h("span.sw-who-switch.segmented", top, agent), kind);"#));
+    assert!(CHAT.contains("const [top, agent] = c.toAgent ? [choice(c.top, false, null), choice(lit, true, mark)] : [choice(lit, true, mark), choice(c.row, false, rowMark)];") && CHAT.contains(r#"if (!other || other === lit) { who.className = "sw-who is-one";"#));
+    // the one you talk to by its name in the status colour of where it stands, then the kind of agent dimmed
+    assert!(CHAT.contains("const t = c.title, lit = t?.steps?.length ? t.steps[t.steps.length - 1] : c.name, edge = t?.edge || \"text\";") && CHAT.contains("h(\"span.sw-who-kind\", `· ${t.kind}`)"));
+    assert!(CSS.contains(".sw-who-pick.is-on:is(.sw-e-red, .sw-e-yellow, .sw-e-green, .sw-e-review, .sw-e-queue, .sw-e-teal) .sw-who-name { color: var(--sw-e); }"));
+    // each with how it stands: the chat's own mark on the one you talk to, a task's row's (or a coordinator's row's) mark on the other
+    assert!(CHAT.contains("const rowMark = row ? markEl(row.mark, row.color, row.markDim) : head ? markEl(head.t, head.c, !!head.d) : null;"));
     // how they stand in words beside it; on a narrow bar a word the mark already says steps aside
     assert!(CHAT.contains(r#"state.classList.toggle("is-plain", PLAIN.test(c.status || "") && !c.progress);"#) && CSS.contains(".sw-who-status.is-plain { display: none; }"));
     // Hide and Show press alt+c's key, so the board remembers which
     assert!(CHAT.contains(r#"const hide = h("button.icon-button.sw-hide", { type: "button", onclick: () => onPress("chatMessage") });"#) && CHAT.contains(r#"hide.title = open ? "Hide the chat" : "Show the chat";"#));
     // full screen: the board's header and list step aside; its own arrow, Esc or the board's arrow go back
-    assert!(CSS.contains(".sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }"));
+    assert!(CSS.contains(".sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-shows, .sw-body, .sw-chips, .sw-find-row, .sw-note) { display: none; }"));
     assert!(CHAT.contains("hide.hidden = full;\n") && !CHAT.contains("grow2.hidden") && CHAT.contains(r#"grow2.replaceChildren(icon(full ? "shrink" : "expand"));"#) && CHAT.contains(r#"grow2.title = full ? "Exit full screen" : "Full screen";"#));
     assert!(!CHAT.contains("sw-chat-back") && BOARD_JS.contains("if (chat.full()) return chat.full(false);") && BOARD_JS.contains("chat.full() ? chat.full(false) : closing?.()"));
     // a step in the browser's history: a phone's back gesture leaves it; left by its button or Esc, the step is taken back

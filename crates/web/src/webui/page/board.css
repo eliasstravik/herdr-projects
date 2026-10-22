@@ -61,6 +61,28 @@
 .sw-chip-pick .sw-chip-x { justify-content: center; min-width: var(--touch-target, 40px); color: var(--sw-dim); }
 .sw-chip-pick svg { width: 14px; height: 14px; }
 .sw-chip-main:focus-visible, .sw-chip-pick .sw-chip-x:focus-visible, .sw-open:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
+/* The filter row under the header (board.js: showsEl): whose board, a bar, then each filter with its count, the one shown
+   lit in its own colour (its ground), the others greyed, every one the same size lit or not so nothing moves. One line:
+   on a phone it scrolls sideways, with the shorter names (Needs, Coords, Autos). */
+.sw-shows { flex: none; display: flex; align-items: center; gap: var(--space-1, 4px); padding: var(--space-1, 4px) var(--space-3, 12px); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; border-bottom: var(--hairline, 1px) solid var(--sw-line); container-type: inline-size; }
+.sw-shows::-webkit-scrollbar { display: none; }
+.sw-show { flex: none; display: inline-flex; align-items: center; gap: 0.4em; min-height: var(--touch-target, 40px); padding: 0 var(--space-3, 12px); border: 0; border-radius: var(--radius-pill, 999px); background: none; color: var(--sw-dim); font: inherit; font-size: var(--fs-sm, 13px); white-space: nowrap; cursor: pointer; }
+@media (hover: hover) { .sw-show:not(.is-lit):hover { background: var(--sw-hover); color: var(--sw-text); } }
+.sw-show-n { font-variant-numeric: tabular-nums; }
+.sw-show-short { display: none; }
+@media (max-width: 640px) { .sw-show-long { display: none; } .sw-show-short { display: inline; } .sw-show { padding: 0 var(--space-2, 8px); } }
+/* Lit: in its own colour on a tint of it, as the web UI marks a status (its --status-*-tint), readable on every palette. */
+.sw-show.is-lit { color: var(--sw-lit); font-weight: var(--fw-semibold, 600); background: color-mix(in srgb, var(--sw-lit) 15%, transparent); box-shadow: inset 0 0 0 var(--hairline, 1px) color-mix(in srgb, var(--sw-lit) 45%, transparent); }
+.sw-lit-text, .sw-lit-plain { --sw-lit: var(--sw-strong); } .sw-lit-red { --sw-lit: var(--sw-red); } .sw-lit-yellow { --sw-lit: var(--sw-yellow); } .sw-lit-green { --sw-lit: var(--sw-green); }
+.sw-lit-accent { --sw-lit: var(--accent, #f0a830); } .sw-lit-auto { --sw-lit: var(--sw-auto); }
+/* Whose board: in the base colour, lit only while one machine is picked; yellow while that machine does not answer. */
+.sw-show-machine { color: var(--sw-text); font-weight: var(--fw-semibold, 600); }
+.sw-show-machine svg { width: 14px; height: 14px; color: var(--sw-dim); }
+.sw-show-machine.is-lit svg { color: inherit; }
+.sw-show-machine.is-off { color: var(--sw-yellow); }
+.sw-show-bar { flex: none; width: var(--hairline, 1px); height: 20px; margin: 0 var(--space-1, 4px); background: var(--sw-line); }
+.sw-show:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: calc(-1 * var(--ring-offset, 2px)); }
+
 /* The list and one task: side by side on a wide screen, one at a time on a phone. */
 .sw-body { flex: 1; min-height: 0; display: flex; }
 .sw-list-host, .sw-task-host { flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: var(--space-2, 8px) var(--space-2, 8px) var(--space-6, 24px); }
@@ -154,33 +176,36 @@
 .sw-unread-detail { margin: var(--space-2, 8px) 0 0; color: var(--sw-dim); font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
 .sw-empty { color: var(--sw-dim); padding: var(--space-6, 24px) var(--space-4, 16px); margin: 0; text-align: center; }
 
-.sw-group { margin-top: var(--space-4, 16px); }
-.sw-group-name {
-  display: flex; align-items: baseline; gap: var(--space-2, 8px); margin: 0; padding: 0 var(--space-3, 12px) var(--space-1, 4px);
-  font-size: var(--fs-sm, 13px); font-weight: var(--fw-semibold, 600);
-}
-.sw-machine-name:first-of-type { margin-top: var(--space-2, 8px); }
-.sw-machine-name {
-  margin: var(--space-5, 20px) var(--space-3, 12px) 0; padding-bottom: var(--space-1, 4px); border-bottom: var(--hairline, 1px) solid var(--sw-line);
-  font-size: var(--fs-md, 14px); font-weight: var(--fw-bold, 700);
-}
-/* A heading folds with a tap: the whole heading is the button, its caret says which way; selected, it has a row's tint. */
-.sw-fold { display: inline-flex; align-items: baseline; gap: var(--space-2, 8px); margin: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
-.sw-caret { width: 1em; color: var(--sw-dim); font-weight: var(--fw-regular, 400); }
-@media (pointer: coarse) { .sw-fold { align-items: center; min-height: var(--touch-target, 40px); } .sw-group-name { align-items: center; padding-bottom: 0; } }
-/* A coordinator on autopilot, as a task's row: its mark before its name, its columns on the right, what it does now under it. */
-.sw-on-pilot { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--space-2, 8px); }
-.sw-pilot-mark { font-weight: var(--fw-regular, 400); }
-.sw-pilot-cols { display: inline-flex; flex-wrap: wrap; gap: var(--space-1, 4px) var(--space-3, 12px); margin-left: auto; color: var(--sw-dim); font-size: var(--fs-sm, 13px); font-weight: var(--fw-regular, 400); font-variant-numeric: tabular-nums; }
-.sw-pilot-says { flex-basis: 100%; padding-left: calc(2em + var(--space-2, 8px)); color: var(--sw-dim); font-size: var(--fs-sm, 13px); font-weight: var(--fw-regular, 400); overflow-wrap: anywhere; }
-.sw-group-name.is-selected, .sw-machine-name.is-selected { background: var(--sw-lift); box-shadow: inset 3px 0 0 var(--accent, #f0a830); border-radius: var(--radius-md, 8px); }
-.sw-fold:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: var(--ring-offset, 2px); }
+/* Hierarchy is how far in a row stands (--d, its depth: all machines → machine → project → task), not colour. */
+.sw-list { --sw-step: var(--space-4, 16px); }
+@media (max-width: 480px) { .sw-list { --sw-step: var(--space-3, 12px); } }
+.sw-group.is-group, .sw-group.is-autos { margin-top: var(--space-3, 12px); }
+.sw-group.is-machine, .sw-group.is-project { margin-top: var(--space-2, 8px); }
+/* A heading is a row: the selected one has a row's tint and bar; a machine's or a project's (its coordinator's) has
+   its mark where a task has its mark, a status group's its caret there. */
+.sw-hrow { display: flex; flex-direction: column; justify-content: center; min-height: var(--touch-target, 40px); padding: var(--space-1, 4px) var(--space-3, 12px); padding-left: calc(var(--space-3, 12px) + var(--d, 0) * var(--sw-step)); border-radius: var(--radius-md, 8px); cursor: pointer; }
+@media (hover: hover) { .sw-hrow:not(.is-selected):hover { background: var(--sw-hover); } }
+.sw-hrow.is-selected { background: var(--sw-lift); box-shadow: inset 3px 0 0 var(--accent, #f0a830); }
+.sw-hrow:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: calc(-1 * var(--ring-offset, 2px)); }
+.sw-hline { display: flex; align-items: center; gap: var(--space-3, 12px); min-width: 0; }
+.sw-hline .sw-mark { line-height: 1; }
+.sw-head-mark { display: contents; }
+/* The caret folds: a thumb's target around its one letter. A status group's stands in the marks' column. */
+.sw-caret { flex: none; display: inline-grid; place-items: center; width: 1.25em; height: var(--touch-target, 40px); margin: calc(-1 * var(--space-1, 4px)) calc(-1 * var(--space-1, 4px)); padding: 0 var(--space-1, 4px); box-sizing: content-box; border: 0; background: none; color: var(--sw-dim); font: inherit; font-weight: var(--fw-regular, 400); cursor: pointer; }
+.sw-caret:not(.sw-head-caret) { margin-left: calc(-1 * var(--space-2, 8px) - var(--space-1, 4px)); width: 1em; }
+.sw-caret:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: calc(-1 * var(--ring-offset, 2px)); border-radius: var(--radius-sm, 6px); }
+.sw-head-words { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The top row and a machine's in bold, a project's in normal weight, as the tasks under it; a status group's smaller. */
+.sw-hrow:is(.is-top, .is-machine) .sw-head-words { font-weight: var(--fw-bold, 700); }
+.sw-hrow:is(.is-top, .is-machine) .sw-head-words .sw-c-overlay0 { font-weight: var(--fw-regular, 400); }
+.sw-hrow:is(.is-group, .is-autos) .sw-head-words { font-size: var(--fs-sm, 13px); font-weight: var(--fw-semibold, 600); }
+.sw-head-time { margin-left: auto; }
 .sw-count { color: var(--sw-dim); font-weight: var(--fw-regular, 400); letter-spacing: 0; }
 .sw-repo-key { color: var(--sw-dim); font-weight: var(--fw-regular, 400); letter-spacing: 0; white-space: nowrap; }
 .sw-rows { list-style: none; margin: 0; padding: 0; }
 .sw-row {
   display: flex; align-items: flex-start; gap: var(--space-3, 12px); min-height: var(--touch-target, 40px);
-  padding: var(--space-2, 8px) var(--space-3, 12px); border-radius: var(--radius-md, 8px); cursor: pointer;
+  padding: var(--space-2, 8px) var(--space-3, 12px); padding-left: calc(var(--space-3, 12px) + var(--d, 0) * var(--sw-step, 16px)); border-radius: var(--radius-md, 8px); cursor: pointer;
 }
 /* Only where there is a pointer that hovers: on a phone the tint would stay on the row last tapped. */
 @media (hover: hover) { .sw-row:hover { background: var(--sw-hover); } }
@@ -222,7 +247,7 @@
 .sw-tag { text-decoration: none; color: inherit; }
 a.sw-tag:hover { text-decoration: underline; }
 .sw-row.is-quiet .sw-title { color: var(--sw-dim); }
-.sw-more { margin: var(--space-1, 4px) 0 0 calc(var(--space-3, 12px) + 1.25em); color: var(--sw-dim); font-size: var(--fs-xs, 12px); }
+.sw-more { margin: var(--space-1, 4px) 0 0 calc(var(--space-3, 12px) + 1.25em + var(--d, 0) * var(--sw-step, 16px)); color: var(--sw-dim); font-size: var(--fs-xs, 12px); }
 /* The selected row's Open: a step of its own, under what the row says. */
 .sw-row-acts { display: flex; margin-top: var(--space-2, 8px); }
 .sw-open { display: inline-flex; align-items: center; gap: var(--space-1, 4px); height: auto; min-height: var(--touch-target, 40px); padding: 0 var(--space-2, 8px) 0 var(--space-3, 12px); }

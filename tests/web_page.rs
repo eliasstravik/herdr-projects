@@ -39,7 +39,7 @@ fn a_rows_tag_has_a_column_of_its_own_and_a_narrow_list_drops_every_tag_at_once(
 fn the_chat_line_shows_only_what_there_is_and_the_boxs_frame_says_who_gets_the_words() {
     // Only what there is: replaceChildren would write a missing part out as the word "null".
     assert!(CHAT.contains("const mark = markEl(c.mark.t, c.mark.c);") && CHAT.contains(r#"const words = cap([c.status, c.progress].filter(Boolean).join(" · "));"#));
-    assert!(CHAT.contains("choice(coord, !c.toAgent, c.toAgent ? null : mark), choice(agent, !!c.toAgent, c.toAgent ? mark : agentMark)"));
+    assert!(CHAT.contains("[choice(c.top, false, null), choice(lit, true, mark)] : [choice(lit, true, mark), choice(c.row, false, rowMark)]"));
     // The box's frame: the plain text colour for the Coordinator, the task's status colour for its agent.
     assert!(CHAT.contains("tone = c.box || \"text\";") && CHAT.contains("card.className = `sw-card sw-b-${to && (moved || !now) ? \"text\" : tone}`;"));
     for c in ["text", "red", "green", "yellow", "teal", "review", "check", "todo", "overlay0"] { assert!(COMPOSE_CSS.contains(&format!(".sw-card.sw-b-{c}")), "the page has a frame colour for {c}"); }
@@ -49,7 +49,8 @@ fn the_chat_line_shows_only_what_there_is_and_the_boxs_frame_says_who_gets_the_w
     assert_eq!(all.len(), 7, "each frame colour is a colour of its own: done is not the green of ready");
     // A reload: the saved words come back with who they were for, before the page knows who it shows; while another
     // task shows, the chip says so and the frame is the plain colour.
-    assert!(CHAT.contains("chip.textContent = moved ? `To: ${to.label}${to.reply ? \" agent\" : \"\"} · not who is shown above` : \"\";"));
+    assert!(CHAT.contains("chip.textContent = moved ? `To: ${to.label} · not who is shown above` : \"\";"));
+    assert!(CHAT.contains("label: lit ? `${possessive(lit)} ${c.title.kind.toLowerCase()}` : c.name"), "named as the terminal names an agent: HP-12's agent");
 }
 
 #[test]
@@ -61,7 +62,7 @@ fn the_pages_styles_nothing_under_13px_targets_a_thumb_can_hit_and_a_draft_kept_
     // the chat full screen hides the header with the open task and their arrows: the full screen button, in its place,
     // goes back then (chat.js), so there is always a way back
     let full = include_str!("../crates/web/src/webui/page/chat.css");
-    assert!(full.contains(".sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-body,") && !full.contains("sw-chat-back"));
+    assert!(full.contains(".sw-board:is(.sw-chat-full, .sw-web-typing) > :is(.sw-head, .sw-shows, .sw-body,") && !full.contains("sw-chat-back"));
     // the chat's switch is a thumb's size to tap, though drawn smaller (the web UI's own expander)
     assert!(full.contains("@media (pointer: coarse) { .sw-chatbar .icon-button { min-width: var(--touch-target, 40px); min-height: var(--touch-target, 40px); } .sw-who-pick::before { content: \"\"; position: absolute; inset: -4px 0; } }"));
     assert!(has(CSS, r"\.sw-row\.is-selected \{[^}]*box-shadow: inset 3px 0 0 var\(--accent"), "the selected row has a bar in its gutter, not a tint alone");

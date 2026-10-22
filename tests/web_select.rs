@@ -1,7 +1,7 @@
 //! On the web board a tap selects and opening is a step of its own: the board keeps the task closed on a pick that
 //! does not open it, the space key flips the chat to the selected task's agent and back, and the page asks to open only
-//! from the selected row's Open button (or, wide, with a task already open beside the list). Whose tasks show is a chip
-//! whose × goes back to this machine's own, and whose tap picks another from the same list as the sidebar's Boards.
+//! from the selected row's Open button (or, wide, with a task already open beside the list). Whose tasks show is the
+//! filter row's first item, whose tap picks another from the same list as the sidebar's Boards.
 use crate::common;
 use common::board::web;
 use common::*;
@@ -41,18 +41,20 @@ fn the_page_selects_on_a_tap_and_opens_from_the_selected_rows_button() {
 }
 
 #[test]
-fn whose_tasks_show_is_a_chip_that_picks_and_whose_cross_goes_back_to_this_machine() {
-    // the chip names it in two words, never the list of machines; its × is this machine's own board, not the next one
-    assert!(BOARD.contains("if (head.machines) out.push(scope(\"All machines\"));") && !BOARD.contains("All machines: ${head.machines}"));
-    assert!(BOARD.contains("onclick: () => scopeTo(\"\")") && BOARD.contains("\"aria-label\": \"Show only this machine's tasks\""));
-    assert!(!BOARD.contains("() => press(\"scope\")"), "no chip goes round the machines");
-    // a tap on it lists every board as the sidebar's Boards section does, the one shown checked
+fn whose_tasks_show_is_the_filter_rows_first_item_and_a_tap_on_it_picks() {
+    // whose board stands first on the filter row (as on the terminal board), never a chip of its own; a tap on it lists
+    // every board as the sidebar's Boards section does, the one shown checked
+    assert!(BOARD.contains(r#"onclick: () => { picking = true; draw(); } }, h("span.sw-show-name", m.name), icon("down"))"#));
+    assert!(!BOARD.contains("Show only this machine's tasks") && !BOARD.contains("head.machines"), "no chip for whose tasks show");
+    assert!(!BOARD.contains("() => press(\"scope\")"), "nothing goes round the machines by itself");
     assert!(SHEETS.contains("const out = await get(\"boards\");") && SHEETS.contains("\"aria-current\": b.scope === scope ? \"true\" : null"));
     let w = world_with(Opts { repo: true, settings: json!({ "board.machines": "vm-a" }), ..Default::default() });
     let far = Far::new(&w.base);
     far.tasks("vm-a", "0.2.0", json!([]));
+    // every machine: All machines, plain; one machine: its name, lit as the filter shown is
     let s = web(&w, "scope", json!({ "to": "*" }));
+    assert_eq!((s.at("list").at("shows").at("machine").s("name"), s.at("list").at("shows").at("machine").at("lit")), ("All machines", &json!(false)), "{}", s.at("list").at("shows"));
     assert!(!s.at("list").at("head").s("machines").is_empty());
     let s = web(&w, "scope", json!({ "to": "" }));
-    assert_eq!((s.at("flags").s("scope"), s.at("list").at("head").s("machines")), ("", ""));
+    assert_eq!((s.at("flags").s("scope"), s.at("list").at("head").s("machines"), s.at("list").at("shows").at("machine").at("lit")), ("", "", &json!(true)));
 }

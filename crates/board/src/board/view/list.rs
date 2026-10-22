@@ -82,17 +82,25 @@ pub fn unread_lines(s: &State, width: usize) -> Vec<Inked> {
 /// top row says what it holds, open or folded: `4 machines · 420 tasks`, `9 projects · 30 tasks`.
 fn heading(s: &State, t: &Theme, rows: &[Row], at: usize, width: usize) -> Inked {
     let r = &rows[at];
-    let Row::Head { name, autos, machine, folded, folded_autos, id, .. } = r else { return Inked::new() };
+    let Row::Head { id, .. } = r else { return Inked::new() };
+    let caret = if id.is_empty() { Inked::plain("  ") } else { Inked::of(if r.shut() { "▸ " } else { "▾ " }, Ink::Muted) };
+    let (named, row) = heading_words(s, t, rows, at);
+    super::pilot::placed(caret, named, row, width)
+}
+/// A heading's words, in their inks, and its coordinator's row (view/pilot.rs): what the terminal draws after the
+/// caret, and the web board too (webui/model/list.rs).
+pub fn heading_words(s: &State, t: &Theme, rows: &[Row], at: usize) -> (Inked, Option<super::pilot::Shown>) {
+    let r = &rows[at];
+    let Row::Head { name, autos, machine, folded, folded_autos, id, .. } = r else { return (Inked::new(), None) };
     let top = *id == crate::board::update::top::top_id(s);
     let project = id.starts_with(&format!("{}repo\t", crate::board::update::heads::HEAD));
     let key = if s.by_repo || (project && s.archive_view) { crate::board::tags::heading_key(s, at) } else { String::new() };
     let named = if *autos { Inked::of(name.clone(), Ink::Auto) } else if *machine || top { Inked::of(name.clone(), MACHINE_INK).bold() } else if s.by_repo || project { Inked::of(crate::board::update::heads::repo_shown(s, id.split('\t').nth(1).unwrap_or(""), name), REPO_HEAD_INK) } else { Inked::of(name.clone(), group_ink(name)) };
     let mut named = if key.is_empty() { named } else { named.add(Inked::of(format!(" · {key}"), Ink::Muted)) };
-    let caret = if id.is_empty() { Inked::plain("  ") } else { Inked::of(if r.shut() { "▸ " } else { "▾ " }, Ink::Muted) };
     // What a folded row holds: its tasks and automations; under Coordinators its projects' coordinators.
     let holds = if crate::board::update::shows::coords(s) { format!("{folded} project coordinator{}", if *folded == 1 { "" } else { "s" }) } else { crate::board::update::heads::holds(*folded, *folded_autos) };
     if top { named = named.add(Inked::of(format!("  {}", top_says(s)), Ink::Muted)); } else if r.shut() { named = named.add(Inked::of(format!("  {holds}"), Ink::Muted)); }
-    super::pilot::placed(caret, named, super::pilot::shown(s, t, id), width)
+    (named, super::pilot::shown(s, t, id))
 }
 /// What the top row holds: every machine's (`4 machines · 420 tasks`), or the one machine's (`9 projects · 30 tasks`).
 fn top_says(s: &State) -> String {

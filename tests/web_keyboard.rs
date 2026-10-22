@@ -26,7 +26,7 @@ fn typing_with_the_keyboard_up_the_header_steps_aside_and_the_conversation_takes
     assert!(ROOM.contains(r#"html.hasAttribute("data-keyboard") || (!!vv && Math.abs(vv.scale - 1) < 0.01 && window.innerHeight - vv.height > KEYBOARD)"#));
     assert!(ROOM.contains(r#"const mine = document.activeElement === box, on = mine && keyboard();"#) && ROOM.contains(r#"board.classList.toggle("sw-typing", on && !shut); board.classList.toggle("sw-keys", on);"#));
     for rule in [
-        r"\.sw-board\.sw-typing > :is\(\.sw-head, \.sw-body, \.sw-chips, \.sw-find-row, \.sw-note\) \{ display: none; \}",
+        r"\.sw-board\.sw-typing > :is\(\.sw-head, \.sw-shows, \.sw-body, \.sw-chips, \.sw-find-row, \.sw-note\) \{ display: none; \}",
         r"\.sw-board\.sw-typing \.sw-chat \{ flex: 1; height: auto; min-height: 0; overflow: hidden;[^}]*\}",
         r"\.sw-board\.sw-keys \.sw-own \{ padding-bottom: calc\(var\(--space-2, 8px\) \+ var\(--sw-kb-cover, 0px\)\); \}",
         r"\.sw-board\.sw-typing \.sw-said-box \{ flex: 1 1 0; min-height: 0; overflow: hidden; \}",
@@ -107,7 +107,7 @@ fn with_the_chat_hidden_the_list_keeps_its_room_however_long_the_words_and_howev
     assert!(KEEP.contains("export const LIST = 120;") && KEEP.contains(r#"export const STEPS = ["sw-tight", "sw-tighter"];"#));
     assert!(KEEP.contains("const room = () => Math.floor(body.getBoundingClientRect().height + box.offsetHeight - spill() - LIST);"));
     assert!(KEEP.contains("for (const step of steps ? STEPS : []) { if (room() >= least) break; board.classList.add(step); }") && KEEP.contains("set(Math.max(least, room()));"));
-    assert!(CHAT_CSS.contains(".sw-board.sw-tight > :is(.sw-head, .sw-chips, .sw-find-row, .sw-note) { display: none; }"));
+    assert!(CHAT_CSS.contains(".sw-board.sw-tight > :is(.sw-head, .sw-shows, .sw-chips, .sw-find-row, .sw-note) { display: none; }"));
     assert!(CHAT_CSS.contains(".sw-board.sw-tighter .sw-chat > :not(.sw-own), .sw-board.sw-tighter .sw-files, .sw-board.sw-tighter .sw-grip { display: none; }"));
     assert!(CHAT_CSS.contains(r#".sw-board.sw-tighter .sw-card { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "files files files" "left text right";"#), "then the box's controls beside its line");
     assert!(!has(CHAT_CSS, r"\.sw-tight(er)?[^{]*\.sw-body"), "the list itself never steps aside");
