@@ -1,9 +1,9 @@
 //! The housekeeping pass. It rides on every hook run (for any pane, in any task), every board tick and the startup
 //! hook, rate-limited by timestamps in the data folder, so nothing important depends on the board being open:
-//! start the jobs asked for from inside a sandbox (runner/outside.rs), start queued tasks when a slot is free (and the
-//! ones that wait for others, once those are done: after.rs), reconcile each linked task with herdr, bring waiting
-//! tasks up to date when main moved, and poll open pull requests (housekeeping/prs.rs). One pass per herdr session at
-//! a time (housekeeping/once.rs).
+//! start the jobs asked for from inside a sandbox or by a command (runner/outside.rs), start queued tasks when a slot is
+//! free (and the ones that wait for others, once those are done: after.rs), reconcile each linked task with herdr, try
+//! a start whose runner was lost again (hook/lost.rs), bring waiting tasks up to date when main moved, and poll open
+//! pull requests (housekeeping/prs.rs). One pass per herdr session at a time (housekeeping/once.rs).
 mod once;
 mod prs;
 pub use prs::poll_prs;
@@ -15,7 +15,7 @@ use crate::flow::{send::resume_cut, spaces::{sweep_closing, sweep_repo_spaces}, 
 use crate::herdr::{cli::socket_exists, Herdr};
 use crate::json::*;
 use crate::runner::{inline, runner_alive, spawn_runner, start_reaped, user_env, detach, JOBS};
-use crate::store::{files::{bin, data_dir, has_tasks}, marks::due, old_suggestions::save_old_suggestions, repos::folder_of, retries::waiting_of, settings::lookup::setting, tasks::{get, list, ListOpts, Task}};
+use crate::store::{files::{bin, data_dir, has_tasks, RUNNER_STAGES}, marks::due, old_suggestions::save_old_suggestions, repos::folder_of, retries::waiting_of, settings::lookup::setting, tasks::{get, list, ListOpts, Task}};
 use crate::sync::{fetch_main, known_target, main_branch, resyncable, tree_of, via_remote};
 use std::collections::HashMap;
 
@@ -40,6 +40,10 @@ fn pass(socket: &str, force: Force) {
         if !linked.is_empty() {
             let api = Herdr::new(Some(socket.into()));
             if api.workspaces().is_ok() { for t in linked { crate::hook::reconcile(&get(t.s("id")).unwrap_or_else(|| t.clone()), &api); } }
+        }
+        // A start whose runner was lost before the task had a pane: tried again once, then failed (hook/lost.rs).
+        for t in every.iter().filter(|t| !is_agent_task(t) && t.at("link").s("socket") == socket && RUNNER_STAGES.contains(&t.s("stage")) && !t.b("archivedAt")) {
+            if let Some(t) = get(t.s("id")) { crate::hook::retry_lost(&t); }
         }
         // A task that waited for others to be done goes on to a slot once they are (after.rs).
         let woke = crate::after::pass::after_pass(&tasks, socket);

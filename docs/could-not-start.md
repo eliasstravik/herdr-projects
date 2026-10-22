@@ -15,6 +15,7 @@ again (or reply, for an agent that is started again).
 | `Could not start: its terminal's shell was not ready for the start command` | Wait until the task's terminal shows its prompt, then delegate again. The board already waited and tried 4 times; a shell that is slow to start (its `.zshrc`) causes this. |
 | `Could not start: its terminal was not at its shell prompt` | End what runs in the task's terminal, or close it. When the board says it already waited and tried 4 times, the shell may also be very slow to start: wait until it shows its prompt. |
 | `Could not start: herdr did not answer in time` | Check that Herdr runs and answers (`herdr workspace list`). |
+| `Could not start: its start was cut off, twice` | Delegate again. Something ended the start from outside, most often a script or service that ends all it started with it (a systemd oneshot). While herdr runs on the machine its keeper does too, and `herdr-projects delegate` from a script hands the start to it, so it lives on; a start cut off once is tried again by itself. |
 
 ## Where to look further
 
