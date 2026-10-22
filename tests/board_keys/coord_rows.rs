@@ -118,9 +118,9 @@ fn machine_and_project_rows_mark_their_coordinators_state_with_a_tasks_marks_or_
     to_all(&mut s); s.press(&["tab"]); assert_eq!(s.s.show, 1);
     // every row shows, though none holds anything under it
     let l = s.screen(120);
-    let row = |name: &str| l.iter().find(|x| x.trim_start_matches(['▌', ' ', '◐', '!', '✗', '∞', '○']).trim_start().starts_with(&format!("▾ {name}")) || x.contains(&format!("▸ {name}"))).cloned().unwrap_or_else(|| panic!("no {name}: {l:#?}"));
+    let row = |name: &str| l.iter().find(|x| x.trim_start_matches(['▌', ' ', '◐', '!', '✗', '○']).trim_start().starts_with(&format!("▾ {name}")) || x.contains(&format!("▸ {name}"))).cloned().unwrap_or_else(|| panic!("no {name}: {l:#?}"));
     assert!(row("otherbox").contains("◐ ▾ otherbox"), "working: {l:#?}");
-    assert!(row("asks").contains("! ▾ asks") && row("broke").contains("✗ ▾ broke") && row("pilot").contains("∞ ▾ pilot"), "{l:#?}");
+    assert!(row("asks").contains("! ▾ asks") && row("broke").contains("✗ ▾ broke") && row("pilot").contains("○ ▾ pilot [autopilot]"), "on autopilot: its own mark, and its tag: {l:#?}");
     assert!(row("quiet").contains("○ ▾ quiet"), "idle: a task's idle mark: {l:#?}");
     // only those that run: a stopped or never started one is not there, nor in the count (this machine's: none run)
     let text = l.join("\n");
