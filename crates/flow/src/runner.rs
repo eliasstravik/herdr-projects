@@ -92,7 +92,7 @@ pub fn release(id: &str, keep: bool) -> bool {
         if !mine(t.at("runner")) { return Ok(Change::Keep); }
         more = !pending_events(t).is_empty();
         if more && keep { return Ok(Change::Keep); }
-        t.put("runner", Value::Null);
+        t.put("runner", Value::Null); t.put("retried", 0); // its step was not lost: a later loss is tried again (hook/lost.rs)
         Ok(Change::Write)
     });
     if more && !keep { spawn_runner("finish", id, &[]); }
