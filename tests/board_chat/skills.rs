@@ -92,3 +92,21 @@ fn with_no_coordinator_what_is_typed_is_added_as_a_task_and_there_is_no_list() {
     s.typed("/");
     assert!(!s.text().contains("skill or command") && s.text().contains("add it as a task"), "{}", s.text());
 }
+
+#[test]
+fn a_codex_coordinator_lists_its_dollar_skills_with_those_of_its_plugins() {
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never", "coordinator.agent": "codex" }), ..Default::default() });
+    let home = w.base.join("home-coord");
+    std::fs::create_dir_all(&home).unwrap();
+    unsafe { std::env::set_var("HERDR_PROJECTS_COORDINATOR_DIR", &home) };
+    let codex = w.base.join("codex");
+    skill(&codex.join("skills"), "local-check", "Check here");
+    skill(&codex.join("plugins/cache/demo/tools/1.0.0/skills"), "plugin-check", "Check from a plugin");
+    write(&codex.join("config.toml"), "[plugins.\"tools@demo\"]\nenabled = true\n");
+    let mut s = open(&w.root, 34);
+    s.typed("$");
+    let t = s.text();
+    assert!(t.contains("2 skills and commands") && t.contains("$local-check") && t.contains("$plugin-check  Check from a plugin"), "{t}");
+    s.typed("pl"); s.press(&["tab"]);
+    assert_eq!(s.s.value(), "$plugin-check ");
+}

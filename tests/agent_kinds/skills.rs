@@ -68,6 +68,23 @@ fn codex_offers_skills_with_a_dollar_and_its_prompts_and_pi_its_skills_as_skill_
     // ~/.agents/skills and the project's .agents/skills are pi's too
     assert_eq!(typed(&l), vec!["/plan", "/skill:deep", "/skill:loose", "/skill:notes", "/skill:proj", "/skill:release"]);
     assert_eq!(refs(&matching(&l, "/de")), vec!["/skill:deep"]);
-    // a program whose skills the board does not know offers none: what is typed goes to it as it is
-    assert!(offered("opencode", &w.root).is_empty() && triggers("opencode").is_empty());
+    // a program whose skills the web UI does not know either offers none: what is typed goes to it as it is
+    assert!(offered("kimi", &w.root).is_empty() && triggers("kimi").is_empty());
+}
+
+#[test]
+fn codex_offers_the_skills_of_the_plugins_turned_on_in_its_config_and_leaves_out_a_skill_turned_off() {
+    let w = world_with(Opts { repo: true, ..Default::default() });
+    let codex = w.base.join("codex");
+    write(&codex.join("skills/local-check/SKILL.md"), "---\nname: local-check\ndescription: Check here\n---\n");
+    write(&codex.join("skills/turned-off/SKILL.md"), "---\nname: turned-off\ndescription: Off in config\n---\n");
+    write(&codex.join("plugins/cache/demo/tools/1.0.0/skills/plugin-check/SKILL.md"), "---\nname: plugin-check\ndescription: Check from a plugin\n---\n");
+    write(&codex.join("plugins/cache/demo/other/1.0.0/skills/not-on/SKILL.md"), "---\nname: not-on\ndescription: A plugin not turned on\n---\n");
+    // no [plugins] table: every plugin in the cache counts
+    assert_eq!(typed(&offered("codex", &w.root)), vec!["$local-check", "$not-on", "$plugin-check", "$turned-off"]);
+    write(&w.base.join("codex.toml"), "");
+    write(&codex.join("config.toml"), &format!("[plugins.\"tools@demo\"]\nenabled = true\n\n[plugins.\"other@demo\"]\nenabled = false\n\n[[skills.config]]\npath = \"{}\"\nenabled = false\n", codex.join("skills/turned-off/SKILL.md").display()));
+    let l = offered("codex", &w.root);
+    assert_eq!(typed(&l), vec!["$local-check", "$plugin-check"]);
+    assert_eq!(about(&l, "$plugin-check"), "Check from a plugin");
 }

@@ -48,16 +48,23 @@ with no Coordinator (your words are added as a task). What you type still goes a
 
 ## What each program offers
 
-As the Herdr web UI lists them:
+The same as the Herdr web UI lists, read from the same places:
 
-| Program | Skills | Commands |
-|---|---|---|
-| Claude Code | `/name`: yours (`~/.claude/skills`, or `$CLAUDE_CONFIG_DIR`), the project's (`.claude/skills` in the folders up to the repo's top), and those of the plugins turned on (`/plugin:name`). A skill marked `user-invocable: false` is left out | `/name` from `~/.claude/commands` and the project's `.claude/commands` (`git/commit.md` is `/git:commit`), and the plugins' |
-| Codex | `$name`: the project's `.agents/skills`, yours in `~/.agents/skills` and `~/.codex/skills` (or `$CODEX_HOME`), and the ones it comes with | your prompts as `/prompts:name` |
-| pi | `/skill:name`: yours (`~/.pi/agent/skills`, `~/.agents/skills`) and the project's (`.pi/skills`, `.agents/skills`) | prompt templates as `/name` |
+| Program | What it lists |
+|---|---|
+| Claude Code | `/name`: your skills (`~/.claude/skills`, or `$CLAUDE_CONFIG_DIR`), the project's (`.claude/skills` in the folders up to the repo's top), your and the project's commands (`git/commit.md` is `/git:commit`), and those of the plugins turned on (`/plugin:name`). A skill marked `user-invocable: false` is left out |
+| Codex | `$name`: the project's `.agents/skills`, yours in `~/.agents/skills` and `~/.codex/skills` (or `$CODEX_HOME`), the ones it comes with, and those of the plugins turned on in its `config.toml` (from its plugin cache). A skill turned off there (`[[skills.config]]`, `enabled = false`) is left out. Your prompts as `/prompts:name` |
+| pi | `/skill:name`: yours (`~/.pi/agent/skills`, `~/.agents/skills`) and the project's (`.pi/skills`, `.agents/skills`); prompt templates as `/name` |
+| OpenCode | `/name`: the commands of its `opencode.json(c)` and `commands` folders, the skill it comes with (`customize-opencode`), and the skills of its own folders, `~/.claude/skills`, `~/.agents/skills` and the project's |
+| Devin | `/name` by the skill's folder: Devin's own skills folders, Windsurf's, Claude Code's and Copilot's (as its `config.json` lets it read them), and its plugins' as `/plugin:name`. A name two places have says the place: `/claude:review` |
+| Grok | `/name`: the project's `.grok/skills` and `.claude/skills`, yours in `~/.grok/skills` (or `$GROK_HOME`) and `~/.claude/skills`, the paths of its `config.toml`, and its plugins'. What git or its `[skills] ignore` leaves out is left out |
+| Hermes | `/name` in its own spelling (`Web Tool` is `/web-tool`): `~/.hermes/skills` (or `$HERMES_HOME`) and its other skill folders, a project's only where its `config.yaml` trusts it, its skill bundles and its quick commands |
+| omp | `/skill:name` from every place it reads (its own folders, Claude Code's, `.agents`, Codex's, OpenCode's, `.github`, the Claude Code plugins turned on), as its `config.yml` lets it; its commands and prompts as `/name` |
+| Antigravity (agy) | `/name`: the project's `.agents` skills (and those its `skills.json` names), yours in `~/.gemini/config/skills` and its plugins', and the ones it comes with |
 
 - Each shows what it does in its first sentence: the rest of a skill's description says when to use it, which is for the
   agent.
 - A program's own built-in commands (`/model`, `/compact`, …) are not listed. They work when typed.
-- Other programs list nothing. What you type still goes to them as typed.
+- The other programs (Copilot, Cursor, Droid, Kilo, Kimi, Letta, Mastra Code, Qoder, Qwen) list nothing, as in the web
+  UI. What you type still goes to them as typed.
 - A skill added or changed shows within a few seconds.

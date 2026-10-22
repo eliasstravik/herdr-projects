@@ -1,36 +1,55 @@
 //! The skills and commands of its own that a program takes in its chat (Claude Code's `/review-pr`, Codex's
-//! `$review`, pi's `/skill:review`), read from where that program keeps them, as the herdr web UI's chat box lists them
-//! when you type `/`: the board's text box offers the same (docs/skills.md). Claude Code, Codex and pi; another
-//! program offers none here, and what you type still goes to it as you typed it.
+//! `$review`, pi's `/skill:review` …), read from where that program keeps them, as the herdr web UI's chat box lists
+//! them when you type `/` (its server/skills/): the board's text box offers the same (docs/skills.md). One file per
+//! program in skills/; a program the web UI lists nothing for offers none here, and what you type still goes to it as
+//! you typed it.
+pub mod agy;
+pub mod claude;
+pub mod codex;
+pub mod devin;
+pub mod grok;
+pub mod hermes;
+pub mod omp;
+pub mod opencode;
+pub mod pi;
 pub mod read;
 
-use super::homes::{claude_home, codex_home, pi_home};
 use crate::store::files::user_home;
-use read::{brief, commands, skills, Found, Walk};
+use read::{brief, Found};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// One entry of the list: what goes in the box (`/review-pr`, `$review`), and what it does, in one sentence.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Skill { pub typed: String, pub about: String }
+/// The programs whose skills the board reads.
+pub const KINDS: [&str; 9] = ["agy", "claude", "codex", "devin", "grok", "hermes", "omp", "opencode", "pi"];
 /// The characters an entry starts with in a program's chat, where the board knows them: Codex's skills start with `$`,
 /// its prompts with `/`.
-pub fn triggers(kind: &str) -> &'static str { match kind { "claude" | "pi" => "/", "codex" => "$/", _ => "" } }
+pub fn triggers(kind: &str) -> &'static str { if kind == "codex" { "$/" } else if KINDS.contains(&kind) { "/" } else { "" } }
 
-/// The folders from `cwd` up to its repo's top (the one holding `.git`), nearest first, and for a task's worktree its
-/// repo's main folder last, where skills not committed yet are. Outside a repo, `cwd` alone; never the home folder,
-/// whose own skills are the program's user skills.
-fn up_to_repo(cwd: &Path) -> Vec<PathBuf> {
-    let home = user_home();
-    let mut out = vec![];
-    let mut at = Some(cwd);
-    while let Some(d) = at {
-        if d == home { break; }
-        out.push(d.to_path_buf());
-        if d.join(".git").exists() { out.extend(main_checkout(d).filter(|m| m != d)); return out; }
-        at = d.parent();
+/// Where a program runs: its folder, the folders from there up to its repo's top (nearest first, never the home
+/// folder), the repo's top, and for a task's worktree its repo's main folder, where skills not committed yet are.
+pub struct Place { pub home: PathBuf, pub cwd: PathBuf, pub up: Vec<PathBuf>, pub top: Option<PathBuf>, pub main: Option<PathBuf> }
+impl Place {
+    pub fn of(cwd: &Path) -> Place {
+        let home = user_home();
+        let (mut up, mut top) = (vec![], None);
+        let mut at = Some(cwd);
+        while let Some(d) = at {
+            if d == home { break; }
+            up.push(d.to_path_buf());
+            if d.join(".git").exists() { top = Some(d.to_path_buf()); break; }
+            at = d.parent();
+        }
+        if top.is_none() { up = if cwd == home { vec![] } else { vec![cwd.to_path_buf()] }; }
+        let main = top.as_deref().and_then(main_checkout).filter(|m| Some(m) != top.as_ref());
+        Place { home, cwd: cwd.to_path_buf(), up, top, main }
     }
-    if cwd == home { vec![] } else { vec![cwd.to_path_buf()] }
+    /// The project's folders, nearest first, the main folder last.
+    pub fn projects(&self) -> Vec<PathBuf> { self.up.iter().cloned().chain(self.main.clone()).collect() }
+    /// The repo's top (else the folder it runs in), and the main folder after it.
+    pub fn roots(&self) -> Vec<PathBuf> { std::iter::once(self.top.clone().unwrap_or_else(|| self.cwd.clone())).chain(self.main.clone()).collect() }
 }
 /// A linked worktree's main folder: its `.git` file names `<main>/.git/worktrees/<name>`, whose `commondir` is the
 /// main `.git`.
@@ -40,70 +59,25 @@ fn main_checkout(top: &Path) -> Option<PathBuf> {
     let common = dir.join(std::fs::read_to_string(dir.join("commondir")).ok()?.trim());
     std::fs::canonicalize(common).ok()?.parent().map(Path::to_path_buf)
 }
-fn entry(typed: String, f: &Found) -> Skill { Skill { typed, about: brief(&f.about) } }
+/// An environment variable that is set to something.
+pub fn env(k: &str) -> Option<String> { std::env::var(k).ok().filter(|v| !v.is_empty()) }
+/// A path as written in a program's settings: `~` is the home folder, a relative one is under `base`.
+pub fn path_in(base: &Path, home: &Path, p: &str) -> PathBuf {
+    if p == "~" { home.to_path_buf() } else if let Some(r) = p.strip_prefix("~/") { home.join(r) } else { base.join(p) }
+}
+pub fn entry(typed: String, f: &Found) -> Skill { Skill { typed, about: brief(&f.about) } }
 
-/// What the program `kind` started in `cwd` offers, each once (the first found wins: yours, then the project's), in
-/// the order of their names.
+/// What the program `kind` started in `cwd` offers, each once (the first found wins), in the order of their names.
 pub fn offered(kind: &str, cwd: &Path) -> Vec<Skill> {
-    let up = up_to_repo(cwd);
-    let mut all = match kind { "claude" => claude(&up), "codex" => codex(&up), "pi" => pi(&up), _ => vec![] };
+    let p = Place::of(cwd);
+    let mut all = match kind {
+        "agy" => agy::list(&p), "claude" => claude::list(&p), "codex" => codex::list(&p), "devin" => devin::list(&p), "grok" => grok::list(&p),
+        "hermes" => hermes::list(&p), "omp" => omp::list(&p), "opencode" => opencode::list(&p), "pi" => pi::list(&p), _ => vec![],
+    };
     let mut seen = HashSet::new();
     all.retain(|s| seen.insert(s.typed.clone()));
     all.sort_by(|a, b| a.typed.cmp(&b.typed));
     all
-}
-/// Claude Code: skills (yours, the project's, the plugins' turned on as `plugin:name`), then the commands of the same
-/// places. A skill marked `user-invocable: false` is only for Claude itself.
-fn claude(up: &[PathBuf]) -> Vec<Skill> {
-    let home = claude_home();
-    let mine = |root: PathBuf, prefix: &str| -> Vec<Skill> {
-        skills(&root, Walk::One, false).iter().filter(|f| f.fields.get("user-invocable").map(|v| v != "false").unwrap_or(true)).map(|f| entry(format!("/{prefix}{}", f.name), f)).collect()
-    };
-    let orders = |root: PathBuf, prefix: &str| -> Vec<Skill> { commands(&root, true).iter().map(|f| entry(format!("/{prefix}{}", f.name), f)).collect() };
-    let mut out = mine(home.join("skills"), "");
-    for d in up { out.extend(mine(d.join(".claude").join("skills"), "")); }
-    out.extend(orders(home.join("commands"), ""));
-    for d in up { out.extend(orders(d.join(".claude").join("commands"), "")); }
-    for (plugin, dir) in claude_plugins(&home) {
-        let p = format!("{plugin}:");
-        out.extend(mine(dir.join("skills"), &p));
-        out.extend(orders(dir.join("commands"), &p));
-    }
-    out
-}
-/// The plugins turned on in Claude Code's settings, by name, with the folder each is installed in.
-fn claude_plugins(home: &Path) -> Vec<(String, PathBuf)> {
-    let read = |f: PathBuf| std::fs::read_to_string(f).ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok()).unwrap_or_default();
-    let (on, installed) = (read(home.join("settings.json")), read(home.join("plugins").join("installed_plugins.json")));
-    let Some(on) = on.get("enabledPlugins").and_then(|v| v.as_object()) else { return vec![] };
-    on.iter().filter(|(_, v)| v.as_bool() == Some(true)).filter_map(|(id, _)| {
-        let path = installed.get("plugins")?.get(id)?.get(0)?.get("installPath")?.as_str()?;
-        Some((id.split('@').next().unwrap_or(id).to_string(), PathBuf::from(path)))
-    }).collect()
-}
-/// Codex: skills as `$name` (the project's `.agents/skills`, yours in `~/.agents/skills` and its own folder, the ones it
-/// comes with), and your prompts as `/prompts:name`.
-fn codex(up: &[PathBuf]) -> Vec<Skill> {
-    let home = codex_home();
-    let dollar = |root: PathBuf| -> Vec<Skill> { skills(&root, Walk::One, true).iter().map(|f| entry(format!("${}", f.name), f)).collect() };
-    let mut out: Vec<Skill> = up.iter().flat_map(|d| dollar(d.join(".agents").join("skills"))).collect();
-    out.extend(dollar(user_home().join(".agents").join("skills")));
-    out.extend(dollar(home.join("skills")));
-    out.extend(dollar(home.join("skills").join(".system")));
-    out.extend(commands(&home.join("prompts"), false).iter().map(|f| entry(format!("/prompts:{}", f.name), f)));
-    out
-}
-/// pi: skills as `/skill:name` (yours in its folder and in `~/.agents/skills`, the project's `.pi/skills` and
-/// `.agents/skills`), and prompt templates as `/name` (yours and the project's).
-fn pi(up: &[PathBuf]) -> Vec<Skill> {
-    let home = pi_home();
-    let skill = |root: PathBuf| -> Vec<Skill> { skills(&root, Walk::Deep, true).iter().map(|f| entry(format!("/skill:{}", f.name), f)).collect() };
-    let mut out = skill(home.join("skills"));
-    out.extend(skill(user_home().join(".agents").join("skills")));
-    for d in up { out.extend(skill(d.join(".pi").join("skills"))); out.extend(skill(d.join(".agents").join("skills"))); }
-    out.extend(commands(&home.join("prompts"), false).iter().map(|f| entry(format!("/{}", f.name), f)));
-    if let Some(d) = up.first() { out.extend(commands(&d.join(".pi").join("prompts"), false).iter().map(|f| entry(format!("/{}", f.name), f))); }
-    out
 }
 
 /// The entries that match a word typed with its trigger (`/rev`): those whose name starts with what follows the

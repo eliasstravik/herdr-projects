@@ -13,6 +13,8 @@ use sw::store::settings::lookup::Scope;
 
 /// The skills and commands a program takes in its chat, read where it keeps them.
 mod skills;
+/// The skills of the other programs the herdr web UI lists them for.
+mod skills_more;
 
 fn args(k: &str, o: StartOpts) -> Vec<String> { start_args(k, &o).unwrap() }
 fn opts(model: &str, effort: &str) -> StartOpts { StartOpts { model: model.into(), effort: effort.into(), ..Default::default() } }
