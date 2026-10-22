@@ -31,7 +31,13 @@ fn the_hook_makes_nothing_with_no_tasks_show_for_a_repo_and_the_how_to_names_the
     like(&run(&w, &["show", "--repo", "proj"]).unwrap(), r"\n\* merge\.by +itself +your entry for proj\n");
     run(&w, &["set", "board.agents", "2"]).unwrap();
     assert_eq!(sw::store::settings::lookup::setting("board.agents", None), json!(2));
-    like(&sw::extras::skill_text::skill_text(&sw::flow::send::shim().display().to_string()), r"report <your id> --state blocked");
+    let skill = sw::extras::skill_text::skill_text(&sw::flow::send::shim().display().to_string());
+    like(&skill, r"report <your id> --state blocked");
+    // what archive, restore and clear really do: the agent and the temporary files go, the worktree stays
+    like(&skill, r"archive <id>` puts a task that is not at work away: its own herdr space closes \(its agent ends with\s+it\) and its temporary files are freed; its worktree, branch and history stay\.");
+    like(&skill, r"`restore <id>` brings it back to the\s+list and starts nothing");
+    like(&skill, r"`clear <id>` stops its agent and removes the task; a worktree with unsaved or unmerged work\s+is kept on disk");
+    assert!(!skill.contains("keeps everything"), "archive does not keep the agent or its temporary files");
 }
 
 #[test]
