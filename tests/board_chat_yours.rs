@@ -1,4 +1,4 @@
-//! Your words in a task agent's chat, as in the Coordinator's: the box shows "You:" with what you just sent until the
+//! Your words in a task agent's chat, as in the Coordinator's: the box shows what you just sent (bright, no label) until the
 //! answer comes, then the answer alone, also where you sent it while the agent worked (Claude Code queues it); the
 //! conversation keeps your words above it (alt+k), and the web board opens on the same part.
 use crate::common;
@@ -34,7 +34,7 @@ fn a_task_agents_chat_shows_your_words_until_its_answer_takes_their_place_and_ke
     let mut s = open(&w.root, 34); s.s.side = false;
     s.s.sel = id.clone(); s.load(); s.press(&["space"]);
     s.typed("yes, g too"); s.press(&["enter"]);
-    assert_eq!(crate::board_chat::chat(&mut s, 120).boxed, v(&["You:", "yes, g too", "", "❯ Send message to Agent"]));
+    assert_eq!(crate::board_chat::chat(&mut s, 120).boxed, v(&["yes, g too", "", "❯ Send message to Agent"]));
     // the answer takes their place: the box holds one message
     settle(&id); save_talk(&w, &id, "yes, g too", "Made g."); s.load();
     assert_eq!(crate::board_chat::chat(&mut s, 120).boxed, v(&["Made g.", "", "❯ Send message to Agent"]));
@@ -42,7 +42,7 @@ fn a_task_agents_chat_shows_your_words_until_its_answer_takes_their_place_and_ke
     // above them, the rest of the conversation
     let mut all = vec![];
     for _ in 0..6 { s.press(&["alt+k"]); all.extend(crate::board_chat::chat(&mut s, 120).boxed); }
-    for l in ["Board:", "Made f, with one line in it.", "You:", "yes, g too"] { assert!(all.iter().any(|x| x == l), "{l} in {all:?}"); }
+    for l in ["Board:", "Made f, with one line in it.", "yes, g too"] { assert!(all.iter().any(|x| x == l), "{l} in {all:?}"); }
     // the web board opens on the same part: the answer alone
     s.s.chat_at = None;
     let side = sw::webui::model::side::side_of(&mut s.s, &s.theme.clone());

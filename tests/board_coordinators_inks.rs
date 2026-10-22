@@ -68,8 +68,9 @@ fn a_coordinators_box_is_amber_and_names_it_from_the_top_row_down_and_a_tasks_ag
             // its reply has no label over it (the ladder names it); only the frame is in the coordinator's colour
             assert!(!s.text().contains("proj's coordinator:"), "{}", s.text());
             s.press(&[&sw::board::keys::key_name("chatScrollUp")]); // the conversation, your words too
-            all(&mut s, "You:", Ink::Muted, false);
-            all(&mut s, "what is open here?", Ink::Soft, false);
+            // your words with no label, in the colour you typed them in
+            assert!(!s.text().contains("You:"), "{}", s.text());
+            all(&mut s, "what is open here?", Ink::Plain, false);
             all(&mut s, "╰", COORD_EDGE, false);
         }
         // a task's agent: violet

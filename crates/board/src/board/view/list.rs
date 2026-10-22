@@ -79,9 +79,9 @@ pub fn unread_lines(s: &State, width: usize) -> Vec<Inked> {
 /// A repo's heading has its key beside its name, dimmed (`gtm-agent · AGT`): the first thing to go where room is short.
 /// A machine's or a project's row (and `All machines`) is its coordinator's, drawn as a task's row (view/pilot.rs). The
 /// top row says what it holds, open or folded: `4 machines · 420 tasks`, `9 projects · 30 tasks`.
-fn heading(s: &State, t: &Theme, rows: &[Row], at: usize, width: usize) -> (Inked, Option<Inked>) {
+fn heading(s: &State, t: &Theme, rows: &[Row], at: usize, width: usize) -> Inked {
     let r = &rows[at];
-    let Row::Head { name, autos, machine, folded, folded_autos, id, .. } = r else { return (Inked::new(), None) };
+    let Row::Head { name, autos, machine, folded, folded_autos, id, .. } = r else { return Inked::new() };
     let top = *id == crate::board::update::top::top_id(s);
     let project = id.starts_with(&format!("{}repo\t", crate::board::update::heads::HEAD));
     let key = if s.by_repo { crate::board::tags::heading_key(s, at) } else { String::new() };
@@ -159,11 +159,9 @@ pub fn list_lines(s: &mut State, t: &Theme, width: usize, h: usize, screen: usiz
             Row::Head { id, .. } => {
                 if heading_height(&rows, k) > 1 { lines.push(L { head: true, ..line(Inked::new()) }); }
                 // An open heading at the foot of what shows goes with the empty line above it; a folded one is a row.
-                let (text, under) = heading(s, t, &rows, k, width);
+                let text = heading(s, t, &rows, k, width);
                 let sel = !id.is_empty() && *id == s.sel;
-                let hangs = !r.shut() && holds(k);
-                lines.push(L { head: hangs && under.is_none(), sel, id: id.clone(), ..line(pad(n_in, text)) });
-                if let Some(u) = under { lines.push(L { head: hangs, sel, id: id.clone(), ..line(pad(n_in, u)) }); }
+                lines.push(L { head: !r.shut() && holds(k), sel, id: id.clone(), ..line(pad(n_in, text)) });
             }
             Row::Note(n) => lines.push(line(pad(n_in, Inked::plain("   ").add(Inked::of(n.clone(), Ink::Muted))))),
             Row::Rec(_) | Row::Auto(_) => {

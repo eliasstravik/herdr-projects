@@ -72,8 +72,8 @@ uncounted.
 
 - **A ladder** in its top edge, from the top row down (`All machines › vm-str › gtm › GTM-14`), the current step lit.
 - **Its edge in its kind's colour**: amber for a coordinator, violet for a task's agent.
-- **Inside it only the reply** and the line you type on: no line that says who said it, since the edge does. Your own
-  words, autopilot's wakes and a reviewer are still named.
+- **Inside it only the conversation** and the line you type on, with no labels: what you wrote in the bright colour you
+  type in, the reply in grey; the edge says who. Only someone else is named (a reviewer, autopilot's wakes, the board).
 - **One that never ran** invites a first message: `Ask it something, e.g. "what's left to do here?"`. Your first
   message starts it.
 - `Enter` sends, and a coordinator decides itself what to start.

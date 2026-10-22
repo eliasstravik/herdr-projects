@@ -20,7 +20,7 @@ fn while_your_words_stand_in_the_box_the_task_panel_has_the_agents_message() {
     assert_eq!(crate::board_chat::chat(&mut s, 160).boxed[0], "Made f, with one line in it.");
     assert!(!panel(&mut s).contains("Made f, with one line in it."), "the chat shows it: the panel does not say it twice:\n{}", panel(&mut s));
     s.typed("yes, g too"); s.press(&["enter"]);
-    assert_eq!(crate::board_chat::chat(&mut s, 160).boxed[..2].to_vec(), vec!["You:", "yes, g too"]);
+    assert_eq!(crate::board_chat::chat(&mut s, 160).boxed[..1].to_vec(), vec!["yes, g too"]);
     assert!(panel(&mut s).contains("Made f, with one line in it."), "so the task panel has the agent's message meanwhile:\n{}", panel(&mut s));
 }
 

@@ -1,6 +1,6 @@
-//! What a coordinator's row says of it, as a task's row says of its agent: what it does while it works (the last line
-//! of its turn so far), what it asks you while it waits for you (its question, or that it wants your OK), when that
-//! turn began and when it last said something. Worked out where it runs, and sent with its tasks to another machine.
+//! What a coordinator's row says of it, as a task's mark and time say of its agent: what it asks you while it waits
+//! for you (its question, or that it wants your OK: the mark `?` or `!`), when its turn began and when it last said
+//! something. Worked out where it runs, and sent with its tasks to another machine.
 use super::look::Look;
 
 /// The last line of something said, kept to one line.
@@ -9,7 +9,7 @@ impl Look {
     /// Fills in what its row says from where it stands, its turn and its conversation.
     pub fn live(mut self) -> Look {
         let open = self.turn.as_ref().map(|t| !t.finished).unwrap_or(false);
-        if self.state == "working" && open { if let Some(t) = &self.turn { self.began = t.began; self.doing = last_line(&t.said); } }
+        if self.state == "working" && open { if let Some(t) = &self.turn { self.began = t.began; } }
         if let Some(m) = self.talk.last() { self.at = m.at; }
         self.asks = self.asking();
         self

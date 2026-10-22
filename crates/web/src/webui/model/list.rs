@@ -60,7 +60,7 @@ pub fn list_of(s: &State, t: &Theme) -> Value {
     let count = |folded: usize, autos: usize| if autos > 0 { json!(crate::board::update::heads::holds(folded, autos)) } else { json!(folded) };
     // A machine's or a project's row: its coordinator's state as a task's mark, where it says something
     // (board/view/pilot.rs); null else.
-    let pilot = |id: &str| crate::board::view::pilot::shown(s, t, id).map(|x| json!({ "mark": pieces(&x.mark), "label": x.label, "cols": if x.time.is_empty() { vec![] } else { vec![pieces(&x.time)] }, "under": pieces(&x.line) })).unwrap_or(Value::Null);
+    let pilot = |id: &str| crate::board::view::pilot::shown(s, t, id).map(|x| json!({ "mark": pieces(&x.mark), "label": x.label, "cols": if x.time.is_empty() { vec![] } else { vec![pieces(&x.time)] }, "under": [] })).unwrap_or(Value::Null);
     let coord = |id: &str| crate::board::update::coords::of_head(s, id).is_some();
     for (at, row) in s.rows.iter().enumerate() {
         match row {

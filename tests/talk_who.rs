@@ -1,4 +1,4 @@
-//! Who said what in a task's chat, as in the Coordinator's: your words under "You:", the agent's under "Agent:", and
+//! Who said what in a task's chat, as in the Coordinator's: your words and the agent's with no label, and
 //! what others sent it under their own name: the board's brief and its own prompts ("Board:"), the Coordinator's
 //! ("Coordinator:"). The same in the box, on the web board and for another machine's task.
 use crate::common;
@@ -38,7 +38,7 @@ fn each_thing_sent_to_a_tasks_agent_is_under_the_name_of_who_sent_it() {
     s.s.just_sent.clear(); // (the agent here says nothing new after your words, which would stand in the box till then)
     let mut b = s.chat(120).boxed;
     for _ in 0..12 { s.press(&["alt+k"]); b.extend(s.chat(120).boxed); }
-    for name in ["Board:", "You:", "Coordinator:"] { assert!(b.iter().any(|l| l == name), "{name} in {b:?}"); }
+    for name in ["Board:", "Coordinator:"] { assert!(b.iter().any(|l| l == name), "{name} in {b:?}"); }
     assert!(!b.iter().any(|l| l.starts_with("To the")), "{b:?}");
     // the web board: the same names
     let side = sw::webui::model::side::side_of(&mut s.s, &s.theme.clone());

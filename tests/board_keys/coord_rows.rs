@@ -86,18 +86,18 @@ fn another_machines_coordinator_is_gone_into_there_with_alt_o_and_enter_only_fol
 }
 
 #[test]
-fn a_coordinator_that_asks_you_stands_under_needs_you_with_its_question_and_is_counted() {
+fn a_coordinator_that_asks_you_stands_under_needs_you_and_is_counted_and_a_coordinators_row_is_one_line() {
     let now = sw::clock::now();
     let (_w, mut s) = far_board(json!({ "machine": { "state": "working", "doing": "Cleaning old worktrees", "began": now - 120000 },
         "project:gtm": { "state": "idle", "talk": [{ "you": false, "text": "Two PRs wait on CI. Want me to retry #11?" }], "at": now - 60000 } }), json!({}), json!([]));
     let l = s.screen(120).join("\n");
-    // the right side as on tasks: how long it has worked, how long ago it spoke; the live line under it
-    assert!(regex::Regex::new(r"\n[ ▌]  ◐ ▸ otherbox  0 tasks +2m *\n[ ▌] +Cleaning old worktrees").unwrap().is_match(&l), "{l}");
+    // the right side as on tasks: how long it has worked, how long ago it spoke; never a line under it
+    assert!(regex::Regex::new(r"\n[ ▌]  ◐ ▸ otherbox  0 tasks +2m *\n").unwrap().is_match(&l) && !l.contains("Cleaning old worktrees"), "{l}");
     s.press(&["tab", "tab"]); assert_eq!(s.s.show, 2);
     let l = s.screen(120);
     assert!(regex::Regex::new(r"Needs you 1 ").unwrap().is_match(&l[1]), "{:?}", l);
     let t = l.join("\n");
-    assert!(regex::Regex::new(r"\n[ ▌]    \? ▾ gtm +1m ago *\n[ ▌] +Two PRs wait on CI\. Want me to retry #11\?").unwrap().is_match(&t), "{t}");
+    assert!(regex::Regex::new(r"\n[ ▌]    \? ▾ gtm +1m ago *\n").unwrap().is_match(&t) && !t.contains("Two PRs wait on CI"), "its question is in the chat, not under its row: {t}");
     let q = s.inked(120).iter().flat_map(|x| x.0.clone()).find(|p| p.t == "?").unwrap();
     assert!(q.c == Ink::Red && q.bold, "asks you: red, bold");
 }

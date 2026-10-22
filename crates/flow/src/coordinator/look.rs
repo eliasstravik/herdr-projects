@@ -27,9 +27,9 @@ use std::sync::{LazyLock, Mutex};
 pub struct Look {
     pub state: String, pub status: Option<String>, pub run: Option<Obj>, pub one_off: bool, pub queue: usize, pub waiting: Vec<String>, pub error: String, pub pane: String, pub workspace: String,
     pub agent: Value, pub turn: Option<Turn>, pub talk: Vec<Said>, pub readable: bool, pub said: String, pub last: String, pub sent: String, pub unseen: String, pub stale: bool, pub def: Option<Obj>,
-    /// What its row says, as a task's (look_live.rs): what it does while it works, what it asks you while it waits for
-    /// you, when its turn began (ms, 0 none), when it last said something (ms, 0 never).
-    pub doing: String, pub asks: String, pub began: i64, pub at: i64,
+    /// What its row says, as a task's (look_live.rs): what it asks you while it waits for you (its mark is `?`), when
+    /// its turn began (ms, 0 none), when it last said something (ms, 0 never).
+    pub asks: String, pub began: i64, pub at: i64,
 }
 /// A transcript's last read, by when it changed and its size: two writes inside one tick of the file system's clock
 /// keep its time, never its size.

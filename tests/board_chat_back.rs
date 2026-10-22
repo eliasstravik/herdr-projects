@@ -70,7 +70,7 @@ fn the_box_holds_only_the_newest_message_whoever_said_it_your_words_only_until_t
     c.key("alt+j"); assert_eq!(message(&c.boxed()), v(&["Answer 1 line 1.", "Answer 1 line 2.", "Answer 1 line 3."]), "alt+j at the end: back to the answer alone");
     // Your words, until the answer comes: then alone too.
     c.talk.push((true, "And now?".into()));
-    assert_eq!(message(&c.boxed()), v(&["You:", "And now?"]));
+    assert_eq!(message(&c.boxed()), v(&["And now?"]));
     c.talk.push((false, "Now this.".into())); c.turn = "turn-2".into();
     assert_eq!(message(&c.boxed()), v(&["Now this."]));
     // A task's agent the same, on the web board too: one part, the newest.
@@ -119,7 +119,7 @@ fn a_short_conversation_that_starts_with_your_words_closes_too() {
     // Your words first, the answer under them: the whole conversation fits the box, open or not.
     let mut c = C::new(vec![(true, "Where do things stand?".into()), (false, "Six tasks are in progress.".into())]);
     assert_eq!(message(&c.boxed()), v(&["Six tasks are in progress."]));
-    c.key("alt+k"); assert_eq!(message(&c.boxed()), v(&["You:", "Where do things stand?", "", "Six tasks are in progress."]));
+    c.key("alt+k"); assert_eq!(message(&c.boxed()), v(&["Where do things stand?", "", "Six tasks are in progress."]));
     c.key("alt+j"); assert_eq!(message(&c.boxed()), v(&["Six tasks are in progress."]));
 }
 

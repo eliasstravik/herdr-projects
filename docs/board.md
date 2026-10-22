@@ -589,9 +589,9 @@ It looks the same for a coordinator and for a task's agent, at every window widt
    that never ran invites a first message.
    - One thing gets a greyed line of its own above the box: a default that changed while a coordinator runs, with the
      command that starts a new one on it.
-2. **One rounded box**: the newest thing said in that conversation, in grey. What the one the box talks to said has no
-   line naming it (the edge does); your own words are under `You:`, a reviewer's under `Reviewer:`, a wake under
-   `Autopilot:`. Then an empty line; then the line you type on (the prompt is only
+2. **One rounded box**: the newest thing said in that conversation. No label on either side: what you wrote is in the
+   bright colour you type in, what the one the box talks to said in grey (its edge names it). Only someone else is
+   named: a reviewer under `Reviewer:`, a wake under `Autopilot:`, the board under `Board:`. Then an empty line; then the line you type on (the prompt is only
    `❯`).
    - A picture you paste stands on it as `[Image 1]`, not as its path; what is sent has the path
      ([pictures pasted](image-paste.md)).
@@ -646,9 +646,8 @@ is the agent's again, and the review's result is where it always is: on the row 
 
 ### The box holds one message: the newest, whoever said it
 
-What you just sent shows under `You:` the moment you send it, in the bright text colour, where the agent's message was,
-over an empty line to type on. It stays until the answer comes; then the answer alone (`Agent:`, or `Coordinator:`), in
-grey, for the Coordinator and a task's agent alike (also when it answers in the very same words as before). The old
+What you just sent shows the moment you send it, with no label, in the bright text colour, where the agent's message
+was, over an empty line to type on. It stays until the answer comes; then the answer alone, with no label, in grey, for the Coordinator and a task's agent alike (also when it answers in the very same words as before). The old
 message is never shown under your words: it is above, with the rest of the conversation.
 
 "The moment you send it" means before the words have reached anyone, whoever the chat talks to: the Coordinator, a
@@ -680,8 +679,8 @@ The box opens on the newest thing said, and holds only that. What came before is
 - `Alt+K` opens the box to the conversation and scrolls up through it; `Alt+J` scrolls down, half a box at a time (K and
   J, as up and down in vim). `Alt+J` once more from its end closes it to the newest message alone again, from its start.
 - That holds wherever the box was opened, whoever you talk to, and also after new messages came while it was open.
-- The last dozen things said are there, each under the line that names who said it, as in the Coordinator's chat: `You:`
-  for your words (typed in the box, with `tell`, or in the agent's own pane), `Agent:` or `Reviewer:` for what it said,
+- The last dozen things said are there, as in a coordinator's chat: your words (typed in the box, with `tell`, or in the
+  agent's own pane) bright and its answers grey, with no label; `Reviewer:` for what a reviewer said,
   `Coordinator:` for what the Coordinator sent it, and `Board:` for what the board sent on its own (its brief, a review's
   findings, the word to go on). A long text sent, such as a brief, shows only its beginning.
 - The mouse wheel does the same with the pointer over the chat ([the mouse](mouse.md)). Both work while you type, and

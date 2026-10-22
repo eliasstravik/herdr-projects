@@ -110,8 +110,8 @@ vm-a: its tasks cannot be read: herdr-projects is not found there.
   show them like this machine's own, under the same lines that name who said them ([the board](board.md)).
 - **Its Coordinator.** While the board shows one other machine by itself, what you type goes to that machine's
   Coordinator, and the chat shows that Coordinator's conversation. The machine sends where its Coordinator stands
-  (`idle`, `working`, how many of your messages wait) and the last dozen things said. The box shows them under the same
-  lines (`Coordinator:`, `You:`) and scrolls back through them. A machine with no Coordinator says so (what you type
+  (`idle`, `working`, how many of your messages wait) and the last dozen things said. The box shows them as this machine's:
+  your words bright, its answers grey, no labels, and scrolls back through them. A machine with no Coordinator says so (what you type
   there is added as a task).
 - **A machine on an older plugin** is recognised by its missing version: its new fields stay blank and the board says
   "update herdr-projects on <machine>". It sends no chat: its agent's last message still shows, and for a reviewer or

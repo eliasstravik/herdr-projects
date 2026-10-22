@@ -41,7 +41,7 @@ fn the_box_talks_to_one_long_lived_coordinator_started_once_with_nothing_held_ba
     assert_eq!(s.s.value(), "", "{}", s.s.msg);
     assert_eq!(sw::coordinator::state::get(&socket).unwrap_or_default().arr("queue").len(), 1);
     s.load();
-    assert!(has(&s.text(), &format!(r"\n╭─  {host}  ─*╮\n│ You: +│\n│ build a login page +│\n│ +│\n│ ❯ Send message to {top} +│\n╰─+╯\n")), "{}", s.text());
+    assert!(has(&s.text(), &format!(r"\n╭─  {host}  ─*╮\n│ build a login page +│\n│ +│\n│ ❯ Send message to {top} +│\n╰─+╯\n")), "{}", s.text());
     drain();
     let st = w.state();
     assert_eq!(st.arr("workspaces").iter().map(|x| x.t("label")).collect::<Vec<_>>(), vec!["~"]);

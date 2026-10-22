@@ -39,8 +39,8 @@ fn what_you_say_is_never_lost_a_dialog_on_its_screen_holds_it_a_failed_start_say
     tell(&w, &w.root, "first", false); drain();
     assert_eq!(get(&w).arr("queue").len(), 1); assert_eq!(look(&so).state, "blocked");
     let mut s = open(&w.root, 34);
-    // its row (the top row) says it wants your OK, as a task's would; the box names it
-    assert!(has(&s.text(), r"\n[ ▌]! [▾▸] [^\n]*\n[ ▌] +wants your OK"), "{}", s.text());
+    // its row (the top row) has the mark of one that wants your OK, as a task's would, and no line under it
+    assert!(has(&s.text(), r"\n[ ▌]! [▾▸] [^\n]*\n") && !s.text().contains("wants your OK"), "{}", s.text());
     let host = regex::escape(&sw::shown::words::clean(&sw::remote::check::hostname()));
     assert!(has(&s.text(), &format!(r"\n╭─  {host}  ─*╮\n")) && !s.text().contains(&format!("│ {}.", crate::board_chat::top_name())), "{}", s.text());
     s.press(&["alt+c"]); assert!(has(&s.text(), r"\n╭─[^\n]*╮\n│ ❯ "), "{}", s.text());
