@@ -2,6 +2,7 @@
 //! starting them, and what is installed. One area per file.
 pub mod access;
 pub mod adapter;
+pub mod codex_trust;
 pub mod efforts;
 pub mod hand_limits;
 pub mod helpers;
