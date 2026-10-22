@@ -121,7 +121,12 @@ fn space_on_a_machines_row_or_a_projects_row_talks_to_its_coordinator_and_coordi
     // ← on a machine's row folds its projects' rows away, → brings them back
     s.s.sel = machine_id("otherbox"); s.load();
     s.press(&["left"]); assert!(s.s.folded.contains(&machine_id("otherbox")) && !heads(&s).contains(&"far".to_string()), "{}", s.text());
+    // folded away, its project's coordinator still counts: the count is of coordinators, not of the rows that show
+    assert!(regex::Regex::new(r"Coordinators 3 ").unwrap().is_match(&s.screen(160)[1]), "{:?}", s.screen(160));
     s.press(&["right"]); assert!(heads(&s).contains(&"far".to_string()));
+    s.s.sel = sw::board::update::top::all_id(); s.load(); s.press(&["left"]); // All machines folded: the same count
+    assert!(heads(&s) == vec!["All machines".to_string()] && regex::Regex::new(r"Coordinators 3 ").unwrap().is_match(&s.screen(160)[1]), "{:?}", s.screen(160));
+    s.press(&["right"]);
     // one machine shown: its own only, and the count is its
     while s.s.scope != "otherbox" { s.press(&["alt+m"]); }
     assert_eq!(heads(&s), vec!["otherbox".to_string(), "far".into()], "that machine's row and its project's; its own Coordinator has none");

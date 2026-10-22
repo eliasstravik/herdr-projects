@@ -31,7 +31,7 @@ pub fn whole(s: &State) -> bool { group(s) == Some("done") }
 pub fn counts(s: &State, items: &[std::sync::Arc<Obj>]) -> Vec<usize> {
     let live: Vec<&std::sync::Arc<Obj>> = items.iter().filter(|r| !r.b("archivedAt")).collect();
     SHOWS.iter().enumerate().map(|(n, (_, g))| match g { Some(g) => live.iter().filter(|r| group_of(r) == *g).count() + if n == NEEDS { needing(s) } else { 0 },
-        None if n == COORDS => coord_rows(s).iter().filter(|r| matches!(r, Row::Head { id, .. } if running(s, id))).count(), None if n == AUTOS => super::list::autos_shown(s, "").len(), None => live.len() }).collect()
+        None if n == COORDS => coords_running(s), None if n == AUTOS => super::list::autos_shown(s, "").len(), None => live.len() }).collect()
 }
 /// Tab: the next filter; shift+tab the one before.
 pub fn step(s: &mut State, p: &Press, fx: &mut Vec<Effect>) {
@@ -87,6 +87,11 @@ pub fn host_needs(s: &State, host: &str) -> bool { s.show == NEEDS && !s.archive
 fn needing(s: &State) -> usize {
     let top = usize::from(s.scope == "*" && needs_you(s, &super::top::all_id()));
     top + hosts(s).iter().map(|h| usize::from(needs_you(s, &machine_id(h))) + projects_needing(s, h).len()).sum::<usize>()
+}
+/// How many coordinators in view run, folded away or not: the top row's, each machine's, each project's.
+fn coords_running(s: &State) -> usize {
+    let top = usize::from(s.scope == "*" && running(s, &super::top::all_id()));
+    top + hosts(s).iter().map(|h| usize::from(running(s, &machine_id(h))) + projects(s, h).iter().filter(|r| running(s, &format!("{HEAD}repo\t{h}\t{r}"))).count()).sum::<usize>()
 }
 /// The list under Coordinators: the top row, then for each machine in view its row (its machine coordinator's) and the
 /// rows of its projects, of the coordinators that run. The top row is always there, counted only while it runs.
