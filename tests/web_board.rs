@@ -57,12 +57,12 @@ fn the_web_board_shows_the_terminal_boards_list_and_one_task_whole() {
     assert_eq!((s.at("send").t("enter"), s.at("send").t("delegate"), s.at("send").t("place")), ("add it as a task".into(), "add it and put an agent on it".into(), "Add a task".into()));
     // opening the task's agent is a link to the web UI's own view of its pane; each press is a new going
     let t = task(&id);
-    let s = web(&w, "press", json!({ "id": "enter" }));
+    let s = web(&w, "press", json!({ "id": "open" }));
     assert_eq!((s.at("go").i("n"), s.at("go").s("pane"), s.at("go").s("workspace")), (1, t.at("link").s("pane"), t.at("link").s("workspace")));
     assert!(["chat", "terminal"].contains(&s.at("go").s("view")));
-    assert_eq!(web(&w, "press", json!({ "id": "enter" })).at("go").i("n"), 2);
+    assert_eq!(web(&w, "press", json!({ "id": "open" })).at("go").i("n"), 2);
     web(&w, "pick", json!({ "id": mine, "open": true }));
-    let none = web(&w, "press", json!({ "id": "enter" }));
+    let none = web(&w, "press", json!({ "id": "open" }));
     assert_eq!(none.at("go").i("n"), 2); assert!(none.at("msg").s("text").contains("No agent has been on this yet"), "{}", none.at("msg"));
 }
 

@@ -18,7 +18,7 @@
 ────────────────────────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────────────────────────
-  enter open this task's agent · ? all keys
+  alt+o open this task's agent · ? all keys
 == the task beside it
  herdr-projects  proj
  All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
@@ -39,7 +39,7 @@
 ❯ Add a task
 ────────────────────────────────────────────────────────────
   Side panel on. alt+p hides it.
-  enter open this task's agent · ? all keys
+  alt+o open this task's agent · ? all keys
 == the whole task
  Task details  #5 "Max length for …        lines 1–13 of 24
 ────────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@
 ────────────────────────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────────────────────────
-  enter open this task's agent · ↑↓ scroll the task
+  alt+o open this task's agent · ↑↓ scroll the task
 == the ? menu
  Menu  for #5 "Max length for task titles"
  plain keys
@@ -72,11 +72,11 @@
    tab          the next filter on top: all, coordinators,
                 needs you, working, ready, to do, done,
                 automations
-   enter        send what is typed; else go into this row's
-                agent: a task's, or a machine's or a
-                project's coordinator
+   enter        send what is typed; else fold or unfold a
+                heading
    space        talk to this row's agent, and back to the
- ↓ 66 more
+                top row's coordinator
+ ↓ 65 more
 
 ────────────────────────────────────────────────────────────
 ❯ Add a task

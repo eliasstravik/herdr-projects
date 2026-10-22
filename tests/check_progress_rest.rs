@@ -48,7 +48,7 @@ fn a_check_on_the_board_its_mark_bars_together_waiting_in_the_list_and_the_chat_
     b.s.sel = id.clone(); b.s.side = false; b.load(); b.press(&["space"]);
     let head = |b: &mut common::board::Board, cols: usize| crate::board_chat::chat(b, cols).who;
     let h60 = head(&mut b, 60);
-    assert!(h60.starts_with("PRJ-1's agent."), "{h60}");
+    assert!(h60.ends_with("› PRJ-1"), "{h60}");
     // Waiting for its turn: in the list, the minutes and no bar, the words under its name.
     put(step_check(&start_check(now, 2 * MIN), Some(&json!({ "state": "waiting", "ahead": 2 })), now));
     b.press(&["esc"]); b.s.side = true; b.load();

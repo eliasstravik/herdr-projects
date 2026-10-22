@@ -58,7 +58,7 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  enter open this task's agent · space talk to the agent · ctrl+x stop the agent · ? all keys
+  alt+o open this task's agent · space talk to the agent · ctrl+x stop the agent · ? all keys
 == the task beside it
  herdr-projects  proj                                                                                                           │
  All 18   Coordinators 0   Needs you 5   Working 9   Ready 1   To do 2   Done 1   Automations 0                                 │  #5 Max length for task titles
@@ -119,7 +119,7 @@
 ❯ Add a task
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Side panel on. alt+p hides it.
-  enter open this task's agent · space talk to the agent · ctrl+x stop the agent · ? all keys
+  alt+o open this task's agent · space talk to the agent · ctrl+x stop the agent · ? all keys
 == the whole task
  Task details  #5 "Max length for task titles"
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  enter open this task's agent · space talk to the agent · ctrl+x stop the agent · esc back to the list
+  alt+o open this task's agent · space talk to the agent · ctrl+x stop the agent · esc back to the list
 == the ? menu
  Menu  for #5 "Max length for task titles"
  plain keys
@@ -188,7 +188,7 @@
    ← →          fold the heading; on a task's row, go to its heading
    pgup pgdn    a page of tasks up or down (in the whole task: a page of its text)
    tab          the next filter on top: all, coordinators, needs you, working, ready, to do, done, automations
-   enter        send what is typed; else go into this row's agent: a task's, or a machine's or a project's coordinator
+   enter        send what is typed; else fold or unfold a heading
    space        talk to this row's agent, and back to the top row's coordinator
    esc          back, one step at a time (as a popup, the board closes on the last one)
    ?            this menu

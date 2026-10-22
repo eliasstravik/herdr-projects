@@ -62,12 +62,12 @@ fn left_on_a_heading_folds_it_to_one_line_with_how_many_it_holds_and_right_unfol
     // The arrows stop on each heading, which is selected as a row is.
     go(&mut s, &repo("otherbox", "crm"));
     assert!(s.screen(100).iter().any(|l| has(l, r"^▌ *(○ |  )?▾ crm")), "{}", s.text());
-    assert!(s.text().contains("← → fold") && s.text().contains("enter go into it"), "the hint line says what the keys do there: {}", s.text());
+    assert!(s.text().contains("enter fold") && s.text().contains("alt+o go into it"), "the hint line says what the keys do there: {}", s.text());
     s.press(&["left"]);
     let t = s.screen(100).join("\n");
     assert!(has(&t, r"Theirs in proj[^\n]*\n\n▌    (○ |  )?▸ crm  1 task"), "{t}"); assert!(!t.contains("Theirs in crm") && t.contains("Theirs in proj"));
     assert_eq!(s.s.sel, repo("otherbox", "crm"), "the selection stays on the heading");
-    assert!(s.text().contains("← → unfold"));
+    assert!(s.text().contains("enter unfold"));
     s.press(&["left"]); assert!(s.s.folded.contains(&repo("otherbox", "crm")), "← again leaves it folded");
     // A machine folds whole; unfolded, its repos are as they were.
     go(&mut s, &machine("otherbox"));
@@ -84,7 +84,7 @@ fn left_on_a_heading_folds_it_to_one_line_with_how_many_it_holds_and_right_unfol
     s.press(&["alt+s", "alt+s", "alt+m"]); s.s.scope.clear(); sw::board::update::list::relist(&mut s.s);
     let todo = "head:status\t\tto do".to_string();
     go(&mut s, &todo);
-    assert!(s.text().contains("← → fold"));
+    assert!(s.text().contains("enter fold") && !s.text().contains("alt+o go into it"), "a status group has no agent: {}", s.text());
     s.press(&["left"]);
     let t = s.screen(100).join("\n");
     assert!(has(&t, r"\n▌  ▸ to do  3 tasks"), "{t}"); assert!(!t.contains("Mine 1"));

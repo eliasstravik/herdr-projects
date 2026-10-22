@@ -51,10 +51,10 @@ opens on it. The archive has none.
 - **`←` on a heading folds it.** Its tasks hide, its caret turns to `▸`, and it says how many tasks it holds
   (`▸ open-crm  4 tasks`), and how many automations where it holds some (`▸ vm-str  7 tasks, 1 automation`,
   [automations](automations.md)). `→` unfolds it. `←` on a task's row goes to its heading.
-- **`Enter` never folds**: on a machine's or a project's row it goes into its coordinator, as on a task it goes into its
-  agent.
+- **`Enter` on a heading folds it and unfolds it too**; on a task's row it does nothing. `Alt+O` goes into a row's
+  agent: on a machine's or a project's row its coordinator, on a task its agent.
 - **A click on a heading** folds it and unfolds it ([mouse](mouse.md)).
-- The hint line says what `←` `→` will do (`← → fold`, `← → unfold`), and the `?` menu lists them.
+- The hint line says what `Enter` will do (`enter fold`, `enter unfold`), and the `?` menu lists `Enter`, `←` and `→`.
 - **A machine folds whole**: all its repos and tasks hide under its one line, which counts them all. Unfold it and its
   repos are as they were: a folded one is still folded.
 - It works the same grouped by repo or by status, on one machine or all of them. The two groupings keep their own

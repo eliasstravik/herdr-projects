@@ -21,7 +21,7 @@ fn the_popup_says_how_to_get_back_before_it_closes_for_an_agent_and_takes_no_key
     let mut v = open_with(&w.root, 34, true);
     v.s.ctx.leave_ms = 30; v.s.ctx.board_key = "prefix+w".into();
     let now = sw::clock::now(); tick(&mut v, now);
-    v.s.sel = id.clone(); v.load(); v.press(&["enter"]);
+    v.s.sel = id.clone(); v.load(); v.press(&["alt+o"]);
     assert!(!v.closed, "not at once: the line shows first");
     assert!(v.text().contains("Opening the agent. prefix+w brings the board back."), "{}", v.text());
     v.press(&["ctrl+x"]); assert_eq!(task(&id).s("stage"), "working", "nothing more is taken from the keyboard"); assert!(v.s.ask.is_none());
@@ -54,9 +54,9 @@ fn closing_takes_ctrl_c_twice_and_the_hints_say_so_wherever_you_are() {
     let hint = format!(r"\n[ ▌] Press {} again to close the board *$", regex::escape(&key_name("close")));
     let esc_hint = format!(r"\n[ ▌] {} closes the board *$", regex::escape(&key_name("close")));
     s.press(&["esc"]); assert!(has(&s.text(), &esc_hint), "{}", s.text()); assert!(!s.text().contains("Close the board?"));
-    // closing is not a question; another esc says it again, and enter does what it does on an empty box
+    // closing is not a question; another esc says it again, and alt+o does what it does
     s.press(&["down", "esc"]); assert!(has(&s.text(), &esc_hint)); s.press(&["up"]);
-    s.press(&["enter"]); assert!(!s.closed && !has(&s.text(), &esc_hint)); assert!(s.text().contains("No agent has been on this yet"), "{}", s.text());
+    s.press(&["alt+o"]); assert!(!s.closed && !has(&s.text(), &esc_hint)); assert!(s.text().contains("No agent has been on this yet"), "{}", s.text());
     // any other key takes the hint away and does its own thing; with words typed ctrl+c is a first press too
     s.press(&["ctrl+c"]); assert!(has(&s.text(), &hint)); s.typed("x"); assert!(!has(&s.text(), &hint)); assert_eq!(s.s.value(), "x");
     s.press(&["ctrl+c"]); assert!(!s.closed); assert_eq!(s.s.value(), "x"); assert!(has(&s.text(), &hint));

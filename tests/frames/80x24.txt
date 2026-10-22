@@ -22,7 +22,7 @@
 ────────────────────────────────────────────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────────────────────────────────────────────
-  enter open this task's agent · space talk to the agent · ? all keys
+  alt+o open this task's agent · space talk to the agent · ? all keys
 == the task beside it
  herdr-projects  proj
  All 18   Coords 0   Needs 5   Working 9   Ready 1   To do 2   Done 1   Autos 0
@@ -47,7 +47,7 @@
 ❯ Add a task
 ────────────────────────────────────────────────────────────────────────────────
   Side panel on. alt+p hides it.
-  enter open this task's agent · space talk to the agent · ? all keys
+  alt+o open this task's agent · space talk to the agent · ? all keys
 == the whole task
  Task details  #5 "Max length for task titles"                 lines 1–17 of 23
 ────────────────────────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@
 ────────────────────────────────────────────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────────────────────────────────────────────
-  enter open this task's agent · ↑↓ scroll the task · esc back to the list
+  alt+o open this task's agent · ↑↓ scroll the task · esc back to the list
 == the ? menu
  Menu  for #5 "Max length for task titles"
  plain keys
@@ -82,8 +82,7 @@
                 text)
    tab          the next filter on top: all, coordinators, needs you, working,
                 ready, to do, done, automations
-   enter        send what is typed; else go into this row's agent: a task's, or
-                a machine's or a project's coordinator
+   enter        send what is typed; else fold or unfold a heading
    space        talk to this row's agent, and back to the top row's coordinator
    esc          back, one step at a time (as a popup, the board closes on the
                 last one)
@@ -92,7 +91,8 @@
    /            typed first: pick a skill of whom you talk to
 
  ctrl: does something
- ↓ 47 more
+   ctrl+l       yes: approve the merge, say yes, retry, take it as it is
+ ↓ 46 more
 
 ────────────────────────────────────────────────────────────────────────────────
 ❯ Add a task

@@ -48,17 +48,17 @@ fn with_an_agent_whose_agent_is_said_once_and_in_a_narrow_window_the_hints_give_
     delegate(&id); settle(&id);
     let mut s = open(&w.root, 34); s.s.side = false;
     s.s.sel = id.clone(); s.load();
-    assert_eq!(hints(&mut s, 140), "enter open this task's agent · space talk to the agent · ctrl+x stop the agent · ? all keys");
-    assert_eq!(hints(&mut s, 80), "enter open this task's agent · space talk to the agent · ? all keys");
-    assert_eq!(hints(&mut s, 60), "enter open this task's agent · ? all keys");
-    assert_eq!(hints(&mut s, 36), "enter open this task's agent", "the main thing is the last to go");
+    assert_eq!(hints(&mut s, 140), "alt+o open this task's agent · space talk to the agent · ctrl+x stop the agent · ? all keys");
+    assert_eq!(hints(&mut s, 80), "alt+o open this task's agent · space talk to the agent · ? all keys");
+    assert_eq!(hints(&mut s, 60), "alt+o open this task's agent · ? all keys");
+    assert_eq!(hints(&mut s, 36), "alt+o open this task's agent", "the main thing is the last to go");
     s.press(&["space"]);
-    assert_eq!(hints(&mut s, 120), "enter open this task's agent · ctrl+x stop the agent · alt+c hide the latest message · space back");
-    assert_eq!(hints(&mut s, 80), "enter open this task's agent · ctrl+x stop the agent · space back");
+    assert_eq!(hints(&mut s, 120), "alt+o open this task's agent · ctrl+x stop the agent · alt+c hide the latest message · space back");
+    assert_eq!(hints(&mut s, 80), "alt+o open this task's agent · ctrl+x stop the agent · space back");
     s.press(&["alt+c"]);
-    assert_eq!(hints(&mut s, 90), "enter open this task's agent · alt+c show the latest message · space back");
+    assert_eq!(hints(&mut s, 90), "alt+o open this task's agent · alt+c show the latest message · space back");
     s.press(&["alt+c"]);
-    assert_eq!(hints(&mut s, 60), "enter open this task's agent · space back");
+    assert_eq!(hints(&mut s, 60), "alt+o open this task's agent · space back");
     assert_eq!(hints(&mut s, 30), "space back");
     s.typed("also say goodbye");
     assert_eq!(hints(&mut s, 120), "enter send to PRJ-1's agent · shift+enter new line · esc put away");
@@ -69,7 +69,7 @@ fn with_an_agent_whose_agent_is_said_once_and_in_a_narrow_window_the_hints_give_
     assert_eq!(hints(&mut s, 22), "enter send to PRJ-1"); assert_eq!(hints(&mut s, 16), "enter send"); s.press(&["esc"]);
     for width in [40, 34] { assert!(!hints(&mut s, width).contains('…')); }
     assert_eq!(hints(&mut s, 34), "space back"); s.press(&["space"]);
-    assert_eq!(hints(&mut s, 26), "enter open its agent");
+    assert_eq!(hints(&mut s, 26), "alt+o open its agent");
 }
 
 #[test]

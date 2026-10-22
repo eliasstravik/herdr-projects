@@ -29,7 +29,8 @@ pub fn prose_lines(text: &str, width: usize, raw: bool) -> Vec<Inked> {
     }
     out
 }
-/// The parts of a chat (oldest first) as lines: an empty line between two, and the line that names who said it first.
+/// The parts of a chat (oldest first) as lines: an empty line between two, and the line that names who said it first
+/// (not for what the one the box talks to said).
 /// `paint(by, line, part)` colours a line. Returns the lines and the one each part starts on.
 pub fn part_lines(parts: &[Part], width: usize, paint: &dyn Fn(bool, Inked, &Part) -> Inked) -> (Vec<Inked>, Vec<usize>) {
     let mut lines = vec![];
@@ -37,7 +38,9 @@ pub fn part_lines(parts: &[Part], width: usize, paint: &dyn Fn(bool, Inked, &Par
     for (n, p) in parts.iter().enumerate() {
         if n > 0 { lines.push(Inked::new()); }
         starts.push(lines.len());
-        if !p.by.is_empty() { for l in wrap(&format!("{}:", clean(&p.by)), width, "", "") { lines.push(paint(true, l, p)); } }
+        // Who said it, but for the one the box talks to, whom its edge names already (a reviewer is named).
+        let own = !p.sent && !p.raw && p.tone.is_empty() && p.by != "Reviewer";
+        if !p.by.is_empty() && !own { for l in wrap(&format!("{}:", clean(&p.by)), width, "", "") { lines.push(paint(true, l, p)); } }
         for l in prose_lines(&p.text, width, p.raw) { lines.push(paint(false, l, p)); }
     }
     (lines, starts)

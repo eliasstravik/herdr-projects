@@ -34,7 +34,7 @@ fn fail_start(id: &str, title: &str, said: &str, again: &str) {
     let w = sf::explain(&sf::Start { kind: &kind, setting: if plan::planner(&t) { "plan.agent" } else { "worker.agent" }, again }, said, &screen);
     sf::tidy(&api, &pane, &screen);
     let log = dir_of(id).join("runner.log");
-    let look = if screen.is_empty() { String::new() } else { format!("Its terminal is still open: go into the task ({}) to see all of it. ", key_name("enter")) };
+    let look = if screen.is_empty() { String::new() } else { format!("Its terminal is still open: go into the task ({}) to see all of it. ", key_name("open")) };
     let detail = sf::detail(&w, said, &screen, &look, &log);
     sf::log(&log, &kind, &detail);
     let _ = update_wait(id, 10000, |t| {

@@ -65,9 +65,9 @@ fn the_group_has_a_colour_of_its_own_narrow_rows_a_menu_of_its_own_and_stays_wit
     assert_eq!(task("proj/2").at("settings"), &serde_json::json!({ "reviewer.agent": "claude", "merge.by": "itself" }));
     s.press(&["ctrl+s"]); l::turn(all[0].s("id"), false).unwrap(); s.load();
     like(&t(&mut s, 120), r"⟳ off {3}Look for old dependencies {2}every 2h +◇ PRJ-2 skipped +\d+s ago"); l::turn(all[0].s("id"), true).unwrap(); s.load();
-    // the key the old list had is no key here; what is typed is no reply to anyone: with no Coordinator on, it is a new task
+    // the key the old list had goes into no agent here; what is typed is no reply to anyone: with no Coordinator on, it is a new task
     s.press(&["down", "down", "down"]); assert_eq!(s.s.sel, row_id(&all[2])); s.press(&["up"]); assert_eq!(s.s.sel, row_id(&all[1]));
-    s.press(&["alt+o"]); assert_eq!(s.s.msg, ""); assert_eq!(s.s.sel, row_id(&all[1]));
+    s.press(&["alt+o"]); assert_eq!(s.s.msg, "Nothing here has an agent to go into."); assert_eq!(s.s.sel, row_id(&all[1]));
     assert!(sw::store::tasks::list(Default::default()).iter().all(|t| !t.b("archivedAt") && !t.b("pinned")));
     like(&t(&mut s, 120), r"❯ Add a task"); s.press(&["space"]); assert!(!s.s.reply); s.press(&["space"]);
     // ctrl+x removes it, and the selection goes to a neighbour

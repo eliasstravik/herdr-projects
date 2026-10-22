@@ -9,8 +9,8 @@
 
 
 
+
 ╭─  HOST ╮
-│ HOST's coordinator │
 │ ❯ Send message to HOST's coordinator │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
   ctrl+s put an agent on this task · space talk about this task · ? all keys
@@ -26,8 +26,8 @@
 
 
 
+
 ╭─  HOST ╮
-│ HOST's coordinator │
 │ ❯ Send message to HOST's coordinator │
 ╰──────────────────────────────────────────────────────╯
   ctrl+s put an agent on this task · ? all keys

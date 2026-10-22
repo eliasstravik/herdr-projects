@@ -146,5 +146,5 @@ fn a_review_under_way_shows_what_the_reviewer_says_never_its_screen_and_a_workin
     // the review ends: the chat is the agent's again
     sw::store::tasks::update(&id, |t| { t.put("stage", "approval"); t.obj_mut("link").put("reviewer", Value::Null); Ok(sw::store::tasks::Change::Write) }).unwrap(); s.load();
     let (_, b) = chat_box(&mut s);
-    assert_eq!(b, vec!["Agent:", "Made f.", "", "❯ Send message to Agent"]);
+    assert_eq!(b, vec!["Made f.", "", "❯ Send message to Agent"]);
 }

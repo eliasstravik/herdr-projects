@@ -1,7 +1,6 @@
 //! The chat's box is in its kind's colour (view/chat_title.rs): amber for every coordinator (a machine's, a project's,
-//! all machines'), violet for a task's agent; its ladder and its first line name whose it is, the first line's name in
-//! that colour too, and so does the hint. Inside the box (the prompt, who said what) all looks the same whoever it
-//! talks to. A repo's heading stays in plain text and a machine's in its accent, in a light theme and a dark one.
+//! all machines'), violet for a task's agent; its ladder names whose it is, the lit step in that colour too, and so
+//! does the hint. Inside the box (the prompt, the reply, your words) all looks the same whoever it talks to. A repo's heading stays in plain text and a machine's in its accent, in a light theme and a dark one.
 use crate::common;
 use common::board::{open, Board};
 use common::*;
@@ -57,18 +56,17 @@ fn a_coordinators_box_is_amber_and_names_it_from_the_top_row_down_and_a_tasks_ag
         assert_eq!(inks_on(&s.inked(100), "talk to proj's coordinator", "proj's coordinator"), vec![(COORD_EDGE, false)]);
         s.press(&["space"]);
         assert_eq!(box_ink(&s.s, None), COORD_EDGE);
-        // its top edge: the ladder, the step it is lit in amber; its first line says whose it is, in amber, then grey
+        // its top edge: the ladder, the step it is lit in amber; no line inside says whose it is again
         all(&mut s, "╭─", COORD_EDGE, false);
         assert!(inks_on(&s.inked(100), "╭─", " proj ").iter().all(|x| x.0 == COORD_EDGE), "{:?}", inks_on(&s.inked(100), "╭─", " proj "));
-        assert_eq!(inks_on(&s.inked(100), "│ proj's coordinator.", "proj's coordinator."), vec![(COORD_EDGE, false)]);
-        assert_eq!(inks_on(&s.inked(100), "│ proj's coordinator.", "Looks after"), vec![(Ink::Muted, false)]);
+        assert!(!s.text().contains("Looks after"), "{}", s.text());
         all(&mut s, "❯", Ink::Text, false); // the prompt: plain, whoever it talks to
         if !light {
             s.typed("what is open here?");
             assert!(s.text().contains("send to") && s.text().contains("proj's coordinator"), "{}", s.text());
             s.press(&["enter"]); drain(); s.load();
-            // who said what: grey; only the frame is in the coordinator's colour
-            all(&mut s, "proj's coordinator:", Ink::Muted, false);
+            // its reply has no label over it (the ladder names it); only the frame is in the coordinator's colour
+            assert!(!s.text().contains("proj's coordinator:"), "{}", s.text());
             s.press(&[&sw::board::keys::key_name("chatScrollUp")]); // the conversation, your words too
             all(&mut s, "You:", Ink::Muted, false);
             all(&mut s, "what is open here?", Ink::Soft, false);
@@ -89,7 +87,7 @@ fn a_coordinators_box_is_amber_and_names_it_from_the_top_row_down_and_a_tasks_ag
         all(&mut s, "❯", Ink::Text, false);
         s.press(&["space"]); assert!(!s.s.reply);
         assert_eq!(box_ink(&s.s, None), COORD_EDGE);
-        assert!(s.text().contains("│ The coordinator of all machines."), "{}", s.text());
+        assert!(s.text().contains("╭─  All machines  ─"), "{}", s.text());
     }
 }
 
@@ -113,7 +111,7 @@ fn the_web_board_draws_a_coordinators_box_amber() {
 #[test]
 fn in_every_theme_with_colours_of_its_own_a_coordinator_and_a_tasks_agent_are_two_colours() {
     let _w = common::world();
-    // ("terminal" has the terminal's own colours: there the box's first line and its ladder tell them apart.)
+    // ("terminal" has the terminal's own colours: there the box's ladder and its placeholder tell them apart.)
     for name in sw::herdr::palette::THEME_NAMES.iter().filter(|n| **n != "terminal") {
         let t = theme(name);
         let (c, a, p) = (t.ink(COORD_EDGE), t.ink(AGENT_EDGE), t.ink(Ink::Text));

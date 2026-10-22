@@ -14,7 +14,7 @@
 ────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────
-  enter open this task's agent
+  alt+o open this task's agent
 == the task beside it
  herdr-projects  proj
  All 18  tab next
@@ -31,7 +31,7 @@
 ❯ Add a task
 ────────────────────────────────────────
   Side panel on. alt+p hides it.
-  enter open this task's agent
+  alt+o open this task's agent
 == the whole task
  Task details  #5 "Max…  lines 1–9 of 2…
 ────────────────────────────────────────
@@ -60,7 +60,7 @@
    pgup pgdn    a page of tasks up or
                 down (in the whole
                 task: a page of its
- ↓ 104 more
+ ↓ 102 more
 
 ────────────────────────────────────────
 ❯ Add a task

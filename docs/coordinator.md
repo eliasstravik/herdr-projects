@@ -34,7 +34,7 @@ only the next one: your default stays as it is.
 it ([machine and project coordinators](machine-and-project-coordinators.md)). With one other machine picked, the top
 row is that machine's, and this one is not on the board.
 
-- `Space` there talks to it; `Space` on another row talks to that row's agent, and again comes back here. `Enter` goes
+- `Space` there talks to it; `Space` on another row talks to that row's agent, and again comes back here. `Alt+O` goes
   into it.
 - `Alt+P`, `Alt+T` and `Ctrl+E` on its row show it and its settings; `Ctrl+S` starts it, `Ctrl+X` stops it and
   `Ctrl+O` puts it on autopilot and takes it off.

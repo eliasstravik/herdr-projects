@@ -83,8 +83,8 @@ fn press(s: &mut State, p: &Press, fx: &mut Vec<Effect>) {
         if enter { fx.push(Effect::Run(Job::StopDispatch { id: j.t("id") })); s.input.set_text(j.s("text")); return; }
         if start { return; }
     } }
-    // On a heading, with nothing typed: go into its coordinator (a status group's has none: ← → fold it).
-    if enter && text.is_empty() && super::heads::selected(s).is_some() { return super::pilot::go_in(s, fx); }
+    // On a heading, with nothing typed: fold it, or unfold it ({open} goes into its coordinator).
+    if enter && text.is_empty() && super::heads::selected(s).is_some() { let id = s.sel.clone(); return super::heads::toggle(s, &id, fx); }
     if enter { return act::enter(s, &text, r.as_ref(), fx); }
     // On a coordinator's row, with nothing typed: autopilot on (update/pilot.rs).
     if start && text.is_empty() && r.is_none() { if let Some(t) = super::pilot::keyed(s) { return super::pilot::run(s, &t, true, fx); } }
@@ -125,6 +125,8 @@ pub fn run_as(s: &mut State, k: K, p: &Press, r: Option<&Obj>, fx: &mut Vec<Effe
         K::Up => act::move_by(s, -1),
         K::Down => act::move_by(s, 1),
         K::Fold => super::heads::fold_key(s, true, fx),
+        // Into the selected row's agent: a task's, or a heading's coordinator.
+        K::Open => match r { Some(r) => act::open_agent(s, r, fx), None if super::heads::selected(s).is_some() => super::pilot::go_in(s, fx), None => s.flash("Nothing here has an agent to go into.", Ink::Muted) },
         K::Unfold => super::heads::fold_key(s, false, fx),
         K::PageUp => act::move_by(s, -10),
         K::PageDown => act::move_by(s, 10),

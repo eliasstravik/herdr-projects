@@ -10,7 +10,7 @@
 ──────────────────────────────
 ❯ Add a task
 ──────────────────────────────
-  enter open this task's agent
+  alt+o open this task's agent
 == the task beside it
  herdr-projects  proj
  All 18  tab next
@@ -23,7 +23,7 @@
 ──────────────────────────────
   Side panel on. alt+p hides
   it.
-  enter open this task's agent
+  alt+o open this task's agent
 == the whole task
  Task details  #5 "Max…  line…
 ──────────────────────────────
@@ -45,7 +45,7 @@
                 headings
    ← →          fold the
                 heading; on a
- ↓ 174 more
+ ↓ 170 more
 ──────────────────────────────
 ❯ Add a task
 ──────────────────────────────

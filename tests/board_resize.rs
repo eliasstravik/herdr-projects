@@ -44,13 +44,13 @@ fn resizing_keeps_the_chat_on_the_last_line_and_the_working_rows_columns_at_the_
             assert_eq!(head, rows - 4, "{note}\n{}", lines.join("\n"));
         } else {
             assert_eq!(in_box(rows - 4), "", "{note}");
-            // (The Rust chat names who said it on the message's first line.)
-            let said: Vec<String> = (head + 2..rows - 4).map(in_box).collect();
-            assert_eq!(said.join(" ").trim_start_matches("Coordinator: "), "Tasks 31 and 32 are both waiting.", "{note}");
+            // (Under the edge that names it, its message alone.)
+            let said: Vec<String> = (head + 1..rows - 4).map(in_box).collect();
+            assert_eq!(said.join(" ").trim(), "Tasks 31 and 32 are both waiting.", "{note}");
         }
-        // Who you talk to: one machine's own coordinator, by its name, and what it looks after. No keys, no program.
-        let me = sw::board::update::top::coordinator_of(&sw::board::update::heads::label(&s.s, ""));
-        assert!(in_box(head + 1).starts_with(&format!("{me}.")) || (columns < 60 && in_box(head + 1).ends_with('…')), "{note}: {:?}", in_box(head + 1));
+        // Who you talk to: one machine's own coordinator, its name on the box's edge. No keys, no program.
+        let me = sw::board::update::heads::label(&s.s, "");
+        assert!(lines[head].contains(&format!(" {me} ")) || (columns < 60 && lines[head].starts_with("╭─")), "{note}: {:?}", lines[head]);
         // The working row: its columns sit at the window's right edge, however wide the window is.
         let row = lines.iter().position(|l| l.contains("Pin the chat to the bottom"));
         if rows >= 20 { assert!(row.is_some(), "{note}: the working row is in view"); }

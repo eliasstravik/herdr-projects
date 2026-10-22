@@ -65,14 +65,14 @@ fn back(b: &mut Board, before: &mut dyn FnMut(&mut Board), cols: usize) -> usize
 fn the_box_holds_only_the_newest_message_whoever_said_it_your_words_only_until_the_answer() {
     // The answer alone: your question is one scroll up.
     let mut c = C::new(exchange(1));
-    assert_eq!(message(&c.boxed()), v(&["Coordinator:", "Answer 1 line 1.", "Answer 1 line 2.", "Answer 1 line 3."]));
+    assert_eq!(message(&c.boxed()), v(&["Answer 1 line 1.", "Answer 1 line 2.", "Answer 1 line 3."]));
     c.key("alt+k"); assert!(c.boxed().contains(&"Question 1?".to_string()), "{:?}", c.boxed());
-    c.key("alt+j"); assert_eq!(message(&c.boxed()), v(&["Coordinator:", "Answer 1 line 1.", "Answer 1 line 2.", "Answer 1 line 3."]), "alt+j at the end: back to the answer alone");
+    c.key("alt+j"); assert_eq!(message(&c.boxed()), v(&["Answer 1 line 1.", "Answer 1 line 2.", "Answer 1 line 3."]), "alt+j at the end: back to the answer alone");
     // Your words, until the answer comes: then alone too.
     c.talk.push((true, "And now?".into()));
     assert_eq!(message(&c.boxed()), v(&["You:", "And now?"]));
     c.talk.push((false, "Now this.".into())); c.turn = "turn-2".into();
-    assert_eq!(message(&c.boxed()), v(&["Coordinator:", "Now this."]));
+    assert_eq!(message(&c.boxed()), v(&["Now this."]));
     // A task's agent the same, on the web board too: one part, the newest.
     use sw::board::view::talk::{opens_at, talk, Part};
     let part = |by: &str, sent: bool| Part { by: by.into(), text: "x".into(), sent, ..Default::default() };
@@ -91,7 +91,7 @@ fn the_box_holds_only_the_newest_message_whoever_said_it_your_words_only_until_t
 fn alt_j_scrolls_down_and_once_more_at_the_end_closes_the_coordinators_chat_to_the_newest_message_from_anywhere() {
     let mut c = C::new(exchange(4));
     let newest = message(&c.boxed());
-    assert_eq!(newest, v(&["Coordinator:", "Answer 4 line 1.", "Answer 4 line 2.", "Answer 4 line 3."]));
+    assert_eq!(newest, v(&["Answer 4 line 1.", "Answer 4 line 2.", "Answer 4 line 3."]));
     // From every place in the conversation: alt+k that many times, then alt+j down to the end and once more.
     for ups in 1..=8 {
         for _ in 0..ups { c.key("alt+k"); }
@@ -118,25 +118,25 @@ fn alt_j_scrolls_down_and_once_more_at_the_end_closes_the_coordinators_chat_to_t
 fn a_short_conversation_that_starts_with_your_words_closes_too() {
     // Your words first, the answer under them: the whole conversation fits the box, open or not.
     let mut c = C::new(vec![(true, "Where do things stand?".into()), (false, "Six tasks are in progress.".into())]);
-    assert_eq!(message(&c.boxed()), v(&["Coordinator:", "Six tasks are in progress."]));
-    c.key("alt+k"); assert_eq!(message(&c.boxed()), v(&["You:", "Where do things stand?", "", "Coordinator:", "Six tasks are in progress."]));
-    c.key("alt+j"); assert_eq!(message(&c.boxed()), v(&["Coordinator:", "Six tasks are in progress."]));
+    assert_eq!(message(&c.boxed()), v(&["Six tasks are in progress."]));
+    c.key("alt+k"); assert_eq!(message(&c.boxed()), v(&["You:", "Where do things stand?", "", "Six tasks are in progress."]));
+    c.key("alt+j"); assert_eq!(message(&c.boxed()), v(&["Six tasks are in progress."]));
 }
 
 #[test]
 fn a_newest_message_longer_than_the_box_alt_j_from_its_end_shows_it_from_its_start() {
     let mut c = C::new(vec![(true, "Tell me everything.".into()), (false, lines("Long", 40))]);
-    let first = |c: &mut C| message(&c.boxed())[..2].to_vec();
-    assert_eq!(first(&mut c), v(&["Coordinator:", "Long line 1."]));
+    let first = |c: &mut C| message(&c.boxed())[..1].to_vec();
+    assert_eq!(first(&mut c), v(&["Long line 1."]));
     // Read down through it, then once more: back at its start.
     let n = back_from_start(&mut c);
     assert!(n > 2, "it scrolled down first: {n} presses");
-    assert_eq!(first(&mut c), v(&["Coordinator:", "Long line 1."]));
+    assert_eq!(first(&mut c), v(&["Long line 1."]));
     // Opened above it to your words, the same.
     for _ in 0..3 { c.key("alt+k"); }
     assert!(c.boxed().contains(&"Tell me everything.".to_string()));
     c.back();
-    assert_eq!(first(&mut c), v(&["Coordinator:", "Long line 1."]));
+    assert_eq!(first(&mut c), v(&["Long line 1."]));
 }
 /// alt+j from the start of a long newest message, down to its end and once more.
 fn back_from_start(c: &mut C) -> usize {
@@ -161,7 +161,7 @@ fn new_messages_while_it_is_open_alt_j_still_goes_down_to_the_end_and_closes_it_
         c.talk.push((false, lines("Answer 4", 3))); c.turn = "turn-2".into(); c.boxed();
         c.talk.push((false, "And one more thing.".into())); c.turn = "turn-3".into(); c.boxed();
         c.back();
-        assert_eq!(message(&c.boxed()), v(&["Coordinator:", "And one more thing."]), "at the end: {at_end}");
+        assert_eq!(message(&c.boxed()), v(&["And one more thing."]), "at the end: {at_end}");
     }
 }
 
@@ -190,17 +190,17 @@ fn a_task_agents_chat_alt_j_at_the_end_closes_it_to_the_newest_message_also_afte
     save_talk(&w, &id, &talk);
     let mut s = open(&w.root, 30); s.s.side = false;
     s.s.sel = id.clone(); s.load(); s.press(&["space"]); assert!(s.s.reply);
-    assert_eq!(message(&crate::board_chat::chat(&mut s, 120).boxed), v(&["Agent:", "Made g."]));
+    assert_eq!(message(&crate::board_chat::chat(&mut s, 120).boxed), v(&["Made g."]));
     for ups in [1, 3, 8] {
         for _ in 0..ups { s.press(&["alt+k"]); }
-        assert_ne!(message(&crate::board_chat::chat(&mut s, 120).boxed), v(&["Agent:", "Made g."]));
+        assert_ne!(message(&crate::board_chat::chat(&mut s, 120).boxed), v(&["Made g."]));
         back(&mut s, &mut |_| {}, 120);
-        assert_eq!(message(&crate::board_chat::chat(&mut s, 120).boxed), v(&["Agent:", "Made g."]), "after {ups} alt+k");
+        assert_eq!(message(&crate::board_chat::chat(&mut s, 120).boxed), v(&["Made g."]), "after {ups} alt+k");
     }
     // Open, then the agent says more: alt+j down to the end and once more, the newest alone.
     for _ in 0..3 { s.press(&["alt+k"]); }
     talk.push((true, "And h?".into())); talk.push((false, "Made h.".into()));
     save_talk(&w, &id, &talk); s.load();
     back(&mut s, &mut |_| {}, 120);
-    assert_eq!(message(&crate::board_chat::chat(&mut s, 120).boxed), v(&["Agent:", "Made h."]));
+    assert_eq!(message(&crate::board_chat::chat(&mut s, 120).boxed), v(&["Made h."]));
 }

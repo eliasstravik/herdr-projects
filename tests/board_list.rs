@@ -143,7 +143,7 @@ fn typed_words_keep_who_they_are_for_the_wheel_moves_the_view_and_a_click_select
     s.click(y as u16); assert_eq!(s.s.sel, s.s.list_ids[at]); assert_ne!(s.s.sel, second);
     let mine = s.s.sel.clone(); s.press(&["space"]); s.typed("pebbles please");
     // The box names the task (chat_title.rs), and the hint line says who gets the words, by the task's tag.
-    assert!(has(&s.text(), r"\n│ PRJ-\d+\. [^\n]*\n│ ❯ pebbles please"), "{}", s.text());
+    assert!(has(&s.text(), r"\n╭─ [^\n]*›  PRJ-\d+  ─[^\n]*╮\n│ ❯ pebbles please"), "{}", s.text());
     let tag = short(&mine);
     assert!(s.text().contains(&format!("enter send, and start an agent on {tag}")) && !s.text().contains("To: "), "{}", s.text());
     let top = s.s.top; s.wheel(4, 1); s.wheel(4, 1); s.screen(120);

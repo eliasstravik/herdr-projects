@@ -55,29 +55,27 @@ uncounted.
 
 - **`Space` talks to it**: the chat points at that row's agent, and follows the selection from row to row, as it does
   from task to task. `Space` again goes back to the top row's coordinator.
-- **`Enter` goes into its agent**: its real Herdr pane, as on a task. A coordinator that is not running is started
-  first; another machine's is gone into there. On a status group's heading (`to do`, `done`) there is no agent.
-- **`←` and `→` fold and unfold** a heading (all machines, a machine, a repo, a status group). `←` on a task's row goes
-  to its heading. `Enter` no longer folds, so it never means two things. A click on a heading folds it too.
+- **`Alt+O` goes into its agent**: its real Herdr pane, as on a task. A coordinator that is not running is started
+  first; another machine's is gone into there. A status group's heading (`to do`, `done`) has no agent.
+- **`Enter` folds and unfolds** a heading (all machines, a machine, a repo, a status group), as `←` and `→` do. On a
+  task's row `Enter` does nothing: it never opens a chat. `←` on a task's row goes to its heading. A click on a heading
+  folds it too.
 
 ## The chat box names who it talks to
 
 ```
 ╭─ All machines › vm-str ›  gtm  ─────────────────────────────────────────╮
-│ gtm's coordinator. Looks after the gtm repo: plans its tasks, starts agents. │
 │ Two PRs are waiting on CI. Want me to retry #11?                         │
 │ ❯ Send message to gtm's coordinator                                      │
 ╰──────────────────────────────────────────────────────────────────────────╯
 ```
 
 - **A ladder** in its top edge, from the top row down (`All machines › vm-str › gtm › GTM-14`), the current step lit.
-- **A first line**: one sentence on what that agent looks after. `The coordinator of all machines. Sees every machine
-  and project; says where work runs.` `vm-str's coordinator. Looks after this machine: its projects, disk and agents.`
-  `gtm's coordinator. Looks after the gtm repo: plans its tasks, starts agents.` `GTM-14's agent. Works on this one
-  task, in its own copy of the repo.`
 - **Its edge in its kind's colour**: amber for a coordinator, violet for a task's agent.
-- **One that never ran** says `Not started yet.`, and its box invites a first message: `Ask it something, e.g. "what's
-  left to do here?"`. Your first message starts it.
+- **Inside it only the reply** and the line you type on: no line that says who said it, since the edge does. Your own
+  words, autopilot's wakes and a reviewer are still named.
+- **One that never ran** invites a first message: `Ask it something, e.g. "what's left to do here?"`. Your first
+  message starts it.
 - `Enter` sends, and a coordinator decides itself what to start.
 - **A repo with no tasks in view keeps its row**, folded (`0 tasks`), when it was used in the last 14 days (a task,
   archived ones too) or has a project coordinator, so `Space` still reaches it. Older repos, and repos whose folder is

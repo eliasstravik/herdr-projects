@@ -38,8 +38,8 @@ fn space_on_a_repos_heading_talks_to_its_project_coordinator_and_space_again_goe
     s.press(&["space"]);
     assert!(s.s.reply && s.s.reply_id == head);
     let t = s.text();
-    // the box names it, from the top row down, and says it never ran: its box asks for a first message
-    assert!(has(&t, &format!(r"\n╭─ {} ›  proj  ─+╮\n│ proj's coordinator\. Looks after the proj repo: plans its tasks, starts agents\. Not started yet\. +│\n", regex::escape(&host))), "{t}");
+    // the box names it, from the top row down; it never ran: its box asks for a first message
+    assert!(has(&t, &format!(r"\n╭─ {} ›  proj  ─+╮\n│ ❯ Ask it something", regex::escape(&host))), "{t}");
     assert!(t.contains("❯ Ask it something, e.g. \"what's left to do here?\"") && t.contains(&format!("space back to {host}'s coordinator")), "{t}");
     s.typed("what is open here?");
     assert!(s.text().contains("enter send to") && s.text().contains("proj's coordinator"), "{}", s.text());
@@ -48,16 +48,17 @@ fn space_on_a_repos_heading_talks_to_its_project_coordinator_and_space_again_goe
     assert_eq!(prompts(&w, "sw-coordinator-proj"), vec!["what is open here?"]);
     assert!(sw::coordinator::state::get(&w.socket).is_none(), "the Coordinator got nothing");
     let t = s.text();
-    assert!(has(&t, r"\n│ proj's coordinator\. Looks after the proj repo: plans its tasks, starts agents\. +│\n") && t.contains("│ proj's coordinator:") && t.contains("Proj has one task open."), "{t}");
+    // its reply alone under the ladder: no line naming it again, no label over the reply
+    assert!(has(&t, r"╭─ [^\n]*›  proj  ─") && !t.contains("Looks after") && !t.contains("│ proj's coordinator:") && t.contains("Proj has one task open."), "{t}");
     // the tab it is in says whose it is
     assert!(w.state().arr("tabs").iter().any(|x| x.s("label") == "proj coordinator"));
     // the chat follows the selection, as with tasks: to the task's agent and back to the repo's coordinator
     s.press(&["down"]); assert_eq!((s.s.sel.as_str(), s.s.reply_id.as_str()), (id.as_str(), id.as_str()));
-    assert!(!s.text().contains("│ proj's coordinator.") && has(&s.text(), r"╭─ [^\n]* proj ›  PRJ-1  ─"), "{}", s.text());
-    s.press(&["up"]); assert!(s.text().contains("│ proj's coordinator."));
+    assert!(has(&s.text(), r"╭─ [^\n]* proj ›  PRJ-1  ─"), "{}", s.text());
+    s.press(&["up"]); assert!(has(&s.text(), r"╭─ [^\n]*›  proj  ─"), "{}", s.text());
     // space again: back to the top row's coordinator (the only machine's, the top-level one)
     s.press(&["space"]); assert!(!s.s.reply);
-    assert!(s.text().contains(&format!("│ {host}'s coordinator. Looks after this machine")), "{}", s.text());
+    assert!(s.text().contains(&format!("╭─  {host}  ─")), "{}", s.text());
     // a status group's heading has no coordinator: space says where they are
     s.press(&["alt+s", "alt+s"]); assert!(!s.s.by_repo && !s.s.by_machine); // by machine, then by status
     s.s.sel = group_id(&s.s, "", "to do"); s.load();
@@ -81,7 +82,7 @@ fn space_on_a_machines_heading_talks_to_that_machines_coordinator_here_or_there(
     // this machine's heading: its machine coordinator, started here
     s.s.sel = machine_id(""); s.load();
     s.press(&["space"]);
-    assert!(s.text().contains(&format!("│ {}'s coordinator. Looks after this machine: its projects, disk and agents. Not started yet.", sw::shown::words::clean(&host))), "{}", s.text());
+    assert!(s.text().contains(&format!("╭─ All machines ›  {}  ─", sw::shown::words::clean(&host))) && s.text().contains("❯ Ask it something"), "{}", s.text());
     s.typed("how busy are you?"); s.press(&["enter"]); drain(); s.load();
     assert_eq!(prompts(&w, "sw-coordinator-machine"), vec!["how busy are you?"]);
     assert!(s.text().contains("This machine is busy."), "{}", s.text());
@@ -89,7 +90,7 @@ fn space_on_a_machines_heading_talks_to_that_machines_coordinator_here_or_there(
     // otherbox's heading: what that machine sent of its own machine coordinator; your words go there
     s.s.sel = machine_id("otherbox"); s.load();
     let t = s.text();
-    assert!(has(&t, r"\n╭─ All machines ›  otherbox  ─+[^\n]*\n│ otherbox's coordinator\. Looks after this machine") && t.contains("Otherbox is quiet."), "{t}");
+    assert!(has(&t, r"\n╭─ All machines ›  otherbox  ─+[^\n]*\n") && t.contains("Otherbox is quiet."), "{t}");
     s.typed("anything to do?");
     let fx = s.hold("enter");
     assert!(fx.iter().any(|e| matches!(e, Effect::Run(Job::Dispatch { machine, text, to, .. }) if machine.label == "otherbox" && text == "anything to do?" && to == "machine")), "{fx:?}");
@@ -100,7 +101,7 @@ fn space_on_a_machines_heading_talks_to_that_machines_coordinator_here_or_there(
     s.s.sel = machine_id("otherbox"); s.load();
     let t = s.text();
     // its row talks to the one coordinator it has, its top-level one, named after the machine
-    assert!(t.contains("otherbox's coordinator. Looks after this machine") && !t.contains("has no machine or project coordinators"), "{t}");
+    assert!(t.contains("╭─ All machines ›  otherbox  ") && t.contains("❯ Ask it something") && !t.contains("has no machine or project coordinators"), "{t}");
 }
 
 #[test]

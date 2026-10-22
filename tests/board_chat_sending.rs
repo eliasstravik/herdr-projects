@@ -45,7 +45,7 @@ fn a_task_agents_chat_shows_your_words_the_moment_you_send_them_and_takes_them_b
     // the job has not even started: the box already has your words, and the line over it says they are on their way
     let c = crate::board_chat::chat(&mut s, 120);
     assert_eq!(c.boxed, v(&["You:", "yes, g too", "", "❯ Send message to Agent"]), "{}", c.lines.join("\n"));
-    assert!(c.who.starts_with("PRJ-1's agent."), "the box says whose it is: {}", c.who);
+    assert!(c.who.ends_with("› PRJ-1"), "the box says whose it is: {}", c.who);
     assert!(!c.lines[..c.lines.len() - 6].iter().any(|l| l.contains("yes, g too")), "nothing of it over the chat: {}", c.lines.join("\n"));
     // delivered: the same box
     s.run(fx);
@@ -71,10 +71,11 @@ fn a_repos_coordinator_here_shows_your_words_at_once_until_its_own_conversation_
     let fx = s.hold("enter");
     let c = crate::board_chat::chat(&mut s, 120);
     assert_eq!(c.boxed[..3].to_vec(), v(&["You:", "what is open here?", ""]), "{}", c.lines.join("\n"));
-    assert!(c.who.starts_with("proj's coordinator."), "{}", c.who);
+    assert!(c.who.ends_with("› proj"), "{}", c.who);
     s.run(fx); drain(); s.load();
     let t = s.text();
-    assert!(t.contains("│ proj's coordinator:") && t.contains("Proj has one task open.") && !t.contains("sending…"), "{t}");
+    // its answer alone, under no label: the box's edge names it
+    assert!(!t.contains("│ proj's coordinator:") && t.contains("│ Proj has one task open.") && !t.contains("sending…"), "{t}");
     assert!(s.s.just_sent.is_empty(), "its conversation has your words now: {:?}", s.s.just_sent);
 }
 
@@ -93,7 +94,7 @@ fn another_machines_coordinators_show_your_words_at_once_with_no_row_on_its_way_
     assert!(fx.iter().any(|e| matches!(e, Effect::Run(Job::Dispatch { .. }))), "{fx:?}");
     let c = crate::board_chat::chat(&mut s, 120);
     assert_eq!(c.boxed, v(&["You:", "anything to do?", "", "❯ Send message to otherbox's coordinator"]), "{}", c.lines.join("\n"));
-    assert!(c.who.starts_with("otherbox's coordinator."), "{}", c.who);
+    assert!(c.who.ends_with("› otherbox"), "{}", c.who);
     // the dispatch on its way to otherbox has no row of its own over the chat: the box has the words
     sw::store::inbox::new_dispatch("@otherbox anything to do?", obj(json!({ "remote": "otherbox" }))).unwrap();
     s.load();
@@ -123,7 +124,7 @@ fn another_machines_coordinators_show_your_words_at_once_with_no_row_on_its_way_
     let _ = s.hold("enter");
     let c = crate::board_chat::chat(&mut s, 120);
     assert_eq!(c.boxed[..2].to_vec(), v(&["You:", "and the crm repo?"]), "{}", c.lines.join("\n"));
-    assert!(c.who.starts_with("otherbox's coordinator."), "{}", c.who);
+    assert_eq!(c.who, "otherbox", "the top row alone on its ladder");
     // that one failed: its row says why, and the chat no longer shows the words as sent
     let d = sw::store::inbox::new_dispatch("@otherbox and the crm repo?", obj(json!({ "remote": "otherbox" }))).unwrap();
     sw::store::inbox::set_dispatch(d.s("id"), obj(json!({ "state": "error", "msg": "otherbox did not answer" })));
@@ -148,7 +149,7 @@ fn a_task_agent_on_another_machine_shows_your_words_at_once_until_it_answers() {
     assert!(fx.iter().any(|e| matches!(e, Effect::Run(Job::Far { action, .. }) if action == "tell")), "{fx:?}");
     let c = crate::board_chat::chat(&mut s, 120);
     assert_eq!(c.boxed[..2].to_vec(), v(&["You:", "g too"]), "{}", c.lines.join("\n"));
-    assert!(c.who.starts_with("#1's agent."), "the box says whose it is: {}", c.who);
+    assert!(c.who.ends_with("› #1"), "the box says whose it is: {}", c.who);
     // its earlier turn ends while your words are still on their way: they stay
     update(&mut s.s, Event::Remote { label: "otherbox".into(), answer: otherbox("Made f, and checked it.", quiet()) });
     assert_eq!(crate::board_chat::chat(&mut s, 120).boxed[..2].to_vec(), v(&["You:", "g too"]), "{}", s.text());
@@ -157,7 +158,7 @@ fn a_task_agent_on_another_machine_shows_your_words_at_once_until_it_answers() {
     assert_eq!(crate::board_chat::chat(&mut s, 120).boxed[..2].to_vec(), v(&["You:", "g too"]), "{}", s.text());
     update(&mut s.s, Event::Remote { label: "otherbox".into(), answer: otherbox("Made g.", quiet()) });
     let c = crate::board_chat::chat(&mut s, 120);
-    assert_eq!(c.boxed[..2].to_vec(), v(&["Agent:", "Made g."]), "{}", c.lines.join("\n"));
+    assert_eq!(c.boxed[..1].to_vec(), v(&["Made g."]), "{}", c.lines.join("\n"));
 }
 
 #[test]

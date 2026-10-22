@@ -8,7 +8,7 @@
 ────────────────────
 ❯ Add a task
 ────────────────────
-  enter open its ag…
+  alt+o open its ag…
 == the task beside it
  herdr-projects
 ▌ ◐ Max length for
@@ -19,7 +19,7 @@
 ────────────────────
   Side panel on.
   alt+p hides it.
-  enter open its ag…
+  alt+o open its ag…
 == the whole task
  Task details  #5 "…
 ────────────────────
@@ -37,7 +37,7 @@
    ↑ ↓          move
                 bet…
                 tas…
- ↓ 271 more
+ ↓ 262 more
 ────────────────────
 ❯ Add a task
 ────────────────────

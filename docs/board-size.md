@@ -33,7 +33,7 @@ closing do nothing to a pane in the space you look at.
 
 A test holds the plugin to it (`tests/board_still_sight.rs`): every space and pane it opens is opened with `--no-focus`,
 it never focuses anything while a task runs, and it never splits or closes the board's own pane. Going into an agent on
-purpose (`Enter` on a task) is the one thing that moves Herdr's window, as before.
+purpose (`Alt+O` on a task) is the one thing that moves Herdr's window, as before.
 
 ## What does change it
 

@@ -1,8 +1,6 @@
 //! The chat box names who it talks to: a ladder in its top edge from the top row down (`All machines › vm-str › gtm ›
-//! GTM-14`) with the current step lit, a first line of one sentence on what that agent looks after (`gtm's
-//! coordinator. Looks after the gtm repo: plans its tasks, starts agents.`), and its edge in its kind's colour: amber
-//! for a coordinator, violet for a task's agent. One that never ran says `Not started yet.`, and the box invites a
-//! first message.
+//! GTM-14`) with the current step lit, and its edge in its kind's colour: amber for a coordinator, violet for a task's
+//! agent. Inside it only the reply. One that never ran invites a first message.
 use crate::board::state::{Mode, State};
 use crate::board::update::coords::{look_of, talking, Target};
 use crate::board::update::top;
@@ -14,7 +12,7 @@ pub const COORD_EDGE: Ink = Ink::Yellow;
 /// A task's agent's edge: violet.
 pub const AGENT_EDGE: Ink = Ink::Auto;
 /// Who the chat talks to, as its title says it.
-pub struct Title { pub steps: Vec<String>, pub first: Inked, pub edge: Ink, pub fresh: bool }
+pub struct Title { pub steps: Vec<String>, pub edge: Ink, pub fresh: bool }
 /// The coordinator the chat talks to: a row's, or the top row's by default (this machine's top-level one).
 pub fn coordinator(s: &State) -> Option<Target> {
     if let Some(t) = talking(s) { return Some(t); }
@@ -32,17 +30,9 @@ pub fn title(s: &State, r: Option<&Obj>) -> Option<Title> {
         let repo = t.to.strip_prefix("project:").map(|r| crate::board::update::heads::repo_shown(s, &t.host, r));
         if let Some(r) = &repo { steps.push(r.clone()); }
         let v = look_of(s, &t).unwrap_or_default();
-        // Never ran, and nothing on its way to it yet.
+        // Never ran, and nothing on its way to it yet: its box invites a first message.
         let fresh = v.state == "none" && v.talk.is_empty() && v.sent.is_empty() && v.queue == 0 && !s.just_sent.contains_key(&t.key());
-        // A reply you have not seen while the chat's message is hidden.
-        let new = !v.unseen.is_empty() && !s.chat_open;
-        let what = match (&repo, all) {
-            (Some(r), _) => format!("Looks after the {r} repo: plans its tasks, starts agents."),
-            (None, true) => "Sees every machine and project; says where work runs.".into(),
-            (None, false) => "Looks after this machine: its projects, disk and agents.".into(),
-        };
-        let first = Inked::of(format!("{}.", top::sentence(&t.name)), COORD_EDGE).add(Inked::of(format!(" {what}{}", if fresh { " Not started yet." } else { "" }), Ink::Muted)).add(if new { Inked::of(" New reply.", Ink::Green) } else { Inked::new() });
-        return Some(Title { steps, first, edge: COORD_EDGE, fresh });
+        return Some(Title { steps, edge: COORD_EDGE, fresh });
     }
     let r = r.filter(|_| s.reply && s.reply_id == s.sel)?;
     steps.push(machine(s, r.s("host")));
@@ -50,10 +40,7 @@ pub fn title(s: &State, r: Option<&Obj>) -> Option<Title> {
     let tag = crate::board::tags::number_tag(r, &s.data.keys, &s.scope, false);
     let tag = if tag.is_empty() { crate::text::cut(r.s("title"), 24) } else { tag };
     steps.push(tag.clone());
-    let agent = crate::board::update::actions::has_agent(r);
-    let first = if agent { Inked::of(format!("{}.", top::possessive(&tag) + " agent"), AGENT_EDGE).add(Inked::of(" Works on this one task, in its own copy of the repo.", Ink::Muted)) }
-        else { Inked::of(format!("{tag}."), AGENT_EDGE).add(Inked::of(" No agent on it yet.", Ink::Muted)) };
-    Some(Title { steps, first, edge: AGENT_EDGE, fresh: false })
+    Some(Title { steps, edge: AGENT_EDGE, fresh: false })
 }
 /// The ladder in the box's top edge, `width` cells wide with its corners: `╭─ All machines › vm-str ›  gtm  ───╮`, the
 /// current step lit in the edge's colour.

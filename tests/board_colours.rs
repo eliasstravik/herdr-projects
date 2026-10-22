@@ -49,13 +49,13 @@ fn the_box_edge_is_violet_for_a_tasks_agent_and_plain_text_with_no_coordinator()
                 assert_eq!(box_ink(&s, Some(&r)), violet, "{what}");
                 let (framed, _) = chat_box(&mut s, 60, 3, Some(&r), &[Inked::plain("hello")]);
                 for l in &framed { starts(l, violet, &what); ends(l, violet, &what); }
-                // its top edge is the ladder, its first line what that agent looks after
+                // its top edge is the ladder; inside, only the message and the line you type on
                 assert!(framed[0].text().starts_with("╭─ ") && framed[0].text().contains(" › "), "{what}: {}", framed[0].text());
-                // inside the frame: the first line, the message as it came, the prompt in plain text
+                // inside the frame: the message as it came, the prompt in plain text
                 let inside = |l: &Inked| Inked(l.0.iter().skip(1).take(l.0.len().saturating_sub(2)).cloned().collect());
                 let prompt = framed.iter().find(|l| l.text().contains('❯')).unwrap();
                 starts(&inside(prompt), Ink::Text, &format!("{what}: the prompt inside the frame"));
-                starts(&inside(&framed[2]), Ink::Plain, &format!("{what}: the message inside the frame"));
+                starts(&inside(&framed[1]), Ink::Plain, &format!("{what}: the message inside the frame"));
                 // No coordinator can run and no task is talked to: plain text, and the box adds tasks.
                 s.reply = false;
                 assert_eq!(box_ink(&s, Some(&r)), Ink::Text, "{what}: no one to talk to");

@@ -79,7 +79,7 @@ fn after_clear_a_chat_says_the_chat_was_reset_and_shows_no_markup() {
     let mut s = open(&w.root, 34); s.s.side = false;
     s.s.sel = id.clone(); s.load(); s.press(&["space"]);
     let boxed = crate::board_chat::chat(&mut s, 120).boxed;
-    assert_eq!(boxed[..2], ["Agent:".to_string(), "Chat reset: a fresh session started.".to_string()], "{boxed:?}");
+    assert_eq!(boxed[..1], ["Chat reset: a fresh session started.".to_string()], "{boxed:?}");
     let mut all = boxed.clone();
     for _ in 0..3 { s.press(&["alt+k"]); all.extend(crate::board_chat::chat(&mut s, 120).boxed); }
     assert!(all.iter().any(|l| l == "/clear"), "{all:?}");

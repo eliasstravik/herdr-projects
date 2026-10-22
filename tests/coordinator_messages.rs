@@ -40,10 +40,10 @@ fn what_you_say_is_never_lost_a_dialog_on_its_screen_holds_it_a_failed_start_say
     assert_eq!(get(&w).arr("queue").len(), 1); assert_eq!(look(&so).state, "blocked");
     let mut s = open(&w.root, 34);
     // its row (the top row) says it wants your OK, as a task's would; the box names it
-    let top = regex::escape(&crate::board_chat::top_name());
     assert!(has(&s.text(), r"\n[ ▌]! [▾▸] [^\n]*\n[ ▌] +wants your OK"), "{}", s.text());
-    assert!(has(&s.text(), &format!(r"\n╭─[^\n]*╮\n│ {top}\. ")), "{}", s.text());
-    s.press(&["alt+c"]); assert!(has(&s.text(), &format!(r"\n│ {top}\.[^\n]*│\n│ ❯ ")), "{}", s.text());
+    let host = regex::escape(&sw::shown::words::clean(&sw::remote::check::hostname()));
+    assert!(has(&s.text(), &format!(r"\n╭─  {host}  ─*╮\n")) && !s.text().contains(&format!("│ {}.", crate::board_chat::top_name())), "{}", s.text());
+    s.press(&["alt+c"]); assert!(has(&s.text(), r"\n╭─[^\n]*╮\n│ ❯ "), "{}", s.text());
     // herdr's sidebar names it and says where it stands in the same words
     sw::coordinator::sidebar::tell_sidebar(&so);
     let meta = |w: &World| w.state().arr("metadata").last().map(|m| m.arr("args").iter().map(text).collect::<Vec<_>>().join(" ")).unwrap_or_default();
@@ -118,14 +118,14 @@ fn what_you_say_is_never_lost_a_dialog_on_its_screen_holds_it_a_failed_start_say
     s.load();
     // its row says so with a task's mark for it, and the box says why, also with its message hidden
     assert!(has(&s.text(), r"\n[ ▌]✗ [▾▸] "), "{}", s.text());
-    assert!(has(&s.text(), r#"\n╭─[^\n]*╮\n│ [^\n]*coordinator\.[^\n]*│\n│ It could not be started: "pi" is not installed here"#), "also with its message hidden: {}", s.text());
+    assert!(has(&s.text(), r#"\n╭─[^\n]*╮\n│ It could not be started: "pi" is not installed here"#), "also with its message hidden: {}", s.text());
     // alt+c hides that too, as the chat's line says, and so does esc with nothing else to step back from.
     s.s.chat_open = false; s.s.input.set_text(""); s.s.reply = false; s.s.full = false; s.s.filter = String::new(); s.s.msg = String::new();
     let chat_key = regex::escape(&key_name("chatMessage"));
     assert!(has(&s.text(), &format!("{chat_key} hide the latest message")), "{}", s.text());
     s.press(&["esc"]); assert!(s.s.ask.is_none() && !s.closed && s.s.closing.is_none());
     assert!(!s.text().contains("It could not be started:"));
-    assert!(has(&s.text(), &format!(r"\n[ ▌]✗ [▾▸] [^\n]*\n(?:[^\n]*\n)*│ [^\n]*coordinator\.[^\n]*│\n│ ❯ [^\n]*\n╰─+╯\n[^\n]*{chat_key} show the latest message")), "{}", s.text());
+    assert!(has(&s.text(), &format!(r"\n[ ▌]✗ [▾▸] [^\n]*\n(?:[^\n]*\n)*╭─[^\n]*╮\n│ ❯ [^\n]*\n╰─+╯\n[^\n]*{chat_key} show the latest message")), "{}", s.text());
     s.load(); assert!(!s.text().contains("It could not be started:"), "the same error stays hidden");
     s.press(&["esc"]); s.s.closing = None;
     // alt+c shows it again and hides it again, shown by the setting or not.
@@ -159,6 +159,6 @@ fn turning_the_coordinator_on_while_the_board_is_open_takes_effect_at_once_and_o
     let mut off = open(&w.root, 34); assert!(!off.s.data.can_dispatch); assert!(off.text().contains("❯ Add a task"), "{}", off.text());
     unset_value("coordinator.agent", &Scope::you()).unwrap();
     off.load(); off.typed("fourth thing"); off.press(&["enter"]); drain(); off.load();
-    assert!(off.s.data.can_dispatch); assert!(has(&off.text(), &format!(r"\n│ {}\. ", regex::escape(&crate::board_chat::top_name()))), "{}", off.text());
+    assert!(off.s.data.can_dispatch); assert!(has(&off.text(), &format!(r"\n╭─  {}  ─*╮\n", regex::escape(&sw::shown::words::clean(&sw::remote::check::hostname())))), "{}", off.text());
     assert_eq!(get(&w).arr("where").last().map(|x| x.t("said")).unwrap_or_default(), "fourth thing");
 }

@@ -89,7 +89,7 @@ fn space_on_a_machines_row_or_a_projects_row_talks_to_its_coordinator_and_coordi
     s.press(&["alt+s"]);
     s.s.sel = group_id(&s.s, "", "proj"); s.load();
     s.press(&["space"]);
-    assert!(s.s.reply && s.text().contains("│ proj's coordinator. Looks after the proj repo"), "{}", s.text());
+    assert!(s.s.reply && regex::Regex::new(r"╭─ [^\n]*›  proj  ─").unwrap().is_match(&s.text()), "{}", s.text());
     s.typed("hello"); s.press(&["enter"]); drain(); s.load();
     let t = s.text();
     // one line: idle, its coordinator has a task's idle mark and when it last spoke; what it said is the chat's
@@ -114,10 +114,10 @@ fn space_on_a_machines_row_or_a_projects_row_talks_to_its_coordinator_and_coordi
     // this machine's own coordinator and the one of all machines never started: rows that head the others, not counted
     assert!(regex::Regex::new(r"Coordinators 3 ").unwrap().is_match(&s.screen(160)[1]), "{:?}", s.screen(160));
     assert!(!s.text().contains("Coordinator on otherbox"), "{}", s.text());
-    // enter on a project's row there goes into its coordinator, on its machine
+    // alt+o on a project's row there goes into its coordinator, on its machine
     s.s.sel = format!("head:repo\totherbox\tfar"); s.load();
-    assert!(s.text().contains("enter go into it"), "{}", s.text());
-    let j = format!("{:?}", s.hold("enter")); assert!(j.contains("coordinator-open") && j.contains("project:far"), "{j}");
+    assert!(s.text().contains("alt+o go into it"), "{}", s.text());
+    let j = format!("{:?}", s.hold("alt+o")); assert!(j.contains("coordinator-open") && j.contains("project:far"), "{j}");
     // ← on a machine's row folds its projects' rows away, → brings them back
     s.s.sel = machine_id("otherbox"); s.load();
     s.press(&["left"]); assert!(s.s.folded.contains(&machine_id("otherbox")) && !heads(&s).contains(&"far".to_string()), "{}", s.text());
@@ -175,11 +175,12 @@ fn the_menus_start_line_puts_an_agent_on_the_task() {
     assert_ne!(task(&id).s("stage"), "todo", "{:?}", task(&id));
 }
 
-/// ← on a heading (and a click on it) folds it to one line that says what it holds, → unfolds it; enter never folds.
+/// ← on a heading (and enter, and a click on it) folds it to one line that says what it holds, → unfolds it.
 fn folds(s: &mut common::board::Board, id: &str, holds: &str) {
     s.s.sel = id.to_string(); s.load();
     let name = match s.s.rows.iter().find(|r| matches!(r, Row::Head { id: h, .. } if h == id)) { Some(Row::Head { name, .. }) => sw::shown::words::repo_label(name), _ => panic!("no heading {id}: {}", s.text()) };
-    let _ = s.hold("enter"); assert!(!s.s.folded.contains(id), "enter never folds {id}");
+    let fx = s.hold("enter"); assert!(s.s.folded.contains(id) && !format!("{fx:?}").contains("CoordOpen") && !format!("{fx:?}").contains("coordinator-open"), "enter folds {id}, and goes into nothing");
+    s.press(&["enter"]); assert!(!s.s.folded.contains(id), "enter again unfolds {id}");
     s.press(&["right"]); assert!(!s.s.folded.contains(id), "→ on an open heading leaves it open");
     s.press(&["left"]);
     assert!(s.s.folded.contains(id) && regex::Regex::new(&format!(r"\n[ ▌]\s*(\S )?▸ {}( · \w+)?  {holds}", regex::escape(&name))).unwrap().is_match(&s.text()), "{id} folds to {holds}: {}", s.text());
@@ -213,7 +214,7 @@ fn left_and_right_fold_every_kind_of_heading_under_every_filter_and_grouping_and
     s.press(&["alt+s"]);
     { let g = group_id(&s.s, "", "proj"); folds(&mut s, &g, "2 tasks"); }
     s.s.sel = group_id(&s.s, "", "proj"); s.load();
-    s.press(&["space"]); assert!(s.text().contains("│ proj's coordinator. Looks after the proj repo"), "{}", s.text());
+    s.press(&["space"]); assert!(regex::Regex::new(r"╭─ [^\n]*›  proj  ─").unwrap().is_match(&s.text()), "{}", s.text());
     s.typed("hello"); s.press(&["enter"]); drain(); s.press(&["space"]); s.load();
     { let g = group_id(&s.s, "", "proj"); folds(&mut s, &g, "2 tasks"); }
     // by machine: this machine's row, the top row, says what it holds open or folded

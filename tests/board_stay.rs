@@ -43,7 +43,7 @@ fn press_attaching(b: &mut Board, key: &str, went: &mut Vec<String>, then: &dyn 
 fn shown(b: &Board) -> Vec<String> { let mut v: Vec<String> = b.s.rows.iter().filter_map(|r| if let sw::board::state::Row::Rec(x) = r { Some(x.t("id")) } else { None }).collect(); v.sort(); v }
 
 #[test]
-fn enter_on_a_task_goes_into_its_agent_and_the_board_stays_as_it_was_from_the_row_from_the_chat() {
+fn the_open_key_on_a_task_goes_into_its_agent_and_the_board_stays_as_it_was_from_the_row_from_the_chat() {
     let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
     set_env(&[("HERDR_ENV", "1")]);
     w.script(json!({ "worker": [{ "status": "working", "screen": "● Editing greet.sh\n" }] }));
@@ -55,27 +55,27 @@ fn enter_on_a_task_goes_into_its_agent_and_the_board_stays_as_it_was_from_the_ro
         s.s.sel = id.clone(); s.s.filter = "greeting".into(); s.load(); relist(&mut s.s);
         s.press(&keys);
         let before = focus(&w).len();
-        s.press(&["enter"]);
+        s.press(&["alt+o"]);
         assert!(!s.closed, "the board is not closed: {way}"); assert!(!s.s.leaving, "{way}");
         assert_eq!(focus(&w)[before..].to_vec(), vec![format!("agent {pane}")], "herdr moved to the agent: {way}");
         assert_eq!(s.s.sel, id, "{way}"); assert_eq!(s.s.filter, "greeting", "{way}"); assert_eq!(s.s.data.repo, "proj", "{way}");
         assert!(has(&s.text().split_whitespace().collect::<Vec<_>>().join(" "), r"Opened (PRJ-1|proj/1)'s agent\. prefix\+w brings you back to the board\."), "{way}: {}", s.text());
         assert_eq!(view_sel("view.json"), id, "where you were is saved: {way}");
-        // It still takes keys when you are back, and a second enter goes in again.
-        s.press(&["enter"]);
+        // It still takes keys when you are back, and a second alt+o goes in again.
+        s.press(&["alt+o"]);
         assert!(!s.closed, "{way}"); assert_eq!(focus(&w).len(), before + 2, "{way}");
         if way == "from its row" { s.press(&["esc"]); assert_eq!(s.s.filter, "", "{way}"); s.press(&["down"]); assert_ne!(s.s.sel, id, "{way}"); }
     }
     // While you are in the agent its task changes where it stands (it stops): the selection is still on that task when
-    // you come back, not on the row that took its place, and enter goes into the same agent again.
+    // you come back, not on the row that took its place, and alt+o goes into the same agent again.
     {
         let mut s = open(&w.root, 34); s.s.sel = id.clone(); s.s.filter.clear(); s.load(); relist(&mut s.s);
-        s.press(&["enter"]); assert!(!s.closed);
+        s.press(&["alt+o"]); assert!(!s.closed);
         sw::actions::talk::stop(&id).unwrap(); assert_eq!(task(&id).s("stage"), "stopped");
         s.load(); s.load();
         assert_eq!(s.s.sel, id, "the selection did not move to its neighbour"); assert_eq!(view_sel("view.json"), id);
         let before = focus(&w).len();
-        s.press(&["enter"]);
+        s.press(&["alt+o"]);
         assert!(!s.text().contains("No agent has been on this yet"), "{}", s.text()); assert_eq!(focus(&w)[before..].to_vec(), vec![format!("agent {pane}")]);
         s.load(); assert_eq!(s.s.sel, id);
         // Back and moving on your own: the rows follow the keys again.
@@ -92,12 +92,12 @@ fn enter_on_a_task_goes_into_its_agent_and_the_board_stays_as_it_was_from_the_ro
         let mut s = open(&w.root, 34); s.s.filter = "working".into(); s.s.sel = other.clone(); s.load(); relist(&mut s.s);
         let mut both = vec![other.clone(), near.clone()]; both.sort();
         assert_eq!(shown(&s), both);
-        s.press(&["enter"]); assert!(!s.closed);
+        s.press(&["alt+o"]); assert!(!s.closed);
         sw::actions::talk::stop(&other).unwrap(); s.load(); s.load();
         assert_eq!(s.s.sel, other, "the selection did not move to the task that still matches"); assert_eq!(s.s.filter, "working");
         assert_eq!(view_sel("view.json"), other);
         let before = focus(&w).len();
-        s.press(&["enter"]);
+        s.press(&["alt+o"]);
         assert!(!s.text().contains("No agent has been on this yet")); assert_eq!(focus(&w)[before..].to_vec(), vec![format!("agent {there}")]);
         // Moving on yourself lets the row go: it does not match what you are looking for.
         s.press(&["down"]); if s.s.sel == other { s.press(&["up"]); }
@@ -115,10 +115,10 @@ fn enter_on_a_task_goes_into_its_agent_and_the_board_stays_as_it_was_from_the_ro
         let mut s = open(&w.root, 34); s.s.filter = "working".into(); s.s.sel = other.clone(); s.load(); relist(&mut s.s);
         let mut went = vec![];
         let o = other.clone();
-        press_attaching(&mut s, "enter", &mut went, &|| { sw::actions::talk::stop(&o).unwrap(); });
+        press_attaching(&mut s, "alt+o", &mut went, &|| { sw::actions::talk::stop(&o).unwrap(); });
         assert_eq!(went, vec![there.clone()]); assert!(!s.closed); assert_eq!(task(&other).s("stage"), "stopped");
         assert_eq!(s.s.sel, other, "back on the task you went into"); s.load(); s.load(); assert_eq!(s.s.sel, other);
-        press_attaching(&mut s, "enter", &mut went, &|| {}); assert_eq!(went, vec![there.clone(), there.clone()]);
+        press_attaching(&mut s, "alt+o", &mut went, &|| {}); assert_eq!(went, vec![there.clone(), there.clone()]);
         s.press(&["down"]); if s.s.sel == other { s.press(&["up"]); }
         s.load(); assert_ne!(s.s.sel, other); assert!(!shown(&s).contains(&other));
         s.s.filter.clear(); sw::board::run::prefs::save(&s.s);
@@ -128,10 +128,10 @@ fn enter_on_a_task_goes_into_its_agent_and_the_board_stays_as_it_was_from_the_ro
     w.patch(|st| { for p in st["panes"].as_array_mut().unwrap() { if p.s("pane_id") == pane { p["agent"] = serde_json::Value::Null; } } });
     let mut s = open(&w.root, 34); s.s.sel = id.clone(); s.load(); relist(&mut s.s);
     let before = focus(&w).len();
-    s.press(&["enter"]);
+    s.press(&["alt+o"]);
     assert!(!s.closed); assert!(has(&focus(&w)[before..].join(" "), r"^workspace \S+"), "{:?} {}", focus(&w), s.text()); assert!(s.text().contains("The board stays here."), "{}", s.text());
     // Only a board someone opened as herdr's popup closes for an agent: a popup lies over every pane, the agent's too.
-    let mut p = open_with(&w.root, 34, true); p.s.sel = id.clone(); p.load(); relist(&mut p.s); p.press(&["enter"]);
+    let mut p = open_with(&w.root, 34, true); p.s.sel = id.clone(); p.load(); relist(&mut p.s); p.press(&["alt+o"]);
     assert!(p.closed);
     assert_eq!(view_sel("view-popup.json"), id);
     set_env(&[]);

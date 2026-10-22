@@ -216,8 +216,8 @@ The web Board uses the web UI's own colours. Its "to do" and its greyed-out word
 
 ## The box says who you type to
 
-The text box sends to a coordinator or to a task's agent. Its edge says which kind, at a glance, and its ladder and
-first line say which one ([machine and project coordinators](machine-and-project-coordinators.md#the-chat-box-names-who-it-talks-to)).
+The text box sends to a coordinator or to a task's agent. Its edge says which kind, at a glance, and its ladder says
+which one ([machine and project coordinators](machine-and-project-coordinators.md#the-chat-box-names-who-it-talks-to)).
 Only the edge: inside it, who said what, what they said and the prompt mark `❯` look the same whoever the box talks to.
 
 | The box sends to | Colour of its edge |
@@ -229,8 +229,7 @@ Only the edge: inside it, who said what, what they said and the prompt mark `❯
 - The lit step of the ladder is in the same colour, reversed. It is the same wherever there is such a box: under the
   list, in the reply view, under the task panel and full screen, in the popup, and on the web Board, where the frame of
   the text field takes the colour.
-- **Colour is never the only clue.** The first line names the kind in words (`gtm's coordinator.`, `GTM-14's agent.`),
-  the grey words in the empty box say who gets it (`Send message to gtm's coordinator`, `your message starts an agent on
+- **Colour is never the only clue.** The ladder names who it is (`vm-str › gtm`, `gtm › GTM-14`), the grey words in the empty box say who gets it (`Send message to gtm's coordinator`, `your message starts an agent on
   it`), and while you type the hint line does (`enter send to HSW-34's agent`). With `NO_COLOR` the board draws no colour
   at all and reads as it always did.
 

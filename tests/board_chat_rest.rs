@@ -17,7 +17,7 @@ fn while_your_words_stand_in_the_box_the_task_panel_has_the_agents_message() {
     delegate(&id); settle(&id);
     let mut s = open(&w.root, 40);
     s.s.sel = id.clone(); s.load(); s.press(&["space"]);
-    assert_eq!(crate::board_chat::chat(&mut s, 160).boxed[1], "Made f, with one line in it.");
+    assert_eq!(crate::board_chat::chat(&mut s, 160).boxed[0], "Made f, with one line in it.");
     assert!(!panel(&mut s).contains("Made f, with one line in it."), "the chat shows it: the panel does not say it twice:\n{}", panel(&mut s));
     s.typed("yes, g too"); s.press(&["enter"]);
     assert_eq!(crate::board_chat::chat(&mut s, 160).boxed[..2].to_vec(), vec!["You:", "yes, g too"]);
@@ -36,5 +36,5 @@ fn a_reply_still_in_the_text_box_when_the_board_is_closed_from_outside_comes_bac
     let mut again = open(&w.root, 34);
     assert_eq!(again.s.value(), "", "a reply does not come back as a draft for the Coordinator");
     again.s.sel = id.clone(); again.load(); again.press(&["space", "ctrl+z"]);
-    assert!(regex::Regex::new(r"╭─ [^\n]* PRJ-\d+  ─+╮\n│ PRJ-\d+'s agent\.[^\n]*\n(?:[^\n]*\n)*?│ ❯ kept across a close").unwrap().is_match(&again.text()), "{}", again.text());
+    assert!(regex::Regex::new(r"╭─ [^\n]* PRJ-\d+  ─+╮\n(?:[^\n]*\n)*?│ ❯ kept across a close").unwrap().is_match(&again.text()), "{}", again.text());
 }

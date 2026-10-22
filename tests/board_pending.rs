@@ -252,7 +252,7 @@ fn opening_its_agent_or_words_to_it_leave_an_unfinished_action_alone() {
     let stop = s.hold("ctrl+x");
     assert!(matches!(jobs(&stop).as_slice(), [Job::Stop { .. }]), "{stop:?} {:?} {}", s.s.ask.as_ref().map(|a| a.q.clone()), s.text());
     // Into its pane while it stops: the pane opens, and the row still says it stops.
-    let open_it = s.hold("enter");
+    let open_it = s.hold("alt+o");
     assert!(matches!(jobs(&open_it).as_slice(), [Job::OpenAgent { .. }]), "{open_it:?} {}", s.text());
     assert!(has(&row(&s.screen(120), "Runs"), r"Stopping…"), "{}", s.text());
     // The pane's answer is not the stop's: the row and the panel still say it stops, after a read too.

@@ -40,14 +40,14 @@ fn a_known_repo_with_a_project_coordinator_and_no_tasks_has_its_heading_and_spac
     s.load();
     let t = screen(&mut s);
     assert!(has(&t, r"\n[ ▌]  ○ ▸ side\b.*  0 tasks") && t.contains("Mine"), "{t}");
-    // Enter goes into its project coordinator; space talks to it, and the chat names it.
+    // Alt+O goes into its project coordinator; space talks to it, and the chat names it.
     let head = group_id(&s.s, "", "side");
     s.s.sel = head.clone(); s.load();
-    let fx = s.hold("enter");
+    let fx = s.hold("alt+o");
     assert!(fx.iter().any(|e| matches!(e, sw::board::update::Effect::Run(sw::board::job::Job::CoordOpen { to, .. }) if to == "project:side")), "{fx:?}");
     s.press(&["space"]);
     assert!(s.s.reply && s.s.reply_id == head);
-    assert!(s.text().contains("│ side's coordinator. Looks after the side repo") && s.text().contains("Ask it something"), "{}", s.text());
+    assert!(s.text().contains("›  side  ─") && s.text().contains("Ask it something"), "{}", s.text());
     // The web board shows it too, folded.
     let g = sw::webui::model::list::list_of(&s.s, &s.theme);
     let side = g.arr("groups").iter().find(|g| g.s("id") == head).cloned().unwrap_or_else(|| panic!("{g}"));

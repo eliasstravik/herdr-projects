@@ -1,6 +1,7 @@
 //! The rows of coordinators, read as tasks' rows: the top row (All machines, or the one machine) the board opens on,
-//! a task's marks for where each coordinator stands, its time on the right and its live second line; enter goes into
-//! its coordinator, ← and → fold, ← on a task goes to its heading; one that asks you stands under Needs you.
+//! a task's marks for where each coordinator stands, its time on the right and its live second line; enter folds a
+//! heading and does nothing on a task, alt+o goes into a row's agent, ← and → fold, ← on a task goes to its heading;
+//! one that asks you stands under Needs you.
 use crate::common;
 use common::board::open;
 use common::*;
@@ -33,7 +34,7 @@ fn far_board(coordinators: serde_json::Value, autopilot: serde_json::Value, task
 }
 
 #[test]
-fn the_board_opens_on_its_top_row_and_enter_goes_into_a_rows_coordinator() {
+fn the_board_opens_on_its_top_row_enter_folds_and_alt_o_goes_into_a_rows_coordinator() {
     let w = coord_world("none");
     let id = w.add("Fix the login");
     let host = sw::shown::words::clean(&sw::remote::check::hostname());
@@ -42,19 +43,29 @@ fn the_board_opens_on_its_top_row_and_enter_goes_into_a_rows_coordinator() {
     s.s.side = false; s.load();
     // one machine: its row is the top row, the board opens on it, and the chat talks to its coordinator
     assert_eq!(s.s.sel, machine_id(""));
-    assert!(s.text().contains(&format!("{host}'s coordinator.")), "{}", s.text());
-    assert!(s.text().contains("enter go into it") && s.text().contains("← → fold"), "{}", s.text());
-    // enter: into its coordinator, here; on a project's row, into that one's
-    let j = jobs(s.hold("enter")); assert!(j.contains("CoordOpen") && j.contains("to: \"\""), "{j}");
-    s.press(&["alt+s"]); s.s.sel = group_id(&s.s, "", "proj"); s.load();
-    let j = jobs(s.hold("enter")); assert!(j.contains("CoordOpen") && j.contains("project:proj"), "{j}");
-    // a status group's heading has no agent: enter says how it folds, and starts nothing
-    s.press(&["alt+s", "alt+s"]); s.s.sel = group_id(&s.s, "", "to do"); s.load();
-    let j = jobs(s.hold("enter")); assert!(j.is_empty(), "{j}");
+    assert!(s.text().contains(&format!("╭─  {host}  ─")) && !s.text().contains("Looks after"), "{}", s.text());
+    assert!(s.text().contains("enter fold") && s.text().contains("alt+o go into it"), "{}", s.text());
+    // enter folds it and unfolds it, and goes into nothing; alt+o goes into its coordinator, here
+    let top = machine_id("");
+    let j = jobs(s.hold("enter")); assert!(j.is_empty() && s.s.folded.contains(&top), "{j}");
+    assert!(s.text().contains("enter unfold"), "{}", s.text());
+    let j = jobs(s.hold("enter")); assert!(j.is_empty() && !s.s.folded.contains(&top), "{j}");
+    let j = jobs(s.hold("alt+o")); assert!(j.contains("CoordOpen") && j.contains("to: \"\""), "{j}");
+    // a project's row: enter folds, alt+o goes into that one's coordinator
+    s.press(&["alt+s"]); let proj = group_id(&s.s, "", "proj"); s.s.sel = proj.clone(); s.load();
+    let j = jobs(s.hold("enter")); assert!(!j.contains("CoordOpen") && s.s.folded.contains(&proj), "{j}");
+    s.press(&["enter"]); assert!(!s.s.folded.contains(&proj));
+    let j = jobs(s.hold("alt+o")); assert!(j.contains("CoordOpen") && j.contains("project:proj"), "{j}");
+    // a status group's heading has no agent: alt+o says so and starts nothing; enter folds it
+    s.press(&["alt+s", "alt+s"]); let todo = group_id(&s.s, "", "to do"); s.s.sel = todo.clone(); s.load();
+    let j = jobs(s.hold("alt+o")); assert!(j.is_empty(), "{j}");
     assert!(s.s.msg.contains("has no agent to go into"), "{}", s.s.msg);
+    s.press(&["enter"]); assert!(s.s.folded.contains(&todo)); s.press(&["enter"]); assert!(!s.s.folded.contains(&todo));
+    // a task's row: enter with nothing typed does nothing at all
+    s.s.sel = id.clone(); s.load(); s.s.msg.clear();
+    let fx = s.hold("enter"); assert!(fx.is_empty() && s.s.msg.is_empty() && s.s.sel == id, "{fx:?} {}", s.s.msg);
     // ← on a task goes to the heading it stands under; ← there folds it, → unfolds it
-    s.s.sel = id.clone(); s.load();
-    s.press(&["left"]); assert_eq!(s.s.sel, group_id(&s.s, "", "to do"));
+    s.press(&["left"]); assert_eq!(s.s.sel, todo);
     s.press(&["left"]); assert!(s.s.folded.contains(&s.s.sel));
     s.press(&["right"]); assert!(!s.s.folded.contains(&s.s.sel));
     // with words typed, ← and → move in them and fold nothing
@@ -62,13 +73,16 @@ fn the_board_opens_on_its_top_row_and_enter_goes_into_a_rows_coordinator() {
 }
 
 #[test]
-fn another_machines_coordinator_is_gone_into_there() {
-    let (_w, mut s) = far_board(json!({ "machine": { "state": "idle" } }), json!({}), json!([]));
-    s.s.sel = machine_id("otherbox"); s.load();
-    let j = jobs(s.hold("enter")); assert!(j.contains("coordinator-open") && j.contains("otherbox") && j.contains("\"to\": String(\"machine\")"), "{j}");
+fn another_machines_coordinator_is_gone_into_there_with_alt_o_and_enter_only_folds_its_row() {
+    let (_w, mut s) = far_board(json!({ "machine": { "state": "idle" } }), json!({}), json!([{ "id": "proj/9", "title": "Theirs", "state": "idle", "stage": "todo", "at": 1, "created": 1 }]));
+    let row = machine_id("otherbox");
+    s.s.sel = row.clone(); s.load();
+    let j = jobs(s.hold("enter")); assert!(j.is_empty() && s.s.folded.contains(&row), "{j}");
+    s.press(&["enter"]); assert!(!s.s.folded.contains(&row));
+    let j = jobs(s.hold("alt+o")); assert!(j.contains("coordinator-open") && j.contains("otherbox") && j.contains("\"to\": String(\"machine\")"), "{j}");
     // All machines: the coordinator of every machine, this machine's top-level one
     s.s.sel = sw::board::update::top::all_id(); s.load();
-    let j = jobs(s.hold("enter")); assert!(j.contains("CoordOpen") && j.contains("to: \"\""), "{j}");
+    let j = jobs(s.hold("alt+o")); assert!(j.contains("CoordOpen") && j.contains("to: \"\""), "{j}");
 }
 
 #[test]

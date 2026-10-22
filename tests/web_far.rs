@@ -58,7 +58,7 @@ fn another_machines_agent_opens_in_the_web_uis_view_of_that_machines_pane_and_wh
     reopen(json!({ "ok": true, "msg": "", "pane": "w3:p2", "workspace": "w3", "hasAgent": true }));
     call("press", json!({ "id": "scope" }), None);
     far::answered("t", 1);
-    let open = |pcs: Vec<Pc>| { call("pick", json!({ "id": "vm-a:far/1", "open": true }), None); call("press", json!({ "id": "enter" }), Some(pcs)) };
+    let open = |pcs: Vec<Pc>| { call("pick", json!({ "id": "vm-a:far/1", "open": true }), None); call("press", json!({ "id": "open" }), Some(pcs)) };
     let mine = pc("pc-9", "vm-a", "vm-a", false);
     // the web UI has that machine as a PC: the machine reopens its own task's space, and the page goes to that pane there
     let s = open(vec![pc("local", "home", "", true), mine.clone()]);
@@ -87,13 +87,13 @@ fn another_machines_agent_opens_in_the_web_uis_view_of_that_machines_pane_and_wh
     assert_eq!(s.at("msg").s("text"), "vm-a is not connected in the web UI (reconnecting). Connect it there, then open the agent again.");
     { let c = sw::webui::web::client("t"); c.lock().unwrap().s.web.pcs = None; }
     call("pick", json!({ "id": "vm-a:far/1", "open": true }), None);
-    let s = call("press", json!({ "id": "enter" }), None);
+    let s = call("press", json!({ "id": "open" }), None);
     assert!(s.at("msg").s("text").starts_with("The web UI did not say which PCs it has"), "{}", s.at("msg"));
     assert_eq!(far.asked().len() - before, 0, "the other machine is not asked to open anything");
     assert_eq!(s.at("go").i("n"), 3);
     // a task there that no agent has been on has nothing to open
     call("pick", json!({ "id": "vm-a:far/2", "open": true }), None);
-    let s = call("press", json!({ "id": "enter" }), Some(vec![mine.clone()]));
+    let s = call("press", json!({ "id": "open" }), Some(vec![mine.clone()]));
     assert_eq!(s.at("canOpen"), &json!(false)); assert!(s.at("msg").s("text").starts_with("No agent has been on this yet"), "{}", s.at("msg"));
     // a machine on an older plugin cannot reopen a space: the pane it last named is opened, and the board says to update
     far.tasks("vm-a", "", json!([theirs(), todo]));

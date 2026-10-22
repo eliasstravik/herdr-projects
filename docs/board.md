@@ -20,8 +20,6 @@ agent.
    ▾ to do
    ○ HSW-9   Rename the hint line                                                 2h ago
 ╭─  vm-str  ─────────────────────────────────────────────────────────────────────────────────╮
-│ vm-str's coordinator. Looks after this machine: its projects, disk and agents.             │
-│ Coordinator:                                                                               │
 │ Added proj/4: Add an undo. An agent is on it.                                              │
 │                                                                                            │
 │ ❯ Send message to vm-str's coordinator                                                     │
@@ -29,7 +27,7 @@ agent.
   alt+c hide the latest message · ? all keys
 ```
 
-- `↑` `↓` select a task. `Enter` goes into its agent. `Space` talks to its agent instead of the Coordinator.
+- `↑` `↓` select a task. `Alt+O` goes into its agent. `Space` talks to its agent instead of the Coordinator.
 - `Tab` shows the next filter: only the tasks that need you, those at work, and so on ([below](#the-filter-row)).
 - Type and press `Enter` to send. The Coordinator decides what to start: ask it to in your words. `Ctrl+S` puts an agent
   on the selected task.
@@ -71,7 +69,7 @@ sidebar ([other machines](other-machines.md)); a click on it does the same. Ever
 - **A machine's row and a project's row are their coordinator's**, read as a task's row: the same marks (`○` idle,
   `◐` working, `?` asks you, `✗` could not start, `∞` autopilot), the time on the right, what it does or asks under
   it. The top row is `All machines` or the one machine shown. The list reads all machines → machine → project → task
-  by how far in each row stands. `Space` talks to it, `Enter` goes into it, `←` `→` fold and unfold it, `Ctrl+S` /
+  by how far in each row stands. `Space` talks to it, `Alt+O` goes into it, `Enter` (or `←` `→`) folds and unfolds it, `Ctrl+S` /
   `Ctrl+X` start and stop it, `Ctrl+O` is its autopilot ([machine and project coordinators](machine-and-project-coordinators.md)).
 - **Where the window is narrow** the names are shorter (`Coords`, `Needs`, `Autos`), then shortest (`Co`, `Need`,
   `Work`), then the filters with nothing in them go; narrower still, only the one shown stands, with `tab next`.
@@ -578,23 +576,22 @@ It looks the same for a coordinator and for a task's agent, at every window widt
 
 ```
 ╭─ All machines ›  vm-str  ─────────────────────────────────────────────── alt+k more ↑ ─╮
-│ vm-str's coordinator. Looks after this machine: its projects, disk and agents.             │
-│ Coordinator:                                                                               │
 │ Added proj/4: Add an undo. An agent is on it.                                              │
 │                                                                                            │
-│ ❯ Send message to Coordinator                                                              │
+│ ❯ Send message to vm-str's coordinator                                                     │
 ╰────────────────────────────────────────────────────────────────────────────────────────────╯
   alt+c hide the latest message · ? all keys
 ```
 
 1. **Its top edge names who you talk to**: a ladder from the top row down (`All machines › vm-str › gtm › GTM-14`),
-   the current step lit, and the edge in its kind's colour: amber for a coordinator, violet for a task's agent. Its first
-   line says in one sentence what that agent looks after (`GTM-14's agent. Works on this one task, in its own copy of the
-   repo.`); one that never ran adds `Not started yet.` ([machine and project coordinators](machine-and-project-coordinators.md#the-chat-box-names-who-it-talks-to)).
+   the current step lit, and the edge in its kind's colour: amber for a coordinator, violet for a task's agent
+   ([machine and project coordinators](machine-and-project-coordinators.md#the-chat-box-names-who-it-talks-to)). One
+   that never ran invites a first message.
    - One thing gets a greyed line of its own above the box: a default that changed while a coordinator runs, with the
      command that starts a new one on it.
-2. **One rounded box**: the newest thing said in that conversation, in grey, under a line that names who said it
-   (`Coordinator:`, `Agent:`, `Reviewer:`, `You:`); then an empty line; then the line you type on (the prompt is only
+2. **One rounded box**: the newest thing said in that conversation, in grey. What the one the box talks to said has no
+   line naming it (the edge does); your own words are under `You:`, a reviewer's under `Reviewer:`, a wake under
+   `Autopilot:`. Then an empty line; then the line you type on (the prompt is only
    `❯`).
    - A picture you paste stands on it as `[Image 1]`, not as its path; what is sent has the path
      ([pictures pasted](image-paste.md)).
@@ -634,7 +631,7 @@ screen or logo.
 - **A dialog that is only on its screen** (a permission prompt, a question with choices) is said in a line of its own,
   with the way to it: `The agent shows a dialog on its screen that waits for your answer: enter opens it.` The
   Coordinator's is in Herdr's `Coordinator` tab, a reviewer's in its `Reviewer #2` tab in the task's space.
-- **Going into the agent** (`Enter`) is its real terminal, untouched.
+- **Going into the agent** (`Alt+O`) is its real terminal, untouched.
 
 ### While a task is under review, the chat is its reviewer's
 
@@ -698,7 +695,7 @@ The box opens on the newest thing said, and holds only that. What came before is
 │ 3. The check fails on main too: it is not this task's change.                              │
 │ 4. I filed proj/7 for it and put an agent on it.                                           │
 │                                                                               alt+j more ↓ │
-│ ❯ Send message to Coordinator                                                              │
+│ ❯ Send message to vm-str's coordinator                                                     │
 ╰────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -717,7 +714,6 @@ The box opens on the newest thing said, and holds only that. What came before is
 
 ```
 ╭─  vm-str  ─────────────────────────────────────────────────────────────────────────────────╮
-│ vm-str's coordinator. Looks after this machine: its projects, disk and agents.             │
 │ ❯ Send message to vm-str's coordinator                                                     │
 ╰────────────────────────────────────────────────────────────────────────────────────────────╯
   alt+c show the latest message · ? all keys
@@ -725,14 +721,14 @@ The box opens on the newest thing said, and holds only that. What came before is
 
 - **One key shows and hides the message**: `Alt+C` (on an empty text box, like `Alt+P` for the side panel), the same both
   ways and for the Coordinator and a task's agent alike. The hint line names it, and the board remembers your choice.
-- Hidden, there is only the box's edge and first line that say who you talk to, and the line you type on: a message is
+- Hidden, there is only the box's edge that says who you talk to, and the line you type on: a message is
   never sent blind.
 - Nothing else shows or hides it: `Esc` never does.
 - A Coordinator that could not be started says why even while the message is hidden. `Alt+C` puts that error away too,
   until the next one.
 - The board with no coordinator (`coordinator.agent none`) gets the plain line between two rules, whether the chat is
   hidden or not: what you type is added as a task.
-- The whole chat of a task's agent is its own pane: `Enter`, with nothing typed, goes into it.
+- The whole chat of a task's agent is its own pane: `Alt+O` goes into it.
 - The text box and its hints are never pushed off the window: the message gives way first. In a very narrow window the box
   stays whole: the message wraps inside it, and a placeholder that does not fit is cut with `…`.
 
@@ -759,7 +755,7 @@ shortcut fires in the middle of a draft.
 
 ## Going into an agent
 
-**Going into an agent never ends the board.** `Enter` on a task, with nothing typed, moves Herdr to that agent's real pane:
+**Going into an agent never ends the board.** `Alt+O` on a task moves Herdr to that agent's real pane:
 from the row, with the chat hidden, or while the chat talks to that agent. The board keeps running.
 
 - Come back to it, or press the board key, and it is as you left it: the same repo, the same task selected, the same
@@ -805,7 +801,7 @@ Herdr's own menu does: nothing behind it takes a key or a click.
 - **The key again closes it**, and so does `Esc` once there is nothing left to step back from (a draft, the whole task,
   the filter, the archive and a chat message that shows come first, as on every board), and `Ctrl+C` twice. What you
   typed, the task you were on and the filter are there when it opens again.
-- **`Enter` on a task closes the popup and lands in that task's agent.** The first three times it says for a moment how to
+- **`Alt+O` on a task closes the popup and lands in that task's agent.** The first three times it says for a moment how to
   get back.
 - **It is showing or closed, never left behind.** Nothing in Herdr's own window can switch tab or space under it. If
   Herdr shows another tab all the same (a command moved it there, or a second window on the same session did), the popup

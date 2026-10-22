@@ -86,7 +86,7 @@ fn a_program_that_is_not_installed_says_so_and_what_to_do() {
     assert_eq!(f.s("title"), "Could not start the agent");
     assert!(f.s("next").starts_with("Install codex so that `codex` runs in a terminal here, or choose another program (worker.agent), then delegate again ("), "{}", f.s("next"));
     let log = sw::store::files::dir_of(&id).join("runner.log");
-    for part in ["Codex is not installed here.", "What herdr said: timed out waiting for agent startup", "bash: codex: command not found", "Its terminal is still open: go into the task (enter)", &format!("This is also written to {}.", log.display())] {
+    for part in ["Codex is not installed here.", "What herdr said: timed out waiting for agent startup", "bash: codex: command not found", &format!("Its terminal is still open: go into the task ({})", sw::board::keys::key_name("open")), &format!("This is also written to {}.", log.display())] {
         assert!(f.s("detail").contains(part), "{part:?} in {}", f.s("detail"));
     }
     assert!(read(&log).contains("could not start codex:\nCodex is not installed here."), "{}", read(&log));

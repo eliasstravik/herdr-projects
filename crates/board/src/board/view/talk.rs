@@ -55,8 +55,8 @@ pub fn talk(r: &Obj) -> Talk {
     let dialog = if who == "reviewer" { r.s("stage") == "reviewneeds" } else { r.s("stage") == "working" && if r.b("host") { r.s("state") == "blocked" } else { r.at("live").s("status") == "blocked" } };
     let note = |text: String, kind: &str, tone: &str| Part { by: String::new(), note: kind.into(), tone: tone.into(), text, ..Default::default() };
     if dialog {
-        parts.push(note(if who == "reviewer" { format!("The reviewer shows a dialog on its screen that waits for your answer. {} opens the task's space: the reviewer is in its tab \"{}\".", key_name("enter"), crate::flow::tabs::reviewer_tab(crate::store::reviews::review_number(r), "")) }
-            else { format!("The agent shows a dialog on its screen that waits for your answer: {} opens it.", key_name("enter")) }, "dialog", "yellow"));
+        parts.push(note(if who == "reviewer" { format!("The reviewer shows a dialog on its screen that waits for your answer. {} opens the task's space: the reviewer is in its tab \"{}\".", key_name("open"), crate::flow::tabs::reviewer_tab(crate::store::reviews::review_number(r), "")) }
+            else { format!("The agent shows a dialog on its screen that waits for your answer: {} opens it.", key_name("open")) }, "dialog", "yellow"));
     } else if !tk.is_object() && r.b("host") && who == "reviewer" {
         parts.push(note(format!("The reviewer is at work. {} runs an older herdr-projects, which does not send what its reviewer says: update it there.", r.s("host")), "old", ""));
     } else if !parts.iter().any(|p| !p.sent) && parts.last().map(|p| p.by != "You").unwrap_or(true) {

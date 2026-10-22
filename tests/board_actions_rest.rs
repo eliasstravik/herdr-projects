@@ -65,7 +65,7 @@ fn an_agent_that_needs_a_login_is_told_by_yes_to_try_again() {
     let mut l = open(&w.root, 34); l.s.sel = lid.clone(); l.load();
     let t = l.text();
     assert!(t.contains("│  Needs a login"), "{t}");
-    assert!(t.contains(&format!("{} tell this task's agent to try again · space talk to the agent · enter open the agent · ? all keys", key_name("yes"))), "{t}");
+    assert!(t.contains(&format!("{} tell this task's agent to try again · space talk to the agent · alt+o open the agent · ? all keys", key_name("yes"))), "{t}");
     let n = prompts(&w, lt.at("link").s("pane")).len();
     l.press(&["ctrl+l"]);
     assert!(l.text().contains("told the agent to continue") && !l.text().contains("Nothing here waits for a yes"), "{}", l.text());

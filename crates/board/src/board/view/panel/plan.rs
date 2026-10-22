@@ -92,7 +92,7 @@ pub fn attempts(k: &mut Kit, c: &Ctx, r: &Obj) -> bool {
         let rows = k.fact(&format!("{}{mark}", x.s("letter")), facts);
         lines.extend(rows.into_iter().enumerate().map(|(n, l)| if n == 0 && x.s("letter") == sel { l.bold() } else { l }));
     }
-    if r.s("stage") == "pick" { lines.extend(k.wrap(&format!("{} moves to the next attempt, {} keeps the one marked ›, {} goes into its tab.", key_name("nextAttempt"), key_name("yes"), key_name("enter"))).into_iter().map(|l| l.recolor(Ink::Muted))); }
+    if r.s("stage") == "pick" { lines.extend(k.wrap(&format!("{} moves to the next attempt, {} keeps the one marked ›, {} goes into its tab.", key_name("nextAttempt"), key_name("yes"), key_name("open"))).into_iter().map(|l| l.recolor(Ink::Muted))); }
     // Short of room it gives up lines from its end, like every long part: while it waits for you, last of all.
     let all = lines.clone();
     let w = k.w;

@@ -20,7 +20,7 @@ again (or reply, for an agent that is started again).
 
 - **The task panel** has the whole account: the reason, what Herdr said, the last lines of the agent's terminal, and where
   to look further.
-- **The terminal stays open**: `Enter` on the task goes into it.
+- **The terminal stays open**: `Alt+O` on the task goes into it.
 - **The task's own log** gets the same account at its end: `runner.log` in the task's folder on the board
   (`~/.herdr-projects/data/tasks/<repo>/<number>/`).
 - **A reviewer** that could not start says the same in its review.

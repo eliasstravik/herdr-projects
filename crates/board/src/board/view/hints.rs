@@ -71,9 +71,10 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
         // Space on a row talks to its coordinator; on the one it talks to, back to the top row's (none on the top row).
         let here = crate::board::update::coords::of_head(s, &s.sel);
         let talk = if super::chat_title::coordinator(s) == here { (s.sel != crate::board::update::top::top_id(s)).then(|| Hint { stays: true, ..hk(K::Talk, &back_words(s)) }) } else { here.filter(|c| head.as_ref() != Some(c)).map(|c| Hint { lit: c.name.clone(), tint: super::chat_title::COORD_EDGE, ..hk(K::Talk, &format!("talk to {}", c.name)) }) };
-        let mut v: Vec<Hint> = (!w.is_empty()).then(|| hk(K::Enter, &w)).into_iter().collect();
+        // Enter folds and unfolds it; the open key goes into its coordinator, where it has one.
         let fold = crate::board::update::heads::fold_says(s);
-        if !fold.is_empty() { v.push(plain(format!("{} {}", name(K::Fold), name(K::Unfold)), &fold)); }
+        let mut v: Vec<Hint> = (!fold.is_empty()).then(|| hk(K::Enter, &fold)).into_iter().collect();
+        if !w.is_empty() { v.push(hk(K::Open, &w)); }
         if crate::board::update::archive_done::counts(s).map(|c| c.0 > 0).unwrap_or(false) { v.push(hk(K::Archive, "archive its done tasks")); }
         // A coordinator's row names both of autopilot's keys (update/pilot.rs).
         // A coordinator's row: started and stopped as an agent is, and its autopilot's own key.
@@ -88,7 +89,7 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
     let failure = failure_for(r);
     let rv = crate::store::reviews::current_review(r).cloned();
     let sendable = rv.as_ref().map(|x| crate::gate::sendable(x)).unwrap_or(false);
-    let open = h(hint(K::Enter, None));
+    let open = h(hint(K::Open, None));
     let fix = h(hint(K::SendBack, None));
     let stop = h(hint(K::Stop, None));
     let agent = h(hint(K::Delegate, None));
@@ -99,8 +100,8 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
     let at = if choosing(s, r) { attempt_now(s, r) } else { None };
     let opt = |b: bool, x: Hint| if b { Some(x) } else { None };
     let main: Vec<Option<Hint>> = if r.b("archivedAt") { vec![Some(h(hint(K::Archive, None))), Some(hk(K::Stop, "remove this task"))] }
-        else if let (Some(c), true) = (&at, st("pick")) { let l = c.s("letter"); vec![Some(Hint { short: format!("keep {l}"), ..hk(K::Yes, &format!("keep attempt {l}")) }), Some(h(hint(K::NextAttempt, None))), Some(hk(K::Enter, &format!("open attempt {l}'s agent")))] }
-        else if let Some(c) = &at { vec![Some(hk(K::Enter, &format!("open attempt {}'s agent", c.s("letter")))), Some(h(hint(K::NextAttempt, None))), Some(reply.clone()), Some(stop.clone())] }
+        else if let (Some(c), true) = (&at, st("pick")) { let l = c.s("letter"); vec![Some(Hint { short: format!("keep {l}"), ..hk(K::Yes, &format!("keep attempt {l}")) }), Some(h(hint(K::NextAttempt, None))), Some(hk(K::Open, &format!("open attempt {l}'s agent")))] }
+        else if let Some(c) = &at { vec![Some(hk(K::Open, &format!("open attempt {}'s agent", c.s("letter")))), Some(h(hint(K::NextAttempt, None))), Some(reply.clone()), Some(stop.clone())] }
         else if in_review(r) { vec![Some(Hint { short: "merge this task".into(), ..hk(K::Yes, "approve and merge this task") }), opt(sendable, hk(K::SendBack, "send the review to this task's agent")), Some(reply.clone())] }
         else if failed_review(r) { vec![opt(sendable, hk(K::SendBack, "send the review to this task's agent")), Some(Hint { short: "merge anyway".into(), ..hk(K::Yes, "merge this task anyway") }), Some(reply.clone())] }
         else if st("approval") && r.b("syncBlocked") { vec![Some(reply.clone()), Some(open.clone())] }

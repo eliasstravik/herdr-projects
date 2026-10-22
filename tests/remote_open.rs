@@ -24,10 +24,10 @@ fn board_on_theirs(w: &World) -> Board {
     b.s.sel = "vm-a:far/1".into(); b.load();
     b
 }
-/// Enter, with what it started run at once: what this terminal was handed to (an attach's last word) is returned.
+/// The open key, with what it started run at once: what this terminal was handed to (an attach's last word) is returned.
 fn enter(b: &mut Board) -> Vec<String> {
     let mut went = vec![];
-    let mut fx = update(&mut b.s, Event::Key(Press::chord("enter")));
+    let mut fx = update(&mut b.s, Event::Key(Press::chord("alt+o")));
     while let Some(e) = fx.pop() {
         match e {
             Effect::Run(j) => { let d = job::run(j); fx.extend(update(&mut b.s, Event::Done(d))); }

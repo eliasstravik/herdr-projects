@@ -29,11 +29,11 @@ fn a_machine_with_no_task_has_its_heading_folded_and_space_there_talks_to_its_ma
     assert!(has(&t, r"\n[ ▌]  ○ ▸ otherbox  0 tasks *\n"), "its coordinator's mark, idle: {t}");
     assert!(t.contains("Mine"), "{t}");
     assert!(!has(&t, r"▸ farbox|▾ farbox"), "a machine that did not answer has no heading, its line says why: {t}");
-    // The arrows stop on it; enter goes into its machine coordinator there, space talks to it.
+    // The arrows stop on it; alt+o goes into its machine coordinator there, space talks to it.
     s.s.sel = machine_id("otherbox"); s.load();
     let t = s.text();
-    assert!(t.contains("space talk to otherbox's coordinator") && t.contains("enter go into it") && !t.contains("unfold"), "{t}");
-    let fx = s.hold("enter");
+    assert!(t.contains("space talk to otherbox's coordinator") && t.contains("alt+o go into it") && !t.contains("unfold"), "{t}");
+    let fx = s.hold("alt+o");
     assert!(fx.iter().any(|e| matches!(e, Effect::Run(Job::Far { host, action, req, .. }) if host == "otherbox" && action == "coordinator-open" && req.s("to") == "machine")), "{fx:?}");
     s.press(&["space"]);
     assert!(s.s.reply && s.s.reply_id == machine_id("otherbox") && s.s.sel == machine_id("otherbox"), "{}", s.s.msg);

@@ -62,7 +62,7 @@ fn the_task_shows_it_everywhere_its_progress_shows_in_a_colour_of_its_own() {
     // When you talk to its agent the chat's box names it; the words and numbers stay on its row.
     b.s.side = false; b.press(&["space"]);
     let head = |b: &mut common::board::Board, cols: usize| crate::board_chat::chat(b, cols).who;
-    assert!(head(&mut b, 120).starts_with("PRJ-1's agent."), "{}", head(&mut b, 120));
+    assert!(head(&mut b, 120).ends_with("› PRJ-1"), "{}", head(&mut b, 120));
     assert!(re(r"Add a greeting +█████░░░ 65% 3m left").is_match(&b.text()), "{}", b.text());
     assert!(sw::board::update::beat::osc(&r).contains(":progress=65:eta=3:"), "{}", sw::board::update::beat::osc(&r));
     // Waiting for its turn: the minutes, and no bar that pretends to move. Known at once: only the words.

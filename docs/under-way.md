@@ -14,7 +14,7 @@ working colour. The task panel says the same under Status, as `Now`.
 | `Ctrl+A`, `Ctrl+Z` | `Archiving…`, `Restoring…` |
 | `Ctrl+P` | `Pinning…`, `Unpinning…` |
 | `y` when picking an attempt | `Keeping attempt B…` |
-| `Enter` with nothing typed | `Opening…` (until its pane opens) |
+| `Alt+O` | `Opening…` (until its pane opens) |
 | `Space`, `Ctrl+S`, `Ctrl+X` on an automation | `Turning on…`, `Turning off…`, `Firing…`, `Removing…` |
 
 ## When it ends

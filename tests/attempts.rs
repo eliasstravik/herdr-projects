@@ -56,7 +56,7 @@ fn one_row_times_three_pick_one_the_panel_and_the_approve_key_keeps_the_selected
     assert!(!meta.iter().any(|m| m.contains("Pick one of 3")), "{}", meta.join("\n"));
     assert!(meta.iter().any(|m| m.contains("--display-agent pick one")), "{}", meta.join("\n"));
     let last = b.lines().last().cloned().unwrap_or_default();
-    assert!(last.contains(&format!("{} keep attempt B · {} the next attempt · enter open attempt B's agent", sw::board::keys::key_name("yes"), sw::board::keys::key_name("nextAttempt"))), "{last}");
+    assert!(last.contains(&format!("{} keep attempt B · {} the next attempt · alt+o open attempt B's agent", sw::board::keys::key_name("yes"), sw::board::keys::key_name("nextAttempt"))), "{last}");
     // The web board: the same row, the same part, and the keys as buttons.
     web(&w, "pick", json!({ "id": id }));
     let s = web(&w, "board", json!({}));

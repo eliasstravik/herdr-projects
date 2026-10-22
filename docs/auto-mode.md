@@ -78,7 +78,7 @@ anything your own `permissions.ask` rules name. Nothing about it is new to the b
   you](waiting-for-you.md)).
 - **A permission prompt on its screen** (after the stops above, or a rule of your own) is a dialog like any other: Herdr
   says the agent is blocked, the task shows under "needs you", and the chat says `The agent shows a dialog on its screen
-  that waits for your answer: enter opens it.` Press `Enter` to go into the agent and answer it there.
+  that waits for your answer: alt+o opens it.` Press `Alt+O` to go into the agent and answer it there.
 
 Tried on 2026-10-19 with Claude Code 2.1.303 on Herdr, on a scratch board: a task with `worker.access auto` started
 as `claude --permission-mode auto`, showed `auto mode on` at its foot, did its work and merged; one told by its check
