@@ -126,6 +126,11 @@ fn space_on_a_machines_row_or_a_projects_row_talks_to_its_coordinator_and_coordi
     while s.s.scope != "otherbox" { s.press(&["alt+m"]); }
     assert_eq!(heads(&s), vec!["otherbox".to_string(), "far".into()], "that machine's row and its project's; its own Coordinator has none");
     assert!(s.screen(160)[1].starts_with(" otherbox │ ") && regex::Regex::new(r"Coordinators 2 ").unwrap().is_match(&s.screen(160)[1]), "{:?}", s.screen(160));
+    // the picker: lit as the filter shown is when one machine is picked, plain for All machines, never a caret
+    assert_eq!(piece(&mut s, " otherbox "), (Ink::Text, true));
+    while s.s.scope != "*" { s.press(&["alt+m"]); }
+    assert_eq!(piece(&mut s, " All machines "), (Ink::Text, false)); assert!(!s.screen(160)[1].contains('▾'));
+    while s.s.scope != "otherbox" { s.press(&["alt+m"]); }
     // a click on the machine item goes round as alt+m does
     s.lines();
     let (y, x, _, _) = *s.s.show_hits.iter().find(|h| h.3 == sw::board::view::shows_row::MACHINE).unwrap();

@@ -51,7 +51,7 @@ each filter with its count, as in an agents command center, with plain room betw
 a cell of the highlight on each side; every filter keeps that room, so the row does not move when another is lit. The
 others are greyed, a count of tasks that need you in red.
 
-**Whose board comes first**, wherever there is another machine: `All machines`, or the one machine shown, in the base colour with no caret (in yellow
+**Whose board comes first**, wherever there is another machine: `All machines` (plain), or the one machine shown (lit, as the filter shown is), in the base colour with no caret (in yellow
 while it does not answer). `Alt+M` goes round: all machines, then each machine by itself in the order of Herdr's
 sidebar ([other machines](other-machines.md)); a click on it does the same. Every count is the machine's shown.
 

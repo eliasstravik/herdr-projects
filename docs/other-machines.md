@@ -4,7 +4,7 @@
 machine, then each machine by itself (this one too) in the order of Herdr's sidebar. Actions on another machine's task run on that machine, over
 SSH. Work never moves between machines.
 
-Which machines you see is the first item of the filter row, in the base colour, with no caret: `All machines`, or `otherbox`
+Which machines you see is the first item of the filter row, in the base colour, with no caret: `All machines` (plain), or `otherbox` (lit, as the filter shown is)
 (in yellow while it does not answer). A click on it goes round too ([the board](board.md#the-filter-row)).
 
 ## Set up another machine

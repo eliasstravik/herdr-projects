@@ -23,7 +23,9 @@ pub fn shows_line(s: &State, _t: &Theme, w: usize) -> (Inked, Vec<(usize, usize,
         let named = if s.scope == "*" { "All machines".to_string() } else { crate::board::update::remotes::shown(s, &s.scope) };
         let ok = s.scope.is_empty() || s.scope == "*" || s.remotes.get(&s.scope).is_some_and(|m| m.ok);
         // In the base colour, no caret (yellow while that machine does not answer); a cell of room each side as every item.
-        Inked::of(format!(" {named} "), if ok { Ink::Text } else { Ink::Yellow })
+        // One machine picked lights it as the filter shown is lit; All machines stays plain.
+        let item = Inked::of(format!(" {named} "), if ok { Ink::Text } else { Ink::Yellow });
+        if s.scope == "*" { item } else { item.bold().inv() }
     });
     // Every item keeps a cell of room on each side, lit or not: the lit one's highlight takes it (` Needs you 1 `), and
     // the row does not move when another is lit.
