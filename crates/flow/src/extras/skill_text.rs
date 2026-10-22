@@ -34,6 +34,7 @@ Every command accepts `--json`. Below, `herdr-projects` stands for that path.
   discussion): the agent changes nothing, every stop of it waits for the human, and the task ends only when the human
   says so (`finish <id>`). Short for the setting `chat.only`; with `research.only` on too, chat wins.
   Add a task only when the human asked for it: nothing adds tasks by itself.
+  A task for GitHub issues of its own repo: add `--merge.closes <n>[,<n>…]`, and the board closes them when its work lands.
 - `herdr-projects delegate <id>`: put an agent on a task. It works in its own git worktree, as an ordinary herdr
   agent in its own herdr space. Any work setting can be chosen for this one task as `--<name> <value>`:
   `--worker.agent {agents}` (a model after a slash: `codex/<model>`, in the program's own names: `herdr-projects models <program>` lists the ones your sign-in can use and its effort levels, never guess one, and with no model named by the human give none: the program alone uses its own default; a wrong name or a program that cannot do a role is refused with the reason), `--worker.effort`, `--reviewer.agent`,

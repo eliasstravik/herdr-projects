@@ -188,6 +188,9 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
     let Ok(t) = res else { return };
     match then {
         Then::Merged => {
+            // The issues its work closes (`merge.closes`): GitHub's own, or closed here (land/closes.rs).
+            let closed = crate::land::closes::after_landing(&t, &root, t.s("mergeCommit"));
+            let t = if closed.is_empty() { t } else { update_wait(id, 10000, |t| { let m = format!("{}. {closed}", t.s("msg").trim_end_matches('.')); t.put("msg", m); Ok(Change::Write) }).unwrap_or(t) };
             tell_sidebar(&t);
             crate::land::cleanup::cleanup_job(id, mode);
             let t = get(id).unwrap_or(t);

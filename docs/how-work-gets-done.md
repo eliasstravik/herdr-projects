@@ -144,6 +144,21 @@ it merges:
 A conflict found here goes back to the agent the same way, and the merge you approved is retried after its repair. A
 checkout with unsaved files is never forced. Merging without your yes: [merging by itself](gate.md#merging-by-itself).
 
+### Closing GitHub issues
+
+A task added for GitHub issues says which ones its work closes: `herdr-projects add "Fix the login" --merge.closes 2203,2204`
+(or later, `set merge.closes 2203 --task <id>`). Only issues of the task's own repo, by number, and only on the task
+itself: never for you or a repo. `show <id>` lists it with the rest.
+
+- **Through a pull request**, its body gets a `Closes #2203` line for each, so GitHub closes them when it merges into
+  the default branch. A pull request the agent opened itself gets the lines it lacks added (`gh pr edit`); so does one
+  opened before the setting was said, right before it merges.
+- **With no pull request** (a local merge), and through one that merges into another branch than the default, the
+  board closes each with `gh issue close` once the merge has landed, with a comment naming the task and the merge commit.
+
+Nothing is closed on a merge that failed. A close that fails never fails the merge, and an issue closed already is
+fine: the task's line says what was closed (`Merged into main. Closed #2203, #2204.`), or which could not be and why.
+
 ### GitHub's checks must pass first
 
 With `merge.checks: github`, a pull request merges only once its checks on GitHub pass, by itself or on your yes, in

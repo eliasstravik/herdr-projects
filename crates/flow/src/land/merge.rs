@@ -47,10 +47,13 @@ pub(super) fn no_fix() -> Fail { Fail { agent_can_fix: false, auth: Some(false),
 /// the branch it landed on, what a task that waited for it is told (after/handed.rs).
 fn landed(id: &str, g: &mut Guard, t: &Task, msg: &str, head: &str, commit: &str) -> Res<()> {
     let mark = flow::spaces::tidy_mark(t, "always", head);
+    // The issues its work closes (`merge.closes`), only once something landed.
+    let closed = if head.is_empty() && commit.is_empty() { String::new() } else { super::closes::after_landing(t, &folder_of(t.s("id")), commit) };
     let d = g.set(|t| {
         if !commit.is_empty() { t.put("mergeCommit", commit); }
         // What GitHub's checks could not be read of (land/checks.rs) is said with it.
         let said = if t.b("checksUnread") { format!("{msg}. {}", t.s("checksUnread")) } else { msg.to_string() };
+        let said = if closed.is_empty() { said } else { format!("{}. {closed}", said.trim_end_matches('.')) };
         t.put("stage", "done"); t.put("mergedAt", now()); t.put("tidy", mark.clone().unwrap_or(Value::Null)); t.put("msg", said);
         for k in ["failure", "prFailure", "mergeIntent", "lineAt", "lineTurn", "checksWait"] { t.put(k, Value::Null); }
         for k in ["autoMerge", "autoMergeLocal", "mergeFailed", "requireApproval"] { t.put(k, false); }
@@ -166,6 +169,9 @@ pub fn land_core(id: &str, g: &mut Guard) -> Res<()> {
         gh(&["pr", "ready", &pr], &root, 60000);
         // GitHub's own checks on it (`merge.checks`): still running it waits, failed it goes back (checks.rs).
         if !super::checks::before_merge(id, g, &t, &root)? { return Ok(()); }
+        // The issues it closes (`merge.closes`) said since it was opened: on its body now. Failing that, they are closed
+        // with gh once it has merged (closes.rs).
+        let _ = super::closes::onto_pr(&t, t.s("pr"), &root);
         let mut a = vec!["pr", "merge", pr.as_str()];
         let how_flag = format!("--{how}");
         a.push(&how_flag);

@@ -1,5 +1,5 @@
 //! Work the board opens no pull request of its own for (finish/already.rs): a pull request the agent opened itself is
-//! taken on (HSW-3, SKL-8); a branch that brings main nothing is done, saying why: no change needed (ELA-2, ELA-3),
+//! taken on (HSW-3, SKL-8), and gets the `Closes #N` lines of `merge.closes` it lacks; a branch that brings main nothing is done, saying why: no change needed (ELA-2, ELA-3),
 //! already on main (HSW-213), already merged by the agent (HP-5); a repo the task archived is not pushed to (HSW-219).
 //! Work that is not on main is never done.
 use crate::common;
@@ -42,6 +42,25 @@ fn a_pull_request_the_agent_opened_itself_is_taken_on_and_merged_as_usual() {
     let t = settle(&id);
     assert_eq!(t.s("stage"), "done", "{} {}", t.s("msg"), t.at("failure"));
     assert!(gh_log(&w).contains("pr merge 9"), "{}", gh_log(&w));
+}
+
+#[test]
+fn a_pull_request_the_agent_opened_itself_gets_the_closes_lines_it_lacks() {
+    let w = pr_world();
+    let url = "https://github.com/o/r/pull/9";
+    w.gh_says(json!({ "createFail": "a pull request for branch \"work/1-own-pr\" into branch \"main\" already exists", "prs": [{ "number": 9, "url": url, "state": "OPEN" }],
+        "view": { "state": "OPEN", "body": "Mine. Fixes #4", "statusCheckRollup": [], "comments": [], "reviews": [], "author": { "login": "me" } } }));
+    w.script(json!({ "worker": [{ "files": { "f.txt": "v1\n" }, "commit": "v1", "note": "Did v1." }] }));
+    let id = sw::actions::filing::add(&w.root, "Own PR", sw::actions::filing::AddOpts { settings: vec![("merge.closes".into(), json!("4, 5"))], ..Default::default() }).unwrap().t("id");
+    delegate(&id);
+    assert_eq!(settle(&id).s("pr"), url);
+    assert!(gh_log(&w).contains("pr edit 9 --body Mine. Fixes #4\n\nCloses #5\n"), "only the line it lacks: {}", gh_log(&w));
+    sw::actions::finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{} {}", t.s("msg"), t.at("failure"));
+    assert_eq!(gh_log(&w).matches("pr edit").count(), 1, "{}", gh_log(&w));
+    assert!(t.s("msg").contains("GitHub closes #4, #5."), "{}", t.s("msg"));
+    assert!(!gh_log(&w).contains("issue close"), "{}", gh_log(&w));
 }
 
 #[test]

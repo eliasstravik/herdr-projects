@@ -198,7 +198,8 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
                 // second one of the branch into another base.
                 let mut own = if named { already::open_pr(t.s("branch"), tp) } else { None };
                 if own.is_none() {
-                    let body = format!("{}\n\nTask: {}", if text.is_empty() { t.t("title") } else { text.to_string() }, task_ref(id, &repo_keys()));
+                    // One `Closes #N` line for each issue it closes (`merge.closes`): GitHub closes them when it merges.
+                    let body = crate::land::closes::with_lines(&format!("{}\n\nTask: {}", if text.is_empty() { t.t("title") } else { text.to_string() }, task_ref(id, &repo_keys())), &crate::land::closes::issues(&t));
                     let mut args = vec!["pr", "create", "--draft", "--head", t.s("branch"), "--title", if t.b("title") { t.s("title") } else { id }, "--body", &body];
                     if let Some(b) = &onto { args.extend(["--base", b.as_str()]); }
                     let r = flow::git::gh(&args, tp, 120000);
@@ -209,6 +210,8 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
                 }
                 if let Some(p) = own {
                     if let Some(why) = onto.as_deref().and_then(|b| already::wrong_base(&p, b)) { return Err(crate::err::Error::new(format!("prbase:{why}"))); }
+                    // It gets the `Closes #N` lines it lacks; failing that, they are tried again before the merge.
+                    let _ = crate::land::closes::onto_pr(&t, &p.url, tp);
                     url = p.url;
                 }
                 g.set(|t| { t.put("pr", url.clone()); t.put("prSeen", ""); t.put("prState", "waiting"); })?;

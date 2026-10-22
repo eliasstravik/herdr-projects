@@ -1,6 +1,6 @@
 //! Pull requests through a fake gh: pushed as a draft, merged through gh on approval, remembered while GitHub's checks
 //! run, watched; failed checks wake the agent; merged elsewhere without a newer local commit; comments of the human
-//! only wake the agent.
+//! only wake the agent; a `Closes #N` line in its body for each issue of `merge.closes`.
 use crate::common;
 use common::*;
 use crate::pull_requests_checks::waits;
@@ -120,4 +120,19 @@ fn pull_request_comments_only_the_humans_own_wake_the_agent_not_others_nor_the_b
     let log = gh_log(&w);
     assert!(log.lines().any(|l| l == "api user --jq .login"), "{log}");
     assert_eq!(log.lines().filter(|l| l.starts_with("api user")).count(), 1, "asked once, then remembered");
+}
+
+#[test]
+fn a_pull_request_the_board_opens_closes_the_issues_of_merge_closes_by_its_body() {
+    let w = pr_world(json!({}));
+    w.script(json!({ "worker": [step(1)] }));
+    let id = sw::actions::filing::add(&w.root, "Fix it", sw::actions::filing::AddOpts { settings: vec![("merge.closes".into(), json!("12, 13"))], ..Default::default() }).unwrap().t("id");
+    delegate(&id);
+    assert_eq!(settle(&id).s("stage"), "approval");
+    assert!(gh_log(&w).contains("Task: PRJ-1 (proj/1)\n\nCloses #12\nCloses #13 --base main"), "{}", gh_log(&w));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
+    assert!(t.s("msg").starts_with("Merged: https://github.com/o/r/pull/7. GitHub closes #12, #13."), "{}", t.s("msg"));
+    assert!(!regex::Regex::new("pr edit|issue close").unwrap().is_match(&gh_log(&w)), "GitHub closes them itself: {}", gh_log(&w));
 }
