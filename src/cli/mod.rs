@@ -109,6 +109,8 @@ fn run(cmd: &str, a: &Args) -> Res<i32> {
         }
         _ => {}
     }
+    // A command may end with everything it started (a script's service): its runners are the keeper's, where one runs.
+    let _by = crate::runner::outside::by_command();
     let (value, said) = tasks::command(cmd, a)?;
     let value = tidy(value);
     // What a person reads names a task by its repo's short key where it has one (`HSW-134: updated`); --json keeps ids.
