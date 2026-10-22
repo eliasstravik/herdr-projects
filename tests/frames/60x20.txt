@@ -1,7 +1,6 @@
 == the list
  herdr-projects  proj
  All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
-
    ▾ working
    ◐ #2     Max length for task titles
             Drafting
@@ -12,6 +11,7 @@
 ▌           Found the cause; now checking every caller of
 ▌           the resize handler for the same mistake
 ▌           ██████░░░░  60% 11m left                      1m
+
 
  ↓ 9 more · ↑ 6 more
 
@@ -22,7 +22,6 @@
 == the task beside it
  herdr-projects  proj
  All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
-
    ▾ working
    ◐ #2     Max length for task titles
             Drafting
@@ -33,6 +32,7 @@
 ▌           Found the cause; now checking every caller of
 ▌           the resize handler for the same mistake
 ▌           ██████░░░░  60% 11m left                      1m
+
  ↓ 9 more · ↑ 6 more
 
 ────────────────────────────────────────────────────────────
@@ -85,7 +85,6 @@
 == a draft
  herdr-projects  proj
  All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
-
    ▾ working
    ◐ #2     Max length for task titles
             Drafting
@@ -96,6 +95,7 @@
 ▌           Found the cause; now checking every caller of
 ▌           the resize handler for the same mistake
 ▌           ██████░░░░  60% 11m left                      1m
+
 
  ↓ 9 more · ↑ 6 more
 

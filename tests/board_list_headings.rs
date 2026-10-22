@@ -43,7 +43,7 @@ fn every_machine_a_heading_its_repos_under_it_and_rows_with_the_number_alone() {
     assert!(t.starts_with(" herdr-projects") && has(&t, r"\n ▾ All machines  2 machines · 5 tasks *\n"), "{t}");
     assert!(has(&t, &format!(r"{}     ▾ proj · PRJ *\n[ ▌] {{6}}○ PRJ-\d+ +Mine", head(&regex::escape(&here)))), "this machine first, under its own name, its project a step in, its tasks a step further: {t}");
     // The repo the board is in comes first on every machine, as on one.
-    assert!(has(&t, &format!(r"{}     (○ |  )?▾ proj *\n[ ▌] {{6}}○ #151 +Theirs in proj[^\n]*\n\n     (○ |  )?▾ crm *\n[ ▌] {{6}}○ #4 +Theirs in crm", head("otherbox"))), "{t}");
+    assert!(has(&t, &format!(r"{}     (○ |  )?▾ proj *\n[ ▌] {{6}}○ #151 +Theirs in proj[^\n]*\n     (○ |  )?▾ crm *\n[ ▌] {{6}}○ #4 +Theirs in crm", head("otherbox"))), "{t}");
     assert!(!t.contains("otherbox#") && !t.contains("otherbox:"), "a row never names its machine, nor a heading the repo's machine: {t}");
     // By status (after by machine): the same machines, their status groups under them.
     s.press(&["alt+s", "alt+s"]);
@@ -65,7 +65,7 @@ fn left_on_a_heading_folds_it_to_one_line_with_how_many_it_holds_and_right_unfol
     assert!(s.text().contains("enter fold") && s.text().contains("alt+o go into it"), "the hint line says what the keys do there: {}", s.text());
     s.press(&["left"]);
     let t = s.screen(100).join("\n");
-    assert!(has(&t, r"Theirs in proj[^\n]*\n\n▌    (○ |  )?▸ crm  1 task"), "{t}"); assert!(!t.contains("Theirs in crm") && t.contains("Theirs in proj"));
+    assert!(has(&t, r"Theirs in proj[^\n]*\n▌    (○ |  )?▸ crm  1 task"), "{t}"); assert!(!t.contains("Theirs in crm") && t.contains("Theirs in proj"));
     assert_eq!(s.s.sel, repo("otherbox", "crm"), "the selection stays on the heading");
     assert!(s.text().contains("enter unfold"));
     s.press(&["left"]); assert!(s.s.folded.contains(&repo("otherbox", "crm")), "← again leaves it folded");

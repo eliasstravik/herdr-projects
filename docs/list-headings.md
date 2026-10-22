@@ -9,16 +9,19 @@ With every machine shown (`Alt+M`, [other machines](other-machines.md)) there is
 machine**, its repos (or status groups) under it, and their tasks under those.
 
 ```
- ▾ vm-str ─────────────────────────────────────────────────────────
- ▾ herdr-projects · HSW
- ◐ HSW-151 Rewrite the board in Rust on Ratatui           47%   3h
- ○ HSW-179 Remove the "To: Coordinator" label          1h ago
-
- ▾ open-crm · CRM
- ○ CRM-4   Explore Open CRM as the next-gen CRM         9h ago
-
- ▸ vm-ssa  1 task ─────────────────────────────────────────────────
+▾ All machines  2 machines · 4 tasks
+  ▾ vm-str
+    ▾ herdr-projects · HSW
+      ◐ HSW-151 Rewrite the board in Rust on Ratatui       47%   3h
+      ○ HSW-179 Remove the "To: Coordinator" label      1h ago
+    ▾ open-crm · CRM
+      ○ CRM-4   Explore Open CRM as the next-gen CRM     9h ago
+  ▸ vm-ssa  1 task
 ```
+
+**Every row sits tight**, at every level and with a filter on or off: no empty line between `All machines` and a
+machine, between machines, between projects or status groups, or between tasks. How far in a row stands, and its bold
+or its colour, say its level.
 
 ## The top row
 

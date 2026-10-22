@@ -42,7 +42,7 @@ fn each_machines_automations_stand_in_its_own_part_and_fold_with_it_by_status_an
     // By status: each machine's automations after its own tasks, under a heading of their own; no machine on a row.
     let text = t(&mut s, 120);
     // Under the top row, All machines: each machine a step in, its groups another, its tasks with them.
-    like(&text, &format!(r"\n ▾ All machines {{2}}2 machines · 2 tasks\n\n   ▾ {}\n     ▾ to do\n[ ▌]    ○ PRJ-1 Mine +0s ago\n\n     ▾ automations\n     ⟳ on {{4}}Look for old dependencies {{2}}every 2h +next in {{2}}2h\n\n     ▾ vm-b\n     ▾ to do\n     ○ #7 +Their task +0s ago\n\n     ▾ automations\n     ⟳ on {{4}}Theirs nightly {{2}}every 5m · far +next in {{2}}4m\n", regex::escape(&here)));
+    like(&text, &format!(r"\n ▾ All machines {{2}}2 machines · 2 tasks\n   ▾ {}\n     ▾ to do\n[ ▌]    ○ PRJ-1 Mine +0s ago\n     ▾ automations\n     ⟳ on {{4}}Look for old dependencies {{2}}every 2h +next in {{2}}2h\n     ▾ vm-b\n     ▾ to do\n     ○ #7 +Their task +0s ago\n     ▾ automations\n     ⟳ on {{4}}Theirs nightly {{2}}every 5m · far +next in {{2}}4m\n", regex::escape(&here)));
     assert!(!text.contains("on vm-b"), "{text}");
     // The web board: the same groups, in the same order.
     assert_eq!(groups(&s).iter().map(|g| (g.0.clone(), g.2.clone())).collect::<Vec<_>>(), vec![("All machines".into(), vec![]), (here.clone(), vec![]), ("to do".into(), vec!["proj/1".into()]), ("automations".into(), vec![row.clone()]),
@@ -81,7 +81,7 @@ fn each_machines_automations_stand_in_its_own_part_and_fold_with_it_by_status_an
     assert_eq!(groups(&s).iter().find(|g| g.0 == "far").unwrap().1, json!("1 task, 1 automation"));
     // On one machine's own board, its automations stand with its tasks there.
     s.press(&["right", "alt+s", "alt+s"]); while s.s.scope != "vm-b" { s.press(&["alt+m"]); } assert!(!s.s.by_repo && !s.s.by_machine);
-    like(&t(&mut s, 120), r"\n[ ▌]  ▾ vm-b {2}1 project · 1 task\n   ▾ to do\n[ ▌]  ○ #7 +Their task +0s ago\n\n   ▾ automations\n[ ▌]  ⟳ on {2}Theirs nightly {2}every 5m · far +next in {2}4m\n");
+    like(&t(&mut s, 120), r"\n[ ▌]  ▾ vm-b {2}1 project · 1 task\n   ▾ to do\n[ ▌]  ○ #7 +Their task +0s ago\n   ▾ automations\n[ ▌]  ⟳ on {2}Theirs nightly {2}every 5m · far +next in {2}4m\n");
 }
 
 #[test]

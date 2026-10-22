@@ -1,15 +1,15 @@
 == the list
  herdr-projects  proj
  All 18   Coords 0   Needs 5   Working 9   Ready 1   To do 2   Done 1   Autos 0
+   ! #12    Max length for task titles                        R#1 PR#123456   1m
+            The pull request's checks fail
    ✗ #13    Max length for task titles                                        1m
             Conflict with main
    ✗ #14    Max length for task titles                                        1m
             Stopped without a summary
-
    ▾ ready to approve
    ◆ #11    Max length for task titles                        R#1 PR#60       1m
             Pass
-
    ▾ working
    ◐ #2     Max length for task titles                                        1m
             Drafting
@@ -17,7 +17,7 @@
             Starting
 ▌  ◐ #5     Max length for task titles                                        1m
 ▌           Found the cause; now checking every caller of the resize handler fo…
- ↓ 9 more · ↑ 3 more
+ ↓ 9 more · ↑ 2 more
 
 ────────────────────────────────────────────────────────────────────────────────
 ❯ Add a task
@@ -26,13 +26,13 @@
 == the task beside it
  herdr-projects  proj
  All 18   Coords 0   Needs 5   Working 9   Ready 1   To do 2   Done 1   Autos 0
+   ✗ #13    Max length for task titles                                        1m
+            Conflict with main
    ✗ #14    Max length for task titles                                        1m
             Stopped without a summary
-
    ▾ ready to approve
    ◆ #11    Max length for task titles                        R#1 PR#60       1m
             Pass
-
    ▾ working
    ◐ #2     Max length for task titles                                        1m
             Drafting
@@ -41,7 +41,7 @@
 ▌  ◐ #5     Max length for task titles                                        1m
 ▌           Found the cause; now checking every caller of the resize handler fo…
 
- ↓ 9 more · ↑ 4 more
+ ↓ 9 more · ↑ 3 more
 
 ────────────────────────────────────────────────────────────────────────────────
 ❯ Add a task
@@ -101,15 +101,15 @@
 == a draft
  herdr-projects  proj
  All 18   Coords 0   Needs 5   Working 9   Ready 1   To do 2   Done 1   Autos 0
+   ! #12    Max length for task titles                        R#1 PR#123456   1m
+            The pull request's checks fail
    ✗ #13    Max length for task titles                                        1m
             Conflict with main
    ✗ #14    Max length for task titles                                        1m
             Stopped without a summary
-
    ▾ ready to approve
    ◆ #11    Max length for task titles                        R#1 PR#60       1m
             Pass
-
    ▾ working
    ◐ #2     Max length for task titles                                        1m
             Drafting
@@ -117,7 +117,7 @@
             Starting
 ▌  ◐ #5     Max length for task titles                                        1m
 ▌           Found the cause; now checking every caller of the resize handler fo…
- ↓ 9 more · ↑ 3 more
+ ↓ 9 more · ↑ 2 more
 
 ────────────────────────────────────────────────────────────────────────────────
 ❯ Hello 日本 🚀

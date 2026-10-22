@@ -28,7 +28,7 @@ fn one_header_line_five_groups_a_mark_for_each_state_and_the_task_panel_from_90_
     let mut s = open(&w.root, 34);
     s.s.sel = b.clone(); s.load(); // it opens on the top row: the task is selected for its panel
     let text = s.screen(120).join("\n");
-    assert!(has(&text, r"^ herdr-projects  proj · PRJ +│ *\n All 2   (Coords \d+   )?Working 1   To do 1 +│[^\n]*\n +│"), "{text}");
+    assert!(has(&text, r"^ herdr-projects  proj · PRJ +│ *\n All 2   (Coords \d+   )?Working 1   To do 1 +│[^\n]*\n ▾ [^\n]*│"), "the top row right under the filter row: {text}");
     let inks = s.inked(120);
     assert_eq!(ink_of(&inks, "◐"), Some((Ink::Yellow, false)), "a working task's mark is the working colour");
     assert_eq!(ink_of(&inks, "My own task"), Some((Ink::Plain, true)), "its title plain, and bold while it lives");

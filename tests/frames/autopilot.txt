@@ -1,9 +1,9 @@
  herdr-projects  proj · PRJ
  All 1   Coordinators 2   Needs you 0   Working 0   Ready 0   To do 1   Done 0   Automations 0
-
  ∞ ▾ HOST  1 project · 1 task
    ∞ ▾ proj · PRJ
 ▌    ○ PRJ-1 Fix the docs index                                                               0s ago
+
 
 
 
@@ -17,10 +17,10 @@
 
  herdr-projects  proj · PRJ
  All 1   Coords 2   To do 1
-
  ∞ ▾ HOST  1 project · 1 task
   ∞ ▾ proj · PRJ
 ▌  ○ PRJ-1 Fix the docs index
+
 
 
 

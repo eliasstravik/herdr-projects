@@ -8,7 +8,7 @@ use crate::board::state::{Mode, Rec, Row, State};
 use crate::board::theme::Theme;
 use crate::board::update::coords::{MACHINE_INK, REPO_HEAD_INK};
 use crate::board::update::heads::is_head;
-use crate::board::update::list::{counts, fold_rows, heading_height};
+use crate::board::update::list::{counts, fold_rows};
 use crate::json::*;
 use crate::shown::ink::{Ink, Inked};
 use crate::shown::states::group_ink;
@@ -166,8 +166,8 @@ pub fn list_lines(s: &mut State, t: &Theme, width: usize, h: usize, screen: usiz
         let (n_in, width) = (ind[k], width.saturating_sub(ind[k]));
         match r {
             Row::Head { id, .. } => {
-                if heading_height(&rows, k) > 1 { lines.push(L { head: true, ..line(Inked::new()) }); }
-                // An open heading at the foot of what shows goes with the empty line above it; a folded one is a row.
+                // Every row sits tight, a heading too: its indent and its ink say its level. An open one at the foot of
+                // what shows goes; a folded one is a row.
                 let text = heading(s, t, &rows, k, width);
                 let sel = !id.is_empty() && *id == s.sel;
                 lines.push(L { head: !r.shut() && holds(k), sel, id: id.clone(), ..line(pad(n_in, text)) });

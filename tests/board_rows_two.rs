@@ -181,20 +181,20 @@ fn a_list_taller_than_its_room_shows_fewer_done_rows_first_down_to_the_newest_on
     let look = |s: &mut State, h: usize| { let lines: Vec<String> = list(s, 60, h, SCREEN).iter().map(|l| l.trim_end().to_string()).collect(); let d = lines.iter().filter(|l| l.contains("Finished")).count(); let note = lines.iter().find(|l| l.contains("more")).cloned(); (lines, d, note) };
     let note = |n: usize| Some(format!("     ↓ {n} more done ({} shows them)", key_name("allDone")));
     let done_rows = |s: &State| s.rows.iter().filter(|r| matches!(r, Row::Rec(o) if o.s("state") == "done")).count();
-    // Room for all of it: the usual fold, the latest five. The top row 2, working 1+6, done 2+5+1, to do 2+1 = 20 lines.
+    // Room for all of it: the usual fold, the latest five. The top row 1, working 1+6, done 1+5+1, to do 1+1 = 17 lines.
     let (_, d, n) = look(&mut s, 30); assert_eq!((d, n), (5, note(3)));
-    assert_eq!(look(&mut s, 20).1, 5);
+    assert_eq!(look(&mut s, 17).1, 5);
     // Each line short takes one done row away, and the note counts it.
-    let (_, d, n) = look(&mut s, 19); assert_eq!((d, n), (4, note(4)));
-    let (_, d, n) = look(&mut s, 17); assert_eq!((d, n), (2, note(6)));
-    for h in [19, 18, 17, 16] { let (lines, _, _) = look(&mut s, h); assert!(lines.iter().any(|l| l.contains("Working 3")) && lines.iter().any(|l| l.contains("Later")), "everything else is in view at {h}"); assert_eq!(s.top, 0); }
+    let (_, d, n) = look(&mut s, 16); assert_eq!((d, n), (4, note(4)));
+    let (_, d, n) = look(&mut s, 14); assert_eq!((d, n), (2, note(6)));
+    for h in [16, 15, 14, 13] { let (lines, _, _) = look(&mut s, h); assert!(lines.iter().any(|l| l.contains("Working 3")) && lines.iter().any(|l| l.contains("Later")), "everything else is in view at {h}"); assert_eq!(s.top, 0); }
     // The newest one always stays; under that the list scrolls, as it always did.
-    let (_, d, n) = look(&mut s, 16); assert_eq!((d, n), (1, note(7)));
+    let (_, d, n) = look(&mut s, 13); assert_eq!((d, n), (1, note(7)));
     assert_eq!(done_rows(&s), 1);
     assert_eq!(s.rows.iter().find_map(|r| if let Row::Rec(o) = r { (o.s("state") == "done").then(|| o.t("id")) } else { None }), Some("p/10".to_string()));
     look(&mut s, 8); assert_eq!(done_rows(&s), 1);
     // More room brings them back; the selected task is never folded away; all done, or a search, folds nothing.
     assert_eq!(look(&mut s, 30).1, 5);
-    s.sel = "p/16".into(); s.rows = fold_rows(&mut s); assert!(look(&mut s, 16).0.iter().any(|l| l.contains("Finished 7")));
+    s.sel = "p/16".into(); s.rows = fold_rows(&mut s); assert!(look(&mut s, 13).0.iter().any(|l| l.contains("Finished 7")));
     s.sel = "p/1".into(); s.whole = true; s.rows = fold_rows(&mut s); assert_eq!(look(&mut s, 30).1, 8); assert_eq!(done_rows(&s), 8);
 }

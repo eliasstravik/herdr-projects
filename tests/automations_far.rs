@@ -94,7 +94,7 @@ fn other_machines_automations_are_in_the_list_with_their_machine_named_and_are_c
     let text = t(&mut s, 140);
     like(&text, r"\n     ⟳ on {4}Look for old dependencies {2}every 2h +next in {2}2h\n"); // its repo is the one the board shows: not said
     // in the part of the machine that has it, a group of its own after that machine's tasks; its machine is its heading, not on its row
-    like(&text, r"\n     ▾ vm-b\n     ▾ to do\n     ○ #7 +Theirs nightly +0s ago\n\n     ▾ automations\n     ⟳ on {4}Theirs nightly {2}every 5m · far +○ #7 next in {2}4m\n"); // another repo: said; and the task it made there
+    like(&text, r"\n     ▾ vm-b\n     ▾ to do\n     ○ #7 +Theirs nightly +0s ago\n     ▾ automations\n     ⟳ on {4}Theirs nightly {2}every 5m · far +○ #7 next in {2}4m\n"); // another repo: said; and the task it made there
     assert!(!text.contains("on vm-b"), "{text}");
     // folded, the machine's one line says what it holds, and its automations go with it
     let head = sw::board::update::heads::machine_id("vm-b");

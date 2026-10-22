@@ -36,20 +36,20 @@ fn the_group_has_a_colour_of_its_own_narrow_rows_a_menu_of_its_own_and_stays_wit
     l::turn(all[2].s("id"), false).unwrap(); s.s.sel = "proj/1".into(); s.load();
     let lines = s.screen(120);
     // every name starts where the task's title starts; "2h" ends where the task's "0s" does, and "never fired" at the right edge
-    for (n, name) in [(8, "Look"), (9, "Release"), (10, "Nightly")] { assert_eq!(col(&lines[n], name), col(&lines[5], "Mine"), "{}", lines[n]); }
-    assert_eq!(lines[8].chars().count(), col(&lines[5], " ago")); assert_eq!(lines[9].chars().count(), lines[5].chars().count());
+    for (n, name) in [(6, "Look"), (7, "Release"), (8, "Nightly")] { assert_eq!(col(&lines[n], name), col(&lines[4], "Mine"), "{}", lines[n]); }
+    assert_eq!(lines[6].chars().count(), col(&lines[4], " ago")); assert_eq!(lines[7].chars().count(), lines[4].chars().count());
     // a colour of its own: the heading and the mark of one that is on are the automations' ink, which no status has; off is not
     let inked = s.inked(120);
-    assert_eq!(ink_of(&inked[7], "automations"), Some(Ink::Auto)); assert_eq!(ink_of(&inked[8], "⟳"), Some(Ink::Auto));
+    assert_eq!(ink_of(&inked[5], "automations"), Some(Ink::Auto)); assert_eq!(ink_of(&inked[6], "⟳"), Some(Ink::Auto));
     let quiet = |l: &sw::shown::ink::Inked| l.0.iter().find(|p| p.t.contains('⟳')).map(|p| p.quiet).unwrap();
-    assert!(!quiet(&inked[8]) && quiet(&inked[10]), "off: the same mark, dimmed");
+    assert!(!quiet(&inked[6]) && quiet(&inked[8]), "off: the same mark, dimmed");
     s.press(&["down"]); assert_eq!(s.s.sel, "head:status\t\tautomations", "the group's heading first: it folds as the others do"); s.press(&["down"]); assert_eq!(s.s.sel, row_id(&all[0]));
     assert_eq!(s.screen(60).last().unwrap(), "  enter open this automation · ? all keys", "the hints that give way are whole ones");
     // narrower still: what a row says wraps under its name as a live task's does, and nothing is cut with …
     let tight = s.screen(34);
     let from = tight.iter().position(|l| l == "  ⟳ on    Release note after a").unwrap();
     assert_eq!(tight[from..from + 5].to_vec(), ["  ⟳ on    Release note after a", "          merge", "          when a task is merged,", "          in every repo", "                       never fired"]);
-    assert!(!tight[6..from + 8].iter().any(|l| l.contains('…')), "{}", tight.join("\n"));
+    assert!(!tight[4..from + 8].iter().any(|l| l.contains('…')), "{}", tight.join("\n"));
     let thirty = s.screen(30); let at = thirty.iter().position(|l| l == "▌ ⟳ on    Look for old").unwrap_or_else(|| panic!("{thirty:#?}"));
     assert_eq!(thirty[at..at + 3].to_vec(), ["▌ ⟳ on    Look for old", "▌         dependencies", "▌         every 2h  next in 2h"]);
     // too narrow for the tasks' numbers: they go, the names still start where the task's title does, and on or off is the first word under each
@@ -58,7 +58,7 @@ fn the_group_has_a_colour_of_its_own_narrow_rows_a_menu_of_its_own_and_stays_wit
     assert!(at(r"^ +○ Mine") > 0);
     like(&tiny[at(r"^▌ ⟳ Look for old") + 2], r"^▌ {3}on · every 2h"); like(&tiny[at(r"^  ⟳ Release note") + 2], r"^ {4}on · when a task"); like(&tiny[at(r"^  ⟳ Nightly audit") + 1], r"^ {4}off · daily 03:00");
     // off, tab would only say so: its hint goes
-    s.press(&["space"]); like(&s.screen(120)[8], r"^▌  ⟳ off {3}Look for old dependencies {2}every 2h +never fired");
+    s.press(&["space"]); like(&s.screen(120)[6], r"^▌  ⟳ off {3}Look for old dependencies {2}every 2h +never fired");
     assert_eq!(s.screen(140).last().unwrap(), "  enter open this automation · space turn this automation on · ctrl+x remove it · ctrl+e its settings · ? all keys");
     s.press(&["space", "ctrl+s"]);
     like(&t(&mut s, 120), r"\n▌  ⟳ on {4}Look for old dependencies {2}every 2h +◇ PRJ-2 next in {2}2h\n"); // the task its last firing made, by that task's own mark and number
@@ -84,7 +84,7 @@ fn the_group_has_a_colour_of_its_own_narrow_rows_a_menu_of_its_own_and_stays_wit
     // with no task at all the group is still there
     for x in sw::store::tasks::list(Default::default()) { sw::store::tasks::patch(x.s("id"), |t| t.put("archivedAt", sw::clock::now())).unwrap(); }
     s.load();
-    like(&t(&mut s, 120), r"^ herdr-projects {2}proj · PRJ\n +All 0 +Coordinators [^\n]*\n\n ▾ \S+  0 projects · 0 tasks\n   ▾ automations\n[ ▌]  ⟳ on {2}Look for old dependencies");
+    like(&t(&mut s, 120), r"^ herdr-projects {2}proj · PRJ\n +All 0 +Coordinators [^\n]*\n ▾ \S+  0 projects · 0 tasks\n   ▾ automations\n[ ▌]  ⟳ on {2}Look for old dependencies");
 }
 
 #[test]

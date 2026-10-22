@@ -247,7 +247,7 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
         rows
     };
     // No task gives way for an automation: theirs are not counted.
-    let lines_of = |rows: &[Row], s: &State| -> usize { let ind = super::depth::indents(rows, s.list_width); rows.iter().enumerate().map(|(n, r)| match r { Row::Head { .. } => heading_height(rows, n), Row::Rec(o) => crate::board::view::row_wrap::row_height(s, o, s.list_width.saturating_sub(ind[n]), s.list_tall), Row::Auto(_) => 0, _ => 1 }).sum() };
+    let lines_of = |rows: &[Row], s: &State| -> usize { let ind = super::depth::indents(rows, s.list_width); rows.iter().enumerate().map(|(n, r)| match r { Row::Rec(o) => crate::board::view::row_wrap::row_height(s, o, s.list_width.saturating_sub(ind[n]), s.list_tall), Row::Auto(_) => 0, _ => 1 }).sum() };
     let over = |rows: &[Row], s: &State| !s.whole && s.list_room > 0 && lines_of(rows, s) > s.list_room;
     let mut keep = DONE_SHOWN;
     let mut rows = lay(keep, usize::MAX, s);
@@ -258,13 +258,6 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
     let live = rows.iter().any(|r| matches!(r, Row::Rec(o) if is_live(o)));
     while live && todos > 1 && over(&rows, s) { todos -= 1; rows = lay(keep, todos, s); }
     rows
-}
-/// The lines the heading at `n` takes: an empty line above it, but for a group's heading right under its machine's
-/// (and a project's right under another open heading).
-pub fn heading_height(rows: &[Row], n: usize) -> usize {
-    // Under Coordinators a project's row follows the open rows above it with nothing between (shows.rs: coord_rows).
-    let project = |r: &Row| matches!(r, Row::Head { id, .. } if id.starts_with(&format!("{}repo\t", super::heads::HEAD)));
-    if n > 0 && (matches!(rows[n - 1], Row::Head { machine: true, folded: 0, empty: false, .. }) || (project(&rows[n]) && n > 1 && matches!(&rows[n - 1], Row::Head { folded: 0, empty: false, .. }))) { 1 } else { 2 }
 }
 /// A row the arrow keys stop on: a task, an automation or a heading.
 pub fn step_id(r: &Row) -> Option<String> { match r { Row::Rec(o) => Some(o.t("id")), Row::Auto(a) => Some(a.t("row")), Row::Head { id, .. } if !id.is_empty() => Some(id.clone()), _ => None } }

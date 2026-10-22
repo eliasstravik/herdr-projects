@@ -78,18 +78,18 @@ fn narrow_screen_the_fold_counts_wrapped_lines_so_the_more_lines_still_keep_the_
     struct L { lines: Vec<String>, done: usize, later: usize, more: Option<String>, folded: Option<String> }
     let look = |s: &mut State, h: usize| { let lines = plain(&drawn(s, 49, h)); L { done: lines.iter().filter(|l| l.contains("Finished")).count(), later: lines.iter().filter(|l| l.contains("Later")).count(), more: lines.iter().find(|l| l.contains("more to do")).cloned(), folded: lines.iter().find(|l| l.contains("more done (")).cloned(), lines } };
     let folded = |n: usize| Some(format!("    ↓ {n} more done ({} shows them)", sw::board::keys::key_name("allDone")));
-    // Room for all of it: the top row 2, working 1+5 (two lines of name, two of words, the progress), to do 2+6, done 2+5+1 = 24.
-    let l = look(&mut s, 24); assert_eq!((l.done, l.later, l.more, l.folded), (5, 6, None, folded(3)));
+    // Room for all of it: the top row 1, working 1+5 (two lines of name, two of words, the progress), to do 1+6, done 1+5+1 = 21.
+    let l = look(&mut s, 21); assert_eq!((l.done, l.later, l.more, l.folded), (5, 6, None, folded(3)));
     // One line short, and it is the wrapped lines that are counted: a done row gives way.
-    let l = look(&mut s, 23); assert_eq!((l.done, l.later), (4, 6));
-    let l = look(&mut s, 20); assert_eq!((l.done, l.later, l.folded), (1, 6, folded(7)));
-    let l = look(&mut s, 18); assert_eq!((l.later, l.more), (3, Some("    ↓ 3 more to do".to_string())));
-    for h in [24, 23, 20, 18] { assert!(look(&mut s, h).lines.iter().any(|l| l.contains("Research capy")), "the live row is in view at {h}"); assert_eq!(s.top, 0); }
+    let l = look(&mut s, 20); assert_eq!((l.done, l.later), (4, 6));
+    let l = look(&mut s, 17); assert_eq!((l.done, l.later, l.folded), (1, 6, folded(7)));
+    let l = look(&mut s, 15); assert_eq!((l.later, l.more), (3, Some("    ↓ 3 more to do".to_string())));
+    for h in [21, 20, 17, 15] { assert!(look(&mut s, h).lines.iter().any(|l| l.contains("Research capy")), "the live row is in view at {h}"); assert_eq!(s.top, 0); }
     // The selected row growing to its whole name takes lines from the rows that give way, not from the screen.
     let wordy: Vec<Rec> = list.iter().map(|r| if r.s("id") == "p/10" { with(r, json!({ "title": format!("Later 1 {}", words(20, "word")) })) } else { r.clone() }).collect();
     let mut w = board(&wordy, "p/10", "");
-    let lines = plain(&drawn(&mut w, 49, 24));
-    assert_eq!(lines.len(), 24); assert!(lines.iter().any(|l| l.ends_with("word20")), "{}", lines.join("\n"));
+    let lines = plain(&drawn(&mut w, 49, 21));
+    assert_eq!(lines.len(), 21); assert!(lines.iter().any(|l| l.ends_with("word20")), "{}", lines.join("\n"));
     let grown = row_height(&w, wordy.iter().find(|r| r.s("id") == "p/10").unwrap(), 49, true) - 1;
     assert!(grown >= 2); assert_eq!(lines.iter().filter(|l| l.contains("Finished")).count(), 5 - grown); assert_eq!(w.top, 0);
 }
