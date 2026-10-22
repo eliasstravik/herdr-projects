@@ -76,7 +76,7 @@
                 agent: a task's, or a machine's or a
                 project's coordinator
    space        talk to this row's agent, and back to the
- ↓ 64 more
+ ↓ 66 more
 
 ────────────────────────────────────────────────────────────
 ❯ Add a task

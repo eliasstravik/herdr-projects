@@ -89,10 +89,10 @@
                 last one)
    ?            this menu
    y  n         answer a question: y yes, n or esc no (enter never confirms)
+   /            typed first: pick a skill of whom you talk to
 
  ctrl: does something
-   ctrl+l       yes: approve the merge, say yes, retry, take it as it is
- ↓ 46 more
+ ↓ 47 more
 
 ────────────────────────────────────────────────────────────────────────────────
 ❯ Add a task

@@ -11,6 +11,11 @@ use sw::agents::start::{start_args, StartOpts};
 use sw::store::settings::change::set_value;
 use sw::store::settings::lookup::Scope;
 
+/// The skills and commands a program takes in its chat, read where it keeps them.
+mod skills;
+/// The skills of the other programs the herdr web UI lists them for.
+mod skills_more;
+
 fn args(k: &str, o: StartOpts) -> Vec<String> { start_args(k, &o).unwrap() }
 fn opts(model: &str, effort: &str) -> StartOpts { StartOpts { model: model.into(), effort: effort.into(), ..Default::default() } }
 fn has(text: &str, re: &str) -> bool { regex::Regex::new(re).unwrap().is_match(text) }

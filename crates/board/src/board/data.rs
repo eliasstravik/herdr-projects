@@ -51,14 +51,16 @@ pub struct Data {
     pub call: Option<Obj>, pub call_ended: Option<(String, String)>,
     /// Your settings ("") or your entry for a repo, while the settings page shows them: which, and its rows and problems.
     pub mine: Option<(String, Value)>,
+    /// The skills the text box offers while a draft could start one (skills.rs): whose (`Wants::skills`), and the list.
+    pub skills: Option<(String, Vec<crate::agents::skills::Skill>)>,
     pub loaded: bool,
     /// Which read this is (`reads_started`), counted from the program's start.
     pub seq: u64,
 }
 /// What the board wants a closer look at. `mine`: your settings (`Some("")`) or your entry for a repo, for the
-/// settings page.
+/// settings page. `skills`: whose skills the text box offers ("" none: update/skills.rs).
 #[derive(Clone, Debug, Default)]
-pub struct Wants { pub ids: Vec<String>, pub cwd: String, pub own_pane: String, pub web: bool, pub coord: String, pub mine: Option<String>, pub looks: Vec<String> }
+pub struct Wants { pub ids: Vec<String>, pub cwd: String, pub own_pane: String, pub web: bool, pub coord: String, pub mine: Option<String>, pub looks: Vec<String>, pub skills: String }
 
 /// The repo the board is in, worked out once for each folder: a busy lock keeps what was known.
 pub fn repo_here(cwd: &str) -> (String, String) {
@@ -95,13 +97,14 @@ pub fn load(wants: &Wants) -> Data {
     let looks = looks(&socket, &wants.looks);
     // A project's whose repo folder is gone has no row: as a repo's heading, it would lead nowhere.
     let coords = crate::coordinator::state::all(&socket).into_iter().filter(|c| !c.is_top() && c.repo().is_none_or(|r| roots.get(r).is_some_and(|f| std::path::Path::new(f).is_dir()))).map(|c| c.to()).collect();
+    let skills = crate::board::skills::read(&wants.skills, &socket, &coord, sub.as_ref());
     Data {
         items, autos, jobs, coord, coord_screen, sub, looks, coords, can_dispatch: crate::coordinator::who::ready(&socket), keys: repo_keys(), repos: roots.keys().cloned().collect(), roots, lately,
         session: session_name(&socket), notify: setting("board.notify", None).as_str().unwrap_or("").to_string(),
         repo: here.0, repo_root: here.1, host: crate::remote::check::hostname(),
         // herdr's approve action and a line left by the board key are for a board in a terminal, never the web board.
         approve: if wants.web { String::new() } else { crate::actions::finish_line::take_approve(&socket, &wants.own_pane) }, heard: if wants.web { None } else { crate::board::run::say::heard(&wants.own_pane, &socket) }, call: crate::voice::call::get(), call_ended: crate::voice::call::last().filter(|c| c.s("state") == "ended").map(|c| (c.t("id"), c.t("why"))),
-        mine: wants.mine.as_ref().map(|r| (r.clone(), mine(r))), pilots: crate::autopilot::far::sent(&socket, now), loaded: true, seq,
+        mine: wants.mine.as_ref().map(|r| (r.clone(), mine(r))), skills, pilots: crate::autopilot::far::sent(&socket, now), loaded: true, seq,
     }
 }
 /// How this machine's coordinators of these levels stand ("*": every one that was ever talked to, and the machine's).

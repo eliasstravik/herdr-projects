@@ -23,10 +23,10 @@ fn the_menus_legend_is_reached_with_the_arrows_in_a_short_window_and_whole_in_a_
     s.press(&["?"]);
     let n = sw::board::update::menu::items(&s.s).len() as i64;
     s.press(&["down"]); assert_eq!(s.s.menu.as_ref().unwrap().at, 0, "the menu opens with no line picked: the first ↓ picks the first");
-    for rows in [60, 24, 14] {
+    for rows in [70, 24, 14] {
         s.rows = rows;
         let top = s.text();
-        if rows == 60 {
+        if rows == 70 {
             assert!(has(&top, LEGEND), "{top}");
             assert!(has(&top, r"\n on a row *\n[ ▌]  ◐ +an agent works *\n[ ▌]  ◑ +its reviewer works *\n"), "{top}");
             assert!(has(&top, r"\n[ ▌]  ◆ +ready to approve *\n") && has(&top, r"\n[ ▌]  65% 2m left +how far it is, and the time left"), "{top}");

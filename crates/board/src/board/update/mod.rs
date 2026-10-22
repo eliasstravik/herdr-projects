@@ -110,5 +110,6 @@ pub mod remotes;
 pub mod setup;
 pub mod shows;
 pub mod size;
+pub mod skills;
 pub mod web;
 pub mod web_ui;

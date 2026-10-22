@@ -1199,6 +1199,7 @@ dependencies = [
  "toml",
  "unicode-segmentation",
  "unicode-width",
+ "yaml-rust2",
 ]
 
 [[package]]

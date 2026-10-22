@@ -41,6 +41,7 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
         return (vec![Hint { key: String::new(), words: w, stays: false, short, shortest, ..Default::default() }], chat_key);
     }
     if s.menu.is_some() { return (vec![plain(arrows, "pick a key"), plain(enter, "press it"), plain(esc, "close the menu")], chat_key); }
+    if !crate::board::update::skills::shown(s).is_empty() { return (vec![plain(arrows, "pick a skill"), plain(format!("{tab} {enter}"), "put it in the box"), plain(esc, "close the list")], chat_key); }
     if let Some(e) = &s.editing {
         return (if !e.typing.is_empty() { vec![plain(enter, "save this value"), plain(esc, "leave it as it is")] } else { vec![plain(pair(K::Up), "move"), plain(enter, "change"), plain(name(K::PutBack), "put back"), plain(esc, if e.whose.mine() { "back to the list" } else { "back to the task" })] }, chat_key);
     }

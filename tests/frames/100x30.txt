@@ -105,6 +105,7 @@
    esc          back, one step at a time (as a popup, the board closes on the last one)
    ?            this menu
    y  n         answer a question: y yes, n or esc no (enter never confirms)
+   /            typed first: pick a skill of whom you talk to
 
  ctrl: does something
    ctrl+l       yes: approve the merge, say yes, retry, take it as it is
@@ -115,8 +116,7 @@
    ctrl+p       pin this task to the top
    ctrl+e       this task's settings: see and change each one
                 your own settings: what every task starts from
-   ctrl+z       undo
- ↓ 36 more
+ ↓ 37 more
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯ Add a task
