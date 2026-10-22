@@ -101,6 +101,7 @@ pub mod edit;
 pub mod edit_coord;
 pub mod keys;
 pub mod landing;
+pub mod link;
 pub mod menu;
 pub mod mouse;
 pub mod paste;
