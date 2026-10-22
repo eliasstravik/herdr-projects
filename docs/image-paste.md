@@ -19,7 +19,8 @@ place, so the agent opens the picture as before.
 - **A path that comes as keys** (a terminal that does not mark a paste as one types it in, key by key): herdr's own is
   a chip the moment its name is whole; any other picture's path once you type a space after it.
 - **What stays words:** a path that is no picture or no file here, and `[Image 1]` you type yourself while the
-  message has no first picture.
+  message has no first picture. A picture whose chip would take a name that already stands as words (`[Image 1]`
+  typed or pasted, in the box or in the paste) stays its path, so those words are sent as they are.
 - **A space on either side:** the chip never touches the word or the chip before or after it, also when a picture is
   pasted or typed right after another chip.
 - **One character:** the arrows step over a chip whole, backspace after it or delete before it takes it out whole, and
