@@ -105,15 +105,39 @@ Tasks stand in five groups, in the order they need you:
 - **The archive** (`Alt+A`) is a list of its own, newest first, outside this order. `Ctrl+A` archives the selected
   task, and restores it there. Archiving closes the task's own space (its agent ends) and frees its temporary files;
   its worktree, branch and history stay. Restoring starts nothing.
-  - **A repo's done tasks in one go:** when a round of work is over, its done tasks are clutter. Grouped by repo
-    (`Alt+S`), `Ctrl+A` on a repo's heading asks `Archive the 50 done tasks of mstars?` and, on `y`, archives every done
-    task of that repo. The heading's hint line says so while it has done tasks to archive. A task that works, waits,
-    is to do or is pinned stays; the message says how many were left out and why. Each goes as one archive does: its
-    space closes, its worktree stays. Only this machine's repos.
-  - From the shell: `herdr-projects archive --done --repo mstars` (`Archived 50 done tasks of mstars. Left out: 1 done
-    but pinned, 2 working.`); without `--repo`, every repo's done tasks. Nothing archives them by itself.
+  - **A whole project:** [archiving a project](#archiving-a-project), below.
+  - **A repo's done tasks in one go**, from the shell: when a round of work is over, its done tasks are clutter.
+    `herdr-projects archive --done --repo mstars` (`Archived 50 done tasks of mstars. Left out: 1 done but pinned, 2
+    working.`) archives every done task of that repo; without `--repo`, every repo's. A task that works, waits, is to
+    do or is pinned stays. Each goes as one archive does: its space closes, its worktree stays. Nothing archives them
+    by itself.
 - **Automations** are a group of their own after the task groups, inside their machine's part of the list (by repo:
   under their repo) ([below](#automations-in-the-list)).
+
+### Archiving a project
+
+A project you are done with for now leaves the board whole, and comes back as it was.
+
+- **`Ctrl+A` on a project's row** (a repo's heading, grouped by repo, `Alt+S`) archives the project with every task
+  of it. When one of them works, waits or is to do, it asks first and says what happens to them:
+  `Archive mstars and its 6 tasks?` `1 working, 1 waiting and 4 done: all 6 go to the archive with it, as they are,
+  and come back with it; an agent on one stops.` With only done tasks (or none), it goes at once. A merge under way holds it up: the
+  key says which task merges.
+- **What goes:** its row and its tasks leave the board (each archived as one task is: its space closes, its worktree
+  stays), an agent at work or waiting for you is stopped first, its project coordinator stops (its autopilot goes
+  off), and its automations are turned off. An empty repo used lately no longer keeps a row for it. A new task in it
+  is refused (`mstars is archived. herdr-projects restore --repo mstars brings it back, with its tasks.`), and so is
+  a message to its coordinator.
+- **Nothing is deleted:** not its folder, its worktrees, its branches, its pull requests, its settings or its tasks.
+- **In the archive** (`Alt+A`) it has its own heading, with the tasks archived with it under it, whatever the
+  grouping; the header counts it (`archive · 1 project, 8 archived`). `Ctrl+A` on that heading restores it at once:
+  every task archived with it comes back as it was (to do is to do again, done is done; one that was stopped stays
+  stopped until you start it), and its automations are on again. Its coordinator starts with your next message to it,
+  as a stopped one does. A task you had archived on its own before stays in the archive.
+- **From the shell:** `herdr-projects archive --repo mstars` (`Archived mstars and its 6 tasks. Stopped first:
+  MST-4.`) and `herdr-projects restore --repo mstars` (`Restored mstars and its 6 tasks.`). They do not ask.
+- The web board does the same with the same key, on a project's row and in the archive. Only this machine's projects:
+  another machine's are archived there.
 
 ### The list says what it hides
 

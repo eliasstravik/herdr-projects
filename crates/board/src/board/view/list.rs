@@ -31,7 +31,8 @@ pub fn head_lines(s: &mut State, t: &Theme, w: usize, h: usize) -> Vec<Inked> {
     // The counts of each status are on the filter row; the archive has none, so its count stays here.
     // The repo with its key beside it (`gtm-agent · AGT`), in the header's quiet ink as the rest of it.
     let where_ = if s.archive_view { "archive".to_string() } else { crate::board::tags::repo_with_key(&repo_label(&s.data.repo), s.data.keys.get(&s.data.repo).map(|k| k.as_str()).unwrap_or("")) };
-    let tally: Vec<String> = if s.archive_view { vec![format!("{} archived", c("archived"))] } else { vec![] };
+    let projects = match s.data.archived.len() { 0 => String::new(), 1 => "1 project, ".into(), p => format!("{p} projects, ") };
+    let tally: Vec<String> = if s.archive_view { vec![format!("{projects}{} archived", c("archived"))] } else { vec![] };
     let mut rest: Vec<String> = vec![];
     if s.scope.is_empty() || s.scope == "*" || s.archive_view { rest.push(where_); }
     rest.extend(tally);
@@ -84,7 +85,7 @@ fn heading(s: &State, t: &Theme, rows: &[Row], at: usize, width: usize) -> Inked
     let Row::Head { name, autos, machine, folded, folded_autos, id, .. } = r else { return Inked::new() };
     let top = *id == crate::board::update::top::top_id(s);
     let project = id.starts_with(&format!("{}repo\t", crate::board::update::heads::HEAD));
-    let key = if s.by_repo { crate::board::tags::heading_key(s, at) } else { String::new() };
+    let key = if s.by_repo || (project && s.archive_view) { crate::board::tags::heading_key(s, at) } else { String::new() };
     let named = if *autos { Inked::of(name.clone(), Ink::Auto) } else if *machine || top { Inked::of(name.clone(), MACHINE_INK).bold() } else if s.by_repo || project { Inked::of(crate::board::update::heads::repo_shown(s, id.split('\t').nth(1).unwrap_or(""), name), REPO_HEAD_INK) } else { Inked::of(name.clone(), group_ink(name)) };
     let mut named = if key.is_empty() { named } else { named.add(Inked::of(format!(" · {key}"), Ink::Muted)) };
     let caret = if id.is_empty() { Inked::plain("  ") } else { Inked::of(if r.shut() { "▸ " } else { "▾ " }, Ink::Muted) };

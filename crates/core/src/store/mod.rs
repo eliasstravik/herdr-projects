@@ -1,6 +1,7 @@
 //! Tasks on disk, locks and settings. No herdr calls here: this part only knows files. One folder per task:
 //! <data>/tasks/<repo>/<n>/ holding task.json, inbox.jsonl and artifacts/. task.json is the whole truth the board owns
 //! about a task; what herdr knows (agent status) is read live.
+pub mod archived_repos;
 pub mod attached;
 pub mod attempts;
 pub mod automations;

@@ -88,7 +88,7 @@ fn paste(s: &mut State, text: &str) {
     if s.mode == super::state::Mode::Find { list::relist(s); }
 }
 pub mod actions;
-pub mod archive_done;
+pub mod archive_project;
 pub mod autos;
 pub mod beat;
 pub mod call;

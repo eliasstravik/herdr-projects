@@ -15,8 +15,12 @@ pub const HEAD: &str = "head:";
 pub fn is_head(id: &str) -> bool { id.starts_with(HEAD) }
 /// A machine's heading: `head:machine` and its name ("" this machine).
 pub fn machine_id(host: &str) -> String { format!("{HEAD}machine\t{host}") }
-/// A group's heading, under its machine: grouped by repo and by status each fold their own.
-pub fn group_id(s: &State, host: &str, name: &str) -> String { format!("{HEAD}{}\t{host}\t{name}", if s.by_repo { "repo" } else { "status" }) }
+/// A group's heading, under its machine: grouped by repo and by status each fold their own. An archived project's in
+/// the archive is a repo's, whatever the grouping.
+pub fn group_id(s: &State, host: &str, name: &str) -> String { format!("{HEAD}{}\t{host}\t{name}", if s.by_repo || archived_head(s, host, name) { "repo" } else { "status" }) }
+/// Whether `name` is an archived project of this machine with its own heading here: in the archive, whatever the
+/// grouping (update/archive_project.rs), with its tasks under it, or alone (`0 tasks`).
+pub fn archived_head(s: &State, host: &str, name: &str) -> bool { s.archive_view && host.is_empty() && (s.scope.is_empty() || s.scope == "*") && s.data.archived.iter().any(|r| r == name) }
 /// The machine a task is on: "" this machine, else the name the board knows it by.
 pub fn host_of(r: &Obj) -> String { r.t("host") }
 /// A repo's name as its row reads on the machine `host` ("" this one): the home folder as `~`, there too (another
@@ -98,7 +102,8 @@ pub fn fold_key(s: &mut State, shut: bool, fx: &mut Vec<Effect>) {
 pub fn toggle(s: &mut State, id: &str, fx: &mut Vec<Effect>) {
     if let Some(Row::Head { name, machine, empty: true, .. }) = s.rows.iter().find(|r| matches!(r, Row::Head { id: h, .. } if h == id)) {
         let talk = crate::board::keys::key_name("talk");
-        let say = if *machine { format!("No tasks on {name} yet. {talk} talks to its machine coordinator, which adds them there.") }
+        let say = if s.archive_view { format!("{} was archived with no tasks. {} brings it back.", crate::shown::words::repo_label(name), crate::board::keys::key_name("archive")) }
+            else if *machine { format!("No tasks on {name} yet. {talk} talks to its machine coordinator, which adds them there.") }
             else { format!("No tasks in {} yet. {talk} talks to its project coordinator, which adds them there.", crate::shown::words::repo_label(name)) };
         s.sel = id.to_string();
         return s.flash(say, Ink::Muted);
