@@ -29,6 +29,7 @@ pub fn label(s: &State, k: K, r: Option<&Obj>) -> String {
             _ => if r.map(|r| r.b("archivedAt")).unwrap_or(false) { "restore this task".into() } else { "archive this task".into() },
         },
         K::Pin => if r.map(|r| r.b("pinned")).unwrap_or(false) { "unpin this task".into() } else { "pin this task to the top".into() },
+        K::OpenLink => r.and_then(super::link::of).map(|(what, _)| format!("open its {what} in the browser")).unwrap_or_default(),
         K::Settings => match (&s.editing, r) {
             (Some(e), _) if e.whose.mine() => "back from your settings".into(),
             (Some(_), _) => "back from this task's settings".into(),

@@ -8,6 +8,7 @@ pub mod endings;
 pub mod fixtures;
 pub mod gh;
 pub mod herdr;
+pub mod opener;
 pub mod panes;
 pub mod pilot;
 pub mod worktrees;
@@ -23,7 +24,7 @@ use sw::json::*;
 static ONE: Mutex<()> = Mutex::new(());
 pub fn one_at_a_time() -> MutexGuard<'static, ()> { ONE.lock().unwrap_or_else(|e| e.into_inner()) }
 static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-pub struct World { pub base: PathBuf, pub root: PathBuf, pub fake: Rc<herdr::FakeHerdr>, pub gh: Rc<gh::FakeGh>, pub socket: String, _listen: std::os::unix::net::UnixListener, _one: MutexGuard<'static, ()> }
+pub struct World { pub base: PathBuf, pub root: PathBuf, pub fake: Rc<herdr::FakeHerdr>, pub gh: Rc<gh::FakeGh>, pub opener: Rc<opener::FakeOpener>, pub socket: String, _listen: std::os::unix::net::UnixListener, _one: MutexGuard<'static, ()> }
 #[derive(Default)]
 pub struct Opts { pub repo: bool, pub settings: Value, pub repo_settings: Option<Value>, pub origin: bool }
 pub fn git(cwd: &Path, a: &[&str]) -> String { worktrees::git(cwd, a).unwrap_or_else(|e| panic!("git {a:?}: {e}")) }
@@ -74,12 +75,15 @@ pub fn world_with(o: Opts) -> World {
     // gh too: never the real program, never the network.
     let gh = Rc::new(gh::FakeGh::default());
     { let g = gh.clone(); sw::flow::git::set_fake_gh(Some(Rc::new(move |a: &[String]| g.run(a)))); }
-    World { base, root, fake, gh, socket, _listen: listen, _one: one }
+    // And the browser's opener: a link opened is only logged.
+    let opener = Rc::new(opener::FakeOpener::default());
+    { let o = opener.clone(); sw::opener::set_fake(Some(Rc::new(move |l: &str| o.run(l)))); }
+    World { base, root, fake, gh, opener, socket, _listen: listen, _one: one }
 }
 impl Drop for World {
     // Out of the world's folder before it goes (a test may have gone into it): the other tests run in this same
     // process, and a program they start would find its folder gone.
-    fn drop(&mut self) { let _ = std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")); FAKE.with(|f| *f.borrow_mut() = None); sw::webui::web::forget(); sw::herdr::cli::set_fake(None); sw::flow::git::set_fake_gh(None); sw::clock::set(None); sw::runner::JOBS.with(|j| j.borrow_mut().clear()); let _ = std::process::Command::new("chmod").args(["-R", "u+w"]).arg(&self.base).status(); let _ = std::fs::remove_dir_all(&self.base); }
+    fn drop(&mut self) { let _ = std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")); FAKE.with(|f| *f.borrow_mut() = None); sw::webui::web::forget(); sw::herdr::cli::set_fake(None); sw::flow::git::set_fake_gh(None); sw::opener::set_fake(None); sw::clock::set(None); sw::runner::JOBS.with(|j| j.borrow_mut().clear()); let _ = std::process::Command::new("chmod").args(["-R", "u+w"]).arg(&self.base).status(); let _ = std::fs::remove_dir_all(&self.base); }
 }
 impl World {
     /// The scripted turns, by role: { "worker": [step, …], "reviewer": […], "picker": […], "coordinator": […] }.

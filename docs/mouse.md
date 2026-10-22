@@ -51,7 +51,8 @@ What this changes for you:
   the mouse, so hold the terminal's modifier as anywhere in Herdr: `Shift` and drag in most terminals, `Option` in
   iTerm2, `Fn` in macOS Terminal.
 - **Links** (the pull request, the evidence links) are terminal links (OSC 8). Clicking one is the terminal's job
-  (`Cmd`+click on a Mac), as before. A plain click on a link reaches the board, which does nothing with it.
+  (`Cmd`+click on a Mac), as before. A plain click on a link reaches the board, which does nothing with it. A task's
+  report or pull request also opens with a key, `Ctrl+D` ([research.md](research.md#where-a-report-goes)).
 - **The wheel over the list moves the selection**, as it did before: Herdr used to turn the wheel into `↑` and `↓`.
 - **Some terminals copy nothing on OSC 52** (macOS Terminal; tmux without `set-clipboard on`). There the highlight shows
   but nothing is copied. Herdr's own copy works the same way, so a terminal that copied from Herdr copies from the
