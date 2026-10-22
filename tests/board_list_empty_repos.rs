@@ -39,7 +39,7 @@ fn a_known_repo_with_a_project_coordinator_and_no_tasks_has_its_heading_and_spac
     coordinated(&w, "side");
     s.load();
     let t = screen(&mut s);
-    assert!(has(&t, r"\n \S ▸ side\b.*  0 tasks") && t.contains("Mine"), "{t}");
+    assert!(has(&t, r"\n ▸ side\b.*  0 tasks") && t.contains("Mine"), "{t}");
     // Enter has nothing to unfold: it talks to its project coordinator, as space does.
     let head = group_id(&s.s, "", "side");
     s.s.sel = head.clone(); s.load();
@@ -64,7 +64,7 @@ fn a_repo_whose_last_task_is_archived_keeps_its_heading_until_it_was_not_used_fo
     sw::actions::archive::archive(&id).unwrap();
     s.load();
     let t = screen(&mut s);
-    assert!(has(&t, r"\n \S ▸ side\b.*  0 tasks") && !t.contains("Side job"), "{t}");
+    assert!(has(&t, r"\n ▸ side\b.*  0 tasks") && !t.contains("Side job"), "{t}");
     // A filter or the archive narrows the list: no empty heading then.
     s.press(&["ctrl+f"]); s.typed("mine");
     assert!(!screen(&mut s).contains("side"), "{}", screen(&mut s));

@@ -93,9 +93,8 @@ fn space_on_a_machines_row_or_a_projects_row_talks_to_its_coordinator_and_coordi
     assert!(s.s.reply && s.text().contains("Send message to proj coordinator"), "{}", s.text());
     s.typed("hello"); s.press(&["enter"]); drain(); s.load();
     let t = s.text();
-    // drawn as a task agent's row: its coordinator's mark, its last line under it, no rule
-    // one line: the coordinators' own mark, its time on the right, nothing under it
-    assert!(regex::Regex::new(r"\n[ ▌]◈ ▾ proj · PRJ +\d+s ago\n[ ▌] +◈? ?○ PRJ-1").unwrap().is_match(&t) && !t.contains("\n     Proj is quiet."), "{t}");
+    // one line, nothing of its coordinator on it (no mark, no state, no time) and nothing under it: the chat has it
+    assert!(regex::Regex::new(r"\n[ ▌]▾ proj · PRJ *\n[ ▌] +○ PRJ-1").unwrap().is_match(&t) && !t.contains("\n     Proj is quiet.") && !t.contains("◈"), "{t}");
     s.press(&["space", "alt+s", "alt+s"]); assert!(!s.s.by_repo && !s.s.by_machine);
     // every machine: space on a machine's row talks to its machine coordinator
     update(&mut s.s, Event::Machines(sw::remote::machines()));
@@ -190,7 +189,7 @@ fn folds(s: &mut common::board::Board, id: &str, holds: &str) {
     s.s.sel = id.to_string(); s.load();
     let name = match s.s.rows.iter().find(|r| matches!(r, Row::Head { id: h, .. } if h == id)) { Some(Row::Head { name, .. }) => sw::shown::words::repo_label(name), _ => panic!("no heading {id}: {}", s.text()) };
     s.press(&["enter"]);
-    assert!(s.s.folded.contains(id) && regex::Regex::new(&format!(r"\n[ ▌]\s*[◈◎]? ?▸ {}( · \w+)?  {holds}", regex::escape(&name))).unwrap().is_match(&s.text()), "{id} folds to {holds}: {}", s.text());
+    assert!(s.s.folded.contains(id) && regex::Regex::new(&format!(r"\n[ ▌]\s*▸ {}( · \w+)?  {holds}", regex::escape(&name))).unwrap().is_match(&s.text()), "{id} folds to {holds}: {}", s.text());
     s.press(&["enter"]);
     assert!(!s.s.folded.contains(id), "{id} unfolds");
     // a click does the same

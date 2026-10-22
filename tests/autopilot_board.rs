@@ -60,17 +60,16 @@ fn the_main_row_sums_up_the_others_and_a_repos_heading_has_its_own_line() {
     assert!(line_with(&lines, "Coordinator").unwrap().contains("Coordinator · 1 other on"), "{lines:#?}");
     b.press(&["alt+s"]); b.load();
     let lines = b.screen(140);
-    let head = line_with(&lines, "◎ ▾ proj").unwrap_or_else(|| panic!("{lines:#?}"));
-    assert!(head.contains("◎ ▾ proj · PRJ") && head.trim_end().ends_with("0 of 5 added  next in 10m"), "{head}");
+    // the repo's row shows nothing of its coordinator's autopilot: no mark, no columns
+    let head = line_with(&lines, "▾ proj").unwrap_or_else(|| panic!("{lines:#?}"));
+    assert!(head.trim() == "▾ proj · PRJ", "{head}");
     // at `needs you`, the main row says so
     sw::autopilot::record::change(&proj(&w), |ap, _| { ap.put("needsYou", true); true }).unwrap();
     b.load();
     assert!(line_with(&b.screen(140), "Coordinator").unwrap().contains("1 other on · 1 needs you"));
-    // Its mark in red, as a task's that needs you; the repo's row is one line, nothing under it; nothing on the list in
-    // a colour of its own
+    // nothing of it on the repo's row, nor under it; nothing on the list in a colour of its own
     let inked = b.inked(140);
-    let has = |what: &str, bold: bool| inked.iter().any(|l| l.0.iter().any(|p| p.t == what && p.c == Ink::Red && p.bold == bold));
-    assert!(has("◎", true) && !b.text().contains("its last wakes went unanswered"), "{inked:?}");
+    assert!(!b.text().contains("◎ ▾") && !b.text().contains("its last wakes went unanswered"), "{inked:?}");
     assert!(inked.iter().all(|l| l.0.iter().all(|p| p.c != Ink::Pilot)), "the theme's own inks only");
 }
 
@@ -184,8 +183,8 @@ fn another_machines_coordinator_shows_its_line_and_takes_its_keys_there_and_an_o
     sw::board::update::update(&mut b.s, sw::board::update::Event::Machines(sw::remote::machines()));
     for m in sw::remote::machines() { let a = sw::remote::ask_list(&m, 20000); sw::board::update::update(&mut b.s, sw::board::update::Event::Remote { label: m.label.clone(), answer: a }); }
     while b.s.scope != "*" { b.press(&["alt+m"]); }
-    let lines = b.screen(160); let at = lines.iter().position(|l| l.contains("◎ ▸ vm-b")).unwrap_or_else(|| panic!("{lines:#?}"));
-    assert!(!lines[at].contains("──") && lines[at].ends_with("1 of 5 added  last #3"), "no rule, its columns on the right: {lines:#?}");
+    let lines = b.screen(160); let at = lines.iter().position(|l| l.contains("▸ vm-b")).unwrap_or_else(|| panic!("{lines:#?}"));
+    assert!(!lines[at].contains("──") && !lines[at].contains("◎") && !lines[at].contains("added"), "no rule, nothing of its autopilot: {lines:#?}");
     assert!(!lines[at + 1].contains("Working · woke for its timer"), "one line, nothing under it: {lines:#?}");
     assert!(line_with(&lines, "Coordinator").unwrap().contains("1 other on"), "the main row sums up every machine's: {lines:#?}");
     f.answers("vm-b", "do", &json!({ "ok": true, "msg": "Autopilot off for the vm-b coordinator." }));

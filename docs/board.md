@@ -67,8 +67,8 @@ sidebar ([other machines](other-machines.md)); a click on it does the same. Ever
 - **`Tab` shows the next filter, `Shift+Tab` the one before**, round and round. A click on one shows it. The filter
   shown is kept with the board's view. Each filter keeps the grouping (`Alt+S`) and the headings of what it shows; a
   machine or a repo with nothing that matches has none.
-- **A machine's row and a project's row are their coordinator's**, one line each: the coordinators' mark `◈` in the
-  colour of where it stands (`◎` on autopilot), no rule to the edge, its time on the right, nothing under it. The list
+- **A machine's row and a project's row are their coordinator's**, one line each: its caret and its name, nothing of
+  its coordinator (no mark, no state, no time: the marks' column is task agents'), nothing under it. The list
   reads machine → project → task by how far in each row stands. `Enter` folds and unfolds it (where it has nothing to
   fold, it talks to its coordinator), `Space` talks to it, `Ctrl+S` / `Ctrl+X` start and stop it, `Ctrl+O` is its
   autopilot.

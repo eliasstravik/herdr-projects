@@ -13,15 +13,12 @@ The Coordinator stays as it is. The others sit beside it: talking to one never t
 ## A machine's row and a project's row are its coordinator
 
 **A machine's row** (its heading, with every machine shown or grouped by machine) **and a project's row** (a repo's
-heading, grouped by repo) stand for their coordinator, and are one line of the list, as a task agent's row:
+heading, grouped by repo) stand for their coordinator, and are one line of the list:
 
-- **the coordinators' own mark, `◈`**, in the marks' column, in the colour of where it stands as a task's mark is:
-  amber working, red needs you, plain idle, dim not started or stopped; autopilot's `◎` while that is on. It is not a
-  round dot, which Herdr's agents have;
-- then its caret and its name (a home folder as `~`, on another machine too), with **no rule** to the edge;
-- on the right how long ago its coordinator last said something (on [autopilot](autopilot.md) its timing:
-  `2 of 5 added  last HSW-92  next in 40m`). **Nothing under it**: what it said is in the chat. No review tag, pull
-  request or progress: a coordinator has none.
+- **its caret and its name** (a home folder as `~`, on another machine too), with **no rule** to the edge;
+- **nothing of its coordinator**: no mark, no state, no time, nothing under it. The marks' column is for task agents
+  alone. Where its coordinator stands shows in the chat's header when you talk to it (`vm-str coordinator  working`),
+  and in its panel (`Alt+P`).
 - **The list reads machine → project → task by how far in each row stands**: a machine's row at the left edge, a
   project's row (or a status group's) one step in under it, a project's tasks one step further in.
 - `Enter` folds it and unfolds it, as any heading; where it has nothing to fold (a repo or a machine with nothing in
@@ -77,8 +74,8 @@ As a task's row stands for the task:
   settings, on a project's your entry for that repo.
 - `Ctrl+S`, with nothing typed, starts its coordinator (in its own conversation), `Ctrl+X` stops it, as they put an
   agent on a task and stop it. Here or on its machine.
-- `Ctrl+O` puts it on [autopilot](autopilot.md) with its saved goal and settings, and takes it off again. While on, its
-  mark is autopilot's `◎` and its timing is on the right.
+- `Ctrl+O` puts it on [autopilot](autopilot.md) with its saved goal and settings, and takes it off again. Its row
+  shows nothing of that: its panel and the main Coordinator's row (`2 others on`) do.
 
 **Each has its own settings**, `coordinator.*` and `autopilot.*`, looked up **this coordinator → you → built in**
 ([settings](settings.md)). What you set for yourself counts for every coordinator; one set for this coordinator alone

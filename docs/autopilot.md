@@ -61,7 +61,7 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
   `coordinator.agent none`). **A machine's row and a project's row stand for their coordinator**: a machine's with
   every machine shown or grouped by machine, a project's grouped by repo; the filter Coordinators (`Tab`) leaves only
   those ([machine and project coordinators](machine-and-project-coordinators.md)).
-- **While it is on, its row reads as a task's row**: autopilot's mark `◎` all the way left, in the column where a task
+- **While it is on, the main Coordinator's row reads as a task's row**: autopilot's mark `◎` all the way left, in the column where a task
   has its mark and an automation its arrow, with the fold caret one step in, where a task's tag starts; the timing in
   the columns on the right, where a task keeps its progress and its time; and what it does now on the line under its
   name, as a live task's second line.
@@ -69,11 +69,10 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
   ```
    ◎   Coordinator · 2 others on · 1 needs you                    0 of 5 added  next in 1h
        On · woke 12m ago: HSW-92 merged
-
-   ◎ ▾ herdr-projects · HSW                               2 of 5 added  ✓ HSW-92  next in 40m
-       Working · woke for HSW-92 merged
-   ✓ HSW-92  Sync never loses data
   ```
+
+  A machine's or a project's row shows nothing of its coordinator's autopilot, on or off: the marks' column is task
+  agents'. Its panel (`Alt+P`) shows it, and the main Coordinator's row counts it (`2 others on`).
 
   - **The mark** is one column wide, of the family of a task's marks (`◐ ◇ ○ ✓`), never an emoji. It takes the colour
     of its state, as a task's does: red at `needs you` and `could not start` (bold, as a task that waits for you),

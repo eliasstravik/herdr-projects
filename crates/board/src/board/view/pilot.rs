@@ -1,9 +1,10 @@
-//! A coordinator's row as the list draws it, in a task's grammar while autopilot is on: autopilot's mark in the marks'
+//! The main Coordinator's row as the list draws it, in a task's grammar while its autopilot is on: autopilot's mark in the marks'
 //! column, left of the caret (`◎`, in the colour of its state, as a task's mark is), the timing in the columns on the right where a task
 //! keeps its progress and an automation when it fires (`2 of 5 added  ✓ HSW-92  next in 40m`: the first go first where
 //! room is short), and what it does now on the line under its name, as a live task's second line
-//! (`On · woke 12m ago: HSW-92 merged`). The main Coordinator's row, on top, is its name and what it sums up of the
-//! others (`2 others on · 1 needs you`). Off, nothing of autopilot shows.
+//! (`On · woke 12m ago: HSW-92 merged`). Its words are its name and what it sums up of the others
+//! (`2 others on · 1 needs you`). Off, nothing of autopilot shows. A machine's or a project's row shows nothing of its
+//! coordinator.
 use crate::board::state::{Row, State};
 use crate::board::theme::Theme;
 use crate::board::update::coords::of_head;
@@ -67,7 +68,7 @@ pub fn placed(caret: Inked, named: Inked, pilot: Option<Shown>, rule: bool, widt
     let right = join(&cols);
     let first = if right.is_empty() { ruled(left) } else { let gap = width.saturating_sub(left.width() + right.width()); left.add(drawn_rule(gap)).add(right).cut(width) };
     let next = if cols.iter().any(|(k, _)| *k == "next") { Inked::new() } else { next_all };
-    // Nothing to say under it (a machine's or a project's row): one line.
+    // Nothing to say under it: one line.
     let under = if p.under.is_empty() { Inked::new() } else { p.under.add(next) };
     (first, (!under.is_empty()).then(|| Inked::spaces(5).add(under).cut(width)))
 }

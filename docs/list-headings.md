@@ -32,7 +32,7 @@ autopilot (`Coordinator · 2 others on · 1 needs you`).
 
 ## Machine and repo headings
 
-- **A machine's heading** is its name in bold, in the accent colour, with a rule to the edge of the list. This machine
+- **A machine's heading** is its name in bold, in the accent colour, nothing after it (no rule, no mark: its coordinator shows in the chat). This machine
   shows its own name (its hostname).
 - Machines come in the order of Herdr's machines sidebar ([machine order](machine-order.md)).
 - **Every machine that answered has a heading, also one with no task yet.** It shows folded, `▸ vm-ssa  0 tasks`, and

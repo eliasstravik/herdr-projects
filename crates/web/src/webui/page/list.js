@@ -52,7 +52,7 @@ export function listEl(list, opts) {
 }
 // A heading: a machine's (over its groups) or a group's (over its rows), as the terminal board has them. A tap folds it
 // to its one line, with how many tasks (and automations) it holds, and unfolds it.
-// A coordinator's heading (and the main Coordinator's row on top) on autopilot is drawn as a task's row: autopilot's
+// A heading; the main Coordinator's row on top, on autopilot, is drawn as a task's row: autopilot's
 // mark first, in the marks' column left of the caret, its columns on the right, what it does now on a line under it.
 // The selected one has an Open button that shows the coordinator whole.
 function headEl(g, selected, onFold, onOpen) {

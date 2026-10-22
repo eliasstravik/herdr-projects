@@ -4,7 +4,7 @@
  ◎   Coordinator · 1 other on                                               0 of 5 added  next in 1h
      On · woke 0s ago: autopilot was turned on
 
- ◎ ▾ proj · PRJ                                                    1 of 5 added  ○ PRJ-1  next in 6h
+ ▾ proj · PRJ
 ▌  ○ PRJ-1 Fix the docs index                                                                 0s ago
 
 
@@ -21,7 +21,7 @@
  ◎   Coordinator · 1 other on   0 of 5 added  next in 1h
      On · woke 0s ago: autopilot was turned on
 
- ◎ ▾ proj · PRJ        1 of 5 added  ○ PRJ-1  next in 6h
+ ▾ proj · PRJ
 ▌ ○ PRJ-1 Fix the docs index
 
 

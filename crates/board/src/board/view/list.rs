@@ -77,15 +77,13 @@ pub fn unread_lines(s: &State, width: usize) -> Vec<Inked> {
 /// column, `▾` open, `▸` folded (then with how many tasks and automations it holds: `7 tasks, 1 automation`; a machine
 /// with nothing in view: `0 tasks`).
 /// A repo's heading has its key beside its name, dimmed (`gtm-agent · AGT`): the first thing to go where room is short.
-/// A coordinator's heading on autopilot is drawn as a task's row (view/pilot.rs): autopilot's mark in the marks' column
-/// and the caret one step in, its timing in the columns on the right, what it does now on the line under it. The main
-/// Coordinator's row, on top, is its name and what it sums up of the others.
+/// A machine's or a project's row carries nothing of its coordinator (no mark, no state: the marks' column is task
+/// agents'); its coordinator shows in the chat's header. The main Coordinator's row, on top, is its name and what it
+/// sums up of the others.
 fn heading(s: &State, t: &Theme, rows: &[Row], at: usize, width: usize) -> (Inked, Option<Inked>) {
     let r = &rows[at];
     let Row::Head { name, autos, machine, folded, folded_autos, id, .. } = r else { return (Inked::new(), None) };
     if crate::board::update::pilot::is_main(id) { return super::pilot::placed(Inked::plain("  "), super::pilot::main_head(s, id), super::pilot::shown(s, t, id), false, width); }
-    // A machine's or a project's row stands for its coordinator: drawn as a task agent's (coord_head.rs).
-    let pilot = super::coord_head::shown(s, t, id);
     let project = id.starts_with(&format!("{}repo\t", crate::board::update::heads::HEAD));
     let key = if s.by_repo { crate::board::tags::heading_key(s, at) } else { String::new() };
     let named = if *autos { Inked::of(name.clone(), Ink::Auto) } else if *machine { Inked::of(name.clone(), MACHINE_INK).bold() } else if s.by_repo || project { Inked::of(crate::board::update::heads::repo_shown(s, id.split('\t').nth(1).unwrap_or(""), name), REPO_HEAD_INK).bold() } else { Inked::of(name.clone(), group_ink(name)) };
@@ -94,7 +92,7 @@ fn heading(s: &State, t: &Theme, rows: &[Row], at: usize, width: usize) -> (Inke
     // What a folded row holds: its tasks and automations; under Coordinators its projects' coordinators.
     let holds = if crate::board::update::shows::coords(s) { format!("{folded} project coordinator{}", if *folded == 1 { "" } else { "s" }) } else { crate::board::update::heads::holds(*folded, *folded_autos) };
     if r.shut() { named = named.add(Inked::of(format!("  {holds}"), Ink::Muted)); }
-    super::pilot::placed(caret, named, pilot, false, width)
+    super::pilot::placed(caret, named, None, false, width)
 }
 struct L { text: Inked, sel: bool, head: bool, n: usize, rest: usize, id: String, auto: bool }
 fn line(text: Inked) -> L { L { text, sel: false, head: false, n: 0, rest: 0, id: String::new(), auto: false } }

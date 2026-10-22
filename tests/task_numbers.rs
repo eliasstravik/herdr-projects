@@ -101,12 +101,12 @@ fn several_repos_in_one_list_the_tag_is_the_number_or_the_key_never_a_repos_name
     assert_eq!(mix.iter().map(|r| at(&row(&together, r.s("title")), r.s("title"))).collect::<std::collections::BTreeSet<_>>().len(), 1); // still one column
     let grouped = lines(&mut board(&mix, true, ""), 100, 200); // its heading names the repo
     assert!(has(&row(&grouped, "Same number"), r"^[ ▌]  ○ #9 {2}Same number, other repo")); assert!(has(&row(&grouped, "Far away"), r"^[ ▌]  ○ #3 {2}Far away")); // a step in under its repo's row
-    // a repo's row: its coordinator's mark, then its name
-    assert!(grouped.iter().any(|x| has(x, r"^ [^ ] ▾ pi-work$")) && grouped.iter().any(|x| has(x, r"^ [^ ] ▾ a-repo-with-a-very-long-name$")), "{grouped:#?}");
+    // a repo's row: its caret and its name, nothing of its coordinator
+    assert!(grouped.iter().any(|x| has(x, r"^ ▾ pi-work$")) && grouped.iter().any(|x| has(x, r"^ ▾ a-repo-with-a-very-long-name$")), "{grouped:#?}");
     // Another machine's task: the tag its own machine gave it, under that machine's heading; the row never names it.
     let far = vec![todo(json!({ "id": "box:p/9", "rid": "p/9", "host": "box", "title": "Over there" })), todo(json!({ "id": "box:q/12", "rid": "q/12", "host": "box", "key": "QQ", "title": "Keyed there" })), all[2].clone()];
     let l = lines(&mut board(&far, false, "*"), 100, 200);
-    assert!(l.iter().any(|x| has(x, r"^ [^ ] ▾ box$")) && l.iter().any(|x| has(x, r"^ [^ ] ▾ this machine$")), "{l:#?}");
+    assert!(l.iter().any(|x| has(x, r"^ ▾ box$")) && l.iter().any(|x| has(x, r"^ ▾ this machine$")), "{l:#?}");
     assert!(has(&row(&l, "Over there"), r"^[ ▌]  ○ #9 {4}Over there"), "{l:#?}"); assert!(has(&row(&l, "Keyed there"), r"^[ ▌]  ○ QQ-12 Keyed there"));
 }
 
