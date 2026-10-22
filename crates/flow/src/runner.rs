@@ -1,7 +1,7 @@
 //! Long jobs (delegate, finish line, land, restart) run in a detached runner so the board stays responsive and hook
 //! commands never hold herdr up. A runner marks itself in task.json as `runner: {pid, start, started, job}`; a marker
 //! whose process is gone is ignored. Each turn is a separate runner, so counters live in task.json. One asked for from
-//! inside a sandbox is started from outside it (runner/outside.rs).
+//! inside a sandbox, or by a command while a keeper runs, is started from outside it (runner/outside.rs).
 pub mod outside;
 
 use crate::err::{Error, Res};
@@ -37,7 +37,7 @@ pub fn reap(mut ch: std::process::Child) -> u32 {
 }
 /// Start a detached runner for one job on one task. Returns at once.
 pub fn spawn_runner(job: &str, id: &str, extra: &[&str]) -> u32 {
-    if crate::plan::sandbox::inside::boxed() { return outside::ask(job, id, extra); }
+    if crate::plan::sandbox::inside::boxed() || outside::hands_over() { return outside::ask(job, id, extra); }
     if inline() { JOBS.with(|j| j.borrow_mut().push((job.into(), id.into(), extra.iter().map(|s| s.to_string()).collect()))); return 0; }
     user_env();
     let dir = if id == "-" { data_dir() } else { dir_of(id) };
@@ -93,7 +93,7 @@ pub fn release(id: &str, keep: bool) -> bool {
         if !mine(t.at("runner")) { return Ok(Change::Keep); }
         more = !pending_events(t).is_empty();
         if more && keep { return Ok(Change::Keep); }
-        t.put("runner", Value::Null);
+        t.put("runner", Value::Null); t.put("retried", 0); // its step was not lost: a later loss is tried again (hook/lost.rs)
         Ok(Change::Write)
     });
     if more && !keep { spawn_runner("finish", id, &[]); }
