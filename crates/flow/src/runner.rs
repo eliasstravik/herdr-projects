@@ -28,8 +28,9 @@ pub fn detach(c: &mut Command) {
 /// until that ends: thousands a day, until the user's process limit fails everything (#212). Only this one pid is
 /// waited for, never any child (that would take the end of the commands others wait for themselves). Returns its pid,
 /// 0 when it did not start.
-pub fn start_reaped(c: &mut Command) -> u32 {
-    let Ok(mut ch) = c.spawn() else { return 0 };
+pub fn start_reaped(c: &mut Command) -> u32 { c.spawn().map(reap).unwrap_or(0) }
+/// Leave a started process to run, waited for by a small thread of this process when it ends (as `start_reaped`).
+pub fn reap(mut ch: std::process::Child) -> u32 {
     let pid = ch.id();
     let _ = std::thread::Builder::new().name("reap".into()).stack_size(64 << 10).spawn(move || { let _ = ch.wait(); });
     pid

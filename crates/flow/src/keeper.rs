@@ -117,6 +117,7 @@ fn handover(own: i64) -> Result<(), String> {
         if let Ok(Some(st)) = c.try_wait() { return Err(format!("it ended: {st}")); }
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
+    crate::runner::reap(c); // still running: waited for when it ends, as no zombie of this keeper
     Err("no heartbeat in 15s".into())
 }
 

@@ -17,11 +17,17 @@ fn server_alive(info: &Value) -> bool { info.b("pid") && pid_alive(info.i("pid")
 pub fn server_info() -> Option<Value> { read_json(&serve_file()).filter(|i| server_alive(i) && i.b("port")) }
 pub fn ensure_server() -> Value {
     if let Some(i) = server_info() { return i; }
-    let mut c = std::process::Command::new(bin());
+    start_server(&bin())
+}
+/// Start the page server (`<prog> serve`), detached, and wait a little for it to say its port. It is waited for when
+/// it ends: one that could not take its port, crashed or was told to go is no zombie of the keeper, which asks for it
+/// every 30 seconds (#311).
+pub fn start_server(prog: &Path) -> Value {
+    let mut c = std::process::Command::new(prog);
     c.arg("serve").current_dir(data_dir()).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
     crate::runner::detach(&mut c);
-    let Ok(child) = c.spawn() else { return Value::Null };
-    let pid = child.id() as i64;
+    let pid = crate::runner::start_reaped(&mut c) as i64;
+    if pid == 0 { return Value::Null; }
     for _ in 0..40 {
         std::thread::sleep(std::time::Duration::from_millis(100));
         if let Some(i) = read_json(&serve_file()) { if i.i("pid") == pid && i.b("port") { return i; } }
