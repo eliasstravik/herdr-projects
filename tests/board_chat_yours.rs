@@ -34,10 +34,10 @@ fn a_task_agents_chat_shows_your_words_until_its_answer_takes_their_place_and_ke
     let mut s = open(&w.root, 34); s.s.side = false;
     s.s.sel = id.clone(); s.load(); s.press(&["space"]);
     s.typed("yes, g too"); s.press(&["enter"]);
-    assert_eq!(crate::board_chat::chat(&mut s, 120).boxed, v(&["yes, g too", "", "❯ Send message to Agent"]));
+    assert_eq!(crate::board_chat::chat(&mut s, 120).boxed, v(&["yes, g too", "", "❯ Send message to the agent"]));
     // the answer takes their place: the box holds one message
     settle(&id); save_talk(&w, &id, "yes, g too", "Made g."); s.load();
-    assert_eq!(crate::board_chat::chat(&mut s, 120).boxed, v(&["Made g.", "", "❯ Send message to Agent"]));
+    assert_eq!(crate::board_chat::chat(&mut s, 120).boxed, v(&["Made g.", "", "❯ Send message to the agent"]));
     assert!(s.s.just_sent.is_empty(), "your words are the conversation's own now");
     // above them, the rest of the conversation
     let mut all = vec![];

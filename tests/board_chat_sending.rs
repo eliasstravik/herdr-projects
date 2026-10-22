@@ -44,12 +44,12 @@ fn a_task_agents_chat_shows_your_words_the_moment_you_send_them_and_takes_them_b
     assert!(fx.iter().any(|e| matches!(e, Effect::Run(Job::Tell { .. }))), "{fx:?}");
     // the job has not even started: the box already has your words, and the line over it says they are on their way
     let c = crate::board_chat::chat(&mut s, 120);
-    assert_eq!(c.boxed, v(&["yes, g too", "", "❯ Send message to Agent"]), "{}", c.lines.join("\n"));
+    assert_eq!(c.boxed, v(&["yes, g too", "", "❯ Send message to the agent"]), "{}", c.lines.join("\n"));
     assert!(c.who.ends_with("› PRJ-1"), "the box says whose it is: {}", c.who);
     assert!(!c.lines[..c.lines.len() - 6].iter().any(|l| l.contains("yes, g too")), "nothing of it over the chat: {}", c.lines.join("\n"));
     // delivered: the same box
     s.run(fx);
-    assert_eq!(crate::board_chat::chat(&mut s, 120).boxed, v(&["yes, g too", "", "❯ Send message to Agent"]));
+    assert_eq!(crate::board_chat::chat(&mut s, 120).boxed, v(&["yes, g too", "", "❯ Send message to the agent"]));
     // words that did not get there are not yours in the chat: they go back into the text box
     s.typed("and h");
     let _ = s.hold("enter");
@@ -93,7 +93,7 @@ fn another_machines_coordinators_show_your_words_at_once_with_no_row_on_its_way_
     let fx = s.hold("enter");
     assert!(fx.iter().any(|e| matches!(e, Effect::Run(Job::Dispatch { .. }))), "{fx:?}");
     let c = crate::board_chat::chat(&mut s, 120);
-    assert_eq!(c.boxed, v(&["anything to do?", "", "❯ Send message to otherbox's coordinator"]), "{}", c.lines.join("\n"));
+    assert_eq!(c.boxed, v(&["anything to do?", "", "❯ Send message to the machine coordinator"]), "{}", c.lines.join("\n"));
     assert!(c.who.ends_with("› otherbox"), "{}", c.who);
     // the dispatch on its way to otherbox has no row of its own over the chat: the box has the words
     sw::store::inbox::new_dispatch("@otherbox anything to do?", obj(json!({ "remote": "otherbox" }))).unwrap();

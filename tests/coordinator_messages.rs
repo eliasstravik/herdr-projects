@@ -42,7 +42,7 @@ fn what_you_say_is_never_lost_a_dialog_on_its_screen_holds_it_a_failed_start_say
     // its row (the top row) has the mark of one that wants your OK, as a task's would, and no line under it
     assert!(has(&s.text(), r"\n[ ▌]! [▾▸] [^\n]*\n") && !s.text().contains("wants your OK"), "{}", s.text());
     let host = regex::escape(&sw::shown::words::clean(&sw::remote::check::hostname()));
-    assert!(has(&s.text(), &format!(r"\n╭─  {host}  ─*╮\n")) && !s.text().contains(&format!("│ {}.", crate::board_chat::top_name())), "{}", s.text());
+    assert!(has(&s.text(), &format!(r"\n╭─  {host}  · Machine coordinator ─*╮\n")) && !s.text().contains(&format!("│ {}.", crate::board_chat::top_name())), "{}", s.text());
     s.press(&["alt+c"]); assert!(has(&s.text(), r"\n╭─[^\n]*╮\n│ ❯ "), "{}", s.text());
     // herdr's sidebar names it and says where it stands in the same words
     sw::coordinator::sidebar::tell_sidebar(&so);
@@ -159,6 +159,6 @@ fn turning_the_coordinator_on_while_the_board_is_open_takes_effect_at_once_and_o
     let mut off = open(&w.root, 34); assert!(!off.s.data.can_dispatch); assert!(off.text().contains("❯ Add a task"), "{}", off.text());
     unset_value("coordinator.agent", &Scope::you()).unwrap();
     off.load(); off.typed("fourth thing"); off.press(&["enter"]); drain(); off.load();
-    assert!(off.s.data.can_dispatch); assert!(has(&off.text(), &format!(r"\n╭─  {}  ─*╮\n", regex::escape(&sw::shown::words::clean(&sw::remote::check::hostname())))), "{}", off.text());
+    assert!(off.s.data.can_dispatch); assert!(has(&off.text(), &format!(r"\n╭─  {}  · Machine coordinator ─*╮\n", regex::escape(&sw::shown::words::clean(&sw::remote::check::hostname())))), "{}", off.text());
     assert_eq!(get(&w).arr("where").last().map(|x| x.t("said")).unwrap_or_default(), "fourth thing");
 }

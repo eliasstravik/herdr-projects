@@ -66,7 +66,7 @@ fn one_header_line_five_groups_a_mark_for_each_state_and_the_task_panel_from_90_
     assert!(!s.s.reply && has(&text, r"\n─[^\n]*\n❯ Add a task"), "{text}");
     s.press(&["space"]); assert!(s.s.reply && s.s.full);
     // The box names the task it talks to by its ladder (the whole task folds the chat to its edge).
-    assert!(has(&s.screen(80).join("\n"), r"\n╭─ [^\n]*› +PRJ-\d+ +─+╮\n│ ❯ your message starts an agent on it"), "{}", s.screen(80).join("\n"));
+    assert!(has(&s.screen(80).join("\n"), r"\n╭─ [^\n]*› +PRJ-\d+ +· Agent ─+╮\n│ ❯ your message starts an agent on it"), "{}", s.screen(80).join("\n"));
     s.press(&["alt+t"]); assert!(!s.s.full && s.s.reply, "folding the panel keeps who you talk to");
     s.press(&["alt+t", "space"]); assert!(!s.s.reply && s.s.full, "space never opens or folds the panel");
     s.press(&["space", "esc"]); assert!(!s.s.full && s.s.reply);
@@ -143,7 +143,7 @@ fn typed_words_keep_who_they_are_for_the_wheel_moves_the_view_and_a_click_select
     s.click(y as u16); assert_eq!(s.s.sel, s.s.list_ids[at]); assert_ne!(s.s.sel, second);
     let mine = s.s.sel.clone(); s.press(&["space"]); s.typed("pebbles please");
     // The box names the task (chat_title.rs), and the hint line says who gets the words, by the task's tag.
-    assert!(has(&s.text(), r"\n╭─ [^\n]*›  PRJ-\d+  ─[^\n]*╮\n│ ❯ pebbles please"), "{}", s.text());
+    assert!(has(&s.text(), r"\n╭─ [^\n]*›  PRJ-\d+  · Agent ─[^\n]*╮\n│ ❯ pebbles please"), "{}", s.text());
     let tag = short(&mine);
     assert!(s.text().contains(&format!("enter send, and start an agent on {tag}")) && !s.text().contains("To: "), "{}", s.text());
     let top = s.s.top; s.wheel(4, 1); s.wheel(4, 1); s.screen(120);

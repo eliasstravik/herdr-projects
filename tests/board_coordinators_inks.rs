@@ -96,8 +96,42 @@ fn the_boxs_edge_follows_the_status_of_whoever_it_talks_to_and_names_are_in_the_
         s.press(&["space"]);
         all(&mut s, "❯", Ink::Text, false);
         s.press(&["space"]); assert!(!s.s.reply);
-        assert!(s.text().contains("╭─  All machines  ─"), "{}", s.text());
+        assert!(s.text().contains("╭─  All machines  · Machine coordinator (all machines) ─"), "{}", s.text());
     }
+}
+
+#[test]
+fn the_boxs_edge_names_the_kind_of_agent_dimmed_after_its_lit_step_and_the_empty_box_says_it_too() {
+    let w = world_with(Opts { repo: true, settings: json!({ "coordinator.agent": "claude", "review.when": "never", "board.machines": "otherbox" }), ..Default::default() });
+    let home = w.base.join("home-coord"); std::fs::create_dir_all(&home).unwrap(); unsafe { std::env::set_var("HERDR_PROJECTS_COORDINATOR_DIR", &home) };
+    w.script(json!({ "worker": [{ "files": { "f.txt": "1\n" }, "commit": "1", "note": "Made f." }], "coordinator": [{ "said": "Proj is quiet." }] }));
+    let id = w.add("Make f");
+    delegate(&id); settle(&id);
+    let mut s = open(&w.root, 34); s.s.side = false;
+    // the kind after the lit step, dimmed: never in a colour of its own
+    let dim = |s: &mut Board, kind: &str| { assert_eq!(crate::board_chat::chat_kind(s, 100), kind, "{}", s.text()); assert!(inks_on(&s.inked(100), "╭─", &format!("· {kind}")).iter().all(|x| x.0 == Ink::Muted), "{kind}: {:?}", inks_on(&s.inked(100), "╭─", &format!("· {kind}"))); };
+    // the top row of one machine: its machine coordinator
+    dim(&mut s, "Machine coordinator");
+    // a task's agent
+    s.s.sel = id.clone(); s.load(); s.press(&["space"]);
+    dim(&mut s, "Agent");
+    assert!(s.text().contains("❯ Send message to the agent"), "{}", s.text());
+    s.press(&["space"]);
+    // a project's coordinator, once it has said something
+    s.press(&["alt+s"]); s.s.sel = group_id(&s.s, "", "proj"); s.load(); s.press(&["space"]);
+    s.typed("anything?"); s.press(&["enter"]); drain(); s.load();
+    dim(&mut s, "Project coordinator");
+    assert!(s.text().contains("❯ Send message to the project coordinator"), "{}", s.text());
+    s.press(&["space", "alt+s", "alt+s"]);
+    // every machine shown: All machines' coordinator, and another machine's
+    update(&mut s.s, Event::Machines(sw::remote::machines()));
+    update(&mut s.s, Event::Remote { label: "otherbox".into(), answer: Ok(json!({ "host": "otherbox", "version": "9.0.0", "coordinator": { "state": "idle" }, "coordinators": { "machine": { "state": "idle", "talk": [{ "you": false, "text": "Quiet." }] } }, "tasks": [] })) });
+    while s.s.scope != "*" { s.press(&["alt+m"]); }
+    s.s.sel = sw::board::update::top::all_id(); s.load();
+    dim(&mut s, "Machine coordinator (all machines)");
+    s.s.sel = machine_id("otherbox"); s.load(); s.press(&["space"]);
+    dim(&mut s, "Machine coordinator");
+    assert!(s.text().contains("❯ Send message to the machine coordinator"), "{}", s.text());
 }
 
 #[test]

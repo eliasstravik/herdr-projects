@@ -89,7 +89,7 @@ fn space_on_a_machines_row_or_a_projects_row_talks_to_its_coordinator_and_coordi
     s.press(&["alt+s"]);
     s.s.sel = group_id(&s.s, "", "proj"); s.load();
     s.press(&["space"]);
-    assert!(s.s.reply && regex::Regex::new(r"╭─ [^\n]*›  proj  ─").unwrap().is_match(&s.text()), "{}", s.text());
+    assert!(s.s.reply && regex::Regex::new(r"╭─ [^\n]*›  proj  · Project coordinator ─").unwrap().is_match(&s.text()), "{}", s.text());
     s.typed("hello"); s.press(&["enter"]); drain(); s.load();
     let t = s.text();
     // one line: idle, its coordinator has a task's idle mark and when it last spoke; what it said is the chat's
@@ -103,7 +103,7 @@ fn space_on_a_machines_row_or_a_projects_row_talks_to_its_coordinator_and_coordi
     to_all(&mut s);
     s.s.sel = machine_id("otherbox"); s.load();
     s.press(&["space"]);
-    assert!(s.s.reply && s.text().contains("Send message to otherbox's coordinator") && s.text().contains("Far machine is quiet."), "{}", s.text());
+    assert!(s.s.reply && s.text().contains("Send message to the machine coordinator") && s.text().contains("Far machine is quiet."), "{}", s.text());
     s.press(&["space"]);
     // Coordinators: the top row, each machine's row and its projects' rows; no task
     s.press(&["tab"]); assert_eq!(s.s.show, 1);
@@ -214,7 +214,7 @@ fn left_and_right_fold_every_kind_of_heading_under_every_filter_and_grouping_and
     s.press(&["alt+s"]);
     { let g = group_id(&s.s, "", "proj"); folds(&mut s, &g, "2 tasks"); }
     s.s.sel = group_id(&s.s, "", "proj"); s.load();
-    s.press(&["space"]); assert!(regex::Regex::new(r"╭─ [^\n]*›  proj  ─").unwrap().is_match(&s.text()), "{}", s.text());
+    s.press(&["space"]); assert!(regex::Regex::new(r"╭─ [^\n]*›  proj  · Project coordinator ─").unwrap().is_match(&s.text()), "{}", s.text());
     s.typed("hello"); s.press(&["enter"]); drain(); s.press(&["space"]); s.load();
     { let g = group_id(&s.s, "", "proj"); folds(&mut s, &g, "2 tasks"); }
     // by machine: this machine's row, the top row, says what it holds open or folded
@@ -235,7 +235,7 @@ fn left_and_right_fold_every_kind_of_heading_under_every_filter_and_grouping_and
     s.press(&["alt+s"]);
     { let g = group_id(&s.s, "otherbox", "far"); folds(&mut s, &g, "1 task"); }
     s.s.sel = machine_id("otherbox"); s.load();
-    s.press(&["space"]); assert!(s.text().contains("Send message to otherbox's coordinator"), "{}", s.text());
+    s.press(&["space"]); assert!(s.text().contains("Send message to the machine coordinator"), "{}", s.text());
     s.press(&["space", "alt+s", "alt+s"]);
     // Coordinators: a machine's row folds its projects' rows
     s.press(&["tab"]); assert_eq!(s.s.show, 1);

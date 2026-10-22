@@ -99,7 +99,7 @@ fn on_the_board_a_keyed_repos_rows_read_hsw_134_the_panel_the_chat_and_the_messa
     s.s.panel_top = 1_000_000_000; assert!(has(&s.screen(100).join("\n"), r"\n Task id {6}proj/134 · HSW\n"), "{}", s.screen(100).join("\n")); s.s.panel_top = 0;
     assert!(has(&s.screen(100).join("\n"), r"\n HSW-134 Number one three four\n"), "{}", s.screen(100).join("\n")); s.press(&["esc"]);
     // The chat's box names the task with its tag, in its ladder.
-    s.press(&["space"]); assert!(has(&s.screen(100).join("\n"), r"\n╭─ [^\n]*› +HSW-134 +─+╮\n"), "{}", s.screen(100).join("\n")); s.press(&["space"]);
+    s.press(&["space"]); assert!(has(&s.screen(100).join("\n"), r"\n╭─ [^\n]*› +HSW-134 +· Agent ─+╮\n"), "{}", s.screen(100).join("\n")); s.press(&["space"]);
     // Find by the tag, in any letter case; and the board's own messages say the short name.
     s.s.sel = nine.clone(); s.press(&["ctrl+f"]); s.typed("hsw-134"); assert_eq!(s.s.sel, big); assert_eq!(row(&mut s, "Number nine"), ""); s.press(&["esc", "esc"]);
     s.s.sel = nine.clone(); s.press(&["ctrl+f"]); s.typed("HSW-9"); assert_eq!(s.s.sel, nine); assert!(!row(&mut s, "Number nine").is_empty()); s.press(&["esc", "esc"]);

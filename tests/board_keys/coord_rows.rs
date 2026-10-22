@@ -43,7 +43,7 @@ fn the_board_opens_on_its_top_row_enter_folds_and_alt_o_goes_into_a_rows_coordin
     s.s.side = false; s.load();
     // one machine: its row is the top row, the board opens on it, and the chat talks to its coordinator
     assert_eq!(s.s.sel, machine_id(""));
-    assert!(s.text().contains(&format!("╭─  {host}  ─")) && !s.text().contains("Looks after"), "{}", s.text());
+    assert!(s.text().contains(&format!("╭─  {host}  · Machine coordinator ─")) && !s.text().contains("Looks after"), "{}", s.text());
     assert!(s.text().contains("enter fold") && s.text().contains("alt+o go into it"), "{}", s.text());
     // enter folds it and unfolds it, and goes into nothing; alt+o goes into its coordinator, here
     let top = machine_id("");

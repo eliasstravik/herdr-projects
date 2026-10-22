@@ -49,7 +49,7 @@ fn under_review_the_web_board_another_machine_and_a_dialog_say_what_the_reviewer
     let side = sw::webui::model::side::side_of(&mut s.s, &s.theme.clone());
     assert_eq!(side.at("chat").arr("parts").last().unwrap(), &json!({ "by": "Reviewer", "text": "One fault left: the header is cut.", "mine": false, "tone": "", "raw": false }));
     assert_eq!(side.at("chat").at("raw"), &json!(false));
-    assert_eq!(side.at("send").s("place"), "Send message to Agent: the review goes on unless the code changes");
+    assert_eq!(side.at("send").s("place"), "Send message to the agent: the review goes on unless the code changes");
     // another machine's task: what that machine sent; one on an older version sends none, and that is said
     let r = s.s.current().unwrap().clone();
     let sent = sw::remote::remote_list().at("tasks").as_array().unwrap().iter().find(|x| x.s("id") == id).unwrap().at("snap").at("talk").clone();

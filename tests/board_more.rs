@@ -51,7 +51,7 @@ fn a_long_message_wraps_inside_the_box_and_takes_the_rows_it_needs_never_the_tex
     s.rows = 10;
     let c = s.chat(80);
     // folded: the box's edge names who (its ladder), and the line you type on stays
-    assert_eq!(c.lines.len(), 10); assert_eq!(c.boxed, vec![format!("❯ Send message to {}", crate::board_chat::top_name())], "{:?}", c.lines);
+    assert_eq!(c.lines.len(), 10); assert_eq!(c.boxed, vec!["❯ Send message to the machine coordinator".to_string()], "{:?}", c.lines);
     assert!(c.lines.iter().any(|l| l.starts_with("╭─") && l.contains(&sw::shown::words::clean(&sw::remote::check::hostname()))), "{:?}", c.lines);
     // The colours: an agent's message is in the brighter of the two greys (it has to be read), your own in the text colour.
     use sw::board::view::chat::{chat_message, Who};

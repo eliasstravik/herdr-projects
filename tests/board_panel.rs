@@ -140,14 +140,14 @@ fn the_panel_never_opens_full_screen_by_itself_something_going_wrong_only_change
     // same panel full screen; esc leaves it, and the chat stays the task's.
     s.cols = 80; s.screen(80); s.press(&["space"]);
     let text = s.screen(80).join("\n");
-    assert!(!s.s.full && s.s.reply && text.starts_with(" herdr-projects") && has(&text, r"\n╭─ [^\n]* PRJ-1  ─+╮\n"), "{text}");
+    assert!(!s.s.full && s.s.reply && text.starts_with(" herdr-projects") && has(&text, r"\n╭─ [^\n]* PRJ-1  · Agent ─+╮\n"), "{text}");
     s.press(&["alt+t"]); let text = s.screen(80).join("\n");
     assert!(s.s.full && s.s.reply);
     assert!(text.starts_with(" Task details  PRJ-1 \"Match the colors\"") && text.contains("Merge conflict with main") && has(&text, r"\n Details {6}Conflicting files: *\n[ ▌] {13}src/board/view\.js"), "{text}");
-    assert!(has(&text, r"\n╭─ [^\n]* PRJ-1  ─+╮\n(?:[^\n]*\n)*?│ ❯"), "{text}"); // whole: the chat folds to its edge
+    assert!(has(&text, r"\n╭─ [^\n]* PRJ-1  · Agent ─+╮\n(?:[^\n]*\n)*?│ ❯"), "{text}"); // whole: the chat folds to its edge
     s.press(&["esc"]);
     let text = s.screen(80).join("\n");
-    assert!(!s.s.full && s.s.reply && !text.contains("Conflicting files") && has(&text, r"\n╭─ [^\n]* PRJ-1  ─+╮\n"), "{text}");
+    assert!(!s.s.full && s.s.reply && !text.contains("Conflicting files") && has(&text, r"\n╭─ [^\n]* PRJ-1  · Agent ─+╮\n"), "{text}");
     // Nor does coming back from the archive bring it up, and an open panel is not remembered when the board reopens.
     s.press(&["alt+t"]); assert!(s.s.full);
     s.press(&["esc", "alt+a"]); assert!(s.s.archive_view);

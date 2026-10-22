@@ -25,9 +25,16 @@ pub fn chat(s: &mut common::board::Board, cols: usize) -> common::board::Chat {
     let mut c = s.chat(cols);
     let Some(t) = c.lines.iter().rposition(|l| l.starts_with("╭─ ") && l.ends_with('╮')) else { return c };
     // Who it talks to is the ladder in the box's top edge (its steps, the lit one last); inside, only the reply.
-    c.who = c.lines[t].trim_start_matches(['╭', '─']).trim_end_matches('╮').trim_end_matches(['─', ' ']).split(" ─").next().unwrap_or("").split_whitespace().collect::<Vec<_>>().join(" ");
+    // After the lit step, the kind of agent (` · Project coordinator`): kept apart (`chat_kind`).
+    c.who = c.lines[t].trim_start_matches(['╭', '─']).trim_end_matches('╮').trim_end_matches(['─', ' ']).split(" ─").next().unwrap_or("").split(" · ").next().unwrap_or("").split_whitespace().collect::<Vec<_>>().join(" ");
     if c.boxed.first().is_some_and(|l| l.starts_with('❯')) { c.framed = false; }
     c
+}
+/// The kind of agent the box's top edge names after its lit step (`Agent`, `Project coordinator`), "" none.
+pub fn chat_kind(s: &mut common::board::Board, cols: usize) -> String {
+    let c = s.chat(cols);
+    let Some(t) = c.lines.iter().rposition(|l| l.starts_with("╭─ ") && l.ends_with('╮')) else { return String::new() };
+    c.lines[t].split(" · ").nth(1).map(|k| k.split(" ─").next().unwrap_or("").trim_end_matches('╮').trim_end_matches(['─', ' ']).to_string()).unwrap_or_default()
 }
 /// The top row's coordinator's name on a board of this machine alone: `vm-str's coordinator`.
 pub fn top_name() -> String { sw::board::update::top::coordinator_of(&sw::shown::words::clean(&sw::remote::check::hostname())) }
@@ -43,7 +50,7 @@ fn a_task_agents_chat_its_message_then_your_words_in_its_place_then_its_next_mes
     for width in [120, 48] {
         let c = chat(&mut s, width);
         assert!(c.framed); assert!(c.who.ends_with("› PRJ-1"), "{}", c.who);
-        assert_eq!(c.boxed, v(&["Made f, with one line in it.", "", "❯ Send message to Agent"]));
+        assert_eq!(c.boxed, v(&["Made f, with one line in it.", "", "❯ Send message to the agent"]));
         assert!(c.hints.ends_with("space back"), "{}", c.hints);
     }
     assert!(chat(&mut s, 120).hints.ends_with(&format!("{} hide the latest message · space back", key_name("chatMessage"))));
@@ -51,18 +58,18 @@ fn a_task_agents_chat_its_message_then_your_words_in_its_place_then_its_next_mes
     assert_eq!(chat(&mut s, 120).boxed, v(&["Made f, with one line in it.", "", "❯ yes, g too"]));
     assert_eq!(chat(&mut s, 120).hints, "enter send to PRJ-1's agent · shift+enter new line · esc put away");
     s.press(&["enter"]);
-    assert_eq!(chat(&mut s, 120).boxed, v(&["yes, g too", "", "❯ Send message to Agent"]));
+    assert_eq!(chat(&mut s, 120).boxed, v(&["yes, g too", "", "❯ Send message to the agent"]));
     assert!(!s.text().contains("Sent to the agent"));
     settle(&id); s.load();
-    assert_eq!(chat(&mut s, 120).boxed, v(&["Made g.", "", "❯ Send message to Agent"]));
+    assert_eq!(chat(&mut s, 120).boxed, v(&["Made g.", "", "❯ Send message to the agent"]));
     assert!(s.s.just_sent.is_empty());
     s.press(&["alt+c"]);
     let c = chat(&mut s, 120);
-    assert!(!c.framed); assert_eq!(c.boxed, v(&["❯ Send message to Agent"]));
+    assert!(!c.framed); assert_eq!(c.boxed, v(&["❯ Send message to the agent"]));
     assert!(c.hints.ends_with(&format!("{} show the latest message · space back", key_name("chatMessage"))), "{}", c.hints);
     assert!(!s.text().contains("│ Made g."));
     s.typed("thanks"); s.press(&["enter"]); assert!(s.text().contains("Sent to the agent"), "with the chat hidden one line says they went");
-    s.press(&["alt+c"]); assert_eq!(chat(&mut s, 120).boxed, v(&["thanks", "", "❯ Send message to Agent"]));
+    s.press(&["alt+c"]); assert_eq!(chat(&mut s, 120).boxed, v(&["thanks", "", "❯ Send message to the agent"]));
     s.press(&["space"]);
     let c = chat(&mut s, 120);
     // no coordinator here: the box adds tasks, and says so
@@ -77,19 +84,19 @@ fn the_coordinators_chat_keeps_what_you_sent_until_it_says_something_new() {
     w.script(json!({ "coordinator": [{ "said": "Six tasks are in progress." }, { "status": "working" }] }));
     let mut s = open(&w.root, 34);
     s.typed("where do things stand?"); s.press(&["enter"]); s.load();
-    assert_eq!(chat(&mut s, 120).boxed, v(&["where do things stand?", "", &format!("❯ Send message to {}", top_name())]));
+    assert_eq!(chat(&mut s, 120).boxed, v(&["where do things stand?", "", &"❯ Send message to the machine coordinator".to_string()]));
     assert!(chat(&mut s, 120).who.ends_with(&sw::shown::words::clean(&sw::remote::check::hostname())), "{}", chat(&mut s, 120).who);
     drain(); s.load();
-    assert_eq!(chat(&mut s, 120).boxed, v(&["Six tasks are in progress.", "", &format!("❯ Send message to {}", top_name())]), "the answer alone, your words above it");
+    assert_eq!(chat(&mut s, 120).boxed, v(&["Six tasks are in progress.", "", &"❯ Send message to the machine coordinator".to_string()]), "the answer alone, your words above it");
     assert!(!chat(&mut s, 120).who.contains("Not started yet"), "it ran: {}", chat(&mut s, 120).who);
     s.typed("archive the last one"); s.press(&["enter"]); drain(); s.load();
     let look = sw::coordinator::look::look(&socket);
     assert_eq!((look.said.as_str(), look.sent.as_str()), ("Six tasks are in progress.", "archive the last one"));
-    assert_eq!(chat(&mut s, 120).boxed, v(&["archive the last one", "", &format!("❯ Send message to {}", top_name())]));
+    assert_eq!(chat(&mut s, 120).boxed, v(&["archive the last one", "", &"❯ Send message to the machine coordinator".to_string()]));
     assert!(!s.text().contains("Six tasks"));
-    assert_eq!(chat(&mut open(&w.root, 34), 120).boxed, v(&["archive the last one", "", &format!("❯ Send message to {}", top_name())]), "a board opened now shows the same");
+    assert_eq!(chat(&mut open(&w.root, 34), 120).boxed, v(&["archive the last one", "", &"❯ Send message to the machine coordinator".to_string()]), "a board opened now shows the same");
     sw::coordinator::requests::typed_there(&socket); s.load();
-    assert_eq!(chat(&mut s, 120).boxed, v(&["Six tasks are in progress.", "", &format!("❯ Send message to {}", top_name())]));
+    assert_eq!(chat(&mut s, 120).boxed, v(&["Six tasks are in progress.", "", &"❯ Send message to the machine coordinator".to_string()]));
 }
 
 #[test]
@@ -99,24 +106,24 @@ fn an_answer_in_the_very_same_words_still_takes_your_words_place() {
     w.script(json!({ "coordinator": [{ "said": "Done." }, { "said": "Done." }], "worker": [{ "files": { "f.txt": "1\n" }, "commit": "1", "note": "Done." }, { "files": { "g.txt": "1\n" }, "commit": "2", "note": "Done." }] }));
     let mut s = open(&w.root, 34);
     s.typed("first request"); s.press(&["enter"]); drain(); s.load();
-    assert_eq!(chat(&mut s, 120).boxed, v(&["Done.", "", &format!("❯ Send message to {}", top_name())]));
+    assert_eq!(chat(&mut s, 120).boxed, v(&["Done.", "", &"❯ Send message to the machine coordinator".to_string()]));
     s.typed("second request"); s.press(&["enter"]); s.load();
-    assert_eq!(chat(&mut s, 120).boxed, v(&["second request", "", &format!("❯ Send message to {}", top_name())]));
+    assert_eq!(chat(&mut s, 120).boxed, v(&["second request", "", &"❯ Send message to the machine coordinator".to_string()]));
     drain(); s.load();
     let look = sw::coordinator::look::look(&socket);
     assert_eq!((look.state.as_str(), look.sent.as_str()), ("idle", ""));
-    assert_eq!(chat(&mut s, 120).boxed, v(&["Done.", "", &format!("❯ Send message to {}", top_name())]));
+    assert_eq!(chat(&mut s, 120).boxed, v(&["Done.", "", &"❯ Send message to the machine coordinator".to_string()]));
     let id = w.add("Make f");
     delegate(&id); settle(&id);
     s.s.sel = id.clone(); s.load(); s.press(&["space"]);
-    assert_eq!(chat(&mut s, 120).boxed, v(&["Done.", "", "❯ Send message to Agent"]));
+    assert_eq!(chat(&mut s, 120).boxed, v(&["Done.", "", "❯ Send message to the agent"]));
     s.typed("make g too"); s.press(&["enter"]); s.load();
-    assert_eq!(chat(&mut s, 120).boxed, v(&["make g too", "", "❯ Send message to Agent"]));
+    assert_eq!(chat(&mut s, 120).boxed, v(&["make g too", "", "❯ Send message to the agent"]));
     settle(&id); s.load();
-    assert_eq!(chat(&mut s, 120).boxed, v(&["Done.", "", "❯ Send message to Agent"]));
+    assert_eq!(chat(&mut s, 120).boxed, v(&["Done.", "", "❯ Send message to the agent"]));
     w.script(json!({ "worker": [{ "files": { "h.txt": "1\n" }, "commit": "3", "note": "Done." }] }));
     s.typed("and h"); s.press(&["enter", "space"]); assert!(!s.s.reply); s.screen(120);
     settle(&id); s.load(); s.screen(120);
     s.press(&["space"]); assert!(s.s.reply);
-    assert_eq!(chat(&mut s, 120).boxed, v(&["Done.", "", "❯ Send message to Agent"]));
+    assert_eq!(chat(&mut s, 120).boxed, v(&["Done.", "", "❯ Send message to the agent"]));
 }

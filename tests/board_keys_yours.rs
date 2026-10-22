@@ -35,7 +35,7 @@ fn a_moved_key_answers_to_your_chord_only_and_the_board_names_it_so() {
     s.press(&["alt+c"]); assert!(s.s.chat_open, "the old chord does nothing now");
     s.press(&["ctrl+g"]);
     let c = s.chat(120);
-    assert!(!s.s.chat_open); assert_eq!(c.boxed.last().cloned(), Some("❯ Send message to Agent".to_string()), "{:?}", c.boxed);
+    assert!(!s.s.chat_open); assert_eq!(c.boxed.last().cloned(), Some("❯ Send message to the agent".to_string()), "{:?}", c.boxed);
     assert!(c.hints.ends_with("ctrl+g show the latest message · space back"), "{}", c.hints);
     s.press(&["ctrl+g"]); assert!(s.s.chat_open);
     s.rows = 60; s.press(&["?"]);

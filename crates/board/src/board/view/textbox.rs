@@ -7,7 +7,6 @@ use super::chat::more_word;
 use crate::board::state::{Mode, State};
 use crate::board::tags::number_tag;
 use crate::board::update::actions::has_agent;
-use crate::flow::tabs::AGENT_TAB;
 use crate::json::*;
 use crate::shown::ink::{Ink, Inked};
 use crate::shown::states::{is_agent, reviewing, status_ink};
@@ -38,8 +37,8 @@ pub fn box_lines(s: &mut State, width: usize, max_rows: usize, r: Option<&Obj>) 
     let place = if let Some(e) = &s.editing { if !e.typing.is_empty() { "type the new value".to_string() } else { "pick a setting above".into() } }
         else if s.mode == Mode::Find { "type to filter, archived tasks too".into() }
         else if super::chat_title::title(s, r).is_some_and(|t| t.fresh) { "Ask it something, e.g. \"what's left to do here?\"".into() }
-        else if let Some(c) = super::chat_title::coordinator(s) { send_to(&c.name) }
-        else if replying { let r = r.unwrap(); if r.b("archivedAt") { "archived: read-only".into() } else if is_agent(r) { format!("{}{}", send_to(AGENT_TAB), if reviewing(r) { ": the review goes on unless the code changes" } else { "" }) } else if !r.b("host") && ["todo", "progress"].contains(&r.s("stage")) { "your message starts an agent on it".into() } else if let Some(c) = crate::board::update::top::top(s) { send_to(&c.name) } else { "what should change?".into() } }
+        else if let Some(t) = super::chat_title::title(s, r).filter(|_| super::chat_title::coordinator(s).is_some()) { send_to(&t.whom()) }
+        else if replying { let r = r.unwrap(); if r.b("archivedAt") { "archived: read-only".into() } else if is_agent(r) { format!("{}{}", send_to("the agent"), if reviewing(r) { ": the review goes on unless the code changes" } else { "" }) } else if !r.b("host") && ["todo", "progress"].contains(&r.s("stage")) { "your message starts an agent on it".into() } else if let Some(c) = crate::board::update::top::top(s) { send_to(&super::chat_title::whom_of(s, &c)) } else { "what should change?".into() } }
         else { "Add a task".into() };
     // The placeholder never runs past the box: it is cut with … like any other greyed line.
     let shown = crate::text::cut(&place, width.saturating_sub(label.width() + 1).max(1));

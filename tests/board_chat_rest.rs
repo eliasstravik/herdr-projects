@@ -36,5 +36,5 @@ fn a_reply_still_in_the_text_box_when_the_board_is_closed_from_outside_comes_bac
     let mut again = open(&w.root, 34);
     assert_eq!(again.s.value(), "", "a reply does not come back as a draft for the Coordinator");
     again.s.sel = id.clone(); again.load(); again.press(&["space", "ctrl+z"]);
-    assert!(regex::Regex::new(r"╭─ [^\n]* PRJ-\d+  ─+╮\n(?:[^\n]*\n)*?│ ❯ kept across a close").unwrap().is_match(&again.text()), "{}", again.text());
+    assert!(regex::Regex::new(r"╭─ [^\n]* PRJ-\d+  · Agent ─+╮\n(?:[^\n]*\n)*?│ ❯ kept across a close").unwrap().is_match(&again.text()), "{}", again.text());
 }

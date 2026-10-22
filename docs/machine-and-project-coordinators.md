@@ -64,13 +64,16 @@ uncounted.
 ## The chat box names who it talks to
 
 ```
-╭─ All machines › vm-str ›  gtm  ─────────────────────────────────────────╮
+╭─ All machines › vm-str ›  gtm  · Project coordinator ───────────────────╮
 │ Two PRs are waiting on CI. Want me to retry #11?                         │
-│ ❯ Send message to gtm's coordinator                                      │
+│ ❯ Send message to the project coordinator                                │
 ╰──────────────────────────────────────────────────────────────────────────╯
 ```
 
-- **A ladder** in its top edge, from the top row down (`All machines › vm-str › gtm › GTM-14`), the current step lit.
+- **A ladder** in its top edge, from the top row down (`All machines › vm-str › gtm › GTM-14`), the current step lit,
+  and after it, dimmed, the kind of agent you talk to: `HP-145 · Agent`, `HP-145 · Reviewer` while its reviewer talks,
+  `herdr-projects · Project coordinator`, `vm-str · Machine coordinator`, `All machines · Machine coordinator (all
+  machines)`. The empty box says the same: `Send message to the agent`, `Send message to the project coordinator`.
 - **Its edge in the status colour of whoever it talks to**, as their mark: base idle or never started, amber working,
   red when it needs you or failed ([colours](colours.md#the-box-says-who-you-type-to)).
 - **Inside it only the conversation** and the line you type on, with no labels: what you wrote in the bright colour you
