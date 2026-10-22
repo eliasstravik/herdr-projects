@@ -103,7 +103,8 @@ Tasks stand in five groups, in the order they need you:
 - **Headings:** the arrows stop on them too, and `Enter` on one folds it to one line, and unfolds it. With every machine
   shown, each machine has a heading of its own: [list headings](list-headings.md).
 - **The archive** (`Alt+A`) is a list of its own, newest first, outside this order. `Ctrl+A` archives the selected
-  task, and restores it there.
+  task, and restores it there. Archiving closes the task's own space (its agent ends) and frees its temporary files;
+  its worktree, branch and history stay. Restoring starts nothing.
   - **A repo's done tasks in one go:** when a round of work is over, its done tasks are clutter. Grouped by repo
     (`Alt+S`), `Ctrl+A` on a repo's heading asks `Archive the 50 done tasks of mstars?` and, on `y`, archives every done
     task of that repo. The heading's hint line says so while it has done tasks to archive. A task that works, waits,
