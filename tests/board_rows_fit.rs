@@ -34,7 +34,9 @@ struct Drawn { rows: Vec<String>, lead: usize }
 fn draw(s: &mut State, list: &[Rec], width: usize) -> Drawn {
     s.grouped = GROUPS.iter().map(|g| (g.to_string(), list.iter().filter(|r| group(r) == *g).cloned().collect())).collect();
     s.list_room = 0; // the list is folded again for these rows
-    let lines: Vec<String> = list_lines(s, &Theme::default_dark(false), width, 80, 200).iter().map(|l| l.text()).collect();
+    // Drawn a step wider and that step taken off: the rows stand one step in under the top row (update/depth.rs).
+    let k = if width + 2 >= 60 { 2 } else { 1 };
+    let lines: Vec<String> = list_lines(s, &Theme::default_dark(false), width + k, 80, 200).iter().map(|l| l.text().chars().skip(k).collect()).collect();
     let cells = number_cells(width, list_numbering(s, &[]));
     let lead = 3 + if cells > 0 { cells + 1 } else { 0 };
     let rows = list.iter().map(|r| { let head: String = r.s("title").chars().take(8).collect(); lines.iter().find(|l| skip(l, lead).starts_with(&head)).cloned().unwrap_or_default() }).collect();

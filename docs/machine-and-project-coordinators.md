@@ -1,67 +1,96 @@
 # Machine and project coordinators
 
-**Three levels you can talk to, each its own conversation.**
+**Every row of the list has an agent you can talk to.** A task's row has its agent; a machine's row and a project's
+row each are their coordinator. There is no main Coordinator besides: the top row is.
 
-| Level | Talk to it | Named | Lives in Herdr |
+| Row | Its agent | Named | Lives in Herdr |
 |---|---|---|---|
-| The [Coordinator](coordinator.md) | the chat, as always | `Coordinator` | a `Coordinator` tab in the home space (`~`) |
-| A machine coordinator | `Space` on its machine's row | after the machine: `vm-str coordinator`, `Mac coordinator` | a tab of that name in that machine's home space |
-| A project coordinator | `Space` on its project's row (its repo's heading) | after the repo: `herdr-projects coordinator`, `~ coordinator` for the home folder | a tab of that name in the repo's own space |
+| `All machines`, the top row with every machine shown | the coordinator of all machines: this machine's top-level one, which sees every machine | `the coordinator of all machines` | a `Coordinator` tab in the home space (`~`) ([the coordinator of all machines](coordinator.md)) |
+| A machine's row | its machine coordinator | after the machine: `vm-str's coordinator` | a tab of that name in that machine's home space |
+| A project's row (a repo's heading) | its project coordinator | after the repo: `gtm's coordinator`, `~'s coordinator` for the home folder | a tab of that name in the repo's own space |
+| A task's row | its agent | `GTM-14's agent` | its own tab |
 
-The Coordinator stays as it is. The others sit beside it: talking to one never touches the others.
+**The top row follows the machine picker** (`Alt+M`, the filter row's first item): `All machines`, or the one machine
+picked. With only one machine, that machine is the top row, with nothing above it, and its coordinator is the
+top-level one: all machines are that one. **The board opens with the top row selected**, so the chat starts with that
+coordinator.
 
-## A machine's row and a project's row are its coordinator
+## A coordinator's row reads as a task's
 
-**A machine's row** (its heading, with every machine shown or grouped by machine) **and a project's row** (a repo's
-heading, grouped by repo) stand for their coordinator, and are one line of the list:
+- **The same marks as tasks**, in the marks' column left of the caret: `○` idle (also one that never ran, or was
+  stopped), `◐` working, `?` it asks you (`!` it wants your OK), `✗` it could not start, `∞` it is on
+  [autopilot](autopilot.md) (in the colour of where that stands: red at `needs you`, amber while it works, quiet while
+  asleep). What needs you and what went wrong come before `∞`. None of a task's other marks (`◑ ◆ ✓ ◌ ◇`) is a
+  coordinator's, and an idle coordinator is not counted in To do. Where no coordinator can run
+  (`coordinator.agent none`), this machine's rows have no mark.
+- **The same right side as tasks: only the time.** `3m` while it works, `1h ago` otherwise, nothing when it never ran.
+  No state words, no role word.
+- **The same second line as tasks**: what it does while it works, or its question while it waits for you. It goes when
+  it stops: no old news. Its latest message shows in the chat box when you select its row.
+- **Its name**, a home folder as `~` (on another machine too), with no rule to the edge. The top row says what it holds,
+  open or folded: `4 machines · 420 tasks`, `9 projects · 30 tasks`.
+- **The list reads all machines → machine → project → task by how far in each row stands.**
+- In a narrow pane the names shorten; the mark and the time stay.
 
-- **its caret and its name** (a home folder as `~`, on another machine too), with **no rule** to the edge;
-- **its coordinator's state as a task's mark**, in the marks' column left of the caret, and only where it says
-  something:
-  - `◐` it works (amber), what it needs from you (`!`, `?`, `@`: red, bold), `✗` it could not start (red, bold),
-    `∞` it is on [autopilot](autopilot.md) (in the colour of where that stands: red at `needs you`, amber while it
-    works, quiet while asleep, plain else). What needs you and what went wrong come before `∞`.
-  - **Idle, stopped or never started: no mark**, the column blank, never a grey mark. None of a task's other marks
-    (`◑ ◆ ✓ ◌ ◇ ○`) is a coordinator's.
-- **nothing else of it**: no time, no columns, nothing under it. What it said is in the chat, whose header names it
-  with the same mark (`∞ vm-str coordinator  working`); its panel (`Alt+P`) has the rest.
-- **The list reads machine → project → task by how far in each row stands**: a machine's row at the left edge, a
-  project's row (or a status group's) one step in under it, a project's tasks one step further in.
-- `Enter` folds it and unfolds it, as any heading; where it has nothing to fold (a repo or a machine with nothing in
-  view, a project's row under Coordinators) `Enter` talks to its coordinator, as `Space` does.
+```
+ ○ ▾ All machines  2 machines · 5 tasks
+   ◐ ▾ vm-str                                                              1m
+       Cleaning old worktrees
+     ? ▾ gtm · GTM                                                     1m ago
+         Two PRs wait on CI. Want me to retry #11?
+       ◐ GTM-14  Bundle skills into the template                           3m
+```
+
+**A coordinator that asks you shows under Needs you**, beside the tasks, with what it wants on its second line, and is
+counted there.
 
 **The filter Coordinators** (`Tab` from All, [the filter row](board.md#the-filter-row)) leaves only the coordinators
-that run: started and not stopped (working, idle, needs you), on autopilot, or failed so that you can fix it. Each
-such machine's row and project's row, for the machine shown; its count is how many there are. A stopped or never
-started one is not there and not counted; its row stays in the other filters as a plain row, with no mark. With every
-machine shown, a machine whose own coordinator does not run keeps its row there only as the heading of its projects'
-that do, uncounted. `Enter` on a machine's row there folds its projects' rows away; on any other row there it talks to
-it.
+that run: started and not stopped (working, idle, needs you), on autopilot, or failed so that you can fix it, for the
+machine shown; its count is how many there are. The top row is always there, counted only while it runs. A stopped or
+never started one is not there and not counted; its row stays in the other filters, with `○`. With every machine shown,
+a machine whose own coordinator does not run keeps its row there only as the heading of its projects' that do,
+uncounted.
 
-## Talking to one
+## The same keys on every row
 
-- **`Space` on its row** opens it in the chat. The chat names it (`herdr-projects coordinator  idle`), and so does the
-  box: `Send message to herdr-projects coordinator`. `Enter` sends, and it decides what to start, as the Coordinator
-  does.
-- **A machine's row** shows with every machine (`Alt+M`, the filter row's first item) or grouped by machine (`Alt+S`);
-  **a project's row** grouped by repo (`Alt+S`), and under Coordinators. The home folder's tasks have one too.
+- **`Space` talks to it**: the chat points at that row's agent, and follows the selection from row to row, as it does
+  from task to task. `Space` again goes back to the top row's coordinator.
+- **`Enter` goes into its agent**: its real Herdr pane, as on a task. A coordinator that is not running is started
+  first; another machine's is gone into there. On a status group's heading (`to do`, `done`) there is no agent.
+- **`←` and `→` fold and unfold** a heading (all machines, a machine, a repo, a status group). `←` on a task's row goes
+  to its heading. `Enter` no longer folds, so it never means two things. A click on a heading folds it too.
+
+## The chat box names who it talks to
+
+```
+╭─ All machines › vm-str ›  gtm  ─────────────────────────────────────────╮
+│ gtm's coordinator. Looks after the gtm repo: plans its tasks, starts agents. │
+│ Two PRs are waiting on CI. Want me to retry #11?                         │
+│ ❯ Send message to gtm's coordinator                                      │
+╰──────────────────────────────────────────────────────────────────────────╯
+```
+
+- **A ladder** in its top edge, from the top row down (`All machines › vm-str › gtm › GTM-14`), the current step lit.
+- **A first line**: one sentence on what that agent looks after. `The coordinator of all machines. Sees every machine
+  and project; says where work runs.` `vm-str's coordinator. Looks after this machine: its projects, disk and agents.`
+  `gtm's coordinator. Looks after the gtm repo: plans its tasks, starts agents.` `GTM-14's agent. Works on this one
+  task, in its own copy of the repo.`
+- **Its edge in its kind's colour**: amber for a coordinator, violet for a task's agent.
+- **One that never ran** says `Not started yet.`, and its box invites a first message: `Ask it something, e.g. "what's
+  left to do here?"`. Your first message starts it.
+- `Enter` sends, and a coordinator decides itself what to start.
 - **A repo with no tasks in view keeps its row**, folded (`0 tasks`), when it was used in the last 14 days (a task,
   archived ones too) or has a project coordinator, so `Space` still reaches it. Older repos, and repos whose folder is
   gone, have none.
-- **It follows the selection**, as a task's agent does: move to another machine's or project's row and you talk to that
-  one's coordinator, move to a task and you talk to its agent. `Space` again goes back to the Coordinator.
-- A status group's heading (`to do`, `done`) has none. `Space` there says so.
-
-Your first message starts it. Until then the chat says `not started: your first message starts it`.
 
 ## What each one is
 
-- **An ordinary agent in a long-lived chat**, like the Coordinator: the same board commands, its own tab, and settings
+- **An ordinary agent in a long-lived chat**, like the coordinator of all machines: the same board commands, its own tab, and settings
   of its own (below). Everything you say is one conversation, kept: if its
   program exits or Herdr restarts, your next message starts it again in the same conversation.
 - **A machine coordinator** is about that machine as a whole: its repos and folders, the tasks and agents on it. It runs
   in a folder of its own (`~/.herdr-projects/data/coordinator/<session>/machine/chat`), with its rules in `AGENTS.md`
-  there, as the Coordinator's are.
+  there, as the coordinator of all machines' are.
 - **A project coordinator** is about one repo. It runs in the repo's own folder, at its main level: your checkout. It
   reads it freely and changes nothing there unless you ask it to; work goes on the board as tasks of that repo. Its tab
   goes in the repo's space (the one Herdr labels after the repo); with none open, one is made there. Since the repo's
@@ -85,10 +114,6 @@ As a task's row stands for the task:
   agent on a task and stop it. Here or on its machine.
 - `Ctrl+O` puts it on [autopilot](autopilot.md) with its saved goal and settings, and takes it off again. While on,
   its row's mark is `∞`.
-
-**The main Coordinator has no row**, anywhere: not on top of the list, not under Coordinators, not under another
-machine's row. It is who the chat talks to when no machine's, project's or task's row is talked to: `Space` on such a row
-talks to that one, and `Space` again goes back to it ([the Coordinator](coordinator.md)).
 
 **Each has its own settings**, `coordinator.*` and `autopilot.*`, looked up **this coordinator → you → built in**
 ([settings](settings.md)). What you set for yourself counts for every coordinator; one set for this coordinator alone

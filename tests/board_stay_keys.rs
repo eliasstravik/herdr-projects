@@ -80,7 +80,7 @@ fn the_popup_is_never_left_behind_its_board_closes_the_moment_herdr_shows_anothe
 #[test]
 fn in_the_popup_the_board_key_closes_the_board_herdr_hands_the_popup_every_key_its_own_too() {
     let w = world_with(Opts { repo: true, settings: json!({ "board.open": "popup" }), ..Default::default() });
-    w.add("First");
+    let first = w.add("First");
     // "prefix+a" is herdr's prefix key and then a: the prefix alone does nothing, as in herdr, and what follows it is
     // only the board key when it is that key.
     let defs = sw::herdr::keys::built_in();
@@ -98,7 +98,7 @@ fn in_the_popup_the_board_key_closes_the_board_herdr_hands_the_popup_every_key_i
     let t = sw::clock::now(); sw::clock::set(Some(t)); late.press(&["ctrl+b"]); sw::clock::set(Some(t + 60000)); late.typed("a"); sw::clock::set(None); assert!(!late.closed); assert!(late.s.value().ends_with('a'));
     // While a question is asked, the key still closes: it is the way out everywhere.
     view_write("view-popup.json", json!({}));
-    let mut q = opened(&w.root, true, "", own.clone()); q.press(&["ctrl+x"]); assert!(q.s.ask.is_some(), "{}", q.text()); q.press(&["ctrl+b"]); q.typed("a"); assert!(q.closed);
+    let mut q = opened(&w.root, true, "", own.clone()); q.s.sel = first.clone(); q.load(); q.press(&["ctrl+x"]); assert!(q.s.ask.is_some(), "{}", q.text()); q.press(&["ctrl+b"]); q.typed("a"); assert!(q.closed);
     // A key without the prefix is one press; the prefix keys are the config's own, one or several.
     assert_eq!(presses("Ctrl+Alt+B", ""), Some((vec![], "ctrl+alt+b".to_string())));
     assert_eq!(presses("prefix+-", "[keys]\nprefix = [\"ctrl+a\", \"ctrl+space\"]\n"), Some((vec!["ctrl+a".to_string(), "ctrl+space".to_string()], "-".to_string())));
@@ -134,11 +134,11 @@ fn the_popup_opens_on_the_task_of_the_pane_you_were_in_and_words_left_in_its_box
     view_write("view-popup.json", json!({ "sel": a, "scope": "*" }));
     let all = opened(&w.root, true, "w9:p1", None); assert_eq!(all.s.scope, "*"); assert_eq!(all.s.sel, b);
     view_write("view-popup.json", json!({ "sel": a, "filter": "first" }));
-    // From a pane that is no task's: where the popup was when it closed.
-    assert_eq!(opened(&w.root, true, "w9:p5", None).s.sel, a);
-    // A board in a pane stays where you left it, wherever you come from.
+    // From a pane that is no task's: on the top row, whatever was selected when it closed.
+    let o = opened(&w.root, true, "w9:p5", None); assert_eq!(o.s.sel, sw::board::update::top::top_id(&o.s));
+    // A board in a pane opens on the top row too, wherever you come from.
     view_write("view.json", json!({ "sel": a }));
-    assert_eq!(opened(&w.root, false, "w9:p1", None).s.sel, a);
+    let o = opened(&w.root, false, "w9:p1", None); assert_eq!(o.s.sel, sw::board::update::top::top_id(&o.s));
     // Words left in the popup's box are sent from the repo they were typed in, also when it reopens somewhere else.
     view_write("view-popup.json", json!({}));
     let other = w.base.join("elsewhere-x1"); std::fs::create_dir_all(&other).unwrap();

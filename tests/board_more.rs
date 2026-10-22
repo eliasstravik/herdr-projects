@@ -32,15 +32,18 @@ fn a_long_message_wraps_inside_the_box_and_takes_the_rows_it_needs_never_the_tex
     let mut s = open(&w.root, 30); s.s.side = false;
     let said: Vec<String> = (1..=20).map(|i| format!("Line {i} of **what** it said, long enough to wrap in a narrow window.")).collect();
     coordinator_says(&mut s, &said.join("\n"));
+    let me = sw::board::update::top::coordinator_of(&sw::board::update::heads::label(&s.s, ""));
     for width in [44, 80, 200] {
         let c = s.chat(width);
         let body = &c.boxed[..c.boxed.len() - 2];
         assert!(has(&c.boxed[c.boxed.len() - 2], &format!(r"^ +({} )?more ↓$", regex::escape(&key_name("chatScrollDown")))), "{:?}", c.boxed);
-        assert_eq!(c.boxed.last().unwrap(), "❯ Send message to Coordinator");
-        // With its box it takes two thirds of the 30 rows: 16 lines of it. It starts at its beginning (here under the
-        // line that names who said it: the Rust chat always names the Coordinator).
+        assert!(c.boxed.last().unwrap().starts_with("❯ Send message to "), "{:?}", c.boxed);
+        // With its box it takes two thirds of the 30 rows: 16 lines of it, under the box's first line, which names who
+        // it is. It starts at its beginning (here under the line that names who said it: the Rust chat always names the
+        // Coordinator).
         assert_eq!(body.len(), 16, "sixteen lines of it at {width} columns: {body:?}");
-        assert_eq!(body[0], "Coordinator:"); assert!(body[1].starts_with("Line 1 of what it said"), "{body:?}");
+        assert!(body[0].starts_with(&format!("{me}.")) || body[0].ends_with('…'), "{body:?}");
+        assert_eq!(body[1], "Coordinator:"); assert!(body[2].starts_with("Line 1 of what it said"), "{body:?}");
         assert!(!body.join("\n").contains("**"));
         let rows = c.lines.iter().filter(|l| has(l, r"Task number \d+")).count();
         assert!(rows >= 1, "the list keeps rows (under the main Coordinator's row and the filter row): {:?}", c.lines);
@@ -48,7 +51,9 @@ fn a_long_message_wraps_inside_the_box_and_takes_the_rows_it_needs_never_the_tex
     // A window too short for all of it: the message gives up its lines first; who you talk to and the line you type on stay.
     s.rows = 10;
     let c = s.chat(80);
-    assert_eq!(c.lines.len(), 10); assert!(has(&c.who, r"^[ ▌]. Coordinator"), "{}", c.who); assert_eq!(c.boxed.last().unwrap(), "❯ Send message to Coordinator"); assert!(c.boxed.len() <= 5);
+    // folded: the box's edge names who (its ladder), and the line you type on stays
+    assert_eq!(c.lines.len(), 10); assert_eq!(c.boxed, vec![format!("❯ Send message to {me}")], "{:?}", c.lines);
+    assert!(c.lines.iter().any(|l| l.starts_with("╭─") && l.contains(&sw::shown::words::clean(&sw::remote::check::hostname()))), "{:?}", c.lines);
     // The colours: an agent's message is in the brighter of the two greys (it has to be read), your own in the text colour.
     use sw::board::view::chat::{chat_message, Who};
     use sw::board::view::talk::Part;
@@ -65,9 +70,10 @@ fn a_very_narrow_window_keeps_the_box_whole_with_the_message_in_it() {
     let w = coord_world();
     w.script(json!({ "coordinator": [{ "said": "Six tasks are in progress and nothing waits on you." }] }));
     let mut s = open(&w.root, 34);
-    // Nothing said yet: the placeholder is cut with …, inside the box.
-    for width in [27, 24, 16] { let c = s.chat(width); assert!(c.framed, "at {width}"); assert_eq!(c.boxed.len(), 1); assert!(has(&c.boxed[0], "^❯ S.*…$"), "at {width}: {:?}", c.boxed); }
-    assert_eq!(s.chat(40).boxed, vec!["❯ Send message to Coordinator"]);
+    // Nothing said yet: the box's first line says who it is, and the placeholder is cut with …, inside the box.
+    for width in [27, 24, 16] { let c = s.chat(width); assert!(c.framed, "at {width}"); assert_eq!(c.boxed.len(), 2); assert!(has(&c.boxed[1], "^❯ A.*…$"), "at {width}: {:?}", c.boxed); }
+    let me = sw::board::update::top::coordinator_of(&sw::board::update::heads::label(&s.s, ""));
+    assert!(s.chat(80).boxed[1] == "❯ Ask it something, e.g. \"what's left to do here?\"" && s.chat(80).boxed[0].starts_with(&format!("{me}.")), "never ran: {:?}", s.chat(80).boxed);
     s.typed("hi"); s.press(&["enter"]); drain(); s.load();
     for width in [60, 24, 23, 20, 19, 12, 8] {
         let c = s.chat(width);

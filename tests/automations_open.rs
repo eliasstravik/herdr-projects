@@ -50,7 +50,7 @@ fn one_automation_whole_its_prompt_trigger_own_settings_and_firings_and_enter_on
     s.press(&["ctrl+f", "alt+a"]); assert!(s.s.mode == sw::board::state::Mode::New); assert!(!s.s.archive_view, "a key of the list does nothing while one is open");
     s.press(&["down", "down", "enter"]); // the last one, and no further
     assert!(!s.s.auto_open); assert_eq!(s.s.sel, first.t("task")); assert_eq!(s.s.current().unwrap().s("id"), "proj/1");
-    like(&t(&mut s, 120), r"\n▌. PRJ-1 Look for old dependencies \[auto\]");
+    like(&t(&mut s, 120), r"\n▌ *. PRJ-1 Look for old dependencies \[auto\]");
     // a task that was archived since is found in the archive
     // (a key reads no file in the Rust board: the archiving is seen by the next load, as the board's beat would)
     sw::store::tasks::patch(second.s("task"), |t| t.put("archivedAt", sw::clock::now())).unwrap(); pick(&mut s, &row_id(&a));
@@ -59,7 +59,7 @@ fn one_automation_whole_its_prompt_trigger_own_settings_and_firings_and_enter_on
     pick(&mut s, &row_id(&a)); s.s.side = true;
     let wide = s.screen(150);
     let re = |r: &str| regex::Regex::new(r).unwrap();
-    assert!(wide.iter().any(|l| re(r"^▌⟳ on {4}Look for old dependencies .*│ {2}Look for old dependencies").is_match(l)) || (wide.iter().any(|l| re(r"^▌⟳ on {4}Look for old dependencies ").is_match(l)) && re(r"│ {2}Look for old dependencies").is_match(&wide[1])), "{}", wide.join("\n"));
+    assert!(wide.iter().any(|l| re(r"^▌ *⟳ on {4}Look for old dependencies .*│ {2}Look for old dependencies").is_match(l)) || (wide.iter().any(|l| re(r"^▌ *⟳ on {4}Look for old dependencies ").is_match(l)) && re(r"│ {2}Look for old dependencies").is_match(&wide[1])), "{}", wide.join("\n"));
     assert!(wide.iter().any(|l| re(r"│ {2}Firings ─").is_match(l)));
     // alt+t opens and folds it as it does a task; esc goes from the whole automation back to the list, and no further
     s.press(&["alt+t"]); assert!(s.s.auto_open); s.press(&["alt+t"]); assert!(!s.s.auto_open);
@@ -119,8 +119,8 @@ fn a_task_an_automation_made_says_so_and_with_the_board_open_a_schedule_fires_by
     sw::clock::advance(2 * HOUR + 1000); beat(&mut s); // no keeper runs: the open board fires what is due
     assert_eq!(sw::store::tasks::list(Default::default()).iter().map(|t| (t.t("id"), t.t("title"), t.t("stage"))).collect::<Vec<_>>(), [("proj/1".to_string(), "Look for old dependencies".to_string(), "starting".to_string())]);
     assert_eq!(firings_of(a.s("id"))[0].s("cause"), "schedule");
-    like(&t(&mut s, 120), r"\n[ ▌]. PRJ-1 Look for old dependencies \[auto\] ");
-    like(&t(&mut s, 120), r"\n[ ▌]⟳ on {4}Look for old dependencies {2}every 2h +◇ PRJ-1 next in +\d");
+    like(&t(&mut s, 120), r"\n[ ▌] *. PRJ-1 Look for old dependencies \[auto\] ");
+    like(&t(&mut s, 120), r"\n[ ▌] *⟳ on {4}Look for old dependencies {2}every 2h +◇ PRJ-1 next in +\d");
     assert_eq!(s.s.sel, row_id(&a), "the selection stayed on the automation: a task it makes does not take it");
     s.press(&["up", "up"]); assert_eq!(s.s.sel, "proj/1"); s.press(&["alt+t"]); like(&t(&mut s, 120), "\n Made by {6}the automation \"Look for old dependencies\"\n"); s.press(&["esc"]);
     // on an automation's row with no Coordinator on, what is typed is a new task, as anywhere with no task selected

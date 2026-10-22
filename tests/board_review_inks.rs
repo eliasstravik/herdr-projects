@@ -108,7 +108,8 @@ fn the_reviewers_work_is_blue_everywhere_and_a_rows_words_are_the_readable_grey(
     assert_eq!(ink_of(&v.panel_inked(&working, 80, false, 0), "◐"), Some(Ink::Yellow)); // the agent at work stays amber
     v.s.reply = true; v.s.reply_id = under.t("id");
     let who = sw::board::view::chat::chat_of(&mut v.s, &v.t.clone(), Some(&under)).expect("the chat talks to the task");
-    let chat = sw::board::view::chat::chat_lines(Some(&who), 80, false);
+    // the chat's box names the task (view/chat_title.rs); who it talks to keeps the reviewer's blue mark
+    let chat = vec![who.mark.clone()];
     assert_eq!(ink_of(&chat, "◑"), Some(Ink::Review), "{}", dump(&chat)); assert!(!all_inks(&chat).contains(&Ink::Green) && !all_inks(&chat).contains(&Ink::Yellow), "{}", dump(&chat));
     v.s.reply = false;
     // what a row says is greyed out, never bold like its title: in the brighter of the two greys, since it has to be

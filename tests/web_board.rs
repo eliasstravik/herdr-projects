@@ -29,7 +29,7 @@ fn the_web_board_shows_the_terminal_boards_list_and_one_task_whole() {
     let s = web(&w, "board", json!({}));
     let got: Vec<Vec<String>> = s.at("list").arr("groups").iter().map(|g| std::iter::once(g.t("name")).chain(g.arr("rows").iter().map(|r| r.t("id"))).collect()).collect();
     assert_eq!(got, want);
-    assert_eq!(s.at("list").arr("groups").iter().map(|g| (g.t("name"), g.t("color"))).collect::<Vec<_>>(), vec![("ready to approve".into(), "green".into()), ("working".into(), "yellow".into()), ("to do".into(), "todo".into())]);
+    assert_eq!(s.at("list").arr("groups").iter().map(|g| (g.t("name"), g.t("color"))).collect::<Vec<_>>(), vec![(sw::shown::words::clean(&sw::remote::check::hostname()), "accent".into()), ("ready to approve".into(), "green".into()), ("working".into(), "yellow".into()), ("to do".into(), "todo".into())]); // the top row, this machine's, then its groups
     let rows = rows_of(&s);
     let (ready, working, todo) = (&rows[0], &rows[1], &rows[2]);
     assert_eq!((ready.s("title"), ready.s("mark"), ready.s("color")), ("Make f", "◆", "green"));

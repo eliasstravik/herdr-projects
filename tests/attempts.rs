@@ -61,7 +61,8 @@ fn one_row_times_three_pick_one_the_panel_and_the_approve_key_keeps_the_selected
     web(&w, "pick", json!({ "id": id }));
     let s = web(&w, "board", json!({}));
     let row = s.at("list").arr("groups").iter().flat_map(|g| g.arr("rows").to_vec()).find(|x| x.s("id") == id).unwrap();
-    assert_eq!((s.at("list").arr("groups")[0].t("name"), row.t("title"), row.arr("says").iter().map(|p| p.t("t")).collect::<String>()), ("needs you".into(), "Greet ×3".into(), "Pick one of 3 · the reviewer recommends B".into()));
+    let group = s.at("list").arr("groups").iter().find(|g| g.arr("rows").iter().any(|x| x.s("id") == id)).unwrap().t("name");
+    assert_eq!((group, row.t("title"), row.arr("says").iter().map(|p| p.t("t")).collect::<String>()), ("needs you".into(), "Greet ×3".into(), "Pick one of 3 · the reviewer recommends B".into()));
     assert_eq!(s.arr("actions").iter().take(2).map(|x| (x.t("id"), x.t("label"))).collect::<Vec<_>>(), vec![("yes".into(), "keep attempt B".into()), ("nextAttempt".into(), "the next attempt".into())]);
     let s = web(&w, "pick", json!({ "id": id, "open": true }));
     let labels: Vec<String> = s.at("panel").arr("parts").iter().find(|x| x.s("head") == "Pick one of 3").unwrap().arr("items").iter().filter(|x| x.s("k") == "fact").map(|x| x.s("label").trim().to_string()).collect();

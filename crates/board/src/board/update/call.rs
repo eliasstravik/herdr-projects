@@ -23,7 +23,7 @@ pub fn owner(s: &State) -> String { format!("terminal:{}", if s.ctx.own_pane.is_
 /// Who the chat talks to now, as the call record keeps it.
 pub fn target(s: &State) -> Target {
     let reply = s.reply && !s.sel.is_empty() && (s.current().is_some() || super::coords::talking(s).is_some());
-    let name = if let Some(c) = super::coords::talking(s) { format!("the {}", c.name) }
+    let name = if let Some(c) = super::coords::talking(s) { c.name.clone() }
         else if let (true, Some(r)) = (reply, s.current()) { format!("{}'s agent ({})", number_tag(r, &s.data.keys, &s.scope, true), crate::shown::words::clean(r.s("title"))) }
         else { match crate::board::view::chat::coord_name(s).as_str() { "Coordinator" => "the Coordinator".to_string(), "New task" => "the board (no Coordinator here: it adds tasks)".to_string(), other => format!("the {other}") } };
     Target { id: if reply { s.sel.clone() } else { String::new() }, reply, scope: s.scope.clone(), name }

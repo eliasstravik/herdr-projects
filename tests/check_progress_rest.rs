@@ -1,6 +1,5 @@
 //! The rest of the old check-progress tests: the check's mark in its own colour, the rows of a section giving up their
-//! bars and percents together beside a check, a check waiting its turn in the list, the chat line cutting the words and
-//! never the numbers (and with no room, the numbers too), a known answer with no numbers, and the usual run's time.
+//! bars and percents together beside a check, a check waiting its turn in the list, a known answer with no numbers, and the usual run's time.
 use crate::common;
 use common::board::open;
 use common::*;
@@ -45,13 +44,11 @@ fn a_check_on_the_board_its_mark_bars_together_waiting_in_the_list_and_the_chat_
         assert_eq!(bar(&lines[0]), bar(&lines[1]), "bars at {width}: {lines:?}");
         assert_eq!(pct(&lines[0]), pct(&lines[1]), "percents at {width}: {lines:?}");
     }
-    // The chat line: at 60 the bar gives way first, the words are cut, the numbers never; with no room, only the words.
+    // The chat's box names its agent (view/chat_title.rs); the check's words and numbers are its row's, above.
     b.s.sel = id.clone(); b.s.side = false; b.load(); b.press(&["space"]);
-    let head = |b: &mut common::board::Board, cols: usize| b.chat(cols).who;
+    let head = |b: &mut common::board::Board, cols: usize| crate::board_chat::chat(b, cols).who;
     let h60 = head(&mut b, 60);
-    assert!(re(r"^[ ▌]◇ (PRJ-\d+ +)?Add a greeting {2}Running the check[^█░]*… {2}65% 3m left$").is_match(&h60), "the words are cut, the numbers never: {h60}");
-    let h30 = head(&mut b, 30);
-    assert!(re(r"^[ ▌]◇ (PRJ-\d+ +)?Add a greeting {2}Runn[^%]*…$").is_match(&h30), "{h30}");
+    assert!(h60.starts_with("PRJ-1's agent."), "{h60}");
     // Waiting for its turn: in the list, the minutes and no bar, the words under its name.
     put(step_check(&start_check(now, 2 * MIN), Some(&json!({ "state": "waiting", "ahead": 2 })), now));
     b.press(&["esc"]); b.s.side = true; b.load();
@@ -62,9 +59,9 @@ fn a_check_on_the_board_its_mark_bars_together_waiting_in_the_list_and_the_chat_
     // Known at once: the chat line has the words and no numbers.
     put(step_check(&start_check(now, 0), Some(&json!({ "state": "known" })), now));
     b.s.sel = id.clone(); b.s.side = false; b.load(); b.press(&["space"]);
-    if !head(&mut b, 120).contains("Add a greeting") { b.press(&["space"]); } // the chat went back to the Coordinator's place with esc
-    let h = head(&mut b, 120);
-    assert!(h.ends_with(&format!("Add a greeting  {KNOWN_LINE}")), "{h}");
+    if !head(&mut b, 120).starts_with("PRJ-1's agent.") { b.press(&["space"]); } // the chat went back to the top row's coordinator with esc
+    let t = b.text();
+    assert!(t.contains(KNOWN_LINE) && !re(r"Add a greeting[^\n]*\d+%").is_match(&t), "{t}");
 }
 
 #[test]

@@ -51,9 +51,9 @@ fn a_file_for_the_coordinator_is_kept_in_its_own_folder() {
     let out = sw::webui::attach::attach(&g, &file("shot.png", "image/png", PNG, json!({ "id": "", "reply": false }))).unwrap();
     let home = sw::coordinator::state::home(&sw::herdr::cli::current_socket());
     assert!(kept(&out).starts_with(home.join(".herdr-projects").join("files")), "{}", out.s("path"));
-    // this machine's heading: its machine coordinator, in its own folder
+    // this machine's heading, the only machine: its coordinator is the top-level one, in that one's folder
     let out = sw::webui::attach::attach(&g, &file("shot.png", "image/png", PNG, json!({ "id": "head:machine\t", "reply": true, "scope": "" }))).unwrap();
-    let home = sw::coordinator::state::home(sw::coordinator::co::Co::of(&sw::herdr::cli::current_socket(), "machine"));
+    let home = sw::coordinator::state::home(&sw::herdr::cli::current_socket());
     assert!(kept(&out).starts_with(home.join(".herdr-projects").join("files")), "{}", out.s("path"));
     // where no coordinator can run, a heading's gets none: its words would not be sent either
     g.s.data.can_dispatch = false;

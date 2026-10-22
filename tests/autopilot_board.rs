@@ -15,27 +15,26 @@ fn board(w: &World) -> Board { let mut b = open(&w.root, 40); b.s.side = false; 
 fn line_with<'a>(lines: &'a [String], needle: &str) -> Option<&'a String> { lines.iter().skip(2).find(|l| l.contains(needle)) } // under the header and its filter row
 
 #[test]
-fn the_main_coordinator_has_no_row_its_autopilot_shows_as_infinity_in_the_chats_header() {
+fn on_one_machine_the_top_rows_coordinator_is_the_top_level_one_and_its_autopilot_is_its_mark() {
     let w = pilot_world();
     let id = w.add("Fix the docs index");
     let mut b = board(&w);
-    assert_eq!(b.s.sel, id, "the list opens on its first task");
+    let top = sw::board::update::heads::machine_id(""); // this machine's: the only one
     let lines = b.screen(140);
-    assert!(!lines.iter().skip(2).take_while(|l| !l.contains("╭")).any(|l| l.trim_start_matches(['▌', ' ']).starts_with("Coordinator")), "no row of its own: {lines:#?}");
-    // On a task's row the autopilot key is not the Coordinator's; on a status group's heading (no machine's, project's
-    // or task's row) it is: the Coordinator is who the chat talks to then.
+    assert!(!lines.iter().skip(2).take_while(|l| !l.contains("╭")).any(|l| l.trim_start_matches(['▌', ' ']).starts_with("Coordinator")), "no row of a main Coordinator's: {lines:#?}");
+    // On a task's row the autopilot key is no coordinator's; on the top row it is the top-level one's.
+    b.s.sel = id.clone(); b.load();
     b.press(&["ctrl+o"]); assert!(b.text().contains("select a machine's or a project's row"), "{}", b.text());
-    b.press(&["up"]); assert!(sw::board::update::heads::is_head(&b.s.sel) && sw::board::update::coords::of_head(&b.s, &b.s.sel).is_none(), "{}", b.s.sel);
+    b.s.sel = top.clone(); b.load();
     b.press(&["ctrl+o"]);
     assert!(b.text().contains("Tell a coordinator its goal first."), "{}", b.text());
     ok(&["set", "autopilot.goal", "Keep the docs current", "--main-coordinator"]); b.s.msg.clear();
     b.press(&["ctrl+o"]);
-    assert!(sw::autopilot::record::is_on(&sw::coordinator::co::Co::top(&w.socket)) && b.s.msg.is_empty(), "on says nothing: the chat's header shows it ({})", b.s.msg);
+    assert!(sw::autopilot::record::is_on(&sw::coordinator::co::Co::top(&w.socket)) && b.s.msg.is_empty(), "on says nothing: its row shows it ({})", b.s.msg);
     b.load();
-    // the chat's header: autopilot's mark where the Coordinator's mark was; nothing of it on the list
+    // the top row's mark is autopilot's, as a task's mark is; no columns, nothing under it
     let lines = b.screen(140);
-    assert!(lines.iter().any(|l| l.trim_start().starts_with("∞ Coordinator")), "{lines:#?}");
-    assert!(!lines.iter().skip(2).take_while(|l| !l.contains("∞ Coordinator")).any(|l| l.contains("∞") || l.contains("added")), "{lines:#?}");
+    assert!(lines.iter().any(|l| l.starts_with("▌∞ ▾ ")) && !lines.iter().any(|l| l.contains("added")), "{lines:#?}");
     b.press(&["ctrl+o"]); b.load(); // the autopilot key again turns it off
     assert!(!sw::autopilot::record::is_on(&sw::coordinator::co::Co::top(&w.socket)));
     assert!(!b.screen(140).join("\n").contains("∞"), "off: no autopilot mark");
@@ -58,20 +57,20 @@ fn a_projects_row_on_autopilot_has_its_mark_in_the_colour_of_its_state_and_nothi
     let inked = b.inked(140);
     assert!(inked.iter().any(|l| l.0.iter().any(|p| p.t == "∞" && p.c == Ink::Red && p.bold)) && !b.text().contains("its last wakes went unanswered"), "{inked:?}");
     assert!(inked.iter().all(|l| l.0.iter().all(|p| p.c != Ink::Pilot)), "the theme's own inks only");
-    // off: no mark at all, the column blank
+    // off: idle's mark
     ok(&["autopilot", "off", "--project", "proj"]); b.load();
     let lines = b.screen(140);
-    assert_eq!(line_with(&lines, "▾ proj").unwrap().trim_end(), "   ▾ proj · PRJ", "{lines:#?}");
+    assert_eq!(line_with(&lines, "▾ proj").unwrap().trim_end(), "   ○ ▾ proj · PRJ", "off and never started: idle's mark, as a task's: {lines:#?}");
 }
 
 #[test]
-fn on_an_empty_board_the_main_coordinators_autopilot_shows_in_the_chats_header() {
+fn on_an_empty_board_the_top_row_has_the_top_level_coordinators_autopilot() {
     let w = pilot_world();
     ok(&["autopilot", "on", "--goal", "Docs", "--autopilot.hours", "00:00-00:01"]);
-    let mut b = board(&w); assert!(b.s.sel.is_empty(), "nothing selected");
+    let mut b = board(&w); assert_eq!(b.s.sel, sw::board::update::heads::machine_id(""), "no task: the top row is the selected row");
     let lines = b.screen(140);
-    assert!(lines.iter().any(|l| l.trim_start().starts_with("∞ Coordinator")), "{lines:#?}");
-    // nothing selected: the autopilot key is the Coordinator's
+    assert!(lines.iter().any(|l| l.starts_with("▌∞ ▸ ")), "asleep, still its mark: {lines:#?}");
+    // on the top row the autopilot key is its coordinator's
     b.press(&["ctrl+o"]); assert!(!sw::autopilot::record::is_on(&sw::coordinator::co::Co::top(&w.socket)));
 }
 
@@ -101,7 +100,7 @@ fn a_coordinators_panel_beside_the_list_and_whole_and_nothing_of_autopilot_while
     b.s.sel = sw::board::update::heads::group_id(&b.s, "", "proj"); b.load();
     let panel = |b: &mut Board| b.screen(160).iter().map(|l| l.split('│').nth(1).unwrap_or("").to_string()).collect::<Vec<_>>().join("\n");
     let t = panel(&mut b);
-    assert!(t.contains("proj coordinator") && t.contains("Status") && t.contains("Settings") && !t.contains("autopilot"), "off: nothing of autopilot: {t}");
+    assert!(t.contains("proj's coordinator") && t.contains("Status") && t.contains("Settings") && !t.contains("autopilot"), "off: nothing of autopilot: {t}");
     ok(&["autopilot", "on", "--project", "proj", "--goal", "Docs stay current", "--autopilot.tasksPerDay", "3"]);
     tick(&w); tick(&w); b.load(); let t = b.screen(160).join("\n");
     assert!(t.contains("· ∞ autopilot on") && t.contains("Goal") && t.contains("Docs stay current") && t.contains("0 of 3 added · 0 of 2 under way"), "{t}");

@@ -29,12 +29,13 @@ fn esc_hides_but_never_shows_the_chat_and_a_task_with_no_agent_is_talked_about_t
     let chat_key = regex::escape(&key_name("chatMessage"));
     w.script(json!({ "coordinator": [{ "said": "Added proj/1." }, { "said": "Delegated proj/1." }, { "said": "Shorter now." }] }));
     let mut s = open(&w.root, 34);
-    s.press(&["?"]); assert!(has(&s.text(), &format!("{chat_key} +hide the chat's latest message")), "{}", s.text()); assert!(!has(&s.text(), "restart the Coordinator|new Coordinator|Coordinator's chat")); s.press(&["esc"]);
+    s.rows = 60; s.press(&["?"]); assert!(has(&s.text(), &format!("{chat_key} +hide the chat's latest message")), "{}", s.text()); assert!(!has(&s.text(), "restart the Coordinator|new Coordinator|Coordinator's chat")); s.press(&["esc"]); s.rows = 34;
     s.typed("build a login page"); s.press(&["enter"]); drain(); s.load();
     assert!(s.text().contains("Added proj/1."));
     // Hidden: who you talk to, and the line you type on.
     s.press(&["alt+c"]);
-    assert!(has(&s.text(), &format!(r"\n *\n[ ▌]○ Coordinator {{2}}idle *\n─[^\n]*\n❯ Send message to Coordinator *\n─+\n[ ▌] [^\n]*{chat_key} show the latest message · \? all keys *$")), "{}", s.text());
+    let top = regex::escape(&crate::board_chat::top_name());
+    assert!(has(&s.text(), &format!(r"\n│ {top}\.[^\n]*│\n│ ❯ Send message to {top} +│\n╰─+╯\n[ ▌] [^\n]*{chat_key} show the latest message · \? all keys *$")), "{}", s.text());
     // esc never shows the message, and never closes the board: hidden, it stays hidden, and nothing is asked.
     s.press(&["esc"]); assert!(!s.s.chat_open && s.s.ask.is_none() && !s.closed && s.s.closing.is_some());
     assert!(has(&s.text(), &format!(r"\n  {} closes the board · the Coordinator keeps running *$", regex::escape(&key_name("close")))), "{}", s.text()); s.s.closing = None;
@@ -45,7 +46,7 @@ fn esc_hides_but_never_shows_the_chat_and_a_task_with_no_agent_is_talked_about_t
     s.press(&["alt+c"]); assert!(s.s.chat_open && s.text().contains("Added proj/1."));
     // With a draft, esc puts the words away and the message stays up; only the next esc hides it.
     s.typed("half");
-    assert!(has(&s.text(), r"│ Added proj/1\. +│\n│ +│\n│ ❯ half +│\n╰─+╯\n[ ▌] enter send to the Coordinator · shift\+enter new line · esc put away *$"), "{}", s.text());
+    assert!(has(&s.text(), &format!(r"│ Added proj/1\. +│\n│ +│\n│ ❯ half +│\n╰─+╯\n[ ▌] enter send to {} · shift\+enter new line · esc put away *$", regex::escape(&crate::board_chat::top_name()))), "{}", s.text());
     s.press(&["esc"]); assert_eq!(s.s.value(), ""); assert!(s.s.chat_open);
     s.text(); s.press(&["esc"]); assert!(!s.s.chat_open && s.s.closing.is_none());
     s.typed("and start it"); s.press(&["enter"]); drain();
@@ -55,7 +56,7 @@ fn esc_hides_but_never_shows_the_chat_and_a_task_with_no_agent_is_talked_about_t
     sw::actions::filing::report(&t, sw::actions::filing::Report { state: "done".into(), ..Default::default() }).unwrap();
     s.load(); s.s.sel = t.clone(); s.load(); s.press(&["space"]); assert!(s.s.reply);
     let txt = s.screen(160).join("\n");
-    assert!(has(&txt, r"\n *\n[ ▌]. PRJ-\d+ Write the docs {2}no agent on it: your message goes to the Coordinator, about this task *\n─[^\n]*\n❯ Send message to Coordinator"), "{txt}");
+    assert!(has(&txt, &format!(r"\n│ PRJ-\d+\. No agent on it yet\. +│\n│ ❯ Send message to {top} +│")), "{txt}");
     s.typed("make it shorter"); s.press(&["enter"]); drain();
     assert_eq!(prompts_of(&w)[2], "make it shorter");
     assert!(has(&where_text(&w.socket), r#"\n- "make it shorter"[^\n]*Task proj/1 \("Write the docs"\) was open: for this message "it" and "this" mean that task\. It was sent with enter"#), "{}", where_text(&w.socket));
@@ -125,6 +126,7 @@ fn enter_goes_into_a_tasks_agent_the_chats_head_line_at_every_width_and_a_narrow
     let w = coord_world();
     let chat_key = regex::escape(&key_name("chatMessage"));
     unsafe { std::env::set_var("HERDR_ENV", "1") }; // the board inside herdr
+    let top = regex::escape(&crate::board_chat::top_name());
     let title = "Add a greeting that is polite, friendly and never cut short";
     let t = w.add(title); delegate(&t); settle(&t);
     w.add("Somebody else"); sw::actions::archive::clear("proj/2").unwrap(); // the old test's numbers: this one is PRJ-3
@@ -132,34 +134,33 @@ fn enter_goes_into_a_tasks_agent_the_chats_head_line_at_every_width_and_a_narrow
     w.script(json!({ "worker": [{ "status": "working", "screen": "● Editing greet.sh\n" }] }));
     let u = w.add("Still at it"); delegate(&u); settle(&u);
     let mut g = open(&w.root, 34); g.s.sel = u.clone(); g.load(); g.press(&["space"]);
-    assert!(has(&g.screen(160).join("\n"), r"\n *\n[ ▌]. PRJ-\d+ Still at it {2}working *\n╭─[^\n]*╮\n│ The agent has just started: nothing to show yet\. +│\n│ +│\n│ ❯ Send message to Agent +│\n╰─+╯\n"), "{}", g.screen(160).join("\n"));
-    // That line is what herdr's sidebar says about the agent: the row's mark, the name, the Watcher's "doing now" line.
+    // The box names who it talks to: the ladder down to its tag on its edge, then whose it is.
+    assert!(has(&g.screen(160).join("\n"), r"\n╭─ [^\n]*PRJ-3  ─*╮\n│ PRJ-3's agent\.[^\n]*│\n│ The agent has just started: nothing to show yet\. +│\n│ +│\n│ ❯ Send message to Agent +│\n╰─+╯\n"), "{}", g.screen(160).join("\n"));
+    // What it does now (the Watcher's "doing now" line) is its row's second line, as herdr's sidebar says it.
     sw::store::tasks::update(&u, |c| { c.put("msg", "Verifying the test run after the rebase onto main"); Ok(sw::store::tasks::Change::Write) }).unwrap(); g.load();
     let lines = g.screen(160);
-    assert!(has(&lines.join("\n"), r"\n[ ▌]. PRJ-\d+ Still at it {2}Verifying the test run after the rebase onto main *\n╭─[^\n]*╮\n│ The agent has just started"), "{}", lines.join("\n"));
-    assert!(!has(&lines[lines.len() - 7], &format!("{chat_key}|its agent · ")));
-    // However little room the name leaves, the status is cut, never dropped: down to the "…" alone. The task's number
-    // stands before its name while the status keeps a readable width beside it; then it goes.
-    let head = |g: &mut common::board::Board, cols: usize| { let l = g.screen(cols); let at = l.iter().position(|x| x.starts_with("╭─")).unwrap(); l[at - 1].clone() };
-    let mark: String = head(&mut g, 160).chars().take(2).collect();
-    for (cols, want) in [(40, " PRJ-3 Still at it  Verifying the tes…"), (29, " PRJ-3 Still at it  Verify…"), (28, " Still at it  Verifying t…"), (25, " Still at it  Verifyin…"), (23, " Still at it  Verify…"), (18, " Still at it  V…"), (17, " Still at it  …"), (16, " Still at it")] {
-        assert_eq!(head(&mut g, cols), format!("{mark}{want}"), "at {cols}");
+    assert!(has(&lines.join("\n"), r"PRJ-3 Still at it[^\n]*\n[ ▌] +Verifying the test run after the rebase onto main"), "{}", lines.join("\n"));
+    // However little room: the box's edge and first line are cut, never wider than the window.
+    for cols in [40, 29, 18] {
+        let l = g.screen(cols); let at = l.iter().position(|x| x.starts_with("╭─")).unwrap();
+        assert!(sw::text::width(&l[at]) == cols && l[at + 1].starts_with("│ PRJ-3"), "at {cols}: {l:?}");
     }
+    assert!(g.screen(40).iter().any(|x| x.starts_with("╭─") && x.contains("PRJ-3")), "{:?}", g.screen(40));
     g.press(&["enter"]); assert!(!g.closed); assert_eq!(text(w.state().arr("focus").last().unwrap()), format!("agent {}", task(&u).at("link").s("pane"))); // into its agent: the board stays
     // A narrow window is the same chat: space talks to the task's agent and opens nothing. On the whole task (alt+t) the
-    // chat folds to its head line. Space again goes back to the Coordinator.
+    // chat folds to its edge (the ladder) and the line you type on. Space again goes back to the top row's coordinator.
     {
         let mut n = open(&w.root, 40); n.s.sel = t.clone(); n.load(); n.screen(70); n.press(&["space"]);
         assert!(n.s.reply && !n.s.full); n.press(&["alt+t"]);
-        assert!(has(&n.screen(70).join("\n"), r"\n─+\n❯ Send message to Agent *\n─+\n[ ▌] enter open this task's agent · esc back to the list *$"), "{}", n.screen(70).join("\n"));
+        assert!(has(&n.screen(70).join("\n"), r"\n╭─ [^\n]*PRJ-1  ─*╮\n│ ❯ Send message to Agent +│\n╰─+╯\n[ ▌] enter open this task's agent · esc back to the list *$"), "{}", n.screen(70).join("\n"));
         assert!(!has(&n.screen(90).join("\n"), &chat_key), "the chat's key is not offered where the chat is folded");
         assert!(has(&n.screen(70).join("\n"), r"The agent said ─+ *\n Done\."));
         n.press(&["alt+c"]); assert!(has(&n.screen(70).join("\n"), r"The agent said ─+ *\n Done\."));
         // esc leaves the whole task and nothing else: the chat stays hidden, and stays the agent's.
         n.press(&["esc"]); assert!(!n.s.full && n.s.reply && !n.s.chat_open);
-        n.press(&["alt+c", "space"]); assert!(!n.s.reply && !n.s.full); assert!(has(&n.screen(70).join("\n"), r"\n[ ▌]. Coordinator {2}"));
+        n.press(&["alt+c", "space"]); assert!(!n.s.reply && !n.s.full); assert!(has(&n.screen(70).join("\n"), &format!(r"\n│ {top}\.")), "{}", n.screen(70).join("\n"));
         // alt+t alone never changes who gets your words.
-        n.press(&["alt+t"]); assert!(n.s.full && !n.s.reply); assert!(has(&n.screen(70).join("\n"), r"\n[ ▌]. Coordinator {2}[^\n]*\n─+\n❯ Send message to Coordinator"), "{}", n.screen(70).join("\n"));
+        n.press(&["alt+t"]); assert!(n.s.full && !n.s.reply); assert!(has(&n.screen(70).join("\n"), r"\n╭─[^\n]*╮\n│ ❯ [^\n]*│"), "{}", n.screen(70).join("\n")); // folded: the edge and the line you type on
         n.typed("for the Coordinator"); n.press(&["enter"]);
         assert_eq!(get(&w).arr("queue").last().unwrap().s("text"), "for the Coordinator"); drain();
     }
@@ -169,14 +170,14 @@ fn enter_goes_into_a_tasks_agent_the_chats_head_line_at_every_width_and_a_narrow
         x.s.input.set_text("one\ntwo\nthree\nfour and last");
         let lines = x.screen(44);
         assert_eq!(lines.len(), 8); assert!(lines.iter().all(|l| sw::text::width(l) <= 44));
-        assert!(lines.iter().any(|l| l.contains("four and last")), "the line you are typing shows: {lines:?}"); assert!(lines.last().unwrap().contains("enter send to PRJ-1's agent")); assert!(has(&lines[lines.len() - 2], "^─+$"));
-        assert!(lines.iter().any(|l| l.contains("Add a greeting") && !l.contains("task panel")), "and so does who you talk to");
+        assert!(lines.iter().any(|l| l.contains("four and last")), "the line you are typing shows: {lines:?}"); assert!(lines.last().unwrap().contains("enter send to PRJ-1's agent"), "{lines:#?}"); assert!(has(&lines[lines.len() - 2], "^(─+|╰─+╯)$"));
+        assert!(lines.iter().any(|l| l.contains("PRJ-1") && !l.contains("task panel")), "and so does who you talk to");
     }
     for width in [24, 40, 64, 90, 200] { for reply in [false, true] { let mut x = open(&w.root, 34); x.s.sel = t.clone(); x.load(); if reply { x.press(&["space"]); } let l = x.screen(width); assert!(l.iter().all(|l| sw::text::width(l) <= width), "fits {width}"); assert_eq!(l.len(), 34); } }
     for rows in [8, 12, 20] {
         let mut x = open(&w.root, rows); let l = x.screen(80);
         assert_eq!(l.len(), rows); assert!(l.iter().any(|l| has(l, "^(│ )?❯")), "the text box is never pushed off a short window");
-        assert_eq!(l.iter().any(|l| l.starts_with("│ ❯")), rows >= 14, "under 14 rows the chat folds to its head line, and the list has the lines");
+        assert!(l.last().unwrap().contains("? all keys") || l.last().unwrap().contains("enter"), "the hints keep the last line: {l:?}");
     }
     unsafe { std::env::remove_var("HERDR_ENV") };
 }

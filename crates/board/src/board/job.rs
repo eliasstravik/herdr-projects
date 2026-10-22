@@ -194,7 +194,7 @@ fn run_one(job: Job) -> Done {
             }
             Job::CoordRun { to, name, on } => {
                 let co = crate::coordinator::co::Co::of(&crate::herdr::cli::current_socket(), &to);
-                if on { crate::coordinator::requests::restart(&co)?; Done::say(format!("Starting the {name}, in its own conversation."), Ink::Muted) } else { crate::coordinator::requests::stop(&co)?; Done::say(format!("Stopped the {name}. Your next message starts it again."), Ink::Muted) }
+                if on { crate::coordinator::requests::restart(&co)?; Done::say(format!("Starting {name}, in its own conversation."), Ink::Muted) } else { crate::coordinator::requests::stop(&co)?; Done::say(format!("Stopped {name}. Your next message starts it again."), Ink::Muted) }
             }
             Job::CoordOpen { to, name, popup } => super::job_far::coord_open(&to, &name, popup),
             Job::AutoRemove { id, name } => { crate::automations::list::remove(&id)?; Done::say(format!("Removed the automation \"{name}\"."), Ink::Muted).and(Then::AutoGone) }

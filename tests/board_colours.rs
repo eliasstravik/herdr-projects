@@ -1,6 +1,6 @@
-//! Who you type to is said by colour, and colour is never the only clue: the text box (its rules and its frame, never
-//! the prompt or anything else inside it) is the task's status colour when it sends to that task's agent and herdr's
-//! plain text colour for the Coordinator; each status has a colour of its own ("to do" a readable grey of its own); with NO_COLOR the same words
+//! Who you type to is said by colour, and colour is never the only clue: the text box's frame (never the prompt or
+//! anything else inside it) is violet when it sends to a task's agent, and its top edge names it (view/chat_title.rs);
+//! herdr's plain text colour where no one is talked to; each status has a colour of its own ("to do" a readable grey of its own); with NO_COLOR the same words
 //! stand there with no colour at all.
 use crate::common;
 use common::*;
@@ -29,11 +29,12 @@ fn starts(l: &Inked, ink: Ink, what: &str) { assert_eq!(l.0.iter().find(|p| !p.t
 fn ends(l: &Inked, ink: Ink, what: &str) { assert_eq!(l.0.iter().rev().find(|p| !p.t.trim().is_empty()).map(|p| p.c), Some(ink), "{what}: its right edge: {l:?}"); }
 
 #[test]
-fn the_box_is_the_tasks_status_colour_for_its_agent_and_plain_text_for_the_coordinator() {
+fn the_box_edge_is_violet_for_a_tasks_agent_and_plain_text_with_no_coordinator() {
     let w = world();
     let id = w.add("Make f");
     let mut s = State::new(Default::default(), Default::default());
     let base = task(&id);
+    let violet = sw::board::view::chat_title::AGENT_EDGE;
     for typed in ["", "half a sentence"] {
         s.input.set_text(typed);
         for (name, fields, colour) in statuses() {
@@ -41,39 +42,36 @@ fn the_box_is_the_tasks_status_colour_for_its_agent_and_plain_text_for_the_coord
                 let mut r = base.clone();
                 for (k, v) in fields.as_object().unwrap() { r.insert(k.clone(), v.clone()); }
                 if !host.is_empty() { r.put("host", host); }
-                // Another machine's task nobody started has no agent to start from here: its message goes to the Coordinator.
-                let want = if !host.is_empty() && name == "to do" { Ink::Text } else { colour };
                 let what = format!("{name}{}{}", if host.is_empty() { "" } else { " on another machine" }, if typed.is_empty() { "" } else { ", typing" });
                 if host.is_empty() { assert_eq!(status_ink(&r), colour, "{name}"); }
+                // Talking to a task: the box is a task agent's, violet whatever the task's status (its mark says that).
                 s.reply = true;
-                assert_eq!(box_ink(&s, Some(&r)), want, "{what}");
-                let (lines, _) = box_lines(&mut s, 60, 3, Some(&r));
-                starts(&lines[0], want, &what); starts(lines.last().unwrap(), want, &what); starts(&lines[1], Ink::Text, &format!("{what}: the prompt, as the Coordinator's"));
-                assert!(lines[1].text().starts_with("❯ "), "{what}");
+                assert_eq!(box_ink(&s, Some(&r)), violet, "{what}");
                 let (framed, _) = chat_box(&mut s, 60, 3, Some(&r), &[Inked::plain("hello")]);
-                for l in &framed { starts(l, want, &what); ends(l, want, &what); }
-                // inside the frame, as with the Coordinator: the prompt in plain text, the words as they came
+                for l in &framed { starts(l, violet, &what); ends(l, violet, &what); }
+                // its top edge is the ladder, its first line what that agent looks after
+                assert!(framed[0].text().starts_with("╭─ ") && framed[0].text().contains(" › "), "{what}: {}", framed[0].text());
+                // inside the frame: the first line, the message as it came, the prompt in plain text
                 let inside = |l: &Inked| Inked(l.0.iter().skip(1).take(l.0.len().saturating_sub(2)).cloned().collect());
                 let prompt = framed.iter().find(|l| l.text().contains('❯')).unwrap();
                 starts(&inside(prompt), Ink::Text, &format!("{what}: the prompt inside the frame"));
-                starts(&inside(&framed[1]), Ink::Plain, &format!("{what}: the message inside the frame"));
+                starts(&inside(&framed[2]), Ink::Plain, &format!("{what}: the message inside the frame"));
+                // No coordinator can run and no task is talked to: plain text, and the box adds tasks.
                 s.reply = false;
-                assert_eq!(box_ink(&s, Some(&r)), Ink::Text, "{what}: to the Coordinator");
+                assert_eq!(box_ink(&s, Some(&r)), Ink::Text, "{what}: no one to talk to");
                 let (lines, _) = box_lines(&mut s, 60, 3, Some(&r));
                 starts(&lines[0], Ink::Text, &what);
             }
         }
     }
-    // Each status has a colour of its own, and none is the Coordinator's.
+    // Each status has a colour of its own, and none is plain text.
     let t = Theme::default_dark(false);
     let live = [Ink::Yellow, Ink::Red, Ink::Green, Ink::Review, Ink::Check, Ink::Teal, Ink::Todo, Ink::Text];
     let colours: std::collections::BTreeSet<String> = live.iter().map(|i| format!("{:?}", t.ink(*i))).collect();
     assert_eq!(colours.len(), live.len(), "{colours:?}");
     assert_ne!(t.ink(Ink::Todo), t.ink(Ink::Text), "\"to do\" is a grey of its own, never the plain text colour");
-    // A task with no agent on it, whose message goes to the Coordinator: the Coordinator's colour. Find is no message at all.
+    // Find is no message at all: plain text.
     s.input.set_text(""); s.reply = true;
-    let mut stopped = base.clone(); stopped.put("state", "idle"); stopped.put("stage", "stopped");
-    assert_eq!(box_ink(&s, Some(&stopped)), Ink::Text);
     s.mode = sw::board::state::Mode::Find;
     let mut working = base.clone(); for (k, v) in statuses()[0].1.as_object().unwrap() { working.insert(k.clone(), v.clone()); }
     assert_eq!(box_ink(&s, Some(&working)), Ink::Text);
@@ -103,5 +101,5 @@ fn with_no_color_the_board_has_the_same_words_and_no_colour() {
     } }
     assert!(painted > 0, "with colour on, something is painted");
     let shown = text(&plain).join("\n");
-    assert!(regex::Regex::new(r"(?m)^ ▾ to do\s").unwrap().is_match(&shown), "the heading says \"to do\" where the colour would: {shown}");
+    assert!(regex::Regex::new(r"(?m)^ +▾ to do\s").unwrap().is_match(&shown), "the heading says \"to do\" where the colour would: {shown}");
 }

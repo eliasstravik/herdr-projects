@@ -51,6 +51,8 @@ pub fn sub_who(s: &mut State, t: &Theme, target: &Target) -> Who {
         return with_sent(s, target, &v, c);
     }
     let Some(m) = s.remotes.get(&target.host) else { return muted(t, target, format!("{} is not on this board", target.host), vec![]) };
+    // An older version there sends nothing of its coordinator at all.
+    if m.ok && target.to.is_empty() && m.coord.is_null() { return muted(t, target, format!("what you type goes to {}", target.host), vec![Part { text: format!("{} runs an older herdr-projects, which does not send what its Coordinator says: update it there.", target.host), note: "old".into(), ..Default::default() }]); }
     if m.coord.b("off") { return muted(t, target, "no coordinator there: coordinator.agent is none on that machine".into(), vec![]); }
     // An older version there has no coordinators but its top-level one.
     if m.ok && !m.coords.is_object() && !target.to.is_empty() {

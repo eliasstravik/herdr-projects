@@ -64,7 +64,8 @@ fn every_state_has_one_mark_of_its_own_and_every_heading_a_colour_the_page_knows
     let groups = s.at("list").arr("groups");
     assert!(groups.len() >= 3, "{groups:?}");
     for g in groups {
-        assert!(sw::shown::states::GROUPS.contains(&g.s("name")), "{}", g.s("name"));
+        // the top row, this machine's, is in a machine's colour; every other heading a status group's
+        assert!(if g.b("machine") { g.s("color") == "accent" } else { sw::shown::states::GROUPS.contains(&g.s("name")) }, "{}", g.s("name"));
         assert!(regex::Regex::new(&format!(r"\.sw-c-{}(?:[^a-z0-9_-])", regex::escape(g.s("color")))).unwrap().is_match(CSS), "{}", g.s("color"));
     }
     assert!(sw::store::settings_list::SETTINGS.iter().filter(|e| e.kind == sw::store::settings_list::Kind::Work).count() >= 20);

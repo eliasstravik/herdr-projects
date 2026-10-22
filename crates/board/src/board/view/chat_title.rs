@@ -31,13 +31,17 @@ pub fn title(s: &State, r: Option<&Obj>) -> Option<Title> {
         if !all { steps.push(machine(s, &t.host)); }
         let repo = t.to.strip_prefix("project:").map(|r| crate::board::update::heads::repo_shown(s, &t.host, r));
         if let Some(r) = &repo { steps.push(r.clone()); }
-        let fresh = look_of(s, &t).map(|v| v.state == "none" && v.talk.is_empty()).unwrap_or(true);
+        let v = look_of(s, &t).unwrap_or_default();
+        // Never ran, and nothing on its way to it yet.
+        let fresh = v.state == "none" && v.talk.is_empty() && v.sent.is_empty() && v.queue == 0 && !s.just_sent.contains_key(&t.key());
+        // A reply you have not seen while the chat's message is hidden.
+        let new = !v.unseen.is_empty() && !s.chat_open;
         let what = match (&repo, all) {
             (Some(r), _) => format!("Looks after the {r} repo: plans its tasks, starts agents."),
             (None, true) => "Sees every machine and project; says where work runs.".into(),
             (None, false) => "Looks after this machine: its projects, disk and agents.".into(),
         };
-        let first = Inked::of(format!("{}.", capital(&t.name)), COORD_EDGE).add(Inked::of(format!(" {what}{}", if fresh { " Not started yet." } else { "" }), Ink::Muted));
+        let first = Inked::of(format!("{}.", top::sentence(&t.name)), COORD_EDGE).add(Inked::of(format!(" {what}{}", if fresh { " Not started yet." } else { "" }), Ink::Muted)).add(if new { Inked::of(" New reply.", Ink::Green) } else { Inked::new() });
         return Some(Title { steps, first, edge: COORD_EDGE, fresh });
     }
     let r = r.filter(|_| s.reply && s.reply_id == s.sel)?;
@@ -51,21 +55,28 @@ pub fn title(s: &State, r: Option<&Obj>) -> Option<Title> {
         else { Inked::of(format!("{tag}."), AGENT_EDGE).add(Inked::of(" No agent on it yet.", Ink::Muted)) };
     Some(Title { steps, first, edge: AGENT_EDGE, fresh: false })
 }
-/// A sentence starts with a capital, a name keeps its own: `The coordinator of all machines.`, `gtm's coordinator.`
-fn capital(x: &str) -> String { match x.strip_prefix("the ") { Some(r) => format!("The {r}"), None => x.to_string() } }
 /// The ladder in the box's top edge, `width` cells wide with its corners: `╭─ All machines › vm-str ›  gtm  ───╮`, the
 /// current step lit in the edge's colour.
 pub fn edge(t: &Title, width: usize, right: Inked) -> Inked {
     let e = |x: &str| Inked::of(x, t.edge);
-    let mut ladder = Inked::new();
-    for (n, step) in t.steps.iter().enumerate() {
+    let avail = width.saturating_sub(2);
+    // Where room is short the steps above go first, the lit one last; then the ladder, then the scroll word is cut.
+    let mut suffix = if right.is_empty() { Inked::new() } else { Inked::plain(" ").add(right).add(Inked::plain(" ")) };
+    let room = avail.saturating_sub(4 + suffix.width());
+    let mut from = 0;
+    let mut ladder = steps_from(t, 0);
+    while ladder.width() > room && from + 1 < t.steps.len() { from += 1; ladder = steps_from(t, from); }
+    let mut inner = if ladder.width() <= room && room > 0 { e("─").add(Inked::plain(" ")).add(ladder).add(Inked::plain(" ")) } else { e("─") };
+    if inner.width() + suffix.width() > avail { inner = e("─"); suffix = suffix.cut(avail.saturating_sub(1)); }
+    let fill = avail.saturating_sub(inner.width() + suffix.width());
+    e("╭").add(inner).add(e(&"─".repeat(fill))).add(suffix).add(e("╮"))
+}
+/// The ladder's steps from the `from`th on (`…` for those left out), the last one lit.
+fn steps_from(t: &Title, from: usize) -> Inked {
+    let mut ladder = if from > 0 { Inked::of("… ›", Ink::Muted).add(Inked::plain(" ")) } else { Inked::new() };
+    for (n, step) in t.steps.iter().enumerate().skip(from) {
         let last = n + 1 == t.steps.len();
         ladder = ladder.add(if last { Inked::of(format!(" {step} "), t.edge).inv() } else { Inked::of(format!("{step} ›"), Ink::Muted) }).add(if last { Inked::new() } else { Inked::plain(" ") });
     }
-    let room = width.saturating_sub(6 + right.width() + if right.is_empty() { 0 } else { 2 });
-    let ladder = if ladder.width() > room { ladder.cut(room) } else { ladder };
-    let rest = width.saturating_sub(4 + ladder.width() + 1 + right.width() + if right.is_empty() { 0 } else { 2 });
-    let mut out = e("╭─").add(Inked::plain(" ")).add(ladder).add(Inked::plain(" ")).add(e(&"─".repeat(rest)));
-    if !right.is_empty() { out = out.add(Inked::plain(" ")).add(right).add(Inked::plain(" ")); }
-    out.add(e("╮")).cut(width)
+    ladder
 }

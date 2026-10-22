@@ -69,14 +69,15 @@ fn a_terminal_held_at_another_size_the_board_draws_inside_what_is_shown_and_take
     for l in &lines { assert!(sw::text::width(l) <= 411, "nothing is drawn right of what is shown: {l}"); }
     assert!(has(&lines[55], r"^[ ▌] \S.* · "), "the hints: the last row that is seen: {}", lines[55]);
     assert!(has(&lines[54], r"^[ ▌] Another viewer holds this terminal at 435×58; herdr shows it at 412×56\. The board takes it back\.$"), "{}", lines[54]);
-    // The one rounded box ends where what is shown ends: the message, an empty line, the line you type on.
+    // The one rounded box ends where what is shown ends: who it talks to, the message, an empty line, the line you type on.
     assert_eq!(lines[53], format!("╰{}╯", "─".repeat(409))); assert!(has(&lines[52], r"^│ ❯ .* │$")); assert!(has(&lines[51], r"^│ +│$"));
     assert!(has(&lines[50], r"^│ Tasks 31 and 32 are both waiting\. +│$"), "{}", lines[50]);
     // (The old test put a message with no sender in the box; the Coordinator's own reply is under its name.)
-    assert!(has(&lines[49], r"^│ Coordinator: +│$"), "{}", lines[49]); assert_eq!(lines[48], format!("╭{}╮", "─".repeat(409)));
-    for n in 48..=52 { assert_eq!(sw::text::width(&lines[n]), 411); }
+    assert!(has(&lines[49], r"^│ Coordinator: +│$"), "{}", lines[49]);
+    let me = sw::board::update::top::coordinator_of(&sw::board::update::heads::label(&s.s, ""));
+    assert!(lines[48].starts_with(&format!("│ {me}. Looks after this machine")), "{}", lines[48]); assert!(has(&lines[47], r"^╭─ .*╮$"), "{}", lines[47]);
+    for n in 47..=52 { assert_eq!(sw::text::width(&lines[n]), 411); }
     assert!(has(&pin(&lines), r"Pin the chat to the bottom +█+░+ +55% 12m left {2}PR#3 {2}6m$"), "the columns are back in view: {}", pin(&lines));
-    assert_eq!(lines.iter().find(|l| has(l, r"^[ ▌]○ Coordinator")).map(|l| l.trim_end()), Some(" ○ Coordinator  idle"));
     assert!(has(&lines[55], &format!(r"{} hide the latest message · \? all keys *$", regex::escape(&key_name("chatMessage")))), "the chat's key is on the hint line, whole: {}", lines[55]);
     // Held at 435x58 while a taller, narrower window shows it: the width is cut down, the rows are all there are.
     s.s.size.shown = sh(184, 78, false);
@@ -102,15 +103,16 @@ fn a_terminal_held_at_another_size_the_board_draws_inside_what_is_shown_and_take
 #[test]
 fn the_board_takes_its_terminal_back_by_itself_and_again_when_a_viewer_comes_back() {
     let w = world();
-    w.add("One task");
+    let one = w.add("One task");
     let tall = sh(184, 78, false);
     let mut a = open(&w.root, 58); a.s.side = false; a.s.ctx.pane = "w1:p1".into();
+    a.s.sel = one.clone(); a.load(); // the task, not the top row it opens on: its keys are on the hint line
     assert_eq!(see(&mut a, (435, 58), tall), vec![], "once is a resize under way");
     assert!(a.screen(435).join("\n").contains("Another viewer holds this terminal at 435×58; herdr shows it at 184×78. The board takes it back."));
     assert_eq!(see(&mut a, (435, 58), tall), vec![(183, 58)]);
     update(&mut a.s, Event::Took(Ok(()))); a.rows = 78; see(&mut a, (184, 78), tall);
     let l = a.screen(184);
-    assert_eq!(l.len(), 78); assert!(has(&l[77], r"^[ ▌] \S.* · ")); assert_eq!(l[75], "─".repeat(184));
+    assert_eq!(l.len(), 78); assert!(has(&l[77], r"^[ ▌] \S.* · "), "{}", l.join("\n")); assert_eq!(l[75], "─".repeat(184));
     assert!(l[76].contains("Another viewer held this terminal at 435×58: it was disconnected, and your window has it again."), "{}", l[76]);
     // A viewer that comes back is sent away again, every time: the board has its pane's size, always.
     let mut took = 1;
@@ -123,7 +125,7 @@ fn the_board_takes_its_terminal_back_by_itself_and_again_when_a_viewer_comes_bac
         let l = a.screen(184); assert_eq!(l.len(), 78); assert!(has(&l[77], r"^[ ▌] \S.* · ")); assert!(!l.join("\n").contains("holds this terminal"));
     }
     // A try that fails is made again at every look, and says so; when herdr answers again the window is back.
-    let mut c = open(&w.root, 58); c.s.side = false; c.s.ctx.pane = "w1:p1".into();
+    let mut c = open(&w.root, 58); c.s.side = false; c.s.ctx.pane = "w1:p1".into(); c.s.sel = one.clone(); c.load();
     let mut tries = vec![];
     for _ in 0..5 { for _ in see(&mut c, (435, 58), tall) { tries.push(true); update(&mut c.s, Event::Took(Err("herdr did not answer".into()))); } }
     assert_eq!(tries, vec![true; 4]);

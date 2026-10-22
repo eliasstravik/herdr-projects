@@ -103,6 +103,12 @@ fn top_says(s: &State) -> String {
     repos.sort(); repos.dedup();
     format!("{} · {}", n(repos.len(), "project"), n(tasks, "task"))
 }
+/// What an empty list says: nothing matches what is typed, nothing archived, nothing yet.
+fn none_lines(s: &State, width: usize) -> Vec<Inked> {
+    let typed = (if s.mode == Mode::Find { s.value() } else { s.filter.clone() }).trim().to_string();
+    let none_text = if !s.filter.is_empty() || s.mode == Mode::Find { if typed.is_empty() { "Type to filter.".to_string() } else { format!("Nothing matches \"{typed}\".") } } else if s.archive_view { "No archived tasks.".into() } else { "Nothing here yet. Type what needs doing.".into() };
+    Inked::of(none_text, Ink::Muted).wrap(width.saturating_sub(2).max(8)).into_iter().map(|l| Inked::plain(" ").add(l)).collect()
+}
 struct L { text: Inked, sel: bool, head: bool, n: usize, rest: usize, id: String, auto: bool }
 fn line(text: Inked) -> L { L { text, sel: false, head: false, n: 0, rest: 0, id: String::new(), auto: false } }
 /// The list in `h` lines. `screen`: the whole board's width, which decides whether live rows have their third line.
@@ -113,9 +119,7 @@ pub fn list_lines(s: &mut State, t: &Theme, width: usize, h: usize, screen: usiz
     let unread = unread_lines(s, width);
     let has_rows = !s.rows.is_empty();
     if !has_rows {
-        let typed = (if s.mode == Mode::Find { s.value() } else { s.filter.clone() }).trim().to_string();
-        let none_text = if !s.filter.is_empty() || s.mode == Mode::Find { if typed.is_empty() { "Type to filter.".to_string() } else { format!("Nothing matches \"{typed}\".") } } else if s.archive_view { "No archived tasks.".into() } else { "Nothing here yet. Type what needs doing.".into() };
-        let none: Vec<Inked> = Inked::of(none_text, Ink::Muted).wrap(width.saturating_sub(2).max(8)).into_iter().map(|l| Inked::plain(" ").add(l)).collect();
+        let none = none_lines(s, width);
         let mut all = vec![Inked::new()];
         all.extend(unread.iter().cloned());
         if unread.is_empty() || s.scope == "*" { if !unread.is_empty() { all.push(Inked::new()); } all.extend(none); }
@@ -170,6 +174,9 @@ pub fn list_lines(s: &mut State, t: &Theme, width: usize, h: usize, screen: usiz
             }
         }
     }
+    // Only the top row left (nothing yet, nothing that matches): what the list says stands under it.
+    let top_alone = matches!(rows.as_slice(), [Row::Head { id, folded: 0, .. }] if *id == crate::board::update::top::top_id(s));
+    if top_alone { lines.push(line(Inked::new())); lines.extend(none_lines(s, width).into_iter().map(line)); }
     // A list longer than its room keeps its last line to say how many tasks are not shown (not in a list of a few lines).
     let cut_any = lines.len() > h && h >= 8;
     let room = if cut_any { h - 1 } else { h };

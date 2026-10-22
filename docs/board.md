@@ -7,23 +7,24 @@ agent.
 ```
  herdr-projects  proj · PRJ
  All 48   Coordinators 4   Needs you 3   Working 2   Ready 1   To do 12   Done 30   Automations 0
- needs you
- ! HSW-98  Add an undo for clear                                       R#2 PR#18 12m ago
-           Review failed · 1 critical, 1 major
- ready to approve
- ◆ HSW-99  Max length for task titles                                  R#3 PR#60  2m ago
-           Pass · 1 minor
- working
- ◐ HSW-134 Tidy the first-run questions             ███░░░░░ 40% 12m left  R#1 PR#17  5m
-           Running the tests
- to do
- ○ HSW-9   Rename the hint line                                                   2h ago
- ○ Coordinator  idle
-╭────────────────────────────────────────────────────────────────────────────────────────────╮
+ ○ ▾ vm-str  1 project · 48 tasks                                                       5m ago
+   ▾ needs you
+   ! HSW-98  Add an undo for clear                                     R#2 PR#18 12m ago
+             Review failed · 1 critical, 1 major
+   ▾ ready to approve
+   ◆ HSW-99  Max length for task titles                                R#3 PR#60  2m ago
+             Pass · 1 minor
+   ▾ working
+   ◐ HSW-134 Tidy the first-run questions           ███░░░░░ 40% 12m left  R#1 PR#17  5m
+             Running the tests
+   ▾ to do
+   ○ HSW-9   Rename the hint line                                                 2h ago
+╭─  vm-str  ─────────────────────────────────────────────────────────────────────────────────╮
+│ vm-str's coordinator. Looks after this machine: its projects, disk and agents.             │
 │ Coordinator:                                                                               │
 │ Added proj/4: Add an undo. An agent is on it.                                              │
 │                                                                                            │
-│ ❯ Send message to Coordinator                                                              │
+│ ❯ Send message to vm-str's coordinator                                                     │
 ╰────────────────────────────────────────────────────────────────────────────────────────────╯
   alt+c hide the latest message · ? all keys
 ```
@@ -67,12 +68,11 @@ sidebar ([other machines](other-machines.md)); a click on it does the same. Ever
 - **`Tab` shows the next filter, `Shift+Tab` the one before**, round and round. A click on one shows it. The filter
   shown is kept with the board's view. Each filter keeps the grouping (`Alt+S`) and the headings of what it shows; a
   machine or a repo with nothing that matches has none.
-- **A machine's row and a project's row are their coordinator's**, one line each: its coordinator's state as a task's
-  mark, only where it says something (`◐` working, `!` needs you, `✗` could not start, `∞` autopilot; none while
-  idle), its caret and its name, nothing under it. The list
-  reads machine → project → task by how far in each row stands. `Enter` folds and unfolds it (where it has nothing to
-  fold, it talks to its coordinator), `Space` talks to it, `Ctrl+S` / `Ctrl+X` start and stop it, `Ctrl+O` is its
-  autopilot.
+- **A machine's row and a project's row are their coordinator's**, read as a task's row: the same marks (`○` idle,
+  `◐` working, `?` asks you, `✗` could not start, `∞` autopilot), the time on the right, what it does or asks under
+  it. The top row is `All machines` or the one machine shown. The list reads all machines → machine → project → task
+  by how far in each row stands. `Space` talks to it, `Enter` goes into it, `←` `→` fold and unfold it, `Ctrl+S` /
+  `Ctrl+X` start and stop it, `Ctrl+O` is its autopilot ([machine and project coordinators](machine-and-project-coordinators.md)).
 - **Where the window is narrow** the names are shorter (`Coords`, `Needs`, `Autos`), then shortest (`Co`, `Need`,
   `Work`), then the filters with nothing in them go; narrower still, only the one shown stands, with `tab next`.
 
@@ -159,9 +159,9 @@ Each state has a mark of its own, so no two are told apart by colour alone:
 
 The `?` menu has the list too.
 
-- **A machine's row and a project's row** carry their coordinator's state with these same marks, and only where it
-  says something: `◐` it works, `!` (or `?`, `@`) it needs you, `✗` it could not start, `∞` it is on autopilot. Idle,
-  stopped or never started: no mark at all. The others (`◑ ◆ ✓ ◌ ◇ ○`) are never a coordinator's
+- **A machine's row and a project's row** (and `All machines`) carry their coordinator's state with these same marks:
+  `○` idle (also never ran, or stopped), `◐` it works, `?` it asks you (`!` it wants your OK), `✗` it could not start,
+  `∞` it is on autopilot. The others (`◑ ◆ ✓ ◌ ◇`) are never a coordinator's
   ([machine and project coordinators](machine-and-project-coordinators.md)).
 
 - **Only a moon says someone works**: `◐` and `◑`, an agent or its reviewer.
@@ -567,17 +567,17 @@ are sent from another machine, so a count would not be true). All of that is in 
   that is to do; it goes to the Coordinator about that task otherwise. An archived task is read-only.
 - **With no task selected** (words on their way to another machine, an empty list), the chat names the Coordinator until
   a task is selected again.
-- **If the task you talk to goes away** (removed), you are back with the Coordinator, never on a neighbour's agent.
+- **If the task you talk to goes away** (removed), you are back with the top row's coordinator, never on a neighbour's agent.
 - **On a machine's or a project's row**, `Space` talks to that machine's or that project's own coordinator
   ([machine and project coordinators](machine-and-project-coordinators.md)).
 
 ### What the chat is made of
 
-It looks the same for the Coordinator and for a task's agent, at every window width:
+It looks the same for a coordinator and for a task's agent, at every window width:
 
 ```
- ○ Coordinator  idle
-╭───────────────────────────────────────────────────────────────────────────── alt+k more ↑ ─╮
+╭─ All machines ›  vm-str  ─────────────────────────────────────────────── alt+k more ↑ ─╮
+│ vm-str's coordinator. Looks after this machine: its projects, disk and agents.             │
 │ Coordinator:                                                                               │
 │ Added proj/4: Add an undo. An agent is on it.                                              │
 │                                                                                            │
@@ -586,14 +586,12 @@ It looks the same for the Coordinator and for a task's agent, at every window wi
   alt+c hide the latest message · ? all keys
 ```
 
-1. **One line that says who you talk to**: the board's own mark for where they stand (the mark the task's row has), the
-   name in bold, and one greyed line: what the task's row says (the Watcher's "doing now" line) or where it stands. For
-   the Coordinator: `idle`, `working`, `needs you`, `new reply`, and how many of your messages still wait to be sent.
-   - It is cut with `…` where it does not fit. The name is never cut to make room (a name longer than the window takes a
-     second line; in a window too short for that, the draft keeps the line).
-   - No program, model, effort or keys are named there.
-   - One thing gets a greyed line of its own under it: a default that changed while a Coordinator runs, with the command
-     that starts a new one on it.
+1. **Its top edge names who you talk to**: a ladder from the top row down (`All machines › vm-str › gtm › GTM-14`),
+   the current step lit, and the edge in its kind's colour: amber for a coordinator, violet for a task's agent. Its first
+   line says in one sentence what that agent looks after (`GTM-14's agent. Works on this one task, in its own copy of the
+   repo.`); one that never ran adds `Not started yet.` ([machine and project coordinators](machine-and-project-coordinators.md#the-chat-box-names-who-it-talks-to)).
+   - One thing gets a greyed line of its own above the box: a default that changed while a coordinator runs, with the
+     command that starts a new one on it.
 2. **One rounded box**: the newest thing said in that conversation, in grey, under a line that names who said it
    (`Coordinator:`, `Agent:`, `Reviewer:`, `You:`); then an empty line; then the line you type on (the prompt is only
    `❯`).
@@ -710,29 +708,29 @@ The box opens on the newest thing said, and holds only that. What came before is
   they moved as the oldest messages drop off (also in a reply said twice: the one you read). Scrolled to its end, it shows
   each new message as it comes. `Alt+K` goes further up with each press. It goes back to the newest message only when you
   take it there: `Alt+J` once more from its end, hiding the chat (`Alt+C`, or esc) and showing it again, or talking to
-  another (the task's agent, another task's, back to the Coordinator).
+  another (the task's agent, another task's, back to the top row's coordinator).
 - **A tall draft never takes the message away.** In a window too small for both, the draft gives rows back and scrolls
   inside what it keeps, so three lines of the message stay, and they still scroll.
 
 ### Hiding the message
 
 ```
- ○ Coordinator  idle
-──────────────────────────────────────────────────────────────────────────────────────────────
-❯ Send message to Coordinator
-──────────────────────────────────────────────────────────────────────────────────────────────
+╭─  vm-str  ─────────────────────────────────────────────────────────────────────────────────╮
+│ vm-str's coordinator. Looks after this machine: its projects, disk and agents.             │
+│ ❯ Send message to vm-str's coordinator                                                     │
+╰────────────────────────────────────────────────────────────────────────────────────────────╯
   alt+c show the latest message · ? all keys
 ```
 
 - **One key shows and hides the message**: `Alt+C` (on an empty text box, like `Alt+P` for the side panel), the same both
   ways and for the Coordinator and a task's agent alike. The hint line names it, and the board remembers your choice.
-- Hidden, there is only the line that says who you talk to and the line you type on, between two thin rules: a message is
+- Hidden, there is only the box's edge and first line that say who you talk to, and the line you type on: a message is
   never sent blind.
 - Nothing else shows or hides it: `Esc` never does.
 - A Coordinator that could not be started says why even while the message is hidden. `Alt+C` puts that error away too,
   until the next one.
-- Someone with no message to show (a task with no agent on it, the board with no Coordinator) gets the plain line between
-  two rules, whether the chat is hidden or not.
+- The board with no coordinator (`coordinator.agent none`) gets the plain line between two rules, whether the chat is
+  hidden or not: what you type is added as a task.
 - The whole chat of a task's agent is its own pane: `Enter`, with nothing typed, goes into it.
 - The text box and its hints are never pushed off the window: the message gives way first. In a very narrow window the box
   stays whole: the message wraps inside it, and a placeholder that does not fit is cut with `…`.

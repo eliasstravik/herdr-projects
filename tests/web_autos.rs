@@ -19,24 +19,26 @@ fn the_web_board_has_the_automations_one_whole_with_its_buttons_and_a_firing_tha
     let w = world();
     sw::clock::set(Some(sw::clock::now())); // "next in 2h" stays 2h however long the board takes
     let s = web(&w, "board", json!({}));
-    assert_eq!(s.at("list").arr("groups").len(), 0);
+    assert_eq!(s.at("list").arr("groups").iter().map(|g| g.b("machine")).collect::<Vec<_>>(), [true], "the top row alone: this machine's");
     assert!(!s.arr("menu").iter().any(|i| i.s("label").contains("automation")), "none: no group, and no key that shows a list of them");
     let mut set = Obj::new(); set.put("merge.by", "itself");
     let a = l::add(Add { name: "Look for old dependencies", prompt: "Check what is out of date.", trigger: Some(parse_schedule("every 2h").unwrap()), repo: "", folder: &w.root, settings: set, research: None }).unwrap();
     let b = l::add(Add { name: "Release note", prompt: "Write it.", trigger: Some(parse_event("merged", false).unwrap()), repo: "", folder: &w.root, settings: Obj::new(), research: None }).unwrap();
     l::turn(b.s("id"), false).unwrap(); w.add("Mine");
     let s = web(&w, "board", json!({}));
-    assert_eq!(s.at("list").arr("groups").iter().map(|g| (g.t("name"), g.arr("rows").len(), g.b("automations"))).collect::<Vec<_>>(), vec![("to do".into(), 1, false), ("automations".into(), 2, true)]);
+    assert_eq!(s.at("list").arr("groups").iter().map(|g| (g.t("name"), g.arr("rows").len(), g.b("automations"))).collect::<Vec<_>>(), vec![(sw::shown::words::clean(&sw::remote::check::hostname()), 0, false), ("to do".into(), 1, false), ("automations".into(), 2, true)]);
+    assert_eq!(s.at("list").s("selected"), "head:machine\t", "it opened on the top row, with no task");
+    let s = web(&w, "pick", json!({ "id": "proj/1" }));
     assert_eq!(s.at("list").s("selected"), "proj/1"); assert!(s.at("flags").at("automations").is_null()); assert_eq!(s.at("flags").at("onTask"), &json!(true));
-    let g = s.at("list").arr("groups")[1].clone();
+    let g = s.at("list").arr("groups")[2].clone();
     let (one, two) = (g.arr("rows")[0].clone(), g.arr("rows")[1].clone());
     // a task row's places: on or off where a task has its number, the trigger where it says something, the firing where it has its time
     assert_eq!((one.s("id"), one.s("title"), one.s("mark"), one.s("color"), one.at("quiet"), one.s("tag"), said(&one), one.s("time")), (format!("auto:{}", a.s("id")).as_str(), "Look for old dependencies", "⟳", "auto", &json!(false), "on", "every 2h".to_string(), "next in 2h"));
     assert_eq!((two.s("title"), two.s("mark"), two.at("markDim"), two.at("quiet"), two.s("tag"), said(&two), two.s("time")), ("Release note", "⟳", &json!(true), &json!(true), "off", "when a task is merged".to_string(), "never fired"), "off: quiet, the same mark dimmed, and the word");
     assert_eq!(g.s("color"), "auto", "the heading has the automations' own colour");
-    assert_eq!([one.i("tagWidth"), two.i("tagWidth"), s.at("list").arr("groups")[0].arr("rows")[0].i("tagWidth")], [5, 5, 5], "one column: the names start where the task's title does");
+    assert_eq!([one.i("tagWidth"), two.i("tagWidth"), s.at("list").arr("groups")[1].arr("rows")[0].i("tagWidth")], [5, 5, 5], "one column: the names start where the task's title does");
     // on the page its row shows all of what it says, on any width, and its word (on, off) stays when the tasks' numbers give way
-    assert_eq!((one.at("automation"), two.at("automation"), s.at("list").arr("groups")[0].arr("rows")[0].at("automation")), (&json!(true), &json!(true), &Value::Null));
+    assert_eq!((one.at("automation"), two.at("automation"), s.at("list").arr("groups")[1].arr("rows")[0].at("automation")), (&json!(true), &json!(true), &Value::Null));
     assert!(include_str!("../crates/web/src/webui/page/board.css").contains(".sw-row.is-automation .sw-says { display: block; overflow: visible; -webkit-line-clamp: none; }"));
     // tap one: it opens, whole, with its buttons; a watching device may look
     let s = web(&w, "pick", json!({ "id": one.s("id"), "open": true }));
@@ -121,9 +123,9 @@ fn the_web_board_has_each_tasks_tag_on_its_row_on_the_open_task_and_in_the_chats
     assert_eq!((s.at("panel").s("tag"), s.at("panel").s("title")), ("HSW-134", "Number one three four"));
     let s = web(&w, "press", json!({ "id": "talk" }));
     assert_eq!((s.at("chat").s("tag"), s.at("chat").s("name")), ("HSW-134", "Number one three four"));
-    // The box says who gets your words by its frame too: this task's status colour (nobody started it: the dim grey),
-    // and the plain text colour for the Coordinator.
-    assert_eq!(s.at("chat").s("box"), "todo"); assert!(s.at("send").s("place").contains("starts an agent"), "{}", s.at("send"));
+    // The box says who gets your words by its frame too: a task's agent's violet, and the plain text colour where
+    // no coordinator can run.
+    assert_eq!(s.at("chat").s("box"), "auto"); assert!(s.at("send").s("place").contains("starts an agent"), "{}", s.at("send"));
     assert_eq!(web(&w, "press", json!({ "id": "talk" })).at("chat").s("box"), "text");
     web(&w, "press", json!({ "id": "talk" }));
     web(&w, "pick", json!({ "id": big, "open": false }));

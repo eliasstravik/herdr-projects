@@ -19,7 +19,7 @@ const SCREEN: usize = 120;
 const AT: i64 = NOW - 2 * 3600000;
 fn has(text: &str, re: &str) -> bool { Regex::new(re).unwrap().is_match(text) }
 /// One press of an arrow key, and on past a heading (the arrows stop on those too): these tests are about the rows.
-fn step(s: &mut State, d: i64) { for _ in 0..4 { arrow(s, d); if !s.sel.starts_with("head:") { return; } } arrow(s, -d); }
+fn step(s: &mut State, d: i64) { for _ in 0..4 { arrow(s, d); if !s.sel.starts_with("head:") { return; } } for _ in 0..4 { arrow(s, -d); if !s.sel.starts_with("head:") { return; } } }
 fn rec(base: Value, more: Value) -> Rec { let mut o = obj(base); for (k, v) in more.as_object().unwrap() { o.insert(k.clone(), v.clone()); } Arc::new(o) }
 fn work(more: Value) -> Rec { rec(json!({ "state": "working", "stage": "working", "agent": "claude", "at": AT }), more) }
 fn ready(more: Value) -> Rec { rec(json!({ "state": "blocked", "kind": "permission", "stage": "approval", "agent": "claude", "at": AT }), more) }
@@ -124,8 +124,8 @@ fn a_row_with_nothing_to_say_yet_keeps_its_second_line_which_says_something_true
     let mut s = board(&[talks, passed, finished], "", "");
     let after = list(&mut s, 60, 20, SCREEN);
     assert_eq!(before.iter().position(|l| l.contains("Finished")), after.iter().position(|l| l.contains("Finished")), "nothing below moved");
-    let under: Vec<String> = after.iter().filter(|l| l.starts_with("      ")).map(|l| l.trim_end().to_string()).collect();
-    assert_eq!(under, ["      Pass · 1 minor", "      Reading the code."]);
+    let under: Vec<String> = after.iter().filter(|l| l.starts_with("        ")).map(|l| l.trim_end().to_string()).collect();
+    assert_eq!(under, ["        Pass · 1 minor", "        Reading the code."]);
 }
 
 #[test]
@@ -133,12 +133,12 @@ fn the_highlight_covers_both_lines_of_the_selected_row_and_the_arrow_keys_go_tas
     let mut s = board(&[live()[0].clone(), live()[1].clone(), quiet()[0].clone()], "p/1", "");
     let l = lit(&mut s, 80);
     assert_eq!(l.len(), 2, "{l:?}");
-    assert!(has(&l[0], r"^[ ▌]◐ #\d+ Agent at work +█+░+ +40% 12m left +2h *$"), "{l:?}");
-    assert_eq!(l[1].trim_end(), "▌     Reading the panel and its tests.", "the bar in the gutter is on every line of the selected row");
+    assert!(has(&l[0], r"^[ ▌]  ◐ #\d+ Agent at work +█+░+ +40% 12m left +2h *$"), "{l:?}");
+    assert_eq!(l[1].trim_end(), "▌       Reading the panel and its tests.", "the bar in the gutter is on every line of the selected row");
     assert!(l.iter().all(|x| len(x) == 80), "each to the window's edge");
     step(&mut s, 1); assert_eq!(s.sel, "p/2", "one press, one task: never onto a row's second line");
-    let l: Vec<String> = lit(&mut s, 80).iter().map(|x| x.chars().take(23).collect::<String>().trim_end().to_string()).collect();
-    assert_eq!(l, ["▌◑ #2 Under review", "▌     Running the tests"]);
+    let l: Vec<String> = lit(&mut s, 80).iter().map(|x| x.chars().take(25).collect::<String>().trim_end().to_string()).collect();
+    assert_eq!(l, ["▌  ◑ #2 Under review", "▌       Running the tests"]);
     step(&mut s, 1); assert_eq!(s.sel, "p/8");
     assert_eq!(lit(&mut s, 80).len(), 1, "a done row is one line");
     step(&mut s, -1); step(&mut s, -1); step(&mut s, -1); assert_eq!(s.sel, "p/1");
@@ -148,19 +148,19 @@ fn the_highlight_covers_both_lines_of_the_selected_row_and_the_arrow_keys_go_tas
 fn the_list_scrolls_by_whole_rows_no_row_is_ever_shown_half_and_the_selected_one_is_always_whole() {
     let many: Vec<Rec> = (1..=5).map(|n| work(json!({ "id": format!("p/{n}"), "title": format!("Working {n}"), "msg": format!("Says {n}") })))
         .chain((0..3).map(|n| todo(json!({ "id": format!("p/{}", n + 20), "title": format!("Later {}", n + 1) })))).collect();
-    let first = Regex::new(r"^[ ▌]◐ #\d+ +Working (\d+) ").unwrap();
-    let second = Regex::new(r"^[ ▌] {6}Says (\d+)").unwrap();
+    let first = Regex::new(r"^[ ▌]  ◐ #\d+ +Working (\d+) ").unwrap();
+    let second = Regex::new(r"^[ ▌] {8}Says (\d+)").unwrap();
     for h in [2, 3, 4, 5, 8] {
         let mut s = board(&many, "p/1", "");
         let look = |s: &mut State| {
             let lines = list(s, 60, h, SCREEN);
             assert_eq!(lines.len(), h);
             for (n, l) in lines.iter().enumerate() {
-                if let Some(c) = first.captures(l) { assert_eq!(lines.get(n + 1).map(|x| x.trim_end().replacen('▌', " ", 1)), Some(format!("       Says {}", &c[1])), "h {h}, at {}: a first line with no second\n{}", s.sel, lines.join("\n")); }
-                if let Some(c) = second.captures(l) { assert!(n > 0 && has(&lines[n - 1], &format!(r"^[ ▌]◐ #\d+ +Working {} ", &c[1])), "h {h}, at {}: a second line with no first\n{}", s.sel, lines.join("\n")); }
+                if let Some(c) = first.captures(l) { assert_eq!(lines.get(n + 1).map(|x| x.trim_end().replacen('▌', " ", 1)), Some(format!("         Says {}", &c[1])), "h {h}, at {}: a first line with no second\n{}", s.sel, lines.join("\n")); }
+                if let Some(c) = second.captures(l) { assert!(n > 0 && has(&lines[n - 1], &format!(r"^[ ▌]  ◐ #\d+ +Working {} ", &c[1])), "h {h}, at {}: a second line with no first\n{}", s.sel, lines.join("\n")); }
             }
             let n: usize = s.sel.split('/').nth(1).unwrap().parse().unwrap();
-            let want = if n < 20 { format!(r"^[ ▌]◐ #{n}  Working {n} ") } else { format!(r"^[ ▌]○ #{n} Later {} ", n - 19) };
+            let want = if n < 20 { format!(r"^[ ▌]  ◐ #{n}  Working {n} ") } else { format!(r"^[ ▌]  ○ #{n} Later {} ", n - 19) };
             assert!(lines.iter().any(|l| has(l, &want)), "h {h}: {} is in view\n{}", s.sel, lines.join("\n"));
         };
         look(&mut s);
@@ -169,7 +169,7 @@ fn the_list_scrolls_by_whole_rows_no_row_is_ever_shown_half_and_the_selected_one
     }
     // In a list of one line there is no room for both: the selected row's first line, its name, is what shows.
     let mut s = board(&many, "p/3", "");
-    assert!(has(&list(&mut s, 60, 1, SCREEN)[0], r"^[ ▌]◐ #3  Working 3 "));
+    assert!(has(&list(&mut s, 60, 1, SCREEN)[0], r"^[ ▌]  ◐ #3  Working 3 "));
 }
 
 #[test]
@@ -179,22 +179,22 @@ fn a_list_taller_than_its_room_shows_fewer_done_rows_first_down_to_the_newest_on
         .chain(std::iter::once(todo(json!({ "id": "p/30", "title": "Later" })))).collect();
     let mut s = board(&all, "p/1", "");
     let look = |s: &mut State, h: usize| { let lines: Vec<String> = list(s, 60, h, SCREEN).iter().map(|l| l.trim_end().to_string()).collect(); let d = lines.iter().filter(|l| l.contains("Finished")).count(); let note = lines.iter().find(|l| l.contains("more")).cloned(); (lines, d, note) };
-    let note = |n: usize| Some(format!("   ↓ {n} more done ({} shows them)", key_name("allDone")));
+    let note = |n: usize| Some(format!("     ↓ {n} more done ({} shows them)", key_name("allDone")));
     let done_rows = |s: &State| s.rows.iter().filter(|r| matches!(r, Row::Rec(o) if o.s("state") == "done")).count();
-    // Room for all of it: the usual fold, the latest five. working 2+6, done 2+5+1, to do 2+1 = 19 lines.
+    // Room for all of it: the usual fold, the latest five. The top row 2, working 1+6, done 2+5+1, to do 2+1 = 20 lines.
     let (_, d, n) = look(&mut s, 30); assert_eq!((d, n), (5, note(3)));
-    assert_eq!(look(&mut s, 19).1, 5);
+    assert_eq!(look(&mut s, 20).1, 5);
     // Each line short takes one done row away, and the note counts it.
-    let (_, d, n) = look(&mut s, 18); assert_eq!((d, n), (4, note(4)));
-    let (_, d, n) = look(&mut s, 16); assert_eq!((d, n), (2, note(6)));
-    for h in [18, 17, 16, 15] { let (lines, _, _) = look(&mut s, h); assert!(lines.iter().any(|l| l.contains("Working 3")) && lines.iter().any(|l| l.contains("Later")), "everything else is in view at {h}"); assert_eq!(s.top, 0); }
+    let (_, d, n) = look(&mut s, 19); assert_eq!((d, n), (4, note(4)));
+    let (_, d, n) = look(&mut s, 17); assert_eq!((d, n), (2, note(6)));
+    for h in [19, 18, 17, 16] { let (lines, _, _) = look(&mut s, h); assert!(lines.iter().any(|l| l.contains("Working 3")) && lines.iter().any(|l| l.contains("Later")), "everything else is in view at {h}"); assert_eq!(s.top, 0); }
     // The newest one always stays; under that the list scrolls, as it always did.
-    let (_, d, n) = look(&mut s, 15); assert_eq!((d, n), (1, note(7)));
+    let (_, d, n) = look(&mut s, 16); assert_eq!((d, n), (1, note(7)));
     assert_eq!(done_rows(&s), 1);
     assert_eq!(s.rows.iter().find_map(|r| if let Row::Rec(o) = r { (o.s("state") == "done").then(|| o.t("id")) } else { None }), Some("p/10".to_string()));
     look(&mut s, 8); assert_eq!(done_rows(&s), 1);
     // More room brings them back; the selected task is never folded away; all done, or a search, folds nothing.
     assert_eq!(look(&mut s, 30).1, 5);
-    s.sel = "p/16".into(); s.rows = fold_rows(&mut s); assert!(look(&mut s, 15).0.iter().any(|l| l.contains("Finished 7")));
+    s.sel = "p/16".into(); s.rows = fold_rows(&mut s); assert!(look(&mut s, 16).0.iter().any(|l| l.contains("Finished 7")));
     s.sel = "p/1".into(); s.whole = true; s.rows = fold_rows(&mut s); assert_eq!(look(&mut s, 30).1, 8); assert_eq!(done_rows(&s), 8);
 }

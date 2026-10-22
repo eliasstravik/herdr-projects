@@ -22,7 +22,7 @@ pub fn apply(s: &mut State, d: Done, fx: &mut Vec<Effect>) {
     }
     for t in d.then {
         match t {
-            Then::Sel(id) => { s.sel = id; }
+            Then::Sel(id) => { s.sel = id.clone(); s.stick = id; } // held until a load brings it (list.rs: relist)
             Then::Archived(id) => { if let Some(r) = s.items.iter().find(|r| r.s("id") == id) { let mut r = (**r).clone(); r.remove("pending"); s.archive_undo = Some(r); } s.left = id; }
             Then::Left(id) => s.left = id,
             Then::AutoGone => { s.auto_open = false; s.editing = None; }

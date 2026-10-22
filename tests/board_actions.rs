@@ -19,7 +19,7 @@ fn ready_to_approve_the_merge_asks_first_the_menu_acts_remove_asks_and_messages_
     let mut s = open(&w.root, 34);
     s.s.sel = id.clone(); s.load();
     let t80 = s.screen(80).join("\n");
-    assert!(has(&t80, r"\n ▾ ready to approve *\n[ ▌]◆ PRJ-\d+ +Make f +R#1 +\d+s ago *\n[ ▌]        Pass · 1 minor *\n") && !has(&t80, "blocked|approve to merge|r1"), "{t80}");
+    assert!(has(&t80, r"\n   ▾ ready to approve *\n[ ▌]  ◆ PRJ-\d+ +Make f +R#1 +\d+s ago *\n[ ▌]          Pass · 1 minor *\n") && !has(&t80, "blocked|approve to merge|r1"), "{t80}");
     let text = s.screen(120).join("\n");
     assert!(has(&text, r"│  State        ◆ ready to approve · \d+s ago *\n"), "{text}");
     assert!(has(&text, r"│  Review ─+ *\n[^\n]*│  Review 1     ✓ Pass · 1 minor · \d+s ago *\n[^\n]*│               Good\."), "{text}");
@@ -53,13 +53,13 @@ fn ready_to_approve_the_merge_asks_first_the_menu_acts_remove_asks_and_messages_
     assert_eq!(task(&id).s("stage"), "merging");
     assert!(s.text().contains("PRJ-1: approved, merging"), "{}", s.text());
     settle(&id); s.load();
-    assert!(has(&s.screen(80).join("\n"), r"\n ▾ done *\n[ ▌]✓ PRJ-\d+ +Make f +R#1 +\d"));
+    assert!(has(&s.screen(80).join("\n"), r"\n   ▾ done *\n[ ▌]  ✓ PRJ-\d+ +Make f +R#1 +\d"));
     // the ? menu: every key the board has, in three groups
     s.s.sel = "proj/2".into(); s.load(); s.rows = 60; s.press(&["?"]);
     let text = s.text();
     assert!(text.starts_with(" Menu  for PRJ-2 \"Other\""), "{text}");
     let keys: Vec<String> = text.split("\n on a row").next().unwrap().lines().filter(|l| has(l, r"^ (❯| ) \S")).map(|l| l.chars().skip(3).take(8).collect::<String>().trim().to_string()).filter(|x| !x.is_empty()).collect();
-    assert_eq!(keys, vec!["↑ ↓", "pgup pgd", "tab", "enter", "space", "esc", "?", "y  n", "ctrl+l", "ctrl+r", "ctrl+s", "ctrl+x", "ctrl+a", "ctrl+p", "ctrl+e", "ctrl+z", "ctrl+f", "ctrl+c", "ctrl+t", "alt+c", "alt+k", "alt+j", "alt+p", "alt+t", "alt+a", "alt+s", "alt+d", "alt+m"]);
+    assert_eq!(keys, vec!["↑ ↓", "← →", "pgup pgd", "tab", "enter", "space", "esc", "?", "y  n", "ctrl+l", "ctrl+r", "ctrl+s", "ctrl+x", "ctrl+a", "ctrl+p", "ctrl+e", "ctrl+z", "ctrl+f", "ctrl+c", "ctrl+t", "alt+c", "alt+k", "alt+j", "alt+p", "alt+t", "alt+a", "alt+s", "alt+d", "alt+m"]);
     assert_eq!(s.s.menu.as_ref().unwrap().at, -1, "no line is picked when the menu opens");
     s.press(&["enter"]); assert!(s.s.menu.is_some());
     let k = |id: &str| regex::escape(&key_name(id));

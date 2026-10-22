@@ -57,11 +57,11 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
 
 ## Where it shows
 
-- **A machine's row and a project's row stand for their coordinator**: a machine's with every machine shown or grouped
-  by machine, a project's grouped by repo; the filter Coordinators (`Tab`) leaves only those
-  ([machine and project coordinators](machine-and-project-coordinators.md)). The main Coordinator has no row.
-- **While it is on, its row's mark is `∞`**, in the marks' column where a task has its mark, left of the caret. Nothing
-  else of it on the list: no columns, no line under it. The main Coordinator's `∞` is in the chat's header.
+- **A machine's row and a project's row stand for their coordinator**, and the top row (`All machines`, or the only
+  machine) for the top-level one; the filter Coordinators (`Tab`) leaves only those
+  ([machine and project coordinators](machine-and-project-coordinators.md)).
+- **While it is on, its row's mark is `∞`**, in the marks' column where a task has its mark, left of the caret, with
+  its time on the right and what it does under it while it works, as any coordinator's row.
 
   ```
    ∞ ▾ herdr-projects · HSW
@@ -72,7 +72,7 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
     of its state, as a task's does: red at `needs you` (bold, as a task that waits for you), yellow while `working`,
     quiet while `asleep`, plain text else. No colour of its own. A coordinator that needs you itself (`!`) or could not
     start (`✗`) shows that mark instead.
-  - Off, nothing of autopilot shows; an idle coordinator has no mark at all.
+  - Off, nothing of autopilot shows: its row has its coordinator's own mark (`○` idle).
 - **The state word**, the first that holds:
 
   | Word | Means |

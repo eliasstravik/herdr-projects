@@ -134,7 +134,8 @@ pub fn relist(s: &mut State) {
     if layout == s.selection_layout && old.is_some() && !reading && (after.is_none() || after.as_ref().map(|a| a.order != old.as_ref().unwrap().order).unwrap_or(false) || crossed) {
         s.sel = land(&s.selection_rows, before.unwrap(), &ids, &|id| folded_heads.iter().any(|h| h == id)).unwrap_or_else(|| if after.is_some() { selected.clone() } else { first_row(&ids) });
     }
-    if !ids.contains(&s.sel) { s.sel = first_row(&ids); }
+    // A task just added is waited for (done.rs: Sel); any other row gone hands the selection on.
+    if !ids.contains(&s.sel) && !(s.sel == s.stick && !s.sel.is_empty() && !is_head(&s.sel)) { s.sel = first_row(&ids); }
     s.selection_rows = next;
     s.selection_layout = layout;
     // With no automation selected, nothing of one is open.
@@ -146,7 +147,7 @@ pub fn relist(s: &mut State) {
         if !s.value().trim().is_empty() { s.draft_away = Some(Away { text: s.value(), to: s.reply_id.clone(), cwd: s.ctx.cwd.clone(), warned: false }); }
         s.input.set_text(""); s.full = false;
         if !s.reply_id.is_empty() { s.reply = false; s.flash("The task you were replying to is gone. Nothing was sent; your words are put away.", Ink::Yellow); }
-        else { s.flash("The row you were on is gone. Nothing was sent; your words for the Coordinator are put away.", Ink::Yellow); }
+        else { s.flash("The row you were on is gone. Nothing was sent; your words for its coordinator are put away.", Ink::Yellow); }
     }
     sync_reply(s);
     if s.sel != selected { s.rows = fold_rows(s); } // the done fold for the new selection
@@ -188,7 +189,9 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
             // A machine's heading, with every machine shown: folded, its one line stands for all its groups. One with
             // nothing in view shows folded (`0 tasks`), so that its machine coordinator is still a space away.
             // The one machine shown is the top row: always there.
-            if p.heading && (n > 0 || has_bare || super::heads::empty_shown(s) || s.scope != "*" || super::shows::host_needs(s, &p.host)) {
+            // One other machine shown that does not answer has no row: it says why above the list.
+            let unread = s.scope != "*" && !super::top::answered(s);
+            if p.heading && !unread && (n > 0 || has_bare || super::heads::empty_shown(s) || super::top::answered(s) || super::shows::host_needs(s, &p.host)) {
                 let id = machine_id(&p.host);
                 // Only empty repos' headings under it: nothing to fold.
                 let shut = super::heads::folded(s, &id) && n > 0;

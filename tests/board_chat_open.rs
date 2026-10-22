@@ -28,7 +28,7 @@ fn read_twice(b: &mut Board, from: usize, to: usize, state: &str, twice: &[usize
 }
 fn tick(b: &mut Board) { sw::clock::advance(1_000); let now = sw::clock::now(); let fx = update(&mut b.s, Event::Tick(now)); b.run(fx); }
 /// The lines in the chat's box, without the line you type on.
-fn shown(b: &mut Board) -> Vec<String> { let c = b.chat(120); assert!(c.framed, "{}", c.lines.join("\n")); c.boxed.into_iter().take_while(|l| !l.starts_with('❯')).collect() }
+fn shown(b: &mut Board) -> Vec<String> { let c = crate::board_chat::chat(b, 120); assert!(c.framed, "{}", c.lines.join("\n")); c.boxed.into_iter().take_while(|l| !l.starts_with('❯')).collect() }
 fn has(lines: &[String], text: &str) -> bool { lines.iter().any(|l| l.contains(text)) }
 
 #[test]
@@ -67,14 +67,15 @@ fn an_opened_chat_stays_open_on_what_you_read_while_the_coordinator_works_and_sa
 #[test]
 fn hiding_the_chat_or_talking_to_another_closes_an_opened_chat_nothing_else_does() {
     let w = world();
-    w.add("Task number 1");
+    let id = w.add("Task number 1");
     let mut b = open(&w.root, 34); b.s.side = false;
+    b.s.sel = id; // (the board opens on the top row: here the task is the one talked to with space)
     read(&mut b, 1, 12, "idle");
     let closed = shown(&mut b);
     // Up, each press further, to its start, and up more there: still open, on its start. Down to its end, and once more:
     // closed to the newest.
     b.press(&["alt+k"]); let mut n = 0; let mut was = usize::MAX;
-    while b.s.chat_fit.as_ref().unwrap().top > 0 { let top = b.s.chat_fit.as_ref().unwrap().top; assert!(top < was, "further up each press"); was = top; b.press(&["alt+k"]); b.chat(120); n += 1; assert!(n < 20); }
+    while b.s.chat_fit.as_ref().unwrap().top > 0 { let top = b.s.chat_fit.as_ref().unwrap().top; assert!(top < was, "further up each press"); was = top; b.press(&["alt+k"]); crate::board_chat::chat(&mut b, 120); n += 1; assert!(n < 20); }
     let start = shown(&mut b); assert!(has(&start, "Message 1, line 1."), "{start:?}");
     b.press(&["alt+k", "alt+k"]); assert_eq!(shown(&mut b), start, "up at its start stays open there");
     while b.s.chat_fit.as_ref().unwrap().below > 0 { b.press(&["alt+j"]); shown(&mut b); n += 1; assert!(n < 40); }
@@ -87,11 +88,11 @@ fn hiding_the_chat_or_talking_to_another_closes_an_opened_chat_nothing_else_does
     b.press(&["alt+c", "alt+c"]); assert_eq!(shown(&mut b), closed);
     // The task's agent, and back to the Coordinator: it starts closed again.
     b.press(&["alt+k"]); assert_ne!(shown(&mut b), closed);
-    b.press(&["space"]); b.chat(120); b.press(&["space"]); read(&mut b, 1, 12, "idle");
+    b.press(&["space"]); crate::board_chat::chat(&mut b, 120); b.press(&["space"]); read(&mut b, 1, 12, "idle");
     assert!(!b.s.reply); assert_eq!(shown(&mut b), closed);
     // A window too short for the box folds it to its head line for a while: open, it is still open after.
     b.press(&["alt+k"]); let open_at = shown(&mut b);
-    b.rows = 12; b.chat(120); assert!(b.s.chat_fit.is_none());
+    b.rows = 12; crate::board_chat::chat(&mut b, 120); assert!(b.s.chat_fit.is_none());
     b.rows = 34; read(&mut b, 1, 12, "working"); assert_eq!(shown(&mut b), open_at);
 }
 

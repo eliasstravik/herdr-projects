@@ -6,7 +6,8 @@ use common::board::{open, Board};
 use common::*;
 use serde_json::json;
 
-/// The chat block of this screen: the line that says who you talk to, and how many task rows the list above it has.
+/// The chat block of this screen: the text box's top edge (its first line inside says who you talk to), and how many
+/// task rows the list above it has.
 fn pinned(s: &mut Board, rows: usize, who: &str, what: &str) -> (usize, usize) {
     s.rows = rows;
     let lines = s.screen(120);
@@ -15,13 +16,13 @@ fn pinned(s: &mut Board, rows: usize, who: &str, what: &str) -> (usize, usize) {
     let last = rows - 1;
     assert!(regex::Regex::new(r"^[ ▌] \S.* · ").unwrap().is_match(&lines[last]), "{note}: the hints are the last line: {:?}", lines[last]);
     assert_eq!(lines.iter().rposition(|l| regex::Regex::new(r"^(─+|╰─+╯)$").unwrap().is_match(l)).unwrap(), last - 1, "{note}: the text box sits right on the hints");
-    let head = lines.iter().position(|l| l.starts_with(who)).unwrap_or_else(|| panic!("{note}: {}", lines.join("\n")));
-    assert!(regex::Regex::new(r"^(─+|╭─.*╮)$").unwrap().is_match(&lines[head + 1]), "{note}: the box is right under that line");
+    let head = lines.iter().position(|l| regex::Regex::new(r"^╭─.*╮$").unwrap().is_match(l)).unwrap_or_else(|| panic!("{note}: {}", lines.join("\n")));
+    assert!(lines[head + 1].starts_with(&format!("│ {who}")), "{note}: the box's first line says who: {}", lines[head + 1]);
     if rows >= 16 { assert_eq!(lines[head - 1].trim(), "", "{note}: an empty line sets the chat off from the list"); }
     for l in &lines[head..=last] { assert_ne!(l.trim(), "", "{note}: an empty line inside the chat block"); }
     let tasks = lines[..head].iter().filter(|l| l.contains("Task number")).count();
-    // (the main Coordinator's row, on top, takes two lines of it: itself and the empty line under it)
-    if rows >= 16 { assert!(tasks + 8 >= head, "{note}: {tasks} tasks in {head} lines"); } // and the filter row
+    // the header, the filter row, the machine's row on top, its group, the line that counts the rest, the empty lines
+    if rows >= 16 { assert!(tasks + 7 >= head, "{note}: {tasks} tasks in {head} lines"); }
     (head, tasks)
 }
 
@@ -33,16 +34,18 @@ fn a_longer_message_from_the_coordinator_grows_the_chat_block_upwards_and_it_sta
     let mut s = open(&w.root, 84); s.s.side = false;
     // The Coordinator, as the loader read it: idle, having said one line; then six.
     let says = |s: &mut Board, said: &str| { s.s.data.can_dispatch = true; s.s.chat_open = true; s.s.data.coord = sw::coordinator::look::Look { state: "idle".into(), readable: true, said: said.into(), ..Default::default() }; };
+    // One machine: its row is the top row, and its coordinator the top-level one (update/top.rs).
+    let me = sw::board::update::top::coordinator_of(&sw::board::update::heads::label(&s.s, ""));
     says(&mut s, "Fine.");
-    let short = pinned(&mut s, 84, " ○ Coordinator", "a one-line message");
+    let short = pinned(&mut s, 84, &me, "a one-line message");
     says(&mut s, &(1..=6).map(|i| format!("Line {i} of what it said.")).collect::<Vec<_>>().join("\n"));
-    let long = pinned(&mut s, 84, " ○ Coordinator", "long message");
+    let long = pinned(&mut s, 84, &me, "long message");
     assert_eq!(long.0, short.0 - 5, "its five more lines, taken from the list");
-    let boxed: Vec<String> = s.screen(120)[long.0 + 1..long.0 + 11].iter().map(|l| regex::Regex::new(r" +│$").unwrap().replace(l, "").into_owned()).collect();
-    let mut want = vec![format!("╭{}╮", "─".repeat(118)), "│ Coordinator:".to_string()];
+    let boxed: Vec<String> = s.screen(120)[long.0 + 2..long.0 + 11].iter().map(|l| regex::Regex::new(r" +│$").unwrap().replace(l, "").into_owned()).collect();
+    let mut want = vec!["│ Coordinator:".to_string()];
     want.extend((1..=6).map(|i| format!("│ Line {i} of what it said.")));
-    want.extend(["│".to_string(), "│ ❯ Send message to Coordinator".to_string()]);
+    want.extend(["│".to_string(), format!("│ ❯ Send message to {me}")]);
     assert_eq!(boxed, want);
-    for rows in [200, 30, 84] { pinned(&mut s, rows, " ○ Coordinator", "long message, resized"); }
-    assert_eq!(pinned(&mut s, 84, " ○ Coordinator", "long message, back"), long);
+    for rows in [200, 30, 84] { pinned(&mut s, rows, &me, "long message, resized"); }
+    assert_eq!(pinned(&mut s, 84, &me, "long message, back"), long);
 }

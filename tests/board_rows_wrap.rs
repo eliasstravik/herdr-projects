@@ -87,7 +87,8 @@ fn narrow_screen_the_selected_row_shows_its_whole_name_on_as_many_lines_as_it_ne
     let mut s = board(&all(), "p/2", "");
     let d = drawn(&mut s, 52, 30);
     let shown: Vec<String> = plain(&d).into_iter().filter(|l| has(l, "Rethink|told before|Bring")).collect();
-    assert_eq!(shown, ["▌○ #2 Rethink how the Coordinator works, restarts", "▌     and remembers what it was told before it", " ○ #3 Bring the board to herdr's web UI"]);
+    // One step in under the top row (update/depth.rs).
+    assert_eq!(shown, ["▌ ○ #2 Rethink how the Coordinator works, restarts", "▌      and remembers what it was told before it", "  ○ #3 Bring the board to herdr's web UI"]);
     let lit: Vec<&Inked> = d.iter().filter(|l| is_lit(l)).collect();
     assert_eq!(lit.len(), 3); assert!(lit.iter().all(|l| len(&l.text()) == 52));
 }
@@ -98,13 +99,14 @@ fn narrow_screen_to_do_and_done_rows_stay_one_line_and_go_without_their_time_so_
     let narrow = plain(&drawn(&mut s, 52, 30));
     let wide = plain(&drawn(&mut s, 140, 30));
     let lg = long();
-    assert!(narrow.contains(&" ✓ #4 Third row line on narrow screens for progress…".to_string()) && narrow.contains(&" ○ #3 Bring the board to herdr's web UI".to_string()), "{}", narrow.join("\n"));
-    assert!(narrow.contains(&format!(" ○ #2 {}…", lg.s("title").chars().take(45).collect::<String>())), "a name cut at the edge, not before a time: {}", narrow.join("\n"));
-    assert!(!narrow.iter().any(|l| has(l, r"^ [○✓].* 5h")));
+    // One step in under the top row (update/depth.rs): a cell less for the names.
+    assert!(narrow.contains(&"  ✓ #4 Third row line on narrow screens for progres…".to_string()) && narrow.contains(&"  ○ #3 Bring the board to herdr's web UI".to_string()), "{}", narrow.join("\n"));
+    assert!(narrow.contains(&format!("  ○ #2 {}…", lg.s("title").chars().take(44).collect::<String>())), "a name cut at the edge, not before a time: {}", narrow.join("\n"));
+    assert!(!narrow.iter().any(|l| has(l, r"^ +[○✓].* 5h")));
     // A wider screen is as it was: the time at the right of every row, one line for a to-do or done row, two for a live one.
     assert_eq!(wide.iter().filter(|l| l.ends_with(" 5h ago")).count(), 3);
-    assert!(has(wide.iter().find(|l| l.contains("Research")).unwrap(), r"^[ ▌]◐ #\d+ Research.* 5h$"));
-    assert_eq!(wide.iter().filter(|l| !l.trim().is_empty()).count(), 3 + 5);
+    assert!(has(wide.iter().find(|l| l.contains("Research")).unwrap(), r"^[ ▌] +◐ #\d+ Research.* 5h$"));
+    assert_eq!(wide.iter().filter(|l| !l.trim().is_empty()).count(), 1 + 3 + 5, "the top row, three headings, five lines of rows");
     let mut sel = board(&all(), "p/2", "");
-    assert_eq!(plain(&drawn(&mut sel, 140, 30)).iter().filter(|l| !l.trim().is_empty()).count(), 3 + 5, "the selected row does not wrap on a wide screen");
+    assert_eq!(plain(&drawn(&mut sel, 140, 30)).iter().filter(|l| !l.trim().is_empty()).count(), 1 + 3 + 5, "the selected row does not wrap on a wide screen");
 }

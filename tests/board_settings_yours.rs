@@ -22,7 +22,9 @@ fn pick(b: &mut Board, name: &str) {
 fn whose(b: &Board) -> Option<Whose> { b.s.editing.as_ref().map(|e| e.whose.clone()) }
 /// A board with every machine shown: this machine's tasks and otherbox's one.
 fn every_machine() -> (World, Board, String) {
-    let w = world_with(Opts { repo: true, settings: json!({ "board.machines": "otherbox" }), ..Default::default() });
+    // A coordinator can run here: a machine's and a repo's row are their coordinators'.
+    let w = world_with(Opts { repo: true, settings: json!({ "board.machines": "otherbox", "coordinator.agent": "claude" }), ..Default::default() });
+    let home = w.base.join("home-coord"); std::fs::create_dir_all(&home).unwrap(); unsafe { std::env::set_var("HERDR_PROJECTS_COORDINATOR_DIR", &home) };
     let id = w.add("Mine");
     let mut b = open(&w.root, 120); b.s.side = false;
     update(&mut b.s, Event::Machines(sw::remote::machines()));
@@ -100,7 +102,8 @@ fn on_a_repos_heading_it_is_your_entry_for_that_repo_on_a_task_the_tasks_own_and
     b.press(&["ctrl+e"]);
     assert!(b.s.editing.is_none());
     let said = b.text().replace("\n  ", " ");
-    assert!(said.contains("settings are changed on otherbox: herdr-projects set <name> <value> --machine-coordinator there"), "{said}");
+    // otherbox sends no coordinators of its own (an older version): its row is its top-level coordinator's
+    assert!(said.contains("settings are changed on otherbox: herdr-projects set <name> <value> --main-coordinator there"), "{said}");
     assert!(b.s.full, "its coordinator shown whole, read-only, in the page's place");
 }
 

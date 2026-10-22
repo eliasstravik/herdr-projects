@@ -97,7 +97,7 @@ use common::*;
 use sw::board::keys::key_name;
 use sw::json::*;
 
-fn chat_box(s: &mut common::board::Board) -> (String, Vec<String>) { let c = s.chat(120); let lines = s.screen(120); let top = lines.iter().rposition(|l| l.starts_with("╭─")).unwrap(); (lines[top].clone(), c.boxed) }
+fn chat_box(s: &mut common::board::Board) -> (String, Vec<String>) { let c = crate::board_chat::chat(s, 120); let lines = s.screen(120); let top = lines.iter().rposition(|l| l.starts_with("╭─")).unwrap(); (lines[top].clone(), c.boxed) }
 
 #[test]
 fn a_review_under_way_shows_what_the_reviewer_says_never_its_screen_and_a_working_agents_words_never_its_tool_calls() {

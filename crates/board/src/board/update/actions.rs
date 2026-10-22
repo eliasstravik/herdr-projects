@@ -207,9 +207,9 @@ pub fn undo(s: &mut State, fx: &mut Vec<Effect>) {
             let title = s.items.iter().find(|r| r.s("id") == d.to).map(|r| r.t("title")).or_else(|| super::coords::of_head(s, &d.to).map(|c| c.name)).unwrap_or_else(|| d.to.clone());
             let nm = format!("\"{}\"", crate::text::cut(&clean(&title), 40));
             s.draft_away = Some(d.clone());
-            return s.flash(if d.to.is_empty() { format!("Those words were for the Coordinator. {} goes back to it, then {} brings them back.", key_name("talk"), key_name("undo")) }
+            return s.flash(if d.to.is_empty() { format!("Those words were for {}. {} goes back to it, then {} brings them back.", super::top::top(s).map(|t| t.name).unwrap_or_else(|| "the top row's coordinator".into()), key_name("talk"), key_name("undo")) }
                 else if !now.is_empty() { format!("Those words were for {nm}. Move to it, then {} brings them back.", key_name("undo")) }
-                else if super::heads::is_head(&d.to) { format!("Those words were for the {}. Select its row and press {}, then {} brings them back.", clean(&title), key_name("talk"), key_name("undo")) }
+                else if super::heads::is_head(&d.to) { format!("Those words were for {}. Select its row and press {}, then {} brings them back.", clean(&title), key_name("talk"), key_name("undo")) }
                 else { format!("Those words were for the agent on {nm}. Select it and press {}, then {} brings them back.", key_name("talk"), key_name("undo")) }, Ink::Yellow);
         }
         s.draft_away = None;

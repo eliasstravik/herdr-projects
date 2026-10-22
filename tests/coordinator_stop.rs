@@ -70,7 +70,7 @@ fn a_start_that_fails_loses_nothing_a_restart_asked_for_meanwhile_still_happens_
     unhook(&w);
     assert_eq!(agents(&w).len(), 1); assert_eq!(agents(&w)[0].at("agent").s("kind"), "claude"); assert!(!get(&w).b("want")); assert_eq!(look(&so).state, "idle");
     assert_eq!(look(&so).error, "", "the failure of the start it replaced is not shown over a Coordinator that is there");
-    let mut s = open(&w.root, 34); assert!(!s.text().contains("could not be started")); assert!(s.text().contains("Coordinator  idle"), "{}", s.text());
+    let mut s = open(&w.root, 34); assert!(!s.text().contains("could not be started")); assert!(regex::Regex::new(r"\n[ ▌]○ [▾▸] ").unwrap().is_match(&s.text()), "idle: its row's plain mark, {}", s.text());
     // A start that failed is not tried again every few seconds by itself; your next message tries.
     // Only pi is missing: claude stays installed as the world has it, never asked of this machine.
     let versions = sw::store::files::data_dir().join("versions.json");

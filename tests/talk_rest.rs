@@ -23,7 +23,7 @@ fn claude_rows(prompt: &str, said: &[&str]) -> Vec<Value> {
     }
     v
 }
-fn boxed(s: &mut common::board::Board) -> Vec<String> { s.chat(120).boxed }
+fn boxed(s: &mut common::board::Board) -> Vec<String> { crate::board_chat::chat(s, 120).boxed }
 fn with(r: &Obj, more: Value) -> Obj { let mut o = r.clone(); for (k, v) in more.as_object().unwrap() { o.insert(k.clone(), v.clone()); } o }
 
 #[test]

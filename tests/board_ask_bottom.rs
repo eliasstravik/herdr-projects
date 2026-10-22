@@ -32,8 +32,8 @@ fn every_question_box_ends_on_the_last_line_at_any_height_and_in_the_popup() {
         // The box (five lines) takes the place of the text box and its hints (four): the list gives up one line.
         s.rows = 30;
         let tall = s.screen(100);
-        let at = |l: &[String]| l.iter().rposition(|x| x.starts_with(" + New task")).unwrap();
-        assert_eq!((at(&before), at(&tall)), (25, 24), "{}", tall.join("\n"));
+        let at = |l: &[String]| l.iter().position(|x| x.starts_with('─')).unwrap();
+        assert_eq!((at(&before), at(&tall)), (26, 25), "{}\n{}", before.join("\n"), tall.join("\n"));
         assert_eq!(&tall[tall.len() - 5..], &["─".repeat(100), " ? Merge PRJ-1 \"Make f\" into main?".into(), "   A merge cannot be undone.".into(), "   y = merge · n = do not merge".into(), "─".repeat(100)].map(|l| format!("{l:<100}")).map(|l| l.trim_end().to_string()), "{}", tall.join("\n"));
         // The short window: the detail gives way before the question and its keys.
         let short = pinned(&mut s, 4, "Merge PRJ-1", "merge, short");

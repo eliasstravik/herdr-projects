@@ -1,7 +1,7 @@
 //! The filter row on top: <machine> │ All · Coordinators · Needs you · Working · Ready · To do · Done · Automations,
 //! each with its count, the one shown lit in its own colour. Tab and shift+tab go round it, a click picks one, the list
-//! shows only that kind of row; a machine's row and a project's row stand for their coordinators (space talks to
-//! one), and Coordinators leaves only those and the main Coordinator's. Alt+S groups by status, repo, machine.
+//! shows only that kind of row; the top row, a machine's row and a project's row stand for their coordinators (space
+//! talks to one), and Coordinators leaves only those. Alt+S groups by status, repo, machine. ← → fold every heading.
 use crate::common;
 use common::board::open;
 use common::*;
@@ -89,11 +89,11 @@ fn space_on_a_machines_row_or_a_projects_row_talks_to_its_coordinator_and_coordi
     s.press(&["alt+s"]);
     s.s.sel = group_id(&s.s, "", "proj"); s.load();
     s.press(&["space"]);
-    assert!(s.s.reply && s.text().contains("Send message to proj coordinator"), "{}", s.text());
+    assert!(s.s.reply && s.text().contains("│ proj's coordinator. Looks after the proj repo"), "{}", s.text());
     s.typed("hello"); s.press(&["enter"]); drain(); s.load();
     let t = s.text();
-    // one line; idle, its coordinator has no mark (the column blank), no time, nothing under it: the chat has it
-    assert!(regex::Regex::new(r"\n[ ▌]  ▾ proj · PRJ *\n[ ▌] +○ PRJ-1").unwrap().is_match(&t) && !t.contains("\n     Proj is quiet.") && !t.contains("◈"), "{t}");
+    // one line: idle, its coordinator has a task's idle mark and when it last spoke; what it said is the chat's
+    assert!(regex::Regex::new(r"\n[ ▌]  ○ ▾ proj · PRJ +(\d+s ago)? *\n[ ▌] +○ PRJ-1").unwrap().is_match(&t) && !t.contains("\n       Proj is quiet.") && !t.contains("◈"), "{t}");
     s.press(&["space", "alt+s", "alt+s"]); assert!(!s.s.by_repo && !s.s.by_machine);
     // every machine: space on a machine's row talks to its machine coordinator
     update(&mut s.s, Event::Machines(sw::remote::machines()));
@@ -103,26 +103,25 @@ fn space_on_a_machines_row_or_a_projects_row_talks_to_its_coordinator_and_coordi
     to_all(&mut s);
     s.s.sel = machine_id("otherbox"); s.load();
     s.press(&["space"]);
-    assert!(s.s.reply && s.text().contains("Send message to otherbox coordinator") && s.text().contains("Far machine is quiet."), "{}", s.text());
+    assert!(s.s.reply && s.text().contains("Send message to otherbox's coordinator") && s.text().contains("Far machine is quiet."), "{}", s.text());
     s.press(&["space"]);
-    // Coordinators: each machine's row and its projects' rows; no task, and no row of a main Coordinator's
+    // Coordinators: the top row, each machine's row and its projects' rows; no task
     s.press(&["tab"]); assert_eq!(s.s.show, 1);
-    let mut want = vec![host.clone(), "proj".into(), "otherbox".into(), "far".into()];
-    if sw::board::update::remotes::place(&s.s, "otherbox") < sw::board::update::remotes::place(&s.s, "") { want = vec!["otherbox".into(), "far".into(), host.clone(), "proj".into()]; }
+    let mut want = vec!["All machines".to_string(), host.clone(), "proj".into(), "otherbox".into(), "far".into()];
+    if sw::board::update::remotes::place(&s.s, "otherbox") < sw::board::update::remotes::place(&s.s, "") { want = vec!["All machines".into(), "otherbox".into(), "far".into(), host.clone(), "proj".into()]; }
     assert_eq!(heads(&s), want);
     assert!(tasks_shown(&s).is_empty());
-    // this machine's own coordinator never started: its row only heads its project's, which runs, and is not counted
+    // this machine's own coordinator and the one of all machines never started: rows that head the others, not counted
     assert!(regex::Regex::new(r"Coordinators 3 ").unwrap().is_match(&s.screen(160)[1]), "{:?}", s.screen(160));
     assert!(!s.text().contains("Coordinator on otherbox"), "{}", s.text());
-    // a project's row folds nothing there: enter talks to it, as space does
+    // enter on a project's row there goes into its coordinator, on its machine
     s.s.sel = format!("head:repo\totherbox\tfar"); s.load();
-    assert!(s.text().contains("enter talk to it"), "{}", s.text());
-    s.press(&["enter"]); assert!(s.s.reply && s.text().contains("Send message to far coordinator"), "{}", s.text());
-    s.press(&["space"]);
-    // a machine's row with its projects' rows under it folds them
+    assert!(s.text().contains("enter go into it"), "{}", s.text());
+    let j = format!("{:?}", s.hold("enter")); assert!(j.contains("coordinator-open") && j.contains("project:far"), "{j}");
+    // ← on a machine's row folds its projects' rows away, → brings them back
     s.s.sel = machine_id("otherbox"); s.load();
-    s.press(&["enter"]); assert!(s.s.folded.contains(&machine_id("otherbox")) && !s.s.reply, "{}", s.text());
-    s.press(&["enter"]);
+    s.press(&["left"]); assert!(s.s.folded.contains(&machine_id("otherbox")) && !heads(&s).contains(&"far".to_string()), "{}", s.text());
+    s.press(&["right"]); assert!(heads(&s).contains(&"far".to_string()));
     // one machine shown: its own only, and the count is its
     while s.s.scope != "otherbox" { s.press(&["alt+m"]); }
     assert_eq!(heads(&s), vec!["otherbox".to_string(), "far".into()], "that machine's row and its project's; its own Coordinator has none");
@@ -153,13 +152,13 @@ fn alt_s_groups_by_status_by_repo_by_machine_and_round_again() {
     w.add("One"); w.add("Two");
     let host = sw::shown::words::clean(&sw::remote::check::hostname());
     let mut s = open(&w.root, 40); s.s.side = false;
-    let plain = |s: &common::board::Board| heads(s).into_iter().filter(|h| h != "Coordinator").collect::<Vec<_>>();
-    assert_eq!(plain(&s), vec!["to do"]);
-    s.press(&["alt+s"]); assert!(s.s.by_repo); assert_eq!(plain(&s), vec!["proj"]);
+    // the one machine is the top row in every grouping
+    assert_eq!(heads(&s), vec![host.clone(), "to do".into()]);
+    s.press(&["alt+s"]); assert!(s.s.by_repo); assert_eq!(heads(&s), vec![host.clone(), "proj".into()]);
     s.press(&["alt+s"]); assert!(s.s.by_machine && !s.s.by_repo);
-    assert_eq!(plain(&s), vec![host.clone()], "the machine's row alone, no status heading under it");
+    assert_eq!(heads(&s), vec![host.clone()], "the machine's row alone, no status heading under it");
     assert_eq!(tasks_shown(&s).len(), 2);
-    s.press(&["alt+s"]); assert!(!s.s.by_machine && !s.s.by_repo); assert_eq!(plain(&s), vec!["to do"]);
+    s.press(&["alt+s"]); assert!(!s.s.by_machine && !s.s.by_repo); assert_eq!(heads(&s), vec![host.clone(), "to do".into()]);
 }
 
 #[test]
@@ -176,13 +175,16 @@ fn the_menus_start_line_puts_an_agent_on_the_task() {
     assert_ne!(task(&id).s("stage"), "todo", "{:?}", task(&id));
 }
 
-/// Enter on a heading (and a click on it) folds it to one line that says what it holds, and unfolds it.
+/// ← on a heading (and a click on it) folds it to one line that says what it holds, → unfolds it; enter never folds.
 fn folds(s: &mut common::board::Board, id: &str, holds: &str) {
     s.s.sel = id.to_string(); s.load();
     let name = match s.s.rows.iter().find(|r| matches!(r, Row::Head { id: h, .. } if h == id)) { Some(Row::Head { name, .. }) => sw::shown::words::repo_label(name), _ => panic!("no heading {id}: {}", s.text()) };
-    s.press(&["enter"]);
-    assert!(s.s.folded.contains(id) && regex::Regex::new(&format!(r"\n[ ▌]\s*▸ {}( · \w+)?  {holds}", regex::escape(&name))).unwrap().is_match(&s.text()), "{id} folds to {holds}: {}", s.text());
-    s.press(&["enter"]);
+    let _ = s.hold("enter"); assert!(!s.s.folded.contains(id), "enter never folds {id}");
+    s.press(&["right"]); assert!(!s.s.folded.contains(id), "→ on an open heading leaves it open");
+    s.press(&["left"]);
+    assert!(s.s.folded.contains(id) && regex::Regex::new(&format!(r"\n[ ▌]\s*(\S )?▸ {}( · \w+)?  {holds}", regex::escape(&name))).unwrap().is_match(&s.text()), "{id} folds to {holds}: {}", s.text());
+    s.press(&["left"]); assert!(s.s.folded.contains(id), "← again leaves it folded");
+    s.press(&["right"]);
     assert!(!s.s.folded.contains(id), "{id} unfolds");
     // a click does the same
     s.lines();
@@ -194,7 +196,7 @@ fn folds(s: &mut common::board::Board, id: &str, holds: &str) {
 }
 
 #[test]
-fn enter_folds_every_kind_of_heading_under_every_filter_and_grouping_and_space_talks() {
+fn left_and_right_fold_every_kind_of_heading_under_every_filter_and_grouping_and_space_talks() {
     let w = coord_world("otherbox");
     w.add("Here one");
     let asks = w.add("Asks you"); sw::actions::filing::report(&asks, sw::actions::filing::Report { state: "blocked".into(), msg: "which one?".into(), ..Default::default() }).unwrap();
@@ -211,12 +213,12 @@ fn enter_folds_every_kind_of_heading_under_every_filter_and_grouping_and_space_t
     s.press(&["alt+s"]);
     { let g = group_id(&s.s, "", "proj"); folds(&mut s, &g, "2 tasks"); }
     s.s.sel = group_id(&s.s, "", "proj"); s.load();
-    s.press(&["space"]); assert!(s.text().contains("Send message to proj coordinator"), "{}", s.text());
+    s.press(&["space"]); assert!(s.text().contains("│ proj's coordinator. Looks after the proj repo"), "{}", s.text());
     s.typed("hello"); s.press(&["enter"]); drain(); s.press(&["space"]); s.load();
     { let g = group_id(&s.s, "", "proj"); folds(&mut s, &g, "2 tasks"); }
-    // by machine: this machine's row
+    // by machine: this machine's row, the top row, says what it holds open or folded
     s.press(&["alt+s"]); assert!(s.s.by_machine);
-    folds(&mut s, &machine_id(""), "2 tasks");
+    folds(&mut s, &machine_id(""), "1 project · 2 tasks");
     s.press(&["alt+s"]);
     // every machine: this machine's row and the other one's, by status and by repo
     update(&mut s.s, Event::Machines(sw::remote::machines()));
@@ -225,13 +227,14 @@ fn enter_folds_every_kind_of_heading_under_every_filter_and_grouping_and_space_t
         "tasks": [{ "id": "far/1", "title": "Far away", "state": "idle", "stage": "todo", "at": now, "created": now, "snap": { "folder": "~/far" } }] });
     update(&mut s.s, Event::Remote { label: "otherbox".into(), answer: Ok(answer) });
     to_all(&mut s);
+    folds(&mut s, &sw::board::update::top::all_id(), "2 machines · 3 tasks");
     folds(&mut s, &machine_id(""), "2 tasks");
     folds(&mut s, &machine_id("otherbox"), "1 task");
     { let g = group_id(&s.s, "otherbox", "to do"); folds(&mut s, &g, "1 task"); }
     s.press(&["alt+s"]);
     { let g = group_id(&s.s, "otherbox", "far"); folds(&mut s, &g, "1 task"); }
     s.s.sel = machine_id("otherbox"); s.load();
-    s.press(&["space"]); assert!(s.text().contains("Send message to otherbox coordinator"), "{}", s.text());
+    s.press(&["space"]); assert!(s.text().contains("Send message to otherbox's coordinator"), "{}", s.text());
     s.press(&["space", "alt+s", "alt+s"]);
     // Coordinators: a machine's row folds its projects' rows
     s.press(&["tab"]); assert_eq!(s.s.show, 1);
@@ -247,11 +250,13 @@ fn ctrl_s_starts_a_coordinator_ctrl_x_stops_it_and_ctrl_o_is_its_autopilot() {
     let jobs = |fx: Vec<sw::board::update::Effect>| fx.iter().filter_map(|e| match e { sw::board::update::Effect::Run(j) => Some(format!("{j:?}")), _ => None }).collect::<Vec<_>>().join(" | ");
     s.press(&["alt+s"]);
     s.s.sel = group_id(&s.s, "", "proj"); s.load();
-    assert!(s.text().contains("ctrl+s start · ctrl+x stop · ctrl+o autopilot ·"), "{}", s.text());
+    assert!(s.text().contains("ctrl+s start · ctrl+x stop · ctrl+o autopilot"), "{}", s.text());
     let j = jobs(s.hold("ctrl+s")); assert!(j.contains("CoordRun") && j.contains("project:proj") && j.contains("on: true"), "{j}");
     let j = jobs(s.hold("ctrl+x")); assert!(j.contains("CoordRun") && j.contains("on: false"), "{j}");
     let j = jobs(s.hold("ctrl+o")); assert!(j.contains("Pilot") && j.contains("project:proj") && j.contains("on: true"), "{j}");
-    // the main Coordinator, which has no row: on a status group's heading, as the chat talks to it there
+    // the top row's coordinator (the only machine's is the top-level one), on its row and on a status group's heading
+    s.s.sel = machine_id(""); s.load();
+    let j = jobs(s.hold("ctrl+s")); assert!(j.contains("CoordRun") && j.contains("to: \"\""), "{j}");
     s.press(&["alt+s", "alt+s"]); s.s.sel = group_id(&s.s, "", "to do"); s.load();
     let j = jobs(s.hold("ctrl+s")); assert!(j.contains("CoordRun") && j.contains("to: \"\""), "{j}");
     s.press(&["alt+s"]);
@@ -266,31 +271,4 @@ fn ctrl_s_starts_a_coordinator_ctrl_x_stops_it_and_ctrl_o_is_its_autopilot() {
     s.press(&["alt+s"]);
     s.s.sel = "proj/1".into(); s.load();
     s.press(&["ctrl+o"]); assert!(s.s.msg.contains("turns a coordinator's autopilot on and off"), "{}", s.s.msg);
-}
-
-/// A machine's or a project's row: its coordinator's state as a task's mark, only where it says something; idle,
-/// stopped or never started, the column blank. No ◈ and no main Coordinator's row anywhere.
-#[test]
-fn machine_and_project_rows_mark_their_coordinators_state_with_a_tasks_marks_or_none() {
-    let w = coord_world("otherbox");
-    w.add("Fix the login");
-    let mut s = open(&w.root, 40); s.s.side = false;
-    update(&mut s.s, Event::Machines(sw::remote::machines()));
-    let answer = json!({ "host": "otherbox", "version": "9.0.0", "coordinator": { "state": "working" }, "tasks": [],
-        "coordinators": { "machine": { "state": "working" }, "project:asks": { "state": "blocked" }, "project:broke": { "state": "none", "error": "no claude" }, "project:quiet": { "state": "idle" }, "project:pilot": { "state": "idle" }, "project:stopped": { "state": "exited" }, "project:never": { "state": "none" } },
-        "autopilot": { "project:pilot": { "on": true, "state": "working" } } });
-    update(&mut s.s, Event::Remote { label: "otherbox".into(), answer: Ok(answer) });
-    to_all(&mut s); s.press(&["tab"]); assert_eq!(s.s.show, 1);
-    // every row shows, though none holds anything under it
-    let l = s.screen(120);
-    let row = |name: &str| l.iter().find(|x| x.trim_start_matches(['▌', ' ', '◐', '!', '✗', '∞']).trim_start().starts_with(&format!("▾ {name}")) || x.contains(&format!("▸ {name}"))).cloned().unwrap_or_else(|| panic!("no {name}: {l:#?}"));
-    assert!(row("otherbox").contains("◐ ▾ otherbox"), "working: {l:#?}");
-    assert!(row("asks").contains("! ▾ asks") && row("broke").contains("✗ ▾ broke") && row("pilot").contains("∞ ▾ pilot"), "{l:#?}");
-    assert!(row("quiet").contains("    ▾ quiet"), "idle: no mark, the column blank: {l:#?}");
-    // only those that run: a stopped or never started one is not there, nor in the count (this machine's: none run)
-    let text = l.join("\n");
-    assert!(!heads(&s).iter().any(|h| h == "stopped" || h == "never") && text.contains("Coordinators 5 "), "{text}");
-    assert!(!text.contains("◈") && !text.contains("◎") && !s.s.rows.iter().any(|r| matches!(r, Row::Head { name, .. } if name == "Coordinator")), "{text}");
-    let red = s.inked(120).iter().flat_map(|x| x.0.clone()).filter(|p| p.t == "!" || p.t == "✗").all(|p| p.c == Ink::Red && p.bold);
-    assert!(red, "what needs you and what went wrong: red, bold");
 }

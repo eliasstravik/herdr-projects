@@ -32,7 +32,7 @@ fn tab_says_starting_at_once_and_the_real_state_replaces_it() {
     assert_eq!(task(&id).s("stage"), "todo");
     assert_eq!(jobs(&fx).len(), 1, "{fx:?}");
     let lines = s.screen(120);
-    assert!(has(&row(&lines, "Make f"), r"^[ ▌]\S PRJ-1 +Make f +Starting…"), "{}", lines.join("\n"));
+    assert!(has(&row(&lines, "Make f"), r"^[ ▌]  \S PRJ-1 +Make f +Starting…"), "{}", lines.join("\n"));
     assert!(has(&lines.join("\n"), r"│  Now +Starting…") && !lines.join("\n").contains("No agent is on this yet"), "{}", lines.join("\n"));
     // The same key again while it starts: nothing is started twice, and the message says it is under way.
     let again = s.hold("ctrl+s");
@@ -64,7 +64,7 @@ fn a_read_that_began_before_the_job_ended_does_not_take_the_word_away() {
     // The next read began after it: the task is pinned, and says so as it always does.
     s.load();
     assert!(s.s.pending.is_empty() && task(&id).b("pinned"));
-    assert!(has(&s.screen(120).join("\n"), r"▾ pinned[^\n]*\n[ ▌]○ PRJ-1 +Make g"), "{}", s.text());
+    assert!(has(&s.screen(120).join("\n"), r"▾ pinned[^\n]*\n[ ▌]  ○ PRJ-1 +Make g"), "{}", s.text());
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn a_job_that_fails_says_so_in_red_on_its_row_and_in_its_panel() {
     s.load();
     let lines = s.screen(120);
     let r = row(&lines, "Breaks");
-    assert!(has(&r, r"^[ ▌]✗ PRJ-1 +Breaks +Could not start: "), "{}", lines.join("\n"));
+    assert!(has(&r, r"^[ ▌]  ✗ PRJ-1 +Breaks +Could not start: "), "{}", lines.join("\n"));
     assert!(has(&lines.join("\n"), r"│  Now +Could not start: "), "{}", lines.join("\n"));
     let inked = s.inked(120);
     assert!(inked.iter().any(|l| l.0.iter().any(|p| p.t.contains("Could not start") && p.c == sw::shown::ink::Ink::Red)), "said in red");

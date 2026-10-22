@@ -33,29 +33,31 @@ fn space_on_a_repos_heading_talks_to_its_project_coordinator_and_space_again_goe
     s.press(&["alt+s"]); assert!(s.s.by_repo);
     let head = group_id(&s.s, "", "proj");
     s.s.sel = head.clone(); s.load();
-    assert!(s.text().contains("space talk to the proj coordinator"), "{}", s.text());
+    let host = sw::shown::words::clean(&sw::remote::check::hostname());
+    assert!(s.text().contains("space talk to proj's coordinator"), "{}", s.text());
     s.press(&["space"]);
     assert!(s.s.reply && s.s.reply_id == head);
     let t = s.text();
-    assert!(has(&t, r"\n[ ▌]· proj coordinator  not started: your first message starts it *\n"), "{t}");
-    assert!(t.contains("❯ Send message to proj coordinator") && t.contains("space back to the Coordinator"), "{t}");
+    // the box names it, from the top row down, and says it never ran: its box asks for a first message
+    assert!(has(&t, &format!(r"\n╭─ {} ›  proj  ─+╮\n│ proj's coordinator\. Looks after the proj repo: plans its tasks, starts agents\. Not started yet\. +│\n", regex::escape(&host))), "{t}");
+    assert!(t.contains("❯ Ask it something, e.g. \"what's left to do here?\"") && t.contains(&format!("space back to {host}'s coordinator")), "{t}");
     s.typed("what is open here?");
-    assert!(s.text().contains("enter send to the proj coordinator"), "{}", s.text());
+    assert!(s.text().contains("enter send to") && s.text().contains("proj's coordinator"), "{}", s.text());
     s.press(&["enter"]); drain(); s.load();
     assert_eq!(s.s.value(), "");
     assert_eq!(prompts(&w, "sw-coordinator-proj"), vec!["what is open here?"]);
     assert!(sw::coordinator::state::get(&w.socket).is_none(), "the Coordinator got nothing");
     let t = s.text();
-    assert!(has(&t, r"\n[ ▌]○ proj coordinator  idle *\n") && t.contains("│ proj coordinator:") && t.contains("Proj has one task open."), "{t}");
+    assert!(has(&t, r"\n│ proj's coordinator\. Looks after the proj repo: plans its tasks, starts agents\. +│\n") && t.contains("│ proj's coordinator:") && t.contains("Proj has one task open."), "{t}");
     // the tab it is in says whose it is
     assert!(w.state().arr("tabs").iter().any(|x| x.s("label") == "proj coordinator"));
     // the chat follows the selection, as with tasks: to the task's agent and back to the repo's coordinator
     s.press(&["down"]); assert_eq!((s.s.sel.as_str(), s.s.reply_id.as_str()), (id.as_str(), id.as_str()));
-    assert!(!s.text().contains("proj coordinator  idle"));
-    s.press(&["up"]); assert!(s.text().contains("proj coordinator  idle"));
-    // space again: back to the Coordinator
+    assert!(!s.text().contains("│ proj's coordinator.") && has(&s.text(), r"╭─ [^\n]* proj ›  PRJ-1  ─"), "{}", s.text());
+    s.press(&["up"]); assert!(s.text().contains("│ proj's coordinator."));
+    // space again: back to the top row's coordinator (the only machine's, the top-level one)
     s.press(&["space"]); assert!(!s.s.reply);
-    assert!(has(&s.text(), r"\n[ ▌]· Coordinator  not started"), "{}", s.text());
+    assert!(s.text().contains(&format!("│ {host}'s coordinator. Looks after this machine")), "{}", s.text());
     // a status group's heading has no coordinator: space says where they are
     s.press(&["alt+s", "alt+s"]); assert!(!s.s.by_repo && !s.s.by_machine); // by machine, then by status
     s.s.sel = group_id(&s.s, "", "to do"); s.load();
@@ -79,7 +81,7 @@ fn space_on_a_machines_heading_talks_to_that_machines_coordinator_here_or_there(
     // this machine's heading: its machine coordinator, started here
     s.s.sel = machine_id(""); s.load();
     s.press(&["space"]);
-    assert!(s.text().contains(&format!("{host} coordinator  not started")), "{}", s.text());
+    assert!(s.text().contains(&format!("│ {}'s coordinator. Looks after this machine: its projects, disk and agents. Not started yet.", sw::shown::words::clean(&host))), "{}", s.text());
     s.typed("how busy are you?"); s.press(&["enter"]); drain(); s.load();
     assert_eq!(prompts(&w, "sw-coordinator-machine"), vec!["how busy are you?"]);
     assert!(s.text().contains("This machine is busy."), "{}", s.text());
@@ -87,17 +89,18 @@ fn space_on_a_machines_heading_talks_to_that_machines_coordinator_here_or_there(
     // otherbox's heading: what that machine sent of its own machine coordinator; your words go there
     s.s.sel = machine_id("otherbox"); s.load();
     let t = s.text();
-    assert!(has(&t, r"\n[ ▌]○ otherbox coordinator  idle *\n") && t.contains("Otherbox is quiet."), "{t}");
+    assert!(has(&t, r"\n╭─ All machines ›  otherbox  ─+[^\n]*\n│ otherbox's coordinator\. Looks after this machine") && t.contains("Otherbox is quiet."), "{t}");
     s.typed("anything to do?");
     let fx = s.hold("enter");
     assert!(fx.iter().any(|e| matches!(e, Effect::Run(Job::Dispatch { machine, text, to, .. }) if machine.label == "otherbox" && text == "anything to do?" && to == "machine")), "{fx:?}");
-    // a machine on an older version has no such coordinators, and says so
+    // a machine on an older version has no machine coordinator: its row is its top-level one
     assert_eq!(s.s.value(), "", "sent: the box is empty again");
     update(&mut s.s, Event::Remote { label: "otherbox".into(), answer: Ok(json!({ "host": "otherbox", "version": "0.2.0", "coordinator": { "state": "none" },
         "tasks": [{ "id": "proj/1", "title": "Far away", "state": "idle", "stage": "todo", "at": now, "created": now, "snap": { "folder": "~/far" } }] })) });
     s.s.sel = machine_id("otherbox"); s.load();
     let t = s.text();
-    assert!(t.contains("otherbox runs an older herdr-projects, which has no machine or project coordinators: update it there."), "{t}");
+    // its row talks to the one coordinator it has, its top-level one, named after the machine
+    assert!(t.contains("otherbox's coordinator. Looks after this machine") && !t.contains("has no machine or project coordinators"), "{t}");
 }
 
 #[test]
@@ -111,9 +114,9 @@ fn the_web_board_names_a_headings_coordinator_and_sends_it_your_words() {
     let head = s.at("list").arr("groups").iter().find(|g| g.s("id").starts_with("head:repo")).map(|g| g.t("id")).unwrap_or_else(|| panic!("{}", s.at("list")));
     // a tap on the heading selects it (and folds it): the switch's other choice is its coordinator
     let s = web("fold", json!({ "id": head }));
-    assert_eq!(s.at("chat").s("head"), "proj coordinator", "{}", s.at("chat"));
+    assert_eq!(s.at("chat").s("head"), "proj's coordinator", "{}", s.at("chat"));
     let s = web("press", json!({ "id": "talk" }));
-    assert_eq!((s.at("chat").at("toAgent"), s.at("chat").s("name")), (&json!(true), "proj coordinator"), "{}", s.at("chat"));
+    assert_eq!((s.at("chat").at("toAgent"), s.at("chat").s("name")), (&json!(true), "proj's coordinator"), "{}", s.at("chat"));
     web("send", json!({ "text": "how is it?", "to": { "id": head, "reply": true, "scope": "" } }));
     drain();
     assert_eq!(prompts(&w, "sw-coordinator-proj"), vec!["how is it?"]);
@@ -134,7 +137,7 @@ fn words_put_away_for_a_headings_coordinator_come_back_only_to_it() {
     assert_eq!(s.s.value(), ""); assert_eq!(s.s.draft_away.as_ref().map(|d| d.to.clone()), Some(head.clone()));
     s.press(&["space"]); assert!(!s.s.reply);
     s.press(&["ctrl+z"]);
-    assert_eq!(s.s.value(), "", "not to the Coordinator"); assert!(s.s.msg.contains("Those words were for the proj coordinator. Select its row and press space"), "{}", s.s.msg);
+    assert_eq!(s.s.value(), "", "not to the Coordinator"); assert!(s.s.msg.contains("Those words were for") && s.s.msg.contains("proj's coordinator. Select its row and press space"), "{}", s.s.msg);
     s.press(&["space"]); s.press(&["ctrl+z"]);
     assert_eq!(s.s.value(), "half a thought");
 }

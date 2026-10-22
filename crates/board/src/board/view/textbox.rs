@@ -69,7 +69,7 @@ pub fn chat_box(s: &mut State, width: usize, max_rows: usize, r: Option<&Obj>, m
     let gap = inner.saturating_sub(down.width() + if down.is_empty() { 0 } else { 1 });
     let under = if above > 0 { edge(&s.input.rule(gap, true)) } else { Inked::spaces(if down.is_empty() { 0 } else { gap }) }.add(if down.is_empty() { Inked::new() } else { Inked::plain(" ").add(down) });
     // Its top edge names who it talks to, and its first line what that one looks after (chat_title.rs).
-    let mut out = match &title { Some(t) if !(above > 0 && message.is_empty()) => vec![super::chat_title::edge(t, width, up), row(&t.first)], _ => vec![edge("╭").add(top).add(edge("╮"))] };
+    let mut out = match &title { Some(t) if !(above > 0 && message.is_empty()) => if s.chat_folded { vec![super::chat_title::edge(t, width, up)] } else { vec![super::chat_title::edge(t, width, up), row(&t.first)] }, _ => vec![edge("╭").add(top).add(edge("╮"))] };
     out.extend(message.iter().map(row));
     if !message.is_empty() { out.push(row(&under)); }
     let body_at = out.len();

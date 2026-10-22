@@ -27,21 +27,23 @@ fn the_automations_are_a_group_of_the_main_list_with_keys_that_turn_fire_and_rem
     let mut s = open(&w.root, 44); s.s.side = false;
     assert!(!s.text().contains("automations"), "none: no heading at all");
     let all = three(&w);
-    l::turn(all[2].s("id"), false).unwrap(); s.load();
+    l::turn(all[2].s("id"), false).unwrap(); s.s.sel = "proj/1".into(); s.load();
     let lines = s.screen(120);
-    assert_eq!(lines[3..10].to_vec(), vec![" ▾ to do", "▌○ PRJ-1 Mine                                                                                                     0s ago", "", " ▾ automations",
-        " ⟳ on    Look for old dependencies  every 2h                                                             next in  2h",
-        " ⟳ on    Release note after a merge  when a task is merged, in every repo                                    never fired",
-        " ⟳ off   Nightly audit  daily 03:00                                                                          never fired"]);
+    // the top row, this machine's, then its groups a step in
+    assert!(regex::Regex::new(r"^ ▾ \S+  1 project · 1 task$").unwrap().is_match(&lines[3]), "{lines:#?}");
+    assert_eq!(lines[4..11].to_vec(), vec!["   ▾ to do", "▌  ○ PRJ-1 Mine                                                                                                   0s ago", "", "   ▾ automations",
+        "   ⟳ on    Look for old dependencies  every 2h                                                           next in  2h",
+        "   ⟳ on    Release note after a merge  when a task is merged, in every repo                                  never fired",
+        "   ⟳ off   Nightly audit  daily 03:00                                                                        never fired"]);
     assert_eq!(lines[0], " herdr-projects  proj · PRJ");
     assert!(regex::Regex::new(r"^ +All 1 +Coordinators \d+   Needs you 0   Working 0   Ready 0   To do 1   Done 0   Automations 3$").unwrap().is_match(&lines[1]), "the filter row: {}", lines[1]);
     // the arrows go from the tasks on to the automations' heading and their rows; the hint line shows the keys that act there
     s.press(&["down"]); assert_eq!(s.s.sel, "head:status\t\tautomations"); s.press(&["down"]); assert_eq!(s.s.sel, row_id(&all[0])); assert!(s.s.current().is_none());
-    assert!(s.screen(120)[7].starts_with("▌⟳ on    Look for old dependencies "));
+    assert!(s.screen(120)[8].starts_with("▌  ⟳ on    Look for old dependencies "));
     assert_eq!(s.screen(140).last().unwrap(), "  enter open this automation · space turn this automation off · ctrl+s fire it now · ctrl+x remove it · ctrl+e its settings · ? all keys");
     // a narrow screen: two lines each, nothing cut
     let narrow = s.screen(60);
-    assert_eq!(narrow[6..13].to_vec(), vec![" ▾ automations", "▌⟳ on    Look for old dependencies", "▌        every 2h                                 next in 2h", " ⟳ on    Release note after a merge", "         when a task is merged, in every repo    never fired", " ⟳ off   Nightly audit", "         daily 03:00                             never fired"]);
+    assert_eq!(narrow[7..14].to_vec(), vec!["   ▾ automations", "▌  ⟳ on    Look for old dependencies", "▌          every 2h                               next in 2h", "   ⟳ on    Release note after a merge", "           when a task is merged, in every repo  never fired", "   ⟳ off   Nightly audit", "           daily 03:00                           never fired"]);
     for l in s.screen(30) { assert!(sw::text::width(&l) <= 30, "{l}"); }
     // space: off and on
     s.press(&["space"]); assert_eq!(sw::store::automations::automation(all[0].s("id")).unwrap().at("on"), &json!(false));
@@ -53,7 +55,7 @@ fn the_automations_are_a_group_of_the_main_list_with_keys_that_turn_fire_and_rem
     assert!(s.text().contains("\"Look for old dependencies\" fired: PRJ-2 was added and an agent is on it."), "{}", s.text());
     assert_eq!(task("proj/2").s("stage"), "starting");
     assert_eq!(s.s.sel, row_id(&all[0]));
-    assert!(regex::Regex::new(r"\n[ ▌]. PRJ-2 Look for old dependencies \[auto\]").unwrap().is_match(&s.text()), "{}", s.text());
+    assert!(regex::Regex::new(r"\n[ ▌] *. PRJ-2 Look for old dependencies \[auto\]").unwrap().is_match(&s.text()), "{}", s.text());
     s.press(&["ctrl+s"]); assert!(s.text().contains("did not fire: its last task, PRJ-2, is still being worked on."));
     // a key that acts on a task does nothing here
     s.press(&["down"]); assert_eq!(s.s.sel, row_id(&all[1]));
@@ -67,9 +69,9 @@ fn the_automations_are_a_group_of_the_main_list_with_keys_that_turn_fire_and_rem
     // find finds them too, by name; the archive has none
     s.press(&["ctrl+f"]); s.typed("nightly"); s.press(&["enter"]);
     let found = s.text();
-    assert!(found.contains("\n ▾ automations\n▌⟳ off Nightly audit") && !found.contains("Mine"), "{found}");
+    assert!(regex::Regex::new(r"\n +▾ automations\n▌ *⟳ off Nightly audit").unwrap().is_match(&found) && !found.contains("Mine"), "{found}");
     s.press(&["esc"]);
-    s.press(&["alt+a"]); assert!(!s.text().contains("Nightly")); s.press(&["alt+a"]); assert!(s.text().contains("\n ▾ automations\n"));
+    s.press(&["alt+a"]); assert!(!s.text().contains("Nightly")); s.press(&["alt+a"]); assert!(regex::Regex::new(r"\n +▾ automations\n").unwrap().is_match(&s.text()));
 }
 
 #[test]

@@ -1,13 +1,14 @@
-//! A machine's coordinator is drawn in its machine heading's colour, a repo's coordinator in the brighter grey (its
-//! repo's heading is in plain text, as loud as its tasks): the chat's frame, its name over the box, its name in the hints, and the web board's chat. Inside the box (the prompt,
-//! who said what) all looks as with the top-level Coordinator, which keeps its plain look, so the three are told apart
-//! by their frames, in a light theme and a dark one.
+//! The chat's box is in its kind's colour (view/chat_title.rs): amber for every coordinator (a machine's, a project's,
+//! all machines'), violet for a task's agent; its ladder and its first line name whose it is, the first line's name in
+//! that colour too, and so does the hint. Inside the box (the prompt, who said what) all looks the same whoever it
+//! talks to. A repo's heading stays in plain text and a machine's in its accent, in a light theme and a dark one.
 use crate::common;
 use common::board::{open, Board};
 use common::*;
 use serde_json::json;
 use sw::board::theme::{resolve, Seen, Theme};
-use sw::board::update::coords::{MACHINE_INK, REPO_HEAD_INK, REPO_INK};
+use sw::board::update::coords::{MACHINE_INK, REPO_HEAD_INK};
+use sw::board::view::chat_title::{AGENT_EDGE, COORD_EDGE};
 use sw::board::update::heads::{group_id, machine_id};
 use sw::board::update::{update, Event};
 use sw::board::view::textbox::box_ink;
@@ -39,9 +40,9 @@ fn all(b: &mut Board, needle: &str, ink: Ink, bold: bool) {
 }
 
 #[test]
-fn a_repos_coordinator_is_drawn_in_the_brighter_grey_and_a_machines_in_its_headings_accent() {
+fn a_coordinators_box_is_amber_and_names_it_from_the_top_row_down_and_a_tasks_agent_is_violet() {
     let w = coord_world();
-    w.add("Fix the login");
+    let id = w.add("Fix the login");
     w.script(json!({ "coordinator": [{ "said": "Proj has one task open." }] }));
     let host = sw::remote::check::hostname();
     // as much of its name as its heading always has room for: a long one (GitHub's macOS runners') is cut there
@@ -51,74 +52,71 @@ fn a_repos_coordinator_is_drawn_in_the_brighter_grey_and_a_machines_in_its_headi
         s.theme = theme(name);
         if !s.s.by_repo { s.press(&["alt+s"]); }
         s.s.sel = group_id(&s.s, "", "proj"); s.load();
-        // the heading in plain text, bold; its coordinator's name in the hint in the brighter grey
+        // the heading in plain text, bold; its coordinator's name in the hint in a coordinator's amber
         assert_eq!(inks_on(&s.inked(100), "▾ proj", "proj"), vec![(REPO_HEAD_INK, true)]);
-        assert_eq!(inks_on(&s.inked(100), "talk to the proj coordinator", "proj coordinator"), vec![(REPO_INK, false)]);
+        assert_eq!(inks_on(&s.inked(100), "talk to proj's coordinator", "proj's coordinator"), vec![(COORD_EDGE, false)]);
         s.press(&["space"]);
-        assert_eq!(box_ink(&s.s, None), REPO_INK);
-        // (the second time round it has run: the board reads the selected heading's coordinator before space)
-        let state = if light { "idle" } else { "not started" };
-        assert_eq!(inks_on(&s.inked(100), &format!("proj coordinator  {state}"), "proj coordinator"), vec![(REPO_INK, true)]); // the name, bold
-        assert_eq!(inks_on(&s.inked(100), "proj coordinator  ", state), vec![(Ink::Muted, false)]);
-        all(&mut s, "❯", Ink::Text, false); // the prompt: the Coordinator's
+        assert_eq!(box_ink(&s.s, None), COORD_EDGE);
+        // its top edge: the ladder, the step it is lit in amber; its first line says whose it is, in amber, then grey
+        all(&mut s, "╭─", COORD_EDGE, false);
+        assert!(inks_on(&s.inked(100), "╭─", " proj ").iter().all(|x| x.0 == COORD_EDGE), "{:?}", inks_on(&s.inked(100), "╭─", " proj "));
+        assert_eq!(inks_on(&s.inked(100), "│ proj's coordinator.", "proj's coordinator."), vec![(COORD_EDGE, false)]);
+        assert_eq!(inks_on(&s.inked(100), "│ proj's coordinator.", "Looks after"), vec![(Ink::Muted, false)]);
+        all(&mut s, "❯", Ink::Text, false); // the prompt: plain, whoever it talks to
         if !light {
             s.typed("what is open here?");
-            assert_eq!(inks_on(&s.inked(100), "send to the proj coordinator", "proj coordinator"), vec![(REPO_INK, false)]);
+            assert!(s.text().contains("send to") && s.text().contains("proj's coordinator"), "{}", s.text());
             s.press(&["enter"]); drain(); s.load();
-            // who said what: grey, as with the Coordinator; only the frame is in the heading's colour
-            all(&mut s, "proj coordinator:", Ink::Muted, false);
+            // who said what: grey; only the frame is in the coordinator's colour
+            all(&mut s, "proj's coordinator:", Ink::Muted, false);
             s.press(&[&sw::board::keys::key_name("chatScrollUp")]); // the conversation, your words too
             all(&mut s, "You:", Ink::Muted, false);
             all(&mut s, "what is open here?", Ink::Soft, false);
-            all(&mut s, "╭", REPO_INK, false);
-            all(&mut s, "╰", REPO_INK, false);
+            all(&mut s, "╰", COORD_EDGE, false);
         }
-        // this machine's coordinator: its heading's accent
+        // a task's agent: violet
+        s.s.sel = id.clone(); s.load();
+        assert_eq!(box_ink(&s.s, s.s.current()), AGENT_EDGE);
+        all(&mut s, "╭─", AGENT_EDGE, false);
+        // this machine's coordinator, and the one of all machines: amber as every coordinator
         s.press(&["space"]); s.press(&["alt+s", "alt+s"]); // by machine, then by status
         update(&mut s.s, Event::Machines(sw::remote::machines()));
         while s.s.scope != "*" { s.press(&["alt+m"]); }
         s.s.sel = machine_id(""); s.load();
         assert_eq!(inks_on(&s.inked(100), &format!("▾ {head}"), &head), vec![(MACHINE_INK, true)]); // its row, not the filter row's ▾ beside the panel
         s.press(&["space"]);
-        assert_eq!(box_ink(&s.s, None), MACHINE_INK);
-        assert_eq!(inks_on(&s.inked(100), "coordinator  not started", &format!("{host} coordinator")), vec![(MACHINE_INK, true)]);
+        assert_eq!(box_ink(&s.s, None), COORD_EDGE);
         all(&mut s, "❯", Ink::Text, false);
-        // the Coordinator keeps its plain look
         s.press(&["space"]); assert!(!s.s.reply);
-        assert_eq!(box_ink(&s.s, None), Ink::Text);
-        assert_eq!(inks_on(&s.inked(100), "Coordinator  not started", "Coordinator"), vec![(Ink::Plain, true)]);
-        all(&mut s, "❯", Ink::Text, false);
+        assert_eq!(box_ink(&s.s, None), COORD_EDGE);
+        assert!(s.text().contains("│ The coordinator of all machines."), "{}", s.text());
     }
 }
 
 #[test]
-fn the_web_board_draws_a_headings_coordinator_in_its_headings_colour() {
+fn the_web_board_draws_a_coordinators_box_amber() {
     let w = coord_world();
     w.add("Fix the login");
     let web = |call: &str, args: serde_json::Value| common::board::web(&w, call, args);
     let s = web("board", json!({}));
-    assert_eq!((s.at("chat").s("tint"), s.at("chat").s("box")), ("", "text"), "the Coordinator: {}", s.at("chat"));
+    assert_eq!(s.at("chat").s("box"), "yellow", "the top row's coordinator: {}", s.at("chat"));
     web("press", json!({ "id": "byRepo" }));
     let s = web("board", json!({}));
     let head = s.at("list").arr("groups").iter().find(|g| g.s("id").starts_with("head:repo")).map(|g| g.t("id")).unwrap();
     web("fold", json!({ "id": head }));
     let s = web("press", json!({ "id": "talk" }));
-    assert_eq!((s.at("chat").s("tint"), s.at("chat").s("box")), ("subtext0", "subtext0"), "{}", s.at("chat"));
+    assert_eq!(s.at("chat").s("box"), "yellow", "{}", s.at("chat"));
     // its heading on the page is in plain text, as on the terminal board
     assert!(s.at("list").arr("groups").iter().any(|g| g.s("id") == head && g.s("color") == "plain"), "{}", s.at("list"));
-    // on the page only the name over the box takes it: who said what keeps the Coordinator's look (chat.css)
-    let css = include_str!("../crates/web/src/webui/page/chat.css");
-    let tinted: Vec<&str> = css.lines().filter(|l| l.contains("data-tint")).collect();
-    assert!(!tinted.is_empty() && tinted.iter().all(|l| l.contains(".sw-who-name") && !l.contains(".sw-by")), "{tinted:?}");
 }
 
 #[test]
-fn in_every_theme_with_colours_of_its_own_the_three_are_three_colours() {
+fn in_every_theme_with_colours_of_its_own_a_coordinator_and_a_tasks_agent_are_two_colours() {
     let _w = common::world();
-    // ("terminal" has the terminal's own text colour for both greys: there the names and their heading tell them apart.)
+    // ("terminal" has the terminal's own colours: there the box's first line and its ladder tell them apart.)
     for name in sw::herdr::palette::THEME_NAMES.iter().filter(|n| **n != "terminal") {
         let t = theme(name);
-        let (m, r, c) = (t.ink(MACHINE_INK), t.ink(REPO_INK), t.ink(Ink::Text));
-        assert!(m != r && r != c && m != c, "{name}: machine {m:?}, repo {r:?}, Coordinator {c:?}");
+        let (c, a, p) = (t.ink(COORD_EDGE), t.ink(AGENT_EDGE), t.ink(Ink::Text));
+        assert!(c != a && a != p && c != p, "{name}: coordinator {c:?}, agent {a:?}, text {p:?}");
     }
 }

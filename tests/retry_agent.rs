@@ -40,9 +40,9 @@ fn a_turn_cut_off_by_a_passing_error_is_told_to_carry_on_by_itself_not_held_as_f
     let e = sw::flow::sidebar::entry_now(&t, sw::clock::now());
     assert_eq!((e.place.as_str(), e.line.as_str()), ("agent · working", "")); // herdr's sidebar says where the row stands, not its sentence
     // on the board: under "working", the row and the task panel say why and when, and nothing asks for you
-    let mut b = common::board::open(&w.root, 40);
+    let mut b = common::board::open(&w.root, 40); b.s.sel = id.clone(); b.load(); // (the board opens on the top row)
     let screen = b.screen(130).join("\n");
-    assert!(regex::Regex::new(r"\n ▾ working\s[^\n]*\n[ ▌]. PRJ-1 Dropped [^\n]*\n[ ▌] {8}Agent's connection dropped, trying again in 2m").unwrap().is_match(&screen), "{screen}");
+    assert!(regex::Regex::new(r"\n +▾ working\s[^\n]*\n[ ▌] *. PRJ-1 Dropped [^\n]*\n[ ▌] {8,}Agent's connection dropped, trying again in 2m").unwrap().is_match(&screen), "{screen}");
     assert!(!screen.contains("needs you") && !screen.contains("Agent cut off"), "{screen}");
     assert!(regex::Regex::new(r"Cut off ─+[\s\S]*Trying again by itself[\s\S]*Cut off by[\s\S]*The socket connection was closed").unwrap().is_match(&screen), "{screen}");
     keep(&w); // too early: nothing is sent

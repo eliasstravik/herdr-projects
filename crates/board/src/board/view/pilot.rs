@@ -21,6 +21,10 @@ pub fn shown(s: &State, t: &Theme, id: &str) -> Option<Shown> {
     let c = of_head(s, id)?;
     // No coordinator can run here (`coordinator.agent none`): this machine's rows are headings only.
     if c.host.is_empty() && !s.data.can_dispatch { return None; }
+    // Another machine that sends nothing of its coordinators (an older version): the column blank. One it sends nothing of
+    // never ran there: `○`.
+    let sends = c.host.is_empty() || s.remotes.get(&c.host).is_some_and(|m| m.coords.is_object() && !m.coord.b("off"));
+    if !sends { return Some(Shown { mark: Inked::plain(" "), label: "", time: Inked::new(), line: Inked::new() }); }
     let v = look_of(s, &c).unwrap_or_default();
     let p = view(s, &c);
     let on = p.b("on");

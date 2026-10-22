@@ -1,6 +1,6 @@
 //! With every machine shown, a machine with no task yet has its heading too: folded, `0 tasks`. Space there talks to
-//! its machine coordinator, what you type goes there, enter says there is nothing to unfold; it comes open with its
-//! first task. A filter hides it, and a machine that did not answer has none. The web board has the same heading.
+//! its machine coordinator, what you type goes there, enter goes into that coordinator; it comes open with its first
+//! task. A filter hides it, and a machine that did not answer has none. The web board has the same heading.
 use crate::common;
 use common::board::{open, Board};
 use common::*;
@@ -26,17 +26,18 @@ fn empty_otherbox() -> (World, Board) {
 fn a_machine_with_no_task_has_its_heading_folded_and_space_there_talks_to_its_machine_coordinator() {
     let (_w, mut s) = empty_otherbox();
     let t = s.screen(100).join("\n");
-    assert!(has(&t, r"\n   ▸ otherbox  0 tasks *\n"), "{t}");
+    assert!(has(&t, r"\n[ ▌]  ○ ▸ otherbox  0 tasks *\n"), "its coordinator's mark, idle: {t}");
     assert!(t.contains("Mine"), "{t}");
     assert!(!has(&t, r"▸ farbox|▾ farbox"), "a machine that did not answer has no heading, its line says why: {t}");
-    // The arrows stop on it; enter has nothing to unfold, space talks to its machine coordinator.
+    // The arrows stop on it; enter goes into its machine coordinator there, space talks to it.
     s.s.sel = machine_id("otherbox"); s.load();
     let t = s.text();
-    assert!(t.contains("space talk to the otherbox coordinator") && !t.contains("unfold this machine"), "{t}");
-    // nothing to unfold: enter talks to its machine coordinator, as space does
-    s.press(&["enter"]);
+    assert!(t.contains("space talk to otherbox's coordinator") && t.contains("enter go into it") && !t.contains("unfold"), "{t}");
+    let fx = s.hold("enter");
+    assert!(fx.iter().any(|e| matches!(e, Effect::Run(Job::Far { host, action, req, .. }) if host == "otherbox" && action == "coordinator-open" && req.s("to") == "machine")), "{fx:?}");
+    s.press(&["space"]);
     assert!(s.s.reply && s.s.reply_id == machine_id("otherbox") && s.s.sel == machine_id("otherbox"), "{}", s.s.msg);
-    assert!(has(&s.screen(100).join("\n"), r"\n▌  ▸ otherbox  0 tasks *\n"), "still folded");
+    assert!(has(&s.screen(100).join("\n"), r"\n▌  ○ ▸ otherbox  0 tasks *\n"), "still folded");
     s.typed("set up the crm repo");
     let fx = s.hold("enter");
     assert!(fx.iter().any(|e| matches!(e, Effect::Run(Job::Dispatch { machine, text, to, .. }) if machine.label == "otherbox" && text == "set up the crm repo" && to == "machine")), "{fx:?}");
@@ -44,7 +45,7 @@ fn a_machine_with_no_task_has_its_heading_folded_and_space_there_talks_to_its_ma
     let now = sw::clock::now();
     update(&mut s.s, Event::Remote { label: "otherbox".into(), answer: Ok(json!({ "host": "otherbox", "version": "9.0.0", "tasks": [{ "id": "crm/1", "title": "Set up crm", "state": "idle", "stage": "todo", "at": now, "created": now }] })) });
     let t = s.screen(100).join("\n");
-    assert!(has(&t, r"\n[ ▌]  ▾ otherbox *\n") && t.contains("Set up crm"), "{t}");
+    assert!(has(&t, r"\n[ ▌]  (○ |  )?▾ otherbox *\n") && t.contains("Set up crm"), "{t}");
 }
 
 #[test]
@@ -57,7 +58,7 @@ fn this_machine_with_no_task_has_its_heading_too_and_a_filter_hides_the_empty_on
     for _ in 0..4 { if s.s.scope == "*" { break; } s.press(&["alt+m"]); } assert_eq!(s.s.scope, "*");
     let here = regex::escape(&sw::shown::words::clean(&sw::remote::check::hostname()));
     let t = s.screen(100).join("\n");
-    assert!(has(&t, &format!(r"\n[ ▌]  ▸ {here}  0 tasks *\n")) && has(&t, r"\n[ ▌]  ▾ otherbox *\n"), "{t}");
+    assert!(has(&t, &format!(r"\n[ ▌]  ▸ {here}  0 tasks *\n")) && has(&t, r"\n[ ▌]  (○ |  )?▾ otherbox *\n"), "{t}");
     s.press(&["ctrl+f"]); s.typed("Theirs");
     let t = s.screen(100).join("\n");
     assert!(!t.contains("0 tasks") && t.contains("Theirs"), "{t}");

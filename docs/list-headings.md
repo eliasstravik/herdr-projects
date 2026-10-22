@@ -1,6 +1,6 @@
 # List headings
 
-**The task list sits under headings, and `Enter` on a heading folds it.** The headings are a repo's name when the list
+**The task list sits under headings, and `←` on a heading folds it, `→` unfolds it.** The headings are a repo's name when the list
 is grouped by repo (`Alt+S`), or a status (`needs you`, `working`, `to do`, `done` …) when it is grouped by status.
 Grouped by machine (`Alt+S` again), each machine has its heading and its tasks stand right under it, with no status
 headings.
@@ -20,11 +20,13 @@ machine**, its repos (or status groups) under it, and their tasks under those.
  ▸ vm-ssa  1 task ─────────────────────────────────────────────────
 ```
 
-## No row for the main Coordinator
+## The top row
 
-**The main Coordinator has no row of its own.** It is who the chat talks to by default; `Space` on a machine's, a
-project's or a task's row talks to that one instead, and `Space` again goes back to it ([the Coordinator](coordinator.md)).
-A machine's row and a project's row are their coordinators' ([machine and project coordinators](machine-and-project-coordinators.md)).
+**On top of every list is the top row**: `All machines` with every machine shown, or the one machine shown (on a board
+with only this machine, that one). Everything else stands under it, one step in. It says what it holds, open or folded
+(`2 machines · 5 tasks`, `9 projects · 30 tasks`), and folds the whole list away. It is its coordinator's row, as every
+machine's and project's row is ([machine and project coordinators](machine-and-project-coordinators.md)), and the board
+opens on it. The archive has none.
 
 ## Machine and repo headings
 
@@ -33,7 +35,7 @@ A machine's row and a project's row are their coordinators' ([machine and projec
 - Machines come in the order of Herdr's machines sidebar ([machine order](machine-order.md)).
 - **Every machine that answered has a heading, also one with no task yet.** It shows folded, `▸ vm-ssa  0 tasks`, and
   does what any machine's row does: `Space` talks to its machine coordinator, which adds tasks there
-  ([machine and project coordinators](machine-and-project-coordinators.md)), and its automations show under it. `Enter`
+  ([machine and project coordinators](machine-and-project-coordinators.md)), and its automations show under it. `→`
   has nothing to unfold and says so; its first task opens it. While a filter is on, or in the archive, a machine with
   nothing that matches has no heading.
 - One whose tasks cannot be read has no heading: it says so above the list, as always.
@@ -42,16 +44,17 @@ A machine's row and a project's row are their coordinators' ([machine and projec
 - **A repo's heading** is its name in bold, in the text colour of the task titles under it, with its key beside it,
   dimmed (`herdr-projects · HSW`), never `vm-str:herdr-projects`. It is never quieter than its tasks, in any theme, so
   a list of several repos reads as several blocks. It has no rule: the rule is a machine's. On each machine, the repo the board is in comes first.
-- **On one machine** (this machine's board, or one other machine by itself) there is no machine heading.
+- **On one machine** (this machine's board, or one other machine by itself) the machine's row is the top row.
 
 ## Folding
 
-- **`Enter` on a heading folds it.** Its tasks hide, its caret turns to `▸`, and it says how many tasks it holds
+- **`←` on a heading folds it.** Its tasks hide, its caret turns to `▸`, and it says how many tasks it holds
   (`▸ open-crm  4 tasks`), and how many automations where it holds some (`▸ vm-str  7 tasks, 1 automation`,
-  [automations](automations.md)). `Enter` again unfolds it.
-- **A click on a heading** does the same ([mouse](mouse.md)).
-- The hint line says what `Enter` will do (`enter fold this repo`, `enter unfold this machine`,
-  `enter fold this group`), and the `?` menu lists it on the line for `enter`.
+  [automations](automations.md)). `→` unfolds it. `←` on a task's row goes to its heading.
+- **`Enter` never folds**: on a machine's or a project's row it goes into its coordinator, as on a task it goes into its
+  agent.
+- **A click on a heading** folds it and unfolds it ([mouse](mouse.md)).
+- The hint line says what `←` `→` will do (`← → fold`, `← → unfold`), and the `?` menu lists them.
 - **A machine folds whole**: all its repos and tasks hide under its one line, which counts them all. Unfold it and its
   repos are as they were: a folded one is still folded.
 - It works the same grouped by repo or by status, on one machine or all of them. The two groupings keep their own

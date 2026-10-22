@@ -58,14 +58,12 @@ fn the_call_key_rings_the_computer_you_sit_at_and_the_call_follows_the_chat() {
     // one row as the line that says who: "Voice call", then with whom, the computer that holds it and the key
     assert!(t.contains(&format!(" ● Voice call  {}'s agent (Make the greeting) · on laptop · ctrl+t hangs up", short(&a))), "{t}");
     assert!(t.contains("Voice: Det går bra.") && !t.contains("[neutral]") && t.contains("   headphones needed: no echo cancelling there"), "{t}");
-    // lined up with the chat's line that says who: the mark in the mark's column, the words in the name's column, and
-    // the lines under it indented as the chat's other lines (a mark one cell wide, as every mark of the board)
+    // over the chat's box (whose own title says who): the mark in the mark's column, the words a cell after it, and
+    // the lines under it indented as the words (a mark one cell wide, as every mark of the board)
     let lines: Vec<String> = t.lines().map(String::from).collect();
     let at = lines.iter().position(|l| l.contains("Voice call")).unwrap();
-    let who = &lines[at - 1];
     let col = |l: &str, w: &str| sw::text::width(&l[..l.find(w).unwrap()]);
     assert_eq!((col(&lines[at], "●"), col(&lines[at], "Voice call")), (1, 3), "{}", lines[at]);
-    assert_eq!(sw::text::width(&who[..who.find(|c: char| c.is_alphabetic()).unwrap()]), 3, "the line that says who starts its name there too: {who}");
     assert!(lines[at + 1].starts_with("   headphones") && lines[at + 2].starts_with("   Voice: "), "{t}");
     // a microphone that stayed near silent for ten seconds: the call's line says the voice may not hear you
     sw::webui::voice::api::local("audio", &json!({ "via": "native", "aec": true, "agent": "laptop", "mic": 0.002, "secs": 12 }), &key);

@@ -16,9 +16,8 @@ board still reads.
 | light grey | the board runs its own check |
 | purple | an automation |
 | orange | an autopilot's wakes in the chat |
-| plain text colour (the box only) | you type to the Coordinator |
-| a machine's heading's colour (the theme's accent) | a machine's coordinator, in the chat |
-| the brighter grey (Herdr's `subtext0`) | a repo's coordinator, in the chat |
+| amber (the box's edge only) | you type to a coordinator: all machines', a machine's or a project's |
+| purple (the box's edge only) | you type to a task's agent |
 
 ## The board is in Herdr's theme
 
@@ -137,7 +136,7 @@ and dark), since the web UI has no purple among its status colours.
 
 A coordinator on [autopilot](autopilot.md) has no colour of its own on the list: its machine's or project's row has the
 mark `∞` in the theme's own colours, as a task's mark is: red at `needs you`, yellow while it works, quiet while asleep
-and plain text else. The main Coordinator's `∞` is in the chat's header, in the colour its state gives it there.
+and plain text else. The top row's `∞` is the coordinator of all machines' (or the only machine's).
 
 **Colour is not the only clue**: `∞` is a shape no task's mark has, its panel's state word says where it stands, and
 nothing of autopilot shows while it is off. With `NO_COLOR` that still stands.
@@ -217,39 +216,23 @@ The web Board uses the web UI's own colours. Its "to do" and its greyed-out word
 
 ## The box says who you type to
 
-The text box sends either to the Coordinator or to the selected task's agent. Its frame (the rounded box, or the two
-rules of the plain one) says which, at a glance. Only the frame: inside it, who said what, what they said and the
-prompt mark `❯` look the same whoever the box talks to, as they do with the Coordinator.
+The text box sends to a coordinator or to a task's agent. Its edge says which kind, at a glance, and its ladder and
+first line say which one ([machine and project coordinators](machine-and-project-coordinators.md#the-chat-box-names-who-it-talks-to)).
+Only the edge: inside it, who said what, what they said and the prompt mark `❯` look the same whoever the box talks to.
 
-| The box sends to | Colour of its frame |
+| The box sends to | Colour of its edge |
 |---|---|
-| the Coordinator (also: a new task, find, a task whose message goes to the Coordinator or into its description) | the theme's plain text colour |
-| a task's agent, or a task your message starts an agent on | that task's status colour, the very one its mark has in the list |
-| a machine's coordinator ([machine and project coordinators](machine-and-project-coordinators.md)) | its machine's heading's colour: the theme's accent (blue in most themes) |
-| a repo's coordinator | the brighter grey (Herdr's `subtext0`); its repo's heading itself is in plain text ([list headings](list-headings.md)) |
+| a coordinator: all machines', a machine's or a project's | amber (the theme's yellow) |
+| a task's agent, or a task your message starts an agent on | violet (the automations' purple) |
+| nobody: a new task where no coordinator can run, find | the theme's plain text colour |
 
-A machine's or a repo's coordinator is in that colour outside the frame too: its name on the line above the box
-(`vm-str coordinator  working`: the name in its colour, where it stands still grey) and its name in the hints (`space
-talk to the vm-str coordinator`, `enter send to the vm-str coordinator`). Never inside the box: `You:` and
-`vm-str coordinator:` there are as grey as `Coordinator:` is. On the web Board the same: the text field's frame and the
-name over it in those colours, the conversation as the Coordinator's. The Coordinator keeps its plain look, so the three are told apart at a glance.
-
-So an agent's box also says how its task is doing: amber while the agent works, red when it needs you, green when ready
-to approve, blue under review, pink while queued (for a free slot, or after other tasks), teal when done, dim grey for a
-task nobody started (and for an archived one, which is read-only).
-
-- It changes with the status, also while you type.
-- It is the same wherever there is such a box: under the list, in the reply view, under the task panel and full screen,
-  in the popup, for this machine's tasks and another machine's, and on the web Board, where the frame of the text field
-  takes the colour.
-- **Colour is never the only clue.** The line above the box names who you talk to; the grey words in the empty box say it
-  (`Send message to Coordinator`, `Send message to Agent`, `your message starts an agent on it`); and while you type, the
-  hint line does (`enter send to the Coordinator`, `enter send to HSW-34's agent`). With `NO_COLOR` the board draws no
-  colour at all and reads as it always did; each state has a mark of its own too.
-- **The box and the mark are never two colours.** So while the board runs its own check on a task (mark: a plain light
-  grey, [the check's progress](check-progress.md)), that task's agent's box is that grey too. That grey is near the plain
-  text colour, and the same as it on the web Board and with the terminal's own colours on a dark terminal. For that
-  while, the words are what tell it from the Coordinator's box.
+- The lit step of the ladder is in the same colour, reversed. It is the same wherever there is such a box: under the
+  list, in the reply view, under the task panel and full screen, in the popup, and on the web Board, where the frame of
+  the text field takes the colour.
+- **Colour is never the only clue.** The first line names the kind in words (`gtm's coordinator.`, `GTM-14's agent.`),
+  the grey words in the empty box say who gets it (`Send message to gtm's coordinator`, `your message starts an agent on
+  it`), and while you type the hint line does (`enter send to HSW-34's agent`). With `NO_COLOR` the board draws no colour
+  at all and reads as it always did.
 
 On the web Board, done is a teal of the board's own: the web UI has one colour for done, and it is the green of "ready to
 approve" there, so the two would be one colour.

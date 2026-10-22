@@ -1,4 +1,4 @@
-//! The whole screen: the chat block (who you talk to, the text box, what just happened, the hints) ends on the window's
+//! The whole screen: the chat block (the text box, which names who you talk to, what just happened, the hints) ends on the window's
 //! last line and the list has every line above it, at any height, through a resize, while the block grows or shrinks.
 use crate::common;
 use common::board::{open, Board};
@@ -11,15 +11,15 @@ fn pinned(s: &mut Board, rows: usize, what: &str) -> (usize, usize) {
     assert_eq!(lines.len(), rows, "{note}");
     let last = lines.len() - 1;
     let said = if s.s.msg.is_empty() { 0 } else { 1 };
-    assert!(regex::Regex::new(r"^[ ▌] \S.* · ").unwrap().is_match(&lines[last]), "{note}: the hints are the last line: {:?}", lines[last]);
+    assert!(regex::Regex::new(r"^[ ▌] \S.*( · |all keys)").unwrap().is_match(&lines[last]), "{note}: the hints are the last line: {:?}", lines[last]);
     let rule = lines.iter().rposition(|l| regex::Regex::new(r"^(─+|╰─+╯)$").unwrap().is_match(l)).unwrap();
     assert_eq!(rule, last - 1 - said, "{note}: the text box sits right on the hints");
-    let head = lines.iter().position(|l| l.starts_with(" + New task  ")).unwrap();
-    assert!(regex::Regex::new(r"^(─+|╭─.*╮)").unwrap().is_match(&lines[head + 1]), "{note}");
+    // The chat block starts with the text box's top edge.
+    let head = lines.iter().position(|l| regex::Regex::new(r"^(─+|╭─.*╮)$").unwrap().is_match(l)).unwrap_or_else(|| panic!("{note}: no text box\n{}", lines.join("\n")));
     if rows >= 16 { assert_eq!(lines[head - 1].trim(), "", "{note}: an empty line sets the chat off from the list"); }
     for l in &lines[head..=last] { assert_ne!(l.trim(), "", "{note}: an empty line inside the chat block"); }
     let tasks = lines[..head].iter().filter(|l| l.contains("Task number")).count();
-    if rows >= 16 { assert!(tasks + 6 >= head, "{note}: {tasks} tasks in {head} lines"); } // the header and the filter row
+    if rows >= 16 { assert!(tasks + 7 >= head, "{note}: {tasks} tasks in {head} lines"); } // the header, the filter row, the top row and its group
     (head, tasks)
 }
 

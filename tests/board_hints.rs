@@ -12,6 +12,8 @@ fn hints(s: &mut Board, width: usize) -> String { s.screen(width).last().cloned(
 fn the_hint_line_names_the_task_once_and_says_what_esc_goes_back_from() {
     let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
     let mut s = open(&w.root, 34); s.s.side = false;
+    // the board opens on its top row, this machine's: with no coordinator here, nothing to talk to, go into or start
+    assert_eq!(s.s.sel, sw::board::update::top::top_id(&s.s));
     assert_eq!(hints(&mut s, 120), "? all keys");
     let id = w.add("Add a greeting"); w.add("Other");
     s.s.sel = id.clone(); s.load();
@@ -51,13 +53,13 @@ fn with_an_agent_whose_agent_is_said_once_and_in_a_narrow_window_the_hints_give_
     assert_eq!(hints(&mut s, 60), "enter open this task's agent · ? all keys");
     assert_eq!(hints(&mut s, 36), "enter open this task's agent", "the main thing is the last to go");
     s.press(&["space"]);
-    assert_eq!(hints(&mut s, 120), "enter open this task's agent · ctrl+x stop the agent · alt+c hide the latest message · space back to the Coordinator");
-    assert_eq!(hints(&mut s, 100), "enter open this task's agent · ctrl+x stop the agent · space back to the Coordinator");
+    assert_eq!(hints(&mut s, 120), "enter open this task's agent · ctrl+x stop the agent · alt+c hide the latest message · space back");
+    assert_eq!(hints(&mut s, 80), "enter open this task's agent · ctrl+x stop the agent · space back");
     s.press(&["alt+c"]);
-    assert_eq!(hints(&mut s, 100), "enter open this task's agent · alt+c show the latest message · space back to the Coordinator");
+    assert_eq!(hints(&mut s, 90), "enter open this task's agent · alt+c show the latest message · space back");
     s.press(&["alt+c"]);
-    assert_eq!(hints(&mut s, 70), "enter open this task's agent · space back to the Coordinator");
-    assert_eq!(hints(&mut s, 48), "space back to the Coordinator");
+    assert_eq!(hints(&mut s, 60), "enter open this task's agent · space back");
+    assert_eq!(hints(&mut s, 30), "space back");
     s.typed("also say goodbye");
     assert_eq!(hints(&mut s, 120), "enter send to PRJ-1's agent · shift+enter new line · esc put away");
     assert_eq!(hints(&mut s, 60), "enter send to PRJ-1's agent · esc put away");
@@ -66,7 +68,7 @@ fn with_an_agent_whose_agent_is_said_once_and_in_a_narrow_window_the_hints_give_
     // narrower, the words still name who gets them, as long as they can
     assert_eq!(hints(&mut s, 22), "enter send to PRJ-1"); assert_eq!(hints(&mut s, 16), "enter send"); s.press(&["esc"]);
     for width in [40, 34] { assert!(!hints(&mut s, width).contains('…')); }
-    assert_eq!(hints(&mut s, 34), "space back to the Coordinator"); s.press(&["space"]);
+    assert_eq!(hints(&mut s, 34), "space back"); s.press(&["space"]);
     assert_eq!(hints(&mut s, 26), "enter open its agent");
 }
 
@@ -77,17 +79,18 @@ fn while_you_type_the_hint_line_says_who_gets_the_words_and_the_box_edge_names_n
     s.typed("a new thing");
     assert_eq!(hints(&mut s, 120), "enter add it as a task · ctrl+s add it and put an agent on it · shift+enter new line · esc put away");
     // a task with no agent yet: in a narrow window too the line names the task the words are locked to
-    s.press(&["esc"]); w.add("Add pebbles"); s.load(); s.press(&["space"]); s.typed("Please add pebbles");
+    s.press(&["esc"]); let pebbles = w.add("Add pebbles"); s.load(); s.s.sel = pebbles; s.load(); s.press(&["space"]); s.typed("Please add pebbles");
     assert_eq!(hints(&mut s, 60), "enter send, and start an agent on PRJ-1 · esc put away");
     assert_eq!(hints(&mut s, 32), "enter send to PRJ-1");
     s.press(&["esc", "space"]);
-    // the board of another machine: its Coordinator gets the words, and the line names the machine
+    // the board of another machine: its machine coordinator (the top row's) gets the words, and the line names it
     s.press(&["esc"]);
-    s.s.remotes.insert("vm-a".into(), sw::board::data::Remote { machine: sw::remote::Machine { label: "vm-a".into(), target: "me@vm-a".into(), ..Default::default() }, ok: true, ..Default::default() });
+    s.s.remotes.insert("vm-a".into(), sw::board::data::Remote { machine: sw::remote::Machine { label: "vm-a".into(), target: "me@vm-a".into(), ..Default::default() }, ok: true, coord: json!({ "state": "idle" }), coords: json!({}), ..Default::default() });
     s.s.scope = "vm-a".into();
     s.typed("fix the build");
     let text = s.screen(120).join("\n");
-    assert!(text.lines().last().unwrap().trim().starts_with("enter send to the Coordinator on vm-a · "), "{text}");
+    let last = text.lines().last().unwrap().trim();
+    assert!(last.starts_with("enter send to ") && last.contains("vm-a's coordinator · "), "{text}");
     assert!(!text.contains("To: "), "{text}");
-    assert_eq!(hints(&mut s, 32), "enter send to vm-a");
+    assert_eq!(hints(&mut s, 32), "enter send");
 }

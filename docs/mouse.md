@@ -11,7 +11,7 @@ Every action is still a key. The keys that scroll the chat without a mouse, `Alt
 
 ## The wheel
 
-- **Over the chat** (the line that says who you talk to, and its box): it scrolls a message that is longer than its
+- **Over the chat** (its box, whose edge says who you talk to): it scrolls a message that is longer than its
   box, two lines a step, faster when you spin it. It works while you type, and never touches your draft.
 - **Anywhere else** it does what `↑` and `↓` do. Over the list it moves the selection one task a step. On the
   whole-task page (`Alt+T`) it scrolls the page, two lines a step, also with a draft in the text box. In the `?` menu it

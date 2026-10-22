@@ -37,6 +37,8 @@ fn whom(c: &Client, to: &Value) -> Result<Whom, String> {
     let scope = to.get("scope").and_then(|s| s.as_str()).map(String::from).unwrap_or_else(|| c.s.scope.clone());
     if reply {
         if let Some(t) = of_head(&c.s, id) { return coordinator(c, &t); }
+        // A heading of this machine where no coordinator can run: nobody would get the words.
+        if crate::board::update::heads::is_head(id) && !c.s.data.can_dispatch { return Err(format!("No coordinator can run here, so nothing was kept. {}", crate::coordinator::who::OFF_WORDS)); }
         let r = c.s.items.iter().chain(c.s.remotes.values().flat_map(|m| m.items.iter())).find(|r| r.s("id") == id).ok_or("The task those words are for is gone.")?;
         if !r.b("host") { return Ok(Whom::Here(crate::store::repos::cwd_of(r).join(RULE_DIR).join("files"))); }
         let m = c.s.remotes.get(r.s("host")).ok_or_else(|| format!("{} is not among the machines you can reach now.", r.s("host")))?;

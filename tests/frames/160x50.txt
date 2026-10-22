@@ -2,7 +2,7 @@
  herdr-projects  proj
  All 18   Coordinators 0   Needs you 5   Working 9   Ready 1   To do 2   Done 1   Automations 0
 
- ○ ▾ this machine  1 project · 18 tasks
+ ▾ this machine  1 project · 18 tasks
    ▾ needs you
    ? #9     Max length for task titles                                                                                                                    1m ago
             Should the old settings file be removed, or kept for one more version so that nobody loses what they set?
@@ -53,7 +53,7 @@
  herdr-projects  proj                                                                             │
  All 18   Coordinators 0   Needs you 5   Working 9   Ready 1   To do 2   Done 1   Automations 0   │  #5 Max length for task titles
                                                                                                   │
- ○ ▾ this machine  1 project · 18 tasks                                                           │  Status ───────────────────────────────────────────────────
+ ▾ this machine  1 project · 18 tasks                                                             │  Status ───────────────────────────────────────────────────
    ▾ needs you                                                                                    │  State        ◐ working · for 1m
    ? #9     Max length for task titles                                                         1m │  Progress     ██████████████░░░░░░░░░░ 60% · 11m left
             Should the old settings file be removed, or kept for one more version so that nobody… │  Now          Found the cause; now checking every caller of
@@ -206,7 +206,7 @@
  herdr-projects  proj
  All 18   Coordinators 0   Needs you 5   Working 9   Ready 1   To do 2   Done 1   Automations 0
 
- ○ ▾ this machine  1 project · 18 tasks
+ ▾ this machine  1 project · 18 tasks
    ▾ needs you
    ? #9     Max length for task titles                                                                                                                    1m ago
             Should the old settings file be removed, or kept for one more version so that nobody loses what they set?

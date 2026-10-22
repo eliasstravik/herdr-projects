@@ -41,7 +41,7 @@ fn plan_ready_is_said_everywhere_the_worktree_stays_untouched_and_the_work_is_re
     assert_eq!(sw::status_words::words::PLAN, "plan ready");
     assert_eq!(sw::shown::states::who_stands(&r), (String::new(), "plan ready".to_string()));
     assert_eq!(sw::notify::event_of(&t), "needs you");
-    let mut b = open(&w.root, 90);
+    let mut b = open(&w.root, 90); b.s.sel = id.clone(); b.load(); // (the board opens on the top row)
     b.press(&["alt+t"]);
     let whole = b.text();
     assert!(has(&whole, r"Stands\s+waits for your yes"), "{whole}");
@@ -52,8 +52,8 @@ fn plan_ready_is_said_everywhere_the_worktree_stays_untouched_and_the_work_is_re
     let page = web(&w, "pick", json!({ "id": id, "open": true }));
     let heads: Vec<String> = page.at("panel").arr("parts").iter().map(|p| p.t("head")).collect();
     assert!(heads.iter().position(|h| h == "Plan").unwrap_or(0) > 0, "{heads:?}");
-    let g = &page.at("list").arr("groups")[0];
-    assert_eq!(g.s("name"), "needs you");
+    // (under this machine's row, the top row)
+    let g = page.at("list").arr("groups").iter().find(|g| g.s("name") == "needs you").cloned().unwrap_or_else(|| panic!("{}", page.at("list")));
     assert_eq!(g.arr("rows")[0].arr("says").iter().map(|x| x.t("t")).collect::<String>(), "Plan ready · Plan");
     // Sent back and written again: still nothing in the repo.
     sw::actions::talk::tell(&id, "Make it smaller.", false).unwrap();
@@ -93,7 +93,7 @@ fn the_reviewers_look_at_a_plan_is_shown_runs_in_tabs_of_its_own_and_is_no_round
     let mut t = settle(&id);
     for _ in 0..2 { t = settle(&id); }
     assert_eq!(t.s("stage"), "plan", "{}", t.at("failure"));
-    let mut b = open(&w.root, 90); b.press(&["alt+t"]);
+    let mut b = open(&w.root, 90); b.s.sel = id.clone(); b.load(); b.press(&["alt+t"]);
     assert!(has(&b.text(), r"Reviewer\s+Fail · 1 major"), "{}", b.text());
     sw::actions::talk::tell(&id, "Add the tests.", false).unwrap();
     let mut t = settle(&id);

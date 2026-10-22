@@ -19,12 +19,12 @@ fn only_space_flips_who_you_talk_to_and_the_chat_follows_the_selection() {
     let mut s = open(&w.root, 34); s.s.sel = alpha.clone(); s.load(); s.screen(120);
     s.press(&["space"]);
     assert!(s.s.reply && s.s.reply_id == alpha);
-    assert!(has(&s.text(), r"\n *\n[ ▌]. PRJ-\d+ +Alpha  no agent yet: your message starts one"), "{}", s.text());
+    assert!(has(&s.text(), r"│ PRJ-1\. No agent on it yet\."), "{}", s.text());
     let ids: Vec<String> = s.s.rows.iter().filter_map(|r| if let Row::Rec(o) = r { Some(o.t("id")) } else { None }).collect();
     let (to_beta, to_alpha) = if ids.iter().position(|x| *x == alpha).unwrap_or(0) > 0 { ("up", "down") } else { ("down", "up") };
     s.press(&[to_beta]);
     assert!(s.s.sel == beta && s.s.reply && s.s.reply_id == beta);
-    assert!(has(&s.text(), r"\n *\n[ ▌]. PRJ-\d+ +Beta  no agent yet: your message starts one") && !s.text().contains("New task"));
+    assert!(has(&s.text(), r"│ PRJ-2\. No agent on it yet\.") && !s.text().contains("New task"));
     s.press(&[to_alpha]); assert_eq!(s.s.reply_id, alpha);
     // find, and leaving it with esc, changes nothing about who you talk to
     s.press(&["ctrl+f"]); s.typed("Alp"); s.press(&["esc"]);
@@ -32,7 +32,7 @@ fn only_space_flips_who_you_talk_to_and_the_chat_follows_the_selection() {
     // talking to the Coordinator, the arrows change nothing about that either
     s.press(&["space"]); assert!(!s.s.reply);
     s.press(&[to_beta]); assert!(s.s.sel == beta && !s.s.reply);
-    assert!(has(&s.text(), r"\n *\n \+ New task  [^\n]*\n─[^\n]*\n❯ Add a task"), "{}", s.text());
+    assert!(has(&s.text(), r"\n─[^\n]*\n❯ Add a task"), "{}", s.text());
     s.typed("for nobody's agent"); s.press(&["enter"]);
     assert_eq!((task(&beta).t("stage"), task(&alpha).t("stage"), sw::store::tasks::list(Default::default()).len()), ("todo".into(), "todo".into(), 3), "it went where the chat said: a new task");
     // space on Alpha, then over to Beta: what you send goes to the one the chat names
@@ -44,7 +44,7 @@ fn only_space_flips_who_you_talk_to_and_the_chat_follows_the_selection() {
     // the task you talk to going away is back to the Coordinator too, never on to a neighbour
     sw::actions::archive::clear(&beta).unwrap(); s.load();
     assert!(!s.s.reply && s.s.sel != beta);
-    assert!(has(&s.text(), r"\n *\n \+ New task  "));
+    assert!(has(&s.text(), r"\n─+\n❯ "));
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn a_reply_put_away_comes_back_as_a_reply_to_the_same_task_never_as_a_new_task()
         s.press(&["up", "up"]); assert_eq!(s.s.sel, id);
         s.press(&["ctrl+z"]);
         assert!(s.s.sel == id && s.s.reply && !s.s.full && s.s.draft_away.is_none());
-        assert!(has(&s.text(), r"\n *\n[ ▌]. PRJ-\d+ +Add a greeting  [^\n]*\n(?:[^\n]*\n)*?│ ❯ also say goodbye"), "{}", s.text());
+        assert!(has(&s.text(), r"│ PRJ-\d+'s agent\.[^\n]*\n(?:[^\n]*\n)*?│ ❯ also say goodbye"), "{}", s.text());
         w.script(json!({ "worker": [{ "status": "working" }] }));
         let before = sw::store::tasks::list(Default::default()).len();
         s.press(&["enter"]);
@@ -85,9 +85,9 @@ fn a_reply_put_away_comes_back_as_a_reply_to_the_same_task_never_as_a_new_task()
     // a new task that was put away comes back as a new task, never as a reply
     s.typed("buy milk"); s.press(&["esc", "space"]); assert!(s.s.reply);
     s.press(&["ctrl+z"]); assert!(s.s.reply && s.s.value().is_empty());
-    assert!(flat(&s.text()).contains(&format!("Those words were for the Coordinator. space goes back to it, then {} brings them back.", key_name("undo"))));
+    assert!(flat(&s.text()).contains(&format!("Those words were for the top row's coordinator. space goes back to it, then {} brings them back.", key_name("undo"))), "{}", flat(&s.text()));
     s.press(&["space", "ctrl+z"]); assert!(!s.s.reply);
-    assert!(has(&s.text(), r"\n *\n \+ New task  [^\n]*\n─[^\n]*\n❯ buy milk"));
+    assert!(has(&s.text(), r"\n─[^\n]*\n❯ buy milk"));
     s.press(&["esc"]);
     // the task a reply was for is gone: the words stay put away rather than go somewhere else
     let gone = w.add("Short lived"); s.s.sel = gone.clone(); s.load();
@@ -96,7 +96,7 @@ fn a_reply_put_away_comes_back_as_a_reply_to_the_same_task_never_as_a_new_task()
     s.press(&["ctrl+z"]); assert!(s.s.value().is_empty());
     assert!(s.text().contains(&format!("The task that reply was for is gone. {} again brings the words back as a draft of their own.", key_name("undo"))), "{}", s.text());
     s.press(&["ctrl+z"]);
-    assert!(has(&s.text(), r"\n *\n \+ New task  [^\n]*\n─[^\n]*\n❯ for the short lived one") && !s.s.reply);
+    assert!(has(&s.text(), r"\n─[^\n]*\n❯ for the short lived one") && !s.s.reply);
     s.press(&["esc"]);
     // the task disappears while the reply is still being typed: the words never slide over to the next task
     let doomed = w.add("Doomed"); s.s.sel = doomed.clone(); s.load();
@@ -115,7 +115,7 @@ fn a_reply_put_away_comes_back_as_a_reply_to_the_same_task_never_as_a_new_task()
     let mut s5 = open(&w.root, 34);
     s5.press(&["ctrl+z"]); assert!(!s5.s.reply && s5.s.value().is_empty(), "the board reopens with the Coordinator: the reply waits for its task");
     s5.s.sel = id.clone(); s5.load(); s5.press(&["space", "ctrl+z"]); assert_eq!(s5.s.sel, id);
-    assert!(has(&s5.text(), r"\n *\n[ ▌]. PRJ-\d+ +Add a greeting  [^\n]*\n(?:[^\n]*\n)*?│ ❯ kept across a reload"), "{}", s5.text());
+    assert!(has(&s5.text(), r"│ PRJ-\d+'s agent\.[^\n]*\n(?:[^\n]*\n)*?│ ❯ kept across a reload"), "{}", s5.text());
     unsafe { std::env::remove_var("HERDR_ENV") };
 }
 
@@ -154,19 +154,19 @@ fn a_row_with_no_task_talks_to_the_coordinator_and_never_becomes_a_reply_to_the_
     let on_alpha = |s: &mut common::board::Board| { for _ in 0..5 { if s.s.sel == alpha { break; } s.press(&["up"]); } assert_eq!(s.s.sel, alpha); };
     s.typed("only for the Coordinator"); s.press(&["esc", "space"]); assert_eq!(s.s.reply_id, alpha);
     on_job(&mut s); assert!(s.s.reply && s.s.reply_id.is_empty());
-    assert!(has(&s.text(), r"\n *\n \+ New task  "));
+    assert!(has(&s.text(), r"\n─+\n❯ "));
     s.press(&["ctrl+z"]); s.load();
     assert_eq!(s.s.value(), "only for the Coordinator"); assert!(s.s.draft_away.is_none());
     s.press(&["esc"]);
     assert_eq!(s.s.draft_away.as_ref().map(|d| (d.text.clone(), d.to.clone())), Some(("only for the Coordinator".into(), String::new())));
     on_alpha(&mut s); assert_eq!(s.s.reply_id, alpha); s.press(&["ctrl+z"]);
     assert!(s.s.value().is_empty());
-    assert!(flat(&s.text()).contains(&format!("Those words were for the Coordinator. space goes back to it, then {} brings them back.", key_name("undo"))));
+    assert!(flat(&s.text()).contains(&format!("Those words were for the top row's coordinator. space goes back to it, then {} brings them back.", key_name("undo"))), "{}", flat(&s.text()));
     s.s.draft_away = None; on_job(&mut s); s.typed("typed on the row"); s.load(); assert_eq!(s.s.value(), "typed on the row");
     sw::store::inbox::clear_dispatch(&jid); s.load();
     assert!(s.s.sel == alpha && s.s.value().is_empty());
     assert_eq!(s.s.draft_away.as_ref().map(|d| (d.text.clone(), d.to.clone())), Some(("typed on the row".into(), String::new())));
-    assert!(flat(&s.text()).contains("The row you were on is gone. Nothing was sent; your words for the Coordinator are put away."));
+    assert!(flat(&s.text()).contains("The row you were on is gone. Nothing was sent; your words for its coordinator are put away."));
     s.press(&["enter"]);
     assert_eq!(task(&alpha).s("stage"), "todo"); assert_eq!(sw::store::tasks::list(Default::default()).len(), 1);
 }

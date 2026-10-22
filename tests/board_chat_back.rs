@@ -25,7 +25,7 @@ impl C {
     }
     fn apply(&mut self) { fill(&mut self.b, &self.talk, &self.turn); }
     fn key(&mut self, k: &str) { self.apply(); self.b.press(&[k]); }
-    fn boxed(&mut self) -> Vec<String> { self.apply(); self.b.chat(120).boxed }
+    fn boxed(&mut self) -> Vec<String> { self.apply(); crate::board_chat::chat(&mut self.b, 120).boxed }
     /// `back` on this board, with the Coordinator's conversation as it is now.
     fn back(&mut self) -> usize { let (talk, turn) = (self.talk.clone(), self.turn.clone()); back(&mut self.b, &mut |b| fill(b, &talk, &turn), 120) }
 }
@@ -190,17 +190,17 @@ fn a_task_agents_chat_alt_j_at_the_end_closes_it_to_the_newest_message_also_afte
     save_talk(&w, &id, &talk);
     let mut s = open(&w.root, 30); s.s.side = false;
     s.s.sel = id.clone(); s.load(); s.press(&["space"]); assert!(s.s.reply);
-    assert_eq!(message(&s.chat(120).boxed), v(&["Agent:", "Made g."]));
+    assert_eq!(message(&crate::board_chat::chat(&mut s, 120).boxed), v(&["Agent:", "Made g."]));
     for ups in [1, 3, 8] {
         for _ in 0..ups { s.press(&["alt+k"]); }
-        assert_ne!(message(&s.chat(120).boxed), v(&["Agent:", "Made g."]));
+        assert_ne!(message(&crate::board_chat::chat(&mut s, 120).boxed), v(&["Agent:", "Made g."]));
         back(&mut s, &mut |_| {}, 120);
-        assert_eq!(message(&s.chat(120).boxed), v(&["Agent:", "Made g."]), "after {ups} alt+k");
+        assert_eq!(message(&crate::board_chat::chat(&mut s, 120).boxed), v(&["Agent:", "Made g."]), "after {ups} alt+k");
     }
     // Open, then the agent says more: alt+j down to the end and once more, the newest alone.
     for _ in 0..3 { s.press(&["alt+k"]); }
     talk.push((true, "And h?".into())); talk.push((false, "Made h.".into()));
     save_talk(&w, &id, &talk); s.load();
     back(&mut s, &mut |_| {}, 120);
-    assert_eq!(message(&s.chat(120).boxed), v(&["Agent:", "Made h."]));
+    assert_eq!(message(&crate::board_chat::chat(&mut s, 120).boxed), v(&["Agent:", "Made h."]));
 }

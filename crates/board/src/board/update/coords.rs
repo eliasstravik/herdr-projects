@@ -39,12 +39,15 @@ pub fn look_of(s: &State, t: &Target) -> Option<crate::coordinator::look::Look> 
 /// The coordinator a heading stands for: a machine's heading, or a repo's. A status group's has none.
 pub fn of_head(s: &State, id: &str) -> Option<Target> {
     let rest = id.strip_prefix(HEAD)?;
+    // No coordinator can run here (`coordinator.agent none`): this machine's rows are headings only.
+    if !s.data.can_dispatch && (rest == "all" || rest.split('\t').nth(1) == Some("")) { return None; }
     let parts: Vec<&str> = rest.split('\t').collect();
     match parts.as_slice() {
         ["all"] => Some(super::top::all_target()),
         // The only machine: its coordinator is the top-level one (top.rs).
         ["machine", ""] if super::top::alone(s) => Some(Target { host: String::new(), to: String::new(), name: super::top::coordinator_of(&label(s, "")) }),
-        ["machine", host] => Some(Target { host: host.to_string(), to: "machine".into(), name: super::top::coordinator_of(&label(s, host)) }),
+        // A machine on an older version has its top-level coordinator only: its row talks to that one.
+        ["machine", host] => { let old = s.remotes.get(*host).is_some_and(|m| m.ok && !m.coords.is_object()); Some(Target { host: host.to_string(), to: if old { String::new() } else { "machine".into() }, name: super::top::coordinator_of(&label(s, host)) }) }
         ["repo", host, repo] => Some(Target { host: host.to_string(), to: format!("project:{repo}"), name: super::top::coordinator_of(&super::heads::repo_shown(s, host, repo)) }),
         _ => None,
     }

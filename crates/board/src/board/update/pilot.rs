@@ -23,34 +23,28 @@ pub fn on(s: &State, t: &Target) -> bool { view(s, t).b("on") }
 /// The coordinator of the selected row, if the row is one.
 pub fn selected(s: &State) -> Option<Target> { of_head(s, &s.sel) }
 /// The coordinator the start, stop and autopilot keys act on: the selected row's; with no machine's, project's or
-/// task's row selected (a status group's heading, or nothing), the main Coordinator the chat talks to then, which has
-/// no row of its own.
+/// task's row selected (a status group's heading, or nothing), the top row's, which the chat talks to then.
 pub fn keyed(s: &State) -> Option<Target> {
     if let Some(t) = selected(s) { return Some(t); }
     if s.current().is_some() || s.auto().is_some() { return None; }
     main(s)
 }
-/// The main Coordinator the chat talks to by default: this machine's while one can run here, or that of the one other
-/// machine whose board shows.
-pub fn main(s: &State) -> Option<Target> {
-    if s.archive_view { return None; }
-    if let Some(t) = super::coords::far_top(s) { return Some(t); }
-    (s.scope.is_empty() || s.scope == "*").then(|| Target { host: String::new(), to: String::new(), name: crate::status_words::COORDINATOR.into() }).filter(|_| s.data.can_dispatch)
-}
+/// The top row's coordinator, which the chat talks to by default (top.rs).
+pub fn main(s: &State) -> Option<Target> { super::top::top(s) }
 /// The start key on a coordinator's row: autopilot on, with its saved goal and settings, and nothing said: its heading shows it.
 /// Already on: it says so; at `needs you`: it resumes.
 pub fn turn_on(s: &mut State, t: &Target, fx: &mut Vec<Effect>) {
     let v = view(s, t);
     if v.is_null() && !t.host.is_empty() { return s.flash(format!("{} runs an older version that has no autopilot: update herdr-projects there first.", t.host), Ink::Yellow); }
-    if v.b("on") && !["needs you", "could not start"].contains(&v.s("state")) { return s.flash(format!("The {} is on autopilot already: {}.", t.name, v.s("line")), Ink::Muted); }
+    if v.b("on") && !["needs you", "could not start"].contains(&v.s("state")) { return s.flash(format!("{} is on autopilot already: {}.", super::top::sentence(&t.name), v.s("line")), Ink::Muted); }
     fx.push(job(s, t, true));
 }
 /// `Ctrl+X` on a coordinator's row: autopilot off. Off already: it says so.
 pub fn turn_off(s: &mut State, t: &Target, fx: &mut Vec<Effect>) {
     let v = view(s, t);
     if v.is_null() && !t.host.is_empty() { return s.flash(format!("{} runs an older version that has no autopilot: update herdr-projects there first.", t.host), Ink::Yellow); }
-    if !v.b("on") { return s.flash(format!("The {} is not on autopilot. {} turns it on.", t.name, crate::board::keys::key_name("autopilot")), Ink::Muted); }
-    s.flash(format!("Turning autopilot off for the {}…", t.name), Ink::Muted);
+    if !v.b("on") { return s.flash(format!("{} is not on autopilot. {} turns it on.", super::top::sentence(&t.name), crate::board::keys::key_name("autopilot")), Ink::Muted); }
+    s.flash(format!("Turning autopilot off for {}…", t.name), Ink::Muted);
     fx.push(job(s, t, false));
 }
 fn job(s: &State, t: &Target, on: bool) -> Effect {
@@ -61,7 +55,7 @@ fn job(s: &State, t: &Target, on: bool) -> Effect {
 /// The start key and the stop key on a coordinator's row: start it in its own conversation, or stop it, as an agent on a
 /// task; here or on its machine.
 pub fn run(s: &mut State, t: &Target, on: bool, fx: &mut Vec<Effect>) {
-    s.flash(format!("{} the {}…", if on { "Starting" } else { "Stopping" }, t.name), Ink::Muted);
+    s.flash(format!("{} {}…", if on { "Starting" } else { "Stopping" }, t.name), Ink::Muted);
     if t.host.is_empty() { return fx.push(Effect::Run(Job::CoordRun { to: t.to.clone(), name: t.name.clone(), on })); }
     let m = s.remotes.get(&t.host).map(|m| m.machine.clone()).unwrap_or_default();
     fx.push(Effect::Run(Job::Far { machine: m, host: t.host.clone(), action: if on { "coordinator-start" } else { "coordinator-stop" }.into(), req: json!({ "id": "", "to": t.to }), quiet: false }));
@@ -78,10 +72,10 @@ pub fn menu_label(s: &State, k: crate::board::keys::K) -> Option<String> {
     // The main Coordinator, which has no row: only the start, stop and autopilot keys are its.
     if selected(s).is_none() && !matches!(k, K::Delegate | K::Stop | K::Pilot) { return None; }
     Some(match k {
-        K::Delegate => format!("start the {}", t.name),
-        K::Stop => format!("stop the {}", t.name),
-        K::Pilot => format!("{} the {}'s autopilot", if on(s, &t) { "turn off" } else { "turn on" }, t.name),
-        K::Settings => if s.editing.is_some() { format!("back from the {}'s settings", t.name) } else if t.host.is_empty() { format!("the {}'s settings: see and change each one", t.name) } else { format!("the {}'s settings, as {} has them", t.name, t.host) },
+        K::Delegate => format!("start {}", t.name),
+        K::Stop => format!("stop {}", t.name),
+        K::Pilot => format!("{} {}'s autopilot", if on(s, &t) { "turn off" } else { "turn on" }, t.name),
+        K::Settings => if s.editing.is_some() { format!("back from {}'s settings", t.name) } else if t.host.is_empty() { format!("{}'s settings: see and change each one", t.name) } else { format!("{}'s settings, as {} has them", t.name, t.host) },
         K::Side => format!("{} the side panel: this coordinator, beside the list", if s.side { "hide" } else { "show" }),
         K::Panel => if s.full { "back to the list".into() } else { "show this coordinator whole: its autopilot and its last wakes".into() },
         _ => return None,
@@ -91,7 +85,7 @@ pub fn menu_label(s: &State, k: crate::board::keys::K) -> Option<String> {
 /// started first when it is not running, another machine's there. A status group's heading has none.
 pub fn go_in(s: &mut State, fx: &mut Vec<Effect>) {
     let Some(t) = selected(s) else { return s.flash(format!("A status group has no agent to go into. {} and {} fold it.", crate::board::keys::key_name("fold"), crate::board::keys::key_name("unfold")), Ink::Muted) };
-    s.flash(format!("Going into the {}…", t.name), Ink::Muted);
+    s.flash(format!("Going into {}…", t.name), Ink::Muted);
     if t.host.is_empty() { return fx.push(Effect::Run(Job::CoordOpen { to: t.to.clone(), name: t.name.clone(), popup: s.ctx.popup })); }
     let m = s.remotes.get(&t.host).map(|m| m.machine.clone()).unwrap_or_default();
     fx.push(Effect::Run(Job::Far { machine: m, host: t.host.clone(), action: "coordinator-open".into(), req: json!({ "id": "", "to": t.to, "focus": s.ctx.in_herdr }), quiet: true }));

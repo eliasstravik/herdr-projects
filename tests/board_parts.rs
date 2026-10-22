@@ -57,7 +57,8 @@ fn done_comes_last_below_to_do_with_its_fold_line_at_the_bottom() {
     let mut s = open(&w.root, 34);
     let shape = |s: &common::board::Board| -> Vec<String> { s.s.rows.iter().map(|r| match r { Row::Head { name, .. } => name.clone(), Row::Note(n) => n.clone(), Row::Rec(o) => o.t("id"), Row::Auto(a) => a.t("row") }).collect() };
     let more = format!("↓ 2 more done ({} shows them)", key_name("allDone"));
-    let mut by_status: Vec<String> = vec!["needs you".into(), asks.clone(), "working".into(), working.clone(), "to do".into(), newer.clone(), older.clone(), "done".into()];
+    // Under the top row, this machine's (update/top.rs).
+    let mut by_status: Vec<String> = vec![sw::board::update::remotes::shown(&s.s, ""), "needs you".into(), asks.clone(), "working".into(), working.clone(), "to do".into(), newer.clone(), older.clone(), "done".into()];
     by_status.extend(done[..5].iter().cloned()); by_status.push(more.clone());
     assert_eq!(shape(&s), by_status);
     s.s.sel = older.clone(); s.load();
@@ -67,13 +68,13 @@ fn done_comes_last_below_to_do_with_its_fold_line_at_the_bottom() {
     for _ in 0..12 { s.press(&["down"]); }
     assert_eq!(s.s.sel, done[4]);
     s.press(&["alt+s"]); assert!(s.s.by_repo); assert_eq!(s.s.sel, done[4]);
-    let mut by_repo: Vec<String> = vec!["proj".into(), asks.clone(), working.clone(), newer.clone(), older.clone()];
+    let mut by_repo: Vec<String> = vec![sw::board::update::remotes::shown(&s.s, ""), "proj".into(), asks.clone(), working.clone(), newer.clone(), older.clone()];
     by_repo.extend(done[..5].iter().cloned()); by_repo.push(more.clone());
     assert_eq!(shape(&s), by_repo);
     s.press(&["up", "up", "up", "up", "up"]); assert_eq!(s.s.sel, older);
     s.press(&["alt+s", "alt+s"]); assert_eq!(s.s.sel, older); assert_eq!(shape(&s), by_status); // by machine, then by status
     sw::actions::filing::pin(&done[6]).unwrap(); s.press(&["alt+d"]); s.load();
-    let mut pinned: Vec<String> = vec!["pinned".into(), done[6].clone(), "needs you".into(), asks.clone(), "working".into(), working.clone(), "to do".into(), newer.clone(), older.clone(), "done".into()];
+    let mut pinned: Vec<String> = vec![sw::board::update::remotes::shown(&s.s, ""), "pinned".into(), done[6].clone(), "needs you".into(), asks.clone(), "working".into(), working.clone(), "to do".into(), newer.clone(), older.clone(), "done".into()];
     pinned.extend(done[..6].iter().cloned());
     assert_eq!(shape(&s), pinned);
     s.s.sel = newer.clone(); s.load();
@@ -82,7 +83,7 @@ fn done_comes_last_below_to_do_with_its_fold_line_at_the_bottom() {
     s.load();
     let mut tail: Vec<String> = vec!["to do".into(), older.clone(), "done".into(), newer.clone()];
     tail.extend(done[..6].iter().cloned());
-    assert_eq!(shape(&s)[6..].to_vec(), tail);
+    assert_eq!(shape(&s)[7..].to_vec(), tail);
     assert_eq!(s.s.sel, older, "the selection does not follow it down");
 }
 

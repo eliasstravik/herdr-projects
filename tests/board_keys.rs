@@ -9,6 +9,7 @@ use sw::board::keys::key_name;
 use sw::json::*;
 
 /// The filter row on top and the three groupings of alt+s.
+mod coord_rows;
 mod filters;
 
 fn has(text: &str, re: &str) -> bool { regex::Regex::new(re).unwrap().is_match(text) }
@@ -21,7 +22,7 @@ fn typing_adds_a_task_tab_delegates_space_replies_and_enter_opens_the_agent() {
     let mut s = open_with(&w.root, 36, true);
     s.typed("Add a greeting");
     let t = s.text();
-    assert!(has(&t, r"\n *\n \+ New task  [^\n]*\n─[^\n]*\n❯ Add a greeting"), "{t}");
+    assert!(has(&t, r"\n─[^\n]*\n❯ Add a greeting"), "{t}");
     assert!(t.contains("enter add it as a task · ctrl+s add it and put an agent on it · shift+enter new line · esc put away"), "{t}");
     s.press(&["enter"]);
     assert_eq!(task("proj/1").s("title"), "Add a greeting");
@@ -31,7 +32,7 @@ fn typing_adds_a_task_tab_delegates_space_replies_and_enter_opens_the_agent() {
     s.press(&["ctrl+s"]);
     settle("proj/1"); s.load();
     let t = s.text();
-    assert!(has(&t, r"\n ▾ working +[^\n]*\n[ ▌]◐ PRJ-\d+ +Add a greeting"), "{t}");
+    assert!(has(&t, r"\n   ▾ working +[^\n]*\n[ ▌]  ◐ PRJ-\d+ +Add a greeting"), "{t}");
     assert!(!has(&t, "On its screen|Editing greet|esc to interrupt"), "nothing of the program's screen is shown");
     assert!(t.contains(&format!("enter open this task's agent · space talk to the agent · {} stop the agent · esc close · ? all keys", key_name("stop"))), "{t}");
     s.press(&["space"]);
@@ -41,19 +42,20 @@ fn typing_adds_a_task_tab_delegates_space_replies_and_enter_opens_the_agent() {
     assert!(s.text().contains("│ ❯ also say goodbye") && s.text().contains("enter send to PRJ-1's agent · shift+enter new line · esc put away"), "{}", s.text());
     s.press(&["enter"]);
     // What you just sent stands in the box, in place of what the agent had said, until it says something new.
-    assert!(has(&s.text(), r"\n╭─[^\n]*╮\n│ You: +│\n│ also say goodbye +│\n│ +│\n│ ❯ Send message to Agent +│\n╰─+╯\n"), "{}", s.text());
+    assert!(has(&s.text(), r"\n╭─[^\n]*╮\n│ PRJ-1's agent\.[^\n]*│\n│ You: +│\n│ also say goodbye +│\n│ +│\n│ ❯ Send message to Agent +│\n╰─+╯\n"), "{}", s.text());
     assert!(!s.text().contains("Sent to the agent"));
     let t1 = task("proj/1");
     assert!(prompts(&w, t1.at("link").s("pane")).last().unwrap().contains("also say goodbye"));
-    // esc has nothing else to go back from here: it hides the chat's message, and never changes who you talk to.
-    assert!(s.text().contains("· space back to the Coordinator") && !s.text().contains("esc close"), "{}", s.text());
+    // esc has nothing else to go back from here: it hides the chat's message, and never changes who you talk to. No
+    // coordinator can run here: space goes back to the box that adds tasks.
+    assert!(s.text().contains("· space back") && !s.text().contains("esc close"), "{}", s.text());
     s.press(&["esc"]); assert!(!s.s.chat_open && s.s.reply && s.s.ask.is_none() && s.s.closing.is_none() && !s.closed);
     assert!(s.text().contains(&format!("esc close · {} show the latest message", key_name("chatMessage"))), "{}", s.text());
     s.press(&["esc"]); assert!(s.closed, "this board is the popup: the last esc closes it");
     s.closed = false;
     s.press(&["alt+c"]); assert!(s.s.chat_open);
     s.press(&["space"]); assert!(!s.s.reply);
-    assert!(has(&s.text(), r"\n *\n \+ New task  [^\n]*\n─[^\n]*\n❯"), "{}", s.text());
+    assert!(has(&s.text(), r"\n─[^\n]*\n❯ Add a task"), "{}", s.text()); // no coordinator here: the box adds tasks
     // enter: the agent's real pane by pane id; the popup closes for it
     s.press(&["enter"]);
     assert!(s.closed, "the popup closes");

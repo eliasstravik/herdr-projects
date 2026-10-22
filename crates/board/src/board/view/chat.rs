@@ -103,7 +103,7 @@ fn far_who(s: &mut State, t: &Theme, far: &str) -> Who {
 /// What the Coordinator is called where you would talk to it now: this machine's, the one of the machine whose board
 /// shows, or no Coordinator at all (the box then adds tasks).
 pub fn coord_name(s: &State) -> String {
-    if !s.scope.is_empty() && s.scope != "*" && s.remotes.contains_key(&s.scope) { format!("Coordinator on {}", s.scope) } else if s.data.can_dispatch { "Coordinator".into() } else { "New task".into() }
+    crate::board::update::top::top(s).map(|t| t.name).unwrap_or_else(|| "New task".into())
 }
 /// The line that says who you talk to: the mark, the name in bold, and what it is doing now, greyed. The name is never
 /// cut to make room: the status takes what is left.

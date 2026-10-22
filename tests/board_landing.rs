@@ -154,7 +154,7 @@ fn the_only_task_there_is_keeps_the_selection_wherever_it_moves() {
     let only = w.add("Alone");
     let mut o = board(&w, &only);
     o.press(&["ctrl+p"]); assert!(task(&only).b("pinned")); assert_eq!(o.s.sel, only);
-    o.press(&["ctrl+a"]); assert!(task(&only).b("archivedAt")); assert_eq!(o.s.sel, "", "nothing left to select");
+    o.press(&["ctrl+a"]); assert!(task(&only).b("archivedAt")); assert_eq!(o.s.sel, sw::board::update::top::top_id(&o.s), "no task left: the top row");
 }
 
 #[test]

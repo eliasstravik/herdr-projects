@@ -69,7 +69,7 @@ pub fn coord_open(to: &str, name: &str, popup: bool) -> Done {
     let co = crate::coordinator::co::Co::of(&crate::herdr::cli::current_socket(), to);
     if !crate::herdr::cli::in_herdr() {
         let v = crate::coordinator::look::look(&co);
-        if v.pane.is_empty() || v.status.is_none() { return Done::say(format!("The {name} is not running: your first message starts it."), Ink::Yellow); }
+        if v.pane.is_empty() || v.status.is_none() { return Done::say(format!("{} is not running: your first message starts it.", crate::board::update::top::sentence(name)), Ink::Yellow); }
         let args = vec![format!("HERDR_SOCKET_PATH={}", co.socket), crate::herdr::cli::bin(), "agent".into(), "attach".into(), v.pane];
         return Done::default().and(Then::Attach { command: "env".into(), args, id: String::new() });
     }

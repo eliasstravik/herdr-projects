@@ -33,7 +33,7 @@ fn a_task_only_to_wait_for_others_stays_in_to_do_saying_nothing_of_it_on_its_row
     let mut b = open(&w.root, 30);
     let text = b.screen(120).join("\n");
     // (Its row may be the selected one, with the bar in its gutter: the three are added within the same moment.)
-    assert!(has(&text, r"\n[ ▌]○ PRJ-2 +Second +0s ago"), "{text}");
+    assert!(has(&text, r"\n[ ▌]  ○ PRJ-2 +Second +0s ago"), "{text}");
     // herdr's sidebar and the web Board say nothing of it either.
     let e = sw::flow::sidebar_entry::entry_of(&row(&id), "", sw::clock::now());
     assert!(![&e.place, &e.stands, &e.line].iter().any(|x| x.contains("PRJ-1")), "{e:?}");

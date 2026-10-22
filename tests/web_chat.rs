@@ -58,23 +58,25 @@ fn another_machines_coordinator_sends_its_words_with_its_tasks_and_the_chat_show
     assert!(coord_far::read(&json!({ "off": true })).is_none() && coord_far::read(&Value::Null).is_none());
 
     let said = coord_far::sent(&looks(&[(true, "What is going on?"), (false, "Two are working. Nothing waits for you.")]), true);
-    far.answers("vm-a", "list", &json!({ "host": "vm-a", "version": "0.9.0", "tasks": [], "coordinator": said }));
+    // vm-a's board shown alone: its top row is vm-a, and the chat talks to vm-a's coordinator.
+    far.answers("vm-a", "list", &json!({ "host": "vm-a", "version": "0.9.0", "tasks": [], "coordinator": said, "coordinators": { "machine": said } }));
     let s = show_vm_a();
     let c = s.at("chat");
-    assert_eq!((c.s("name"), c.s("coord"), c.at("toAgent"), c.at("open")), ("Coordinator on vm-a", "Coordinator on vm-a", &json!(false), &json!(true)));
+    assert_eq!((c.s("name"), c.at("toAgent"), c.at("open")), ("vm-a's coordinator", &json!(false), &json!(true)), "{c}");
+    assert!(c.s("coord").contains("vm-a"), "{c}");
     assert_eq!(c.s("status"), "idle");
     let parts: Vec<(String, String)> = c.arr("parts").iter().map(|p| (p.t("by"), p.t("text"))).collect();
-    assert_eq!(parts, vec![("You".into(), "What is going on?".into()), ("Coordinator".into(), "Two are working. Nothing waits for you.".into())]);
+    assert_eq!(parts, vec![("You".into(), "What is going on?".into()), ("vm-a's coordinator".into(), "Two are working. Nothing waits for you.".into())]);
 
     // A machine on an older version sends nothing of its Coordinator: said, never an empty chat that looks quiet.
     far.answers("vm-a", "list", &json!({ "host": "vm-a", "version": "0.8.0", "tasks": [] }));
     let c = round_until(|c| c.arr("parts").last().is_some_and(|p| p.s("text").contains("older herdr-projects")));
-    assert_eq!(c.s("coord"), "Coordinator on vm-a");
-    assert_eq!(c.arr("parts").last().unwrap().s("text"), "vm-a runs an older herdr-projects, which does not send what its Coordinator says: update it there.");
+    assert!(c.s("coord").contains("vm-a"), "{c}");
+    assert!(c.arr("parts").last().is_some_and(|p| p.s("text").starts_with("vm-a runs an older herdr-projects") && p.s("text").ends_with("update it there.")), "{c}");
     // One with no Coordinator adds what you type as a task, and the chat says so.
     far.answers("vm-a", "list", &json!({ "host": "vm-a", "version": "0.9.0", "tasks": [], "coordinator": { "off": true } }));
-    let c = round_until(|c| c.s("status").starts_with("no Coordinator there"));
-    assert_eq!((c.s("status"), c.arr("parts").len()), ("no Coordinator there: what you type is added as a task", 0));
+    let c = round_until(|c| c.s("status").starts_with("no coordinator there"));
+    assert_eq!((c.s("status"), c.arr("parts").len()), ("no coordinator there: coordinator.agent is none on that machine", 0));
 }
 
 #[test]

@@ -92,16 +92,16 @@ fn other_machines_automations_are_in_the_list_with_their_machine_named_and_are_c
     assert!(!t(&mut s, 120).contains("Theirs nightly"), "this machine only: its own");
     { let mut fx = vec![]; sw::board::update::remotes::set_scope(&mut s.s, "*".into(), &mut fx); s.run(fx); } // every machine (alt+m's ring passes the others first)
     let text = t(&mut s, 140);
-    like(&text, r"\n   ⟳ on {4}Look for old dependencies {2}every 2h +next in {2}2h\n"); // its repo is the one the board shows: not said
+    like(&text, r"\n     ⟳ on {4}Look for old dependencies {2}every 2h +next in {2}2h\n"); // its repo is the one the board shows: not said
     // in the part of the machine that has it, a group of its own after that machine's tasks; its machine is its heading, not on its row
-    like(&text, r"\n   ▾ vm-b\n   ▾ to do\n   ○ #7 +Theirs nightly +0s ago\n\n   ▾ automations\n   ⟳ on {4}Theirs nightly {2}every 5m · far +○ #7 next in {2}4m\n"); // another repo: said; and the task it made there
+    like(&text, r"\n     ▾ vm-b\n     ▾ to do\n     ○ #7 +Theirs nightly +0s ago\n\n     ▾ automations\n     ⟳ on {4}Theirs nightly {2}every 5m · far +○ #7 next in {2}4m\n"); // another repo: said; and the task it made there
     assert!(!text.contains("on vm-b"), "{text}");
     // folded, the machine's one line says what it holds, and its automations go with it
     let head = sw::board::update::heads::machine_id("vm-b");
-    s.s.sel = head.clone(); s.load(); s.press(&["enter"]);
+    s.s.sel = head.clone(); s.load(); s.press(&["left"]);
     let folded = t(&mut s, 140);
-    like(&folded, r"\n▌  ▸ vm-b {2}1 task, 1 automation\n"); assert!(!folded.contains("Theirs nightly"), "{folded}");
-    s.press(&["enter"]); assert!(t(&mut s, 140).contains("Theirs nightly  every 5m"));
+    like(&folded, r"\n▌    ▸ vm-b {2}1 task, 1 automation\n"); assert!(!folded.contains("Theirs nightly"), "{folded}");
+    s.press(&["right"]); assert!(t(&mut s, 140).contains("Theirs nightly  every 5m"));
     s.s.sel = "vm-b:auto:0a1b2c3d".into(); s.load(); assert_eq!(s.s.auto().unwrap().s("host"), "vm-b");
     assert_eq!(s.screen(140).last().unwrap(), "  enter open this automation · space turn this automation off · ctrl+s fire it now · ctrl+x remove it · ctrl+e its settings · ? all keys");
     // each key is sent to that machine, and its answer is what the board says
@@ -132,10 +132,10 @@ fn other_machines_automations_are_in_the_list_with_their_machine_named_and_are_c
     // that machine's own board: only its automations, no machine on the row (the header names it)
     while s.s.scope != "vm-b" { s.press(&["alt+m"]); }
     let text = t(&mut s, 140);
-    like(&text, r"\n[ ▌]⟳ on {2}Theirs nightly {2}every 5m · far +○ #7 next in {2}4m\n"); assert!(!text.contains("Look for old dependencies"));
+    like(&text, r"\n[ ▌]  ⟳ on {2}Theirs nightly {2}every 5m · far +○ #7 next in {2}4m\n"); assert!(!text.contains("Look for old dependencies"));
     // off there, with why; and removing asks first, naming the machine
     poll(&mut s, Some(json!([far_auto(json!({ "on": false, "nextAt": 0, "offWhy": "it fired 30 times in an hour" }))])));
-    like(&t(&mut s, 140), r"\n[ ▌]⟳ off Theirs nightly {2}every 5m · far +○ #7 +fired {2}2h ago\n[ ▌] {6}it fired 30 times in an hour\n");
+    like(&t(&mut s, 140), r"\n[ ▌]  ⟳ off Theirs nightly {2}every 5m · far +○ #7 +fired {2}2h ago\n[ ▌] {8}it fired 30 times in an hour\n");
     s.s.sel = "vm-b:auto:0a1b2c3d".into(); s.load(); s.press(&["ctrl+x"]); assert!(t(&mut s, 120).contains("? Remove the automation \"Theirs nightly\" on vm-b? The tasks it made stay."));
     s.press(&["y"]); assert_eq!(asked(&f), json!({ "action": "auto-remove", "id": "0a1b2c3d" }));
     poll(&mut s, Some(json!([]))); let text = t(&mut s, 140); assert!(!text.contains("automations") && !text.contains('⟳'), "{text}");

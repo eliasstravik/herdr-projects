@@ -1,5 +1,4 @@
-//! The board's check as it runs and shows: everywhere a task's progress shows (the row, the panel, the chat line,
-//! OSC) in a colour of its own, what its command writes kept on the task as it changes, how long a full run took
+//! The board's check as it runs and shows: everywhere a task's progress shows (the row, the panel, OSC) in a colour of its own, what its command writes kept on the task as it changes, how long a full run took
 //! remembered, and an answer known at once said and not timed.
 use crate::common;
 use common::board::open;
@@ -60,11 +59,11 @@ fn the_task_shows_it_everywhere_its_progress_shows_in_a_colour_of_its_own() {
     let page = b.screen(120).join("\n");
     assert!(re(r"Progress +█+░+ 65% · 3m left").is_match(&page) && page.contains("Running the check · tests 31 of 47"), "{page}");
     b.press(&["esc"]);
-    // The chat line, when you talk to its agent: the same words, then the same bar, percent and minutes.
+    // When you talk to its agent the chat's box names it; the words and numbers stay on its row.
     b.s.side = false; b.press(&["space"]);
-    let head = |b: &mut common::board::Board, cols: usize| b.chat(cols).who;
-    assert!(re(r"^ ◇ (PRJ-\d+ +)?Add a greeting  Running the check · tests 31 of 47  █████░░░ 65% 3m left$").is_match(&head(&mut b, 120)), "{}", head(&mut b, 120));
-    assert!(re(r"^ ◇ (PRJ-\d+ +)?Add a greeting  Running the check · t[^…]*… +(█████░░░ )?65% 3m left$").is_match(&head(&mut b, 66)), "the words are cut, the numbers never: {}", head(&mut b, 66));
+    let head = |b: &mut common::board::Board, cols: usize| crate::board_chat::chat(b, cols).who;
+    assert!(head(&mut b, 120).starts_with("PRJ-1's agent."), "{}", head(&mut b, 120));
+    assert!(re(r"Add a greeting +█████░░░ 65% 3m left").is_match(&b.text()), "{}", b.text());
     assert!(sw::board::update::beat::osc(&r).contains(":progress=65:eta=3:"), "{}", sw::board::update::beat::osc(&r));
     // Waiting for its turn: the minutes, and no bar that pretends to move. Known at once: only the words.
     let waiting = step_check(&start_check(now, 2 * MIN), Some(&json!({ "state": "waiting", "ahead": 2 })), now);
@@ -73,7 +72,7 @@ fn the_task_shows_it_everywhere_its_progress_shows_in_a_colour_of_its_own() {
     let f = sw::shown::row_says::row_fields(&r, now);
     assert_eq!((f.bar.text(), f.percent.text(), f.eta.text()), ("".into(), "".into(), "6m left".into()));
     b.load();
-    assert!(re(r"^ ◇ (PRJ-\d+ +)?Add a greeting  Waiting for its turn · 2 ahead  6m left$").is_match(&head(&mut b, 120)), "{}", head(&mut b, 120));
+    assert!(re(r"Add a greeting +6m left").is_match(&b.text()) && b.text().contains("Waiting for its turn · 2 ahead"), "{}", b.text());
     let known = step_check(&start_check(now, 0), Some(&json!({ "state": "known" })), now);
     patch(&id, move |t| t.put("check", known)).unwrap();
     b.press(&["esc"]); b.s.side = true; b.load();

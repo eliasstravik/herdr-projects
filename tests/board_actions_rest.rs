@@ -53,7 +53,7 @@ fn a_result_stays_through_the_beats_and_the_menu_names_every_key_and_no_old_one(
     assert!(!s.s.archive_view); assert!(!task("proj/2").b("archivedAt"), "ctrl+z takes the archiving back");
     // pinned: a group of its own on top
     s.s.sel = "proj/2".into(); s.load(); s.press(&["ctrl+p"]);
-    assert!(has(&s.screen(80).join("\n"), r"\n ▾ pinned *\n"), "{}", s.screen(80).join("\n"));
+    assert!(has(&s.screen(80).join("\n"), r"\n   ▾ pinned *\n"), "{}", s.screen(80).join("\n"));
 }
 
 #[test]
