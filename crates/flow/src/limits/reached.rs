@@ -18,7 +18,7 @@ pub struct StopHow { pub role: String, pub review: bool, pub ready: bool, pub do
 pub fn stop_at(id: &str, what: &str, limit: &str, used: f64, how: StopHow) -> Option<Task> {
     let role = if how.role.is_empty() { "agent".to_string() } else { how.role.clone() };
     count(id, &role, 2000); // what it used up to here, read while the task still names its conversation
-    let _ = crate::actions::talk::stop(id);
+    let _ = crate::actions::talk::board_stop(id);
     let (what, limit) = (what.to_string(), limit.to_string());
     let t = update_wait(id, 10000, move |t| {
         if t.s("stage") != "stopped" { return Ok(Change::Keep); }
