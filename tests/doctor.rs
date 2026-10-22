@@ -181,7 +181,7 @@ fn other_machines_must_answer_and_be_able_to_ask_this_one() {
 fn a_disk_low_on_space_is_a_problem() {
     let _w = world();
     let gb = 1_000_000_000u64;
-    let d = |free: u64| disk::Disk { mount: "/".into(), free, total: 100 * gb, holds: vec!["the board's data".into(), "worktrees".into()] };
+    let d = |free: u64| disk::Disk { mount: "/".into(), free, total: 100 * gb, holds: vec!["the board's data".into(), "worktrees".into()], waiting: vec![] };
     assert_eq!(disk::check(&[d(16 * gb)]), [Found::ok("16 GB free of 100 GB on / (the board's data, worktrees)")]);
     assert!(bad(&disk::check(&[d(3_200_000_000)]))[0].starts_with("Only 3.2 GB free on /, which holds the board's data, worktrees: new tasks may fail at their setup → Free some space"));
     assert_eq!(disk::gb(640_000_000), "640 MB");
