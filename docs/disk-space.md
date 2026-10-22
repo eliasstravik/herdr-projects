@@ -63,3 +63,29 @@ herdr-projects sweep, and herdr-projects doctor lists more that can go.
 
 It starts by itself once there is room. `herdr-projects machines` says how much each machine has free, and
 `herdr-projects doctor` lists each disk and the leftovers it could clean.
+
+### A small disk
+
+A disk never has to keep more than half of itself free. A `/tmp` that is a small memory disk (3.4 GB in all; many Linux
+machines give `/tmp` half their memory) could never have 5 GB free, and every task would wait forever: on it, a task
+needs 1.7 GB free, and its line says why it is less than `board.diskFree`:
+
+```
+Disk nearly full on vm-str: 1.2 GB free on /tmp; this task starts once 1.7 GB is free (/tmp is only 3.4 GB in all, so
+it needs 1.7 GB free, not the 5.0 GB of board.diskFree). Free some space: herdr-projects sweep, …
+```
+
+`herdr-projects doctor` measures such a disk the same way, so the two never disagree.
+
+### What a waiting task says
+
+A task that waits for room keeps its place in the queue, and says that it waits for disk space, not for a free slot:
+
+- its row on the board and on the web board: the whole `Disk nearly full on …` line under its name, its place (`Q#1`)
+  on the right;
+- the task panel's State line, `list`, `details` and the line when you start it: `waiting for disk space, Q#1`;
+- herdr's sidebar: `waiting for disk space`, with its place;
+- `herdr-projects doctor`, beside the disk: `Only 1.2 GB free on /tmp, which holds temporary files: HP-12 waits for
+  room on /tmp, and new tasks wait too`.
+
+A task that waits for a slot of `board.agents` still says `waiting for a free slot, Q#2`.
