@@ -109,8 +109,8 @@ fn pis_own_new_is_followed_too_the_newest_session_saved_for_its_folder_is_the_co
     tell(&w, "pick a fruit");
     let first = get(&w).t("session");
     assert_eq!(agents(&w)[0].at("agent").s("kind"), "pi"); assert_eq!(after(&w, "--session-id"), first);
-    // pi saves each conversation as <time>_<id>.jsonl in a folder named after the working folder: `/a/b` is `--a-b--`.
-    let dir = pi.join("sessions").join(format!("--{}--", real_home(&w).trim_start_matches('/').replace(['/', '\\', ':'], "-")));
+    // pi saves each conversation as <time>_<id>.jsonl in a folder named after the working folder.
+    let dir = pi.join("sessions").join("--the-folder--");
     let save = |id: &str, said: &str, cwd: &str, ms: i64| {
         let at = now() + ms * 10;
         let lines = [json!({ "type": "session", "version": 3, "id": id, "timestamp": sw::clock::iso(at), "cwd": cwd }), json!({ "type": "message", "id": format!("m-{id}"), "timestamp": sw::clock::iso(at), "message": { "role": "assistant", "content": [{ "type": "text", "text": said }], "stopReason": "stop" } })];

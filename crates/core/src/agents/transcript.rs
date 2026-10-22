@@ -15,6 +15,10 @@ const FRESH: Duration = Duration::from_secs(300);
 const MISS_FRESH: Duration = Duration::from_secs(30);
 /// How many answers are kept; a long-running keeper sees many conversations come and go.
 const CAP: usize = 1024;
+/// Whether misses are remembered: only in the keeper, which asks every second; a board, a hook or a test asks
+/// once and wants what is saved now (a hook can come just before its conversation is written).
+static MISSES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub fn remember_misses() { MISSES.store(true, std::sync::atomic::Ordering::Relaxed); }
 static FOUND: LazyLock<Mutex<HashMap<(String, String), (Option<PathBuf>, Instant)>>> = LazyLock::new(Default::default);
 
 /// `a/./b/../c/` becomes `a/c`, without following links, as pi's path.resolve does.
@@ -39,7 +43,7 @@ pub fn transcript(kind: &str, session: &str, cwd: &Path) -> Option<PathBuf> {
         Some((Some(f), at)) if at.elapsed() < FRESH && f.is_file() => return Some(f),
         // A miss is believed only after the places a new conversation is saved first are looked at again (cheap): a
         // hook can come before its conversation is written, and a coordinator looks before its first prompt.
-        Some((None, at)) if at.elapsed() < MISS_FRESH => {
+        Some((None, at)) if at.elapsed() < MISS_FRESH && MISSES.load(std::sync::atomic::Ordering::Relaxed) => {
             let f = quick(kind, session, cwd)?;
             FOUND.lock().unwrap().insert(key, (Some(f.clone()), Instant::now()));
             return Some(f);
@@ -153,6 +157,7 @@ mod transcript_tests {
     #[test]
     fn a_miss_is_remembered_briefly() {
         let h = home("miss", 0);
+        remember_misses();
         assert_eq!(transcript("pi", "sw-late", Path::new("/tmp/hp-project")), None);
         let f = save(&h, "--tmp-elsewhere--", "sw-late");
         assert_eq!(transcript("pi", "sw-late", Path::new("/tmp/hp-project")), None, "a miss is not searched for everywhere at once");
