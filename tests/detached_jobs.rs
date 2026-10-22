@@ -1,7 +1,9 @@
 //! [real programs] A job the board starts and leaves to run is waited for when it ends: it does not stay a zombie of
-//! the long-lived keeper or board that started it until that ends, and its marker reads as gone (#212).
+//! the long-lived keeper or board that started it until that ends, and its marker reads as gone (#212). The page
+//! server the keeper starts is waited for the same way (#311).
 use crate::common;
 use common::*;
+use sw::json::*;
 use std::time::{Duration, Instant};
 
 /// A process's state letter as `ps` gives it, on Linux and macOS alike (`Z`: a zombie, ended and nobody waited for
@@ -25,6 +27,19 @@ fn real_programs_a_detached_job_that_ended_is_reaped_and_its_marker_reads_as_gon
         assert!(until(|| state(pid).is_none()), "{pid} is left as {:?}", state(pid));
         assert!(!sw::store::files::pid_alive(pid as i64));
     }
+}
+
+#[test]
+fn real_programs_the_page_server_that_ends_is_reaped() {
+    let _w = world();
+    let info = sw::review_page::start_server(std::path::Path::new(env!("CARGO_BIN_EXE_herdr-projects")));
+    assert!(info.b("port"), "it did not say its port: {info}");
+    let pid = info.i("pid") as u32;
+    assert_eq!(state(pid).map(|c| c != 'Z'), Some(true), "{pid} is {:?}", state(pid));
+    // Told to go (as ensure_door tells an old one): it ends, and is waited for.
+    unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+    assert!(until(|| state(pid).is_none()), "{pid} is left as {:?}", state(pid));
+    assert!(!sw::store::files::pid_alive(pid as i64));
 }
 
 #[test]

@@ -1,12 +1,17 @@
 //! A task's temporary files (crates/core/src/temp.rs, crates/flow/src/leftovers.rs): its agent and reviewer start with
 //! its own temporary folder as TMPDIR and are told to keep everything temporary there; when it ends (done, archived,
 //! removed) that folder and the agents' files for its worktree go, a kept worktree stays, and its line says what was
-//! freed; on a nearly full disk a start waits in the queue with a plain line, and starts once there is room.
+//! freed; on a nearly full disk a start waits in the queue with a plain line, and starts once there is room. A small disk
+//! (a `/tmp` of 3.4 GB) keeps free `board.diskFree`, never more than half of itself; a task that waits for room says
+//! "waiting for disk space" everywhere, never "waiting for a free slot", and doctor names it beside its disk.
 use crate::common;
 use common::*;
 use serde_json::json;
 use std::path::{Path, PathBuf};
+use common::board::open;
 use sw::actions::{archive, finish_line};
+use sw::doctor::disk::{self, Disk};
+use sw::doctor::Found;
 use sw::json::*;
 
 fn uid() -> u32 { sw::agents::scratch::uid() }
@@ -15,6 +20,9 @@ fn has(text: &str, re: &str) -> bool { regex::Regex::new(re).unwrap().is_match(t
 fn fill(p: &Path, mb: usize) { std::fs::create_dir_all(p.parent().unwrap()).unwrap(); std::fs::write(p, vec![7u8; mb * 1_000_000]).unwrap(); }
 /// Where Claude Code, started without the task's own folder, kept its files for this worktree.
 fn claude_files(w: &World, tree: &str) -> PathBuf { w.base.join("tmp").join(format!("claude-{}", uid())).join(sw::agents::scratch::slug(Path::new(tree))) }
+/// Every disk has `free` bytes free of `size` in all.
+const GB: u64 = 1_000_000_000;
+fn disk_is(free: u64, size: u64) { unsafe { std::env::set_var("HERDR_PROJECTS_FREE", free.to_string()); std::env::set_var("HERDR_PROJECTS_SIZE", size.to_string()) } }
 
 #[test]
 fn the_agent_and_the_reviewer_start_with_the_task_s_own_temporary_folder_and_are_told_to_keep_temporary_things_there() {
@@ -176,4 +184,107 @@ fn a_board_command_a_task_s_agent_runs_leaves_that_task_s_temporary_folder_behin
     assert_eq!(std::env::var_os("TMPDIR"), Some(mine.into()));
     for (k, v) in names.iter().zip(had) { match v { Some(v) => unsafe { std::env::set_var(k, v) }, None => unsafe { std::env::remove_var(k) } } }
     assert!(sw::temp::in_task_folder(&tmp.join("claude-1000")) && !sw::temp::in_task_folder(std::path::Path::new("/srv/proj")));
+}
+
+#[test]
+fn a_disk_smaller_than_twice_board_disk_free_needs_half_of_itself_free_and_its_line_says_so() {
+    let w = world();
+    // 3.4 GB in all, 2 GB free: more than its half (1.7 GB), so the task starts.
+    disk_is(2 * GB, 3_400_000_000);
+    w.script(json!({ "worker": [{ "status": "working" }] }));
+    let a = w.add("Fits");
+    delegate(&a);
+    assert_eq!(settle(&a).s("stage"), "working");
+    assert_eq!(sw::leftovers::room::need_on(Some(3_400_000_000)), 1_700_000_000);
+    // 1.2 GB free: it waits, and its line says the amount that disk needs, and why it is less than board.diskFree.
+    disk_is(1_200_000_000, 3_400_000_000);
+    w.script(json!({ "worker": [{ "status": "working" }] }));
+    let b = w.add("Waits");
+    delegate(&b);
+    let t = settle(&b);
+    assert_eq!(t.s("stage"), "queued");
+    let host = sw::remote::check::hostname();
+    assert!(t.s("msg").starts_with(&format!("Disk nearly full on {host}: 1.2 GB free on ")), "{}", t.s("msg"));
+    assert!(regex::Regex::new(r"; this task starts once 1\.7 GB is free \(\S+ is only 3\.4 GB in all, so it needs 1\.7 GB free, not the 5\.0 GB of board\.diskFree\)\. Free some space: herdr-projects sweep").unwrap().is_match(t.s("msg")), "{}", t.s("msg"));
+    assert!(t.at("diskWait").s("on").starts_with('/'), "the disk it waits for: {}", t.at("diskWait"));
+    // A big disk still needs all of board.diskFree, and says nothing more.
+    disk_is(3_100_000_000, 100 * GB);
+    let l = sw::leftovers::room::low(&t).unwrap();
+    assert_eq!(l.need, 5 * GB);
+    assert!(l.line().contains("this task starts once 5.0 GB is free (board.diskFree). Free"), "{}", l.line());
+    // 0: never waits, on a small disk too.
+    sw::store::settings::change::set_value("board.diskFree", &json!(0), &sw::store::settings::lookup::Scope::you()).unwrap();
+    disk_is(1, 3_400_000_000);
+    assert!(sw::leftovers::room::low(&t).is_none());
+}
+
+#[test]
+fn a_task_that_waits_for_disk_space_says_so_everywhere_and_one_that_waits_for_a_slot_still_says_a_free_slot() {
+    let w = world_with(Opts { repo: true, settings: json!({ "board.agents": 1, "review.when": "never" }), ..Default::default() });
+    w.script(json!({ "worker": [{ "status": "working" }, { "status": "working" }] }));
+    let a = w.add("First at work");
+    delegate(&a);
+    assert_eq!(settle(&a).s("stage"), "working");
+    // No free slot: both wait for one, in the same words as ever.
+    let d = w.add("Waits for disk");
+    sw::clock::advance(1000);
+    delegate(&d);
+    let s = w.add("Waits for a slot");
+    sw::clock::advance(1000);
+    delegate(&s);
+    assert_eq!(sw::shown::states::standing(&sw::shown::states::as_row(&row(&d))), "waiting for a free slot, Q#1");
+    // A slot frees on a small disk without room: the first waits for disk space now, its place in the queue kept.
+    disk_is(1_200_000_000, 3_400_000_000);
+    let agents = |n: i64| sw::store::settings::change::set_value("board.agents", &json!(n), &sw::store::settings::lookup::Scope::you()).unwrap();
+    agents(2);
+    assert_eq!(sw::actions::start::start_queued(&w.socket), vec![d.clone()]);
+    agents(1);
+    let t = settle(&d);
+    assert!(t.s("stage") == "queued" && t.b("diskWait"), "{t:?}");
+    assert_eq!(task(&s).s("stage"), "queued");
+    let r = sw::shown::states::as_row(&row(&d));
+    assert_eq!(sw::shown::states::standing(&r), "waiting for disk space, Q#1");
+    assert_eq!(sw::shown::states::standing(&sw::shown::states::as_row(&row(&s))), "waiting for a free slot, Q#2");
+    // The board's row says the whole line under its name; the task panel's State line what it waits for.
+    let mut bd = open(&w.root, 40);
+    let lines = bd.screen(200);
+    let at = lines.iter().position(|l| l.contains("Waits for disk")).unwrap();
+    assert!(lines[at + 1].contains("Disk nearly full on"), "{}", lines.join("\n"));
+    assert!(!lines.iter().any(|l| l.contains("Waits for disk") && l.contains("free slot")), "{}", lines.join("\n"));
+    let panel = sw::board::view::panel::panel(&mut bd.s, &bd.theme, &r, 100, false, 0).iter().map(|l| l.text()).collect::<Vec<_>>().join("\n");
+    assert!(panel.contains("◌ waiting for disk space, Q#1"), "{panel}");
+    // The web board's row: the same line, and its place.
+    let rows: Vec<Value> = common::board::web(&w, "board", json!({})).at("list").arr("groups").iter().flat_map(|g| g.arr("rows").iter().cloned()).collect();
+    let wd = rows.iter().find(|x| x.s("id") == d).unwrap();
+    assert!(wd.at("says").to_string().contains("Disk nearly full on") && wd.s("percent") == "Q#1", "{wd}");
+    // `list` and `details`.
+    let (_, said) = sw::cli::tasks::command("list", &sw::cli::flags::parse(&["list".to_string()])).unwrap();
+    assert!(said.lines().any(|l| l.contains("Waits for disk") && l.contains("· waiting for disk space, Q#1")), "{said}");
+    assert!(said.lines().any(|l| l.contains("Waits for a slot") && l.contains("· waiting for a free slot, Q#2")), "{said}");
+    let det = sw::actions::finish_line::details(&d).unwrap();
+    assert_eq!(det.at("queue").s("words"), "waiting for disk space, Q#1");
+    // herdr's sidebar: what it waits for, then its place.
+    let e = sw::flow::sidebar_entry::entry_of(&row(&d), "", sw::clock::now());
+    assert_eq!((e.place.as_str(), e.progress.as_str()), ("waiting for disk space", "Q#1"));
+    let e = sw::flow::sidebar_entry::entry_of(&row(&s), "", sw::clock::now());
+    assert_eq!((e.place.as_str(), e.progress.as_str()), ("queued", "Q#2"));
+    // doctor: the task beside the disk it waits for.
+    let named = sw::store::keys::say_id(&d, &sw::store::keys::repo_keys());
+    let on = disk::ask().into_iter().find(|x| !x.waiting.is_empty()).expect("a disk with a waiting task");
+    assert_eq!(on.waiting, vec![named]);
+}
+
+#[test]
+fn doctor_says_which_task_waits_for_room_on_a_disk_and_measures_a_small_disk_as_the_start_does() {
+    let _w = world();
+    let tmp = |free: u64, waiting: &[&str]| Disk { mount: "/tmp".into(), free, total: 3_400_000_000, holds: vec!["temporary files".into()], waiting: waiting.iter().map(|s| s.to_string()).collect() };
+    // A 3.4 GB /tmp is low under its half, as the start check has it: never under doctor's 10 GB, which it cannot have.
+    assert_eq!(disk::low_at(3_400_000_000), sw::leftovers::room::need_on(Some(3_400_000_000)));
+    assert_eq!(disk::check(&[tmp(2 * GB, &[])]), [Found::ok("2.0 GB free of 3.4 GB on /tmp (temporary files)")]);
+    let f = disk::check(&[tmp(1_200_000_000, &["HP-12"])]);
+    assert!(f[0].what.starts_with("Only 1.2 GB free on /tmp, which holds temporary files: HP-12 waits for room on /tmp, and new tasks wait too"), "{f:?}");
+    // A big disk: 10 GB, or more where board.diskFree asks for more.
+    assert_eq!(disk::low_at(100 * GB), disk::LOW);
+    sw::store::settings::change::set_value("board.diskFree", &json!(20), &sw::store::settings::lookup::Scope::you()).unwrap();
+    assert_eq!(disk::low_at(100 * GB), 20 * GB);
 }
