@@ -24,11 +24,12 @@ pub fn label(s: &State, k: K, r: Option<&Obj>) -> String {
         K::Delegate => if r.is_some_and(|r| !r.b("archivedAt")) { "put an agent on this task".into() } else { String::new() },
         K::NextAttempt => if r.map(|r| choosing(s, r)).unwrap_or(false) { "move to this task's next attempt".into() } else { String::new() },
         K::Stop => match r { None => "stop the agent, or remove the task".into(), Some(r) if r.s("stage") == "progress" => "put this task back in to do".into(), Some(r) if running(r) => "stop this task's agent".into(), _ => "remove this task".into() },
-        K::Archive => match super::archive_done::counts(s).filter(|_| r.is_none()) {
-            Some((n, _)) if n > 0 => format!("archive this repo's {n} done task{}, after a yes", if n == 1 { "" } else { "s" }),
+        K::Archive => match (r, super::archive_project::says(s)) {
+            (None, w) if !w.is_empty() => if s.archive_view { format!("{w}, with its tasks as they were") } else { "archive this project with its tasks (after a yes when one works, waits or is to do)".into() },
             _ => if r.map(|r| r.b("archivedAt")).unwrap_or(false) { "restore this task".into() } else { "archive this task".into() },
         },
         K::Pin => if r.map(|r| r.b("pinned")).unwrap_or(false) { "unpin this task".into() } else { "pin this task to the top".into() },
+        K::OpenLink => r.and_then(super::link::of).map(|(what, _)| format!("open its {what} in the browser")).unwrap_or_default(),
         K::Settings => match (&s.editing, r) {
             (Some(e), _) if e.whose.mine() => "back from your settings".into(),
             (Some(_), _) => "back from this task's settings".into(),

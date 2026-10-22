@@ -27,6 +27,9 @@ fn allowed(name: &str, scope: &Scope) -> Res<&'static Entry> {
     if e.kind == Kind::Repo && repo.is_empty() {
         return refuse(format!("{name} is one repo's own: it cannot be set {}. Set it for the repo: herdr-projects set {name} <value> --repo <name>, or in the repo's own .herdr-projects.json.", if task.is_some() { "on a task" } else { "for every repo at once" }));
     }
+    if e.task && task.is_none() {
+        return refuse(format!("{name} is one task's own: it cannot be set {}. Set it on the task: herdr-projects set {name} <value> --task <id>, or when it is added: herdr-projects add \"<title>\" --{name} <value>", if repo.is_empty() { "for every task" } else { "for a repo" }));
+    }
     let repos = known_repos();
     if !repo.is_empty() && !repos.contains_key(repo) {
         let names: Vec<&str> = repos.keys().map(|s| s.as_str()).collect();

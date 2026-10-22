@@ -142,10 +142,14 @@ pub fn blocker(pr: &str, head: &str, names: &[String], detail: &str) -> Value {
     json!({ "stage": "pr", "remote": true, "remoteKind": "checks", "head": head, "checks": names, "why": failed_why(pr, names), "title": "Pull request checks failed", "detail": detail,
         "next": "Address this on your own branch and finish again. Local checks do not prove remote CI passed; wait for a fresh remote result.", "agentCanFix": true, "at": now(), "sentAt": null })
 }
+/// Failed checks recorded on another commit than `head`: they say nothing of it (#309).
+pub fn stale(t: &Obj, head: &str) -> bool { let f = t.at("prFailure"); f.s("remoteKind") == "checks" && f.b("head") && !head.is_empty() && f.s("head") != head }
+/// A pull request blocker that stands for `head`: one of an older commit's checks does not.
+pub fn stands(t: &Obj, head: &str) -> bool { t.b("prFailure") && !stale(t, head) }
 /// The checks that failed on the commit that would merge, by name: what `approve` refuses without `--anyway`.
 pub fn failed_on(t: &Obj) -> Option<String> {
     let f = t.at("prFailure");
-    if f.s("remoteKind") != "checks" || (t.b("prHead") && f.b("head") && f.s("head") != t.s("prHead")) { return None; }
+    if f.s("remoteKind") != "checks" || stale(t, t.s("prHead")) { return None; }
     let names = strings(f.at("checks"));
     Some(if names.is_empty() { "its pull request's checks failed on GitHub".into() } else { format!("GitHub's checks failed on its pull request: {}", names.join(", ")) })
 }
@@ -180,7 +184,9 @@ pub fn before_merge(id: &str, g: &mut Guard, t: &Task, root: &Path) -> Res<bool>
         Look::Passed => {
             // What could not be read is said on the task (merge.rs adds it to "Merged"), never asked of you as a login.
             let note = unread_note(&read.unread, &unread);
-            if t.b("checksWait") || t.s("checksUnread") != note { g.set(|t| { t.put("checksWait", Value::Null); t.put("checksUnread", if note.is_empty() { Value::Null } else { json!(note) }); })?; }
+            // They passed on the commit that merges: a record of failed checks, of an older one, is over.
+            let over = t.at("prFailure").s("remoteKind") == "checks";
+            if t.b("checksWait") || t.s("checksUnread") != note || over { g.set(|t| { t.put("checksWait", Value::Null); t.put("checksUnread", if note.is_empty() { Value::Null } else { json!(note) }); if over { t.put("prFailure", Value::Null); } })?; }
             Ok(true)
         }
         Look::Running(checks) => {

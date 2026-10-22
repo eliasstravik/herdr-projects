@@ -1,6 +1,7 @@
 //! Main merged into a task's branch by the board itself, before the check and the review and whenever main moves while
 //! it waits: the agent hears of it only on a real conflict; a review is repeated only where the update touched the
-//! task's own files; a worktree off its own branch is never checked or put up for approval.
+//! task's own files; a worktree off its own branch is never checked or put up for approval. Under `merge.sync approve`
+//! a waiting task is only test-merged: a conflict still goes to its agent, and main is merged after your yes.
 use crate::common;
 use common::*;
 use serde_json::json;
@@ -14,6 +15,9 @@ fn main_moves(w: &World, file: &str, body: &str) -> String { std::fs::write(w.ro
 fn asking(w: &World, title: &str) -> String { let id = w.add(title); delegate(&id); assert_eq!(settle(&id).s("stage"), "asks"); id }
 fn tree(t: &sw::json::Obj) -> &Path { Path::new(t.s("worktree")) }
 fn pane_prompts(w: &World, id: &str) -> Vec<String> { prompts(w, task(id).at("link").s("pane")) }
+fn head(t: &sw::json::Obj) -> String { git(tree(t), &["rev-parse", "HEAD"]) }
+fn housekeep(w: &World) { sw::housekeeping::housekeeping(&w.socket, sw::housekeeping::Force::Yes); }
+fn checks(w: &World) -> usize { read(&w.base.join("home/checks.log")).lines().count() }
 fn sync_jobs() -> usize { sw::runner::JOBS.with(|j| j.borrow().iter().filter(|(job, _, _)| job == "sync").count()) }
 
 #[test]
@@ -137,4 +141,48 @@ fn main_renaming_a_file_the_task_edited_is_an_update_to_the_tasks_own_files_the_
     assert_eq!(t.s("stage"), "approval", "{}", t.at("failure")); assert!(holds(tree(&t), &target));
     assert_eq!(read(&tree(&t).join("b.txt")), "one\nand more from the agent\n", "the edit followed the rename");
     assert_eq!(t.i("reviewRound"), 2); assert!(!t.at("review").b("keptAt"), "what would land changed shape: reviewed again");
+}
+
+#[test]
+fn with_approve_a_conflicting_main_is_found_by_a_test_merge_and_goes_to_the_agent_as_a_real_conflict_does() {
+    let w = world_with(Opts { repo: true, settings: json!({ "merge.sync": "approve" }), ..Default::default() });
+    w.script(json!({ "worker": [{ "files": { "a.txt": "from the agent\n" }, "commit": "agent", "note": "Changed a.txt." }, { "note": null, "status": "working" }] }));
+    let id = w.add("Clash");
+    delegate(&id);
+    let before = settle(&id);
+    assert_eq!(before.s("stage"), "approval");
+    let target = main_moves(&w, "a.txt", "from main\n");
+    // the test merge itself: made in memory, it names the conflict and leaves the worktree and the branch as they were
+    let r = sw::sync::test_main(&before, before.s("worktree"));
+    assert_eq!((r.status, r.files.as_str(), r.target.as_str(), r.restored), ("conflict", "a.txt", target.as_str(), true));
+    assert_eq!(head(&before), before.s("reviewedHead")); assert_eq!(git(tree(&before), &["status", "--porcelain"]), "");
+    housekeep(&w);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "working"); assert_eq!(t.at("failure").s("title"), "Merge conflict with main"); assert!(t.at("failure").s("detail").contains("Conflicting files:\na.txt"));
+    assert_eq!(row(&id).s("note"), "Resolving a conflict with main");
+    let said = pane_prompts(&w, &id).last().cloned().unwrap();
+    assert!(said.contains("Conflicting files:\n- a.txt") && said.contains(&format!("Target commit: {target}")), "{said}");
+    // the test merge left nothing behind: no merge under way, the branch where it was
+    assert_eq!(head(&t), head(&before)); assert_eq!(git(tree(&t), &["status", "--porcelain"]), "");
+    assert!(common::worktrees::git(tree(&t), &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err());
+    assert!(finish_line::approve(&id, None, false).unwrap_err().msg.contains("not waiting for an approval"));
+}
+
+#[test]
+fn with_approve_main_is_merged_and_checked_after_your_yes_and_the_work_lands() {
+    let w = world_with(Opts { repo: true, settings: json!({ "merge.sync": "approve", "review.when": "never" }), repo_settings: Some(json!({ "check.command": "echo run >> \"$HOME/checks.log\"" })), ..Default::default() });
+    w.script(json!({ "worker": [{ "files": { "f.txt": "v1\n" }, "commit": "v1", "note": "Did v1." }] }));
+    let id = w.add("Later");
+    delegate(&id);
+    let before = settle(&id);
+    assert_eq!(before.s("stage"), "approval"); assert_eq!(checks(&w), 1);
+    let target = main_moves(&w, "g.txt", "from main\n");
+    housekeep(&w);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure")); assert_eq!(head(&t), head(&before)); assert_eq!(checks(&w), 1, "nothing to check again while it waits");
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
+    assert_eq!(checks(&w), 2, "the branch with main merged in is checked before it lands");
+    assert!(holds(&w.root, &target)); assert_eq!(read(&w.root.join("f.txt")), "v1\n"); assert_eq!(read(&w.root.join("g.txt")), "from main\n");
 }

@@ -10,11 +10,13 @@ again (or reply, for an agent that is started again).
 | `Could not start: codex does not know the model it was given`, `Could not start: sol-6.1 can't be used with your ChatGPT sign-in; try gpt-6.1-sol` | Choose a model it has (`herdr-projects models codex` lists the ones your sign-in can use; [models](models.md)), or leave the model out. |
 | `Could not start: codex 0.150.0 does not take one of the board's start arguments` | Update the program. |
 | `Could not start: codex quit as it started` | Read what it printed, in the task panel, and fix that. |
+| `Could not start: codex quit as it started`, and it printed `cannot unmarshal ~/.codex/config.toml` | Its config.toml does not read: `herdr-projects doctor` says which line, or which project's table is in it twice (an older board could add one). Delete the second copy; the board never rewrites the file. |
 | `Could not start: codex did not come up within a minute` | Look at its terminal: whatever it shows (an update, a question, an error) is in the way. |
 | `Could not start: its start command was cut off: the terminal's shell was still starting` | Delegate again: the board has cleared the half-typed command. |
 | `Could not start: its terminal's shell was not ready for the start command` | Wait until the task's terminal shows its prompt, then delegate again. The board already waited and tried 4 times; a shell that is slow to start (its `.zshrc`) causes this. |
 | `Could not start: its terminal was not at its shell prompt` | End what runs in the task's terminal, or close it. When the board says it already waited and tried 4 times, the shell may also be very slow to start: wait until it shows its prompt. |
 | `Could not start: herdr did not answer in time` | Check that Herdr runs and answers (`herdr workspace list`). |
+| `Could not start: its start was cut off, twice` | Delegate again. Something ended the start from outside, most often a script or service that ends all it started with it (a systemd oneshot). While herdr runs on the machine its keeper does too, and `herdr-projects delegate` from a script hands the start to it, so it lives on; a start cut off once is tried again by itself. |
 
 ## Where to look further
 

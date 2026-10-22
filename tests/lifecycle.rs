@@ -6,6 +6,11 @@ use common::*;
 use serde_json::json;
 use sw::json::*;
 
+/// A start whose runner was lost with the command that delegated it: tried again once, then failed; a keeper takes it.
+mod start_lost;
+/// A stop ends what the agent started (a command, a dev server, what runs from its folders) and keeps the agent.
+mod stop;
+
 #[test]
 fn at_most_board_agents_work_at_once_and_a_freed_slot_is_reused() {
     let w = world_with(Opts { repo: true, settings: json!({ "board.agents": 1, "review.when": "never" }), ..Default::default() });

@@ -106,8 +106,10 @@ merges, then the next, in the order they became ready.
 - a merge that failed;
 - a login, a question or a permission request from the agent;
 - a checkout of yours on another branch;
-- **a task you stepped into after it asked you** (a reply to its agent, a turn in its terminal, delegating it again)
-  asks you again too, once. `set merge.by itself --task <id>` on that task says you do not need to be asked.
+- **a task you stepped into after it asked you** (a reply to its agent, a turn in its terminal, stopping it or
+  delegating it again) asks you again too, once. `set merge.by itself --task <id>` on that task says you do not need
+  to be asked. One you stopped or delegated again while it still worked was not asking: its new round is checked and
+  reviewed again, and merges by itself when it passes.
 
 Sending the board's own words back to the agent (the review, or what went wrong: `Ctrl+R`, `review`, `fix`) is not
 stepping in. You added nothing of your own, the repair is checked and reviewed, and it merges by itself when it passes.

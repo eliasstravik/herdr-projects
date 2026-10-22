@@ -72,8 +72,9 @@ function draw() {
   part("find-row").hidden = !finding;
   chat.update(snap);
   if (snap.msg && snap.msg.n !== seenMsg) { seenMsg = snap.msg.n; toast(part("toast-host"), snap.msg, () => press("back")); }
-  // Into a task's agent (Open agent): the web UI's own view of that pane (talk.js).
-  if (snap.go && seenGo !== null && snap.go.n !== seenGo) { seenGo = snap.go.n; return goTo(snap.go); }
+  // Into a task's agent (Open agent): the web UI's own view of that pane (talk.js). A task's link (Open the link): a
+  // tab of its own.
+  if (snap.go && seenGo !== null && snap.go.n !== seenGo) { seenGo = snap.go.n; return snap.go.url ? void window.open(snap.go.url, "_blank", "noopener") : goTo(snap.go); }
   seenGo = snap.go ? snap.go.n : 0;
 }
 function take(out) {

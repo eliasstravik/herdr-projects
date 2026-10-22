@@ -4,7 +4,7 @@
 use super::ink::Ink;
 use super::queue::queued;
 use crate::json::*;
-use crate::status_words::{needs, review_failed, step, who, words, QUEUED};
+use crate::status_words::{needs, review_failed, step, who, words};
 use crate::store::retries::waiting_of;
 
 /// The groups, in the order they need you.
@@ -59,7 +59,7 @@ pub fn who_stands(r: &Obj) -> (String, String) {
     if r.s("state") == "working" {
         if under_review(r) { return say(words::UNDER_REVIEW, who::REVIEWER); }
         if BOARD_STEPS.contains(&r.s("stage")) { return say(step(r.s("stage")), who::BOARD); }
-        if r.s("stage") == "queued" { return say(QUEUED, ""); }
+        if r.s("stage") == "queued" { return say(super::queue::short(r), ""); }
         if super::queue::waits_after(r) { return say(&super::queue::words(r), ""); }
         return say(words::WORKING, if r.s("stage") == "progress" { who::YOU } else { who::AGENT });
     }

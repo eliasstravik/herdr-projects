@@ -110,3 +110,22 @@ fn what_a_task_holds_is_checked_too_a_wrong_value_a_board_setting_or_an_effort_i
     sw::store::tasks::patch(&id, |t| { t.put("settings", json!({ "worker.agent": "claude", "worker.effort": "minimal" })); }).unwrap(); // claude takes no "minimal"
     assert_eq!(setting("worker.effort", Some(&task(&id))), json!("default")); assert!(has(&problems(Some(&task(&id))).join("\n"), r#"this task: worker\.effort: claude has no effort "minimal""#));
 }
+
+#[test]
+fn merge_closes_is_one_tasks_own_list_of_issue_numbers_shown_by_show() {
+    let w = world_with(Opts { repo: true, ..Default::default() });
+    let t = sw::actions::filing::add(&w.root, "Issue", sw::actions::filing::AddOpts { settings: vec![("merge.closes".into(), json!("2203,#2204"))], ..Default::default() }).unwrap();
+    let id = t.t("id");
+    assert_eq!(setting("merge.closes", Some(&task(&id))), json!([2203, 2204]));
+    assert!(has(&show_text(&Scope::task(&task(&id))), r"merge\.closes\s+2203, 2204"), "{}", show_text(&Scope::task(&task(&id))));
+    set_value("merge.closes", &json!("7"), &Scope::task(&task(&id))).unwrap();
+    assert_eq!(setting("merge.closes", Some(&task(&id))), json!([7]));
+    refused(set_value("merge.closes", &json!("o/r#7"), &Scope::task(&task(&id))), "another repo");
+    // never for every task, nor a repo's: and a hand-written one there is not read
+    refused(set_value("merge.closes", &json!("7"), &you()), "one task's own");
+    refused(set_value("merge.closes", &json!("7"), &Scope::repo("proj")), "one task's own");
+    write(json!({ "merge": { "closes": [9] } }));
+    let other = w.add("Other");
+    assert_eq!(setting("merge.closes", Some(&task(&other))), json!("none"));
+    assert!(!show_text(&you()).contains("merge.closes"));
+}

@@ -73,7 +73,7 @@ fn an_automations_settings_are_the_page_a_task_has_its_own_rows_marked_a_row_cha
     let w = world();
     let a = three(&w).remove(0);
     sw::store::settings::change::set_value("review.rounds", &json!(5), &sw::store::settings::lookup::Scope::you()).unwrap();
-    let mut s = open(&w.root, 61); s.s.side = false;
+    let mut s = open(&w.root, 62); s.s.side = false;
     let row_of = |s: &mut Board, name: &str| -> String { let re = regex::Regex::new(&format!(" {}( |$)", regex::escape(name))).unwrap(); s.screen(120).into_iter().find(|l| re.is_match(l)).unwrap_or_default() };
     let names = |s: &Board| -> Vec<String> { sw::board::update::edit::rows(&s.s).iter().map(|x| x.t("name")).collect() };
     let at = |s: &Board| s.s.editing.as_ref().unwrap().at;

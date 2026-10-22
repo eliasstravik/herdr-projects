@@ -2,7 +2,7 @@
 //! and edits by written characters (a letter with its marks, an emoji, a flag) the way pi-tui's editor did, which the
 //! board's keys and docs/keys.md assume. Lines of text, a cursor, undo; keys.rs says what each key does, view.rs draws
 //! it within the room the board gives it. A paste comes in whole and is never taken for keys; a picture's path pasted
-//! stands as `[Image 1]` (images.rs).
+//! or typed stands as `[Image 1]` (images.rs).
 pub mod images;
 pub mod keys;
 pub mod view;
@@ -45,7 +45,7 @@ impl TextBox {
         let kill: Vec<String> = self.kill.iter().map(|k| self.expand(k)).collect();
         self.kill = kill;
         self.images.clear();
-        let norm = self.collapse(&norm, false);
+        let norm = self.collapse(&norm, "");
         self.lines = norm.split('\n').map(String::from).collect();
         self.line = self.lines.len() - 1; self.col = self.lines[self.line].len();
         self.typing = false; self.pref = None; self.killed_last = false; self.yank_at = None;
@@ -78,6 +78,7 @@ impl TextBox {
         if c.is_whitespace() || !self.typing { self.push_undo(); }
         self.typing = true;
         self.insert_raw(&c.to_string());
+        self.typed(c);
     }
     pub fn newline(&mut self) { self.push_undo(); self.typing = false; self.insert_raw("\n"); }
     pub fn undo(&mut self) { if let Some(s) = self.undo.pop() { self.lines = s.lines; self.line = s.line; self.col = s.col; self.images = s.images; } self.typing = false; self.pref = None; }

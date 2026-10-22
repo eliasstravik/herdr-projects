@@ -34,6 +34,7 @@ Every command accepts `--json`. Below, `herdr-projects` stands for that path.
   discussion): the agent changes nothing, every stop of it waits for the human, and the task ends only when the human
   says so (`finish <id>`). Short for the setting `chat.only`; with `research.only` on too, chat wins.
   Add a task only when the human asked for it: nothing adds tasks by itself.
+  A task for GitHub issues of its own repo: add `--merge.closes <n>[,<n>…]`, and the board closes them when its work lands.
 - `herdr-projects delegate <id>`: put an agent on a task. It works in its own git worktree, as an ordinary herdr
   agent in its own herdr space. Any work setting can be chosen for this one task as `--<name> <value>`:
   `--worker.agent {agents}` (a model after a slash: `codex/<model>`, in the program's own names: `herdr-projects models <program>` lists the ones your sign-in can use and its effort levels, never guess one, and with no model named by the human give none: the program alone uses its own default; a wrong name or a program that cannot do a role is refused with the reason), `--worker.effort`, `--reviewer.agent`,
@@ -84,7 +85,9 @@ Every command accepts `--json`. Below, `herdr-projects` stands for that path.
   it) and its temporary files are freed; its worktree, branch and history stay. `restore <id>` brings it back to the
   list and starts nothing. `clear <id>` stops its agent and removes the task; a worktree with unsaved or unmerged work
   is kept on disk, and it says where (only when the human plainly asks). `archive --done [--repo NAME]` archives every done task of that repo (or of every
-  repo) in one go; one that works, waits, is to do or is pinned stays.
+  repo) in one go; one that works, waits, is to do or is pinned stays. `archive --repo NAME` archives a whole project
+  with its tasks (stopping their agents and its coordinator) and `restore --repo NAME` brings it back as it was: only
+  when the human asks.
 
 If you are an agent or a reviewer the board itself started on a task, your rules were given to you at the start, and
 they come first: do nothing to the board beyond your own task unless a human explicitly told you to. An explicit

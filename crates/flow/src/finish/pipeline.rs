@@ -172,7 +172,9 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
     };
     t = g.set(|t| t.put("doneWhy", why.clone().map(Value::from).unwrap_or(Value::Null)))?;
     if let Some(w) = &why { note = format!("{note} {w}."); }
-    if !tree.is_empty() && ch.b("merge.pr") && !research && why.is_none() {
+    // A task that has a pull request pushes to it also with `merge.pr` turned off since: it merges through that pull
+    // request, at the commit checked here, so what was merged in after its review must be on it (#307).
+    if !tree.is_empty() && (ch.b("merge.pr") || t.b("pr")) && !research && why.is_none() {
         let tp = Path::new(&tree);
         let base = [t.s("baseSha"), t.s("from")].into_iter().find(|s| !s.is_empty()).unwrap_or("HEAD").to_string();
         let pushed = (|| -> Res<Option<String>> {
@@ -189,6 +191,8 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
             g.set(|t| t.put("prHead", ph.clone()))?;
             let mut url = t.t("pr");
             if url.is_empty() {
+                // The issues whose `Closes #N` lines the board writes on it (`merge.closes`, land/closes.rs).
+                let mut on_pr: Vec<u64> = vec![];
                 // It merges into the branch the task keeps up with: the one it started from at the remote.
                 let onto = t.s("from").starts_with("origin/").then(|| sync::main_branch(&root, &t));
                 let named = sync::named_base(&root, &t).is_some();
@@ -196,20 +200,24 @@ pub fn pipeline(id: &str, g: &mut Guard, text: &str, keep_intent: bool, reason: 
                 // second one of the branch into another base.
                 let mut own = if named { already::open_pr(t.s("branch"), tp) } else { None };
                 if own.is_none() {
-                    let body = format!("{}\n\nTask: {}", if text.is_empty() { t.t("title") } else { text.to_string() }, task_ref(id, &repo_keys()));
+                    // One `Closes #N` line for each issue it closes (`merge.closes`): GitHub closes them when it merges.
+                    let (body, lines) = crate::land::closes::with_lines(&format!("{}\n\nTask: {}", if text.is_empty() { t.t("title") } else { text.to_string() }, task_ref(id, &repo_keys())), &crate::land::closes::issues(&t));
                     let mut args = vec!["pr", "create", "--draft", "--head", t.s("branch"), "--title", if t.b("title") { t.s("title") } else { id }, "--body", &body];
                     if let Some(b) = &onto { args.extend(["--base", b.as_str()]); }
                     let r = flow::git::gh(&args, tp, 120000);
                     url = r.stdout.split_whitespace().find(|w| w.starts_with("http://") || w.starts_with("https://")).unwrap_or("").to_string();
                     // The agent opened one itself for this branch: the board goes on with that one.
                     if url.is_empty() { own = already::open_pr(t.s("branch"), tp); }
+                    if !url.is_empty() { on_pr = lines; }
                     if url.is_empty() && own.is_none() { return Err(crate::err::Error::new(format!("pr:{}", [r.stdout.trim(), r.stderr.trim()].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n")))); }
                 }
                 if let Some(p) = own {
                     if let Some(why) = onto.as_deref().and_then(|b| already::wrong_base(&p, b)) { return Err(crate::err::Error::new(format!("prbase:{why}"))); }
+                    // It gets the `Closes #N` lines it lacks; failing that, they are tried again before the merge.
+                    on_pr = crate::land::closes::onto_pr(&t, &p.url, tp).unwrap_or_default();
                     url = p.url;
                 }
-                g.set(|t| { t.put("pr", url.clone()); t.put("prSeen", ""); t.put("prState", "waiting"); })?;
+                g.set(|t| { t.put("pr", url.clone()); t.put("prSeen", ""); t.put("prState", "waiting"); t.put("closesOnPr", json!(on_pr)); })?;
             }
             Ok(Some(url))
         })();

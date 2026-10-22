@@ -1,10 +1,12 @@
 //! Keeping a task's branch current with main, in the task's own worktree. The board does this by itself, in code:
-//! before a finished turn is checked and reviewed, again whenever main moves while the task waits for you, and one last
-//! time after you approve (land/). The agent hears about it only when a real conflict exists. A merge attempt that
-//! fails is always rolled back, and the human's checkout is never touched.
+//! before a finished turn is checked and reviewed, again whenever main moves while the task waits for you (under
+//! `merge.sync approve` only a test merge then, sync/probe.rs), and one last time after you approve (land/). The agent
+//! hears about it only when a real conflict exists. A merge attempt that fails is always rolled back, and the human's
+//! checkout is never touched.
 pub mod conflict;
 pub mod conflict_log;
 pub mod merge_only;
+pub mod probe;
 pub use conflict::{conflict_back, conflict_failure, conflict_message};
 pub use merge_only::merge_only;
 use crate::flow::git::{has_origin, head_of};
@@ -86,12 +88,16 @@ fn remote_main(root: &Path, t: &Obj, tree: &Path) -> Result<(String, String), St
         (Ok(()), Err(e)) => Err(format!("origin/{b} could not be read after the fetch.\n\nWhat git said:\n{}", e.msg)),
     }
 }
-/// What a sync found: current, merged, conflict, skip or error, with what it looked at.
+/// What a sync found: current, merged, conflict, skip or error (and clean, for a test merge), with what it looked at.
 #[derive(Clone, Debug, Default)]
 pub struct Synced { pub status: &'static str, pub target: String, pub seen: String, pub base: String, pub onto: Option<String>, pub adopt: bool, pub head: String, pub before: String, pub overlap: Option<Vec<String>>, pub files: String, pub restored: bool, pub out: String, pub want: String, pub detail: String }
 /// Fetch main and merge it into the task's branch. Every result that looked at main carries `seen`: where main stood in
 /// the form known_target gives it, for exactly the commit that was merged here.
-pub fn sync_main(t: &Task, tree: &str) -> Synced {
+pub fn sync_main(t: &Task, tree: &str) -> Synced { look(t, tree, false) }
+/// The same, merged only in memory (sync/probe.rs): nothing in the worktree, the branch or at the remote changes. The
+/// task's own branch is what is test-merged, wherever its worktree stands.
+pub fn test_main(t: &Task, tree: &str) -> Synced { look(t, tree, true) }
+fn look(t: &Task, tree: &str, test: bool) -> Synced {
     let root = folder_of(t.s("id"));
     let tree = Path::new(tree);
     let (target, base, onto, adopt);
@@ -113,9 +119,11 @@ pub fn sync_main(t: &Task, tree: &str) -> Synced {
         onto = Some(on); adopt = ad;
     }
     let seen = match &onto { None => target.clone(), Some(o) => format!("{target} {o}") };
-    let before = head_of(tree);
+    let tip = if test && !t.s("branch").is_empty() { format!("refs/heads/{}", t.s("branch")) } else { "HEAD".into() };
+    let before = if test { git_out(tree, &["rev-parse", "--verify", "-q", &tip]).unwrap_or_default() } else { head_of(tree) };
     let r = Synced { target: target.clone(), seen, base, onto, adopt, ..Default::default() };
-    if git_out(tree, &["merge-base", "--is-ancestor", &target, "HEAD"]).is_ok() { return Synced { status: "current", head: before, ..r }; }
+    if git_out(tree, &["merge-base", "--is-ancestor", &target, &tip]).is_ok() { return Synced { status: "current", head: before, ..r }; }
+    if test { return probe::test_merge(tree, &tip, Synced { before, ..r }); }
     if let Err(e) = git_out(tree, &["merge", "--no-edit", &target]) {
         let files = git_out(tree, &["diff", "--name-only", "--diff-filter=U"]).unwrap_or_default();
         // Rolled back means: no merge is in progress any more and the branch is where it was.
@@ -138,7 +146,11 @@ pub fn skip_why(r: &Synced) -> String { format!("your checkout is on {}, not on 
 pub fn held_why(r: &Synced) -> String {
     match r.status {
         "skip" => skip_why(r),
-        "error" => { let f: String = r.detail.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("").chars().take(300).collect(); format!("main could not be fetched ({})", if f.is_empty() { "git fetch failed" } else { f.trim_end_matches('.') }) }
+        "error" => {
+            let f: String = r.detail.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("").chars().take(300).collect();
+            if f.starts_with("main could not be test-merged") { return f.trim_end_matches('.').into(); }
+            format!("main could not be fetched ({})", if f.is_empty() { "git fetch failed" } else { f.trim_end_matches('.') })
+        }
         _ => String::new(),
     }
 }

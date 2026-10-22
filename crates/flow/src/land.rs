@@ -2,9 +2,10 @@
 //! there is one, else locally), then clean up. A pull request merges once GitHub's checks pass (checks.rs), as the
 //! token can read them (readable.rs). Conflicts are rolled back and saved; a checkout with unsaved files is never
 //! forced. One part per file in land/: the clean-up and what keeps a space in use, GitHub's checks, how they are read
-//! and the ones it expects, and the merge.
+//! and the ones it expects, the merge, and the GitHub issues it closes.
 pub mod checks;
 pub mod cleanup;
+pub mod closes;
 pub mod expected;
 pub mod in_use;
 pub mod merge;

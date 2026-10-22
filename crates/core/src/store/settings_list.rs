@@ -6,7 +6,7 @@
 //! -> you -> the repo's file -> built in; board: yours only; repo: a fact about one repo; coordinator: this time ->
 //! this coordinator -> you -> built in, store/settings/coord.rs), `ty` (what a value is:
 //! settings/values.rs), `builtin`, `values` (a choice's words), `none` (an agent or a time that may be `none`), `min`
-//! (a count's smallest), `repo` (one of the facts the repo's own file may hold), `adds` (its values add up across the
+//! (a count's smallest), `repo` (one of the facts the repo's own file may hold), `task` (one task's own only), `adds` (its values add up across the
 //! places), `label` (its plain name on the settings page), `means` (a few words beside what the row may be), `doc`.
 use crate::json::{json, Value};
 use std::sync::LazyLock;
@@ -15,21 +15,22 @@ use std::sync::LazyLock;
 pub enum Kind { Work, Board, Repo, Coord }
 impl Kind { pub fn name(self) -> &'static str { match self { Kind::Work => "work", Kind::Board => "board", Kind::Repo => "repo", Kind::Coord => "coordinator" } } }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Ty { Switch, Choice, Time, Count, Tokens, Agent, Agents, Effort, Access, Text, List, Machines, Notify, Key, Attempts, Keys, Branch, From, Pilot }
+pub enum Ty { Switch, Choice, Time, Count, Tokens, Agent, Agents, Effort, Access, Text, List, Machines, Notify, Key, Attempts, Keys, Branch, From, Pilot, Issues }
 
 #[derive(Clone, Debug)]
 pub struct Entry {
     pub name: String, pub label: String, pub kind: Kind, pub ty: Ty, pub builtin: Value,
-    pub values: Vec<String>, pub none: bool, pub min: i64, pub repo: bool, pub adds: bool, pub means: String, pub doc: String,
+    pub values: Vec<String>, pub none: bool, pub min: i64, pub repo: bool, pub adds: bool, pub task: bool, pub means: String, pub doc: String,
 }
 fn e(name: &str, label: &str, kind: Kind, ty: Ty, builtin: Value, doc: &str) -> Entry {
-    Entry { name: name.into(), label: label.into(), kind, ty, builtin, values: vec![], none: false, min: 0, repo: false, adds: false, means: String::new(), doc: doc.into() }
+    Entry { name: name.into(), label: label.into(), kind, ty, builtin, values: vec![], none: false, min: 0, repo: false, adds: false, task: false, means: String::new(), doc: doc.into() }
 }
 impl Entry {
     fn values(mut self, v: &[&str]) -> Self { self.values = v.iter().map(|s| s.to_string()).collect(); self }
     fn none(mut self) -> Self { self.none = true; self }
     fn min(mut self, n: i64) -> Self { self.min = n; self }
     fn repo(mut self) -> Self { self.repo = true; self }
+    fn task(mut self) -> Self { self.task = true; self }
     fn means(mut self, m: &str) -> Self { self.means = m.into(); self }
 }
 
@@ -114,14 +115,16 @@ pub static SETTINGS: LazyLock<Vec<Entry>> = LazyLock::new(|| {
     // how it lands
     s.push(e("merge.by", "Merged by", Work, Ty::Choice, json!("you"), "`you`: finished work waits for your yes. `itself`: it merges the moment it may: its review passed, its checks pass, nothing conflicts. Read right before the merge, so a change counts for tasks under way. More: [the gate](gate.md#merging-by-itself)").values(&["you", "itself"]));
     s.push(e("merge.method", "Merge method", Work, Ty::Choice, json!("squash"), "how approved work lands").values(&["squash", "merge", "rebase"]));
-    s.push(e("merge.pr", "Open a pull request", Work, Ty::Switch, json!(true), "push the branch and open a draft pull request after the check passes"));
+    s.push(e("merge.pr", "Open a pull request", Work, Ty::Switch, json!(true), "push the branch and open a draft pull request after the check passes. Turned off, no new one is opened: a task that already has its pull request still pushes to it after each check that passes (main merged in after the review too) and merges through it"));
     s.push(e("merge.pushTimeout", "Push may run for", Work, Ty::Time, json!("2m"), "how long the push of a task's branch may run, the repo's pre-push hook included: a time (`10m`) or `none`. Reached: the push is stopped and the finish fails (`git push did not end within 2m (merge.pushTimeout)`). Raise it for a repo whose pre-push hook runs its tests: `set merge.pushTimeout 10m --repo <name>`. More: [how work gets done](how-work-gets-done.md#the-finish-line)").none().repo());
     s.push(e("merge.checks", "GitHub's checks", Work, Ty::Choice, json!("github"), "whether a pull request waits for its checks on GitHub before it merges, by itself or on your yes. `github`: still running, it waits for them, at most `check.timeout`, then it waits for you with that reason; failed, nothing merges and the failure goes back to the agent with each failing check's name and the end of its log, as a failed check does, within `review.rounds`, then it waits for you (`approve <id> --anyway` merges it all the same); passed, and nothing expected still out, it merges: each workflow of the branch that runs for the pull request (its events, branches and paths, as GitHub reads them) must have its run on the commit through, every job and matrix member of it, each check the branch requires must be listed, and a check gone from the list is still waited for; with nothing listed at all, only a repo where no outside CI reports merges. A fine-grained token (which cannot have the Checks permission) is enough: the checks are then read from Actions and Commit statuses, and what it cannot read (another app's check runs) is said on the task, not asked as a login. `none`: GitHub's checks are not looked at. More: [how work gets done](how-work-gets-done.md)").values(&["github", "none"]));
+    s.push(e("merge.closes", "Closes issues", Work, Ty::Issues, json!("none"), "the GitHub issues of the task's own repo its work closes, by number (`2203, 2204`), or `none`. One task's own: set it when the task is added (`add … --merge.closes 2203`) or later (`set merge.closes 2203 --task <id>`). Its pull request gets a `Closes #2203` line for each, so GitHub closes them when it merges into the default branch (one the agent opened itself gets the lines added, and the board's own lines of an issue no longer named are taken off before it merges); a merge with no pull request closes them with `gh issue close` once it has landed, with a comment naming the task and the merge commit. Only on a merge that landed; a close that fails never fails the merge, and the task's line says what was closed or why not. More: [how work gets done](how-work-gets-done.md#closing-github-issues)").task());
+    s.push(e("merge.sync", "Takes main in", Work, Ty::Choice, json!("always"), "when main is merged into a task's branch. `always`: before its review, whenever main moves while it waits for your yes (each merge checked again and pushed to its pull request) and after your yes. `approve`: before its review and after your yes only: while it waits, a test merge in memory (nothing in its branch or pull request changes) only finds out whether main conflicts, and a conflict goes to its agent as a real one does. Fewer merge commits, CI runs and bot reviews on a pull request in a busy repo. More: [how work gets done](how-work-gets-done.md#staying-current-with-main)").values(&["always", "approve"]));
     // how its tasks are named
     s.push(e("repo.key", "Repo's short key", Repo, Ty::Key, json!("none"), "the short key of this repo's tasks, as `SKL` for gtm-skills: 2 to 5 letters or digits, the first a letter, kept in capitals. Every repo and folder has one: the board makes it from the name the moment it first sees the repo (`SKL` for gtm-skills, `HOME` for the home folder, `ROOT` for `/`) and saves it as your entry for the repo, so `none` lasts only until then. A task's tag on the board reads `HSW-134`, and `HSW-134` (in any letter case) names the task wherever its id `herdr-projects/134` does. Set it to change it: the old key still names the tasks. A key another repo already has is refused; `unset` goes back to the repo's file's key, or to the one made from the name. More: [task numbers and keys](task-numbers.md)").repo());
     // the board (yours only)
     s.push(e("board.agents", "Agents at once", Board, Ty::Count, json!(4), "how many agents work at once").min(1));
-    s.push(e("board.diskFree", "Keep free on disk", Board, Ty::Count, json!(5), "how many GB a disk the board writes to (the repo's, the worktrees', the board's data, the temporary files) keeps free: under it, a task about to start (its worktree, its setup, its agent) first sweeps what ended tasks left, and still under it waits in the queue with a plain line (`Disk nearly full on vm-str: 3.1 GB free …`) instead of failing half-way through a build; it starts by itself once there is room. `0`: never waits. More: [disk space](disk-space.md)").min(0));
+    s.push(e("board.diskFree", "Keep free on disk", Board, Ty::Count, json!(5), "how many GB a disk the board writes to (the repo's, the worktrees', the board's data, the temporary files) keeps free, never more than half of that disk (a `/tmp` of 3.4 GB in all keeps 1.7 GB): under it, a task about to start (its worktree, its setup, its agent) first sweeps what ended tasks left, and still under it waits in the queue (`waiting for disk space, Q#1`) with a plain line (`Disk nearly full on vm-str: 3.1 GB free …`) instead of failing half-way through a build; it starts by itself once there is room. `0`: never waits. More: [disk space](disk-space.md)").min(0));
     s.push(e("board.oldBuilds", "Old builds go after", Board, Ty::Count, json!(7), "after how many days without a change a done or archived task's kept worktree loses its build output (`target/`, `node_modules/`, `.next/`: only what git ignores) in the daily sweep; the next build makes it again. `0`: never. More: [disk space](disk-space.md)").min(0));
     s.push(e("board.machines", "Other machines", Board, Ty::Machines, json!("auto"), "other machines: `auto` (herdr's saved machines), names (`exedev@vm-a, vm-b`) or `none`"));
     s.push(e("board.open", "The board key opens", Board, Ty::Choice, json!("tab"), "what the board key opens. `tab`: the board in a herdr tab of its own, which stays when you go into an agent; pressed on the board itself, the key takes you back to where you came from. `popup`: the board as herdr's popup, a framed window in the middle of herdr's screen, over whatever is there (in a window under 110 columns or 30 rows it takes the whole pane: a margin would cost half the board); the key again or `Esc` closes it, as its hint line says (`esc close`), it closes when you go into an agent, and it is never left behind on a tab. More: [the board](board.md)").values(&["tab", "popup"]));

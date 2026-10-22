@@ -75,12 +75,15 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
         let fold = crate::board::update::heads::fold_says(s);
         let mut v: Vec<Hint> = (!fold.is_empty()).then(|| hk(K::Enter, &fold)).into_iter().collect();
         if !w.is_empty() { v.push(hk(K::Open, &w)); }
-        if crate::board::update::archive_done::counts(s).map(|c| c.0 > 0).unwrap_or(false) { v.push(hk(K::Archive, "archive its done tasks")); }
         // A coordinator's row names both of autopilot's keys (update/pilot.rs).
         // A coordinator's row: started and stopped as an agent is, and its autopilot's own key.
         if let Some(c) = crate::board::update::pilot::selected(s) { v.push(hk(K::Delegate, "start")); v.push(hk(K::Stop, "stop")); v.push(hk(K::Pilot, if crate::board::update::pilot::on(s, &c) { "autopilot off" } else { "autopilot" })); }
         v.extend(back); v.extend(key);
         match talk { Some(t) if t.stays => { v.push(t) } Some(t) => { v.insert(0, t); v.push(more) } None => v.push(more) }
+        // A project's row: the whole project to the archive; in the archive, back (update/archive_project.rs). It gives
+        // way first: past the line's six it is the web board's button alone, and the ? menu's line.
+        let archive = crate::board::update::archive_project::says(s);
+        if !archive.is_empty() { let at = if v.len() < 6 { v.len() - 1 } else { v.len() }; v.insert(at, hk(K::Archive, archive)); }
         return (v, chat_key);
     }
     let Some(r) = r else { let mut v = back; v.extend(key); v.push(more); return (v, chat_key); };
@@ -116,6 +119,7 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
         else if agent_on && r.s("state") == "blocked" && st("asks") && r.s("kind") != "auth" && crate::chat_only::is_chat(r) { vec![Some(hk(K::Talk, "answer this task's agent")), Some(Hint { short: "end the chat".into(), ..hk(K::Yes, "end the chat, as it is") }), Some(open.clone())] }
         else if agent_on && r.s("state") == "blocked" { vec![Some(if r.s("kind") == "question" { hk(K::Talk, "answer this task's agent") } else { reply.clone() }), Some(open.clone())] }
         else if stuck_finishing(r) { vec![Some(hk(K::Yes, "finish with what its agent said last")), Some(open.clone()), Some(reply.clone())] }
+        else if let Some((what, _)) = crate::board::update::link::of(r).filter(|_| st("done")) { vec![Some(hk(K::OpenLink, &format!("open its {what}"))), Some(reply.clone()), opt(agent_on, open.clone())] }
         else if agent_on && r.s("state") == "working" { vec![Some(open.clone()), Some(reply.clone()), Some(stop.clone())] }
         else if agent_on { vec![Some(open.clone()), Some(reply.clone())] }
         else if r.s("state") == "working" { vec![Some(agent.clone()), Some(hk(K::Stop, "put it back in to do"))] }

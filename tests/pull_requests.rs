@@ -1,6 +1,6 @@
 //! Pull requests through a fake gh: pushed as a draft, merged through gh on approval, remembered while GitHub's checks
 //! run, watched; failed checks wake the agent; merged elsewhere without a newer local commit; comments of the human
-//! only wake the agent.
+//! only wake the agent; a `Closes #N` line in its body for each issue of `merge.closes`.
 use crate::common;
 use common::*;
 use crate::pull_requests_checks::waits;
@@ -58,7 +58,8 @@ fn pull_requests_failed_checks_wake_the_agent_capped_and_the_blocker_survives_a_
     let w = pr_world(json!({ "review.rounds": 1 }));
     let id = to_approval(&w, "CI fails");
     let t = task(&id);
-    w.script(json!({ "worker": [{ "files": { "f.txt": "fixed\n" }, "commit": "fix", "note": "Fixed CI." }] }));
+    // the agent finds nothing to change: the commit that failed on GitHub is still the one that would merge
+    w.script(json!({ "worker": [{ "note": "Nothing to fix here." }] }));
     w.gh_says(json!({ "view": { "state": "OPEN", "headRefOid": t.at("prHead"), "statusCheckRollup": [{ "name": "build", "conclusion": "FAILURE" }], "comments": [], "reviews": [], "author": { "login": "me" } } }));
     poll_prs();
     let last = pane_prompts(&w, &id).last().cloned().unwrap_or_default();
@@ -66,7 +67,8 @@ fn pull_requests_failed_checks_wake_the_agent_capped_and_the_blocker_survives_a_
     let t = settle(&id);
     assert_eq!(t.s("stage"), "approval"); assert_eq!(t.at("prFailure").s("title"), "Pull request checks failed");
     assert!(t.s("msg").contains("pull request still blocked"), "local success cannot clear failed CI: {}", t.s("msg"));
-    // CI on the new head passes: normal approval wording returns
+    assert_eq!(t.at("prFailure").s("head"), t.s("prHead"));
+    // CI on that head passes: normal approval wording returns
     w.gh_says(json!({ "view": { "state": "OPEN", "headRefOid": task(&id).at("prHead"), "statusCheckRollup": [{ "name": "build", "conclusion": "SUCCESS" }], "comments": [], "reviews": [], "author": { "login": "me" } } }));
     poll_prs();
     let t = task(&id);
@@ -118,4 +120,61 @@ fn pull_request_comments_only_the_humans_own_wake_the_agent_not_others_nor_the_b
     let log = gh_log(&w);
     assert!(log.lines().any(|l| l == "api user --jq .login"), "{log}");
     assert_eq!(log.lines().filter(|l| l.starts_with("api user")).count(), 1, "asked once, then remembered");
+}
+
+#[test]
+fn a_pull_request_the_board_opens_closes_the_issues_of_merge_closes_by_its_body() {
+    let w = pr_world(json!({}));
+    w.script(json!({ "worker": [step(1)] }));
+    let id = sw::actions::filing::add(&w.root, "Fix it", sw::actions::filing::AddOpts { settings: vec![("merge.closes".into(), json!("12, 13"))], ..Default::default() }).unwrap().t("id");
+    delegate(&id);
+    assert_eq!(settle(&id).s("stage"), "approval");
+    assert!(gh_log(&w).contains("Task: PRJ-1 (proj/1)\n\nCloses #12\nCloses #13 --base main"), "{}", gh_log(&w));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
+    assert!(t.s("msg").starts_with("Merged: https://github.com/o/r/pull/7. GitHub closes #12, #13."), "{}", t.s("msg"));
+    assert!(!regex::Regex::new("pr edit|issue close").unwrap().is_match(&gh_log(&w)), "GitHub closes them itself: {}", gh_log(&w));
+}
+
+fn body_now(w: &World) -> String { serde_json::from_str::<serde_json::Value>(&sw::flow::git::gh(&["pr", "view", "7", "--json", "body"], &w.root, 1000).stdout).unwrap().t("body") }
+fn closing(w: &World, issues: &str) -> String {
+    w.script(json!({ "worker": [step(1)] }));
+    let id = sw::actions::filing::add(&w.root, "Fix it", sw::actions::filing::AddOpts { settings: vec![("merge.closes".into(), json!(issues))], ..Default::default() }).unwrap().t("id");
+    delegate(&id);
+    assert_eq!(settle(&id).s("stage"), "approval");
+    id
+}
+fn closes(id: &str, issues: &str) { sw::store::settings::change::set_value("merge.closes", &json!(issues), &sw::store::settings::lookup::Scope::task(&task(id))).unwrap(); }
+
+#[test]
+fn an_issue_taken_off_merge_closes_is_taken_off_its_pull_request_before_it_merges() {
+    let w = pr_world(json!({}));
+    let id = closing(&w, "12, 13");
+    closes(&id, "13, 14");
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
+    let body = body_now(&w);
+    assert!(!body.contains("#12") && body.contains("Closes #13") && body.contains("Closes #14"), "{body}");
+    assert!(t.s("msg").contains("GitHub closes #13, #14."), "{}", t.s("msg"));
+    assert!(!gh_log(&w).contains("issue close"), "{}", gh_log(&w));
+}
+
+#[test]
+fn a_cleared_merge_closes_leaves_no_closes_line_and_nothing_merges_while_it_cannot_be_taken_off() {
+    let w = pr_world(json!({}));
+    let id = closing(&w, "12");
+    closes(&id, "none");
+    w.gh_says(json!({ "editFail": "HTTP 502" }));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!((t.s("stage"), t.at("failure").s("title")), ("approval", "Could not take an issue off the pull request"));
+    assert!(t.at("failure").s("detail").contains("HTTP 502") && !gh_log(&w).contains("pr merge"), "{}", gh_log(&w));
+    w.gh_says(json!({}));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
+    assert!(!body_now(&w).contains("Closes"), "{}", body_now(&w));
+    assert!(!t.s("msg").contains("closes") && !gh_log(&w).contains("issue close"), "{}", t.s("msg"));
 }

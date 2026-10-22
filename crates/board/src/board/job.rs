@@ -17,8 +17,8 @@ pub enum Job {
     Stop { id: String, said: String },
     Pin { id: String, name: String, key: String },
     Archive { id: String, said: String }, Restore { id: String, said: String },
-    /// Every done task of this machine's repo `repo`, in one go; `said` follows what it says it did.
-    ArchiveDone { repo: String, said: String },
+    /// This machine's project `repo` with its tasks, to the archive and back; `said` follows what it says it did.
+    ArchiveProject { repo: String, said: String }, RestoreProject { repo: String, said: String },
     Clear { id: String, name: String },
     Pick { id: String, letter: String },
     /// What you typed, for this machine's Coordinator; with no Coordinator, a task (or words added to one's description).
@@ -44,6 +44,8 @@ pub enum Job {
     ChatLeft { id: String },
     /// Into a task's agent: its real herdr pane (`attempt`: the selected attempt's, not the task's).
     OpenAgent { id: String, popup: bool },
+    /// A task's link (`what`: its report, its pull request) in this machine's browser; copied where none opens it.
+    OpenLink { link: String, what: String },
     FreeSize { pids: Vec<i64> },
     /// The first run's answers: which blocks to add to herdr's config.
     Setup { key: Option<String>, sidebar: Option<bool>, file: String },
@@ -67,6 +69,8 @@ impl Job {
             Job::Far { host, action, req, .. } if action.starts_with("auto-") => format!("{host}:auto:{}", req.s("id")),
             // A coordinator's row, by its coordinator (coords.rs: Target::key): started, stopped, autopilot, gone into.
             Job::CoordRun { to, .. } | Job::Pilot { to, .. } | Job::CoordOpen { to, .. } => format!("co:\t{to}"),
+            // A project archived or restored: its row, the project coordinator's.
+            Job::ArchiveProject { repo, .. } | Job::RestoreProject { repo, .. } => format!("co:\tproject:{repo}"),
             Job::Far { host, action, req, .. } if action.starts_with("coordinator-") || action.starts_with("autopilot-") => format!("co:{host}\t{}", req.s("to")),
             Job::Far { host, req, .. } => format!("{host}:{}", req.s("id")),
             _ => String::new(),
@@ -109,6 +113,8 @@ pub enum Then {
     /// A setting typed on the settings page was taken: the box it was typed in is emptied. A refused one stays there
     /// to be put right.
     Saved(String),
+    /// Copy this to the clipboard of the terminal the board is in (OSC 52).
+    Copy(String),
     /// A call rang: its id, for the chat to say when no helper took it, or why it ended before it began.
     CallRang { id: String },
 }
@@ -162,10 +168,11 @@ fn run_one(job: Job) -> Done {
             Job::SendFailure { id } => green(finish_line::send_failure(&id)?.msg),
             Job::SendError { id } => green(finish_line::send_error(&id)?.msg),
             Job::SendReview { id } => green(finish_line::send_review(&id)?.msg),
-            Job::Stop { id, said } => { talk::stop(&id)?; Done::say(said, Ink::Yellow) }
+            Job::Stop { id, said } => { let s = talk::stop(&id)?; Done::say(talk::stopped(&said, &s.msg), Ink::Yellow) }
             Job::Pin { id, name, key } => { let t = filing::pin(&id)?; Done::say(if t.b("pinned") { format!("Pinned {name} to the top. {key} unpins it.") } else { format!("Unpinned {name}.") }, Ink::Muted) }
             Job::Archive { id, said } => { archive::archive(&id)?; Done::say(said, Ink::Green).and(Then::Archived(id)) }
-            Job::ArchiveDone { repo, said } => { let r = crate::actions::archive_done::archive_done(Some(&repo))?; Done::say(format!("{}{said}", r.said), if r.failed.is_empty() { Ink::Green } else { Ink::Yellow }) }
+            Job::ArchiveProject { repo, said } => { let (r, _) = crate::actions::archive_project::archive_project(&repo)?; Done::say(format!("{r}{said}"), if r.contains("Still on the board") { Ink::Yellow } else { Ink::Green }) }
+            Job::RestoreProject { repo, said } => { let (r, _) = crate::actions::archive_project::restore_project(&repo)?; Done::say(format!("{r}{said}"), Ink::Green) }
             Job::Restore { id, said } => { archive::restore(&id)?; Done::say(said, Ink::Green).and(Then::Left(id)) }
             Job::Clear { id, name } => {
                 let (_, kept) = archive::clear(&id)?;
@@ -205,6 +212,10 @@ fn run_one(job: Job) -> Done {
             Job::CoordSeen { unseen, to } => { crate::coordinator::requests::seen(&unseen, crate::coordinator::co::Co::of(&crate::herdr::cli::current_socket(), &to)); Done::default() }
             Job::ChatLeft { id } => { crate::finish::chat::left(&id); Done::default() }
             Job::OpenAgent { id, popup } => super::job_far::open_agent(&id, popup),
+            Job::OpenLink { link, what } => match crate::opener::open(&link) {
+                Ok(()) => Done::default(),
+                Err(why) => Done::say(format!("Nothing opens its {what} here ({why}): copied the link instead. {link}"), Ink::Yellow).and(Then::Copy(link)),
+            },
             Job::FreeSize { pids } => {
                 let ended = pids.iter().filter(|p| unsafe { libc::kill(**p as i32, libc::SIGTERM) } == 0).count();
                 if ended > 0 { Done::say(format!("Ended {}. The board has its own size again in a moment.", if ended == 1 { "the remote view of this pane".to_string() } else { format!("{ended} remote views of this pane") }), Ink::Green) }

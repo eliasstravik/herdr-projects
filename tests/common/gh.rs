@@ -14,13 +14,22 @@ use sw::json::*;
 /// `jobs` (each run's jobs), `statuses` (the commit's statuses), `actionsFail` (it may not read Actions either).
 /// `noLogin`: gh is not logged in where it runs (a keeper started without the login shell's GH_TOKEN): every call fails.
 /// `prs`: the pull requests GitHub has for a head branch (`pr list --head`), each { number, url, state }; none by
-/// default. `archived`: the repo is archived on GitHub (`repo view`).
+/// default. `archived`: the repo is archived on GitHub (`repo view`). `origin`: the bare repo the board pushes to; the
+/// pull request's `headRefOid` is then what its head branch holds there (the one `pr create --head` named, or `headBranch`),
+/// and `newer` the checks of a commit pushed there after the one `view` names. The pull request's `body` is the one
+/// `pr create` or `pr edit` gave it last (or `view`'s own). `issueFail`: `issue close` fails with these words;
+/// `editFail`: `pr edit` does.
 #[derive(Default)]
-pub struct FakeGh { pub cfg: RefCell<Value>, pub log: RefCell<Vec<String>>, pub merged: Cell<bool>, late: Cell<i64> }
+pub struct FakeGh { pub cfg: RefCell<Value>, pub log: RefCell<Vec<String>>, pub merged: Cell<bool>, late: Cell<i64>, head_branch: RefCell<String>, body: RefCell<Option<String>> }
 fn ok(out: &str) -> GhOut { GhOut { status: 0, stdout: if out.is_empty() { String::new() } else { format!("{out}\n") }, stderr: String::new() } }
 fn rows(v: &Value) -> String { v.as_array().map(|a| a.iter().map(|r| strings(r).join("\t")).collect::<Vec<_>>().join("\n")).unwrap_or_default() }
 fn fail(m: &str) -> GhOut { GhOut { status: 1, stdout: String::new(), stderr: format!("{m}\n") } }
 impl FakeGh {
+    /// What the pull request's head branch holds at `origin`.
+    fn pushed(&self, c: &Value) -> String {
+        let b = if c.b("headBranch") { c.t("headBranch") } else { self.head_branch.borrow().clone() };
+        sw::store::repos::git_out(std::path::Path::new(c.s("origin")), &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{b}")]).unwrap_or_default()
+    }
     pub fn run(&self, a: &[String]) -> GhOut {
         let c = self.cfg.borrow().clone();
         self.log.borrow_mut().push(a.join(" "));
@@ -35,11 +44,19 @@ impl FakeGh {
         }
         match (x, y) {
             ("api", "user") => ok(if c.b("user") { c.s("user") } else { "me" }),
-            ("pr", "create") => if c.b("createFail") { fail(c.s("createFail")) } else { ok("https://github.com/o/r/pull/7") },
+            ("pr", "create") => if c.b("createFail") { fail(c.s("createFail")) } else {
+                *self.head_branch.borrow_mut() = a.iter().position(|s| s == "--head").and_then(|i| a.get(i + 1)).cloned().unwrap_or_default();
+                *self.body.borrow_mut() = a.iter().position(|s| s == "--body").and_then(|i| a.get(i + 1)).cloned();
+                ok("https://github.com/o/r/pull/7")
+            },
+            ("pr", "edit") if c.b("editFail") => fail(c.s("editFail")),
+            ("pr", "edit") => { if let Some(b) = a.iter().position(|s| s == "--body").and_then(|i| a.get(i + 1)) { *self.body.borrow_mut() = Some(b.clone()); } ok("") }
+            ("issue", "close") => if c.b("issueFail") { fail(c.s("issueFail")) } else { ok("") },
             ("pr", "ready") | ("pr", "comment") => ok(""),
             ("pr", "merge") => {
                 let only = a.iter().position(|s| s == "--match-head-commit").and_then(|i| a.get(i + 1)).cloned().unwrap_or_default();
-                if c.b("head") && !only.is_empty() && only != c.s("head") && !has("--disable-auto") { return fail("Head branch was modified. Review and try the merge again."); }
+                let at = if c.b("origin") { self.pushed(&c) } else { c.t("head") };
+                if !at.is_empty() && !only.is_empty() && only != at && !has("--disable-auto") { return fail("Head branch was modified. Review and try the merge again."); }
                 if has("--disable-auto") { return if c.b("disableFail") { fail("could not disable auto-merge") } else { ok("") }; }
                 if has("--auto") { return if c.b("autoOk") { ok("") } else { fail("auto-merge is not allowed") }; }
                 if c.b("mergeFail") { return fail(c.s("mergeFail")); }
@@ -50,6 +67,12 @@ impl FakeGh {
                 if c.at("late").is_object() { let n = self.late.get(); self.late.set(n + 1); if n < c.at("late").i("times") { return ok(&json!({ "state": "OPEN", "headRefOid": c.at("late").at("head") }).to_string()); } }
                 let mut v = if c.at("view").is_object() { c.at("view").clone() } else { json!({ "state": "OPEN", "statusCheckRollup": [], "comments": [], "reviews": [], "author": { "login": "me" } }) };
                 if self.merged.get() { v["state"] = json!("MERGED"); }
+                if let Some(b) = self.body.borrow().clone() { v["body"] = json!(b); }
+                if c.b("origin") {
+                    let at = self.pushed(&c);
+                    if c.at("newer").is_array() && c.at("view").b("headRefOid") && c.at("view").s("headRefOid") != at { v["statusCheckRollup"] = c.at("newer").clone(); }
+                    v["headRefOid"] = json!(at);
+                }
                 if !rollup { if let Some(o) = v.as_object_mut() { o.remove("statusCheckRollup"); } }
                 ok(&v.to_string())
             }

@@ -1,7 +1,8 @@
 //! A task's place in the queue for a free slot (`board.agents` all taken): `Q#1` gets the next slot, `Q#2` the one
 //! after. The board starts waiting tasks in this order (actions/start.rs: start_queued), so the row, the task panel,
 //! `list`, `details`, herdr's sidebar and the web Board all say the same place. A task delegated with `--after` is
-//! queued too, after the tasks it waits for (after.rs): the same mark and colour, no place, and "queued after HSW-6".
+//! queued too, after the tasks it waits for (after.rs): the same mark and colour, no place, and "queued after HSW-6". One
+//! that waits for room on a disk (leftovers/room.rs) keeps its place, and says it waits for disk space, not a slot.
 use crate::json::*;
 
 /// Queued: started, no slot yet, or queued after other tasks to be done.
@@ -33,9 +34,16 @@ pub fn number(rows: &mut [Obj]) {
 }
 /// `Q#2`, or nothing where the task does not wait or its place is not known.
 pub fn tag(r: &Obj) -> String { if queued(r) && r.i("queuePlace") > 0 { format!("Q#{}", r.i("queuePlace")) } else { String::new() } }
-/// "waiting for a free slot, Q#2", or "queued after HSW-6": where a queued task stands, in words.
+/// It waits for room on a disk (leftovers/room.rs), not for a free slot.
+pub fn waits_disk(r: &Obj) -> bool { r.s("stage") == "queued" && r.b("diskWait") && !r.b("archivedAt") }
+/// What a task in the queue waits for, in words: "waiting for disk space", or "waiting for a free slot".
+pub fn waits_for(r: &Obj) -> &'static str { if waits_disk(r) { DISK } else { WAITING } }
+/// "waiting for a free slot, Q#2", "waiting for disk space, Q#1", or "queued after HSW-6": where a queued task stands, in words.
 pub fn words(r: &Obj) -> String {
     if waits_after(r) { return crate::after::row_line(r); }
-    let q = tag(r); if q.is_empty() { WAITING.into() } else { format!("{WAITING}, {q}") }
+    let (w, q) = (waits_for(r), tag(r)); if q.is_empty() { w.into() } else { format!("{w}, {q}") }
 }
+/// The same in a word or two, for herdr's sidebar (its place is beside it): "queued", or "waiting for disk space".
+pub fn short(r: &Obj) -> &'static str { if waits_disk(r) { DISK } else { crate::status_words::QUEUED } }
 pub const WAITING: &str = "waiting for a free slot";
+pub const DISK: &str = "waiting for disk space";

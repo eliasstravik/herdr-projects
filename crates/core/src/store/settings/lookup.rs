@@ -95,7 +95,8 @@ pub fn lookup_at(name: &str, scope: &Scope, at: &Places) -> Res<Found> {
     let entry = known(name)?;
     if at.no_repo && needs_repo(name) { return Ok(Found { name: name.into(), value: entry.builtin.clone(), place: "builtin".into(), from: "built in".into(), applies: false, parts: vec![], skipped: vec![] }); }
     let list = match entry.kind { Kind::Work => &at.work, Kind::Board => &at.board, Kind::Repo => &at.repo, Kind::Coord => &at.coord };
-    let mut said: Vec<&Place> = list.iter().filter(|p| p.values().contains_key(name)).collect();
+    // One task's own setting (`merge.closes`) is said by that task alone: a broader place's answer is never read.
+    let mut said: Vec<&Place> = list.iter().filter(|p| p.values().contains_key(name) && (!entry.task || ["task", "builtin"].contains(&p.place))).collect();
     // An effort and an access are right or wrong for one program: an answer that does not fit the program the role has
     // is not counted, and the next place down is asked (the built-in one fits every program). Except `auto`: the next
     // place down could be `full`, so an agent is never let act without asking where its auto mode was asked for. It

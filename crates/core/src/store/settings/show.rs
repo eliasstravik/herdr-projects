@@ -55,7 +55,8 @@ pub fn rows(scope: &Scope) -> Vec<Row> {
     let at = places_of(scope, &mine);
     let get = |name: &str| lookup_at(name, scope, &at).map(|f| text(&f.value)).unwrap_or_default();
     let shows = |s: &Entry| if scope.coord.is_some() { s.kind == Kind::Coord } else if task.is_some() { true } else if !scope.repo.is_empty() { s.kind != Kind::Board && s.kind != Kind::Coord } else { s.kind != Kind::Repo && s.name != super::coord::GOAL };
-    SETTINGS.iter().filter(|s| shows(s)).filter_map(|s| {
+    // One task's own setting is said on that task only.
+    SETTINGS.iter().filter(|s| shows(s) && (task.is_some() || !s.task)).filter_map(|s| {
         let r = lookup_at(&s.name, scope, &at).ok()?;
         let n = note(s, &r, task, scope, at.no_repo, &get);
         let own_place = if task.is_some() { "task" } else if !scope.repo.is_empty() { "repo" } else if scope.coord.is_some() { "coord" } else { "you" };

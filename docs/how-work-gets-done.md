@@ -144,6 +144,23 @@ it merges:
 A conflict found here goes back to the agent the same way, and the merge you approved is retried after its repair. A
 checkout with unsaved files is never forced. Merging without your yes: [merging by itself](gate.md#merging-by-itself).
 
+### Closing GitHub issues
+
+A task added for GitHub issues says which ones its work closes: `herdr-projects add "Fix the login" --merge.closes 2203,2204`
+(or later, `set merge.closes 2203 --task <id>`). Only issues of the task's own repo, by number, and only on the task
+itself: never for you or a repo. `show <id>` lists it with the rest.
+
+- **Through a pull request**, its body gets a `Closes #2203` line for each, so GitHub closes them when it merges into
+  the default branch. A pull request the agent opened itself gets the lines it lacks added (`gh pr edit`); so does one
+  opened before the setting was said, right before it merges. Changed or cleared since, the board takes its own lines of
+  the issues no longer named off again before it merges; while it cannot, nothing merges (the task says why).
+- **With no pull request** (a local merge), and through one that merges into another branch than the default, the
+  board closes each with `gh issue close` once the merge has landed, with a comment naming the task and the merge commit.
+  So it does for work the agent put on main itself (`Already merged in #133`); work that needed no change closes none.
+
+Nothing is closed on a merge that failed. A close that fails never fails the merge, and an issue closed already is
+fine: the task's line says what was closed (`Merged into main. Closed #2203, #2204.`), or which could not be and why.
+
 ### GitHub's checks must pass first
 
 With `merge.checks: github`, a pull request merges only once its checks on GitHub pass, by itself or on your yes, in
@@ -155,6 +172,9 @@ every repo the board merges in. `merge.checks: none` does not look at GitHub's c
 | failed | merges nothing. The failure goes back to the agent like a failed check of the board's own, with the failing check's name and the end of its log, within `review.rounds` (a merge you approved goes on once GitHub's checks pass on the repair). After that it waits for you, and `approve <id>` refuses and says why, as for a failed review, until `approve <id> --anyway` |
 | not reporting, still running after `check.timeout` | waits for you, with that reason |
 | passed, or there are none | merges |
+
+A failure is of one commit: once a repair is pushed, the old commit's failed checks block nothing (also when main is
+merged in before it merges). Only the checks of the commit that would merge count.
 
 Each check is counted once, a workflow for its jobs until GitHub lists them. `details` names what it waits for
 (`checksWaitingFor`).
@@ -218,6 +238,14 @@ own worktree:
 - **whenever main moves** (another task merged, a merge on GitHub, your own push; the remote is asked every two minutes):
   every task waiting for your approval is updated, and a task under review the moment its review ends;
 - **after you approve**, once more, as the last safety net. It should rarely find anything.
+
+**Fewer merges while it waits: `merge.sync approve`.** In a busy repo, merging main on every move gives a waiting
+pull request a merge commit, a CI run and a round of bot reviews each time, and only the last merge before landing
+matters. With `herdr-projects set merge.sync approve` (for a task, a repo or all), main is merged in before review and
+after your yes only. While the task waits, the board makes a test merge in memory (`git merge-tree`), which changes
+nothing in its worktree, branch or pull request: a conflict is handled as a real one (below), so you know before you
+approve; a clean one changes nothing. After your yes, main is merged, checked again and the work lands, as always.
+`always` (built in) is the behaviour described above.
 
 **A clean update is silent.** If it changed the commit, the check runs again on the result. The review is not repeated
 when taking main in is all that happened to work that already passed ([below](#a-review-that-passed-is-not-repeated-for-a-merge-of-main)),
