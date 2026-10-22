@@ -49,6 +49,11 @@ The severity says what the fault does:
 - **`review.timeout`** (`20m`, or `none`) is how long one review may take: past it the review fails (`review timed out
   after 20m (review.timeout)`) and goes on as any failed review does. `limit.time` is another thing: it stops any run,
   the agent's too, keeps its work and waits for you ([limits](limits.md)).
+- **A reviewer that shows no output is not reviewing.** A pane that shows the same screen for five minutes, after the
+  brief went in, is waiting at a prompt of its own: the round ends at once with `the reviewer produced no output for
+  5m: its pane last shows: …` and the pane's last lines, so the next attempt knows what it walked into. This is not a
+  retry: the same wall would be there again. `review.timeout` stays the outer bound, and a reviewer Herdr reports as
+  blocked is left for you to answer. `HERDR_PROJECTS_REVIEW_QUIET_MS` sets the five minutes.
 
 Findings below the gate still show on the review page, in the task panel and in a comment on the pull request, marked
 as not required.

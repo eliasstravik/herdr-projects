@@ -12,7 +12,7 @@ after a cut-off turn, the reviewer's brief, and what you say to the Coordinator.
 |---|---|
 | `Starting` (or `About to continue`) | the board is waiting for the program to come up, or checking the text went in |
 | `Has not started yet: pressing enter again` | the text sits in the box; the board presses enter again |
-| **Not started: its instructions sit unsent in its box** | still sitting there 40 seconds after the last enter |
+| **Not started: its instructions sit unsent in its box** | still sitting there 40 seconds after the last enter, or 3 minutes after the text went in |
 
 While it waits, the row never says `working` or `finishing`.
 
@@ -22,6 +22,13 @@ While it waits, the row never says `working` or `finishing`.
   the same pane and hands it the same text, word for word. The program is ended first because its box may still hold
   the old text, and typing on top would send it twice.
 - **Or go into the agent and press enter yourself.** The board sees it start, and the error goes away.
+- **Or hand the brief over by hand**: send the task's description into the agent's pane yourself, with
+  `herdr agent prompt <agent> "<the task's description>"`. The failure names the agent. Use it when enter does
+  nothing: some panes keep the text and never start on it.
+- **The board gives up after 3 minutes.** The text has to show on the agent's pane, or in its saved conversation, or
+  the agent has to work. If an agent that is at rest shows none of that 3 minutes after the text went in, the task
+  fails as not started and its error quotes the pane's last lines. Herdr's own counters do not overrule this: a
+  program still drawing its screen moves them, which reads as "it started".
 - **A reply from the board** is typed into the same box and goes out together with what sat there. The board keeps
   both: if that does not start either, retry hands over all of it, in order.
 - **A program that ended** with typed text it never took shows the same error at once: the text went with the program.
@@ -82,6 +89,7 @@ on the message is delivered: the turn's end, however much later, is the answer t
 |---|---|---|
 | `HERDR_PROJECTS_READY_MS` | 60000 | the longest the board waits for a started program to draw its screen; 0 types at once |
 | `HERDR_PROJECTS_SUBMIT_MS` | 5000 | the wait before the first extra enter; each later wait is twice the one before |
+| `HERDR_PROJECTS_LOST_MS` | 180000 | the longest the board waits for the agent to start on text that neither its pane nor its saved conversation holds |
 
 Very long text is handed over in a file instead: [when an agent could not start](could-not-start.md#long-rules-and-long-messages).
 

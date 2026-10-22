@@ -51,6 +51,32 @@ fn a_message_typed_into_a_running_turn_gets_its_enter_once_the_agent_rests_with_
 }
 
 #[test]
+fn a_brief_the_agent_never_took_fails_and_says_how_to_hand_it_over() {
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    waits(0, 0);
+    unsafe { std::env::set_var("HERDR_PROJECTS_LOST_MS", "60000") };
+    // The prompt comes back as sent and leaves nothing at all in the pane: the box is empty and no work is going on.
+    w.patch(|s| { s["lost"] = json!(99); s["deaf"] = json!(99); });
+    let id = w.add("Brief never arrives");
+    delegate(&id);
+    sw::runner::drain_jobs(&|job, id, extra| { sw::jobs::run_job(job, id, extra); });
+    assert_eq!(the_agent(&w, &id).t("box"), "");
+    // herdr's own change counter moves on, as a program still drawing its screen does: that alone would read as "it
+    // started". A minute later the agent has still not started on the text, and its conversation does not hold it.
+    w.patch(|s| { let seq = s.i("seq") + 1; s["seq"] = json!(seq); for p in s["panes"].as_array_mut().unwrap() { if p.at("agent").is_object() { p["agent"]["seq"] = json!(seq); } } });
+    sw::clock::advance(61000);
+    for _ in 0..2 { pass(&w); }
+    let c = task(&id); let r = row(&id);
+    assert_eq!((c.s("stage"), r.t("state")), ("failed".into(), "error".into()), "{}", c.at("failure"));
+    assert_eq!(c.at("failure").s("stage"), "send");
+    assert!(c.at("failure").s("detail").contains("the agent has not started on it"), "{}", c.at("failure"));
+    assert!(c.at("failure").s("detail").contains("pane shows nothing"), "the pane was read: {}", c.at("failure"));
+    assert!(c.at("failure").s("next").contains("herdr agent prompt "), "{}", c.at("failure"));
+    assert!(c.at("unsent").s("text").contains("Brief never arrives"), "the brief is kept for retry: {}", c.at("unsent"));
+    assert!(count(&w, r"^agent send-keys .* enter$") <= TRIES as usize, "a few tries, then no more");
+}
+
+#[test]
 fn an_agent_that_never_starts_is_shown_as_not_started_and_retry_starts_it_again_with_the_same_text() {
     let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
     waits(0, 0);

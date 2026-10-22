@@ -3,6 +3,7 @@
 use super::review::{close_reviewer, Reviewed};
 use super::review_brief::{parse_verdict, review_brief, Brief};
 use super::review_fallback::{reviewer_now, Cut};
+use super::review_watch::{quiet_ms, Screen};
 use super::shared::{ms, review_until, timed_out};
 use crate::agents::{adapter, helpers::still_at_work, installed, start, start_failed};
 use crate::clock::now;
@@ -99,6 +100,8 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
         let until = review_until(ch);
         let every = ms("HERDR_PROJECTS_POLL_MS", 3000);
         let (mut sent, mut sent_at, mut quiet_since, mut comp_at_send) = (false, 0i64, 0i64, Value::Null);
+        // A reviewer whose pane shows nothing new is waiting at a prompt of its own (finish/review_watch.rs).
+        let (mut seen, quiet) = (Screen::default(), quiet_ms());
         let mut waited: Vec<i64> = vec![]; // its own turn-end reports while its helpers were still at work
         // Its turn ended while helpers it started are still at work (agents/helpers.rs): their answers start it again.
         let helpers_at_work = |ev: Option<&Value>| { let w = why_stopped(&get(id).unwrap_or(t.clone()), "reviewer", ev); w.turn.as_ref().map(|x| x.error.is_empty()).unwrap_or(false) && still_at_work(&w.kind, w.turn.as_ref(), started_at) };
@@ -170,6 +173,12 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
                     }
                     _ => quiet_since = 0,
                 }
+            }
+            // The same screen for minutes once its brief is in: the reviewer is not working, it is waiting at a prompt
+            // nobody will answer. The round ends here with what the pane shows, well before `review.timeout` (above).
+            if sent && !blocked {
+                let screen = api.pane_read(&pane, "visible", None).unwrap_or_default();
+                if let Some(e) = seen.look(&screen, now(), quiet) { error = e; break; }
             }
             sleep(every);
         }

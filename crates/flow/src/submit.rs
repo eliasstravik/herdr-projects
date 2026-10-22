@@ -144,6 +144,28 @@ pub fn note_sent(id: &str, mark: Option<Value>, text: &str, first: bool) {
 /// Task id -> when its saved conversation was last read for a text typed into a running turn.
 static LOOKED: LazyLock<Mutex<HashMap<String, i64>>> = LazyLock::new(Default::default);
 pub const NOT_STARTED: &str = "Not started: its instructions sit unsent in its box";
+/// How long the board waits for herdr to show that the agent took the text: 3 minutes after it was typed. Past this,
+/// an agent that is at rest and whose saved conversation does not hold the text never took it, whatever herdr's own
+/// change counters say (a program still drawing its screen moves them as well).
+fn lost_ms() -> i64 { ms("HERDR_PROJECTS_LOST_MS", 180000) }
+/// Does the pane show the text? That is what a brief that reached the pane leaves behind: its first words, in the
+/// agent's box or in the scrollback above it. Read on a screen that wraps, so the words are compared, not the lines.
+fn shows(screen: &str, text: &str) -> bool {
+    let head: String = text.split_whitespace().take(5).collect::<Vec<_>>().join(" ");
+    head.chars().count() >= 8 && screen.split_whitespace().collect::<Vec<_>>().join(" ").contains(&head)
+}
+/// The next step that needs nothing of the board: the human hands the brief to the agent themselves.
+fn hand_over_next(t: &Task) -> String {
+    let to = if t.at("link").s("agent").is_empty() { t.at("link").s("pane").to_string() } else { t.at("link").s("agent").to_string() };
+    format!("Send the task's description into the agent yourself: herdr agent prompt {to} \"<the task's description>\"")
+}
+/// What the agent's pane last showed, for a failure that has to say whether the text is there.
+fn pane_seen(api: &Herdr, t: &Task, text: &str) -> String {
+    let screen = api.pane_read(t.at("link").s("pane"), "visible", None).unwrap_or_default();
+    if shows(&screen, text) { return "The brief does show on the agent's pane: the text went in, and the agent has not started on it.".into(); }
+    let tail = crate::finish::shared::last_lines(&screen, 6);
+    if tail.trim().is_empty() { "The agent's pane shows nothing.".into() } else { format!("The agent's pane last shows:\n{tail}") }
+}
 /// Called on every pass with the agent as herdr shows it now. Never waits: one look, at most one enter.
 pub fn check_sent(id: &str, a: Option<&Value>, api: &Herdr) {
     let Some(t) = get(id) else { return };
@@ -173,6 +195,14 @@ pub fn check_sent(id: &str, a: Option<&Value>, api: &Herdr) {
         if said() == Some(true) { return clear(); }
         return lost(format!("The board typed the text into the agent's box {secs} seconds ago. The agent's program ended before it started on it: nothing was submitted."), format!("Retry ({}) starts the agent's program again and hands it the text once more.", key_name("yes")));
     };
+    // The board's own bound on the wait, whatever herdr says: the agent sits at rest this long after the text went in,
+    // and its saved conversation does not hold that text. It is not going to start on it. Its pane is read once, so the
+    // failure can say what is there, and the next step says how to hand the brief over by hand.
+    if !working(a) && !m.b("busy") && now() - m.i("at") >= lost_ms() && said() != Some(true) {
+        let mins = (lost_ms() / 60000).max(1);
+        let seen = pane_seen(api, &t, m.s("text"));
+        return lost(format!("The board typed the text into the agent's box {mins} minute{} ago and the agent has not started on it: no work is going on. {seen}", if mins == 1 { "" } else { "s" }), format!("Retry ({}) starts the agent's program again and hands it the text once more. {}", key_name("yes"), hand_over_next(&t)));
+    }
     if m.b("busy") { // typed into a running turn: looked at from the moment the agent is at rest
         let last = LOOKED.lock().unwrap().get(id).copied().unwrap_or(0);
         if now() - last >= wait_ms(None) { LOOKED.lock().unwrap().insert(id.into(), now()); if said() == Some(true) { LOOKED.lock().unwrap().remove(id); return clear(); } }
@@ -190,8 +220,8 @@ pub fn check_sent(id: &str, a: Option<&Value>, api: &Herdr) {
         if go { let _ = api.agent_keys(t.at("link").s("pane"), &["enter"]); }
         return;
     }
-    lost(format!("The board typed the text into the agent's box {secs} seconds ago and has pressed enter {TRIES} more times since. The agent still sits at its prompt: nothing was submitted, and no work is going on."),
-        format!("Retry ({}) starts the agent's program again and hands it the text once more. Or go into the agent and press enter yourself.", key_name("yes")));
+    lost(format!("The board typed the text into the agent's box {secs} seconds ago and has pressed enter {TRIES} more times since. The agent still sits at its prompt: nothing was submitted, and no work is going on. {}", pane_seen(api, &t, m.s("text"))),
+        format!("Retry ({}) starts the agent's program again and hands it the text once more. Or go into the agent and press enter yourself. {}.", key_name("yes"), hand_over_next(&t)));
 }
 /// "Not started", and the words do stand in the agent's saved conversation: it took them after all.
 pub fn took_after_all(t: &Task) -> Option<bool> {
