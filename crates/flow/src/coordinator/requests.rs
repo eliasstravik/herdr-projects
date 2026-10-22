@@ -92,6 +92,8 @@ pub fn not_delivered(name: &str) -> String {
 /// A project coordinator's repo, which must be one this machine knows: it works in its folder.
 fn known(co: &Co) -> Res<Option<std::path::PathBuf>> {
     let Some(r) = co.repo() else { return Ok(None) };
+    // An archived project's coordinator stays stopped until the project is restored.
+    crate::store::archived_repos::refuse_archived(r)?;
     match co.root() { Some(p) if p.is_dir() => Ok(Some(p)), _ => crate::fail!("No repo \"{r}\" on this machine, so it has no project coordinator here.") }
 }
 /// restart: the same conversation, the program started again. new: a fresh conversation, on the default or on `pick`.

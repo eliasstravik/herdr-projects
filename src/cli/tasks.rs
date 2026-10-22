@@ -1,7 +1,7 @@
 //! The commands on tasks and settings: each returns what --json prints and what a person reads.
 use super::flags::{pick_choices, Args};
 use super::{caller, context_folder};
-use crate::actions::{archive, archive_done, filing, finish_line, settings::{settings_command, Where}, start, talk};
+use crate::actions::{archive, archive_done, archive_project, filing, finish_line, settings::{settings_command, Where}, start, talk};
 use crate::board::keys::key_name;
 use crate::err::Res;
 use crate::flow::live::board;
@@ -133,10 +133,15 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
             let r = archive_done::archive_done(flag("repo").as_deref())?;
             (r.json(), r.said)
         }
-        "archive" => {
-            if flags.has("repo") { crate::fail!("--repo goes with --done: herdr-projects archive --done --repo NAME"); }
-            let t = archive::archive(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: archived", t.s("id")))
+        // A whole project, with its tasks: put away, and brought back as it was.
+        "archive" | "restore" | "unarchive" if flags.has("repo") => {
+            if pos.len() > 1 { crate::fail!("{cmd} --repo NAME takes no id: it {cmd}s the whole project. Try: herdr-projects help"); }
+            let Some(repo) = flag("repo") else { crate::fail!("--repo needs a repo's name: herdr-projects {cmd} --repo NAME") };
+            let (said, ids) = if cmd == "archive" { archive_project::archive_project(&repo)? } else { archive_project::restore_project(&repo)? };
+            let mut out = obj(json!({ "repo": repo })); out.put(if cmd == "archive" { "archived" } else { "restored" }, ids);
+            (Value::Object(out), said)
         }
+        "archive" => { let t = archive::archive(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: archived", t.s("id"))) }
         "restore" | "unarchive" => { let t = archive::restore(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: restored", t.s("id"))) }
         "clear" => {
             let (id, kept) = archive::clear(&need(1, "an id")?)?;
