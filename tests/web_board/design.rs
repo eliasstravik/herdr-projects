@@ -88,6 +88,7 @@ fn the_chats_switch_names_the_top_rows_coordinator_and_the_selected_rows_agent_a
     assert_eq!((c.t("top"), c.t("row"), c.at("toAgent")), (host.clone(), tag.clone(), &json!(false)), "{c}");
     assert_eq!((c.at("title").at("steps"), c.at("title").s("kind"), c.at("title").s("edge"), c.at("title").at("fresh")), (&json!([host]), "Machine coordinator", "text", &json!(true)), "{c}");
     assert_eq!(c.s("box"), "text");
+    assert_eq!(c.at("mark").s("t"), "○", "its mark is its row's, as the list has it: {c}");
     // space (the other choice): the task's agent, named by its tag, `Agent`, its status colour (to do: the base colour)
     let s = web(&w, "press", json!({ "id": "talk" }));
     let t = s.at("chat").at("title");

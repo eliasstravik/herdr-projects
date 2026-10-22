@@ -61,6 +61,13 @@ async function scopeTo(to) {
 // Wide, an open task stays open as the selection moves (the terminal board's side panel); on a phone, where it would
 // cover the list, a tap only selects.
 const wide = () => window.matchMedia?.("(min-width: 900px)").matches;
+// The list drawn again; a selection that moved (a key's doing: the next row after one archived) is brought into view.
+let selShown = "";
+function drawList(el) {
+  part("list-host").replaceChildren(el);
+  const sel = snap.list.selected || "";
+  if (sel !== selShown) { selShown = sel; [...el.querySelectorAll("[data-id]")].find((x) => x.dataset.id === sel)?.scrollIntoView?.({ block: "nearest" }); }
+}
 // Draw what changed. Each part is compared as text, so a tick that changed nothing touches nothing on the page.
 function draw() {
   if (!root || !snap) return;
@@ -78,7 +85,7 @@ function draw() {
     if (lit && key !== litShown) { const l = lit.offsetLeft, r = l + lit.offsetWidth; if (l < row.scrollLeft || r > row.scrollLeft + row.clientWidth) row.scrollLeft = Math.max(0, l - 24); }
     litShown = key;
   });
-  once("list", [snap.list, !!snap.panel, snap.actions], () => part("list-host").replaceChildren(listEl(snap.list, { opened: snap.panel ? snap.list.selected : "", onPick: (id) => call("pick", { id, open: !!snap.panel && wide() }), onOpen: (id) => call("pick", { id, open: true }), onMore: () => press("allDone"), onFold: (id) => call("fold", { id }), actions: snap.actions, onPress: press })));
+  once("list", [snap.list, !!snap.panel, snap.actions], () => drawList(listEl(snap.list, { opened: snap.panel ? snap.list.selected : "", onPick: (id) => call("pick", { id, open: !!snap.panel && wide() }), onOpen: (id) => call("pick", { id, open: true }), onMore: () => press("allDone"), onFold: (id) => call("fold", { id }), actions: snap.actions, onPress: press })));
   once("panel", [snap.panel, snap.actions, snap.canOpen, snap.role], () => { const el = panelEl(snap, { onPress: press, onMenu: () => { menuOpen = true; draw(); }, onClose: () => call("pick", { id: snap.list.selected, open: false }), onGo: (id) => call("pick", { id, open: true }) }); const host = part("task-host"), top = host.scrollTop; part("panel-host").replaceChildren(...(el ? [el] : [])); host.scrollTop = top; });
   // All settings stands under the task in a place of its own, drawn again only when a setting changed: what you
   // are typing into one of its boxes is not taken away by the task's status moving on.

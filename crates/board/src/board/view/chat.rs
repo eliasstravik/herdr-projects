@@ -36,7 +36,7 @@ fn who_of(s: &mut State, t: &Theme, r: Option<&Obj>) -> Option<Who> {
         let word = if r.b("archivedAt") { "archived".to_string() } else if under_review(r) { reviewer_word(r).to_string() } else { standing(r) };
         let starts = !r.b("host") && !is_agent(r) && ["todo", "progress"].contains(&r.s("stage"));
         let status = if r.b("archivedAt") { "archived: read-only".to_string() } else if to_agent { let x = crate::board::update::pending::said(r.at("pending")).unwrap_or_else(|| crate::shown::row_says::sentence(r)).text(); if x.is_empty() { word.clone() } else { x } }
-            else if starts { "no agent yet: your message starts one".into() } else if s.data.can_dispatch || r.b("host") { "no agent on it: your message goes to the Coordinator, about this task".into() } else { "no agent on it: your message is added to its description".into() };
+            else if starts { "no agent yet: your message starts one".into() } else if s.data.can_dispatch || r.b("host") { format!("no agent on it: your message goes to {}, about this task", crate::board::update::top::top(s).map(|t| t.name).unwrap_or_else(|| "the coordinator".into())) } else { "no agent on it: your message is added to its description".into() };
         let said = to_agent && !r.b("archivedAt");
         let k = if said { Some(talk(r)) } else { None };
         // A dialog on its screen, or a review of its work, outranks your own words.
