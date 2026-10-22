@@ -6,8 +6,13 @@ use crate::json::*;
 
 /// The sections whose items are follow-ups, by the words their heading starts with, and the kind each gives.
 const SECTIONS: [(&str, &str); 6] = [("still open", "open"), ("also noticed", "noticed"), ("follow-ups", "open"), ("follow ups", "open"), ("followups", "open"), ("open follow-ups", "open")];
-/// An item that says there is nothing.
-const NOTHING: [&str; 6] = ["none", "nothing", "n/a", "-", "none.", "nothing."];
+/// An item that says there is nothing: its first word, or "nothing" with one of these after it ("nothing else").
+const NONE: [&str; 3] = ["none", "n/a", "-"];
+const NOTHING_MORE: [&str; 11] = ["else", "worth", "more", "left", "open", "to", "further", "noticed", "found", "outstanding", "new"];
+fn says_nothing(words: &str) -> bool {
+    let w: Vec<String> = words.split_whitespace().map(|x| x.trim_matches(|c: char| !c.is_alphanumeric() && c != '/' && c != '-').to_lowercase()).filter(|x| !x.is_empty()).collect();
+    match w.first().map(|s| s.as_str()) { None => true, Some(f) if NONE.contains(&f) => true, Some("nothing") => w.len() == 1 || NOTHING_MORE.contains(&w[1].as_str()), _ => false }
+}
 /// The longest heading line taken for a section's: a longer line is a sentence that happens to start with its words.
 const HEADING_MAX: usize = 60;
 
@@ -41,7 +46,7 @@ fn entry(kind: &str, raw: &str) -> Option<Value> {
     let blocks = tag.is_match(&words);
     let words = tag.replace_all(&words, "").split_whitespace().collect::<Vec<_>>().join(" ");
     let words = words.trim_matches(|c: char| c == ' ' || c == '·' || c == ',' || c == ';').to_string();
-    if words.is_empty() || NOTHING.contains(&words.to_lowercase().as_str()) { return None; }
+    if words.is_empty() || says_nothing(&words) { return None; }
     let mut o = obj(json!({ "text": words, "kind": kind }));
     if !repo.is_empty() { o.put("repo", repo); }
     if blocks { o.put("blocks", true); }
@@ -76,6 +81,8 @@ mod tests {
         assert_eq!((f[1].s("text"), f[1].s("repo")), ("Show the new field on the settings page", "web"));
         assert_eq!((f[2].s("text"), f[2].s("kind")), ("`src/a.rs`: an old comment", "noticed"));
         assert!(parse("Also noticed: none\n\nStill open: nothing").is_empty());
+        for none in ["Also noticed: nothing else.", "Also noticed: nothing worth mentioning", "## Still open\n- None — everything is done.", "Still open:\n- Nothing."] { assert!(parse(none).is_empty(), "{none}"); }
+        assert_eq!(parse("Still open:\n- Nothing logs the retry yet").len(), 1);
         assert_eq!(parse("Also noticed: the README is stale")[0].s("text"), "the README is stale");
         assert!(parse("Still open is the question of whether this is a sentence long enough to be no heading at all, really.\n- x").is_empty());
     }

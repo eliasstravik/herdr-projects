@@ -36,8 +36,8 @@ replaces it; an item you already added as a task or hid keeps that, matched by i
 
 Only once the task is finished (merged, or done): before that the work is still going on.
 
-- **The row** says `2 follow-ups` where a done row says nothing else, on the board, in herdr's sidebar and on the web
-  board. It counts the open ones; added and hidden ones are not counted.
+- **The row** says `2 follow-ups` where a done row says nothing else, on the board and on the web board. (herdr's
+  sidebar does not: a merged task's pane is gone, and with it its entry there.) It counts the open ones; added and hidden ones are not counted.
 - **The task panel**, beside the list and full screen, has a **Follow-ups · 2 open** part: each one
   numbered, with its repo and `(blocks)`, and the commands below.
 - **`herdr-projects details <id>`** has them under `followups`: every item with its number, words, repo, `blocks`, kind

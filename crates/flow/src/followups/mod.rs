@@ -15,16 +15,23 @@ pub const OPEN: &str = "open";
 pub const ADDED: &str = "added";
 pub const HIDDEN: &str = "hidden";
 
-/// The list as the note now has it. What you did to one already kept (added or hidden) stays with it: an item is
-/// the same one when its words are.
+/// The list as the note now has it. An item is the same one when its words are: it keeps its number and what you
+/// did to it. A new one gets the next number. One you added as a task or hid stays on the list (its link with it)
+/// when the note no longer says it; an open one it no longer says is gone.
 pub fn merged(old: &Value, note: &str) -> Value {
     let was: Vec<&Value> = old.as_array().map(|a| a.iter().collect()).unwrap_or_default();
-    let list: Vec<Value> = parse::parse(note).into_iter().enumerate().map(|(i, mut f)| {
-        if let Some(o) = was.iter().find(|o| o.s("text") == f.s("text") && o.s("state") != OPEN) { for k in ["state", "task", "at"] { if o.has(k) { f[k] = o.at(k).clone(); } } }
+    let mut next = was.iter().map(|o| o.i("n")).max().unwrap_or(0);
+    let mut list: Vec<Value> = parse::parse(note).into_iter().map(|mut f| {
+        match was.iter().find(|o| o.s("text") == f.s("text")) {
+            Some(o) => { for k in ["state", "task", "at", "n"] { if o.has(k) { f[k] = o.at(k).clone(); } } }
+            None => { next += 1; f["n"] = json!(next); }
+        }
         if !f.has("state") { f["state"] = json!(OPEN); }
-        f["n"] = json!(i + 1);
         f
     }).collect();
+    let kept: Vec<Value> = was.iter().filter(|o| o.s("state") != OPEN && !list.iter().any(|f| f.s("text") == o.s("text"))).map(|o| (*o).clone()).collect();
+    list.extend(kept);
+    list.sort_by_key(|f| f.i("n"));
     Value::Array(list)
 }
 /// The task's follow-ups, read again from the note its agent ended with. A note that lists none (a later round's
@@ -56,4 +63,25 @@ pub fn line(f: &Value) -> String {
 pub fn detail(t: &Obj) -> Value {
     if !t.b("followups") { return Value::Null; }
     json!({ "open": open_of(t).len(), "items": t.at("followups"), "lines": t.arr("followups").iter().map(line).collect::<Vec<_>>() })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a_later_note_keeps_numbers_and_what_you_did_and_drops_only_open_ones_it_no_longer_says() {
+        let first = merged(&Value::Null, "Still open:\n- A\n- B\n- C");
+        let mut acted = first.as_array().unwrap().clone();
+        acted[1]["state"] = json!(ADDED); acted[1]["task"] = json!("x/9");
+        acted[2]["state"] = json!(HIDDEN);
+        let again = merged(&Value::Array(acted), "Still open:\n- A\n- C\n- D\n- E");
+        let got: Vec<(i64, String, String)> = again.as_array().unwrap().iter().map(|f| (f.i("n"), f.t("text"), f.t("state"))).collect();
+        let want = [(1, "A", OPEN), (2, "B", ADDED), (3, "C", HIDDEN), (4, "D", OPEN), (5, "E", OPEN)].map(|(n, t, s)| (n, t.to_string(), s.to_string()));
+        assert_eq!(got, want.to_vec());
+        assert_eq!(again[1].s("task"), "x/9");
+        // an open one the note no longer says is gone; the next new one is not given its number again
+        let third = merged(&again, "Still open:\n- F");
+        let got: Vec<(i64, String)> = third.as_array().unwrap().iter().map(|f| (f.i("n"), f.t("text"))).collect();
+        assert_eq!(got, vec![(2, "B".into()), (3, "C".into()), (6, "F".into())]);
+    }
 }

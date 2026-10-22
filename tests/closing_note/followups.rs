@@ -32,7 +32,7 @@ fn a_merged_task_keeps_what_its_note_left_open_and_shows_it_on_its_row_in_list_d
     assert_eq!((f[0].s("text"), f[0].b("blocks"), f[0].i("n")), ("Check the new page on staging", true, 1));
     assert_eq!((f[1].s("repo"), f[1].s("kind")), ("elsewhere", "open"));
     assert_eq!((f[2].s("kind"), f[2].s("state")), ("noticed", "open"));
-    // the row, as the board, herdr's sidebar and the web board say it
+    // the row, as the board and the web board say it
     assert_eq!(sw::shown::row_says::sentence(&row(&id)).text(), "3 follow-ups");
     let d = sw::actions::finish_line::details(&id).unwrap();
     assert_eq!(d.at("followups").i("open"), 3);
@@ -90,4 +90,18 @@ fn the_agent_is_told_how_to_write_them_and_a_coordinator_is_told_of_them() {
     assert!(sw::delegate::rules::rules(&task(&id)).contains(sw::followups::STILL_OPEN_RULE));
     assert!(sw::coordinator::rules::rules("board").contains("board followups add <id> <n>"));
     assert_eq!(sw::followups::wake_words(&task(&id)), format!(", with 3 follow-ups open (board followups {})", short(&id)));
+}
+
+#[test]
+fn a_follow_up_of_a_repo_the_board_knows_is_added_as_a_task_there() {
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    let web = w.root.parent().unwrap().join("web");
+    std::fs::create_dir_all(&web).unwrap();
+    git(&web, &["init", "-q"]);
+    let (name, _) = sw::store::repos::repo_of(&web).unwrap();
+    let id = merged(&w);
+    sw::store::tasks::update(&id, |t| { let mut l = t.arr("followups").to_vec(); l[1]["repo"] = json!(name.to_uppercase()); t.put("followups", l); Ok(sw::store::tasks::Change::Write) }).unwrap();
+    let (made, _) = act::add_as_task(&id, "2").unwrap();
+    assert_eq!(made.s("repo"), name);
+    assert!(!made.s("description").contains("does not know"), "{}", made.s("description"));
 }
