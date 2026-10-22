@@ -128,7 +128,7 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
         "fix" => said(finish_line::send_failure(&need(1, "an id")?)?),
         "finish" => said(finish_line::finish_anyway(&need(1, "an id")?)?),
         "details" => { let mut d = tidy(finish_line::details(&need(1, "an id")?)?); if pilot.is_some() { crate::autopilot::history::with_note(&mut d); } let s = serde_json::to_string_pretty(&d).unwrap_or_default(); (d, s) }
-        // What finished tasks left open (followups/): listed, added as a task, dismissed.
+        // What finished tasks left open (followups/): listed, added as a task, hidden.
         "followups" | "followup" => crate::followups::command::followups_command(&pos[1..], flag("repo"))?,
         "pin" => { let t = filing::pin(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: {}", t.s("id"), if t.b("pinned") { "pinned" } else { "unpinned" })) }
         // A round of work is over: every done task of a repo (or of every repo) in one go.

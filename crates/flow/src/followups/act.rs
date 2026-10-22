@@ -1,7 +1,7 @@
 //! What you do to a follow-up: add it as a task (in its repo, not started, the task it came from named in its
-//! description), dismiss it, or open it again; and `followups.add todo`, which adds every open one as a task when its
+//! description), hide it, or open it again; and `followups.add todo`, which adds every open one as a task when its
 //! task merges. Nothing here starts an agent: you decide what becomes work.
-use super::{ADDED, DISMISSED, OPEN};
+use super::{ADDED, HIDDEN, OPEN};
 use crate::actions::filing::{add, AddOpts};
 use crate::clock::now;
 use crate::err::Res;
@@ -51,15 +51,15 @@ pub fn add_as_task(id: &str, n: &str) -> Res<(Task, String)> {
     let said = format!("{tag}: follow-up {k} added as {}, not started", say_id(made.s("id"), &repo_keys()));
     Ok((made, said))
 }
-/// Dismisses the follow-up (`open`: false) or opens it again (true).
-pub fn dismiss(id: &str, n: &str, open: bool) -> Res<(Task, String)> {
+/// Hides the follow-up (`open`: false) or opens it again (true).
+pub fn hide(id: &str, n: &str, open: bool) -> Res<(Task, String)> {
     let t = find(id)?;
     let f = item(&t, n)?;
     let tag = say_id(t.s("id"), &repo_keys());
     if f.s("state") == ADDED { crate::fail!("Follow-up {} of {tag} is a task already ({}).", f.i("n"), say_id(f.s("task"), &repo_keys())); }
     let k = f.i("n");
-    let t = change(t.s("id"), k, |x| { x["state"] = json!(if open { OPEN } else { DISMISSED }); x["at"] = json!(now()); })?;
-    Ok((t, format!("{tag}: follow-up {k} {}", if open { "is open again" } else { "dismissed" })))
+    let t = change(t.s("id"), k, |x| { x["state"] = json!(if open { OPEN } else { HIDDEN }); x["at"] = json!(now()); })?;
+    Ok((t, format!("{tag}: follow-up {k} {}", if open { "is open again" } else { "hidden" })))
 }
 /// The task merged: with `followups.add todo` every open follow-up is added as a task, not started.
 pub fn on_merged(id: &str) {

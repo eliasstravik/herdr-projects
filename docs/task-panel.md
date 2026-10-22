@@ -87,7 +87,7 @@ The panel and the full screen have the same parts, in the same order:
   what it needs from you.
 - **The reviews**, as a history ([below](#the-reviews)).
 - **Follow-ups**, for a finished task: what its closing note left open, each numbered, and how to add one as a task or
-  dismiss it ([follow-ups](follow-ups.md)).
+  hide it ([follow-ups](follow-ups.md)).
 - **What the agent said**: the newest words of its conversation, never its program's screen (while you talk to its
   agent, that is in the chat instead). During a review it is the reviewer's, and the headline says `The reviewer says`.
   When the review ends it is the agent's again. A dialog that is only on a program's screen is mentioned in a line, with

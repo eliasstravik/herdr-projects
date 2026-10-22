@@ -1,6 +1,6 @@
 //! A finished task's open follow-ups: read from its closing note when its turn ends, kept on the task after its pane,
 //! worktree and note are gone, shown on its row, in `list`, `details` and its panel once it is done, listed board-wide
-//! by `followups`, added as a task (not started) or dismissed, all of them made tasks on merge with `followups.add
+//! by `followups`, added as a task (not started) or hidden, all of them made tasks on merge with `followups.add
 //! todo`, and said in a coordinator's wake.
 use crate::common;
 use common::*;
@@ -51,7 +51,7 @@ fn a_merged_task_keeps_what_its_note_left_open_and_shows_it_on_its_row_in_list_d
 }
 
 #[test]
-fn a_follow_up_is_added_as_a_task_not_started_naming_where_it_came_from_or_dismissed_and_opened_again() {
+fn a_follow_up_is_added_as_a_task_not_started_naming_where_it_came_from_or_hidden_and_opened_again() {
     let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
     let id = merged(&w);
     let tag = short(&id);
@@ -60,12 +60,12 @@ fn a_follow_up_is_added_as_a_task_not_started_naming_where_it_came_from_or_dismi
     assert_eq!((made.s("stage"), made.s("title"), made.s("repo")), ("todo", "Show the field in the other app", task(&id).s("repo")));
     assert!(made.s("description").contains(&format!("A follow-up of {tag} (Payments page)")) && made.s("description").contains("does not know"), "{}", made.s("description"));
     assert!(act::add_as_task(&id, "2").unwrap_err().msg.contains("was added already"));
-    act::dismiss(&id, "3", false).unwrap();
+    act::hide(&id, "3", false).unwrap();
     assert_eq!(sw::shown::row_says::sentence(&row(&id)).text(), "1 follow-up");
     let (_, one) = followups_command(&[tag.clone()], None).unwrap();
-    assert!(one.contains("· added as") && one.contains("· dismissed"), "{one}");
-    act::dismiss(&id, "3", true).unwrap();
-    act::dismiss(&id, "1", false).unwrap(); act::dismiss(&id, "3", false).unwrap();
+    assert!(one.contains("· added as") && one.contains("· hidden"), "{one}");
+    act::hide(&id, "3", true).unwrap();
+    act::hide(&id, "1", false).unwrap(); act::hide(&id, "3", false).unwrap();
     assert_eq!(sw::shown::row_says::sentence(&row(&id)).text(), "");
     assert_eq!(followups_command(&[], None).unwrap().1, "No open follow-ups.");
     assert!(act::add_as_task(&id, "9").unwrap_err().msg.contains("has no follow-up 9"));

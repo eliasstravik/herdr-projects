@@ -1,13 +1,13 @@
 //! `herdr-projects followups …`: the open follow-ups of every finished task (no word after it, `--repo NAME` for one
-//! repo), one task's (`followups <id>`), and `add`, `dismiss` and `open <id> <n>` on one of them.
-use super::act::{add_as_task, all_open, dismiss};
+//! repo), one task's (`followups <id>`), and `add`, `hide` and `open <id> <n>` on one of them.
+use super::act::{add_as_task, all_open, hide};
 use super::{count_words, line, open_of};
 use crate::err::Res;
 use crate::json::*;
 use crate::store::keys::{repo_keys, say_id};
 use crate::store::tasks::find;
 
-const USAGE: &str = "followups takes: (nothing) [--repo NAME], <id>, add <id> <n>, dismiss <id> <n>, open <id> <n>. Try: herdr-projects help";
+const USAGE: &str = "followups takes: (nothing) [--repo NAME], <id>, add <id> <n>, hide <id> <n>, open <id> <n>. Try: herdr-projects help";
 
 /// One task with its follow-ups, as `followups` lists it: `all`, every one of them, not only the open ones.
 fn task_json(t: &Obj, all: bool) -> Value {
@@ -29,7 +29,7 @@ pub fn followups_command(pos: &[String], repo: Option<String>) -> Res<(Value, St
             Ok((json!({ "open": n, "tasks": list.iter().map(|t| task_json(t, false)).collect::<Vec<_>>() }), text))
         }
         Some("add") => { let (t, said) = add_as_task(&at(1, "a task's id")?, &at(2, "the follow-up's number")?)?; Ok((json!({ "added": t.at("id"), "title": t.at("title") }), said)) }
-        Some(w @ ("dismiss" | "open")) => { let (t, said) = dismiss(&at(1, "a task's id")?, &at(2, "the follow-up's number")?, w == "open")?; Ok((task_json(&t, true), said)) }
+        Some(w @ ("hide" | "open")) => { let (t, said) = hide(&at(1, "a task's id")?, &at(2, "the follow-up's number")?, w == "open")?; Ok((task_json(&t, true), said)) }
         Some(id) if pos.len() == 1 => {
             let t = find(id)?;
             let text = if t.arr("followups").is_empty() { format!("{}: no follow-ups.", say_id(t.s("id"), &keys)) } else { task_text(&t, true, &keys) };
