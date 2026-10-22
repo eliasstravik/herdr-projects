@@ -9,6 +9,7 @@ use sw::actions::finish_line;
 use sw::housekeeping::poll_prs;
 use sw::json::*;
 use sw::store::settings::{change::set_value, lookup::Scope};
+use sw::store::tasks::{update, Change};
 
 pub fn pr_world(more: Value) -> World {
     let mut s = json!({ "review.when": "never" });
@@ -21,6 +22,9 @@ pub fn running(head: &str) -> Value { view(head, json!({ "__typename": "CheckRun
 pub fn passed(head: &str) -> Value { view(head, json!({ "__typename": "CheckRun", "name": "build", "status": "COMPLETED", "conclusion": "SUCCESS" })) }
 pub fn failed(head: &str) -> Value { view(head, json!({ "__typename": "CheckRun", "name": "build", "status": "COMPLETED", "conclusion": "FAILURE", "detailsUrl": "https://github.com/o/r/actions/runs/11/job/22" })) }
 pub const LOG: &str = "build\tRun tests\t2026-10-14T10:00:00.0000000Z running 3 tests\nbuild\tRun tests\t2026-10-14T10:00:01.0000000Z test parses_flags ... FAILED\nbuild\tRun tests\t2026-10-14T10:00:02.0000000Z \u{1b}[31merror: 1 test failed\u{1b}[0m";
+/// The bare repo the board pushes to: GitHub names the commit the branch holds there.
+pub fn origin(w: &World) -> String { w.base.join("origin.git").display().to_string() }
+pub fn rollup(view: Value) -> Value { view["statusCheckRollup"].clone() }
 pub fn merged(w: &World) -> bool { gh_log(w).lines().any(|l| l.starts_with("pr merge")) }
 pub fn pane_prompts(w: &World, id: &str) -> Vec<String> { prompts(w, task(id).at("link").s("pane")) }
 /// What a merge that waits for GitHub's checks says (how far they are) and which it waits for, each once.
@@ -57,25 +61,51 @@ fn failed_checks_go_back_to_the_agent_with_the_name_and_the_log_and_the_approval
     let id = to_approval(&w, "CI fails at the merge");
     let head = task(&id).t("prHead");
     w.script(json!({ "worker": [{ "files": { "f.txt": "fixed\n" }, "commit": "fix", "note": "Fixed CI." }] }));
-    w.gh_says(json!({ "view": failed(&head), "log": LOG }));
+    w.gh_says(json!({ "origin": origin(&w), "view": failed(&head), "newer": rollup(running(&head)), "log": LOG }));
     finish_line::approve(&id, None, false).unwrap();
     // straight back to the agent: the name of the check and the end of its log, the time and colours taken off; the
-    // repair is checked and pushed, and the blocker stands until GitHub's checks pass on it
+    // repair is checked and pushed, and merges once GitHub's checks pass on it
     let t = settle(&id);
     let sent = pane_prompts(&w, &id).last().cloned().unwrap_or_default();
     assert!(sent.contains("GitHub's checks failed on the pull request"), "{sent}");
     assert!(sent.contains("build (failure)") && sent.contains("test parses_flags ... FAILED\nerror: 1 test failed"), "{sent}");
     assert!(gh_log(&w).contains("run view --job 22 --log-failed"));
     assert!(!merged(&w));
-    assert_eq!(t.s("stage"), "approval"); assert_eq!(t.i("prRounds"), 1); assert!(t.b("mergeIntent"), "the approval you gave carries the repair");
-    assert!(t.s("msg").contains("pull request still blocked"), "{}", t.s("msg"));
     let fixed = t.t("prHead");
     assert_ne!(fixed, head);
+    // the old commit's failure says nothing of the repair (#309): gone, and the approval you gave waits for its checks
+    assert_eq!(t.s("stage"), "merging", "{}", t.s("msg")); assert_eq!(t.i("prRounds"), 1); assert!(t.b("mergeIntent"), "the approval you gave carries the repair");
+    assert!(t.at("prFailure").is_null(), "{}", t.at("prFailure")); assert_ne!(t.s("prState"), "failing");
+    waits(&t, "Waiting for GitHub checks · 0 of 1 passed", "build");
     assert!(sw::land::checks::failed_on(&t).is_none(), "a new commit is not refused for the old one's checks");
-    w.gh_says(json!({ "view": passed(&fixed) }));
+    w.gh_says(json!({ "origin": origin(&w), "view": failed(&head), "newer": rollup(passed(&head)) }));
     poll_prs();
     let t = settle(&id);
     assert_eq!(t.s("stage"), "done", "{}", t.at("failure")); assert!(merged(&w));
+}
+
+#[test]
+fn failed_checks_of_an_older_commit_do_not_block_its_repair_that_passed_when_main_moved_before_it_merged() {
+    // #309: checks fail on H1; the repair H2 waits for its own; main moves; H2 passes; its merge turn merges main in
+    // and checks again. A record of H1's failure still on the task (as the board kept it before) blocks none of it.
+    let w = pr_world(json!({}));
+    let id = to_approval(&w, "Old head failed");
+    let head = task(&id).t("prHead");
+    w.script(json!({ "worker": [{ "files": { "f.txt": "fixed\n" }, "commit": "fix", "note": "Fixed CI." }] }));
+    w.gh_says(json!({ "origin": origin(&w), "view": failed(&head), "newer": rollup(running(&head)), "log": LOG }));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "merging", "{}", t.s("msg")); assert!(t.b("checksWait"));
+    let old = sw::land::checks::blocker(t.s("pr"), &head, &["build".into()], "build failed");
+    update(&id, |t| { t.put("prFailure", old.clone()); Ok(Change::Write) }).unwrap();
+    std::fs::write(w.root.join("other.txt"), "main\n").unwrap(); git(&w.root, &["add", "-A"]); git(&w.root, &["commit", "-qm", "main moves"]); git(&w.root, &["push", "-q", "origin", "main"]);
+    let main = git(&w.root, &["rev-parse", "HEAD"]);
+    w.gh_says(json!({ "origin": origin(&w), "view": failed(&head), "newer": rollup(passed(&head)) }));
+    poll_prs();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{} {}", t.s("msg"), t.at("failure")); assert!(merged(&w)); assert!(t.at("prFailure").is_null());
+    let at = gh_log(&w).lines().find(|l| l.starts_with("pr merge")).and_then(|l| l.rsplit(' ').next()).unwrap_or_default().to_string();
+    assert!(common::worktrees::git(&w.root, &["merge-base", "--is-ancestor", &main, &at]).is_ok(), "merged with main in: {at}");
 }
 
 #[test]

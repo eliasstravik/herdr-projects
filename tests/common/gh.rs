@@ -15,7 +15,8 @@ use sw::json::*;
 /// `noLogin`: gh is not logged in where it runs (a keeper started without the login shell's GH_TOKEN): every call fails.
 /// `prs`: the pull requests GitHub has for a head branch (`pr list --head`), each { number, url, state }; none by
 /// default. `archived`: the repo is archived on GitHub (`repo view`). `origin`: the bare repo the board pushes to; the
-/// pull request's `headRefOid` is then what its head branch holds there (the one `pr create --head` named, or `headBranch`).
+/// pull request's `headRefOid` is then what its head branch holds there (the one `pr create --head` named, or `headBranch`),
+/// and `newer` the checks of a commit pushed there after the one `view` names.
 #[derive(Default)]
 pub struct FakeGh { pub cfg: RefCell<Value>, pub log: RefCell<Vec<String>>, pub merged: Cell<bool>, late: Cell<i64>, head_branch: RefCell<String> }
 fn ok(out: &str) -> GhOut { GhOut { status: 0, stdout: if out.is_empty() { String::new() } else { format!("{out}\n") }, stderr: String::new() } }
@@ -60,7 +61,11 @@ impl FakeGh {
                 if c.at("late").is_object() { let n = self.late.get(); self.late.set(n + 1); if n < c.at("late").i("times") { return ok(&json!({ "state": "OPEN", "headRefOid": c.at("late").at("head") }).to_string()); } }
                 let mut v = if c.at("view").is_object() { c.at("view").clone() } else { json!({ "state": "OPEN", "statusCheckRollup": [], "comments": [], "reviews": [], "author": { "login": "me" } }) };
                 if self.merged.get() { v["state"] = json!("MERGED"); }
-                if c.b("origin") { v["headRefOid"] = json!(self.pushed(&c)); }
+                if c.b("origin") {
+                    let at = self.pushed(&c);
+                    if c.at("newer").is_array() && c.at("view").b("headRefOid") && c.at("view").s("headRefOid") != at { v["statusCheckRollup"] = c.at("newer").clone(); }
+                    v["headRefOid"] = json!(at);
+                }
                 if !rollup { if let Some(o) = v.as_object_mut() { o.remove("statusCheckRollup"); } }
                 ok(&v.to_string())
             }
