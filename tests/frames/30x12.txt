@@ -1,23 +1,23 @@
 == the list
  herdr-projects  proj
  All 18  tab next
-▌◐ #5     Max length for task
-▌         titles
-▌         Found the cause; now
-▌         checking every call…
-▌           60% 11m left    1m
- + New task  added word for w…
+▌ ◐ #5     Max length for task
+▌          titles
+▌   Found the cause; now
+▌   checking every caller of …
+▌          ████████░░░░░    1m
+
 ──────────────────────────────
 ❯ Add a task
 ──────────────────────────────
   enter open this task's agent
 == the task beside it
  herdr-projects  proj
-▌◐ #5     Max length for task
-▌         titles
-▌         Found the cause; now
-▌         checking every call…
- + New task  added word for w…
+ All 18  tab next
+▌ ◐ #5     Max length for task
+▌          titles
+▌   Found the cause; now
+▌   checking every caller of …
 ──────────────────────────────
 ❯ Add a task
 ──────────────────────────────
@@ -32,7 +32,7 @@
  titles
 
  Status ─────────────────────
- + New task  added word for w…
+ State
 ──────────────────────────────
 ❯ Add a task
 ──────────────────────────────
@@ -43,9 +43,9 @@
    ↑ ↓          move between
                 tasks and
                 headings
-   pgup pgdn    a page of
- ↓ 163 more
- + New task  added word for w…
+   ← →          fold the
+                heading; on a
+ ↓ 170 more
 ──────────────────────────────
 ❯ Add a task
 ──────────────────────────────
@@ -53,12 +53,12 @@
 == a draft
  herdr-projects  proj
  All 18  tab next
-▌◐ #5     Max length for task
-▌         titles
-▌         Found the cause; now
-▌         checking every call…
-▌           60% 11m left    1m
- + New task  added word for w…
+▌ ◐ #5     Max length for task
+▌          titles
+▌   Found the cause; now
+▌   checking every caller of …
+▌          ████████░░░░░    1m
+
 ──────────────────────────────
 ❯ Hello 日本 🚀
 ──────────────────────────────

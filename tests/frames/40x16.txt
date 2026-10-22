@@ -1,16 +1,16 @@
 == the list
  herdr-projects  proj
  All 18  tab next
- ◇ #4     Max length for task titles
-          Starting                    1m
-▌◐ #5     Max length for task titles
-▌         Found the cause; now checking
-▌         every caller of the resize ha…
-▌         ██████░░░░  60% 11m left    1m
+  ◇ #4     Max length for task titles
+           Starting                   1m
+▌ ◐ #5     Max length for task titles
+▌          Found the cause; now checking
+▌          every caller of the resize h…
+▌          █████░░░░  60% 11m left    1m
+
 
  ↓ 9 more · ↑ 7 more
 
- + New task  added word for word
 ────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────
@@ -18,22 +18,22 @@
 == the task beside it
  herdr-projects  proj
  All 18  tab next
- ◇ #4     Max length for task titles
-          Starting                    1m
-▌◐ #5     Max length for task titles
-▌         Found the cause; now checking
-▌         every caller of the resize ha…
-▌         ██████░░░░  60% 11m left    1m
+  ◇ #4     Max length for task titles
+           Starting                   1m
+▌ ◐ #5     Max length for task titles
+▌          Found the cause; now checking
+▌          every caller of the resize h…
+▌          █████░░░░  60% 11m left    1m
 
+ ↓ 9 more · ↑ 7 more
 
- + New task  added word for word
 ────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────
   Side panel on. alt+p hides it.
   enter open this task's agent
 == the whole task
- Task details  #5 "Max…  lines 1–8 of 2…
+ Task details  #5 "Max…  lines 1–9 of 2…
 ────────────────────────────────────────
 
  #5 Max length for task titles
@@ -43,8 +43,8 @@
  Progress     ██████░░░░ 60% · 11m left
  Now          Found the cause; now
               checking every caller of
+              the resize handler for
 
- + New task  added word for word
 ────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────
@@ -54,14 +54,14 @@
  plain keys
    ↑ ↓          move between tasks and
                 headings
+   ← →          fold the heading; on a
+                task's row, go to its
+                heading
    pgup pgdn    a page of tasks up or
                 down (in the whole
                 task: a page of its
-                text)
-   tab          the next filter on top:
- ↓ 98 more
+ ↓ 101 more
 
- + New task  added word for word
 ────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────
@@ -69,16 +69,16 @@
 == a draft
  herdr-projects  proj
  All 18  tab next
- ◇ #4     Max length for task titles
-          Starting                    1m
-▌◐ #5     Max length for task titles
-▌         Found the cause; now checking
-▌         every caller of the resize ha…
-▌         ██████░░░░  60% 11m left    1m
+  ◇ #4     Max length for task titles
+           Starting                   1m
+▌ ◐ #5     Max length for task titles
+▌          Found the cause; now checking
+▌          every caller of the resize h…
+▌          █████░░░░  60% 11m left    1m
+
 
  ↓ 9 more · ↑ 7 more
 
- + New task  added word for word
 ────────────────────────────────────────
 ❯ Hello 日本 🚀
 ────────────────────────────────────────

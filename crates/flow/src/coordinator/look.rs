@@ -27,6 +27,9 @@ use std::sync::{LazyLock, Mutex};
 pub struct Look {
     pub state: String, pub status: Option<String>, pub run: Option<Obj>, pub one_off: bool, pub queue: usize, pub waiting: Vec<String>, pub error: String, pub pane: String, pub workspace: String,
     pub agent: Value, pub turn: Option<Turn>, pub talk: Vec<Said>, pub readable: bool, pub said: String, pub last: String, pub sent: String, pub unseen: String, pub stale: bool, pub def: Option<Obj>,
+    /// What its row says, as a task's (look_live.rs): what it does while it works, what it asks you while it waits for
+    /// you, when its turn began (ms, 0 none), when it last said something (ms, 0 never).
+    pub doing: String, pub asks: String, pub began: i64, pub at: i64,
 }
 /// A transcript's last read, by when it changed and its size: two writes inside one tick of the file system's clock
 /// keep its time, never its size.
@@ -82,7 +85,7 @@ pub fn look(co: impl Into<Co>) -> Look {
     // The default changed since this one started: it keeps running as it is until you start a new one.
     let stale = c.o("run").map(|r| !r.b("oneOff") && def.as_ref().map(|d| !same_choice(r, d)).unwrap_or(false)).unwrap_or(false);
     Look { state: state.into(), status, one_off: c.at("run").b("oneOff"), queue, waiting: c.arr("queue").iter().map(|m| m.t("said")).collect(), error: c.t("error"), pane: c.t("pane"), workspace: c.t("workspace"),
-        agent: agent.unwrap_or(Value::Null), turn, talk, readable, said, last: c.t("last"), sent, unseen, stale, def, run }
+        agent: agent.unwrap_or(Value::Null), turn, talk, readable, said, last: c.t("last"), sent, unseen, stale, def, run, ..Default::default() }.live()
 }
 /// What is on its screen, for when there is no message to show (a dialog, a program without a readable conversation).
 pub fn screen(v: &Look, co: impl Into<Co>) -> String {

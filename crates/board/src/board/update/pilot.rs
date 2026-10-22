@@ -87,3 +87,12 @@ pub fn menu_label(s: &State, k: crate::board::keys::K) -> Option<String> {
         _ => return None,
     })
 }
+/// Enter on a heading: go into its coordinator's agent, as enter on a task goes into its agent; this machine's is
+/// started first when it is not running, another machine's there. A status group's heading has none.
+pub fn go_in(s: &mut State, fx: &mut Vec<Effect>) {
+    let Some(t) = selected(s) else { return s.flash(format!("A status group has no agent to go into. {} and {} fold it.", crate::board::keys::key_name("fold"), crate::board::keys::key_name("unfold")), Ink::Muted) };
+    s.flash(format!("Going into the {}…", t.name), Ink::Muted);
+    if t.host.is_empty() { return fx.push(Effect::Run(Job::CoordOpen { to: t.to.clone(), name: t.name.clone(), popup: s.ctx.popup })); }
+    let m = s.remotes.get(&t.host).map(|m| m.machine.clone()).unwrap_or_default();
+    fx.push(Effect::Run(Job::Far { machine: m, host: t.host.clone(), action: "coordinator-open".into(), req: json!({ "id": "", "to": t.to, "focus": s.ctx.in_herdr }), quiet: true }));
+}

@@ -41,11 +41,11 @@ pub fn far(m: &Machine, host: &str, action: &str, req: Value, quiet: bool) -> Do
     if action == "tell" {
         match carry(m, &req.t("text"), &For::Task(req.t("id"))) { Ok(t) => req.put("text", t), Err(e) => return Done::fail(format!("{e} Nothing was sent.")) }
     }
-    let ms = if action == "reopen" { 60000 } else { 20000 };
+    let ms = if action == "reopen" || action == "coordinator-open" { 60000 } else { 20000 };
     match ask(m, "do", Some(&Value::Object(req.clone())), ms) {
         Err(why) => Done::fail(unanswered(host, &why)),
         Ok(j) if !j.b("ok") => Done::fail(j.t("msg")),
-        Ok(j) if action == "reopen" => {
+        Ok(j) if action == "reopen" || action == "coordinator-open" => {
             // In a herdr window: that machine's herdr put it in front (`focus`); the window goes there when you pick
             // that machine in its sidebar, as herdr has no command that switches a window to another machine.
             if j.b("focused") { return Done::default().and(Then::OpenedThere { id: format!("{host}:{}", req.t("id")), host: host.into(), agent: j.b("hasAgent") }); }
@@ -62,6 +62,18 @@ pub fn far(m: &Machine, host: &str, action: &str, req: Value, quiet: bool) -> Do
             d
         }
     }
+}
+/// Going into a coordinator of this machine: herdr goes to its pane (started first when it is not running), or, outside
+/// a herdr client, this terminal attaches to it.
+pub fn coord_open(to: &str, name: &str, popup: bool) -> Done {
+    let co = crate::coordinator::co::Co::of(&crate::herdr::cli::current_socket(), to);
+    if !crate::herdr::cli::in_herdr() {
+        let v = crate::coordinator::look::look(&co);
+        if v.pane.is_empty() || v.status.is_none() { return Done::say(format!("The {name} is not running: your first message starts it."), Ink::Yellow); }
+        let args = vec![format!("HERDR_SOCKET_PATH={}", co.socket), crate::herdr::cli::bin(), "agent".into(), "attach".into(), v.pane];
+        return Done::default().and(Then::Attach { command: "env".into(), args, id: String::new() });
+    }
+    match crate::coordinator::look::go_in(&co, 30000) { Ok(_) => if popup { Done::default().and(Then::Leave) } else { Done::default() }, Err(e) => Done::fail(e.msg) }
 }
 /// A setting of one task (or automation) from the settings page: a value, or none to put the row back. Yours and your
 /// entry for a repo are changed as `set` and `set --repo` change them, with the same checks.

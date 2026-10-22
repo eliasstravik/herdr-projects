@@ -68,8 +68,12 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
     if let Some(a) = s.auto() { return (auto_hints(s, a, &back, &more), chat_key); }
     if let Some(w) = crate::board::update::heads::says(s) {
         // A machine's or a repo's heading: space talks to its coordinator, and back.
-        let talk = if head.is_some() { Some(Hint { stays: true, ..hk(K::Talk, "back to the Coordinator") }) } else { crate::board::update::coords::of_head(s, &s.sel).map(|c| Hint { lit: c.name.clone(), tint: c.ink(), ..hk(K::Talk, &format!("talk to the {}", c.name)) }) };
+        // Space on a row talks to its coordinator; on the one it talks to, back to the top row's (none on the top row).
+        let here = crate::board::update::coords::of_head(s, &s.sel);
+        let talk = if super::chat_title::coordinator(s) == here { (s.sel != crate::board::update::top::top_id(s)).then(|| Hint { stays: true, ..hk(K::Talk, &back_words(s)) }) } else { here.filter(|c| head.as_ref() != Some(c)).map(|c| Hint { lit: c.name.clone(), tint: super::chat_title::COORD_EDGE, ..hk(K::Talk, &format!("talk to {}", c.name)) }) };
         let mut v: Vec<Hint> = (!w.is_empty()).then(|| hk(K::Enter, &w)).into_iter().collect();
+        let fold = crate::board::update::heads::fold_says(s);
+        if !fold.is_empty() { v.push(plain(format!("{} {}", name(K::Fold), name(K::Unfold)), &fold)); }
         if crate::board::update::archive_done::counts(s).map(|c| c.0 > 0).unwrap_or(false) { v.push(hk(K::Archive, "archive its done tasks")); }
         // A coordinator's row names both of autopilot's keys (update/pilot.rs).
         // A coordinator's row: started and stopped as an agent is, and its autopilot's own key.
@@ -79,7 +83,7 @@ pub fn hints(s: &State, r: Option<&Obj>, who: Option<&Who>) -> (Vec<Hint>, Optio
         return (v, chat_key);
     }
     let Some(r) = r else { let mut v = back; v.extend(key); v.push(more); return (v, chat_key); };
-    let tail: Vec<Hint> = leave.clone().unwrap_or_else(|| vec![if s.reply { Hint { stays: true, ..hk(K::Talk, "back to the Coordinator") } } else { more.clone() }]);
+    let tail: Vec<Hint> = leave.clone().unwrap_or_else(|| vec![if s.reply { Hint { stays: true, ..hk(K::Talk, &back_words(s)) } } else { more.clone() }]);
     let mid: Vec<Hint> = if leave.is_some() { vec![] } else { back };
     let failure = failure_for(r);
     let rv = crate::store::reviews::current_review(r).cloned();
@@ -148,3 +152,5 @@ fn auto_hints(s: &State, a: &Obj, back: &[Hint], more: &Hint) -> Vec<Hint> {
     v.push(Hint { key: name(K::Back), words: "back to the list".into(), stays: true, ..Default::default() });
     v
 }
+/// Space again: back to the top row's coordinator (All machines', or the one machine's).
+fn back_words(s: &State) -> String { crate::board::update::top::top(s).map(|t| format!("back to {}", t.name)).unwrap_or_else(|| "back".into()) }

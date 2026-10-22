@@ -14,12 +14,15 @@ pub fn sent(v: &Look, ready: bool) -> Value {
     if !ready { return json!({ "off": true }); }
     let talk: Vec<Value> = v.talk.iter().skip(v.talk.len().saturating_sub(KEEP)).map(|m| json!({ "you": m.you, "text": cut(&m.text) })).collect();
     // Its pane there: a file attached for it goes into its folder through the web UI (webui/attach/far.rs).
-    json!({ "state": v.state, "error": v.error, "queue": v.queue, "readable": v.readable, "said": cut(&v.said), "sent": cut(&v.sent), "talk": talk, "pane": v.pane })
+    json!({ "state": v.state, "error": v.error, "queue": v.queue, "readable": v.readable, "said": cut(&v.said), "sent": cut(&v.sent), "talk": talk, "pane": v.pane,
+        "doing": v.doing, "began": v.began, "at": v.at })
 }
 /// What another machine sent of its Coordinator, as a look. None: it sent nothing (an older version), or has none.
 pub fn read(v: &Value) -> Option<Look> {
     if !v.is_object() || v.b("off") { return None; }
     let talk = v.arr("talk").iter().map(|m| Said { you: m.b("you"), text: m.t("text"), at: 0 }).filter(|m| !m.text.is_empty()).collect();
     // `status` only says whether its program answered: a readable conversation is read whatever it is.
-    Some(Look { state: v.t("state"), error: v.t("error"), queue: v.at("queue").as_u64().unwrap_or(0) as usize, readable: v.b("readable"), status: Some(v.t("state")), said: v.t("said"), sent: v.t("sent"), talk, pane: v.t("pane"), ..Default::default() })
+    // What its row says came with it (an older version sends none: its row then has no time and no second line).
+    let l = Look { state: v.t("state"), error: v.t("error"), queue: v.at("queue").as_u64().unwrap_or(0) as usize, readable: v.b("readable"), status: Some(v.t("state")), said: v.t("said"), sent: v.t("sent"), talk, pane: v.t("pane"), doing: v.t("doing"), began: v.i("began"), at: v.i("at"), ..Default::default() };
+    Some(Look { asks: l.asking(), ..l })
 }

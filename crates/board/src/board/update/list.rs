@@ -172,6 +172,13 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
     let parts = parts(s, &groups);
     let lay = |keep: usize, todos: usize, s: &State| -> Vec<Row> {
         let mut rows = vec![];
+        // With every machine shown, the top row is `All machines` (top.rs); folded, it is the whole list.
+        if s.scope == "*" && !s.archive_view {
+            let (tasks, autos) = (groups.iter().map(|(_, r)| r.len()).sum::<usize>(), s.autos.len());
+            let shut = super::heads::folded(s, &super::top::all_id());
+            rows.push(Row::Head { name: "All machines".into(), autos: false, id: super::top::all_id(), machine: false, folded: if shut { tasks + autos } else { 0 }, folded_autos: if shut { autos } else { 0 }, empty: false });
+            if shut { return rows; }
+        }
         for p in &parts {
             let autos: Vec<Vec<Obj>> = p.groups.iter().map(|(name, _)| autos_in(s, &p.host, name)).collect();
             let n_autos: usize = autos.iter().map(|a| a.len()).sum();
@@ -180,12 +187,20 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
             let has_bare = p.groups.iter().zip(&autos).any(|((name, recs), a)| bare(name, recs, a));
             // A machine's heading, with every machine shown: folded, its one line stands for all its groups. One with
             // nothing in view shows folded (`0 tasks`), so that its machine coordinator is still a space away.
-            if p.heading && (n > 0 || has_bare || super::heads::empty_shown(s)) {
+            // The one machine shown is the top row: always there.
+            if p.heading && (n > 0 || has_bare || super::heads::empty_shown(s) || s.scope != "*" || super::shows::host_needs(s, &p.host)) {
                 let id = machine_id(&p.host);
                 // Only empty repos' headings under it: nothing to fold.
                 let shut = super::heads::folded(s, &id) && n > 0;
                 rows.push(Row::Head { name: super::remotes::shown(s, &p.host), autos: false, id, machine: true, folded: if shut { n } else { 0 }, folded_autos: if shut { n_autos } else { 0 }, empty: n == 0 && !has_bare });
                 if shut { continue; }
+            }
+            // Under Needs you, the projects whose coordinators ask you stand beside the tasks, though no task of theirs does.
+            if s.show == super::shows::NEEDS && !s.archive_view {
+                for r in super::shows::projects_needing(s, &p.host) {
+                    if s.by_repo && p.groups.iter().any(|(name, recs)| *name == r && !recs.is_empty()) { continue; }
+                    rows.push(Row::Head { id: format!("{}repo\t{}\t{r}", super::heads::HEAD, p.host), name: r, autos: false, machine: false, folded: 0, folded_autos: 0, empty: false });
+                }
             }
             if n == 0 && !has_bare { continue; }
             for ((name, recs), autos) in p.groups.iter().zip(&autos) {
@@ -221,7 +236,7 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
         rows
     };
     // No task gives way for an automation: theirs are not counted.
-    let lines_of = |rows: &[Row], s: &State| -> usize { let ind = super::depth::indents(rows, s.list_width); rows.iter().enumerate().map(|(n, r)| match r { Row::Head { .. } => heading_height(rows, n), Row::Rec(o) => crate::board::view::row_wrap::row_height(s, o, s.list_width.saturating_sub(ind[n]), s.list_tall), Row::Auto(_) => 0, _ => 1 }).sum() };
+    let lines_of = |rows: &[Row], s: &State| -> usize { let ind = super::depth::indents(rows, s.list_width); rows.iter().enumerate().map(|(n, r)| match r { Row::Head { .. } => heading_height(rows, n) + crate::board::view::pilot::extra(s, r), Row::Rec(o) => crate::board::view::row_wrap::row_height(s, o, s.list_width.saturating_sub(ind[n]), s.list_tall), Row::Auto(_) => 0, _ => 1 }).sum() };
     let over = |rows: &[Row], s: &State| !s.whole && s.list_room > 0 && lines_of(rows, s) > s.list_room;
     let mut keep = DONE_SHOWN;
     let mut rows = lay(keep, usize::MAX, s);
@@ -241,7 +256,7 @@ pub fn heading_height(rows: &[Row], n: usize) -> usize {
     if n > 0 && (matches!(rows[n - 1], Row::Head { machine: true, folded: 0, empty: false, .. }) || (project(&rows[n]) && n > 1 && matches!(&rows[n - 1], Row::Head { folded: 0, empty: false, .. }))) { 1 } else { 2 }
 }
 /// A row the arrow keys stop on: a task, an automation or a heading.
-fn step_id(r: &Row) -> Option<String> { match r { Row::Rec(o) => Some(o.t("id")), Row::Auto(a) => Some(a.t("row")), Row::Head { id, .. } if !id.is_empty() => Some(id.clone()), _ => None } }
+pub fn step_id(r: &Row) -> Option<String> { match r { Row::Rec(o) => Some(o.t("id")), Row::Auto(a) => Some(a.t("row")), Row::Head { id, .. } if !id.is_empty() => Some(id.clone()), _ => None } }
 /// Up or down `d` rows: through every task (folded to-dos too) and automation, then words on their way.
 pub fn step(s: &mut State, d: i64) {
     let mut ids: Vec<String> = if s.steps.is_empty() { s.rows.iter().filter_map(step_id).collect() } else { s.steps.clone() };

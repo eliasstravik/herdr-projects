@@ -41,13 +41,22 @@ pub fn of_head(s: &State, id: &str) -> Option<Target> {
     let rest = id.strip_prefix(HEAD)?;
     let parts: Vec<&str> = rest.split('\t').collect();
     match parts.as_slice() {
-        ["machine", host] => Some(Target { host: host.to_string(), to: "machine".into(), name: crate::coordinator::co::named(&label(s, host)) }),
-        ["repo", host, repo] => Some(Target { host: host.to_string(), to: format!("project:{repo}"), name: crate::coordinator::co::named(&crate::shown::words::repo_label(repo)) }),
+        ["all"] => Some(super::top::all_target()),
+        // The only machine: its coordinator is the top-level one (top.rs).
+        ["machine", ""] if super::top::alone(s) => Some(Target { host: String::new(), to: String::new(), name: super::top::coordinator_of(&label(s, "")) }),
+        ["machine", host] => Some(Target { host: host.to_string(), to: "machine".into(), name: super::top::coordinator_of(&label(s, host)) }),
+        ["repo", host, repo] => Some(Target { host: host.to_string(), to: format!("project:{repo}"), name: super::top::coordinator_of(&super::heads::repo_shown(s, host, repo)) }),
         _ => None,
     }
 }
-/// The heading's coordinator the chat talks to now, if it does.
-pub fn talking(s: &State) -> Option<Target> { if s.reply && is_head(&s.reply_id) && s.reply_id == s.sel { of_head(s, &s.sel) } else { None } }
+/// The coordinator the chat talks to now, if it talks to one by its row: the selected row's, or where it talks to no
+/// row's agent the top row's (top.rs). None for a task's agent, and for this machine's top-level coordinator when it
+/// is that by default: that one goes the Coordinator's own way (actions.rs: submit), which says where you were.
+pub fn talking(s: &State) -> Option<Target> {
+    if s.reply && is_head(&s.reply_id) && s.reply_id == s.sel { if let Some(t) = of_head(s, &s.sel) { return Some(t); } }
+    if s.reply && s.reply_id == s.sel && s.current().is_some() { return None; }
+    super::top::top(s).filter(|t| !(t.host.is_empty() && t.to.is_empty()))
+}
 /// This machine's coordinator the board should read, as the coordinator code names its level ("" none): the one the
 /// chat talks to, else the one whose row is selected (its panel shows it).
 pub fn wanted(s: &State) -> String { talking(s).or_else(|| of_head(s, &s.sel)).filter(|t| t.host.is_empty()).map(|t| t.to).unwrap_or_default() }

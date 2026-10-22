@@ -40,18 +40,21 @@ pub fn empty_shown(s: &State) -> bool { filter_now(s).is_empty() && !s.archive_v
 /// repo used lately (data.rs: used_lately), and not while a filter or the archive narrows the list. It shows folded
 /// (`0 tasks`), so that its project coordinator is still a space away.
 pub fn empty_repo(s: &State, host: &str, name: &str) -> bool { s.by_repo && host.is_empty() && empty_shown(s) && s.data.lately.iter().any(|r| r == name) }
-/// One machine's part of the list: its groups, and whether it has a heading of its own (only with every machine shown).
+/// One machine's part of the list: its groups, and whether it has a row of its own (all but in the archive: the one
+/// machine shown has it as the top row, top.rs).
 pub struct Part { pub host: String, pub heading: bool, pub groups: Vec<(String, Vec<Rec>)> }
 /// The groups, machine by machine in the order of herdr's sidebar (remotes.rs: place), this machine where it stands
-/// there. On one machine's board, one part with no heading.
+/// there. On one machine's board, one part, its row the top row.
 pub fn parts(s: &State, groups: &[(String, Vec<Rec>)]) -> Vec<Part> {
-    if s.scope != "*" { return vec![Part { host: s.scope.clone(), heading: s.by_machine, groups: groups.to_vec() }]; }
+    if s.scope != "*" { return vec![Part { host: s.scope.clone(), heading: !s.archive_view, groups: groups.to_vec() }]; }
     let mut hosts: Vec<String> = vec![String::new()];
     for r in &s.items { let h = host_of(r); if !hosts.contains(&h) { hosts.push(h); } }
     for a in &s.autos { let h = a.t("host"); if !hosts.contains(&h) { hosts.push(h); } }
     for (_, recs) in groups { for r in recs { let h = host_of(r); if !hosts.contains(&h) { hosts.push(h); } } }
     // Every machine that answered, also one with no task yet. One that did not is said above the list (view/list.rs).
     if empty_shown(s) { for m in super::remotes::others(s) { if m.ok && !hosts.contains(&m.machine.label) { hosts.push(m.machine.label.clone()); } } }
+    // Under Needs you, a machine whose coordinators ask you, though no task of its does.
+    for h in super::shows::hosts(s) { if !hosts.contains(&h) && super::shows::host_needs(s, &h) { hosts.push(h); } }
     hosts.sort_by_key(|h| super::remotes::place(s, h));
     hosts.into_iter().map(|h| Part { groups: groups.iter().map(|(n, recs)| (n.clone(), recs.iter().filter(|r| host_of(r) == h).cloned().collect())).collect(), host: h, heading: true }).collect()
 }
@@ -69,33 +72,30 @@ pub fn holds(folded: usize, autos: usize) -> String {
 }
 /// The selected heading, when the selection is on one.
 pub fn selected(s: &State) -> Option<&Row> { if !is_head(&s.sel) { return None; } s.rows.iter().find(|r| matches!(r, Row::Head { id, .. } if *id == s.sel)) }
-/// What enter does on the selected heading, in words: for the hint line ("" nothing).
+/// What enter does on the selected heading, in words: for the hint line ("" nothing: a status group's has no agent).
 pub fn says(s: &State) -> Option<String> {
-    let Some(Row::Head { machine, folded, empty, id, .. }) = selected(s) else { return None };
-    // A coordinator's row with nothing to fold: enter talks to it.
-    if folds_nothing(s, id) { return Some(if super::coords::of_head(s, id).is_some() && super::coords::talking(s).is_none() { "talk to it".into() } else { String::new() }); }
-    if *empty { return Some(String::new()); }
-    let what = if *machine { "this machine" } else if s.by_repo { "this repo" } else { "this group" };
-    Some(format!("{} {what}", if *folded > 0 { "unfold" } else { "fold" }))
+    let Some(Row::Head { id, .. }) = selected(s) else { return None };
+    Some(if super::coords::of_head(s, id).is_some() { "go into it".into() } else { String::new() })
 }
-/// A heading with nothing to fold or unfold: a machine or a repo with nothing in view, and under Coordinators a
-/// project's row, or a machine's with no project's row under it.
-fn folds_nothing(s: &State, id: &str) -> bool {
-    let Some(at) = s.rows.iter().position(|r| matches!(r, Row::Head { id: h, .. } if h == id)) else { return false };
-    let Row::Head { machine, empty, folded, .. } = &s.rows[at] else { return false };
-    if *empty { return true; }
-    if !super::shows::coords(s) || *folded > 0 { return false; }
-    let projects_under = matches!(s.rows.get(at + 1), Some(Row::Head { machine: false, .. }));
-    !*machine || !projects_under
+/// What ← or → does on the selected heading, in words ("" nothing to fold).
+pub fn fold_says(s: &State) -> String {
+    let Some(r @ Row::Head { empty, .. }) = selected(s) else { return String::new() };
+    if *empty { String::new() } else if r.shut() { "unfold".into() } else { "fold".into() }
 }
-/// Fold the heading `id`, or unfold it; the selection stays on it. A coordinator's row with nothing to fold (an empty
-/// one, a project's under Coordinators) opens its coordinator in the chat instead, as space does.
-pub fn toggle(s: &mut State, id: &str, fx: &mut Vec<Effect>) {
-    if folds_nothing(s, id) && super::coords::of_head(s, id).is_some() {
-        s.sel = id.to_string();
-        if super::coords::talking(s).is_none() { super::coords::flip(s); }
+/// ← (`shut`) and →: fold the selected heading, or unfold it; ← on a task's or an automation's row goes to the heading
+/// it stands under.
+pub fn fold_key(s: &mut State, shut: bool, fx: &mut Vec<Effect>) {
+    if !is_head(&s.sel) {
+        if !shut { return; }
+        let Some(at) = s.rows.iter().position(|r| super::list::step_id(r).as_deref() == Some(s.sel.as_str())) else { return };
+        if let Some(Row::Head { id, .. }) = s.rows[..at].iter().rev().find(|r| matches!(r, Row::Head { .. })) { s.sel = id.clone(); }
         return;
     }
+    let id = s.sel.clone();
+    if s.folded.contains(&id) != shut { toggle(s, &id, fx); }
+}
+/// Fold the heading `id`, or unfold it; the selection stays on it (← →, a click). One with nothing in view says so.
+pub fn toggle(s: &mut State, id: &str, fx: &mut Vec<Effect>) {
     if let Some(Row::Head { name, machine, empty: true, .. }) = s.rows.iter().find(|r| matches!(r, Row::Head { id: h, .. } if h == id)) {
         let talk = crate::board::keys::key_name("talk");
         let say = if *machine { format!("No tasks on {name} yet. {talk} talks to its machine coordinator, which adds them there.") }

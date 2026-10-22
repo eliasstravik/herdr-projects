@@ -30,7 +30,8 @@ pub fn whole(s: &State) -> bool { group(s) == Some("done") }
 /// automations' its filter shows.
 pub fn counts(s: &State, items: &[std::sync::Arc<Obj>]) -> Vec<usize> {
     let live: Vec<&std::sync::Arc<Obj>> = items.iter().filter(|r| !r.b("archivedAt")).collect();
-    SHOWS.iter().enumerate().map(|(n, (_, g))| match g { Some(g) => live.iter().filter(|r| group_of(r) == *g).count(), None if n == COORDS => coord_rows(s).iter().filter(|r| matches!(r, Row::Head { id, .. } if running(s, id))).count(), None if n == AUTOS => super::list::autos_shown(s, "").len(), None => live.len() }).collect()
+    SHOWS.iter().enumerate().map(|(n, (_, g))| match g { Some(g) => live.iter().filter(|r| group_of(r) == *g).count() + if n == NEEDS { needing(s) } else { 0 },
+        None if n == COORDS => coord_rows(s).iter().filter(|r| matches!(r, Row::Head { id, .. } if running(s, id))).count(), None if n == AUTOS => super::list::autos_shown(s, "").len(), None => live.len() }).collect()
 }
 /// Tab: the next filter; shift+tab the one before.
 pub fn step(s: &mut State, p: &Press, fx: &mut Vec<Effect>) {
@@ -69,17 +70,41 @@ pub fn running(s: &State, id: &str) -> bool {
     let v = super::coords::look_of(s, &t).unwrap_or_default();
     !v.error.is_empty() || ["starting", "working", "blocked", "idle"].contains(&v.state.as_str())
 }
-/// The list under Coordinators: for each machine in view its row (its machine coordinator's) and the rows of its
-/// projects, of the coordinators that run. The main Coordinator has no row: it is who the chat talks to by default.
+/// The coordinator a heading stands for needs you: it asks you, wants your OK, could not start, or its autopilot
+/// needs you. It shows under Needs you beside the tasks, and is counted there.
+pub fn needs_you(s: &State, id: &str) -> bool {
+    let Some(t) = super::coords::of_head(s, id) else { return false };
+    let p = super::pilot::view(s, &t);
+    if p.b("on") && ["needs you", "could not start"].contains(&p.s("state")) { return true; }
+    let v = super::coords::look_of(s, &t).unwrap_or_default();
+    !v.error.is_empty() || v.state == "blocked" || !v.asks.is_empty()
+}
+/// The project rows of the machine `host` whose coordinators need you.
+pub fn projects_needing(s: &State, host: &str) -> Vec<String> { projects(s, host).into_iter().filter(|r| needs_you(s, &format!("{HEAD}repo\t{host}\t{r}"))).collect() }
+/// Under Needs you: a coordinator of the machine `host` (its own, or a project's) needs you.
+pub fn host_needs(s: &State, host: &str) -> bool { s.show == NEEDS && !s.archive_view && (needs_you(s, &machine_id(host)) || !projects_needing(s, host).is_empty()) }
+/// Every coordinator in view that needs you, by its row: the top row's, each machine's, each project's.
+fn needing(s: &State) -> usize {
+    let top = usize::from(s.scope == "*" && needs_you(s, &super::top::all_id()));
+    top + hosts(s).iter().map(|h| usize::from(needs_you(s, &machine_id(h))) + projects_needing(s, h).len()).sum::<usize>()
+}
+/// The list under Coordinators: the top row, then for each machine in view its row (its machine coordinator's) and the
+/// rows of its projects, of the coordinators that run. The top row is always there, counted only while it runs.
 pub fn coord_rows(s: &State) -> Vec<Row> {
     let head = |name: String, id: String, machine: bool| Row::Head { name, autos: false, id, machine, folded: 0, folded_autos: 0, empty: false };
     let mut out: Vec<Row> = vec![];
+    if s.scope == "*" {
+        let id = super::top::all_id();
+        let shut = super::heads::folded(s, &id);
+        out.push(Row::Head { name: "All machines".into(), autos: false, id, machine: false, folded: 0, folded_autos: 0, empty: false });
+        if shut { return out; }
+    }
     for h in hosts(s) {
         let id = machine_id(&h);
         let projects: Vec<String> = projects(s, &h).into_iter().filter(|r| running(s, &format!("{HEAD}repo\t{h}\t{r}"))).collect();
         // A machine whose own coordinator does not run: no row, but with every machine shown the heading of its
-        // projects' that do (not counted).
-        if !running(s, &id) && (projects.is_empty() || s.scope != "*") { for r in projects { out.push(head(r.clone(), format!("{HEAD}repo\t{h}\t{r}"), false)); } continue; }
+        // projects' that do (not counted). The one machine shown is the top row: always there.
+        if !running(s, &id) && s.scope == "*" && projects.is_empty() { continue; }
         // A machine's row folds its projects' rows away, as everywhere (enter, heads.rs: toggle).
         let shut = super::heads::folded(s, &id) && !projects.is_empty();
         out.push(Row::Head { name: super::remotes::shown(s, &h), autos: false, id, machine: true, folded: if shut { projects.len() } else { 0 }, folded_autos: 0, empty: false });

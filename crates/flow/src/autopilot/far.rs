@@ -23,6 +23,12 @@ pub fn door(req: &Value) -> crate::err::Res<Value> {
         // Started and stopped as an agent on a task is (the board's start key and stop key).
         "coordinator-start" => { crate::coordinator::requests::restart(&co)?; format!("Starting the {}.", co.name()) }
         "coordinator-stop" => { crate::coordinator::requests::stop(&co)?; format!("Stopped the {}.", co.name()) }
+        // Gone into from another machine's board: its herdr puts it in front (`focus`), or that board attaches to its pane.
+        "coordinator-open" => {
+            let v = if req.b("focus") { crate::coordinator::look::go_in(&co, 30000)? } else { crate::coordinator::look::look(&co) };
+            if v.pane.is_empty() { crate::coordinator::requests::open(&co)?; return Ok(json!({ "ok": false, "msg": format!("Starting the {}: enter again in a moment.", co.name()) })); }
+            return Ok(json!({ "ok": true, "msg": "", "pane": v.pane, "hasAgent": true, "focused": req.b("focus") }));
+        }
         a => crate::fail!("Unknown action {a}"),
     };
     Ok(json!({ "ok": true, "msg": msg }))

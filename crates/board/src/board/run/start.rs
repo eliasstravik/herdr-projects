@@ -54,8 +54,8 @@ pub fn prepare(folder: &std::path::Path) -> (State, Theme, Option<(String, Strin
     let theme = Theme::load(seen.light, seen);
     (s, theme, named)
 }
-/// What the board opens on: the view it had when it last closed (the popup's own), in the repo a draft left in its box
-/// was typed for, on the task of the pane you came from.
+/// What the board opens on: the view it had when it last closed (the popup's own) with the top row selected, in the
+/// repo a draft left in its box was typed for, on the task of the pane you came from.
 pub fn view(mut ctx: Ctx, folder: &std::path::Path) -> State {
     let p = prefs::read(ctx.popup);
     // Opened from the Coordinator's own pane: its folder is nobody's repo. The board is where it was when you left it.
@@ -63,6 +63,8 @@ pub fn view(mut ctx: Ctx, folder: &std::path::Path) -> State {
     let data = quick_data(&ctx.cwd);
     let mut s = State::new(ctx, data);
     prefs::apply(&mut s, &p);
+    // It opens on the top row (All machines, or the one machine shown), so the chat starts with its coordinator.
+    s.sel = crate::board::update::top::top_id(&s);
     // Words left in the box when it closed were typed for the repo it was in then: the board stays there.
     if !p.s("draft").trim().is_empty() { crate::board::update::setup::to_repo_of(&mut s, p.s("cwd")); }
     // The popup opens on the task that belongs to where you are: the one whose agent runs in the pane you came from.

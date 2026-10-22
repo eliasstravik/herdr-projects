@@ -105,7 +105,7 @@ fn draw_at(s: &mut State, t: &Theme, width: usize, rows: usize) -> Screen {
     let said: Vec<Inked> = broke.iter().map(|b| failed(b, width)).chain(said).collect();
     // The text box grows with a draft that wraps, up to half the window: a longer draft scrolls inside it.
     let box_rows = (rows_n as i64 - 4 - head_n as i64 - if selected_job.is_some() { 1 } else { 0 }).min((rows_n / 2).max(5) as i64).max(1) as usize;
-    let (mut input, mut cursor) = super::guard::part(|| if s.ask.is_some() { (super::ask::ask_lines(s, width, rows_n), None) } else if framed { chat_box(s, width, box_rows, r.as_ref(), &[]) } else { box_lines(s, width, box_rows, r.as_ref()) })
+    let (mut input, mut cursor) = super::guard::part(|| if s.ask.is_some() { (super::ask::ask_lines(s, width, rows_n), None) } else if (framed || super::chat_title::title(s, r.as_ref()).is_some()) && width >= 8 { chat_box(s, width, box_rows, r.as_ref(), &[]) } else { box_lines(s, width, box_rows, r.as_ref()) })
         .unwrap_or_else(|why| (vec![Inked::of("─".repeat(width), Ink::Rule), failed(&format!("The text box could not be shown: {why}"), width), Inked::of("─".repeat(width), Ink::Rule)], None));
     // The message takes the lines it needs: with its box up to two thirds of the window, and only rows the list can
     // spare. Under the whole task and the menu it keeps to a third. A longer one scrolls.

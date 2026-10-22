@@ -134,8 +134,8 @@ pub fn chat_head(c: &Who, width: usize, tight: bool) -> Vec<Inked> {
 /// Above the text box: an empty line (a short window has none to spare), then who you talk to.
 pub fn chat_lines(c: Option<&Who>, width: usize, tight: bool) -> Vec<Inked> {
     let Some(c) = c else { return vec![] };
+    // Who it is is the box's own title now (chat_title.rs): above it only what goes with it.
     let mut out = if tight { vec![] } else { vec![Inked::new()] };
-    out.extend(chat_head(c, width, tight));
     if !c.note.is_empty() && !tight { out.push(Inked::plain("   ").add(Inked::of(crate::text::cut(&c.note, width.saturating_sub(3).max(1)), Ink::Muted))); }
     out.extend(c.call.iter().take(if tight { 1 } else { 3 }).map(|l| l.cut(width.max(1))));
     out

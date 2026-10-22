@@ -2,19 +2,19 @@
  herdr-projects  proj
  All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
 
- ▾ working
- ◐ #2     Max length for task titles
-          Drafting
-          █████░░░░░░░  40% 90m left                      1m
- ◇ #4     Max length for task titles
-          Starting                                        1m
-▌◐ #5     Max length for task titles
-▌         Found the cause; now checking every caller of the
-▌         resize handler for the same mistake
-▌         ███████░░░░░  60% 11m left                      1m
+   ▾ working
+   ◐ #2     Max length for task titles
+            Drafting
+            ████░░░░░░  40% 90m left                      1m
+   ◇ #4     Max length for task titles
+            Starting                                      1m
+▌  ◐ #5     Max length for task titles
+▌           Found the cause; now checking every caller of
+▌           the resize handler for the same mistake
+▌           ██████░░░░  60% 11m left                      1m
+
  ↓ 9 more · ↑ 6 more
 
- + New task  added word for word
 ────────────────────────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────────────────────────
@@ -22,26 +22,26 @@
 == the task beside it
  herdr-projects  proj
  All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
- ▾ working
- ◐ #2     Max length for task titles
-          Drafting
-          █████░░░░░░░  40% 90m left                      1m
- ◇ #4     Max length for task titles
-          Starting                                        1m
-▌◐ #5     Max length for task titles
-▌         Found the cause; now checking every caller of the
-▌         resize handler for the same mistake
-▌         ███████░░░░░  60% 11m left                      1m
+
+   ▾ working
+   ◐ #2     Max length for task titles
+            Drafting
+            ████░░░░░░  40% 90m left                      1m
+   ◇ #4     Max length for task titles
+            Starting                                      1m
+▌  ◐ #5     Max length for task titles
+▌           Found the cause; now checking every caller of
+▌           the resize handler for the same mistake
+▌           ██████░░░░  60% 11m left                      1m
  ↓ 9 more · ↑ 6 more
 
- + New task  added word for word
 ────────────────────────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────────────────────────
   Side panel on. alt+p hides it.
   enter open this task's agent · ? all keys
 == the whole task
- Task details  #5 "Max length for …        lines 1–12 of 24
+ Task details  #5 "Max length for …        lines 1–13 of 24
 ────────────────────────────────────────────────────────────
 
  #5 Max length for task titles
@@ -55,8 +55,8 @@
 
  Description ──────────────────────────────────────────────
  A task title should have a maximum length. A longer one is
+ cut between words.
 
- + New task  added word for word
 ────────────────────────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────────────────────────
@@ -65,19 +65,19 @@
  Menu  for #5 "Max length for task titles"
  plain keys
    ↑ ↓          move between tasks and headings
+   ← →          fold the heading; on a task's row, go to
+                its heading
    pgup pgdn    a page of tasks up or down (in the whole
                 task: a page of its text)
    tab          the next filter on top: all, coordinators,
                 needs you, working, ready, to do, done,
                 automations
-   enter        send what is typed; else open this task's
-                agent, or fold a heading
-   space        flip who you talk to: the Coordinator, or
-                this task's agent
-   esc          back, one step at a time (as a popup, the
- ↓ 62 more
+   enter        send what is typed; else go into this row's
+                agent: a task's, or a machine's or a
+                project's coordinator
+   space        talk to this row's agent, and back to the
+ ↓ 64 more
 
- + New task  added word for word
 ────────────────────────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────────────────────────
@@ -86,19 +86,19 @@
  herdr-projects  proj
  All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
 
- ▾ working
- ◐ #2     Max length for task titles
-          Drafting
-          █████░░░░░░░  40% 90m left                      1m
- ◇ #4     Max length for task titles
-          Starting                                        1m
-▌◐ #5     Max length for task titles
-▌         Found the cause; now checking every caller of the
-▌         resize handler for the same mistake
-▌         ███████░░░░░  60% 11m left                      1m
+   ▾ working
+   ◐ #2     Max length for task titles
+            Drafting
+            ████░░░░░░  40% 90m left                      1m
+   ◇ #4     Max length for task titles
+            Starting                                      1m
+▌  ◐ #5     Max length for task titles
+▌           Found the cause; now checking every caller of
+▌           the resize handler for the same mistake
+▌           ██████░░░░  60% 11m left                      1m
+
  ↓ 9 more · ↑ 6 more
 
- + New task  added word for word
 ────────────────────────────────────────────────────────────
 ❯ Hello 日本 🚀
 ────────────────────────────────────────────────────────────
