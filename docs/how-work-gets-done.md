@@ -27,10 +27,15 @@ All of this runs with the board open or closed.
 - **Started from a named branch** (`workspace.from develop`, for a long branch with small tasks on top), the task lands
   there too. The branch is fetched from origin on every start (10 seconds at most, never asking for a password); one
   origin does not have is refused with the reason, and the task waits as failed. If origin cannot be reached, the copy it
-  last gave is used. The task keeps up with that branch, its pull request merges into it (`gh pr create --base develop`),
-  a pull request the agent opened itself is taken on only while it merges into it, and `merge.checks` reads the checks of
-  a pull request into it. It needs `merge.pr` on: a local merge lands on your checkout's branch, so a named branch with
-  `merge.pr` off is refused at the start and at the merge, for now.
+  last gave is used. The task keeps up with that branch. With `merge.pr` on its pull request merges into it
+  (`gh pr create --base develop`), a pull request the agent opened itself is taken on only while it merges into it, and
+  `merge.checks` reads the checks of a pull request into it. With `merge.pr` off (no GitHub) the board lands the work
+  itself, after your yes as for any task: it builds the reviewed commit on origin's copy of that branch and pushes it
+  there (`git push origin <commit>:refs/heads/develop`), squashed by default (`merge.method`). Your checkout is not
+  touched, whatever branch it is on, and the branch need not be checked out anywhere. A push git refuses because someone
+  pushed first sends the task back to catch up with the branch and be checked again; one origin refuses for another
+  reason (a protected branch) waits for you with git's words. The push is to origin, not to your local copy of the branch:
+  pull it as you would any other.
 - `workspace.setup` runs. Then the agent starts in that space's root pane, with the task and its rules.
 - **Outside git**, the agent works in place, in a plain Herdr space.
 - **At most `board.agents` (4) agents work at once.** More wait their turn. Tasks that wait for you hold no slot.
