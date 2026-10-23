@@ -11,6 +11,8 @@ use sw::json::*;
 use sw::store::settings::lookup::lookup;
 use sw::store::settings::places::yours;
 
+/// Who added a task: a project coordinator's add in another repo names it, in `details` and in that repo's history.
+mod added_by;
 /// One that never ran: sent as off, and `Tab` from another machine starts it.
 mod never_ran;
 /// A pane id herdr handed out again: a done task's old pane given to a coordinator is the coordinator's.
