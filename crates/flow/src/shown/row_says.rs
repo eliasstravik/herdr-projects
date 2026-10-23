@@ -64,7 +64,8 @@ pub fn sentence(r: &Obj) -> Inked {
     if r.at("limits").b("near") && r.s("state") == "working" { return Inked::of(r.at("limits").t("near"), Ink::Peach).add(quiet(if msg.is_empty() { msg } else { format!(" · {msg}") })); }
     if needs_you(r) {
         let text = if !msg.is_empty() { msg.clone() } else if !bare(r.s("kind")).is_empty() { bare(r.s("kind")).into() } else if r.s("state") == "error" { bare("error").into() } else { String::new() };
-        return if r.s("state") == "blocked" && !msg.is_empty() { plainly(text) } else { quiet(text) };
+        // A question, an OK or a login it waits for is in the colour of its mark, so it stands out as the mark does.
+        return if r.s("state") == "blocked" { Inked::of(text, status_ink(r)) } else { quiet(text) };
     }
     quiet(msg)
 }
