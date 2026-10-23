@@ -29,6 +29,10 @@ trap 'rm -rf "$tmp"; sc_leave' EXIT
 sc_cargo test --profile quick --quiet --no-run --message-format=json-render-diagnostics > "$tmp/built"
 bins=$(grep '"profile":{[^}]*"test":true' "$tmp/built" | sed -n 's/.*"executable":"\([^"]*\)".*/\1/p')
 [ -n "$bins" ] || { echo "cargo built no test program." >&2; exit 101; }
+# The tests never reach your real board: a test that makes no world of its own keeps its board in this run's scratch
+# folder too, and the store refuses the real ~/.herdr-projects under them, loudly (crates/core/src/store/never_real.rs).
+HERDR_PROJECTS_TESTING=1; HERDR_PROJECTS_HOME="$tmp/board"; export HERDR_PROJECTS_TESTING HERDR_PROJECTS_HOME
+unset HERDR_PROJECTS_DATA_DIR HERDR_PROJECTS_CONFIG_DIR HERDR_PROJECTS_REPORTS_DIR
 sc_share
 procs="${HERDR_PROJECTS_TEST_PROCS:-$((sc_threads * 2))}"
 case "$procs" in ''|0*|*[!0-9]*) procs=1 ;; esac
