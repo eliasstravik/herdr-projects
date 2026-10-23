@@ -38,9 +38,11 @@ pub fn sentence(r: &Obj) -> Inked {
     let words = |s: &str| clean(s).replace("**", "").replace('`', "");
     let quiet = |s: String| Inked::of(s, Ink::Soft);
     let plainly = |s: String| Inked::of(s, Ink::Text);
+    // A question, an OK or a login it waits for is in the colour of its mark, so it stands out as the mark does.
+    let asks = |s: String| if r.s("state") == "blocked" { Inked::of(s, status_ink(r)) } else { quiet(s) };
     // Cut off by its provider, and the board tries again by itself: the row says why and when.
     if waiting_of(r).is_some() { return quiet(words(r.s("msg"))); }
-    if let Some(f) = failure_for(r) { if !f.b("sentAt") && (r.b("failure") || r.b("prFailure")) { return quiet(words(if f.b("msg") { f.s("msg") } else { f.s("title") })); } }
+    if let Some(f) = failure_for(r) { if !f.b("sentAt") && (r.b("failure") || r.b("prFailure")) { return asks(words(if f.b("msg") { f.s("msg") } else { f.s("title") })); } }
     // A chat with its agent changed no code: the review's result, and that it still stands (flow/chat.rs).
     let kept = |t: String| if r.b("chatKept") { [t, crate::flow::chat::KEPT_LINE.to_string()].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ") } else { t };
     if failed_review(r) { let t = kept(review_tally(r)); return Inked::of("Review failed", Ink::Red).add(quiet(if t.is_empty() { t } else { format!(" · {t}") })); }
@@ -64,7 +66,7 @@ pub fn sentence(r: &Obj) -> Inked {
     if r.at("limits").b("near") && r.s("state") == "working" { return Inked::of(r.at("limits").t("near"), Ink::Peach).add(quiet(if msg.is_empty() { msg } else { format!(" · {msg}") })); }
     if needs_you(r) {
         let text = if !msg.is_empty() { msg.clone() } else if !bare(r.s("kind")).is_empty() { bare(r.s("kind")).into() } else if r.s("state") == "error" { bare("error").into() } else { String::new() };
-        return if r.s("state") == "blocked" && !msg.is_empty() { plainly(text) } else { quiet(text) };
+        return asks(text);
     }
     quiet(msg)
 }

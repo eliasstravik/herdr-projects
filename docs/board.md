@@ -273,7 +273,9 @@ is on it, or it waits for you.
   came out, with a short tally (`Pass · 2 minor`, `Review failed · 1 critical, 1 major`, the result in its own colour); or
   what it waits for. While the reviewer works, it says only what the reviewer is doing.
 - Line 2 is in the brighter of the board's two greys, Herdr's `subtext0`, because it must be read (the fainter one,
-  `overlay0`, is for what may be missed: times, counts, tags). What a task asks of you is in the plain text colour.
+  `overlay0`, is for what may be missed: times, counts, tags). What a task asks of you (its question, the OK it wants,
+  the login it needs: a `?`, `!` or `@` row) is in its mark's needs-you colour, Herdr's `red`, so it stands out as the
+  mark does; on the selected row too, and on the web board in its needs-you colour.
 - In the all-machines view the machine is the heading above its tasks, never in a row
   ([list headings](list-headings.md)), so line 2 starts under the task's name as everywhere.
 - Line 2 has the row's whole width, so it is rarely cut. One longer than the window is cut at its end with `…`, never
