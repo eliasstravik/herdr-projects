@@ -116,7 +116,8 @@ pub fn start_build_by(id: &str, g: &mut Guard, by: &str) -> Res<()> {
             t = g.set(|t| { t.put("stage", "working"); t.put("armedAt", now()); t.put("expectedWake", Value::Null); t.put("turnOpen", true); t.put("turnBy", "start"); t.put("msg", ""); t.put("watch", Value::Null); t.del("kind"); })?;
             flow::send::deliver(&t, &flow::send::with_tail(&t, &words), None, false)?;
         } else {
-            // In its own plan mode, or in the read-only mount: neither ends by itself. Ended, and started again.
+            // In the read-only mount (or, started by an older board, in Claude Code's own plan mode): neither ends by
+            // itself. Ended, and started again.
             if a.is_some() && !api.pane_quit(t.at("link").s("pane"), 6000) { crate::fail!("The agent's program could not be ended to leave its plan step. Close its terminal, then retry."); }
             if resumable(&t) { start_agent(id, g, &flow::send::with_tail(&t, &words), Some(t.s("session")))?; }
             else { start_agent(id, g, &std::iter::once(first_prompt(&t)).chain(waiting.iter().cloned()).collect::<Vec<_>>().join("\n\n"), None)?; }

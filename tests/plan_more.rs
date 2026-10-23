@@ -88,17 +88,12 @@ fn what_the_plans_writer_a_planner_the_builder_and_the_reviewer_are_told() {
     assert!(told.contains("Stopping with the plan written is right in this step") && told.contains("puts back whatever changed"));
     assert!(told.contains("Commit your work on this branch"), "the rules of the work still stand, for after the yes");
     assert!(first_prompt(&planning).contains("This task starts with a plan (your rules say how): write the plan and stop. Change nothing yet."));
-    // Claude Code has a plan mode of its own: the plan is presented there, and its launch flags say so.
+    // Claude Code plans as every program does: it is told to save the file, never to use a plan mode of its own.
     let mut claude = planning.clone(); claude.put("agent", "claude");
-    assert!(rules(&claude).contains("started in its own plan mode: write the plan as that mode has you do it and present it for approval"));
-    assert!(!rules(&claude).contains("Save it as"));
-    let mode = Some(vec!["--permission-mode".to_string(), "plan".into()]);
-    assert_eq!(P::plan_args(&claude, "claude"), mode);
-    assert_eq!(P::plan_args(&planning, "codex"), None);
-    assert_eq!(P::plan_args(&with(&claude, json!({ "asked": 1, "by": "you", "approvedAt": 5 })), "claude"), None);
+    assert_eq!(rules(&claude), told);
+    assert!(!told.contains("plan mode"));
     use sw::agents::start::{start_args, StartOpts};
-    assert_eq!(start_args("claude", &StartOpts { access: "full".into(), plan: mode.clone(), ..Default::default() }).unwrap(), mode.clone().unwrap(), "in place of its access flags");
-    assert_eq!(start_args("claude", &StartOpts { access: "full".into(), ..Default::default() }).unwrap(), vec!["--dangerously-skip-permissions"]);
+    assert_eq!(start_args("claude", &StartOpts { access: "full".into(), ..Default::default() }).unwrap(), vec!["--dangerously-skip-permissions"], "its usual access");
     // A planner of its own.
     let planner = with(&planning, json!({ "asked": 1, "by": "you", "home": { "tab": "t1", "pane": "p1" }, "writer": { "kind": "codex", "model": "gpt-5.5" } }));
     let to_planner = rules(&planner);
