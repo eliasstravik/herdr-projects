@@ -1,5 +1,5 @@
-//! Who writes a plan: a program with its own plan mode (started in it, its plan taken by the board's hook, started
-//! again after the yes with its usual access), and a planner of its own (plan.agent) in a tab beside the worker's.
+//! Who writes a plan: the working agent with its usual access (Claude Code too: in the read-only mount, saving plan.md,
+//! started again outside it after the yes), and a planner of its own (plan.agent) in a tab beside the worker's.
 use crate::common;
 use common::board::open;
 use common::*;
@@ -22,51 +22,47 @@ fn approve(id: &str) { sw::actions::finish_line::approve(id, None, false).unwrap
 fn has(text: &str, re: &str) -> bool { regex::Regex::new(re).unwrap().is_match(text) }
 
 #[test]
-fn a_program_with_its_own_plan_mode_is_started_in_it_its_plan_taken_by_the_hook_and_started_again_after_the_yes() {
+fn claude_code_plans_with_its_usual_access_in_the_mount_saves_plan_md_and_is_started_again_outside_after_the_yes() {
     let w = plan_world(json!({ "plan.approve": "you", "review.when": "never" }));
-    w.script(json!({ "worker": [{ "note": "A first draft, said and not presented." }, { "plan": PLAN, "note": "Presented." }, { "status": "working" }] }));
+    w.script(json!({ "worker": [{ "plan": PLAN, "note": "Planned." }, { "status": "working" }] }));
     let id = w.add("Work");
     delegate(&id);
     let t = settle(&id);
-    // With nothing presented and no file, what the agent said last is the plan.
-    assert_eq!(t.s("stage"), "plan", "{}", t.at("failure"));
-    assert_eq!(P::read_plan(&t), "A first draft, said and not presented.");
+    assert_eq!((t.s("stage"), t.s("agent")), ("plan", "claude"), "{}", t.at("failure"));
+    assert_eq!(P::read_plan(&t), PLAN.trim(), "the file it saved is the plan");
+    // Its usual access, as every program plans: not Claude Code's own plan mode, which asks at the pane for every write
+    // outside its plan file. The read-only mount is the guard.
     let args = args_of(&w, &t);
-    assert!(args.join(" ").contains("--permission-mode plan") && !args.iter().any(|a| a == "--dangerously-skip-permissions"), "{args:?}");
-    assert_eq!(t.at("plan").at("mode"), &json!(true));
-    // Its launch settings carry the hook that takes the plan (a test world starts agents without their hooks: asked for here).
+    assert!(args.iter().any(|a| a == "--dangerously-skip-permissions") && !args.join(" ").contains("--permission-mode"), "{args:?}");
+    let before = w.pane_of(&t).at("agent").clone();
+    assert_eq!(before.at("boxed"), &json!(true));
+    assert_eq!(t.at("plan").at("mode"), &json!(true), "started in the mount: started again after the yes");
+    let told = sw::delegate::rules::rules(&t);
+    assert!(told.contains(&format!("Save it as {} (the board's own folder for this task", P::plan_file(&t).display())) && !told.contains("plan mode"), "{told}");
+    // Its launch settings hold the turn-end hooks and nothing that takes a plan mode's plan (a test world starts agents
+    // without their hooks: asked for here).
     let token = sw::store::files::read_json(&sw::store::files::dir_of(&id).join("tokens.json")).unwrap().t("agent");
-    let hooks = |plan: bool| -> Value {
-        let h = sw::agents::adapter::Hook { shim: "/bin/board".into(), id: id.clone(), role: "agent".into(), token: token.clone(), round: 0, dir: w.base.clone(), plan };
-        let a = sw::agents::adapter::hook_args("claude", &h).unwrap().unwrap();
-        let file = &a[a.iter().position(|x| x == "--settings").unwrap() + 1];
-        sw::store::files::read_json(std::path::Path::new(file)).unwrap().at("hooks").clone()
-    };
-    let on = hooks(true);
-    let pre = &on.at("PermissionRequest")[0];
-    assert_eq!(pre.s("matcher"), "ExitPlanMode");
-    assert_eq!(pre.at("hooks")[0].s("command"), format!("'/bin/board' 'plan-written' '--id' 'proj/1' '--token' '{token}'"));
-    assert!(!pre.at("hooks")[0].b("async"));
-    assert!(hooks(false).at("PermissionRequest").is_null(), "only while the plan step is open");
-    // The hook: a wrong token or no plan lets the tool through (nothing printed); the plan is saved, and the tool is
-    // refused with Claude Code's structured deny, whose message (SAVED) tells the agent to stop. The command exits 0.
+    let h = sw::agents::adapter::Hook { shim: "/bin/board".into(), id: id.clone(), role: "agent".into(), token: token.clone(), round: 0, dir: w.base.clone() };
+    let a = sw::agents::adapter::hook_args("claude", &h).unwrap().unwrap();
+    let file = &a[a.iter().position(|x| x == "--settings").unwrap() + 1];
+    let hooks = sw::store::files::read_json(std::path::Path::new(file)).unwrap().at("hooks").clone();
+    assert_eq!(hooks.as_object().unwrap().keys().collect::<Vec<_>>(), ["Stop", "StopFailure"]);
+    // A Claude Code an older board started in plan mode still has its plan taken, for one release (plan/presented.rs):
+    // a wrong token or no plan lets the tool through; the plan is saved, and the tool refused with the structured deny.
     use sw::plan::presented::{presented, SAVED};
     assert_eq!(presented(&id, "wrong", Some(json!({ "tool_input": { "plan": PLAN } }))), None);
     assert_eq!(presented(&id, &token, Some(json!({ "tool_input": {} }))), None);
-    assert_eq!(P::read_plan(&t), "A first draft, said and not presented.");
     let deny = json!({ "hookSpecificOutput": { "hookEventName": "PermissionRequest", "decision": { "behavior": "deny", "message": SAVED } } });
-    assert_eq!(presented(&id, &token, Some(json!({ "tool_input": { "plan": "# As the hook took it" } }))), Some(deny));
-    assert_eq!(P::read_plan(&t), "# As the hook took it");
-    sw::actions::talk::tell(&id, "Present it properly.", false).unwrap(); // its next turn presents a new plan
-    let t = settle(&id);
-    assert_eq!((t.s("stage"), t.at("plan").s("words")), ("plan", "Plan"));
+    assert_eq!(presented(&id, &token, Some(json!({ "tool_input": { "plan": PLAN } }))), Some(deny));
+    assert_eq!(P::read_plan(&t), PLAN.trim());
     approve(&id);
     let t = started(&id);
     assert_eq!(t.s("stage"), "working", "{}", t.at("failure"));
     assert!(t.at("plan").b("built"));
-    // Started again, out of plan mode (in the same conversation where its program still has it; the fake keeps none).
-    let now = args_of(&w, &t);
-    assert!(now.iter().any(|a| a == "--dangerously-skip-permissions") && !now.join(" ").contains("--permission-mode plan") && now != args, "{now:?}");
+    // Ended and started again outside the mount, with the same access.
+    let after = w.pane_of(&t).at("agent").clone();
+    assert!(!after.b("boxed") && after.i("seq") > before.i("seq"), "{after}");
+    assert!(args_of(&w, &t).iter().any(|a| a == "--dangerously-skip-permissions"));
     assert!(has(prompts(&w, t.at("link").s("pane")).last().unwrap(), r"(?s)This task has an approved plan.*build exactly that plan"));
     assert_eq!(presented(&id, &token, Some(json!({ "tool_input": { "plan": "late" } }))), None);
 }
