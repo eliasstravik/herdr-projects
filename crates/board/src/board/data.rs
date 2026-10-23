@@ -44,7 +44,7 @@ pub struct Data {
     pub lately: Vec<String>,
     /// This machine's archived projects (store/archived_repos.rs): off the board, each a heading in the archive.
     pub archived: Vec<String>,
-    /// Whether this machine and which of its projects are pinned (store/pins.rs): a mark on their rows, and the Pinned tab.
+    /// Whether this machine and which of its projects are pinned (store/pins.rs): a mark on their rows, and the Pinned filter.
     pub pins: crate::store::pins::Pins,
     /// The repo the board is in (where it was opened, or where a draft was typed), its folder, and the tasks' file.
     pub repo: String, pub repo_root: String,

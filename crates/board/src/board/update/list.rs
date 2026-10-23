@@ -32,7 +32,7 @@ fn tags(s: &State, r: &Obj) -> Vec<String> {
 /// The automations of whoever's board shows, machine by machine in the order of herdr's sidebar. None in the archive.
 /// Each stands in its machine's part of the list: its own group there, or under its repo (heads.rs: autos_in).
 pub fn autos_shown(s: &State, f: &str) -> Vec<Obj> {
-    if s.archive_view || super::pinned::on(s) { return vec![]; }
+    if s.archive_view { return vec![]; }
     let mut all: Vec<Obj> = if s.scope.is_empty() || s.scope == "*" { s.data.autos.iter().map(|a| { let mut a = a.clone(); let row = format!("auto:{}", a.s("id")); a.put("row", row); a.put("host", ""); a }).collect() } else { vec![] };
     for m in super::remotes::in_view(s) { all.extend(m.autos.iter().cloned()); }
     all.sort_by_key(|a| super::remotes::place(s, a.s("host")));
@@ -46,7 +46,7 @@ pub fn relist(s: &mut State) {
     s.items = if s.scope.is_empty() { mine.clone() } else if s.scope == "*" { mine.iter().cloned().chain(super::remotes::others(s).into_iter().flat_map(|m| m.items.iter().cloned())).collect() } else { s.remotes.get(&s.scope).map(|m| m.items.clone()).unwrap_or_default() };
     // The filter row counts every task in view; the list keeps those of the filter shown (shows.rs).
     let all = s.items.clone();
-    s.show_n = super::shows::counts(s, &all); super::pinned::narrow(s, &all); // the Pinned tab: only what is pinned
+    s.show_n = super::shows::counts(s, &all);
     let keep: Vec<bool> = s.items.iter().map(|r| super::shows::keeps_task(s, r)).collect();
     let mut keep = keep.into_iter();
     s.items.retain(|_| keep.next().unwrap_or(true));
@@ -55,7 +55,7 @@ pub fn relist(s: &mut State) {
     let f = filter_now(s);
     s.autos = if super::shows::keeps_all(s) { autos_shown(s, &f) } else { vec![] };
     super::pending::overlay_autos(s);
-    let layout = serde_json::to_string(&json!([s.scope, s.by_repo, s.all_done, s.archive_view, f, s.show, s.by_machine, s.pinned_view])).unwrap_or_default();
+    let layout = serde_json::to_string(&json!([s.scope, s.by_repo, s.all_done, s.archive_view, f, s.show, s.by_machine])).unwrap_or_default();
     // The task the selection is held on (or that the panel shows whole, in the same list) keeps its row whatever it has
     // become meanwhile.
     let held = |r: &Obj| r.s("id") == s.sel && (r.s("id") == s.stick || (s.full && layout == s.selection_layout));
@@ -80,7 +80,7 @@ pub fn relist(s: &mut State) {
         for a in &s.autos { let g = a.t("repo"); if !names.contains(&g) { names.push(g); } }
         // A repo used lately with no task in view keeps its heading, for its project coordinator (heads.rs: empty_repo).
         if s.scope.is_empty() || s.scope == "*" { for g in &s.data.lately { if super::heads::empty_repo(s, "", g) && !names.contains(g) { names.push(g.clone()); } } }
-        for g in project_groups.iter().map(|(g, _)| g.clone()).chain(super::pinned::names(s)) { if !names.contains(&g) { names.push(g); } } // and a pinned project's, in the Pinned tab
+        for g in project_groups.iter().map(|(g, _)| g.clone()).chain(super::pinned::names(s)) { if !names.contains(&g) { names.push(g); } } // and a pinned project's, under Pinned
         let here = s.data.repo.clone();
         names.sort_by(|a, b| if *a == here { std::cmp::Ordering::Less } else if *b == here { std::cmp::Ordering::Greater } else { a.to_lowercase().cmp(&b.to_lowercase()).then(b.cmp(a)) });
         names.into_iter().map(|g| { let list = shown.iter().filter(|r| repo_name(r) == g).cloned().collect(); (g, list) }).collect()
@@ -196,7 +196,7 @@ fn lay_rows(s: &mut State) -> Vec<Row> {
     s.fold_sel = s.sel.clone();
     // Under Coordinators only the coordinators' rows: each machine's and its projects' (shows.rs).
     if super::shows::coords(s) { let rows = super::shows::coord_rows(s); s.steps = rows.iter().filter_map(step_id).collect(); return rows; }
-    if super::pinned::nothing(s) { s.steps.clear(); return vec![]; } // the Pinned tab with nothing pinned says how to pin something
+    if super::pinned::nothing(s) { s.steps.clear(); return vec![]; } // Pinned with nothing pinned says how to pin something
     let groups = s.grouped.clone();
     let parts = parts(s, &groups);
     let held = open_on(s);
@@ -227,12 +227,11 @@ fn lay_rows(s: &mut State) -> Vec<Row> {
                 rows.push(Row::Head { name: super::remotes::shown(s, &p.host), autos: false, id, machine: true, folded: if shut { n } else { 0 }, folded_autos: if shut { n_autos } else { 0 }, empty: n == 0 && !has_bare });
                 if shut { continue; }
             }
-            // Under Needs you, the projects whose coordinators ask you stand beside the tasks, though no task of theirs does.
-            if s.show == super::shows::NEEDS && !s.archive_view {
-                for r in super::shows::projects_needing(s, &p.host) {
-                    if s.by_repo && p.groups.iter().any(|(name, recs)| *name == r && !recs.is_empty()) { continue; }
-                    rows.push(Row::Head { id: format!("{}repo\t{}\t{r}", super::heads::HEAD, p.host), name: r, autos: false, machine: false, folded: 0, folded_autos: 0, empty: false });
-                }
+            // Under Needs you, the projects whose coordinators ask you stand beside the tasks, though no task of theirs
+            // does; under Pinned, the pinned projects (shows.rs: beside).
+            for r in super::shows::beside(s, &p.host) {
+                if s.by_repo && p.groups.iter().any(|(name, recs)| *name == r && !recs.is_empty()) { continue; }
+                rows.push(Row::Head { id: format!("{}repo\t{}\t{r}", super::heads::HEAD, p.host), name: r, autos: false, machine: false, folded: 0, folded_autos: 0, empty: false });
             }
             if n == 0 && !has_bare { continue; }
             for ((name, recs), autos) in p.groups.iter().zip(&autos) {

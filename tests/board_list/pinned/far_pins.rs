@@ -1,4 +1,4 @@
-//! Another machine's pins come with its tasks: its rows carry the pin mark and the Pinned tab shows what it pinned.
+//! Another machine's pins come with its tasks: its rows carry the pin mark and the Pinned filter shows what it pinned.
 //! Its machine's row and its project's row pin there, through its door (`do`, `pin-machine` / `pin-project`), and so do
 //! `pin <machine>` and `pin <project> --on <machine>` from the shell; this machine's door pins here, and what it
 //! sends with its tasks says what is pinned.
@@ -9,7 +9,7 @@ use common::*;
 use far::{theirs, Far};
 use serde_json::{json, Value};
 use sw::board::state::Row;
-use sw::board::update::heads::{group_id, machine_id};
+use sw::board::update::heads::{machine_id, HEAD};
 use sw::board::update::{update, Event};
 use sw::json::*;
 
@@ -42,9 +42,9 @@ fn another_machines_pins_come_with_its_tasks_and_its_rows_pin_there() {
     let (w, far) = far_world();
     w.add("Mine");
     let mut s = every_machine(&w, json!([theirs(1), theirs(2)]), json!({ "machine": false, "repos": ["far"] }));
-    s.press(&["alt+i"]);
+    while s.s.show != sw::board::update::shows::PINNED { s.press(&["tab"]); }
     assert_eq!(tasks_shown(&s), vec!["vm-b:far/1".to_string(), "vm-b:far/2".into()], "its pinned project's tasks, not this machine's: {}", s.text());
-    let far_row = group_id(&s.s, "vm-b", "far");
+    let far_row = format!("{HEAD}repo\tvm-b\tfar"); // its row above its tasks, grouped by status
     assert!(heads(&s).contains(&machine_id("vm-b")) && heads(&s).contains(&far_row), "{:?}", heads(&s));
     assert!(s.lines().iter().any(|l| l.contains("far") && l.contains('⚑')), "{}", s.text());
     // Its project's row: unpinned there.
@@ -59,7 +59,7 @@ fn another_machines_pins_come_with_its_tasks_and_its_rows_pin_there() {
     s.press(&["ctrl+p"]);
     let (action, req) = asked(&far).unwrap();
     assert_eq!((action.as_str(), req.b("on")), ("pin-machine", true));
-    // vm-b says so with its tasks: its row has the mark, and every task of it is in the tab.
+    // vm-b says so with its tasks: its row has the mark, and every task of it is under Pinned.
     answer(&mut s, json!([theirs(1), theirs(2), theirs(3)]), json!({ "machine": true, "repos": [] }));
     assert_eq!(tasks_shown(&s).len(), 3, "{}", s.text());
     // A machine on an older version cannot: it says to update it there.

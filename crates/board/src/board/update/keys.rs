@@ -129,7 +129,7 @@ pub fn run_as(s: &mut State, k: K, p: &Press, r: Option<&Obj>, fx: &mut Vec<Effe
         K::Unfold => super::heads::fold_key(s, false, fx),
         K::PageUp => act::move_by(s, -10),
         K::PageDown => act::move_by(s, 10),
-        K::Filter => if s.pinned_view && !s.archive_view { super::pinned::fixed(s) } else { super::shows::step(s, p, fx) },
+        K::Filter => super::shows::step(s, p, fx),
         K::Talk => act::flip_reply(s, r),
         K::Menu => s.menu = Some(crate::board::state::Menu { at: -1, ..Default::default() }),
         K::Yes => if let Some(r) = r { act::yes(s, r, fx) },
@@ -152,9 +152,7 @@ pub fn run_as(s: &mut State, k: K, p: &Press, r: Option<&Obj>, fx: &mut Vec<Effe
         K::Side => if !s.full { act::toggle_side(s, fx) },
         K::Panel => if s.full { act::fold_panel(s) } else { act::open_panel(s) },
         K::ArchiveView => act::toggle_archive(s),
-        K::PinnedView => super::pinned::switch(s, fx),
         // By status, by repo, by machine, and round again.
-        K::ByRepo if super::pinned::on(s) => super::pinned::fixed(s),
         K::ByRepo => { (s.by_repo, s.by_machine) = (!s.by_repo && !s.by_machine, s.by_repo); fx.push(Effect::Save); relist(s); }
         K::AllDone => { s.all_done = !s.all_done; relist(s); }
         K::Scope => super::remotes::next_scope(s, fx),

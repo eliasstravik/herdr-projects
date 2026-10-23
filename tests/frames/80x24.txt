@@ -1,6 +1,6 @@
 == the list
- herdr-projects   Board   Pinned  proj
- All 18   Coords 0   Needs 5   Working 9   Ready 1   To do 2   Done 1   Autos 0
+ herdr-projects  proj
+ All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
    ! #12    Max length for task titles                        R#1 PR#123456   1m
             The pull request's checks fail
    ✗ #13    Max length for task titles                                        1m
@@ -24,8 +24,8 @@
 ────────────────────────────────────────────────────────────────────────────────
   alt+o open this task's agent · space talk to the agent · ? all keys
 == the task beside it
- herdr-projects   Board   Pinned  proj
- All 18   Coords 0   Needs 5   Working 9   Ready 1   To do 2   Done 1   Autos 0
+ herdr-projects  proj
+ All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
    ✗ #13    Max length for task titles                                        1m
             Conflict with main
    ✗ #14    Max length for task titles                                        1m
@@ -81,7 +81,7 @@
    pgup pgdn    a page of tasks up or down (in the whole task: a page of its
                 text)
    tab          the next filter on top: all, coordinators, needs you, working,
-                ready, to do, done, automations
+                ready, to do, done, automations, pinned
    enter        send what is typed; else fold or unfold a heading
    space        talk to this row's agent, and back to the top row's coordinator
    esc          back, one step at a time (as a popup, the board closes on the
@@ -92,15 +92,15 @@
 
  ctrl: does something
    ctrl+l       yes: approve the merge, say yes, retry, take it as it is
- ↓ 48 more
+ ↓ 47 more
 
 ────────────────────────────────────────────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────────────────────────────────────────────
   ↑↓ pick a key · enter press it · esc close the menu
 == a draft
- herdr-projects   Board   Pinned  proj
- All 18   Coords 0   Needs 5   Working 9   Ready 1   To do 2   Done 1   Autos 0
+ herdr-projects  proj
+ All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
    ! #12    Max length for task titles                        R#1 PR#123456   1m
             The pull request's checks fail
    ✗ #13    Max length for task titles                                        1m

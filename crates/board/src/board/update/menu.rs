@@ -47,8 +47,6 @@ pub fn label(s: &State, k: K, r: Option<&Obj>) -> String {
         K::Side => format!("{} the side panel: this task, beside the list", if s.side { "hide" } else { "show" }),
         K::Panel => if s.full { "back to the list".into() } else { "show the whole task, full screen".into() },
         K::ArchiveView => format!("{} the archive", if s.archive_view { "hide" } else { "show" }),
-        K::PinnedView => super::pinned::tab_label(s),
-        K::ByRepo if super::pinned::on(s) => String::new(),
         K::ByRepo => if s.by_machine { "group by status".into() } else if s.by_repo { "group by machine: each machine's tasks under its name".into() } else { "group by repo: see which repo each task is in".into() },
         K::AllDone => if s.all_done { "hide the done tasks".into() } else { "show all done".into() },
         K::Scope => {

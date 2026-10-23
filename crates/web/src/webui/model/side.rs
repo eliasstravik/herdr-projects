@@ -96,7 +96,7 @@ pub fn side_of(s: &mut State, t: &Theme) -> Obj {
         // With something typed: what enter and tab do with it.
         "send": { "enter": pick("enter"), "delegate": pick("delegate"), "place": place },
         "menu": menu,
-        "flags": { "onTask": r.is_some(), "archive": s.archive_view, "pinned": s.pinned_view, "byRepo": s.by_repo && !crate::board::update::pinned::on(s), "byMachine": s.by_machine, "allDone": s.all_done, "scope": s.scope, "reply": s.reply, "open": open, "filter": s.filter },
+        "flags": { "onTask": r.is_some(), "archive": s.archive_view, "byRepo": s.by_repo, "byMachine": s.by_machine, "allDone": s.all_done, "scope": s.scope, "reply": s.reply, "open": open, "filter": s.filter },
         // The selected task has an agent whose pane the web UI can show: on this machine, or on another of its PCs.
         "canOpen": can_open, "go": s.web.go.clone().unwrap_or(Value::Null),
     }))

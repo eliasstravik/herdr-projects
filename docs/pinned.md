@@ -1,15 +1,15 @@
-# Pins and the Pinned tab
+# Pins and the Pinned filter
 
-**Pin what matters to you, and step outside everything else.** A task, a project or a whole machine can be pinned.
-Pinning moves nothing: the row stays where it always sorts and gets a small pin mark, `⚑`, after its name. The
-**Pinned** tab beside the board shows only what you pinned.
+**Pin what matters to you, and see only that when you want to.** A task, a project or a whole machine can be pinned.
+Pinning moves nothing: the row stays where it always sorts and gets a small pin mark, `⚑`, after its name. **Pinned**,
+the last filter on the filter row, shows only what you pinned, as `Needs you` shows only what needs you.
 
 ```
- herdr-projects   Board 3   Pinned   proj · PRJ
+ herdr-projects  proj · PRJ
+ vm-str │ All 299   Coordinators 7   Needs you 1   Working 5   Ready 0   To do 11   Done 283   Automations 2   Pinned 4
  ○ ▾ vm-str  2 projects · 4 tasks
    ○ ▾ gtm · GTM ⚑
      ? GTM-14  Pick the ICP                                       2m ago
-       Which segment first?
      ○ GTM-15  Write the first sequence                            1h ago
    ○ ▾ herdr-projects · HP
      ◐ HP-182  Pin machines and projects ⚑                ██░░ 40%  5m
@@ -27,27 +27,24 @@ Pinning moves nothing: the row stays where it always sorts and gets a small pin 
   `vm-b:web/7` for another machine's task. `pin` pins whatever it was, `unpin` unpins.
   `herdr-projects list --pinned` lists what is pinned on this machine: the machine, its projects, its tasks.
 - A pinned done task is never archived by `archive --done`. An archived task or project cannot be pinned; a pinned
-  project that is archived leaves the Pinned tab until it is restored.
+  project that is archived leaves the Pinned filter until it is restored.
 
-## The Pinned tab
+## The Pinned filter
 
-`Alt+I` (or a click on `Pinned` in the header) shows it, and back to the board. The board remembers which tab shows,
-also after it closes.
+`Pinned` is a filter like the others on the filter row, after `Automations`: `Tab` gets there, a click shows it, and
+the board keeps it shown as it keeps any filter, also after it closes.
 
-- **Only what is pinned:** a pinned machine with its projects and tasks under it, a pinned project with its tasks, a
-  pinned task alone. Each stands under its machine's and its project's rows, so it is clear where it lives, and
-  nothing is shown twice.
-- **Everything works as on the board:** the same marks and colours, what needs you in red, and every key: talk to an
-  agent, put one on a task, approve, stop, archive, a coordinator's row and its keys.
-- **Always grouped by machine and project**, with no filter row: `Alt+S` and `Tab` say so and change nothing. Its
-  folded headings are its own; the board's grouping, filter and folds are kept for when you go back.
+- **Only what is pinned, in its places:** a pinned task in its group, a pinned project with all its tasks, a pinned
+  machine with its projects and tasks. The board's grouping (`Alt+S`) and its folded headings stay as they are: by
+  repo a pinned project is its heading with its tasks under it (alone, `0 tasks`, when it has none); by status or by
+  machine its row stands above the tasks, as a project that needs you does under `Needs you`.
+- **Its count** is the rows it shows: the tasks, and the pinned machines' and projects' rows.
+- **Everything works as everywhere:** the same marks and colours, what needs you in red, and every key.
 - **Whose board** (`Alt+M`) counts here too: with every machine shown, every machine's pins.
-- **Done tasks fold away** as on the board, pinned ones too: one line counts them (`↓ 2 done`), and `Alt+D` shows
-  them.
+- **Done tasks fold away** as under `All`, pinned ones too: one line counts them (`↓ 2 done`), and `Alt+D` shows them.
 - **Nothing pinned:** one line says how to pin something.
-- **What needs you is never out of sight.** Pinning moves nothing, so all of it stays on the board. The tab that is
-  not shown says in red how many of its rows need you: `Board 3` while you look at the Pinned tab. On the web board
-  the pin button carries that count, and in the Pinned tab a red `3 need you on the board` takes you back.
+- **What needs you is never out of sight:** the filter row's `Needs you` and its red count stay on the row beside it.
+- **On the web board** it is the same filter, the last pill on the filter row.
 
 ## Where pins live
 
@@ -56,5 +53,6 @@ A task's pin is its own, kept with the task. A machine's and its projects' pins 
 after a restart too. Pinning another machine's project or the machine itself asks that machine to do it, as its
 tasks' pins are. A machine on an older version cannot: the board says to update it there.
 
-The code: `crates/board/src/board/update/pinned.rs` (the tab and the key), `crates/core/src/store/pins.rs`,
-`crates/flow/src/actions/pins.rs`, `crates/flow/src/remote/pins.rs` and `src/cli/pins.rs`.
+The code: `crates/board/src/board/update/pinned.rs` (the filter and the key), `crates/board/src/board/update/shows.rs`
+(the filter row), `crates/core/src/store/pins.rs`, `crates/flow/src/actions/pins.rs`, `crates/flow/src/remote/pins.rs`
+and `src/cli/pins.rs`.

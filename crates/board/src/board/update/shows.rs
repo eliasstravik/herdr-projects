@@ -1,8 +1,9 @@
-//! The filter row on top of the board: All · Coordinators · Needs you · Working · Ready · To do · Done · Automations,
-//! each with its count. Tab moves to the next, shift+tab back, a click picks one; the list then shows only the tasks of
+//! The filter row on top of the board: All · Coordinators · Needs you · Working · Ready · To do · Done · Automations
+//! · Pinned, each with its count. Tab moves to the next, shift+tab back, a click picks one; the list then shows only the tasks of
 //! that status. Coordinators and Automations are filters as the others are: Coordinators leaves the coordinators' own
 //! rows, which are the machines' rows and the projects', of those that run (started and not stopped, on autopilot, or
-//! failed), for the machine shown (the main Coordinator has none); Automations leaves the automations' rows, in the same places and grouping.
+//! failed), for the machine shown (the main Coordinator has none); Automations leaves the automations' rows, in the same places and grouping;
+//! Pinned leaves what is pinned, in its places and the board's grouping (pinned.rs).
 use super::heads::{machine_id, HEAD};
 use super::list::relist;
 use super::Effect;
@@ -11,27 +12,33 @@ use crate::board::state::{Row, State};
 use crate::json::*;
 use crate::shown::states::group_of;
 
-/// The filters, each with the status group it shows (None: every task, the coordinators, the automations).
-pub const SHOWS: [(&str, Option<&str>); 8] = [("All", None), ("Coordinators", None), ("Needs you", Some("needs you")), ("Working", Some("working")), ("Ready", Some("ready to approve")), ("To do", Some("to do")), ("Done", Some("done")), ("Automations", None)];
+/// The filters, each with the status group it shows (None: every task, the coordinators, the automations, what is pinned).
+pub const SHOWS: [(&str, Option<&str>); 9] = [("All", None), ("Coordinators", None), ("Needs you", Some("needs you")), ("Working", Some("working")), ("Ready", Some("ready to approve")), ("To do", Some("to do")), ("Done", Some("done")), ("Automations", None), ("Pinned", None)];
 pub const COORDS: usize = 1;
 pub const NEEDS: usize = 2;
 pub const AUTOS: usize = 7;
+pub const PINNED: usize = 8;
 
 /// The filter Coordinators is on (not in the archive, which holds tasks only).
 pub fn coords(s: &State) -> bool { s.show == COORDS && !s.archive_view }
 fn group(s: &State) -> Option<&'static str> { if s.archive_view { None } else { SHOWS.get(s.show).and_then(|x| x.1) } }
-/// A task stays in the list of this filter: every task, or those of its status.
-pub fn keeps_task(s: &State, r: &Obj) -> bool { s.archive_view || (s.show != COORDS && s.show != AUTOS && group(s).is_none_or(|g| group_of(r) == g)) }
+/// A task stays in the list of this filter: every task, those of its status, or what is pinned.
+pub fn keeps_task(s: &State, r: &Obj) -> bool {
+    if s.archive_view { return true; }
+    if s.show == PINNED { return super::pinned::keeps(s, r); }
+    s.show != COORDS && s.show != AUTOS && group(s).is_none_or(|g| group_of(r) == g)
+}
 /// Automations stand in the list under All and under Automations.
 pub fn keeps_all(s: &State) -> bool { s.show == 0 || s.show == AUTOS || s.archive_view }
 /// Done shows every done task, which the other filters hide.
 pub fn whole(s: &State) -> bool { group(s) == Some("done") }
-/// How many each filter holds, from the tasks in view (archived ones left out), the coordinators' rows and the
-/// automations' its filter shows.
+/// How many each filter holds, from the tasks in view (archived ones left out), the coordinators' rows, the
+/// automations' and the pinned rows its filter shows.
 pub fn counts(s: &State, items: &[std::sync::Arc<Obj>]) -> Vec<usize> {
     let live: Vec<&std::sync::Arc<Obj>> = items.iter().filter(|r| !r.b("archivedAt")).collect();
     SHOWS.iter().enumerate().map(|(n, (_, g))| match g { Some(g) => live.iter().filter(|r| group_of(r) == *g).count() + if n == NEEDS { needing(s) } else { 0 },
-        None if n == COORDS => coords_running(s), None if n == AUTOS => super::list::autos_shown(s, "").len(), None => live.len() }).collect()
+        None if n == COORDS => coords_running(s), None if n == AUTOS => super::list::autos_shown(s, "").len(),
+        None if n == PINNED => super::pinned::count(s, &live), None => live.len() }).collect()
 }
 /// Tab: the next filter; shift+tab the one before.
 pub fn step(s: &mut State, p: &Press, fx: &mut Vec<Effect>) {
@@ -78,6 +85,12 @@ pub fn needs_you(s: &State, id: &str) -> bool {
     if p.b("on") && ["needs you", "could not start"].contains(&p.s("state")) { return true; }
     let v = super::coords::look_of(s, &t).unwrap_or_default();
     !v.error.is_empty() || v.state == "blocked" || !v.asks.is_empty()
+}
+/// The projects' rows of the machine `host` that stand beside the tasks, though no task of theirs does: under Needs you
+/// those whose coordinators ask you, under Pinned the pinned ones (by repo, those have their own heading).
+pub fn beside(s: &State, host: &str) -> Vec<String> {
+    if s.archive_view { return vec![]; }
+    if s.show == NEEDS { projects_needing(s, host) } else if s.show == PINNED && !s.by_repo { super::pinned::projects_of(s, host) } else { vec![] }
 }
 /// The project rows of the machine `host` whose coordinators need you.
 pub fn projects_needing(s: &State, host: &str) -> Vec<String> { projects(s, host).into_iter().filter(|r| needs_you(s, &format!("{HEAD}repo\t{host}\t{r}"))).collect() }

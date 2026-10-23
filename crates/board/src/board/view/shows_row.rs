@@ -1,5 +1,5 @@
 //! The filter row under the header: `vm-str │ All 48   Coordinators 4   Needs you 3   Working 2   Ready 1   To do 12
-//! Done 30   Automations 2`, whose board first (where there is another machine: `All machines`, or one machine),
+//! Done 30   Automations 2   Pinned 3`, whose board first (where there is another machine: `All machines`, or one machine),
 //! the one shown lit, the others greyed with their counts (a count of tasks that need you in red). Where it has no
 //! room, the names are said shorter (then shortest), those with nothing in them go, and where that is still too long only the one
 //! shown stands, with the key that moves on. Where each is drawn is kept for a click (update/mouse.rs).
@@ -11,10 +11,10 @@ use crate::shown::ink::{Ink, Inked};
 
 /// What a click on the machine item says it is, among the filters' places.
 pub const MACHINE: usize = usize::MAX;
-pub const SHORT: [&str; 8] = ["All", "Coords", "Needs", "Working", "Ready", "To do", "Done", "Autos"];
-const TINY: [&str; 8] = ["All", "Co", "Need", "Work", "Rdy", "Todo", "Done", "Au"];
+pub const SHORT: [&str; 9] = ["All", "Coords", "Needs", "Working", "Ready", "To do", "Done", "Autos", "Pinned"];
+const TINY: [&str; 9] = ["All", "Co", "Need", "Work", "Rdy", "Todo", "Done", "Au", "Pin"];
 /// Each filter's own colour, the one its rows and marks have: lit, it is the highlight's.
-pub const INKS: [Ink; 8] = [Ink::Text, Ink::Accent, Ink::Red, Ink::Yellow, Ink::Green, Ink::Text, Ink::Text, Ink::Auto];
+pub const INKS: [Ink; 9] = [Ink::Text, Ink::Accent, Ink::Red, Ink::Yellow, Ink::Green, Ink::Text, Ink::Text, Ink::Auto, Ink::Text];
 /// The row, `w` cells wide, and where each filter landed: (first cell, last cell, which).
 pub fn shows_line(s: &State, _t: &Theme, w: usize) -> (Inked, Vec<(usize, usize, usize)>) {
     // `only`: 0 every filter, 1 those with something in them (and the one shown), 2 the one shown alone.

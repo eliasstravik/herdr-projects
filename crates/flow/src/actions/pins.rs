@@ -1,6 +1,6 @@
 //! Pinning this machine or one of its projects, and unpinning it: kept in the data folder (store/pins.rs) and sent with
 //! this machine's tasks to every board that asks, as a task's pin is. Another machine's is pinned there, through its
-//! door (remote/pins.rs). A pin moves nothing on the board: it puts a mark on the row and the row in the Pinned tab.
+//! door (remote/pins.rs). A pin moves nothing on the board: it puts a mark on the row, and the row under the Pinned filter.
 use super::archive_done::repo_named;
 use crate::err::Res;
 use crate::shown::words::repo_label;

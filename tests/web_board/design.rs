@@ -30,7 +30,7 @@ fn the_filter_row_counts_lights_the_one_shown_and_a_tap_shows_another() {
     let shows = s.at("list").at("shows");
     let items: Vec<(String, u64, bool, String)> = shows.arr("items").iter().map(|x| (x.t("name"), x.at("count").as_u64().unwrap(), x.b("lit"), x.t("color"))).collect();
     assert_eq!(items[0], ("All".into(), 3, true, "text".into()));
-    assert_eq!(items.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(), ["All", "Coordinators", "Needs you", "Working", "Ready", "To do", "Done", "Automations"]);
+    assert_eq!(items.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(), ["All", "Coordinators", "Needs you", "Working", "Ready", "To do", "Done", "Automations", "Pinned"]);
     assert_eq!((items[3].1, items[3].3.as_str(), items[5].1, items[2].3.as_str(), items[7].3.as_str()), (1, "yellow", 2, "red", "auto"));
     assert!(shows.at("machine").is_null(), "no other machine: no machine picker");
     // a tap on To do: only its tasks, To do lit, and the next page shows the same

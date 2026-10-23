@@ -28,18 +28,12 @@ function fit() {
   root.style.setProperty("--sw-left", root.style.left === "0" ? "0px" : root.style.left);
 }
 function note(text) { const n = part("note"); n.textContent = text || ""; n.hidden = !text; }
-// What the board shows beyond its plain view, each a chip whose × puts the plain view back: the archive, the Pinned
-// tab, a find, a grouping other than by status.
+// What the board shows beyond its plain view, each a chip whose × puts the plain view back: the archive, a find, a
+// grouping other than by status.
 function chips() {
   const f = snap.flags, out = [];
   const chip = (text, title, fn) => h("button.sw-chip", { type: "button", title, onclick: fn }, text, h("span.sw-chip-x", { "aria-hidden": "true" }, "×"));
   if (f.archive) out.push(chip("Archive", "Back to the board", () => press("archiveView")));
-  else if (f.pinned) {
-    out.push(chip("Pinned", "Back to the board", () => press("pinnedView")));
-    // What needs you on the board, which the Pinned tab does not show, is never out of sight (update/pinned.rs).
-    const n = snap.list.head.tabs?.board || 0;
-    if (n) out.push(h("button.sw-chip.sw-chip-needs", { type: "button", title: "Back to the board", onclick: () => press("pinnedView") }, `${n} need${n === 1 ? "s" : ""} you on the board`));
-  }
   if (f.filter) out.push(chip(`Find: ${f.filter}`, "Clear the filter", () => call("find", { text: "" })));
   if (f.byRepo || f.byMachine) out.push(chip(f.byRepo ? "By repo" : "By machine", "Group by status", () => call("group")));
   return out;
@@ -83,11 +77,6 @@ function draw() {
   where.replaceChildren(...[head.where, head.where && head.whereKey ? h("span.sw-repo-key", ` · ${head.whereKey}`) : null, head.session ? `${head.where ? " · " : ""}session ${head.session}` : null].filter(Boolean));
   const once = (key, value, fn) => { const text = JSON.stringify(value); if (drawn[key] !== text) { drawn[key] = text; fn(); } };
   once("chips", [snap.flags, snap.list.head], () => part("chips").replaceChildren(...chips()));
-  // The pin button: lit in the Pinned tab; a red count of what needs you in the tab not shown.
-  const tabs = snap.list.head.tabs || {}, other = tabs.pinned ? tabs.board : tabs.pinnedNeeds, pin = part("pinned"), count = part("pin-n");
-  pin.setAttribute("aria-pressed", String(!!snap.flags.pinned));
-  count.textContent = other ? String(other) : ""; count.hidden = !other;
-  pin.title = other ? `${tabs.pinned ? "Back to the board" : "Pinned"}: ${other} need${other === 1 ? "s" : ""} you there` : (tabs.pinned ? "Back to the board" : "Pinned: only what you pinned");
   once("shows", snap.list.shows, () => {
     const row = part("shows");
     row.hidden = !snap.list.shows; row.replaceChildren(...showsEl(snap.list.shows));
@@ -165,8 +154,6 @@ export function openBoard({ onClose }) {
       h("button.icon-button.sw-back", { type: "button", "aria-label": "Close the board", title: "Close the board", onclick: () => (chat.full() ? chat.full(false) : closing?.()) }, icon("back")),
       h("h2.sw-name", "Board"), h("span.sw-where"),
       h("span.sw-head-space"),
-      // The Pinned tab (update/pinned.rs): only what you pinned; again, back to the board.
-      h("button.icon-button.sw-pinned", { type: "button", "aria-label": "Pinned", title: "Pinned: only what you pinned", "aria-pressed": "false", onclick: () => press("pinnedView") }, icon("pin"), h("span.sw-pin-n", { hidden: true })),
       h("button.icon-button", { type: "button", "aria-label": "Find tasks", title: "Find tasks", onclick: () => { finding = !finding; draw(); if (finding) find.focus(); else if (snap?.flags.filter) { find.value = ""; call("find", { text: "" }); } } }, icon("find")),
       h("button.icon-button", { type: "button", "aria-label": "More", title: "More", "aria-haspopup": "dialog", onclick: () => { menuOpen = true; draw(); } }, icon("more"))),
     // One row; the wheel scrolls it sideways where it does not fit (a mouse has no sideways swipe).

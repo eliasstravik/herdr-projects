@@ -38,8 +38,8 @@ fn tab_goes_round_the_filters_lit_in_their_own_colours_and_the_list_shows_only_t
     for n in 0..7 { let id = w.add(&format!("Done {n}")); sw::store::tasks::update(&id, |t| { t.put("stage", "done"); Ok(sw::store::tasks::Change::Write) }).unwrap(); }
     let mut s = open(&w.root, 40); s.s.side = false;
     let l = s.screen(120);
-    assert_eq!(l[0], " herdr-projects   Board   Pinned  proj · PRJ");
-    assert!(regex::Regex::new(r"^ +All 9 +Coordinators 0   Needs you 1   Working 0   Ready 0   To do 1   Done 7   Automations 0$").unwrap().is_match(&l[1]), "{l:?}");
+    assert_eq!(l[0], " herdr-projects  proj · PRJ");
+    assert!(regex::Regex::new(r"^ +All 9 +Coordinators 0   Needs you 1   Working 0   Ready 0   To do 1   Done 7   Automations 0   Pinned 0$").unwrap().is_match(&l[1]), "{l:?}");
     assert!(!l.iter().any(|x| x.starts_with(" ") && x.contains("──")), "no heading has a rule: {l:?}");
     // All is lit in the plain text colour, reversed
     assert_eq!(piece(&mut s, "All 9"), (Ink::Text, true));
@@ -61,8 +61,11 @@ fn tab_goes_round_the_filters_lit_in_their_own_colours_and_the_list_shows_only_t
     s.press(&["tab"]); assert_eq!(tasks_shown(&s).len(), 7, "{:?}", tasks_shown(&s));
     s.press(&["tab"]); assert_eq!(s.s.show, 7); assert_eq!(piece(&mut s, "Automations 0"), (Ink::Auto, true));
     assert!(tasks_shown(&s).is_empty());
+    // Pinned, the last: nothing pinned here
+    s.press(&["tab"]); assert_eq!(s.s.show, 8); assert_eq!(piece(&mut s, "Pinned 0"), (Ink::Text, true));
+    assert!(tasks_shown(&s).is_empty());
     // shift+tab: back; round again
-    s.press(&["shift+tab"]); assert_eq!(s.s.show, 6);
+    s.press(&["shift+tab"]); assert_eq!(s.s.show, 7);
     s.press(&["tab", "tab"]); assert_eq!(s.s.show, 0);
     // a click on a filter picks it
     s.lines();
@@ -150,8 +153,8 @@ fn automations_is_a_filter_with_only_the_automations_rows_and_its_count() {
     w.add("A task");
     l::add(Add { name: "Nightly audit", prompt: "Audit.", trigger: Some(sw::automations::triggers::parse_schedule("daily 03:00").unwrap()), repo: "", folder: &w.root, settings: Obj::new(), research: Some(true) }).unwrap();
     let mut s = open(&w.root, 40); s.s.side = false;
-    assert!(s.screen(140)[1].ends_with("Automations 1"), "{:?}", s.screen(140));
-    s.press(&["shift+tab"]); assert_eq!(s.s.show, 7);
+    assert!(s.screen(140)[1].ends_with("Automations 1   Pinned 0"), "{:?}", s.screen(140));
+    s.press(&["shift+tab", "shift+tab"]); assert_eq!(s.s.show, 7);
     assert!(tasks_shown(&s).is_empty() && s.s.rows.iter().any(|r| matches!(r, Row::Auto(_))), "{}", s.text());
     assert!(s.text().contains("Nightly audit") && !s.text().contains("A task"), "{}", s.text());
 }

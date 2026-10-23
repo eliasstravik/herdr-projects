@@ -9,7 +9,7 @@ use sw::board::keys::key_name;
 use sw::json::*;
 use sw::shown::ink::{Ink, Inked};
 
-/// Pins and the Pinned tab: a pin moves nothing; the tab shows only what is pinned.
+/// Pins and the Pinned filter: a pin moves nothing; the filter shows only what is pinned.
 mod pinned;
 
 fn has(text: &str, re: &str) -> bool { regex::Regex::new(re).unwrap().is_match(text) }
@@ -31,7 +31,7 @@ fn one_header_line_five_groups_a_mark_for_each_state_and_the_task_panel_from_90_
     let mut s = open(&w.root, 34);
     s.s.sel = b.clone(); s.load(); // it opens on the top row: the task is selected for its panel
     let text = s.screen(120).join("\n");
-    assert!(has(&text, r"^ herdr-projects   Board   Pinned  proj · PRJ +│ *\n All 2   (Coords \d+   )?Working 1   To do 1 +│[^\n]*\n ▾ [^\n]*│"), "the top row right under the filter row: {text}");
+    assert!(has(&text, r"^ herdr-projects  proj · PRJ +│ *\n All 2   (Coords \d+   )?Working 1   To do 1 +│[^\n]*\n ▾ [^\n]*│"), "the top row right under the filter row: {text}");
     let inks = s.inked(120);
     assert_eq!(ink_of(&inks, "◐"), Some((Ink::Yellow, false)), "a working task's mark is the working colour");
     assert_eq!(ink_of(&inks, "My own task"), Some((Ink::Plain, true)), "its title plain, and bold while it lives");
@@ -116,7 +116,7 @@ fn work_whose_review_failed_stands_under_needs_you_and_its_yes_is_merge_anyway()
     let t = s.text();
     assert!(has(&t, r"\n   ▾ needs you *\n[ ▌]  ! PRJ-1 +Add an undo for clear +R#1 +\d+s ago *\n[ ▌] {10}Review failed · 1 critical, 1 major *\n"), "{t}");
     assert!(has(&t, r"\n   ▾ ready to approve *\n[ ▌]  ◆ PRJ-2 +Max length for titles +R#1 +\d+s ago *\n[ ▌] {10}Pass *\n"), "{t}");
-    assert!(t.starts_with(" herdr-projects   Board   Pinned  proj · PRJ") && has(&t, r"\n All 2   Coordinators \d+   Needs you 1   Working 0   Ready 1   "), "{t}");
+    assert!(t.starts_with(" herdr-projects  proj · PRJ") && has(&t, r"\n All 2   Coordinators \d+   Needs you 1   Working 0   Ready 1   "), "{t}");
     s.s.sel = bad.clone(); s.load();
     assert!(s.text().contains(&format!("  {} send the review to this task's agent · {} merge this task anyway · ", key_name("sendBack"), key_name("yes"))), "{}", s.text());
     s.press(&["ctrl+l"]);
@@ -170,7 +170,7 @@ fn the_list_says_what_it_hides_the_header_where_you_are_and_an_action_what_it_di
     let mut s = open(&w.root, 24); s.s.side = false;
     s.s.sel = s.s.steps.iter().find(|x| !x.starts_with("head:")).cloned().unwrap(); s.load(); // it opens on the top row: the first task
     let lines = s.screen(100);
-    assert!(has(&lines[0], r"^ herdr-projects   Board   Pinned  proj · PRJ *$")); assert!(has(&lines[1], r"^ All 40   Coordinators \d+   Needs you 0   Working 0   Ready 0   To do 40   Done 0   Automations 0 *$"), "{}", lines[1]);
+    assert!(has(&lines[0], r"^ herdr-projects  proj · PRJ *$")); assert!(has(&lines[1], r"^ All 40   Coords \d+   Needs 0   Working 0   Ready 0   To do 40   Done 0   Autos 0   Pinned 0 *$"), "{}", lines[1]);
     let end = lines.iter().position(|l| l.starts_with('─')).unwrap(); // the box's top edge
     let list = &lines[2..end];
     let shown = list.iter().filter(|l| l.contains("Task number")).count();

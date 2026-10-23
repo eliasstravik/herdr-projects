@@ -165,7 +165,7 @@ fn the_popup_opens_on_the_task_of_the_pane_you_were_in_and_words_left_in_its_box
     back.press(&["ctrl+z"]);
     assert_eq!(back.s.value(), "Tidy the greeting"); assert_eq!(back.s.ctx.cwd, root);
     back.load(); assert_eq!(back.s.data.repo, "proj");
-    assert!(flat(&back.text()).contains("What you typed was for proj, so the board is there now."), "{}", back.text()); assert!(back.text().contains("herdr-projects   Board   Pinned  proj · "), "{}", back.text());
+    assert!(flat(&back.text()).contains("What you typed was for proj, so the board is there now."), "{}", back.text()); assert!(back.text().contains("herdr-projects  proj · "), "{}", back.text());
     back.press(&["enter"]);
     let all = sw::store::tasks::list(Default::default());
     assert_eq!(all.iter().find(|t| t.s("title") == "Tidy the greeting").unwrap().s("root"), root); assert!(!all.iter().any(|t| t.s("root") == other.display().to_string()));

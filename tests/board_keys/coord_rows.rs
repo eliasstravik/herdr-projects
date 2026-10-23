@@ -96,7 +96,7 @@ fn a_coordinator_that_asks_you_stands_under_needs_you_and_is_counted_and_a_coord
     assert!(regex::Regex::new(r"\n[ ▌]  ◐ ▸ otherbox  0 tasks +2m *\n").unwrap().is_match(&l) && !l.contains("Cleaning old worktrees"), "{l}");
     s.press(&["tab", "tab"]); assert_eq!(s.s.show, 2);
     let l = s.screen(120);
-    assert!(regex::Regex::new(r"Needs you 1 ").unwrap().is_match(&l[1]), "{:?}", l);
+    assert!(regex::Regex::new(r"Needs 1 ").unwrap().is_match(&l[1]), "{:?}", l);
     let t = l.join("\n");
     assert!(regex::Regex::new(r"\n[ ▌]    \? ▾ gtm +1m ago *\n").unwrap().is_match(&t) && !t.contains("Two PRs wait on CI"), "its question is in the chat, not under its row: {t}");
     let q = s.inked(120).iter().flat_map(|x| x.0.clone()).find(|p| p.t == "?").unwrap();
@@ -124,7 +124,7 @@ fn machine_and_project_rows_mark_their_coordinators_state_with_a_tasks_marks_or_
     assert!(row("quiet").contains("○ ▾ quiet"), "idle: a task's idle mark: {l:#?}");
     // only those that run: a stopped or never started one is not there, nor in the count (this machine's: none run)
     let text = l.join("\n");
-    assert!(!heads(&s).iter().any(|h| h == "stopped" || h == "never") && text.contains("Coordinators 5 "), "{text}");
+    assert!(!heads(&s).iter().any(|h| h == "stopped" || h == "never") && text.contains("Coords 5 "), "{text}");
     assert!(!text.contains("◈") && !text.contains("◎") && !s.s.rows.iter().any(|r| matches!(r, Row::Head { name, .. } if name == "Coordinator")), "{text}");
     let red = s.inked(120).iter().flat_map(|x| x.0.clone()).filter(|p| p.t == "!" || p.t == "✗").all(|p| p.c == Ink::Red && p.bold);
     assert!(red, "what needs you and what went wrong: red, bold");

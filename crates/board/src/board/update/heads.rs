@@ -46,12 +46,12 @@ pub fn label(s: &State, host: &str) -> String {
 pub fn folded(s: &State, id: &str) -> bool { filter_now(s).is_empty() && s.folded.contains(id) }
 /// Whether a machine with nothing in view has its heading: not while a find, the filter row or the archive narrows the
 /// list.
-pub fn empty_shown(s: &State) -> bool { filter_now(s).is_empty() && !s.archive_view && s.show == 0 && !super::pinned::on(s) }
+pub fn empty_shown(s: &State) -> bool { filter_now(s).is_empty() && !s.archive_view && s.show == 0 }
 /// Whether the repo `name` of the machine `host` has its heading with nothing in view: by repo, on this machine, for a
 /// repo used lately (data.rs: used_lately), and not while a filter or the archive narrows the list. It shows folded
 /// (`0 tasks`), so that its project coordinator is still a space away.
 pub fn empty_repo(s: &State, host: &str, name: &str) -> bool {
-    if super::pinned::on(s) { return super::pinned::empty_repo(s, host, name); } // the Pinned tab's own (pinned.rs)
+    if super::pinned::on(s) { return super::pinned::empty_repo(s, host, name); } // Pinned's own (pinned.rs)
     s.by_repo && host.is_empty() && empty_shown(s) && s.data.lately.iter().any(|r| r == name)
 }
 /// One machine's part of the list: its groups, and whether it has a row of its own (all but in the archive: the one
@@ -69,7 +69,7 @@ pub fn parts(s: &State, groups: &[(String, Vec<Rec>)]) -> Vec<Part> {
     if empty_shown(s) { for m in super::remotes::others(s) { if m.ok && !hosts.contains(&m.machine.label) { hosts.push(m.machine.label.clone()); } } }
     // Under Needs you, a machine whose coordinators ask you, though no task of its does.
     for h in super::shows::hosts(s) { if !hosts.contains(&h) && super::shows::host_needs(s, &h) { hosts.push(h); } }
-    // In the Pinned tab, a pinned machine, or one with a pinned project, though none of its tasks shows.
+    // Under Pinned, a pinned machine, or one with a pinned project, though none of its tasks shows.
     for h in super::pinned::hosts(s) { if !hosts.contains(&h) { hosts.push(h); } }
     // In the archive, a machine with an archived project, though none of its tasks shows.
     for (h, _) in archived_heads(s) { if !hosts.contains(&h) { hosts.push(h); } }

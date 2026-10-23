@@ -35,10 +35,6 @@ pub struct Away { pub text: String, pub to: String, pub cwd: String, pub warned:
 /// What the archive view put aside, to come back to.
 #[derive(Clone, Debug, Default)]
 pub struct Back { pub sel: String, pub top: usize, pub filter: String, pub mode: Option<Mode>, pub value: String }
-/// What the tab not shown had (update/pinned.rs): its grouping, its filter, its folded headings and its selection,
-/// to come back to. The Pinned tab is always by machine and project, with no filter.
-#[derive(Clone, Debug, Default)]
-pub struct TabBack { pub by_repo: bool, pub by_machine: bool, pub show: usize, pub folded: std::collections::BTreeSet<String>, pub sel: String }
 /// Whose settings the page shows: a task's, an automation's, yours (what every task starts from, as `set` changes
 /// them), your entry for a repo (`set --repo`), or a coordinator's (its key, "main", "machine", "project:<repo>"),
 /// with what its heading's page showed before ("you", "repo:<repo>", "" nothing more).
@@ -121,9 +117,6 @@ pub struct State {
     pub selection_rows: Vec<SelRow>, pub selection_layout: String,
     pub sel: String, pub top: usize, pub stick: String, pub top_free: bool,
     pub all_done: bool, pub archive_view: bool, pub archive_back: Option<Back>, pub archive_undo: Option<Obj>,
-    /// The Pinned tab shows (update/pinned.rs), and what the other tab had; how many rows need you in each tab (the
-    /// board's, the Pinned tab's), for the tab names in the header.
-    pub pinned_view: bool, pub tab_back: TabBack, pub tab_needs: (usize, usize),
     /// Who the chat talks to: the selected task's agent after space (`reply`), the Coordinator otherwise.
     pub reply: bool, pub reply_id: String,
     pub side: bool, pub full: bool, pub panel_top: usize, pub panel_height: usize, pub panel_length: usize, pub width: usize,
@@ -179,7 +172,7 @@ impl State {
         State {
             ctx, web: Web::default(), data, remotes: BTreeMap::new(), listed_at: None, seeking: false, order: vec![], sidebar_from: None, own_order: None, sidebar_names: BTreeMap::new(), items: vec![], rows: vec![], grouped: vec![], whole: false, autos: vec![], jobs: vec![], steps: vec![],
             selection_rows: vec![], selection_layout: String::new(), sel: String::new(), top: 0, stick: String::new(), top_free: false,
-            all_done: false, archive_view: false, archive_back: None, archive_undo: None, pinned_view: false, tab_back: TabBack::default(), tab_needs: (0, 0), reply: false, reply_id: String::new(),
+            all_done: false, archive_view: false, archive_back: None, archive_undo: None, reply: false, reply_id: String::new(),
             side: false, full: false, panel_top: 0, panel_height: 1, panel_length: 0, width: 120,
             mode: Mode::New, menu: None, ask: None, by_repo: false, draft_away: None, auto_open: false, auto_at: -1, folded: Default::default(), scope: String::new(), show: 0, show_n: vec![], show_hits: vec![], by_machine: false,
             filter: String::new(), msg: String::new(), msg_kind: Ink::Muted, chat_open: true, chat_folded: false, just_sent: HashMap::new(), chat_at: None, chat_fit: None, chat_rows: None,

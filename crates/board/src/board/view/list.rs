@@ -40,22 +40,16 @@ pub fn head_lines(s: &mut State, t: &Theme, w: usize, h: usize) -> Vec<Inked> {
     let rest = rest.join(" · ");
     // The board's name gives way before whose tasks these are; names too long for the line go on to the next, whole.
     let name = Inked::plain(" ").add(Inked::plain("herdr-projects").bold()).add(Inked::plain("  "));
-    // The tabs after it, Board and Pinned (tabs.rs): the name gives way to them too.
-    let (tabs, tab_hits) = super::tabs::tabs(s);
-    let lead = if (!scope.is_empty() && name.width() + crate::text::width(&scope) > w) || name.width() + tabs.width() > w { Inked::plain(" ") } else { name };
+    let lead = if !scope.is_empty() && name.width() + crate::text::width(&scope) > w { Inked::plain(" ") } else { name };
     let named: Vec<Inked> = if scope.is_empty() { vec![Inked::new()] } else { Inked::of(scope.clone(), Ink::Accent).wrap(w.saturating_sub(lead.width()).max(4)) };
-    let at = lead.width();
-    let tab_hits: Vec<(usize, usize, usize, usize)> = tab_hits.into_iter().map(|(a, b, n)| (0, at + a, at + b, n)).filter(|h| h.2 <= w).collect();
-    let first = lead.add(tabs.clone()).add(Inked::plain(if tabs.is_empty() { "" } else { " " })).add(named[0].clone());
+    let first = lead.add(named[0].clone());
     let left = w as i64 - first.width() as i64 - if scope.is_empty() { 0 } else { 3 };
     let more: Vec<Inked> = named[1..].iter().map(|l| Inked::plain(" ").add(l.clone())).collect();
     let tail = if !rest.is_empty() && more.is_empty() && left >= 4 { Inked::of(format!("{}{}", if scope.is_empty() { "" } else { " · " }, crate::text::cut(&rest, left as usize)), Ink::Muted) } else { Inked::new() };
     let mut head = vec![first.add(tail)];
     head.extend(more);
     // In a window too short for it, the filter row gives way before the list's rows do.
-    // The Pinned tab has no filter row: it shows all that is pinned.
-    if !s.archive_view && !s.pinned_view && h >= 6 { let (row, hits) = super::shows_row::shows_line(s, t, w); let y = head.len(); s.show_hits = hits.into_iter().map(|(a, b, n)| (y, a, b, n)).collect(); head.push(row); } else { s.show_hits.clear(); }
-    s.show_hits.extend(tab_hits);
+    if !s.archive_view && h >= 6 { let (row, hits) = super::shows_row::shows_line(s, t, w); let y = head.len(); s.show_hits = hits.into_iter().map(|(a, b, n)| (y, a, b, n)).collect(); head.push(row); } else { s.show_hits.clear(); }
     let f = (if s.mode == Mode::Find { s.value() } else { s.filter.clone() }).trim().to_string();
     if f.is_empty() { return head; }
     let found: usize = s.grouped.iter().map(|(_, r)| r.len()).sum();
@@ -121,21 +115,16 @@ pub fn heading_words(s: &State, t: &Theme, rows: &[Row], at: usize) -> (Inked, O
 fn top_says(s: &State) -> String {
     let n = |k: usize, what: &str| format!("{k} {what}{}", if k == 1 { "" } else { "s" });
     let tasks = s.show_n.first().copied().unwrap_or(0);
-    let pinned = crate::board::update::pinned::on(s);
-    // In the Pinned tab, what is pinned: the machines and projects it shows (update/pinned.rs).
-    if s.scope == "*" && pinned { let mut h: Vec<String> = s.items.iter().map(|r| r.t("host")).chain(crate::board::update::pinned::hosts(s)).collect(); h.sort(); h.dedup(); return format!("{} · {}", n(h.len(), "machine"), n(tasks, "task")); }
     if s.scope == "*" { return format!("{} · {}", n(crate::board::update::shows::hosts(s).len(), "machine"), n(tasks, "task")); }
-    let items = if pinned { &s.items } else if s.scope.is_empty() { &s.data.items } else { match s.remotes.get(&s.scope) { Some(m) => &m.items, None => return n(tasks, "task") } };
-    let names = if pinned { crate::board::update::pinned::names(s) } else { vec![] };
+    let items = if s.scope.is_empty() { &s.data.items } else { match s.remotes.get(&s.scope) { Some(m) => &m.items, None => return n(tasks, "task") } };
     let mut repos: Vec<&str> = items.iter().filter(|r| !r.b("archivedAt")).map(|r| (if r.b("rid") { r.s("rid") } else { r.s("id") }).split('/').next().unwrap_or("")).collect();
-    repos.extend(names.iter().map(|r| r.as_str()));
     repos.sort(); repos.dedup();
     format!("{} · {}", n(repos.len(), "project"), n(tasks, "task"))
 }
 /// What an empty list says: nothing matches what is typed, nothing archived, nothing yet.
 fn none_lines(s: &State, width: usize) -> Vec<Inked> {
     let typed = (if s.mode == Mode::Find { s.value() } else { s.filter.clone() }).trim().to_string();
-    let none_text = if !s.filter.is_empty() || s.mode == Mode::Find { if typed.is_empty() { "Type to filter.".to_string() } else { format!("Nothing matches \"{typed}\".") } } else if s.archive_view { "No archived tasks.".into() } else if s.pinned_view { crate::board::update::pinned::empty_says() } else { "Nothing here yet. Type what needs doing.".into() };
+    let none_text = if !s.filter.is_empty() || s.mode == Mode::Find { if typed.is_empty() { "Type to filter.".to_string() } else { format!("Nothing matches \"{typed}\".") } } else if s.archive_view { "No archived tasks.".into() } else if crate::board::update::pinned::on(s) { crate::board::update::pinned::empty_says() } else { "Nothing here yet. Type what needs doing.".into() };
     Inked::of(none_text, Ink::Muted).wrap(width.saturating_sub(2).max(8)).into_iter().map(|l| Inked::plain(" ").add(l)).collect()
 }
 struct L { text: Inked, sel: bool, head: bool, n: usize, rest: usize, id: String, auto: bool }

@@ -33,7 +33,7 @@ fn a_yes_says_nothing_under_the_chat_its_row_says_it_and_the_menu_names_every_ke
     // the ? menu: every key it has, with its line
     s.s.sel = "proj/2".into(); s.load(); s.rows = 60; s.press(&["?"]);
     let text = s.text();
-    for line in [format!("{} +send it back: tell the agent to fix it, or to continue", k("sendBack")), format!("{} +pin this task: a mark on its row, and in the Pinned tab", k("pin")), format!("{} +undo", k("undo")),
+    for line in [format!("{} +send it back: tell the agent to fix it, or to continue", k("sendBack")), format!("{} +pin this task: a mark on its row, and under Pinned", k("pin")), format!("{} +undo", k("undo")),
         format!("{} +find: show only the tasks that match", k("find")), format!("{} +twice: close the board", k("close")), format!("{} +hide the side panel", k("side")),
         format!("{} +show the whole task, full screen", k("panel")), format!("{} +show the archive", k("archiveView")), format!("{} +group by repo", k("byRepo")), format!("{} +show all done", k("allDone")), "65% 2m left".into()] {
         assert!(has(&text, &line), "{line}:\n{text}");

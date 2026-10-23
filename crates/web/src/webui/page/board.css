@@ -46,9 +46,6 @@
 .sw-head-space { flex: 1; }
 .sw-board .icon-button svg, .sw-float svg { width: var(--icon-size, 18px); height: var(--icon-size, 18px); }
 .sw-head .icon-button { font-size: var(--fs-lg, 16px); }
-.sw-head .sw-pinned[aria-pressed="true"] { color: var(--accent, #f0a830); } .sw-head .sw-pinned { position: relative; }
-.sw-pin-n { position: absolute; top: -2px; right: -6px; min-width: 15px; padding: 0 3px; border-radius: var(--radius-pill, 999px); background: var(--sw-red); color: var(--sw-bg, #111); font-size: 10px; font-weight: 600; line-height: 15px; text-align: center; }
-.sw-chip.sw-chip-needs { color: var(--sw-red); border-color: color-mix(in srgb, var(--sw-red) 45%, transparent); }
 .sw-board [hidden] { display: none !important; }
 .sw-find-row { flex: none; padding: var(--space-2, 8px) var(--space-3, 12px); border-bottom: var(--hairline, 1px) solid var(--sw-line); background: var(--sw-panel); }
 .sw-find { width: 100%; height: var(--touch-target, 40px); padding: 0 var(--space-3, 12px); border: var(--hairline, 1px) solid var(--sw-line); border-radius: var(--radius-md, 8px); background: var(--bg-input, #1c1916); color: var(--sw-text); font: inherit; font-size: var(--fs-input, 16px); }

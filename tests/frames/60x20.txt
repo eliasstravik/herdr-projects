@@ -1,5 +1,5 @@
 == the list
- herdr-projects   Board   Pinned  proj
+ herdr-projects  proj
  All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
    ▾ working
    ◐ #2     Max length for task titles
@@ -20,7 +20,7 @@
 ────────────────────────────────────────────────────────────
   alt+o open this task's agent · ? all keys
 == the task beside it
- herdr-projects   Board   Pinned  proj
+ herdr-projects  proj
  All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
    ▾ working
    ◐ #2     Max length for task titles
@@ -71,19 +71,19 @@
                 task: a page of its text)
    tab          the next filter on top: all, coordinators,
                 needs you, working, ready, to do, done,
-                automations
+                automations, pinned
    enter        send what is typed; else fold or unfold a
                 heading
    space        talk to this row's agent, and back to the
                 top row's coordinator
- ↓ 69 more
+ ↓ 68 more
 
 ────────────────────────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────────────────────────
   ↑↓ pick a key · enter press it · esc close the menu
 == a draft
- herdr-projects   Board   Pinned  proj
+ herdr-projects  proj
  All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
    ▾ working
    ◐ #2     Max length for task titles
