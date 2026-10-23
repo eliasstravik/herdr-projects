@@ -100,6 +100,8 @@ fn a_call_on_is_one_row_with_its_way_to_hang_up_and_a_call_over_leaves_only_a_li
 
 #[test]
 fn the_policies_let_a_call_reach_elevenlabs_and_nothing_else() {
+    // A board of its own, with calls on: never the one the test before it left (voice.calls off widens nothing).
+    let _w = crate::common::world();
     let web = "default-src 'self'; script-src 'self'; connect-src 'self'; media-src 'self'; frame-ancestors 'none'";
     let wide = widen(web);
     assert_eq!(wide, format!("default-src 'self'; script-src 'self'; connect-src 'self' {HOSTS}; media-src 'self'; frame-ancestors 'none'"));
