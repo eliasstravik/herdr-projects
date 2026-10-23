@@ -1,6 +1,6 @@
 //! A live task's row of two lines on a wide screen: which rows are, what the second line says (and says while there are
 //! no words yet), where it starts beside another machine's name; the highlight on both lines, the arrow keys going task
-//! by task, scrolling by whole rows, and the done rows giving way in a list taller than its room.
+//! by task, scrolling by whole rows, and the done rows folded to the one line that counts them.
 use regex::Regex;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -139,9 +139,9 @@ fn the_highlight_covers_both_lines_of_the_selected_row_and_the_arrow_keys_go_tas
     step(&mut s, 1); assert_eq!(s.sel, "p/2", "one press, one task: never onto a row's second line");
     let l: Vec<String> = lit(&mut s, 80).iter().map(|x| x.chars().take(25).collect::<String>().trim_end().to_string()).collect();
     assert_eq!(l, ["▌  ◑ #2 Under review", "▌       Running the tests"]);
-    step(&mut s, 1); assert_eq!(s.sel, "p/8");
-    assert_eq!(lit(&mut s, 80).len(), 1, "a done row is one line");
-    step(&mut s, -1); step(&mut s, -1); step(&mut s, -1); assert_eq!(s.sel, "p/1");
+    s.sel = "p/8".into(); s.rows = fold_rows(&mut s);
+    assert_eq!(lit(&mut s, 80).len(), 1, "a done row is one line (selected, it shows)");
+    s.sel = "p/2".into(); step(&mut s, -1); step(&mut s, -1); assert_eq!(s.sel, "p/1");
 }
 
 #[test]
@@ -173,28 +173,23 @@ fn the_list_scrolls_by_whole_rows_no_row_is_ever_shown_half_and_the_selected_one
 }
 
 #[test]
-fn a_list_taller_than_its_room_shows_fewer_done_rows_first_down_to_the_newest_one_before_it_scrolls() {
+fn a_list_taller_than_its_room_shows_no_done_row_only_the_line_that_counts_them_before_it_scrolls() {
     let all: Vec<Rec> = (1..=3).map(|n| work(json!({ "id": format!("p/{n}"), "title": format!("Working {n}"), "msg": "Busy." })))
         .chain((0..8).map(|n| done(json!({ "id": format!("p/{}", n + 10), "title": format!("Finished {}", n + 1), "at": AT - n * 60000 }))))
         .chain(std::iter::once(todo(json!({ "id": "p/30", "title": "Later" })))).collect();
     let mut s = board(&all, "p/1", "");
-    let look = |s: &mut State, h: usize| { let lines: Vec<String> = list(s, 60, h, SCREEN).iter().map(|l| l.trim_end().to_string()).collect(); let d = lines.iter().filter(|l| l.contains("Finished")).count(); let note = lines.iter().find(|l| l.contains("more")).cloned(); (lines, d, note) };
-    let note = |n: usize| Some(format!("     ↓ {n} more done ({} shows them)", key_name("allDone")));
+    let look = |s: &mut State, h: usize| { let lines: Vec<String> = list(s, 60, h, SCREEN).iter().map(|l| l.trim_end().to_string()).collect(); let d = lines.iter().filter(|l| l.contains("Finished")).count(); let note = lines.iter().find(|l| l.contains(" done (")).cloned(); (lines, d, note) };
+    let note = Some(format!("     ↓ 8 done ({} shows them)", key_name("allDone")));
     let done_rows = |s: &State| s.rows.iter().filter(|r| matches!(r, Row::Rec(o) if o.s("state") == "done")).count();
-    // Room for all of it: the usual fold, the latest five. The top row 1, working 1+6, done 1+5+1, to do 1+1 = 17 lines.
-    let (_, d, n) = look(&mut s, 30); assert_eq!((d, n), (5, note(3)));
-    assert_eq!(look(&mut s, 17).1, 5);
-    // Each line short takes one done row away, and the note counts it.
-    let (_, d, n) = look(&mut s, 16); assert_eq!((d, n), (4, note(4)));
-    let (_, d, n) = look(&mut s, 14); assert_eq!((d, n), (2, note(6)));
-    for h in [16, 15, 14, 13] { let (lines, _, _) = look(&mut s, h); assert!(lines.iter().any(|l| l.contains("Working 3")) && lines.iter().any(|l| l.contains("Later")), "everything else is in view at {h}"); assert_eq!(s.top, 0); }
-    // The newest one always stays; under that the list scrolls, as it always did.
-    let (_, d, n) = look(&mut s, 13); assert_eq!((d, n), (1, note(7)));
-    assert_eq!(done_rows(&s), 1);
-    assert_eq!(s.rows.iter().find_map(|r| if let Row::Rec(o) = r { (o.s("state") == "done").then(|| o.t("id")) } else { None }), Some("p/10".to_string()));
-    look(&mut s, 8); assert_eq!(done_rows(&s), 1);
-    // More room brings them back; the selected task is never folded away; all done, or a search, folds nothing.
-    assert_eq!(look(&mut s, 30).1, 5);
-    s.sel = "p/16".into(); s.rows = fold_rows(&mut s); assert!(look(&mut s, 13).0.iter().any(|l| l.contains("Finished 7")));
+    // Whatever the room: no done row, one line that counts them. The top row 1, working 1+6, done 1+1, to do 1+1 = 12 lines.
+    for h in [30, 12] { let (lines, d, n) = look(&mut s, h); assert_eq!((d, n), (0, note.clone()), "at {h}"); assert!(lines.iter().any(|l| l.contains("Working 3")) && lines.iter().any(|l| l.contains("Later")), "everything else is in view at {h}"); assert_eq!(s.top, 0); }
+    look(&mut s, 8); assert_eq!(done_rows(&s), 0);
+    // A selected done task folds away too, and the selection goes to its heading; pinned, it is counted with them.
+    s.sel = "p/16".into(); s.rows = fold_rows(&mut s); assert!(!look(&mut s, 13).0.iter().any(|l| l.contains("Finished 7")));
+    assert_eq!(s.sel, "head:status\t\tdone");
+    // While you talk to its agent it stays, and is not counted. All done, or a search, folds nothing.
+    s.sel = "p/16".into(); s.reply = true; s.reply_id = "p/16".into(); s.rows = fold_rows(&mut s);
+    assert!(look(&mut s, 30).0.iter().any(|l| l.contains("Finished 7"))); assert_eq!(look(&mut s, 30).2, Some(format!("     ↓ 7 done ({} shows them)", key_name("allDone"))));
+    s.reply = false; s.reply_id.clear();
     s.sel = "p/1".into(); s.whole = true; s.rows = fold_rows(&mut s); assert_eq!(look(&mut s, 30).1, 8); assert_eq!(done_rows(&s), 8);
 }

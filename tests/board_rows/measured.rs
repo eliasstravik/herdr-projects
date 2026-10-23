@@ -31,8 +31,8 @@ fn folding_a_long_list_to_its_room_measures_each_row_once_however_many_layouts_i
         s.rows = fold_rows(&mut s);
         let n = measured() - before;
         assert!(n <= all.len(), "{n} measures for {} tasks, at {width}x{h}", all.len());
-        if h < 40 { assert_eq!(shown(&s, "done"), 1, "folded down to one done row, at {width}x{h}: many layouts tried"); }
-        else { assert_eq!(shown(&s, "done"), 5, "with room, the latest five"); }
+        assert_eq!(shown(&s, "done"), 0, "no done row, at {width}x{h}");
+        if h < 40 { assert!(shown(&s, "idle") < 8, "the to-dos gave way, at {width}x{h}: many layouts tried"); }
     }
     // The arrow keys fold the list again on each press.
     list_lines(&mut s, &Theme::default_dark(false), 50, 12, 50);

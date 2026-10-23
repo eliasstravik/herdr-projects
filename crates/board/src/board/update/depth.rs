@@ -1,7 +1,7 @@
 //! How far in each row of the list stands, so that all machines → machine → project → task reads at a glance: the top
 //! row at the left edge (`All machines`, or the one machine shown), each machine's row one step in under `All
 //! machines`, a project's (and a status group's, an automations' group) one step in under its machine, and under a
-//! project's row its tasks, automations and lines like `↓ 3 more done` one step further in; under a status group's
+//! project's row its tasks, automations and lines like `↓ 3 done` one step further in; under a status group's
 //! they stand where it does.
 use crate::board::state::Row;
 

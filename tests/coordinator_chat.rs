@@ -57,7 +57,7 @@ fn one_chat_for_everyone_space_on_a_task_talks_to_its_agent_otherwise_to_the_coo
     // Space on a task: the same chat, now with that task's agent; in the box the agent's last message, which the task
     // panel no longer repeats.
     let t = w.add(TITLE); delegate(&t); settle(&t);
-    e.load(); e.s.sel = t.clone(); e.load();
+    e.s.all_done = true; e.load(); e.s.sel = t.clone(); e.load(); // all done: a done task has no row else
     assert!(has(&wide(&mut e, 160), r"The agent said ─+ *\n[^\n]*Done\."), "{}", wide(&mut e, 160)); assert!(has(&wide(&mut e, 160), r"\n╭─  [^›\n]+  · Machine coordinator ─*╮\n(?:│ +│\n)?"));
     e.press(&["space"]); assert!(e.s.reply);
     let text = wide(&mut e, 160);

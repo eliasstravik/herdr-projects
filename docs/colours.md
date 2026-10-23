@@ -123,7 +123,7 @@ as the board's own words stand under `Board`, in the same greys. With `NO_COLOR`
 
 The board has three greys:
 
-- the one for greyed-out words: a task's number, a time, a count in the header, "… more done", the words between two
+- the one for greyed-out words: a task's number, a time, a count in the header, "↓ 3 done", the words between two
   hints, a label;
 - a brighter one for words that must be read: what a row says, the keys on the hint line;
 - the dim grey of "to do".

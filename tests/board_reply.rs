@@ -131,7 +131,7 @@ fn a_reply_to_work_that_was_merged_and_cleaned_up_starts_a_new_round() {
     let t = settle(&id);
     assert_eq!(t.s("stage"), "done"); assert!(t.b("cleaned") && !t.at("link").b("pane"));
     let mut s = open(&w.root, 34);
-    s.s.sel = id.clone(); s.load();
+    s.press(&["alt+d"]); s.s.sel = id.clone(); s.load(); // all done: a done task has no row else
     s.press(&["space"]);
     w.script(json!({ "worker": [{ "files": { "g.txt": "g\n" }, "commit": "g", "note": "Did g." }] }));
     s.typed("now add g"); s.press(&["enter"]);

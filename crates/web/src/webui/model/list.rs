@@ -82,7 +82,7 @@ pub fn list_of(s: &State, t: &Theme) -> Value {
             }
             Row::Auto(a) => push(&mut groups, deep_row(auto_row_of(s, t, a, now))),
             Row::Rec(r) => push(&mut groups, deep_row(row_of(s, t, r, now))),
-            Row::Note(n) => if let Some(g) = groups.last_mut() { g.put("more", crate::re!(r"(\d+) more").captures(n).and_then(|c| c[1].parse::<i64>().ok()).unwrap_or(0)); },
+            Row::Note(n) => if let Some(g) = groups.last_mut() { g.put("more", crate::re!(r"(\d+) done").captures(n).and_then(|c| c[1].parse::<i64>().ok()).unwrap_or(0)); },
         }
     }
     // The characters each task's tag (`#134`, `HSW-134`) fills: the terminal board's column and its limit on the space

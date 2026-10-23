@@ -104,5 +104,5 @@ function drawList(list, { opened, onPick, onOpen, onMore, onFold, actions, onPre
   return h("div.sw-list", { role: "listbox", "aria-label": "Tasks" }, unread, jobs, list.groups.map((g) => h(`section.sw-group.is-${g.top ? "top" : g.machine ? "machine" : g.repo ? "project" : g.automations ? "autos" : "group"}`,
     headEl(g, g.id === list.selected, { onFold, onOpen, onPick, actions, onPress }),
     g.rows.length ? h("ul.sw-rows", g.rows.map((r) => rowEl(r, { selected: r.id === list.selected, opened: r.id === opened, onPick, onOpen }))) : null,
-    g.more ? h("button.btn.btn-ghost.sw-more", { type: "button", style: `--d:${g.rows[0]?.depth ?? g.depth ?? 0}`, onclick: () => onMore(g) }, `Show ${g.more} more`) : null)));
+    g.more ? h("button.btn.btn-ghost.sw-more", { type: "button", style: `--d:${g.rows[0]?.depth ?? g.depth ?? 0}`, onclick: () => onMore(g) }, `Show ${g.more} done`) : null)));
 }

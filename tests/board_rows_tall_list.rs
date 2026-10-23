@@ -1,5 +1,5 @@
 //! A live task's row of three lines on a narrow screen, in the list: the highlight on all three, the arrow keys going
-//! task by task, scrolling by whole rows, and the to-dos giving way after the done rows in a list taller than its room
+//! task by task, scrolling by whole rows, and the to-dos giving way (no done row shows) in a list taller than its room
 //! (only where there are live rows to keep in view). The third line itself: board_rows_tall.rs.
 use regex::Regex;
 use serde_json::{json, Value};
@@ -45,9 +45,9 @@ fn narrow_screen_the_highlight_covers_all_three_lines_of_the_selected_row_and_th
     assert!(l.iter().all(|x| x.chars().count() == 50), "each to the screen's edge");
     step(&mut s, 1); assert_eq!(s.sel, "p/4", "one press, one task: never onto a row's second or third line");
     assert_eq!(lit(&mut s).iter().map(|x| squeeze(x.trim())).collect::<Vec<_>>(), ["▌ ◐ #4 Brand new", "▌  Just started  2h"], "only a time for a third line: it stands on the second");
-    step(&mut s, 1); assert_eq!(s.sel, "p/9");
-    assert_eq!(lit(&mut s).len(), 1, "a done row is one line");
-    step(&mut s, -1); step(&mut s, -1); assert_eq!(s.sel, "p/1");
+    s.sel = "p/9".into(); s.rows = fold_rows(&mut s);
+    assert_eq!(lit(&mut s).len(), 1, "a done row is one line (selected, it shows)");
+    s.sel = "p/4".into(); step(&mut s, -1); assert_eq!(s.sel, "p/1");
 }
 
 #[test]
@@ -84,40 +84,40 @@ fn look(s: &mut State, h: usize) -> Look {
 }
 
 #[test]
-fn a_list_taller_than_its_room_the_done_rows_give_way_first_then_the_to_dos_and_the_live_rows_stay_in_view() {
+fn a_list_taller_than_its_room_shows_no_done_row_the_to_dos_give_way_and_the_live_rows_stay_in_view() {
     let all: Vec<Rec> = (1..=2).map(|n| work(json!({ "id": format!("p/{n}"), "title": format!("Working {n}"), "msg": "Busy." })))
         .chain((0..6).map(|n| todo(json!({ "id": format!("p/{}", n + 10), "title": format!("Later {}", n + 1) }))))
         .chain((0..8).map(|n| done(json!({ "id": format!("p/{}", n + 20), "title": format!("Finished {}", n + 1), "at": AT - n * 60000 })))).collect();
     let mut s = board(&all, "p/1");
     let live_in_view = |s: &mut State, h: usize| { let l = look(s, h); assert!(l.lines.iter().any(|x| x.contains("Working 1")) && l.lines.iter().any(|x| x.contains("Working 2")), "the live rows are in view at {h}\n{}", l.lines.join("\n")); assert_eq!(s.top, 0); };
     let more = |n: usize| Some(format!("    ↓ {n} more to do"));
-    // Room for all of it: the top row 1, working 1+4 (two lines a row: only a time for a third), to do 1+6, done 1+5+1 = 20 lines.
-    let l = look(&mut s, 20); assert_eq!((l.done, l.later.len(), l.note), (5, 6, None));
-    // Short of room, the done rows go first, down to the newest; no to-do goes while a done row can.
-    let l = look(&mut s, 17); assert_eq!((l.done, l.later.len()), (2, 6));
-    let l = look(&mut s, 16); assert_eq!((l.done, l.later.len(), l.note), (1, 6, None));
-    // Then the to-dos, from the last one up, with a line that counts them.
-    let l = look(&mut s, 14); assert_eq!((l.done, l.later, l.note), (1, vec![1, 2, 3], more(3)));
-    let l = look(&mut s, 13); assert_eq!((l.later, l.note), (vec![1, 2], more(4)));
-    for h in [22, 19, 18, 16, 15, 14] { live_in_view(&mut s, h); }
+    // Room for all of it: the top row 1, working 1+4 (two lines a row: only a time for a third), to do 1+6, done 1 and
+    // the line that counts them 1 = 15 lines. No done row shows, whatever the room.
+    let l = look(&mut s, 20); assert_eq!((l.done, l.later.len(), l.note), (0, 6, None));
+    let l = look(&mut s, 15); assert_eq!((l.done, l.later.len(), l.note), (0, 6, None));
+    // Short of room, the to-dos go, from the last one up, with a line that counts them.
+    let l = look(&mut s, 14); assert_eq!((l.done, l.later, l.note), (0, vec![1, 2, 3, 4], more(2)));
+    let l = look(&mut s, 13); assert_eq!((l.later, l.note), (vec![1, 2, 3], more(3)));
+    for h in [22, 15, 14, 13, 12] { live_in_view(&mut s, h); }
     // Down to the first one; under that the list scrolls.
-    let l = look(&mut s, 12); assert_eq!((l.later, l.note), (vec![1], more(5))); assert!(look(&mut s, 8).later.len() <= 1);
+    let l = look(&mut s, 11); assert_eq!((l.later, l.note), (vec![1], more(5))); assert!(look(&mut s, 8).later.len() <= 1);
     assert_eq!(s.rows.iter().filter(|r| matches!(r, Row::Rec(o) if group_of(o) == "to do")).count(), 1);
-    // The arrow keys still go through every to-do: the one they land on shows, with the ones before it.
-    look(&mut s, 14);
+    // The arrow keys still go through every to-do: the one they land on shows, with the ones before it. They stop at
+    // the last to-do: no done task is on the way.
+    look(&mut s, 13);
     let mut walk = vec![];
     for _ in 0..9 {
         step(&mut s, 1);
-        let seen = look(&mut s, 14);
+        let seen = look(&mut s, 13);
         walk.push(s.sel.clone());
         if group_of(all.iter().find(|r| r.s("id") == s.sel).unwrap()) == "to do" {
             let n: usize = s.sel.split('/').nth(1).unwrap().parse().unwrap();
-            assert!(seen.later.contains(&(n - 9)), "{} shows", s.sel); assert_eq!(seen.later.len(), 3); live_in_view(&mut s, 16);
+            assert!(seen.later.contains(&(n - 9)), "{} shows", s.sel); assert_eq!(seen.later.len(), 3); live_in_view(&mut s, 14);
         }
     }
-    assert_eq!(walk, ["p/2", "p/10", "p/11", "p/12", "p/13", "p/14", "p/15", "p/20", "p/20"]);
-    s.sel = "p/14".into(); let l = look(&mut s, 14); assert_eq!((l.later, l.note), (vec![3, 4, 5], more(3)));
-    step(&mut s, -1); step(&mut s, -1); step(&mut s, -1); assert_eq!(look(&mut s, 14).later, [1, 2, 3]);
+    assert_eq!(walk, ["p/2", "p/10", "p/11", "p/12", "p/13", "p/14", "p/15", "p/15", "p/15"]);
+    s.sel = "p/14".into(); let l = look(&mut s, 13); assert_eq!((l.later, l.note), (vec![3, 4, 5], more(3)));
+    step(&mut s, -1); step(&mut s, -1); step(&mut s, -1); assert_eq!(look(&mut s, 13).later, [1, 2, 3]);
     // More room brings them back; all done, or a search, folds nothing.
     s.sel = "p/1".into(); assert_eq!(look(&mut s, 20).later.len(), 6);
     s.whole = true; s.rows = fold_rows(&mut s); assert_eq!(s.rows.iter().filter(|r| matches!(r, Row::Rec(_))).count(), all.len());

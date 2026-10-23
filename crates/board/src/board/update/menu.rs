@@ -50,7 +50,7 @@ pub fn label(s: &State, k: K, r: Option<&Obj>) -> String {
         K::PinnedView => super::pinned::tab_label(s),
         K::ByRepo if super::pinned::on(s) => String::new(),
         K::ByRepo => if s.by_machine { "group by status".into() } else if s.by_repo { "group by machine: each machine's tasks under its name".into() } else { "group by repo: see which repo each task is in".into() },
-        K::AllDone => if s.all_done { "show only the latest done".into() } else { "show all done".into() },
+        K::AllDone => if s.all_done { "hide the done tasks".into() } else { "show all done".into() },
         K::Scope => {
             let to = if super::remotes::seeks(s) { "look for other machines".to_string() } else if next_scope.is_empty() { "show this machine's tasks only".to_string() } else if next_scope == "*" { "show every machine's tasks".into() } else { format!("show only {next_scope}'s tasks") };
             let now = if s.scope.is_empty() { "this machine".to_string() } else if s.scope == "*" { "every machine".into() } else { format!("only {}", s.scope) };

@@ -42,6 +42,8 @@ also after it closes.
 - **Always grouped by machine and project**, with no filter row: `Alt+S` and `Tab` say so and change nothing. Its
   folded headings are its own; the board's grouping, filter and folds are kept for when you go back.
 - **Whose board** (`Alt+M`) counts here too: with every machine shown, every machine's pins.
+- **Done tasks fold away** as on the board, pinned ones too: one line counts them (`↓ 2 done`), and `Alt+D` shows
+  them.
 - **Nothing pinned:** one line says how to pin something.
 - **What needs you is never out of sight.** Pinning moves nothing, so all of it stays on the board. The tab that is
   not shown says in red how many of its rows need you: `Board 3` while you look at the Pinned tab.

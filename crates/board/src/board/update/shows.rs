@@ -24,7 +24,7 @@ fn group(s: &State) -> Option<&'static str> { if s.archive_view { None } else { 
 pub fn keeps_task(s: &State, r: &Obj) -> bool { s.archive_view || (s.show != COORDS && s.show != AUTOS && group(s).is_none_or(|g| group_of(r) == g)) }
 /// Automations stand in the list under All and under Automations.
 pub fn keeps_all(s: &State) -> bool { s.show == 0 || s.show == AUTOS || s.archive_view }
-/// Done shows every done task, not only the latest few.
+/// Done shows every done task, which the other filters hide.
 pub fn whole(s: &State) -> bool { group(s) == Some("done") }
 /// How many each filter holds, from the tasks in view (archived ones left out), the coordinators' rows and the
 /// automations' its filter shows.

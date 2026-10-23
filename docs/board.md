@@ -63,7 +63,7 @@ sidebar ([other machines](other-machines.md)); a click on it does the same. Ever
 | `All` | every task in its group and the automations, as always |
 | `Coordinators` | only the coordinators that run (started and not stopped: working, idle, needs you; on autopilot; or failed, so you can fix it): each such machine's row and project's row ([machine and project coordinators](machine-and-project-coordinators.md)). A stopped or never started one is not there, nor in the count; its row stays in the other filters, with no mark. The main Coordinator has no row |
 | `Needs you`, `Working`, `Ready`, `To do` | only the tasks of that group (`Ready` is ready to approve) |
-| `Done` | every done task, not only the latest five |
+| `Done` | every done task, which the other filters hide |
 | `Automations` | only the automations' rows, in their places |
 
 - **`Tab` shows the next filter, `Shift+Tab` the one before**, round and round. A click on one shows it. The filter
@@ -100,8 +100,10 @@ Tasks stand in five groups, in the order they need you:
 - **A pinned task** (or project, or machine) stays where it is, with a pin mark `⚑` after its name; the Pinned tab
   (`Alt+I`) shows only what is pinned ([pins and the Pinned tab](pinned.md)).
 - **Grouped by repo or by machine** (`Alt+S`), each repo's or machine's rows follow the same order, so a repo's done rows are below its to-dos.
-- **Only the latest five done tasks show.** The line under them counts the rest (`↓ 73 more done (alt+d shows them)`),
-  and `Alt+D` shows them all.
+- **No done task shows**, a pinned or a selected one neither. One line where they would stand counts them
+  (`↓ 73 done (alt+d shows them)`), and `Alt+D` shows them all. With none done, there is no such line. A project whose
+  tasks are all done shows its heading and that line. The selection on a done task that goes out of view (`Alt+D`
+  again) goes to the heading it stood under; while you talk to its agent or read it whole, it stays.
 - **Moving:** `↑` and `↓` follow the order shown; `PgUp` and `PgDn` go ten tasks at a time. Changing the grouping keeps
   the selected task selected.
 - **Headings:** the arrows stop on them too, and `Enter` on one folds it to one line, and unfolds it. With every machine
@@ -163,15 +165,13 @@ the screen with nothing under it. (A list of fewer than eight lines keeps every 
 
 ### A list taller than the window
 
-1. **The done rows give way first.** The list shows the latest five, and when it still does not fit, one fewer for each
-   line it is short, down to the newest one. The line under them says how many more there are, and `?` has the key that
-   shows them all.
-2. **Then the to-dos**, from the last one up, down to the first, with a line under them that counts the rest
+1. **The done rows take no room**: the list shows none of them, only the line that counts them (see above).
+2. **The to-dos give way**, from the last one up, down to the first, with a line under them that counts the rest
    (`… 4 more to do`).
 
 So the live tasks, the ones that need your eye, stay on screen, also on a phone where each takes three to five lines.
 
-- The selected task is never folded away, and nothing is while you search or have asked for all done.
+- Nothing is folded away while you search or have asked for all done; the selected to-do never gives way.
 - A to-do that gave way is still one `↓` away: the arrows go through every to-do, and the ones that show are then those
   that end at the selected task.
 - To-dos give way only on a list that has live tasks. With none, the list just scrolls, with no line spent on a count.

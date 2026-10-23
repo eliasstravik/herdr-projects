@@ -11,9 +11,8 @@ use crate::shown::ink::Ink;
 use crate::shown::queue::queued;
 use crate::shown::states::{group_of, is_live, GROUPS};
 
-/// A long done list folds to its latest few. A list taller than its room shows fewer still, down to one.
-const DONE_SHOWN: usize = 5;
 pub const AUTOMATIONS: &str = "automations";
+/// A done task the list folds away: every one, pinned too (not in the archive, which is a list of its own).
 fn is_done(r: &Obj) -> bool { r.s("state") == "done" && !r.b("archivedAt") }
 fn is_todo(r: &Obj) -> bool { group_of(r) == "to do" && !r.b("archivedAt") }
 fn rank(r: &Obj) -> i64 { if r.b("archivedAt") { -2 } else { GROUPS.iter().position(|g| *g == group_of(r)).map(|n| n as i64).unwrap_or(9) } }
@@ -47,8 +46,7 @@ pub fn relist(s: &mut State) {
     s.items = if s.scope.is_empty() { mine.clone() } else if s.scope == "*" { mine.iter().cloned().chain(super::remotes::others(s).into_iter().flat_map(|m| m.items.iter().cloned())).collect() } else { s.remotes.get(&s.scope).map(|m| m.items.clone()).unwrap_or_default() };
     // The filter row counts every task in view; the list keeps those of the filter shown (shows.rs).
     let all = s.items.clone();
-    s.show_n = super::shows::counts(s, &all);
-    super::pinned::narrow(s, &all); // the Pinned tab: only what is pinned, counted apart
+    s.show_n = super::shows::counts(s, &all); super::pinned::narrow(s, &all); // the Pinned tab: only what is pinned
     let keep: Vec<bool> = s.items.iter().map(|r| super::shows::keeps_task(s, r)).collect();
     let mut keep = keep.into_iter();
     s.items.retain(|_| keep.next().unwrap_or(true));
@@ -82,8 +80,7 @@ pub fn relist(s: &mut State) {
         for a in &s.autos { let g = a.t("repo"); if !names.contains(&g) { names.push(g); } }
         // A repo used lately with no task in view keeps its heading, for its project coordinator (heads.rs: empty_repo).
         if s.scope.is_empty() || s.scope == "*" { for g in &s.data.lately { if super::heads::empty_repo(s, "", g) && !names.contains(g) { names.push(g.clone()); } } }
-        for (g, _) in &project_groups { if !names.contains(g) { names.push(g.clone()); } }
-        for g in super::pinned::names(s) { if !names.contains(&g) { names.push(g); } } // in the Pinned tab, a pinned project with no task too
+        for g in project_groups.iter().map(|(g, _)| g.clone()).chain(super::pinned::names(s)) { if !names.contains(&g) { names.push(g); } } // and a pinned project's, in the Pinned tab
         let here = s.data.repo.clone();
         names.sort_by(|a, b| if *a == here { std::cmp::Ordering::Less } else if *b == here { std::cmp::Ordering::Greater } else { a.to_lowercase().cmp(&b.to_lowercase()).then(b.cmp(a)) });
         names.into_iter().map(|g| { let list = shown.iter().filter(|r| repo_name(r) == g).cloned().collect(); (g, list) }).collect()
@@ -106,7 +103,7 @@ pub fn relist(s: &mut State) {
     if !f.is_empty() && layout != s.selection_layout { if let Some(exact) = shown.iter().find(|r| tags(s, r).contains(&f)) { s.sel = exact.t("id"); } }
     // The selection taken to a task (or the list laid out anew under it): that task's headings unfold.
     if !is_head(&s.sel) && (layout != s.selection_layout || !s.selection_rows.iter().any(|r| r.id == s.sel)) { super::heads::reveal(s); }
-    s.rows = fold_rows(s);
+    s.rows = lay_rows(s); // a selection on a folded done task is moved below, after its landing
     // Every row the arrows stop on (the to-dos a long list folds too), with the heading it stands under.
     let mut under: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     for (name, recs) in &s.grouped { for r in recs { let host = if s.scope == "*" { host_of(r) } else { s.scope.clone() }; under.insert(r.t("id"), group_id(s, &host, name)); } }
@@ -145,6 +142,7 @@ pub fn relist(s: &mut State) {
     if layout == s.selection_layout && old.is_some() && !reading && (after.is_none() || after.as_ref().map(|a| a.order != old.as_ref().unwrap().order).unwrap_or(false) || crossed) {
         s.sel = land(&s.selection_rows, before.unwrap(), &ids, &|id| folded_heads.iter().any(|h| h == id)).unwrap_or_else(|| if after.is_some() { selected.clone() } else { first_row(&ids) });
     }
+    to_heading(s);
     // A task just added is waited for (done.rs: Sel); any other row gone hands the selection on.
     if !ids.contains(&s.sel) && !(s.sel == s.stick && !s.sel.is_empty() && !is_head(&s.sel)) { s.sel = first_row(&ids); }
     s.selection_rows = next;
@@ -172,19 +170,37 @@ pub fn sync_reply(s: &mut State) {
     if !s.reply_id.is_empty() && !super::coords::exists(s, &s.reply_id) { s.reply = false; s.full = false; s.panel_top = 0; }
     else { s.reply_id = if s.current().is_some() || super::coords::of_head(s, &s.sel).is_some() { s.sel.clone() } else { String::new() }; s.panel_top = 0; }
 }
-/// The rows under their headings. A long done list folds to its latest few; a list taller than its room shows fewer
-/// done rows, down to one, then fewer to-dos of a list that has live tasks. The selected task is never folded away,
-/// nor anything while you search or ask for all done. A machine's automations stand in its part, after its tasks (by
-/// repo: after their repo's), and fold with their heading.
+/// The rows under their headings. No done task shows (pinned or selected alike), only one line that counts them
+/// (`↓ 7 done`); a list taller than its room shows fewer to-dos of a list that has live tasks. Nothing is folded away
+/// while you search or ask for all done; the selected task stays while you talk to its agent or read it whole. A
+/// selection on a done task folded away goes to the heading it stands under. A machine's automations stand in its
+/// part, after its tasks (by repo: after their repo's), and fold with their heading.
 pub fn fold_rows(s: &mut State) -> Vec<Row> {
+    let rows = lay_rows(s);
+    if to_heading(s) { s.fold_sel = s.sel.clone(); }
+    rows
+}
+/// The selected task is open: you talk to its agent, or read it whole.
+fn open_on(s: &State) -> bool { s.full || (s.reply && s.reply_id == s.sel) }
+/// A selected done task folded away: the selection goes to its heading (by machine, its machine's), else the first row.
+fn to_heading(s: &mut State) -> bool {
+    if s.whole || open_on(s) || s.steps.contains(&s.sel) { return false; }
+    let parts = parts(s, &s.grouped);
+    let at = parts.iter().find_map(|p| p.groups.iter().find(|(_, recs)| recs.iter().any(|r| r.s("id") == s.sel && is_done(r)))
+        .map(|(name, _)| if s.by_machine && name != AUTOMATIONS { machine_id(&p.host) } else { group_id(s, &p.host, name) }));
+    let Some(head) = at else { return false };
+    s.sel = if s.steps.contains(&head) { head } else { s.steps.first().cloned().unwrap_or_default() };
+    true
+}
+fn lay_rows(s: &mut State) -> Vec<Row> {
     s.fold_sel = s.sel.clone();
     // Under Coordinators only the coordinators' rows: each machine's and its projects' (shows.rs).
     if super::shows::coords(s) { let rows = super::shows::coord_rows(s); s.steps = rows.iter().filter_map(step_id).collect(); return rows; }
-    // The Pinned tab with nothing pinned: it says how to pin something (view/list.rs).
-    if super::pinned::nothing(s) { s.steps.clear(); return vec![]; }
+    if super::pinned::nothing(s) { s.steps.clear(); return vec![]; } // the Pinned tab with nothing pinned says how to pin something
     let groups = s.grouped.clone();
     let parts = parts(s, &groups);
-    let lay = |keep: usize, todos: usize, s: &State| -> Vec<Row> {
+    let held = open_on(s);
+    let lay = |todos: usize, s: &State| -> Vec<Row> {
         let mut rows = vec![];
         // With every machine shown, the top row is `All machines` (top.rs); folded, it is the whole list.
         if s.scope == "*" && !s.archive_view {
@@ -234,16 +250,17 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
                     .then_with(|| if a.b("archivedAt") && b.b("archivedAt") { b.i("archivedAt").cmp(&a.i("archivedAt")) } else { std::cmp::Ordering::Equal })
                     .then_with(|| if is_done(a) && is_done(b) { b.i("at").cmp(&a.i("at")) } else { std::cmp::Ordering::Equal }));
                 let done: Vec<&Rec> = list.iter().filter(|r| is_done(r)).collect();
-                let folded: Vec<String> = if s.whole { vec![] } else { done.iter().skip(keep).filter(|r| r.s("id") != s.sel).map(|r| r.t("id")).collect() };
+                let folded: Vec<String> = if s.whole { vec![] } else { done.iter().filter(|r| r.s("id") != s.sel || !held).map(|r| r.t("id")).collect() };
                 let todo: Vec<&Rec> = list.iter().filter(|r| is_todo(r)).collect();
                 let from = match todo.iter().position(|r| r.s("id") == s.sel) { Some(p) if todos <= p => p + 1 - todos, _ => 0 };
                 let later: Vec<String> = if s.whole { vec![] } else { todo.iter().enumerate().filter(|(n, _)| *n < from || *n >= from.saturating_add(todos)).map(|(_, r)| r.t("id")).collect() };
+                // The count of done tasks stands where the last of them would.
                 let last_done = done.last().map(|r| r.t("id"));
                 let last_todo = todo.last().map(|r| r.t("id"));
                 for r in &list {
                     let id = r.t("id");
                     if !folded.contains(&id) && !later.contains(&id) { rows.push(Row::Rec(r.clone())); }
-                    if !folded.is_empty() && Some(&id) == last_done.as_ref() { rows.push(Row::Note(format!("↓ {} more done ({} shows them)", folded.len(), key_name("allDone")))); }
+                    if !folded.is_empty() && Some(&id) == last_done.as_ref() { rows.push(Row::Note(format!("↓ {} done ({} shows them)", folded.len(), key_name("allDone")))); }
                     if !later.is_empty() && Some(&id) == last_todo.as_ref() { rows.push(Row::Note(format!("↓ {} more to do", later.len()))); }
                 }
                 rows.extend(autos.iter().cloned().map(Row::Auto));
@@ -254,14 +271,12 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
     // Each row measured once, whatever the rounds below lay out (fold_heights.rs).
     let heights = super::fold_heights::Heights::default();
     let over = |rows: &[Row], s: &State| !s.whole && s.list_room > 0 && heights.lines(rows, s) > s.list_room;
-    let mut keep = DONE_SHOWN;
-    let mut rows = lay(keep, usize::MAX, s);
-    while keep > 1 && over(&rows, s) { keep -= 1; rows = lay(keep, usize::MAX, s); }
+    let mut rows = lay(usize::MAX, s);
     // The arrow keys go through every heading and every to-do, folded or not.
     s.steps = rows.iter().filter_map(step_id).collect();
     let mut todos = groups.iter().map(|(_, recs)| recs.iter().filter(|r| is_todo(r)).count()).max().unwrap_or(0);
     let live = rows.iter().any(|r| matches!(r, Row::Rec(o) if is_live(o)));
-    while live && todos > 1 && over(&rows, s) { todos -= 1; rows = lay(keep, todos, s); }
+    while live && todos > 1 && over(&rows, s) { todos -= 1; rows = lay(todos, s); }
     rows
 }
 /// A row the arrow keys stop on: a task, an automation or a heading.

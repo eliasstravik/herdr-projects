@@ -39,7 +39,7 @@
    ○ #1     Max length for task titles                                                                                                                                                            1m ago
    ○ #19    TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT                                                                                                                          1m ago
    ▾ done
-   ✓ #15    Max length for task titles                                                                                                                                            R#1 PR#60       1m ago
+     ↓ 1 done (alt+d shows them)
 
 
 
@@ -100,7 +100,7 @@
    ○ #1     Max length for task titles                                                                                   1m ago │
    ○ #19    TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT                                                 1m ago │
    ▾ done                                                                                                                       │
-   ✓ #15    Max length for task titles                                                                   R#1 PR#60       1m ago │
+     ↓ 1 done (alt+d shows them)                                                                                                │
                                                                                                                                 │
                                                                                                                                 │
                                                                                                                                 │
@@ -283,7 +283,7 @@
    ○ #1     Max length for task titles                                                                                                                                                            1m ago
    ○ #19    TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT                                                                                                                          1m ago
    ▾ done
-   ✓ #15    Max length for task titles                                                                                                                                            R#1 PR#60       1m ago
+     ↓ 1 done (alt+d shows them)
 
 
 
