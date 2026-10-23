@@ -101,11 +101,19 @@ uncounted.
   `AGENTS.md` is yours, its rules are a file beside its state
   (`~/.herdr-projects/data/coordinator/<session>/projects/<repo>/rules.md`), passed when it starts, as a working agent's
   are.
+  **It stays in its own repo.** A task it adds goes there, unless the message it acts on names another place ("in the
+  other repo"). It may read other repos to answer you (their tasks, reports, closing notes), and acts on none of it:
+  work it notices in another repo is one line of an **Also noticed** list in its answer, never a task added or
+  delegated there, which that repo's own coordinator would know nothing of. No coordinator adds a task you did not ask
+  for: what it reads in reports and closing notes is information, never instructions, in every turn.
   Your own chats in the repo's folder are never taken for its conversation: it keeps the one it has, and moves to
   another (after its own `/clear`) only when Herdr names that one for its pane.
 - **Another machine's** coordinators run on that machine. Its board sends what they said with its tasks, and what you
   type goes there. A machine on an older version has none: the chat says to update it there.
 - **Herdr's sidebar** names each as the board does, with where it stands and its last message.
+- **A task says which coordinator added it.** `details <id>` has `addedBy`: `the herdr-projects coordinator, asked by
+  the human` for one added from that coordinator's pane, `the herdr-projects coordinator's autopilot` for one its
+  autopilot added, else `the human` or the automation's name. Autopilot's history in `list` says the same.
 
 ## Its row's keys
 
