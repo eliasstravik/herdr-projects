@@ -184,8 +184,12 @@ fn a_list_taller_than_its_room_shows_no_done_row_only_the_line_that_counts_them_
     // Whatever the room: no done row, one line that counts them. The top row 1, working 1+6, done 1+1, to do 1+1 = 12 lines.
     for h in [30, 12] { let (lines, d, n) = look(&mut s, h); assert_eq!((d, n), (0, note.clone()), "at {h}"); assert!(lines.iter().any(|l| l.contains("Working 3")) && lines.iter().any(|l| l.contains("Later")), "everything else is in view at {h}"); assert_eq!(s.top, 0); }
     look(&mut s, 8); assert_eq!(done_rows(&s), 0);
-    // The selected task is never folded away; all done, or a search, folds nothing.
-    s.sel = "p/16".into(); s.rows = fold_rows(&mut s); assert!(look(&mut s, 13).0.iter().any(|l| l.contains("Finished 7")));
-    assert_eq!(look(&mut s, 30).2, Some(format!("     ↓ 7 done ({} shows them)", key_name("allDone"))), "the selected one is not counted");
+    // A selected done task folds away too, and the selection goes to its heading; pinned, it is counted with them.
+    s.sel = "p/16".into(); s.rows = fold_rows(&mut s); assert!(!look(&mut s, 13).0.iter().any(|l| l.contains("Finished 7")));
+    assert_eq!(s.sel, "head:status\t\tdone");
+    // While you talk to its agent it stays, and is not counted. All done, or a search, folds nothing.
+    s.sel = "p/16".into(); s.reply = true; s.reply_id = "p/16".into(); s.rows = fold_rows(&mut s);
+    assert!(look(&mut s, 30).0.iter().any(|l| l.contains("Finished 7"))); assert_eq!(look(&mut s, 30).2, Some(format!("     ↓ 7 done ({} shows them)", key_name("allDone"))));
+    s.reply = false; s.reply_id.clear();
     s.sel = "p/1".into(); s.whole = true; s.rows = fold_rows(&mut s); assert_eq!(look(&mut s, 30).1, 8); assert_eq!(done_rows(&s), 8);
 }

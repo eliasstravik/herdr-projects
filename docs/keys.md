@@ -236,7 +236,7 @@ below always use the PC names.
 | `Alt+T` | the whole task (on an automation's row: the whole automation; on a coordinator's row: the coordinator, with its last wakes while its autopilot is on), full screen, and back to the list |
 | `Alt+A` | the archive, and back to the board |
 | `Alt+S` | how the list is grouped, in turn: by status, by repo (each group under its repo's name; a row's tag never names a repo), by machine (each machine under its own heading, its tasks under it by how much they need you) |
-| `Alt+D` | every done task, or only the latest |
+| `Alt+D` | every done task, or none: the list then counts them on one line |
 | `Alt+O` | go into the selected row's agent: its real herdr pane. On a task's row its agent; on a machine's or a project's row (or All machines) its coordinator, started first when it is not running, on another machine there. The board keeps running in its own tab and is there as you left it; your key goes back to it (as a popup it closes, and your key opens it again where it was). On a status group's heading there is none ([machine-and-project-coordinators.md](machine-and-project-coordinators.md)) |
 | `Alt+M` | whose board shows, the filter row's first item: every machine, then each machine by itself (this one too) in the order of herdr's sidebar |
 

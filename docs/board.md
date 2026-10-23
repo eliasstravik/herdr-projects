@@ -96,9 +96,10 @@ Tasks stand in five groups, in the order they need you:
   then done. Done is history, so it is last: however long it grows, it never pushes the to-dos down.
 - **A pinned task** stays on top, above all of them.
 - **Grouped by repo or by machine** (`Alt+S`), each repo's or machine's rows follow the same order, so a repo's done rows are below its to-dos.
-- **No done task shows.** One line where they would stand counts them (`↓ 73 done (alt+d shows them)`), and `Alt+D`
-  shows them all. With none done, there is no such line. A project whose tasks are all done shows its heading and
-  that line.
+- **No done task shows**, a pinned or a selected one neither. One line where they would stand counts them
+  (`↓ 73 done (alt+d shows them)`), and `Alt+D` shows them all. With none done, there is no such line. A project whose
+  tasks are all done shows its heading and that line. The selection on a done task that goes out of view (`Alt+D`
+  again) goes to the heading it stood under; while you talk to its agent or read it whole, it stays.
 - **Moving:** `↑` and `↓` follow the order shown; `PgUp` and `PgDn` go ten tasks at a time. Changing the grouping keeps
   the selected task selected.
 - **Headings:** the arrows stop on them too, and `Enter` on one folds it to one line, and unfolds it. With every machine
@@ -166,7 +167,7 @@ the screen with nothing under it. (A list of fewer than eight lines keeps every 
 
 So the live tasks, the ones that need your eye, stay on screen, also on a phone where each takes three to five lines.
 
-- The selected task is never folded away, and nothing is while you search or have asked for all done.
+- Nothing is folded away while you search or have asked for all done; the selected to-do never gives way.
 - A to-do that gave way is still one `↓` away: the arrows go through every to-do, and the ones that show are then those
   that end at the selected task.
 - To-dos give way only on a list that has live tasks. With none, the list just scrolls, with no line spent on a count.

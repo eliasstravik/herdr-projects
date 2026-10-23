@@ -179,3 +179,28 @@ fn the_settings_page_move_change_and_put_back() {
     assert!(s.screen(120).join("\n").contains("Archived tasks are read-only"));
     assert_eq!(task(&id).at("settings").s("worker.agent"), "codex/gpt-5.5");
 }
+
+#[test]
+fn a_selected_or_pinned_done_task_is_folded_away_and_counted_too() {
+    let w = world();
+    let ids: Vec<String> = ["One", "Two", "Three"].iter().map(|t| w.add(t)).collect();
+    for id in &ids { sw::store::tasks::update(id, |t| { t.put("stage", "done"); Ok(sw::store::tasks::Change::Write) }).unwrap(); }
+    let mut s = open(&w.root, 34);
+    let text = |s: &mut common::board::Board| s.screen(80).join("\n");
+    let note = |n: usize| format!("↓ {n} done ({} shows them)", key_name("allDone"));
+    // All done on a done task, then all done off: it goes too, and the selection goes to its heading.
+    s.press(&["alt+d"]); s.s.sel = ids[0].clone(); s.load();
+    assert!(text(&mut s).contains("One"));
+    s.press(&["alt+d"]);
+    let t = text(&mut s);
+    assert!(!t.contains("✓") && t.contains(&note(3)), "{t}");
+    assert_eq!(s.s.sel, "head:status\t\tdone");
+    // Pinned, it is folded away all the same, and counted.
+    sw::actions::filing::pin(&ids[1]).unwrap(); s.load();
+    let t = text(&mut s);
+    assert!(!t.contains("✓") && t.contains(&note(1)) && t.contains(&note(2)), "the pinned group's and the done group's: {t}");
+    let web = common::board::web(&w, "board", serde_json::json!({}));
+    let groups = web.at("list").arr("groups");
+    assert!(groups.iter().flat_map(|g| g.arr("rows").to_vec()).all(|r| r.s("mark") != "✓"), "the web board's list is the same: {groups:?}");
+    assert_eq!(groups.iter().map(|g| g.i("more")).sum::<i64>(), 3);
+}

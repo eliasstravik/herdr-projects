@@ -54,7 +54,7 @@ fn esc_hides_but_never_shows_the_chat_and_a_task_with_no_agent_is_talked_about_t
     // With a task open that has no agent to reply to, the words go to the Coordinator with that task named.
     let t = w.add("Write the docs");
     sw::actions::filing::report(&t, sw::actions::filing::Report { state: "done".into(), ..Default::default() }).unwrap();
-    s.load(); s.s.sel = t.clone(); s.load(); s.press(&["space"]); assert!(s.s.reply);
+    s.s.all_done = true; s.load(); s.s.sel = t.clone(); s.load(); s.press(&["space"]); assert!(s.s.reply); // all done: a done task has no row else
     let txt = s.screen(160).join("\n");
     assert!(has(&txt, &format!(r"\n╭─ [^\n]*PRJ-\d+  · Agent ─*╮\n(?:│ +│\n)?│ +❯ Send message to the machine coordinator +│")), "{txt}");
     s.typed("make it shorter"); s.press(&["enter"]); drain();
@@ -150,7 +150,7 @@ fn enter_goes_into_a_tasks_agent_the_chats_head_line_at_every_width_and_a_narrow
     // A narrow window is the same chat: space talks to the task's agent and opens nothing. On the whole task (alt+t) the
     // chat folds to its edge (the ladder) and the line you type on. Space again goes back to the top row's coordinator.
     {
-        let mut n = open(&w.root, 40); n.s.sel = t.clone(); n.load(); n.screen(70); n.press(&["space"]);
+        let mut n = open(&w.root, 40); n.s.all_done = true; n.s.sel = t.clone(); n.load(); n.screen(70); n.press(&["space"]);
         assert!(n.s.reply && !n.s.full); n.press(&["alt+t"]);
         assert!(has(&n.screen(70).join("\n"), &format!(r"\n╭─ [^\n]*PRJ-1  · Agent ─*╮\n(?:│ +│\n)?│ +❯ Send message to the agent +│\n(?:│ +│\n)?╰─+╯\n[ ▌] {} open this task's agent · esc back to the list *$", regex::escape(&key_name("open")))), "{}", n.screen(70).join("\n"));
         assert!(!has(&n.screen(90).join("\n"), &chat_key), "the chat's key is not offered where the chat is folded");
@@ -166,7 +166,7 @@ fn enter_goes_into_a_tasks_agent_the_chats_head_line_at_every_width_and_a_narrow
     }
     // A short, narrow window with a long name and a draft of several lines: the draft's line, the box and the hints are whole.
     {
-        let mut x = open(&w.root, 8); x.s.sel = t.clone(); x.load(); x.screen(44); x.press(&["space"]);
+        let mut x = open(&w.root, 8); x.s.all_done = true; x.s.sel = t.clone(); x.load(); x.screen(44); x.press(&["space"]);
         x.s.input.set_text("one\ntwo\nthree\nfour and last");
         let lines = x.screen(44);
         assert_eq!(lines.len(), 8); assert!(lines.iter().all(|l| sw::text::width(l) <= 44));

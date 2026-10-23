@@ -20,7 +20,8 @@ fn done_research(w: &World) -> String {
     put(&id, "report", json!({ "file": "index.html", "link": REPORT, "at": sw::clock::now() }));
     id
 }
-fn board_on(w: &World, id: &str) -> common::board::Board { let mut b = open(&w.root, 50); b.s.sel = id.into(); b.load(); b }
+/// The board on `id`, with all done shown: a done task has no row else.
+fn board_on(w: &World, id: &str) -> common::board::Board { let mut b = open(&w.root, 50); b.s.all_done = true; b.s.sel = id.into(); b.load(); b }
 
 #[test]
 fn the_key_opens_a_done_research_tasks_report_and_the_panel_the_hint_line_and_the_menu_name_it() {
