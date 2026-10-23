@@ -27,7 +27,7 @@ pub fn place_rules(co: &Co, home_dir: &str) -> (String, String, String) {
             let root = tilde(&home(co).display().to_string());
             (format!("You are the {}, the project coordinator of the repo \"{r}\" ({root}) on the human's work board in herdr (herdr-projects): the human talks to you about this repo (its tasks and their agents, how work in it goes, its code). {LEVELS} You are this repo's.", co.name()),
             NO_TASK.into(),
-            format!("You run in the repo's own folder ({root}), at its main level: it is the human's own checkout. Read it freely, and change nothing in it unless the human plainly asks you, yourself, to: work goes on the board as tasks, each done by an agent in a worktree of its own. Every \"board add\" says where the task goes: --repo {r}, unless the human names another place (\"in the other repo\", \"in my home folder\")."))
+            format!("You run in the repo's own folder ({root}), at its main level: it is the human's own checkout. Read it freely, and change nothing in it unless the human plainly asks you, yourself, to: work goes on the board as tasks, each done by an agent in a worktree of its own. Every \"board add\" says where the task goes: --repo {r}, unless the human, in the message you are acting on, names another place (\"in the other repo\", \"in my home folder\"). Other repos you may read to answer a question (their tasks, reports and closing notes), and that is all: work you notice in another repo is one line of an \"Also noticed\" list in your answer, never a task you add or delegate there. That repo has a coordinator of its own, and the human takes it there if they want it done."))
         }
     }
 }

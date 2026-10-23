@@ -1,11 +1,11 @@
 //! What an autopilot turn reads of the past: the board is its only memory. `list` in an autopilot turn also gives its
 //! area's finished, stopped and archived tasks of the last 30 days (at most 50, newest first), each with who added it
-//! (you, an automation, or which coordinator's autopilot) and the first 300 characters of its closing note;
-//! `details <id>` the whole note.
+//! (you, an automation, which coordinator's autopilot, or which coordinator you asked) and the first 300 characters of
+//! its closing note; `details <id>` the whole note.
 use super::care::in_area;
 use super::limits::board_tasks;
 use crate::clock::now;
-use crate::coordinator::co::Co;
+use crate::coordinator::co::{named, Co, Level};
 use crate::json::*;
 use crate::store::keys::{repo_keys, say_id};
 
@@ -13,12 +13,17 @@ const DAYS: i64 = 30;
 const MOST: usize = 50;
 const NOTE: usize = 300;
 fn note_of(t: &Obj) -> String { std::fs::read_to_string(crate::flow::task::note_file(t)).unwrap_or_default().trim().to_string() }
-/// Who added a task, in words.
+/// Who added a task, in words (also in every `details`).
 pub fn added_by(t: &Obj) -> String {
     if t.at("autopilot").is_object() { return format!("the {}'s autopilot{}", t.at("autopilot").s("name"), if t.at("autopilot").b("machine") { format!(" on {}", t.at("autopilot").s("machine")) } else { String::new() }); }
     if t.at("automation").is_object() { return format!("the automation \"{}\"", t.at("automation").s("name")); }
-    if t.b("coordinator") { return "a coordinator, asked by the human".into(); }
+    if t.b("coordinator") { return format!("the {}, asked by the human", coordinator_name(t)); }
     "the human".into()
+}
+/// The coordinator whose pane added it, by its name: another machine's task names that machine.
+fn coordinator_name(t: &Obj) -> String {
+    let co = super::record::co_of("", t.s("coordinator"));
+    match (&co.level, t.b("host")) { (Level::Machine, true) => named(t.s("host")), (_, true) => format!("{} on {}", co.name(), t.s("host")), _ => co.name() }
 }
 fn ended_at(t: &Obj) -> i64 { [t.i("archivedAt"), t.i("mergedAt"), t.i("at"), t.i("updated")].into_iter().max().unwrap_or(0) }
 fn past(co: &Co) -> Vec<Obj> {
@@ -44,5 +49,5 @@ pub fn with_history(co: &Co, v: Value, text: String) -> (Value, String) {
 pub fn with_note(d: &mut Value) {
     let id = d.at("task").t("id");
     let Some(t) = crate::store::tasks::get(&id) else { return };
-    if let Some(o) = d.as_object_mut() { o.put("closingNote", note_of(&t)); o.put("addedBy", added_by(&t)); }
+    if let Some(o) = d.as_object_mut() { o.put("closingNote", note_of(&t)); }
 }
