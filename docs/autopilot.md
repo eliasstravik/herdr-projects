@@ -82,7 +82,7 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
     | `Working on HSW-92 · 3 of 20 today` | one of its tasks is under way (and today's adds of `tasksPerDay`) |
     | `Autopilot · asleep outside mon-fri 09:00-18:00 · 3 of 20 today` | outside its hours |
     | `Autopilot · at today's limit · 5 of 5 today` | no room for more tasks |
-    | `Autopilot stalled: no check-in for 3h · 0 of 5 today` | idle with room, and no wake for more than twice its timer (below) |
+    | `Autopilot stalled: no check-in for 3h · 0 of 5 today` | idle with room, and nothing ran for more than twice `autopilot.every` (below) |
     | `Autopilot idle: last 3 wakes added nothing · next check-in in 2h · 0 of 5 today` | idle, its timer backed off (below) |
     | `Autopilot · next check-in in 12m · 3 of 20 today` | waiting for its next reason to wake |
 
@@ -130,9 +130,10 @@ wakes it even when nothing changed: a turn that once declined, or misread a wake
 does not burn a turn every hour for nothing, its wakes whose turn ended with nothing changed are counted in a row: from
 the third on, its timer's gap doubles each time, up to 4 hours (an `autopilot.every` longer than that stays as it is),
 and its row says `Autopilot idle: last 3 wakes added nothing`. A change in its area wakes it as before, and a turn that
-changes something (it adds, starts or retries a task, or you did) sets the count back, as does `autopilot on`. If it
-stalls all the same (idle, room, wakes left today, and no wake for more than twice its timer, say while the keeper did
-not run), its row says `Autopilot stalled: no check-in for 3h`.
+changes something (it adds, starts or retries a task, or you did) sets the count back, as does `autopilot on`. When
+it is idle with room and wakes left today, and nothing ran for more than twice `autopilot.every` (the keeper did not
+run, or its timer backed off), its row says `Autopilot stalled: no check-in for 3h`, backed off with why: `Autopilot
+stalled: no check-in for 3h, last 4 wakes added nothing`.
 
 **No wake while** it is off; it says `needs you`; it is outside `autopilot.hours`; it is within `autopilot.gap` of the end
 of its last wake's turn or of a turn of yours; `autopilot.wakesPerDay` are used today; it is mid-turn, or a message of

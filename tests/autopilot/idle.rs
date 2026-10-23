@@ -44,7 +44,12 @@ fn an_idle_area_with_room_wakes_on_the_timer_backs_off_after_three_wakes_that_ad
     assert_eq!(prompts_of(&w, &co).len(), 5);
     tick(&w);
     assert_eq!(record(&co).i("idleRuns"), 4);
-    minutes(181); tick(&w);
+    // backed off to 4 hours, but no wake for more than twice autopilot.every is a stall all the same: its row says so
+    minutes(119);
+    assert!(status(&co).starts_with("Autopilot idle: last 4 wakes added nothing"), "{}", status(&co));
+    minutes(2);
+    assert!(status(&co).starts_with("Autopilot stalled: no check-in for 2h, last 4 wakes added nothing"), "{}", status(&co));
+    minutes(60); tick(&w);
     assert_eq!(prompts_of(&w, &co).len(), 5);
     minutes(60); tick(&w);
     assert_eq!(prompts_of(&w, &co).len(), 6);

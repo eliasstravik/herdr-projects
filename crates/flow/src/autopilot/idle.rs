@@ -2,8 +2,8 @@
 //! left to stall. Its timer wakes it even when the free look (look.rs) finds nothing new, so a turn that once declined
 //! (or misread a wake) gets another chance. Wakes whose turn ends with nothing changed are counted in a row
 //! (`idleRuns`): from the third on, the timer's gap doubles each time, up to 4 hours, and its row says so. A turn that
-//! changes its area sets the count back. Its row also says when it stalled all the same: idle with room, and no wake
-//! for more than twice that gap.
+//! changes its area sets the count back. Its row also says when it stalled: idle with room, and no wake for more than
+//! twice `autopilot.every` (backed off too: then it also says why the timer waits longer).
 use super::care::under_way_count;
 use super::limits::room;
 use super::record::{count, day_of};
@@ -35,15 +35,19 @@ pub fn noted(ap: &mut Obj, snap: &str, wake: bool) {
 }
 /// When it last ran: the end of its last turn, a wake typed in, or turning on.
 fn last_ran(ap: &Obj) -> i64 { [ap.i("endAt"), ap.i("since"), ap.at("wake").i("typedAt")].into_iter().max().unwrap_or(0) }
-/// Stalled: idle with room, wakes left today, and no wake for more than twice its timer's gap.
+/// Stalled: idle with room, wakes left today, and no wake for more than twice `autopilot.every`, backed off or not.
 pub fn stalled(co: &Co, ap: &Obj, board: &[Obj], now: i64, every: i64) -> bool {
     let woke = if ap.s("day") == day_of(now) { ap.i("woke") } else { 0 };
-    every > 0 && !ap.at("wake").b("typedAt") && woke < count(co, "autopilot.wakesPerDay") && idle(co, ap, board, now) && now - last_ran(ap) > 2 * timer_gap(every, ap)
+    every > 0 && !ap.at("wake").b("typedAt") && woke < count(co, "autopilot.wakesPerDay") && idle(co, ap, board, now) && now - last_ran(ap) > 2 * every
 }
-/// What its row says of it, after `Autopilot`: `stalled: no check-in for 3h`, `idle: last 3 wakes added nothing`, or ""
-/// (it is busy, or waking as it should).
+/// What its row says of it, after `Autopilot`: `stalled: no check-in for 3h`, `idle: last 3 wakes added nothing`, both
+/// (`stalled: no check-in for 3h, last 4 wakes added nothing`), or "" (it is busy, or waking as it should).
 pub fn words(co: &Co, ap: &Obj, board: &[Obj], now: i64, every: i64) -> String {
-    if stalled(co, ap, board, now, every) { return format!("stalled: no check-in for {}", age(now - last_ran(ap))); }
-    if backed_off(ap) && idle(co, ap, board, now) { return format!("idle: last {} wakes added nothing", runs(ap)); }
-    String::new()
+    let idle_runs = (backed_off(ap) && idle(co, ap, board, now)).then(|| format!("last {} wakes added nothing", runs(ap)));
+    match (stalled(co, ap, board, now, every), idle_runs) {
+        (true, Some(r)) => format!("stalled: no check-in for {}, {r}", age(now - last_ran(ap))),
+        (true, None) => format!("stalled: no check-in for {}", age(now - last_ran(ap))),
+        (false, Some(r)) => format!("idle: {r}"),
+        (false, None) => String::new(),
+    }
 }
