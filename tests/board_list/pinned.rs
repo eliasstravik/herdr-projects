@@ -111,7 +111,7 @@ fn a_project_and_a_machine_pin_from_their_rows_and_show_with_their_tasks_under_p
     let mut all = vec![a.clone(), b.clone()]; all.sort();
     assert_eq!(shown, all);
     assert!(ids(&s).contains(&proj), "{:?}", ids(&s));
-    assert_eq!(s.s.show_n[PINNED], 3, "two tasks and the project's row");
+    assert_eq!(s.s.show_n[PINNED], 1, "one pin, the project's: its tasks add nothing");
     // By status: the project's row stands above its tasks, as a project that needs you does under Needs you.
     while s.s.by_repo || s.s.by_machine { s.press(&["alt+s"]); }
     let row = format!("{HEAD}repo\t\tproj");
@@ -135,6 +135,27 @@ fn a_project_and_a_machine_pin_from_their_rows_and_show_with_their_tasks_under_p
     on(&mut s, &todo);
     s.press(&["ctrl+p"]);
     assert!(s.s.msg.contains("pins a task, a project's row or a machine's row"), "{}", s.s.msg);
+}
+
+#[test]
+fn pinneds_count_is_each_pin_once_not_the_tasks_under_a_pinned_project() {
+    let w = world();
+    let [a, b, c] = <[String; 3]>::try_from(add(&w, &["Done in it", "Pinned in it", "Another"])).unwrap();
+    mark(&a, json!({ "stage": "done" }));
+    sw::store::pins::set(Some("proj"), true).unwrap();
+    sw::actions::filing::set_pin(&b, true).unwrap();
+    let mut s = board(&w);
+    pinned(&mut s);
+    // The project and the task pinned in it: two pins. Its done task (folded away) and its other task add nothing.
+    assert!(tasks_shown(&s).contains(&c) && !tasks_shown(&s).contains(&a), "{}", s.text());
+    let text = s.text();
+    assert_eq!(s.s.show_n[PINNED], 2, "{text}");
+    assert!(text.contains("Pinned 2"), "{text}");
+    let (j, _) = run(&w, &["list", "--pinned"]).unwrap();
+    assert_eq!(j.at("projects").as_array().unwrap().len() + j.arr("tasks").len(), 2, "as list --pinned says: {j}");
+    // The web board's filter row says the same.
+    let web = common::board::web(&w, "board", json!({}));
+    assert_eq!(web.at("list").at("shows").arr("items")[PINNED].i("count"), 2);
 }
 
 #[test]

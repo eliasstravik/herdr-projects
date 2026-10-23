@@ -70,6 +70,23 @@ fn another_machines_pins_come_with_its_tasks_and_its_rows_pin_there() {
 }
 
 #[test]
+fn pinned_counts_each_machines_pins_once_a_project_with_a_done_task_and_a_task_elsewhere() {
+    // As the human's board had it: this machine's project pinned, its one task done (folded away), and one task of
+    // vm-b pinned. Two pins: Pinned 2, not 3.
+    let (w, _far) = far_world();
+    let done = w.add("Done in the pinned project");
+    sw::store::tasks::set(&done, json!({ "stage": "done" })).unwrap();
+    sw::store::pins::set(Some("proj"), true).unwrap();
+    let mut pinned_far = theirs(8); pinned_far["pinned"] = json!(true);
+    let mut s = every_machine(&w, json!([theirs(1), pinned_far]), json!({ "machine": false, "repos": [] }));
+    while s.s.show != sw::board::update::shows::PINNED { s.press(&["tab"]); }
+    assert_eq!(tasks_shown(&s), vec!["vm-b:far/8".to_string()], "{}", s.text());
+    let text = s.text();
+    assert_eq!(s.s.show_n[sw::board::update::shows::PINNED], 2, "{text}");
+    assert!(text.contains("Pinned 2"), "{text}");
+}
+
+#[test]
 fn the_door_pins_this_machine_and_its_projects_and_says_so_with_its_tasks() {
     let w = world();
     let id = w.add("Theirs to pin");

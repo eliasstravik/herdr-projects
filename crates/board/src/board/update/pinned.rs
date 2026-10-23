@@ -48,11 +48,12 @@ pub fn empty_repo(s: &State, host: &str, name: &str) -> bool {
 pub fn nothing(s: &State) -> bool { on(s) && s.items.is_empty() && hosts(s).is_empty() }
 /// What the list says under Pinned with nothing pinned.
 pub fn empty_says() -> String { format!("Nothing pinned yet. {} on a task, a project or a machine pins it here.", key_name("pin")) }
-/// Pinned's count on the filter row: the rows it shows, of the tasks in view (`live`, archived ones left out) and the
-/// pinned machines and projects in view.
+/// Pinned's count on the filter row: what is pinned in view, each pin once, as `list --pinned` lists them: the pinned
+/// machines, the pinned projects and the pinned tasks (`live`, archived ones left out). The other tasks of a pinned
+/// project or machine stand under Pinned but pin nothing of their own: they are not counted.
 pub fn count(s: &State, live: &[&std::sync::Arc<Obj>]) -> usize {
     let heads: usize = super::shows::hosts(s).iter().map(|h| usize::from(machine_pinned(s, h)) + projects_of(s, h).len()).sum();
-    live.iter().filter(|r| keeps(s, r)).count() + heads
+    live.iter().filter(|r| r.b("pinned")).count() + heads
 }
 
 /// The pin key: the selected task, project's row or machine's row pinned, or unpinned; here, or on its machine.

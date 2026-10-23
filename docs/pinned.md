@@ -6,7 +6,7 @@ the last filter on the filter row, shows only what you pinned, as `Needs you` sh
 
 ```
  herdr-projects  proj · PRJ
- vm-str │ All 299   Coordinators 7   Needs you 1   Working 5   Ready 0   To do 11   Done 283   Automations 2   Pinned 4
+ vm-str │ All 299   Coordinators 7   Needs you 1   Working 5   Ready 0   To do 11   Done 283   Automations 2   Pinned 2
  ○ ▾ vm-str  2 projects · 4 tasks
    ○ ▾ gtm · GTM ⚑
      ? GTM-14  Pick the ICP                                       2m ago
@@ -38,7 +38,9 @@ the board keeps it shown as it keeps any filter, also after it closes.
   machine with its projects and tasks. The board's grouping (`Alt+S`) and its folded headings stay as they are: by
   repo a pinned project is its heading with its tasks under it (alone, `0 tasks`, when it has none); by status or by
   machine its row stands above the tasks, as a project that needs you does under `Needs you`.
-- **Its count** is the rows it shows: the tasks, and the pinned machines' and projects' rows.
+- **Its count** is what you pinned, each pin once: the pinned machines, projects and tasks, as `list --pinned` lists
+  them (with every machine shown, every machine's). The other tasks of a pinned project or machine show under it but
+  add nothing to the count, done or not.
 - **Everything works as everywhere:** the same marks and colours, what needs you in red, and every key.
 - **Whose board** (`Alt+M`) counts here too: with every machine shown, every machine's pins.
 - **Done tasks fold away** as under `All`, pinned ones too: one line counts them (`↓ 2 done`), and `Alt+D` shows them.
