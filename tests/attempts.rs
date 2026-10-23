@@ -109,7 +109,7 @@ fn the_check_filters_one_left_wins_none_left_fails_with_all_kept() {
     // removing the task never takes unsaved work with it
     let dir_a = kid(&id, "A").t("worktree");
     std::fs::write(std::path::Path::new(&dir_a).join("unsaved.txt"), "mine\n").unwrap();
-    let (_, kept) = sw::actions::archive::clear(&id).unwrap();
+    let (_, kept, _) = sw::actions::archive::clear(&id).unwrap();
     assert!(kept.iter().any(|k| k.contains("attempt A: files that were never committed")), "{}", kept.join(" | "));
     assert_eq!(read(&std::path::Path::new(&dir_a).join("unsaved.txt")), "mine\n");
     // none passes

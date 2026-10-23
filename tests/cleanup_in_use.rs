@@ -6,6 +6,9 @@ use common::*;
 use serde_json::{json, Value};
 use sw::json::*;
 
+/// What a clean-up ends before the worktree goes (a dev server handed to init), and what it names for you to end.
+mod procs;
+
 fn kept(t: &Obj) -> String { t.arr("kept").first().map(text).unwrap_or_default() }
 fn pane(w: &World, id: &str, f: impl FnOnce(&mut Value)) { w.patch(|s| { let p = s["panes"].as_array_mut().unwrap().iter_mut().find(|p| p.s("pane_id") == id).unwrap(); f(p); }); }
 /// A task approved and merged once `before` did something to its space: the task as it then is.
