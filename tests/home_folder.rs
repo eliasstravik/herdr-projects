@@ -1,14 +1,18 @@
 //! The one home folder: where things are kept by default, and the one-time move of an older version's folders into it
 //! (old layout in, new layout out; twice; cut off; with new data there already; the Coordinator's conversation found
-//! again). The rest of the move (lock files, what is not the board's, real programs): home_folder_more.rs.
+//! again). The rest of the move (lock files, what is not the board's, real programs): home_folder_more.rs. And under
+//! the tests (HERDR_PROJECTS_TESTING) the store refuses the real ~/.herdr-projects, by HOME, by a part's own variable
+//! or through a link, with words that say what to do instead; a test's own folder is fine, and outside them nothing is.
 use crate::common;
 use crate::move_home as util;
 use common::{world_with, Opts};
 use serde_json::json;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use sw::json::*;
 use sw::store::files::{board_env, config_dir, data_dir, home_dir, reports_dir};
 use sw::store::move_home::{move_note, move_told, moved_from, swap_now};
+use sw::store::never_real::{guard, real_board, real_home, TESTING};
 use util::*;
 
 #[test]
@@ -19,12 +23,16 @@ fn a_new_install_keeps_everything_in_the_home_folder_and_the_xdg_variables_choos
     for (k, v) in [("XDG_STATE_HOME", "/x/state"), ("XDG_CONFIG_HOME", "/x/config"), ("XDG_DATA_HOME", "/x/share")] { set(k, v); }
     let home = w.base.join("home").join(".herdr-projects");
     assert_eq!([home_dir(), data_dir(), config_dir(), reports_dir()], [home.clone(), home.join("data"), home.join("settings"), home.join("reports")]);
-    assert_eq!(board_env(), vec![("HERDR_PROJECTS_DATA_DIR".to_string(), home.join("data").display().to_string()), ("HERDR_PROJECTS_CONFIG_DIR".to_string(), home.join("settings").display().to_string())]);
-    // One variable moves the whole folder; each part still has its own.
+    // What the board hands a program it starts is the home folder alone: a scratch HERDR_PROJECTS_HOME in front of a
+    // command there moves all of it (HP-172).
+    assert_eq!(board_env(), vec![("HERDR_PROJECTS_HOME".to_string(), home.display().to_string())]);
+    // One variable moves the whole folder; each part still has its own, handed on beside the home folder.
     set("HERDR_PROJECTS_HOME", "/somewhere");
     assert_eq!([data_dir(), config_dir(), reports_dir()], ["/somewhere/data", "/somewhere/settings", "/somewhere/reports"].map(PathBuf::from));
-    for (k, v) in [("HERDR_PROJECTS_DATA_DIR", "/d"), ("HERDR_PROJECTS_CONFIG_DIR", "/c"), ("HERDR_PROJECTS_REPORTS_DIR", "/r")] { set(k, v); }
-    assert_eq!([data_dir(), config_dir(), reports_dir()], ["/d", "/c", "/r"].map(PathBuf::from));
+    for (k, v) in [("HERDR_PROJECTS_DATA_DIR", "/d"), ("HERDR_PROJECTS_CONFIG_DIR", "/somewhere/settings"), ("HERDR_PROJECTS_REPORTS_DIR", "/r")] { set(k, v); }
+    assert_eq!([data_dir(), config_dir(), reports_dir()], ["/d", "/somewhere/settings", "/r"].map(PathBuf::from));
+    let kv = |k: &str, v: &str| (k.to_string(), v.to_string());
+    assert_eq!(board_env(), vec![kv("HERDR_PROJECTS_HOME", "/somewhere"), kv("HERDR_PROJECTS_DATA_DIR", "/d"), kv("HERDR_PROJECTS_REPORTS_DIR", "/r")]);
     unsafe { std::env::remove_var("XDG_DATA_HOME") };
     // A new install has nothing to move, and the move makes no folder for it.
     let fresh = w.base.join("fresh"); std::fs::create_dir_all(&fresh).unwrap();
@@ -164,4 +172,47 @@ fn with_data_in_the_new_place_already_nothing_is_written_over_the_newer_file_sta
     assert!(r.line.ends_with("2 files that were in both places are kept in ~/.herdr-projects/set-aside."), "{}", r.line);
     assert!(is_link(&h.data) && is_link(&h.settings));
     assert!(nothing(&h.run()));
+}
+
+const KEYS: [&str; 6] = ["HOME", TESTING, "HERDR_PROJECTS_HOME", "HERDR_PROJECTS_DATA_DIR", "HERDR_PROJECTS_CONFIG_DIR", "HERDR_PROJECTS_REPORTS_DIR"];
+fn put_env(k: &str, v: Option<OsString>) { unsafe { match v { Some(v) => std::env::set_var(k, v), None => std::env::remove_var(k) } } }
+/// What the store does with these changes to the world's environment: the words it stopped with, or None. The
+/// environment is the world's again before anything is asserted.
+fn refused(env: &[(&str, Option<PathBuf>)], f: fn()) -> Option<String> {
+    let was: Vec<(&str, Option<OsString>)> = KEYS.iter().map(|k| (*k, std::env::var_os(k))).collect();
+    put_env(TESTING, Some("1".into()));
+    for (k, v) in env { put_env(k, v.clone().map(|p| p.into_os_string())); }
+    let r = std::panic::catch_unwind(f);
+    for (k, v) in was { put_env(k, v); }
+    r.err().map(|e| e.downcast_ref::<String>().cloned().unwrap_or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()).unwrap_or_default()))
+}
+fn open() { let _ = sw::store::tasks::all(); }
+fn settings() { let _ = sw::store::settings::lookup::setting("board.diskFree", None); }
+
+#[test]
+fn under_the_tests_the_store_refuses_the_real_board_folder_with_a_clear_message() {
+    let w = common::world();
+    let (home, real) = (real_home().unwrap(), real_board().unwrap());
+    // No temporary folder: HOME is yours and nothing names another board.
+    let said = refused(&[("HOME", Some(home.clone())), ("HERDR_PROJECTS_HOME", None)], open).expect("the store opened the real board");
+    assert!(said.contains(&real.join("data").display().to_string()) && said.contains("temporary folder") && said.contains(TESTING), "{said}");
+    // A scratch home with the real data folder still named by its own variable, as an agent's tab had it (HP-172); the
+    // settings and the reports the same.
+    let scratch = Some(w.base.join("scratch"));
+    for (k, part) in [("HERDR_PROJECTS_DATA_DIR", "data"), ("HERDR_PROJECTS_CONFIG_DIR", "settings"), ("HERDR_PROJECTS_REPORTS_DIR", "reports")] {
+        let f: fn() = match part { "data" => open, "settings" => settings, _ => || { let _ = sw::store::files::reports_dir(); } };
+        let said = refused(&[("HERDR_PROJECTS_HOME", scratch.clone()), (k, Some(real.join(part)))], f).unwrap_or_else(|| panic!("{k} reached the real board"));
+        assert!(said.contains(&real.join(part).display().to_string()), "{said}");
+    }
+    // Through a link to your home folder.
+    std::os::unix::fs::symlink(&home, w.base.join("link")).unwrap();
+    assert!(refused(&[("HERDR_PROJECTS_HOME", Some(w.base.join("link").join(".herdr-projects")))], open).is_some(), "a link into the real board");
+    // The test's own board is fine, under the tests or not; outside the tests the guard lets every folder be.
+    assert_eq!(refused(&[], open), None);
+    assert_eq!(sw::store::files::data_dir(), w.base.join("sw/data"));
+    let was = std::env::var_os(TESTING);
+    put_env(TESTING, None);
+    let p = guard(real.join("data"));
+    put_env(TESTING, was);
+    assert_eq!(p, real.join("data"));
 }

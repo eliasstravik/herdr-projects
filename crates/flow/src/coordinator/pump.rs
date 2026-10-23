@@ -85,7 +85,7 @@ fn ensure(api: &Herdr, co: &Co) -> Res<(Obj, bool)> {
     let mut pane = if c.b("pane") { api.pane_get(c.s("pane")) } else { None };
     if c.b("workspace") { match move_over(api, co, false) { Ok(p) => pane = p, Err(_) => { close_place(api, &c); let _ = change(co, |c| { nowhere(c); true }); pane = None; } } }
     // A board kept somewhere else than the default is the board its commands must reach.
-    let env: Vec<(String, String)> = ["HERDR_PROJECTS_DATA_DIR", "HERDR_PROJECTS_CONFIG_DIR"].iter().filter_map(|k| std::env::var(k).ok().filter(|v| !v.is_empty()).map(|v| (k.to_string(), v))).collect();
+    let env: Vec<(String, String)> = ["HERDR_PROJECTS_HOME", "HERDR_PROJECTS_DATA_DIR", "HERDR_PROJECTS_CONFIG_DIR", "HERDR_PROJECTS_REPORTS_DIR"].iter().filter_map(|k| std::env::var(k).ok().filter(|v| !v.is_empty()).map(|v| (k.to_string(), v))).collect();
     let pane = match pane { Some(p) => p, None => open_tab(api, co, &env)? };
     c = get(co).unwrap_or_default();
     if api.agent_get(pane.s("pane_id"))?.is_some() { return Ok((c, false)); }

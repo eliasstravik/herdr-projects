@@ -93,5 +93,8 @@ board: asked again, it answers at once.
   purpose: `UPDATE_FRAMES=1 npm run check frames` writes them again; look at what changed before you commit it.
 - A look at the real thing (a real terminal, a browser screenshot) only for a task that changes what the board looks
   like.
+- Never write into the board's own folder (`~/.herdr-projects`) yourself or with a program of your own: change the
+  board only through its commands. Anything you run by hand on this code gets a scratch board:
+  `HERDR_PROJECTS_HOME=$TMPDIR/board` in front of it.
 
 How it works, and why: [docs/testing.md](docs/testing.md). You do not need it to start.
