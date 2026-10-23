@@ -20,6 +20,7 @@ pub mod review;
 pub mod review_once;
 pub mod review_brief;
 pub mod review_fallback;
+pub mod review_screen;
 pub mod shared;
 pub mod sync_job;
 pub mod turn_ended;
