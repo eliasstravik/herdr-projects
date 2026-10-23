@@ -3,6 +3,7 @@
 use super::review::{close_reviewer, Reviewed};
 use super::review_brief::{parse_verdict, review_brief, Brief};
 use super::review_fallback::{reviewer_now, Cut};
+use super::review_screen::last_screen;
 use super::shared::{ms, review_until, timed_out};
 use crate::agents::{adapter, helpers::still_at_work, installed, start, start_failed};
 use crate::clock::now;
@@ -135,7 +136,7 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
                 error = no_verdict(Some(r), ""); ended = true; break;
             }
             let a = api.agent_get(&pane).ok().flatten();
-            if a.is_none() && sent { error = no_verdict(None, "the reviewer exited without a verdict"); ended = true; break; }
+            if a.is_none() && sent { let gone = api.pane_get(&pane).is_none(); error = no_verdict(None, if gone { "the reviewer's terminal was closed" } else { "the reviewer exited without a verdict" }); ended = true; break; }
             if a.is_none() && api.pane_get(&pane).is_none() { error = "the reviewer's terminal was closed".into(); break; }
             // herdr status is used only to notice a reviewer that is blocked: "review needs you".
             let blocked = a.as_ref().map(|a| a.s("agent_status") == "blocked").unwrap_or(false);
@@ -179,6 +180,8 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
         if is_aborted(&e) { close_reviewer(id); if let Some((p, tb)) = &pane_tab { flow::tabs::close_reviewer_tab(&api, &json!({ "tab": tb, "pane": p })); } return Ok(Reviewed { aborted: true, ..Default::default() }); }
         error = crate::text::squash(&e.msg).chars().take(400).collect();
     }
+    // No verdict: what is on its screen says what stopped it (a dialog herdr did not see as one), read before its tab closes.
+    let screen = match (&pane_tab, &review, &cut) { (Some((p, _)), None, None) => last_screen(&api, p), _ => String::new() };
     // Put back anything the reviewer changed: what you approve is exactly what the agent committed. Not while you chat
     // with the agent: what changed may be its (flow/chat.rs), and the end of its turn decides.
     if to_land && !get(id).map(|c| crate::flow::chat::during(&c)).unwrap_or(false) && (flow::git::head_of(&folder) != head || !flow::git::dirty(&folder).is_empty()) { if git_out(&folder, &["reset", "--hard", &head]).is_ok() { let _ = git_out(&folder, &["clean", "-fd"]); } }
@@ -190,7 +193,7 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
         if let Err(e) = g.set(|t| { if plan.is_none() && t.i("reviewRound") == round { t.put("reviewRound", round - 1); } }) { if is_aborted(&e) { return Ok(Reviewed { aborted: true, ..Default::default() }); } }
         return Ok(Reviewed { cut: true, error, auth, by, cut_by: cut, ..Default::default() });
     }
-    let Some(mut rv) = review else { return Ok(Reviewed { error: if error.is_empty() { "no valid verdict".into() } else { error }, auth, by, ended, ..Default::default() }) };
+    let Some(mut rv) = review else { return Ok(Reviewed { error: if error.is_empty() { "no valid verdict".into() } else { error }, auth, by, ended, screen, ..Default::default() }) };
     gate::stamp(&mut rv, ch.s("review.mustFix"));
     rv.put("by", by.clone()); // who reviewed: the task's history keeps it
     if plan.is_some() { let _ = std::fs::remove_dir_all(&dir); rv.del("listed"); return Ok(Reviewed { review: Some(rv), by, ..Default::default() }); }
