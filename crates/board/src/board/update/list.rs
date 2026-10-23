@@ -247,9 +247,9 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
         }
         rows
     };
-    // No task gives way for an automation: theirs are not counted.
-    let lines_of = |rows: &[Row], s: &State| -> usize { let ind = super::depth::indents(rows, s.list_width); rows.iter().enumerate().map(|(n, r)| match r { Row::Rec(o) => crate::board::view::row_wrap::row_height(s, o, s.list_width.saturating_sub(ind[n]), s.list_tall), Row::Auto(_) => 0, _ => 1 }).sum() };
-    let over = |rows: &[Row], s: &State| !s.whole && s.list_room > 0 && lines_of(rows, s) > s.list_room;
+    // Each row measured once, whatever the rounds below lay out (fold_heights.rs).
+    let heights = super::fold_heights::Heights::default();
+    let over = |rows: &[Row], s: &State| !s.whole && s.list_room > 0 && heights.lines(rows, s) > s.list_room;
     let mut keep = DONE_SHOWN;
     let mut rows = lay(keep, usize::MAX, s);
     while keep > 1 && over(&rows, s) { keep -= 1; rows = lay(keep, usize::MAX, s); }

@@ -10,6 +10,9 @@ use sw::board::view::row::{row, row_layout, row_lines, Layout};
 use sw::json::*;
 use sw::shown::ink::{Ink, Inked};
 
+/// Each row measured once while a long list folds to its room.
+mod measured;
+
 const NOW: i64 = 1_800_000_000_000;
 fn has(text: &str, re: &str) -> bool { Regex::new(re).unwrap().is_match(text) }
 fn rec(v: Value) -> Rec { Arc::new(obj(v)) }

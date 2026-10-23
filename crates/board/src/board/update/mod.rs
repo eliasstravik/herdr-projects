@@ -99,6 +99,7 @@ pub mod depth;
 pub mod done;
 pub mod edit;
 pub mod edit_coord;
+pub mod fold_heights;
 pub mod keys;
 pub mod landing;
 pub mod link;

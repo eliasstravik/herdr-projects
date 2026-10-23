@@ -24,8 +24,7 @@ pub fn places<'a>(all: impl IntoIterator<Item = &'a Obj>) -> Vec<(String, i64)> 
 }
 /// Writes each waiting task's place as `queuePlace` on the board's rows (and their attempts), and takes it off the rest.
 pub fn number(rows: &mut [Obj]) {
-    let all: Vec<Obj> = rows.iter().flat_map(|r| std::iter::once(r.clone()).chain(r.arr("tries").iter().filter_map(|c| c.as_object().cloned()))).collect();
-    let at = places(all.iter());
+    let at = places(rows.iter().flat_map(|r| std::iter::once(r).chain(r.arr("tries").iter().filter_map(|c| c.as_object()))));
     let place = |o: &mut Obj| match at.iter().find(|(id, _)| id == o.s("id")) { Some((_, n)) => o.put("queuePlace", *n), None => o.del("queuePlace") };
     for r in rows.iter_mut() {
         place(r);

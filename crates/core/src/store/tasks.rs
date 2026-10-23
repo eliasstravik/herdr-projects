@@ -1,13 +1,14 @@
 //! Tasks on disk: reading, listing, changing, creating, and finding one by what it is called (its id, its number,
 //! its repo's key).
 use super::files::*;
-use super::{attempts, keys, old_research, repos, titles};
+use super::{attempts, keys, old_research, repos, task_cache, titles};
 use super::settings::migrate;
 use crate::clock::now;
 use crate::err::{Error, Res};
 use crate::json::*;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub type Task = Obj;
 
@@ -35,27 +36,26 @@ fn task_file(id: &str) -> PathBuf { dir_of(id).join("task.json") }
 pub fn get(id: &str) -> Option<Task> {
     let t = read_obj(&task_file(id))?;
     if !t.b("id") { return None; }
-    Some(old_research::research_moved(migrate::moved_on_read(t)))
+    Some(as_now(t))
 }
+/// A task as read, in the names of this version.
+pub fn as_now(t: Task) -> Task { old_research::research_moved(migrate::moved_on_read(t)) }
 #[derive(Default, Clone, Copy)]
 pub struct ListOpts { pub include_archived: bool, pub archived: bool, pub attempts: bool }
 /// Every task, newest first. `attempts`: the attempts of every task as well: they are no rows of the board, so only
 /// what starts, watches and tidies agents asks for them.
-pub fn list(o: ListOpts) -> Vec<Task> {
-    let mut out: Vec<Task> = if o.attempts { attempts::all_attempts().into_iter().map(migrate::moved_on_read).collect() } else { vec![] };
+pub fn list(o: ListOpts) -> Vec<Task> { shared(o).into_iter().map(Arc::unwrap_or_clone).collect() }
+/// The same, as read once for every look in this process: for a look that only reads them (the board's each second),
+/// with no copy of each task.
+pub fn shared(o: ListOpts) -> Vec<Arc<Task>> {
+    let mut out: Vec<Arc<Task>> = if o.attempts { attempts::all_attempts().into_iter().map(|a| Arc::new(migrate::moved_on_read(a))).collect() } else { vec![] };
     let mut ids = vec![];
     for repo in read_dir_names(&tasks_dir()) {
         for n in read_dir_names(&tasks_dir().join(&repo)) { if !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) { ids.push(format!("{repo}/{n}")); } }
     }
-    // Read on several threads at once: a board with a long history opens without waiting for each file in turn.
+    // Only the files changed since the last look are parsed (task_cache.rs).
     let keep = |t: &Task| { let archived = t.b("archivedAt"); !if o.archived { !archived } else { archived && !o.include_archived } };
-    let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).clamp(1, 8);
-    if ids.len() < 32 || n == 1 { out.extend(ids.iter().filter_map(|id| get(id)).filter(keep)); }
-    else {
-        let chunk = ids.len().div_ceil(n);
-        let found: Vec<Vec<Task>> = std::thread::scope(|sc| ids.chunks(chunk).map(|c| sc.spawn(move || c.iter().filter_map(|id| get(id)).filter(keep).collect::<Vec<_>>())).collect::<Vec<_>>().into_iter().map(|h| h.join().unwrap_or_default()).collect());
-        for f in found { out.extend(f); }
-    }
+    out.extend(task_cache::read(&ids, &keep));
     out.sort_by(|a, b| b.f("created").partial_cmp(&a.f("created")).unwrap_or(std::cmp::Ordering::Equal));
     out
 }

@@ -10,6 +10,9 @@ use sw::store::settings::change::{set_value, unset_value};
 use sw::store::settings::lookup::{setting, Scope};
 use sw::store::tasks::{create, find, list, update, Change};
 
+/// The cache a look at every task reads the task files through.
+mod cache;
+
 fn o(v: Value) -> Obj { v.as_object().cloned().unwrap() }
 fn has(text: &str, re: &str) -> bool { regex::Regex::new(re).unwrap().is_match(text) }
 

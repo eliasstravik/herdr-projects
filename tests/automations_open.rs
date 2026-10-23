@@ -32,6 +32,7 @@ fn last(s: &mut Board) -> String { s.screen(120).last().cloned().unwrap_or_defau
 #[test]
 fn one_automation_whole_its_prompt_trigger_own_settings_and_firings_and_enter_on_a_firing_goes_to_its_task() {
     let w = world();
+    sw::clock::set(Some(sw::clock::now())); // `in 2h` stays 2h however long a busy machine takes to get there
     let a = three(&w).remove(0);
     let first = fire(a.s("id"), Cause::Run, sw::clock::now()).unwrap(); fire(a.s("id"), Cause::Schedule, sw::clock::now()).unwrap(); stage(first.s("task"), "approval");
     let second = fire(a.s("id"), Cause::Schedule, sw::clock::now()).unwrap();
