@@ -90,7 +90,8 @@ fn one_chat_for_everyone_space_on_a_task_talks_to_its_agent_otherwise_to_the_coo
     assert!(!has(&wide(&mut e, 160), r"\n│ +Done\. +│\n│ +│\n│ +❯ Send message to the agent")); assert!(has(&wide(&mut e, 160), &format!("{chat_key} show the latest message")));
     // Hidden, the chat still says who you talk to, and that follows the selection: a message is never sent blind.
     {
-        let other = w.add("Somebody else"); e.load();
+        // (All done: the done task you talk to stays in the list when the selection leaves it.)
+        let other = w.add("Somebody else"); e.press(&["alt+d"]); e.load();
         let order: Vec<String> = e.s.rows.iter().filter_map(|r| match r { sw::board::state::Row::Rec(o) => Some(o.t("id")), sw::board::state::Row::Head { id, .. } => Some(id.clone()), _ => None }).collect(); // the arrows stop on headings too
         let d = order.iter().position(|x| *x == other).unwrap() as i64 - order.iter().position(|x| *x == t).unwrap() as i64;
         for _ in 0..d.abs() { e.press(&[if d > 0 { "down" } else { "up" }]); }
@@ -99,7 +100,7 @@ fn one_chat_for_everyone_space_on_a_task_talks_to_its_agent_otherwise_to_the_coo
         for _ in 0..d.abs() { e.press(&[if d > 0 { "up" } else { "down" }]); }
         assert_eq!(e.s.sel, t);
         assert!(has(&wide(&mut e, 160), &format!(r"\n╭─ [^\n]*PRJ-\d+  · Agent ─*╮\n(?:│ +│\n)?│ +❯ Send message to the agent +│\n(?:│ +│\n)?╰─+╯\n[^\n]*{chat_key} show the latest message")), "{}", wide(&mut e, 160));
-        sw::actions::archive::clear(&other).unwrap(); e.load();
+        sw::actions::archive::clear(&other).unwrap(); e.press(&["alt+d"]); e.load();
     }
     e.press(&["alt+c"]); assert!(e.s.chat_open); assert!(has(&wide(&mut e, 160), r"\n│ +Done\. +│\n│ +│\n│ +❯ Send message to the agent"));
     // space goes back to the top row's coordinator with its message up, and its reply is there.

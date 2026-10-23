@@ -33,6 +33,7 @@ fn board(list: &[Rec], by_repo: bool, scope: &str) -> State {
     sw::clock::set(Some(NOW));
     let mut s = State::new(Default::default(), Default::default());
     s.scope = scope.into(); s.by_repo = by_repo;
+    s.whole = true; // every done row shows, as with all done: these tests are about how rows look
     let repo = |r: &Rec| r.s("id").split('/').next().unwrap_or("").to_string();
     s.grouped = if by_repo { let mut names: Vec<String> = vec![]; for r in list { if !names.contains(&repo(r)) { names.push(repo(r)); } } names.into_iter().map(|g| (g.clone(), list.iter().filter(|r| repo(r) == g).cloned().collect())).collect() }
         else { GROUPS.iter().map(|g| (g.to_string(), list.iter().filter(|r| group_of(r) == *g).cloned().collect())).collect() };

@@ -53,7 +53,10 @@ fn ready_to_approve_the_merge_asks_first_the_menu_acts_remove_asks_and_messages_
     assert_eq!(task(&id).s("stage"), "merging");
     assert!(!s.text().contains("approved, merging"), "no confirmation under the chat: {}", s.text());
     settle(&id); s.load();
-    assert!(has(&s.screen(80).join("\n"), r"\n   ▾ done *\n[ ▌]  ✓ PRJ-\d+ +Make f +R#1 +\d"));
+    // Done, it shows only while selected; else the line under done counts it, and all done shows it.
+    s.s.sel = "proj/2".into(); s.load();
+    assert!(has(&s.screen(80).join("\n"), r"\n   ▾ done *\n +↓ 1 done \("), "{}", s.screen(80).join("\n"));
+    s.press(&["alt+d"]); assert!(has(&s.screen(80).join("\n"), r"\n   ▾ done *\n[ ▌]  ✓ PRJ-\d+ +Make f +R#1 +\d")); s.press(&["alt+d"]);
     // the ? menu: every key the board has, in three groups, and the / that lists skills in the text box
     s.s.sel = "proj/2".into(); s.load(); s.rows = 60; s.press(&["?"]);
     let text = s.text();
