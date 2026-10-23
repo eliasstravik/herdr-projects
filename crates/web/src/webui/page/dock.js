@@ -13,7 +13,8 @@ import { setHome } from "./dom.js";
 import { sendsOn } from "./compose.js";
 import { keepList, STEPS } from "./keep.js";
 
-// The web UI's places this leans on (herdr-web-ui 0.4.12: App.tsx, PaneTerminal.tsx, Composer.tsx there).
+// The web UI's places this leans on (herdr-web-ui 0.4.12, and Ovis 0.4.13 under its new name: App.tsx,
+// PaneTerminal.tsx, Composer.tsx there).
 const COLUMN = ".pane-column", CHAT = ".pane-frame.is-current .terminal-stack.is-chat", COMPOSER = ".pane-frame.is-current .composer";
 const BOX = "textarea.composer-text";
 // Its box's left controls: the add button, then the mic where dictation is on (VoiceInput.tsx there).

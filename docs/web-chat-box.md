@@ -1,6 +1,6 @@
 # The web board's chat box
 
-**The board's own box looks and works like the Herdr web UI's own chat input**, so going from the Board to an agent's
+**The board's own box looks and works like the web UI's (Ovis's) own chat input**, so going from the Board to an agent's
 chat and back feels like one program. Most of the time the chat under the [web board](web-ui.md)'s list *is* the web
 UI's own chat, its box with it ([the web board's chat](web-chat.md)); this box is the one the board's own chat has
 where the web UI has none to show (a Coordinator not started yet, a task with no agent in its pane, another machine's
@@ -61,8 +61,8 @@ Measured against **herdr-web-ui 0.4.8** (see [how](#how-it-was-measured)):
     alone), or, with no Coordinator, in the board's own folder (`files/` in its data folder).
   - For another machine's agent or Coordinator (a task of that machine, its heading, or its board shown) the file goes
     to that machine, and the path is where it landed there. First the web UI's own way, as its chat box sends a file
-    for a pane on another PC: kept beside that agent's pane, in `.herdr-web-ui/` (a task's worktree leaves it out of
-    git too). Where the web UI cannot (no PC for that machine in it, not connected, or the agent has no pane yet) it
+    for a pane on another PC: kept beside that agent's pane, in `.ovis/` (`.herdr-web-ui/` before its rename; a task's
+    worktree leaves both out of git too). Where the web UI cannot (no PC for that machine in it, not connected, or the agent has no pane yet) it
     goes over the board's own link to that machine. If neither works the box says why, and nothing is attached.
 - **Dictation**, as in the web UI, with the mic beside the add button:
   - Tap it to start and tap again to finish, or hold it and let go (or hold ctrl+shift+space, cmd on a Mac).

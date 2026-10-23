@@ -125,8 +125,8 @@ fn ours(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstream) {
     // A call: its page and its calls keep to a call's own rules (voice/api.rs), before the web UI is asked.
     if let Some(v) = rel.strip_prefix("api/voice/") { let v = v.to_string(); return super::voice::api::route(client, head, rest, up, &v); }
     let Some(call) = rel.strip_prefix("api/").map(String::from) else { return json_out(&mut client, 404, &json!({ "ok": false, "msg": "Not found" })) };
-    let Some(to) = up.to() else { return json_out(&mut client, 503, &json!({ "ok": false, "msg": "The herdr web UI is not answering." })) };
-    let role = match who(head, &to) { Ok(r) => r, Err(w) => return json_out(&mut client, if w == "down" { 503 } else { 401 }, &json!({ "ok": false, "msg": if w == "down" { "The herdr web UI is not answering." } else { "Log in to the herdr web UI first." } })) };
+    let Some(to) = up.to() else { return json_out(&mut client, 503, &json!({ "ok": false, "msg": "The web UI (Ovis) is not answering." })) };
+    let role = match who(head, &to) { Ok(r) => r, Err(w) => return json_out(&mut client, if w == "down" { 503 } else { 401 }, &json!({ "ok": false, "msg": if w == "down" { "The web UI (Ovis) is not answering." } else { "Log in to the web UI (Ovis) first." } })) };
     let q: std::collections::HashMap<String, String> = head.target.split_once('?').map(|(_, q)| q.split('&').filter_map(|p| p.split_once('=').map(|(k, v)| (crate::util::url_decode(k), crate::util::url_decode(&v.replace('+', " "))))).collect()).unwrap_or_default();
     let client_id = q.get("client").cloned().unwrap_or_default();
     let machine: String = q.get("machine").cloned().unwrap_or_default().chars().take(80).collect();

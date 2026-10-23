@@ -2,8 +2,8 @@
    top (under the list and the bar) or at its left (a wide screen, the list beside the chat), so its transcript and its
    box lay out whole beside the board, never under it. Its glass header over the chat and its tab strip step aside (the
    board's bar stands for them), and the board goes under the web UI's own menus, sheets and drawer. Each selector is
-   the web UI's (styles.css there, herdr-web-ui 0.4.12); where one is gone the page still works, the board's own chat
-   standing in. */
+   the web UI's (styles.css there, herdr-web-ui 0.4.12 and Ovis 0.4.13); where one is gone the page still works, the
+   board's own chat standing in. */
 html.sw-dock .app { --header-over: 0px !important; }
 html.sw-dock .app > .app-header { margin-bottom: 0 !important; }
 html.sw-dock .pane-column { box-sizing: border-box; padding-top: var(--sw-dock-top, 0px); padding-left: var(--sw-dock-left, 0px); }
