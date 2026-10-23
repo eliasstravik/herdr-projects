@@ -73,7 +73,7 @@ Coordinator's closing line use them too):
 | `clear` | `removed` |
 | `archive`, `restore` | `archived`, `restored` |
 | `archive --done [--repo NAME]` | `Archived 50 done tasks of mstars.`, and what it left out: `Left out: 1 done but pinned, 2 working.` |
-| `archive --repo NAME`, `restore --repo NAME` | `Archived mstars and its 6 tasks.`, `Restored mstars and its 6 tasks.`, and the tasks it stopped first ([archiving a project](board.md#archiving-a-project)) |
+| `archive --repo NAME`, `restore --repo NAME` (`--on MACHINE`: another machine's) | `Archived mstars and its 6 tasks.`, `Restored mstars and its 6 tasks.`, and the tasks it stopped first ([archiving a project](board.md#archiving-a-project)) |
 | `approve` | `approved` |
 | `stop` | `stopped`, and what it ended beside the agent: `proj/12: stopped. Ended what it started: bun …/check (pid 812).` |
 

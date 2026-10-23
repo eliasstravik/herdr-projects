@@ -72,6 +72,7 @@ impl Job {
             // A project archived or restored: its row, the project coordinator's.
             Job::ArchiveProject { repo, .. } | Job::RestoreProject { repo, .. } => format!("co:\tproject:{repo}"),
             Job::Far { host, action, req, .. } if action.starts_with("coordinator-") || action.starts_with("autopilot-") => format!("co:{host}\t{}", req.s("to")),
+            Job::Far { host, action, req, .. } if action.starts_with("project-") => format!("co:{host}\tproject:{}", req.s("repo")),
             Job::Far { host, req, .. } => format!("{host}:{}", req.s("id")),
             _ => String::new(),
         }
