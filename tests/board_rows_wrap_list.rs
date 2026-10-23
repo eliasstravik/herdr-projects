@@ -49,6 +49,7 @@ fn narrow_screen_rows_of_different_heights_the_selected_row_is_whole_and_in_view
         .chain((0..7).map(|n| done(json!({ "id": format!("p/{}", n + 20), "title": format!("Finished {} {}", n + 1, words(n * 4, "word")).trim().to_string(), "at": AT - n as i64 * 60000 })))).collect();
     for h in [6, 9, 14, 22, 40] {
         let mut s = board(&many, "p/1", "");
+        s.whole = true; s.rows = fold_rows(&mut s); // every done row shows, as with all done
         let look = |s: &mut State| {
             let d = drawn(s, 44, h);
             let lines = plain(&d);
@@ -76,22 +77,22 @@ fn narrow_screen_the_fold_counts_wrapped_lines_so_the_more_lines_still_keep_the_
         .chain((0..8).map(|n| done(json!({ "id": format!("p/{}", n + 20), "title": format!("Finished {}", n + 1), "at": AT - n * 60000 })))).collect();
     let mut s = board(&list, "p/10", "");
     struct L { lines: Vec<String>, done: usize, later: usize, more: Option<String>, folded: Option<String> }
-    let look = |s: &mut State, h: usize| { let lines = plain(&drawn(s, 49, h)); L { done: lines.iter().filter(|l| l.contains("Finished")).count(), later: lines.iter().filter(|l| l.contains("Later")).count(), more: lines.iter().find(|l| l.contains("more to do")).cloned(), folded: lines.iter().find(|l| l.contains("more done (")).cloned(), lines } };
-    let folded = |n: usize| Some(format!("    ↓ {n} more done ({} shows them)", sw::board::keys::key_name("allDone")));
-    // Room for all of it: the top row 1, working 1+5 (two lines of name, two of words, the progress), to do 1+6, done 1+5+1 = 21.
-    let l = look(&mut s, 21); assert_eq!((l.done, l.later, l.more, l.folded), (5, 6, None, folded(3)));
-    // One line short, and it is the wrapped lines that are counted: a done row gives way.
-    let l = look(&mut s, 20); assert_eq!((l.done, l.later), (4, 6));
-    let l = look(&mut s, 17); assert_eq!((l.done, l.later, l.folded), (1, 6, folded(7)));
-    let l = look(&mut s, 15); assert_eq!((l.later, l.more), (3, Some("    ↓ 3 more to do".to_string())));
-    for h in [21, 20, 17, 15] { assert!(look(&mut s, h).lines.iter().any(|l| l.contains("Research capy")), "the live row is in view at {h}"); assert_eq!(s.top, 0); }
+    let look = |s: &mut State, h: usize| { let lines = plain(&drawn(s, 49, h)); L { done: lines.iter().filter(|l| l.contains("Finished")).count(), later: lines.iter().filter(|l| l.contains("Later")).count(), more: lines.iter().find(|l| l.contains("more to do")).cloned(), folded: lines.iter().find(|l| l.contains(" done (")).cloned(), lines } };
+    let folded = Some(format!("    ↓ 8 done ({} shows them)", sw::board::keys::key_name("allDone")));
+    // Room for all of it: the top row 1, working 1+5 (two lines of name, two of words, the progress), to do 1+6, done 1
+    // and the line that counts them 1 = 16. No done row shows.
+    let l = look(&mut s, 16); assert_eq!((l.done, l.later, l.more, l.folded.clone()), (0, 6, None, folded.clone()));
+    // One line short, and it is the wrapped lines that are counted: the to-dos give way, with a line that counts them.
+    let l = look(&mut s, 15); assert_eq!((l.done, l.later, l.more, l.folded), (0, 4, Some("    ↓ 2 more to do".to_string()), folded));
+    let l = look(&mut s, 14); assert_eq!((l.later, l.more), (3, Some("    ↓ 3 more to do".to_string())));
+    for h in [16, 15, 14] { assert!(look(&mut s, h).lines.iter().any(|l| l.contains("Research capy")), "the live row is in view at {h}"); assert_eq!(s.top, 0); }
     // The selected row growing to its whole name takes lines from the rows that give way, not from the screen.
     let wordy: Vec<Rec> = list.iter().map(|r| if r.s("id") == "p/10" { with(r, json!({ "title": format!("Later 1 {}", words(20, "word")) })) } else { r.clone() }).collect();
     let mut w = board(&wordy, "p/10", "");
-    let lines = plain(&drawn(&mut w, 49, 21));
-    assert_eq!(lines.len(), 21); assert!(lines.iter().any(|l| l.ends_with("word20")), "{}", lines.join("\n"));
+    let lines = plain(&drawn(&mut w, 49, 16));
+    assert_eq!(lines.len(), 16); assert!(lines.iter().any(|l| l.ends_with("word20")), "{}", lines.join("\n"));
     let grown = row_height(&w, wordy.iter().find(|r| r.s("id") == "p/10").unwrap(), 49, true) - 1;
-    assert!(grown >= 2); assert_eq!(lines.iter().filter(|l| l.contains("Finished")).count(), 5 - grown); assert_eq!(w.top, 0);
+    assert!(grown >= 2); assert_eq!(lines.iter().filter(|l| l.contains("Later")).count(), 5 - grown, "{}", lines.join("\n")); assert_eq!(w.top, 0);
 }
 
 #[test]

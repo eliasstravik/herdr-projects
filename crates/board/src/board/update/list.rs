@@ -11,8 +11,6 @@ use crate::shown::ink::Ink;
 use crate::shown::queue::queued;
 use crate::shown::states::{group_of, is_live, GROUPS};
 
-/// A long done list folds to its latest few. A list taller than its room shows fewer still, down to one.
-const DONE_SHOWN: usize = 5;
 pub const AUTOMATIONS: &str = "automations";
 fn is_done(r: &Obj) -> bool { r.s("state") == "done" && !r.b("pinned") && !r.b("archivedAt") }
 fn is_todo(r: &Obj) -> bool { group_of(r) == "to do" && !r.b("pinned") && !r.b("archivedAt") }
@@ -170,9 +168,9 @@ pub fn sync_reply(s: &mut State) {
     if !s.reply_id.is_empty() && !super::coords::exists(s, &s.reply_id) { s.reply = false; s.full = false; s.panel_top = 0; }
     else { s.reply_id = if s.current().is_some() || super::coords::of_head(s, &s.sel).is_some() { s.sel.clone() } else { String::new() }; s.panel_top = 0; }
 }
-/// The rows under their headings. A long done list folds to its latest few; a list taller than its room shows fewer
-/// done rows, down to one, then fewer to-dos of a list that has live tasks. The selected task is never folded away,
-/// nor anything while you search or ask for all done. A machine's automations stand in its part, after its tasks (by
+/// The rows under their headings. No done task shows, only one line that counts them (`↓ 7 done`); a list taller than its
+/// room shows fewer to-dos of a list that has live tasks. The selected task is never folded away, nor anything while
+/// you search or ask for all done. A machine's automations stand in its part, after its tasks (by
 /// repo: after their repo's), and fold with their heading.
 pub fn fold_rows(s: &mut State) -> Vec<Row> {
     s.fold_sel = s.sel.clone();
@@ -180,7 +178,7 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
     if super::shows::coords(s) { let rows = super::shows::coord_rows(s); s.steps = rows.iter().filter_map(step_id).collect(); return rows; }
     let groups = s.grouped.clone();
     let parts = parts(s, &groups);
-    let lay = |keep: usize, todos: usize, s: &State| -> Vec<Row> {
+    let lay = |todos: usize, s: &State| -> Vec<Row> {
         let mut rows = vec![];
         // With every machine shown, the top row is `All machines` (top.rs); folded, it is the whole list.
         if s.scope == "*" && !s.archive_view {
@@ -230,16 +228,17 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
                     .then_with(|| if a.b("archivedAt") && b.b("archivedAt") { b.i("archivedAt").cmp(&a.i("archivedAt")) } else { std::cmp::Ordering::Equal })
                     .then_with(|| if is_done(a) && is_done(b) { b.i("at").cmp(&a.i("at")) } else { std::cmp::Ordering::Equal }));
                 let done: Vec<&Rec> = list.iter().filter(|r| is_done(r)).collect();
-                let folded: Vec<String> = if s.whole { vec![] } else { done.iter().skip(keep).filter(|r| r.s("id") != s.sel).map(|r| r.t("id")).collect() };
+                let folded: Vec<String> = if s.whole { vec![] } else { done.iter().filter(|r| r.s("id") != s.sel).map(|r| r.t("id")).collect() };
                 let todo: Vec<&Rec> = list.iter().filter(|r| is_todo(r)).collect();
                 let from = match todo.iter().position(|r| r.s("id") == s.sel) { Some(p) if todos <= p => p + 1 - todos, _ => 0 };
                 let later: Vec<String> = if s.whole { vec![] } else { todo.iter().enumerate().filter(|(n, _)| *n < from || *n >= from.saturating_add(todos)).map(|(_, r)| r.t("id")).collect() };
+                // The count of done tasks stands where the last of them would.
                 let last_done = done.last().map(|r| r.t("id"));
                 let last_todo = todo.last().map(|r| r.t("id"));
                 for r in &list {
                     let id = r.t("id");
                     if !folded.contains(&id) && !later.contains(&id) { rows.push(Row::Rec(r.clone())); }
-                    if !folded.is_empty() && Some(&id) == last_done.as_ref() { rows.push(Row::Note(format!("↓ {} more done ({} shows them)", folded.len(), key_name("allDone")))); }
+                    if !folded.is_empty() && Some(&id) == last_done.as_ref() { rows.push(Row::Note(format!("↓ {} done ({} shows them)", folded.len(), key_name("allDone")))); }
                     if !later.is_empty() && Some(&id) == last_todo.as_ref() { rows.push(Row::Note(format!("↓ {} more to do", later.len()))); }
                 }
                 rows.extend(autos.iter().cloned().map(Row::Auto));
@@ -250,14 +249,12 @@ pub fn fold_rows(s: &mut State) -> Vec<Row> {
     // Each row measured once, whatever the rounds below lay out (fold_heights.rs).
     let heights = super::fold_heights::Heights::default();
     let over = |rows: &[Row], s: &State| !s.whole && s.list_room > 0 && heights.lines(rows, s) > s.list_room;
-    let mut keep = DONE_SHOWN;
-    let mut rows = lay(keep, usize::MAX, s);
-    while keep > 1 && over(&rows, s) { keep -= 1; rows = lay(keep, usize::MAX, s); }
+    let mut rows = lay(usize::MAX, s);
     // The arrow keys go through every heading and every to-do, folded or not.
     s.steps = rows.iter().filter_map(step_id).collect();
     let mut todos = groups.iter().map(|(_, recs)| recs.iter().filter(|r| is_todo(r)).count()).max().unwrap_or(0);
     let live = rows.iter().any(|r| matches!(r, Row::Rec(o) if is_live(o)));
-    while live && todos > 1 && over(&rows, s) { todos -= 1; rows = lay(keep, todos, s); }
+    while live && todos > 1 && over(&rows, s) { todos -= 1; rows = lay(todos, s); }
     rows
 }
 /// A row the arrow keys stop on: a task, an automation or a heading.

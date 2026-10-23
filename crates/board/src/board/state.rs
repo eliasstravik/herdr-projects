@@ -68,7 +68,7 @@ pub struct Sent { pub text: String, pub over: (String, Value, Value), pub at: i6
 pub struct ChatAt { pub key: String, pub top: Option<usize>, pub lines: Vec<String>, pub end: bool }
 #[derive(Clone, Debug, Default)]
 pub struct ChatFit { pub total: usize, pub rows: usize, pub top: usize, pub above: usize, pub below: usize, pub latest: usize }
-/// One row of the folded list: a heading, a task, a note ("↓ 3 more done"), or an automation. A heading is a machine's
+/// One row of the folded list: a heading, a task, a note ("↓ 3 done"), or an automation. A heading is a machine's
 /// (`machine`, with every machine shown) or a group's (a repo, a status, a machine's automations: `autos`), selectable
 /// by its `id` (update/heads.rs). `folded` holds how many rows it hides, tasks and automations (0: open), `folded_autos`
 /// how many of those are automations. `empty`: a machine's with nothing in view, or a repo's used lately with no task in view, which shows folded (`0 tasks`).

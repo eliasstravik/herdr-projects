@@ -30,6 +30,7 @@ fn board(list: &[Rec], sel: &str, scope: &str) -> State {
     sw::clock::set(Some(NOW));
     let mut s = State::new(Default::default(), Default::default());
     s.sel = sel.into(); s.scope = scope.into();
+    s.whole = true; // every done row shows, as with all done: these tests are about how rows look
     s.grouped = GROUPS.iter().map(|g| (g.to_string(), list.iter().filter(|r| group_of(r) == *g).cloned().collect())).collect();
     s.rows = fold_rows(&mut s);
     s

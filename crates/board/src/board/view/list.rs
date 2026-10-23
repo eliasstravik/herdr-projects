@@ -130,7 +130,7 @@ fn line(text: Inked) -> L { L { text, sel: false, head: false, n: 0, rest: 0, id
 /// The list in `h` lines. `screen`: the whole board's width, which decides whether live rows have their third line.
 pub fn list_lines(s: &mut State, t: &Theme, width: usize, h: usize, screen: usize) -> Vec<Inked> {
     let tall = tall_at(screen);
-    // The room the list has decides how many done rows show: when it changes, they are folded again.
+    // The room the list has decides how many to-dos show: when it changes, they are folded again.
     if h != s.list_room || tall != s.list_tall || width != s.list_width || s.sel != s.fold_sel { s.list_room = h; s.list_tall = tall; s.list_width = width; s.rows = fold_rows(s); }
     let unread = unread_lines(s, width);
     let has_rows = !s.rows.is_empty();

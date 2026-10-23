@@ -84,6 +84,8 @@ fn the_done_list_is_newest_first_and_nothing_marks_a_task_as_read() {
         sw::store::tasks::update(id, |t| { t.put("at", now - (3 - n as i64) * 60000); t.put("seen", n != 0); Ok(sw::store::tasks::Change::Write) }).unwrap();
     }
     let mut s = open(&w.root, 34);
+    assert!(!s.screen(80).iter().any(|l| l.contains('✓')), "the list shows no done task");
+    s.press(&["alt+d"]);
     let lines = s.screen(80);
     let at: Vec<usize> = titles.iter().map(|t| lines.iter().position(|l| has(l, r"^[ ▌]  ✓ PRJ-\d ") && l.chars().skip(11).collect::<String>().starts_with(t)).unwrap_or(0)).collect();
     assert!(at[2] > 0 && at[2] < at[1] && at[1] < at[0], "{}", lines.join("\n"));

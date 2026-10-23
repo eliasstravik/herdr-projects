@@ -146,3 +146,16 @@ fn every_colour_name_has_a_colour_on_the_page_every_state_a_mark_and_every_setti
     }
     assert!(left <= 3); assert_eq!(s.at("settings").at("canSet"), &json!(true));
 }
+
+#[test]
+fn the_web_board_shows_no_done_task_only_a_button_that_counts_them_and_all_done_shows_every_one() {
+    let w = world();
+    w.add("Later");
+    let done = |s: &serde_json::Value| s.at("list").arr("groups").iter().find(|g| g.s("name") == "done").cloned();
+    assert!(done(&web(&w, "board", json!({}))).is_none(), "none done: no done group, no button");
+    for t in ["One", "Two", "Three"] { let id = w.add(t); sw::store::tasks::update(&id, |t| { t.put("stage", "done"); Ok(sw::store::tasks::Change::Write) }).unwrap(); }
+    let g = done(&web(&w, "board", json!({}))).unwrap();
+    assert_eq!((g.arr("rows").len(), g.i("more")), (0, 3), "the done heading and its button: Show 3 done");
+    let g = done(&web(&w, "press", json!({ "id": "allDone" }))).unwrap();
+    assert_eq!((g.arr("rows").len(), g.i("more")), (3, 0), "all done: every one of them");
+}
