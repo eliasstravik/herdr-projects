@@ -176,8 +176,9 @@ fn run_one(job: Job) -> Done {
             Job::RestoreProject { repo, said } => { let (r, _) = crate::actions::archive_project::restore_project(&repo)?; Done::say(format!("{r}{said}"), Ink::Green) }
             Job::Restore { id, said } => { archive::restore(&id)?; Done::say(said, Ink::Green).and(Then::Left(id)) }
             Job::Clear { id, name } => {
-                let (_, kept) = archive::clear(&id)?;
-                if kept.is_empty() { Done::say(format!("Removed {name}."), Ink::Muted) } else { Done::say(format!("Removed {name}. Kept, so no work is lost: {}", kept.join(", ")), Ink::Yellow) }
+                let (_, kept, ends) = archive::clear(&id)?;
+                let first = if kept.is_empty() { format!("Removed {name}.") } else { format!("Removed {name}. Kept, so no work is lost: {}", kept.join(", ")) };
+                Done::say(crate::leftovers::then_say(&first, &ends.said()), if kept.is_empty() && ends.left.is_empty() { Ink::Muted } else { Ink::Yellow })
             }
             Job::Pick { id, letter } => green(crate::attempts::settle::pick(&id, &letter)?.msg),
             Job::CoordSend { cwd, text, delegate, about, to } => { crate::coordinator::requests::send(std::path::Path::new(&cwd), &text, delegate, &about, crate::coordinator::co::Co::of(&crate::herdr::cli::current_socket(), &to))?; Done::default() }

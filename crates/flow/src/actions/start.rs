@@ -50,6 +50,7 @@ const FRESH: &[&str] = &[
     "summary",
     "stat",
     "kept",
+    "stillRunning",
     "tidy",
     "exitedAt",
     "repoFile",
