@@ -82,3 +82,23 @@ fn a_program_the_board_does_not_know_gets_agents_md_your_own_notes_in_the_file_a
     let before = file("AGENTS.md"); write_rules(&home, "amp", &text).unwrap(); assert_eq!(file("AGENTS.md"), before);
     drop(w);
 }
+
+#[test]
+fn the_rules_name_merge_closes_and_archive_done_and_a_running_coordinator_hears_once_that_they_changed() {
+    let w = coord_world();
+    let home = state::home(&w.socket);
+    let said = rules("/x/bin/herdr-projects");
+    assert!(said.contains("merge.closes") && said.contains("--merge.closes 2203,2204"), "the issues a task's work closes");
+    assert!(said.contains("board archive --done [--repo <repo>]"), "every done task archived in one go");
+    w.script(json!({ "coordinator": [{ "said": "One." }, { "said": "Two." }, { "said": "Three." }] }));
+    send(&w.root, "first", false, "", &w.socket).unwrap(); drain();
+    // A new version of the board, or new words of yours, changes the rules while its program runs: it is told once,
+    // before the next message, never with a message of its own.
+    sw::store::settings::change::set_value("coordinator.instructions", &json!("Answer in Swedish."), &sw::store::settings::lookup::Scope::you()).unwrap();
+    assert_eq!(agent(&w).arr("prompts").len(), 1);
+    send(&w.root, "second", false, "", &w.socket).unwrap(); drain();
+    send(&w.root, "third", false, "", &w.socket).unwrap(); drain();
+    let note = format!("[The board was updated: your standing rules in {} changed; read them again.]", home.join("AGENTS.md").display());
+    assert_eq!(agent(&w).arr("prompts").iter().map(text).collect::<Vec<_>>(), vec!["first".to_string(), format!("{note}\n\nsecond"), "third".into()]);
+    assert!(read(&home.join("AGENTS.md")).contains("Answer in Swedish."));
+}

@@ -105,6 +105,12 @@ pub fn show_text(scope: &Scope) -> String {
     let mut out = vec![head];
     out.extend(lines);
     if !bad.is_empty() { out.push(String::new()); out.push("Not counted (the next place down is used for each):".into()); out.extend(bad.iter().map(|b| format!("  {b}"))); }
+    // One task's own settings are said on that task only: named here, so that they are known to be there.
+    let own: Vec<&str> = SETTINGS.iter().filter(|s| s.task).map(|s| s.name.as_str()).collect();
+    if task.is_none() && scope.coord.is_none() && !own.is_empty() {
+        out.push(String::new());
+        out.push(format!("Set on one task only: {} (add … {}, show <id>)", own.join(", "), own.iter().map(|n| format!("--{n}")).collect::<Vec<_>>().join(" ")));
+    }
     out.join("\n")
 }
 /// How a board says a value just saved or put back: plain, and `, for this task only` where it is that one's own now.

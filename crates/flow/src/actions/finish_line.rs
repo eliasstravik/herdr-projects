@@ -266,6 +266,7 @@ pub fn details(id: &str) -> Res<Value> {
         "worktree": if t.b("worktree") { t.at("worktree").clone() } else { Value::Null },
         "branch": if t.b("branch") { t.at("branch").clone() } else { Value::Null },
         "kept": if t.b("kept") { t.at("kept").clone() } else { Value::Null },
+        "stillRunning": if t.b("stillRunning") { t.at("stillRunning").clone() } else { Value::Null }, // what its clean-up or archive left for you to end
         "inUse": if t.at("tidy").b("inUse") { t.at("tidy").at("inUse").clone() } else { Value::Null }, // what keeps its space in use, every thing
         "limits": limits_detail(&t, now()),
         "addedBy": crate::autopilot::history::added_by(&t), // you, an automation, a coordinator's autopilot, or which coordinator you asked

@@ -126,7 +126,8 @@ pub fn stop(id: &str) -> Res<Said> { stop_as(id, true).map(|(t, e)| say(t, e.sai
 pub fn stopped(first: &str, msg: &str) -> String { if msg.is_empty() { first.to_string() } else { format!("{}. {msg}", first.trim_end_matches('.')) } }
 /// The board's own stop (at a limit): not you stepping in, so a merge it was on its way to asks nothing more.
 pub fn board_stop(id: &str) -> Res<Task> { stop_as(id, false).map(|(t, _)| t) }
-fn stop_as(id: &str, yours: bool) -> Res<(Task, Ended)> {
+/// A stop (`yours`: you stepping in), with what it ended beside the agent and what still runs (clear says it too).
+pub(crate) fn stop_as(id: &str, yours: bool) -> Res<(Task, Ended)> {
     let cur = find(id)?;
     assert_unarchived(&cur)?;
     let cid = cur.t("id");
