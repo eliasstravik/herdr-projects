@@ -53,7 +53,9 @@ pub fn on_pane(socket: &str, pane: &str) {
     let Some(first) = named.iter().find(|t| !ended(t)).or(named.first()) else { return };
     let api = Herdr::new(Some(socket.into()));
     let Ok(Some(a)) = api.agent_get(pane) else { return reconcile(first, &api) };
-    // A done task's old pane id, given to another pane since (a coordinator's): what runs there is not its agent.
+    // A done task's old pane id, given to another pane since (a coordinator's): what runs there is not its agent. Nor is
+    // a coordinator's own, a task's not done yet included: its readings never go into a task's terminals.
+    if crate::flow::pane_owner::coordinators_pane(socket, pane, a.s("terminal_id")) { return; }
     let Some(t) = named.into_iter().find(|t| !ended(t) || agents_pane(t, a.s("terminal_id"))) else { return };
     // Ids can change: a match also requires the pane to be in the task's working folder. No prompt is ever sent to a
     // pane that fails this check.

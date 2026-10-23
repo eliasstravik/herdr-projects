@@ -219,7 +219,10 @@ nothing more, and autopilot may not touch it.
 - Their agent and reviewer may read the board, and `report` on their own task. Every other board command is refused, so
   nothing its tasks do adds work outside its limits. A command is its agent's (or reviewer's) when it runs in that
   pane in a terminal the agent was seen in: Herdr gives a closed pane's id to the next pane of its space, so a
-  coordinator in a done task's old pane is that coordinator, not the done task's agent.
+  coordinator in a done task's old pane is that coordinator, not the done task's agent. A coordinator's own pane, in
+  the terminal saved with it, is never a task's, whatever the task has on record, and a task whose worktree was
+  cleaned up is never linked again to an agent in the repo's folder. A refusal names the task the caller was taken
+  for ("You are taken as AFS-6's agent").
 - Under `autopilot.repoFileWaits yes`, a change that touches the repo's own `.herdr-projects.json` never merges by
   itself, whatever `merge.by` or `autopilot.approve` say. Its row says it waits for your own yes.
 - An approve from autopilot's turn is refused on any task whose change touches that file, whoever added it.

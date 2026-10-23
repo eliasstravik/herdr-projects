@@ -42,17 +42,20 @@ pub fn reconcile(t: &Task, api: &Herdr) {
     apply(id, &a, api); // covers hooks missed while herdr restarted
 }
 /// When the stored pane id no longer matches, the task is relinked: first by terminal_id, then by agent name, then
-/// to the single agent pane whose folder is the task's worktree. Otherwise its terminal is gone.
+/// to the single agent pane whose folder is the task's worktree, while that is there (once it was cleaned up, the
+/// folder an agent of it would be in is the repo's, a project coordinator's too). Never to a coordinator's pane.
+/// Otherwise its terminal is gone.
 fn relink(t: &Task, api: &Herdr) -> Option<Value> {
     let panes = api.panes(None).ok()?;
     let agents = api.agents().unwrap_or_default();
     let dir = cwd_of(t);
-    let in_dir = |p: &Value| same_dir(p.s("cwd"), &dir) || same_dir(p.s("foreground_cwd"), &dir);
     let link = t.at("link");
-    let by_pane = |pid: &str| panes.iter().find(|p| p.s("pane_id") == pid).cloned();
+    let theirs = |p: &Value| crate::flow::pane_owner::coordinators_pane(link.s("socket"), p.s("pane_id"), p.s("terminal_id"));
+    let in_dir = |p: &Value| (same_dir(p.s("cwd"), &dir) || same_dir(p.s("foreground_cwd"), &dir)) && !theirs(p);
+    let by_pane = |pid: &str| panes.iter().find(|p| p.s("pane_id") == pid && !theirs(p)).cloned();
     let mut hit = panes.iter().find(|p| link.b("terminal") && p.at("terminal_id") == link.at("terminal") && in_dir(p)).cloned();
     if hit.is_none() && link.b("agent") { if let Some(a) = agents.iter().find(|a| a.at("name") == link.at("agent") && in_dir(a)) { hit = by_pane(a.s("pane_id")); } }
-    if hit.is_none() && t.b("worktree") {
+    if hit.is_none() && t.b("worktree") && Path::new(t.s("worktree")).exists() {
         let c: Vec<&Value> = agents.iter().filter(|a| in_dir(a) && a.at("pane_id") != link.at("reviewer").at("pane")).collect();
         if c.len() == 1 { hit = by_pane(c[0].s("pane_id")); }
     }

@@ -1,6 +1,7 @@
 //! Whose agent runs in a herdr pane: herdr hands a closed pane's id to the next pane opened in its space, so a task's
 //! saved pane id names its agent (or its reviewer) only while the terminal in that pane is one it was seen in. A done
-//! task's old pane id given to a coordinator is the coordinator's, not the task's.
+//! task's old pane id given to a coordinator is the coordinator's, not the task's, and so is a pane a coordinator runs
+//! in now, in the terminal saved with it, whatever a task has on record.
 use super::live::{owns_pane, terminals};
 use crate::herdr::Herdr;
 use crate::json::*;
@@ -26,17 +27,24 @@ pub fn reviewers_pane(t: &Task, term: &str) -> bool {
     if !term.is_empty() && r.b("terminal") { return r.s("terminal") == term; }
     !ended(t)
 }
+/// Is pane `pane`, with terminal `term`, a coordinator's now: its saved pane, in the terminal saved with it? herdr never
+/// hands a terminal id out again, so no task's agent runs there, whatever pane and terminal a task has on record.
+pub fn coordinators_pane(socket: &str, pane: &str, term: &str) -> bool {
+    if pane.is_empty() || term.is_empty() { return false; }
+    crate::coordinator::state::all(socket).into_iter().any(|co| crate::coordinator::state::get(&co).map(|c| c.s("pane") == pane && c.s("terminal") == term).unwrap_or(false))
+}
 /// The task among `tasks` whose agent or reviewer runs in pane `pane` of herdr session `socket` now, and as which.
-/// herdr is asked for the pane's terminal once, and only when a task names the pane.
+/// herdr is asked for the pane's terminal once, and only when a task names the pane. A coordinator's pane is no task's.
 pub fn whose(tasks: impl IntoIterator<Item = Task>, socket: &str, pane: &str) -> Option<(Task, &'static str)> {
     if pane.is_empty() { return None; }
     let mut term: Option<String> = None;
     let mut now = || term.get_or_insert_with(|| terminal_of(socket, pane)).clone();
-    for t in tasks {
+    let found = tasks.into_iter().find_map(|t| {
         let l = t.at("link");
-        if l.s("socket") != socket { continue; }
+        if l.s("socket") != socket { return None; }
         if l.s("pane") == pane && agents_pane(&t, &now()) { return Some((t, "agent")); }
         if l.at("reviewer").s("pane") == pane && reviewers_pane(&t, &now()) { return Some((t, "reviewer")); }
-    }
-    None
+        None
+    })?;
+    (!coordinators_pane(socket, pane, &now())).then_some(found)
 }

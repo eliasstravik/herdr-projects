@@ -32,12 +32,15 @@ fn space_for(api: &Herdr, co: &Co, c: Option<&Obj>) -> Res<String> {
     Ok(api.workspace_create(&root.display().to_string(), repo, &[])?.at("workspace").t("workspace_id"))
 }
 /// Not written down (the state file was lost) but there: the pane in the coordinator's own folder. A project
-/// coordinator's folder is the human's repo: only a pane in a tab named after it.
+/// coordinator's folder is the human's repo: only a pane in a tab named after it. Never a pane a task's agent or
+/// reviewer runs in (flow/pane_owner.rs).
 fn adopt(api: &Herdr, co: &Co) -> Option<Value> {
     let h = real(&home(co));
     let tab = co.name();
     let label = |p: &Value| api.tab_get(p.s("tab_id")).map(|t| t.t("label")).unwrap_or_default();
-    let here: Vec<Value> = api.panes(None).ok()?.into_iter().filter(|p| real(std::path::Path::new(p.s("cwd"))) == h && (co.repo().is_none() || label(p) == tab)).collect();
+    let tasks = crate::store::tasks::list(Default::default());
+    let a_tasks = |p: &Value| crate::flow::pane_owner::whose(tasks.iter().cloned(), &co.socket, p.s("pane_id")).is_some();
+    let here: Vec<Value> = api.panes(None).ok()?.into_iter().filter(|p| real(std::path::Path::new(p.s("cwd"))) == h && (co.repo().is_none() || label(p) == tab) && !a_tasks(p)).collect();
     let alone = |p: &Value| api.tab_get(p.s("tab_id")).map(|t| t.s("label") == tab && t.i("pane_count") == 1).unwrap_or(false);
     here.iter().find(|p| p.b("agent")).cloned().or_else(|| here.iter().find(|p| api.pane_idle(p.s("pane_id")) && alone(p)).cloned())
 }

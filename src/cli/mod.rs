@@ -35,8 +35,8 @@ pub fn plugin_folder(c: &Value) -> Option<PathBuf> {
 }
 /// Is the caller the agent of a task? Its shell runs in the task's worker pane (or its reviewer's), in a terminal the
 /// task's agent was seen in: herdr gives a closed pane's id to the next pane of its space, a coordinator's too
-/// (flow/pane_owner.rs). The board's own pane is the plugin's and the Coordinator's pane belongs to no task, so neither
-/// is ever taken for a worker.
+/// (flow/pane_owner.rs). The board's own pane is the plugin's and a coordinator's pane (its saved pane, in the terminal
+/// saved with it) belongs to no task, whatever a task has on record, so neither is ever taken for a worker.
 pub fn caller() -> Option<(Obj, &'static str)> {
     let (pane, socket) = (crate::util::env_val("HERDR_PANE_ID")?, crate::util::env_val("HERDR_SOCKET_PATH")?);
     if crate::util::env_set("HERDR_PLUGIN_ID") { return None; }

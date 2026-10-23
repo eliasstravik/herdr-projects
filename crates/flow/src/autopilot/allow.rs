@@ -28,11 +28,12 @@ fn refused(what: &str, rule: &str) -> Res<Option<Co>> { no(format!("Refused in a
 /// the command runs in this coordinator's autopilot turn, and `add` keeps to its limits.
 pub fn guard(cmd: &str, pos: &[String], flags: &Obj, agent: Option<(&Obj, &str)>) -> Res<Option<Co>> {
     if let Some((t, role)) = agent {
-        if switches(cmd, pos) { return no(format!("A task's {role} can never switch autopilot or change a coordinator's settings: only the human does, by a key, a command of theirs, or by telling a coordinator.")); }
+        if switches(cmd, pos) { return no(format!("You are taken as {}'s {role}. A task's {role} can never switch autopilot or change a coordinator's settings: only the human does, by a key, a command of theirs, or by telling a coordinator.", t.s("id"))); }
         // A report with no id is its own task's only for its agent: for anyone else it adds a task (cli/tasks.rs).
         let mine = cmd == "report" && pos.get(1).map(|id| find(id).map(|x| x.s("id") == t.s("id")).unwrap_or(false)).unwrap_or(role == "agent");
         if t.at("autopilot").is_object() && !reads(cmd, pos) && !mine {
-            return no(format!("This task was added by autopilot: its {role} may read the board and `report` on its own task, nothing else."));
+            // Which task: a pane taken for the wrong one's shows at once.
+            return no(format!("You are taken as {}'s {role}. This task was added by autopilot: its {role} may read the board and `report` on its own task, nothing else.", t.s("id")));
         }
         return Ok(None);
     }
