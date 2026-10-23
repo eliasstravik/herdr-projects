@@ -1,6 +1,6 @@
 //! Reviews in colour: a verdict in red or green; the PR in the colour of its checks and nothing else; merged, the
 //! reviews and the PR go quiet unless the last review failed; a finished row's right-hand side is quiet; the reviewer's
-//! own blue wherever the reviewer works; and what a row says is in the brighter grey, a question to you in the text colour.
+//! own blue wherever the reviewer works; and what a row says is in the brighter grey, a question to you in its mark's colour.
 use crate::common;
 use crate::review_kit;
 use common::*;
@@ -113,10 +113,10 @@ fn the_reviewers_work_is_blue_everywhere_and_a_rows_words_are_the_readable_grey(
     assert_eq!(ink_of(&chat, "◑"), Some(Ink::Review), "{}", dump(&chat)); assert!(!all_inks(&chat).contains(&Ink::Green) && !all_inks(&chat).contains(&Ink::Yellow), "{}", dump(&chat));
     v.s.reply = false;
     // what a row says is greyed out, never bold like its title: in the brighter of the two greys, since it has to be
-    // read; what a task asks of you is in the plain text colour
+    // read; what a task asks of you is in its mark's colour, the needs-you red
     let lines = v.inked(&working, 120, &[]);
     assert_eq!(look(&lines[1..], "A long sentence about what the other agent").map(|x| x.0), Some(Ink::Soft), "a working row's status line is the brighter grey");
     let asks = v.inked(&with(&working, json!({ "state": "blocked", "kind": "question", "stage": "asks", "msg": "Which colour?" })), 120, &[]);
-    assert_eq!(look(&asks[1..], "Which colour?").map(|x| x.0), Some(Ink::Text), "a question to you is in the text colour");
+    assert_eq!(look(&asks[1..], "Which colour?").map(|x| x.0), Some(Ink::Red), "a question to you is in the needs-you colour");
     assert_ne!(look(&lines[..1], "Other").map(|x| x.0), Some(Ink::Soft), "the title is not");
 }
