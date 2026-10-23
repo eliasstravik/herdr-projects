@@ -46,7 +46,7 @@ fn another_machines_pins_come_with_its_tasks_and_its_rows_pin_there() {
     assert_eq!(tasks_shown(&s), vec!["vm-b:far/1".to_string(), "vm-b:far/2".into()], "its pinned project's tasks, not this machine's: {}", s.text());
     let far_row = format!("{HEAD}repo\tvm-b\tfar"); // its row above its tasks, grouped by status
     assert!(heads(&s).contains(&machine_id("vm-b")) && heads(&s).contains(&far_row), "{:?}", heads(&s));
-    assert!(s.lines().iter().any(|l| l.contains("far") && l.contains('⚑')), "{}", s.text());
+    assert!(s.lines().iter().any(|l| l.contains("far") && l.contains('★')), "{}", s.text());
     // Its project's row: unpinned there.
     far.answers("vm-b", "do.pin-project", &json!({ "ok": true, "pin": true, "msg": "far: unpinned", "name": "far" }));
     s.s.sel = far_row; s.load();

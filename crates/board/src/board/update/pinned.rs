@@ -9,11 +9,13 @@ use crate::board::job::Job;
 use crate::board::keys::key_name;
 use crate::board::state::State;
 use crate::json::*;
-use crate::shown::ink::Ink;
+use crate::shown::ink::{Ink, Inked};
 use crate::store::pins::Pins;
 
-/// The pin mark after a pinned row's name: the same for a machine, a project and a task.
-pub const MARK: &str = "⚑";
+/// The pin mark after a pinned row's name: the same for a machine, a project and a task, in yellow (`ink`).
+pub const MARK: &str = "★";
+/// The pin mark after a name: a space, then the mark in its yellow.
+pub fn ink() -> Inked { Inked::plain(" ").add(Inked::of(MARK, Ink::Yellow)) }
 /// The Pinned filter shows (not in the archive, which has no filter).
 pub fn on(s: &State) -> bool { s.show == super::shows::PINNED && !s.archive_view }
 fn pins<'a>(s: &'a State, host: &str) -> Option<&'a Pins> { if host.is_empty() { Some(&s.data.pins) } else { s.remotes.get(host).map(|m| &m.pins) } }

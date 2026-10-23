@@ -55,7 +55,7 @@ fn a_yes_says_nothing_under_the_chat_its_row_says_it_and_the_menu_names_every_ke
     assert!(!s.s.archive_view); assert!(!task("proj/2").b("archivedAt"), "ctrl+z takes the archiving back");
     // pinned: it stays under to do, with its pin mark
     s.s.sel = "proj/2".into(); s.load(); s.press(&["ctrl+p"]);
-    assert!(has(&s.screen(80).join("\n"), r"\n   ▾ to do *\n▌  ○ PRJ-2 Other ⚑ "), "{}", s.screen(80).join("\n"));
+    assert!(has(&s.screen(80).join("\n"), r"\n   ▾ to do *\n▌  ○ PRJ-2 Other ★ "), "{}", s.screen(80).join("\n"));
 }
 
 #[test]

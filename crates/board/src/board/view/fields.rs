@@ -56,14 +56,17 @@ pub fn row_title(s: &State, r: &Obj) -> String {
     t
 }
 /// The title is in the base colour whatever the task's state, never bold: colour means status, and the mark carries
-/// it. What is said of it after it (`×3`, `[auto]`, `[research]`, `[chat]`, `[archived]`, the pin mark `⚑`) is dimmed. An automation's
-/// name is plain, greyed while it is off.
+/// it. What is said of it after it (`×3`, `[auto]`, `[research]`, `[chat]`, `[archived]`) is dimmed, and the pin mark `★`
+/// last is yellow (update/pinned.rs). An automation's name is plain, greyed while it is off.
 pub fn name_ink(r: &Obj, s: &str) -> Inked {
     if is_auto(r) { return if auto(r).b("on") { Inked::plain(s) } else { Inked::of(s, Ink::Muted) }; }
-    let at = crate::re!(r"(?: ×\d+)?(?: \[[a-z]+\])*(?: ⚑)?$").find(s).map(|m| m.start()).unwrap_or(s.len());
+    let pin = format!(" {}", crate::board::update::pinned::MARK);
+    let (s, pinned) = match s.strip_suffix(pin.as_str()) { Some(rest) => (rest, true), None => (s, false) };
+    let at = crate::re!(r"(?: ×\d+)?(?: \[[a-z]+\])*$").find(s).map(|m| m.start()).unwrap_or(s.len());
     let mut out = Inked::new();
     out.push(&s[..at], Ink::Plain);
     if at < s.len() { out.push(&s[at..], Ink::Muted); }
+    if pinned { out = out.add(crate::board::update::pinned::ink()); }
     out
 }
 /// What a row says on its first line: nothing on a live task's (it says it on its second). An automation says its

@@ -21,7 +21,9 @@ fn a_rows_tag_has_a_column_of_its_own_and_a_narrow_list_drops_every_tag_at_once(
     assert!(LIST.contains(r#"${r.automation ? " is-automation" : ""}"#));
     // what follows a title ([auto], [research], ×3) is dimmed, never in a colour; an automation's mark is an arrow going
     // round, drawn at the round marks' size, the same one quiet while it is off
-    assert!(LIST.contains(r#"h("span.sw-count", r.title.slice(at))"#) && !LIST.contains(r#"h("span.sw-c-auto", "[auto]")"#));
+    assert!(LIST.contains(r#"h("span.sw-count", t.slice(at))"#) && !LIST.contains(r#"h("span.sw-c-auto", "[auto]")"#));
+    // the pin mark last is a yellow star, apart from the dimmed tags
+    assert!(LIST.contains(r#"const PIN = " ★";"#) && LIST.contains(r#"h("span.sw-pin", PIN.trim())"#) && has(CSS, r"\.sw-pin \{ color: var\(--sw-yellow\); \}"));
     assert!(DOM.contains(r#"mark === TURN ? h("span.sw-turn")"#) && DOM.contains(r#"${dim ? ".sw-d" : ""}"#) && DOM.contains(r#"span.sw-mark${color ? `.sw-c-${color}` : ""}"#));
     for part in [r"\.sw-main \{ display: grid; grid-template-columns: auto minmax\(0, 1fr\)", r"\.sw-main > \* \{ grid-column: 2; \}", r"\.sw-no-tags \.sw-main > \.sw-id \{ display: none; \}",
         r"\.sw-word \{ display: none; \} \.sw-no-tags \.sw-word \{ display: inline; \}", r"\.sw-c-auto \{ color: var\(--sw-auto\); \}", r"--sw-auto: color-mix\(in srgb, #a855f7 78%"] { assert!(has(CSS, part), "{part}"); }

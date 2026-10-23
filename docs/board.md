@@ -62,7 +62,7 @@ sidebar ([other machines](other-machines.md)); a click on it does the same. Ever
 | `Needs you`, `Working`, `Ready`, `To do` | only the tasks of that group (`Ready` is ready to approve) |
 | `Done` | every done task, which the other filters hide |
 | `Automations` | only the automations' rows, in their places |
-| `Pinned` | only what you pinned, in its places: a pinned task, a pinned project with its tasks, a pinned machine with its projects and tasks ([pins](pinned.md)). Its count is those rows |
+| `Pinned` | only what you pinned, in its places: a pinned task, a pinned project with its tasks, a pinned machine with its projects and tasks ([pins](pinned.md)). Its count is each pin once: the pinned machines, projects and tasks, not the other rows under them |
 
 - **`Tab` shows the next filter, `Shift+Tab` the one before**, round and round. A click on one shows it. The filter
   shown is kept with the board's view. Each filter keeps the grouping (`Alt+S`) and the headings of what it shows; a
@@ -95,7 +95,7 @@ Tasks stand in five groups, in the order they need you:
 
 - **First what waits for you**, then what is being worked on (the agent, the reviewer, the board's check), then to do,
   then done. Done is history, so it is last: however long it grows, it never pushes the to-dos down.
-- **A pinned task** (or project, or machine) stays where it is, with a pin mark `⚑` after its name; the `Pinned`
+- **A pinned task** (or project, or machine) stays where it is, with a yellow pin mark `★` after its name; the `Pinned`
   filter shows only what is pinned ([pins](pinned.md)).
 - **Grouped by repo or by machine** (`Alt+S`), each repo's or machine's rows follow the same order, so a repo's done rows are below its to-dos.
 - **No done task shows**, a pinned or a selected one neither. One line where they would stand counts them

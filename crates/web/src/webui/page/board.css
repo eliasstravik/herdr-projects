@@ -209,6 +209,7 @@
 /* The selected coordinator's row: its Open at the end of its one line. */
 .sw-head-acts { flex: none; display: flex; margin: calc(-1 * var(--space-1, 4px)) 0; }
 .sw-count { color: var(--sw-dim); font-weight: var(--fw-regular, 400); letter-spacing: 0; }
+.sw-pin { color: var(--sw-yellow); }
 .sw-repo-key { color: var(--sw-dim); font-weight: var(--fw-regular, 400); letter-spacing: 0; white-space: nowrap; }
 .sw-rows { list-style: none; margin: 0; padding: 0; }
 .sw-row {

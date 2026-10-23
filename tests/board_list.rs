@@ -190,7 +190,7 @@ fn the_list_says_what_it_hides_the_header_where_you_are_and_an_action_what_it_di
     let id = s.s.sel.clone();
     // No confirmation under the chat: the row says it, with its pin mark, where it was; nothing moves.
     s.press(&["ctrl+p"]); assert!(!s.s.msg.contains("Pinned"), "{}", s.s.msg);
-    assert_eq!(s.s.sel, id); assert!(has(&s.screen(100).join("\n"), r"\n▌ [^\n]* ⚑ "), "{}", s.text());
+    assert_eq!(s.s.sel, id); assert!(has(&s.screen(100).join("\n"), r"\n▌ [^\n]* ★ "), "{}", s.text());
     s.press(&["ctrl+p"]); assert!(!s.s.msg.contains("Unpinned"), "{}", s.s.msg); assert_eq!(s.s.sel, id);
     s.s.flash("proj/7: started, an agent is on it", Ink::Muted); assert_eq!(s.s.msg, "PRJ-7: started, an agent is on it");
     s.s.flash("Run: herdr-projects approve proj/7 --anyway", Ink::Muted); assert!(s.s.msg.contains("approve proj/7 --anyway"), "a command keeps the id it takes");

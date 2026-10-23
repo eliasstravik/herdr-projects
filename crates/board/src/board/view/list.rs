@@ -99,7 +99,7 @@ pub fn heading_words(s: &State, t: &Theme, rows: &[Row], at: usize) -> (Inked, O
     let named = if *autos { Inked::of(name.clone(), Ink::Auto) } else if *machine || top { Inked::of(name.clone(), MACHINE_INK).bold() } else if s.by_repo || project { Inked::of(crate::board::update::heads::repo_shown(s, id.split('\t').nth(1).unwrap_or(""), name), REPO_HEAD_INK) } else { Inked::of(name.clone(), group_ink(name)) };
     let mut named = if key.is_empty() { named } else { named.add(Inked::of(format!(" · {key}"), Ink::Muted)) };
     // A pinned machine or project: the pin mark after its name, as a pinned task's (update/pinned.rs).
-    if crate::board::update::pinned::head_pinned(s, id) { named = named.add(Inked::of(format!(" {}", crate::board::update::pinned::MARK), Ink::Muted)); }
+    if crate::board::update::pinned::head_pinned(s, id) { named = named.add(crate::board::update::pinned::ink()); }
     // Its coordinator on autopilot: a tag after its name, dimmed as a task's `[research]` (view/pilot.rs).
     let shown = super::pilot::shown(s, t, id);
     if shown.as_ref().is_some_and(|x| x.on) { named = named.add(Inked::of(format!(" {}", super::pilot::PILOT_TAG), Ink::Muted)); }

@@ -64,7 +64,7 @@ fn a_read_that_began_before_the_job_ended_does_not_take_the_word_away() {
     // The next read began after it: the task is pinned, and says so as it always does.
     s.load();
     assert!(s.s.pending.is_empty() && task(&id).b("pinned"));
-    assert!(has(&s.screen(120).join("\n"), r"▾ to do[^\n]*\n[ ▌]  ○ PRJ-1 +Make g ⚑"), "{}", s.text());
+    assert!(has(&s.screen(120).join("\n"), r"▾ to do[^\n]*\n[ ▌]  ○ PRJ-1 +Make g ★"), "{}", s.text());
 }
 
 #[test]

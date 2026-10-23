@@ -1,18 +1,18 @@
 # Pins and the Pinned filter
 
 **Pin what matters to you, and see only that when you want to.** A task, a project or a whole machine can be pinned.
-Pinning moves nothing: the row stays where it always sorts and gets a small pin mark, `⚑`, after its name. **Pinned**,
-the last filter on the filter row, shows only what you pinned, as `Needs you` shows only what needs you.
+Pinning moves nothing: the row stays where it always sorts and gets a small yellow star, `★`, after its name.
+**Pinned**, the last filter on the filter row, shows only what you pinned, as `Needs you` shows only what needs you.
 
 ```
  herdr-projects  proj · PRJ
  vm-str │ All 299   Coordinators 7   Needs you 1   Working 5   Ready 0   To do 11   Done 283   Automations 2   Pinned 2
  ○ ▾ vm-str  2 projects · 4 tasks
-   ○ ▾ gtm · GTM ⚑
+   ○ ▾ gtm · GTM ★
      ? GTM-14  Pick the ICP                                       2m ago
      ○ GTM-15  Write the first sequence                            1h ago
    ○ ▾ herdr-projects · HP
-     ◐ HP-182  Pin machines and projects ⚑                ██░░ 40%  5m
+     ◐ HP-182  Pin machines and projects ★                ██░░ 40%  5m
 ```
 
 ## Pinning

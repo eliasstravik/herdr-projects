@@ -4,8 +4,14 @@
 /* global ResizeObserver, localStorage */
 import { h, icon, ink, said, markEl } from "./dom.js";
 
-// What is said of a task after its title (`×3`, `[auto]`, `[research]` …, the pin mark `⚑`) is dimmed: colour means status only.
-const titleOf = (r) => { const m = /(?: ×\d+)?(?: \[[a-z]+\])*(?: ⚑)?$/.exec(r.title); const at = m && m[0] ? m.index : -1; return at < 0 ? r.title : [r.title.slice(0, at), h("span.sw-count", r.title.slice(at))]; };
+// What is said of a task after its title (`×3`, `[auto]`, `[research]` …) is dimmed: colour means status only. The pin
+// mark `★` last is yellow, as on the terminal board (board/view/fields.rs).
+const PIN = " ★";
+const titleOf = (r) => {
+  const pinned = r.title.endsWith(PIN), t = pinned ? r.title.slice(0, -PIN.length) : r.title;
+  const m = /(?: ×\d+)?(?: \[[a-z]+\])*$/.exec(t); const at = m && m[0] ? m.index : t.length;
+  return [t.slice(0, at), at < t.length ? h("span.sw-count", t.slice(at)) : null, pinned ? h("span.sw-count", " ", h("span.sw-pin", PIN.trim())) : null];
+};
 
 export function rowEl(r, { selected, opened, onPick, onOpen }) {
   const tags = h("span.sw-tags", r.review?.length ? ink(r.review, "sw-tag") : null,

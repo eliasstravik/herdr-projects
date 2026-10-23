@@ -51,12 +51,34 @@ fn a_pin_moves_nothing_and_marks_the_row() {
     assert!(task(&b).b("pinned"));
     assert_eq!(ids(&s), before, "the task keeps its place under to do");
     assert_eq!(s.s.sel, b, "and the selection stays on it");
-    assert!(line_with(&mut s, "Two").contains("Two ⚑"), "{}", s.text());
+    assert!(line_with(&mut s, "Two").contains("Two ★"), "{}", s.text());
     s.press(&["?"]);
     assert!(s.text().contains("unpin this task"), "{}", s.text());
     s.press(&["esc"]);
     s.press(&["ctrl+p"]);
-    assert!(!task(&b).b("pinned")); assert!(!s.text().contains('⚑'), "{}", s.text());
+    assert!(!task(&b).b("pinned")); assert!(!s.text().contains('★'), "{}", s.text());
+}
+
+#[test]
+fn the_pin_mark_is_a_yellow_star_one_column_wide_on_a_task_and_a_projects_row() {
+    use sw::shown::ink::Ink;
+    let w = world();
+    let [a] = <[String; 1]>::try_from(add(&w, &["Starred"])).unwrap();
+    sw::actions::filing::set_pin(&a, true).unwrap();
+    sw::store::pins::set(Some("proj"), true).unwrap();
+    assert_eq!((sw::board::update::pinned::MARK, sw::text::width(sw::board::update::pinned::MARK)), ("★", 1));
+    let s = board(&w);
+    let star = |p: &[sw::shown::ink::Piece]| p.iter().any(|p| p.t == "★" && p.c == Ink::Yellow);
+    // The task's row: its title plain, then a space and the star in yellow.
+    let name = sw::board::view::row::row_name(&s.s, &task(&a), 60);
+    assert_eq!(name.0.iter().map(|p| p.t.as_str()).collect::<String>(), "Starred ★");
+    assert!(star(&name.0) && name.0.iter().all(|p| p.t != "★" || p.c == Ink::Yellow), "{:?}", name.0);
+    // The project's row under Pinned (by status it stands above its tasks), as the web board gets both.
+    let web = common::board::web(&w, "show", json!({ "n": PINNED }));
+    let groups = web.at("list").arr("groups");
+    let yellow = |v: &serde_json::Value| v.as_array().is_some_and(|ps| ps.iter().any(|p| p.s("t").contains('★') && p.s("c") == "yellow"));
+    assert!(groups.iter().any(|g| g.t("id").ends_with("\tproj") && yellow(g.at("words"))), "{groups:?}");
+    assert!(groups.iter().flat_map(|g| g.arr("rows").iter()).any(|r| r.t("title") == "Starred ★"), "{groups:?}");
 }
 
 #[test]
@@ -104,7 +126,7 @@ fn a_project_and_a_machine_pin_from_their_rows_and_show_with_their_tasks_under_p
     s.press(&["ctrl+p"]);
     assert_eq!(sw::store::pins::pins().repos, vec!["proj".to_string()]);
     assert_eq!(s.s.sel, proj, "nothing moved");
-    assert!(s.lines().iter().any(|l| l.contains("proj") && l.contains('⚑')), "{}", s.text());
+    assert!(s.lines().iter().any(|l| l.contains("proj") && l.contains('★')), "{}", s.text());
     // Under Pinned by repo: the project's heading with every task of it under it.
     pinned(&mut s);
     let mut shown = tasks_shown(&s); shown.sort();
@@ -117,7 +139,7 @@ fn a_project_and_a_machine_pin_from_their_rows_and_show_with_their_tasks_under_p
     let row = format!("{HEAD}repo\t\tproj");
     let at = ids(&s).iter().position(|i| *i == row).unwrap_or_else(|| panic!("{:?}", ids(&s)));
     assert!(ids(&s).iter().position(|i| *i == a).unwrap() > at, "{:?}", ids(&s));
-    assert!(s.lines().iter().any(|l| l.contains("proj") && l.contains('⚑')), "{}", s.text());
+    assert!(s.lines().iter().any(|l| l.contains("proj") && l.contains('★')), "{}", s.text());
     // The machine's row (the top row on this machine's board): pinned too; the project unpinned, its tasks stay
     // under the pinned machine.
     on(&mut s, &machine_id(""));
@@ -128,7 +150,7 @@ fn a_project_and_a_machine_pin_from_their_rows_and_show_with_their_tasks_under_p
     assert!(sw::store::pins::pins().repos.is_empty());
     assert_eq!(tasks_shown(&s).len(), 2, "{}", s.text());
     assert!(!ids(&s).contains(&row), "no project pinned, no project's row: {:?}", ids(&s));
-    assert!(s.lines().iter().any(|l| l.contains('⚑')), "the machine's mark: {}", s.text());
+    assert!(s.lines().iter().any(|l| l.contains('★')), "the machine's mark: {}", s.text());
     // A heading that is no machine's or project's pins nothing.
     s.press(&["tab"]);
     let todo = group_id(&s.s, "", "to do");
@@ -210,11 +232,11 @@ fn the_web_board_has_pinned_on_its_filter_row_and_the_pin_mark() {
     assert_eq!((last.i("n"), last.s("name"), last.i("count")), (PINNED as i64, "Pinned", 1));
     assert_eq!(items[items.len() - 2].s("name"), "Automations");
     let titles = |s: &serde_json::Value| s.at("list").arr("groups").iter().flat_map(|g| g.arr("rows").iter().map(|r| (r.t("id"), r.t("title"))).collect::<Vec<_>>()).collect::<Vec<_>>();
-    assert!(titles(&s).contains(&(b.clone(), "Two ⚑".into())) && titles(&s).contains(&(a.clone(), "One".into())), "{:?}", titles(&s));
+    assert!(titles(&s).contains(&(b.clone(), "Two ★".into())) && titles(&s).contains(&(a.clone(), "One".into())), "{:?}", titles(&s));
     // A tap on it shows it, as any filter: only what is pinned, the filter row still there.
     let s = common::board::web(&w, "show", json!({ "n": PINNED }));
     assert!(s.at("list").at("shows").arr("items")[PINNED].b("lit"));
-    assert_eq!(titles(&s), vec![(b.clone(), "Two ⚑".into())]);
+    assert_eq!(titles(&s), vec![(b.clone(), "Two ★".into())]);
     let s = common::board::web(&w, "show", json!({ "n": 0 }));
     assert_eq!(titles(&s).len(), 2);
 }

@@ -38,7 +38,7 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
   herdr-projects details <id>                  failure details, review, next steps, and what it used against its limits
   herdr-projects archive|restore|clear <id>
   herdr-projects pin|unpin <id | machine | project> [--on MACHINE]
-                                                pin a task, a machine or a project (or unpin it): it gets a pin mark and
+                                                pin a task, a machine or a project (or unpin it): it gets a yellow pin mark ★ and
                                                 shows under the board's Pinned filter. --on MACHINE: a project of another machine
   herdr-projects archive --done [--repo NAME]  archive every done task of that repo (or of every repo) in one go; one
                                                 that works, waits, is to do or is pinned stays, and is counted
