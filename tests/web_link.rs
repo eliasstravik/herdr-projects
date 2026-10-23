@@ -10,7 +10,10 @@ use std::net::{TcpListener, TcpStream};
 use std::rc::Rc;
 use sw::extras::{extras, note};
 use sw::json::*;
-use sw::webui::{command as cmd, find::{address_from, web_ui}, link};
+use sw::webui::{command as cmd, find::{address_from, web_ui, OLD}, link};
+
+/// The web UI found under its new name, Ovis, and under its name before; the port from the state folder of each.
+mod ovis;
 
 const HOST: &str = "box.tail1.ts.net";
 const SCRIPT: &str = r#"#!/bin/sh
@@ -114,7 +117,8 @@ fn real_programs_the_private_link_goes_through_the_front_door_after_a_yes_follow
     fresh();
 }
 
-/// herdr with the web UI plugin in its list (or turned off there), and that plugin's config folder.
+/// herdr with the web UI plugin in its list under its old id (or turned off there), and that plugin's config folder
+/// (under its new id, Ovis: web_link_ovis.rs).
 struct WithPlugin { inner: Rc<common::herdr::FakeHerdr>, dir: String, enabled: std::cell::Cell<bool> }
 impl sw::herdr::cli::Fake for WithPlugin {
     fn run(&self, args: &[String], input: &str) -> sw::herdr::cli::Ran {
@@ -136,30 +140,30 @@ fn real_programs_the_web_ui_is_found_from_its_own_settings_the_command_says_how_
     let d = dir.display().to_string();
     env("HERDR_WEB_STATE_DIR", Some(&state.display().to_string()));
     env("HERDR_SOCKET_PATH", None); env("HERDR_SOCKET", None);
-    assert_eq!((address_from(&d).host.as_str(), address_from(&d).port), ("127.0.0.1", 7317));
-    std::fs::write(state.join("plugin-port"), "17317\n").unwrap(); assert_eq!(address_from(&d).port, 17317);
-    std::fs::write(dir.join("env"), "# mine\nPORT=8000\nHERDR_WEB_TOKEN=secret\n").unwrap(); assert_eq!(address_from(&d).port, 8000);
+    assert_eq!((address_from(&d, OLD).host.as_str(), address_from(&d, OLD).port), ("127.0.0.1", 7317));
+    std::fs::write(state.join("plugin-port"), "17317\n").unwrap(); assert_eq!(address_from(&d, OLD).port, 17317);
+    std::fs::write(dir.join("env"), "# mine\nPORT=8000\nHERDR_WEB_TOKEN=secret\n").unwrap(); assert_eq!(address_from(&d, OLD).port, 8000);
     // which herdr it shows, as the web UI's own start works it out: the session's socket first, the settings' only
     // where no session's is given
-    assert_eq!(address_from(&d).socket, "");
-    env("HERDR_SOCKET_PATH", Some("/tmp/named-session/herdr.sock")); assert_eq!(address_from(&d).socket, "/tmp/named-session/herdr.sock");
+    assert_eq!(address_from(&d, OLD).socket, "");
+    env("HERDR_SOCKET_PATH", Some("/tmp/named-session/herdr.sock")); assert_eq!(address_from(&d, OLD).socket, "/tmp/named-session/herdr.sock");
     std::fs::write(dir.join(".env"), "PORT=\"8100\"\nHERDR_SOCKET=/tmp/other.sock\n").unwrap();
-    assert_eq!((address_from(&d).port, address_from(&d).socket.as_str()), (8100, "/tmp/named-session/herdr.sock"));
-    env("HERDR_SOCKET_PATH", None); assert_eq!(address_from(&d).socket, "/tmp/other.sock");
-    env("HERDR_SOCKET", Some("/tmp/env.sock")); assert_eq!(address_from(&d).socket, "/tmp/other.sock", "its settings are laid over its environment"); env("HERDR_SOCKET", None);
+    assert_eq!((address_from(&d, OLD).port, address_from(&d, OLD).socket.as_str()), (8100, "/tmp/named-session/herdr.sock"));
+    env("HERDR_SOCKET_PATH", None); assert_eq!(address_from(&d, OLD).socket, "/tmp/other.sock");
+    env("HERDR_SOCKET", Some("/tmp/env.sock")); assert_eq!(address_from(&d, OLD).socket, "/tmp/other.sock", "its settings are laid over its environment"); env("HERDR_SOCKET", None);
     env("HERDR_SOCKET_PATH", Some("/tmp/named-session/herdr.sock"));
-    std::fs::write(dir.join(".env"), "PORT=\"8100\"\nHERDR_SOCKET=/tmp/other.sock\nHERDR_SOCKET_PATH=/tmp/set.sock\n").unwrap(); assert_eq!(address_from(&d).socket, "/tmp/set.sock");
+    std::fs::write(dir.join(".env"), "PORT=\"8100\"\nHERDR_SOCKET=/tmp/other.sock\nHERDR_SOCKET_PATH=/tmp/set.sock\n").unwrap(); assert_eq!(address_from(&d, OLD).socket, "/tmp/set.sock");
     std::fs::write(dir.join(".env"), "PORT=\"8100\"\nHERDR_SOCKET=/tmp/other.sock\n").unwrap();
     env("HERDR_SOCKET_PATH", Some(&w.socket));
     // not installed: nothing to stand in front of, and the command says so
     assert_eq!(web_ui(true), None);
-    assert!(regex::Regex::new(r"^Web UI: not found: the plugin devswha\.herdr-web-ui is not installed in herdr\nFront door: not running$").unwrap().is_match(cmd::main(&[]).s("msg")), "{}", cmd::main(&[]));
+    assert_eq!(cmd::main(&[]).s("msg"), "Web UI (Ovis): not found: its plugin (devswha.ovis, or devswha.herdr-web-ui before the rename) is not installed in herdr\nFront door: not running");
     assert!(cmd::link_now().s("msg").contains("not installed"));
     // installed in herdr: found from herdr's list of plugins and that plugin's own config folder; turned off there, it is not
     let plugged = Rc::new(WithPlugin { inner: w.fake.clone(), dir: d.clone(), enabled: std::cell::Cell::new(true) });
     sw::herdr::cli::set_fake(Some(plugged.clone()));
-    assert_eq!(web_ui(true), Some(sw::webui::find::WebUi { host: "127.0.0.1".into(), port: 8100, socket: w.socket.clone(), version: "0.4.8".into(), named: false }));
-    assert!(cmd::main(&[]).s("msg").starts_with("Web UI: found at http://127.0.0.1:8100 (herdr-web-ui 0.4.8)\nFront door: not running"), "{}", cmd::main(&[]));
+    assert_eq!(web_ui(true), Some(sw::webui::find::WebUi { host: "127.0.0.1".into(), port: 8100, socket: w.socket.clone(), plugin: OLD.into(), version: "0.4.8".into(), named: false }));
+    assert!(cmd::main(&[]).s("msg").starts_with("Web UI (Ovis): found at http://127.0.0.1:8100 (devswha.herdr-web-ui 0.4.8)\nFront door: not running"), "{}", cmd::main(&[]));
     plugged.enabled.set(false); assert_eq!(web_ui(true), None);
     sw::herdr::cli::set_fake(Some(w.fake.clone()));
     // installed (named by hand here), the front door up, a link that goes straight to the web UI: that is what is asked about

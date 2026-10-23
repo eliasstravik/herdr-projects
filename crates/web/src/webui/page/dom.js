@@ -1,5 +1,6 @@
-// The page's few tools: making elements, drawing the board's coloured pieces of text, and calling the front door.
-/* global document, fetch, sessionStorage, crypto, location */
+// The page's few tools: making elements, drawing the board's coloured pieces of text, reading the web UI's own settings,
+// and calling the front door.
+/* global document, fetch, localStorage, sessionStorage, crypto, location */
 
 // h("div.sw-row", { onclick }, child, …): a tag with classes, then properties and children.
 export function h(spec, ...rest) {
@@ -62,6 +63,13 @@ export function ink(pieces, cls = "") {
 const ROUND = { "●": "full", "◑": "right", "◌": "dotted" }, TURN = "⟳";
 export const markEl = (mark, color = "", dim = false) => h(`span.sw-mark${color ? `.sw-c-${color}` : ""}${dim ? ".sw-d" : ""}`, { "aria-hidden": "true" }, ROUND[mark] ? h(`span.sw-dot.sw-dot-${ROUND[mark]}`) : mark === TURN ? h("span.sw-turn") : mark);
 export const said = (pieces) => (pieces || []).map((p) => p.t).join("");
+// The web UI's own settings, where its page keeps them: `ovis:settings` since its rename to Ovis (which moves the old
+// record over), `herdr-web-ui:settings` before. None kept, or none that can be read: {}.
+const SETTINGS = ["ovis:settings", "herdr-web-ui:settings"];
+export function webUiSettings() {
+  for (const key of SETTINGS) { try { const s = JSON.parse(localStorage.getItem(key) || "null"); if (s && typeof s === "object") return s; } catch {} }
+  return {};
+}
 
 // This browser tab's own board (its selection, its question): a name of its own, kept while the tab lives.
 export const client = (() => {

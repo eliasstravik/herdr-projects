@@ -1,10 +1,11 @@
 //! A file attached in the web board's chat box for another machine's agent or coordinator, put where that one reads
 //! it, on its machine. First the herdr web UI's own way, as its chat box sends a file for a pane on another of its PCs
 //! (`POST /api/machines/<PC>/pane/image`, checked on herdr-web-ui 0.4.8): that PC keeps it beside the pane, in
-//! `<its folder>/.herdr-web-ui/` (which a task's worktree leaves out of git, delegate/worktree.rs). The front door asks
-//! with the caller's own headers, so the web UI lets in only whom it lets in itself. Where that cannot be (no PC of
-//! the web UI for that machine, not connected, no pane known yet, or the web UI says why not): over the board's own SSH
-//! link (remote/carry.rs). The answer is the path there; a file that went neither way says why.
+//! `<its folder>/.ovis/` (`.herdr-web-ui/` before its rename to Ovis; a task's worktree leaves both out of git,
+//! delegate/worktree.rs). The front door asks with the caller's own headers, so the web UI lets in only whom it lets
+//! in itself. Where that cannot be (no PC of the web UI for that machine, not connected, no pane known yet, or the web
+//! UI says why not): over the board's own SSH link (remote/carry.rs). The answer is the path there; a file that went
+//! neither way says why.
 use crate::json::*;
 use crate::remote::carry::{send_bytes, For};
 use crate::remote::Machine;

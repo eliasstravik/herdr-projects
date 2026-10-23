@@ -39,9 +39,11 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
   herdr-projects pin|archive|restore|clear <id>
   herdr-projects archive --done [--repo NAME]  archive every done task of that repo (or of every repo) in one go; one
                                                 that works, waits, is to do or is pinned stays, and is counted
-  herdr-projects archive|restore --repo NAME    archive a whole project with its tasks (what works or waits is stopped
+  herdr-projects archive|restore --repo NAME [--on MACHINE]
+                                                archive a whole project with its tasks (what works or waits is stopped
                                                 first; its coordinator stops, its automations go off), or bring it back
-                                                with its tasks as they were. Nothing on disk or GitHub is deleted
+                                                with its tasks as they were. Nothing on disk or GitHub is deleted.
+                                                --on MACHINE: a project of another machine, done there
   herdr-projects set <name> <value> [--repo NAME | --task ID | --automation NAME | --main-coordinator | --machine-coordinator | --project-coordinator REPO]
                                       change a setting: for you, for your entry for one repo, for one task, for an automation,
                                       or for one coordinator (its coordinator.* and autopilot.* settings)
@@ -82,7 +84,7 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
   herdr-projects sweep [--dry]                 remove what ended tasks left behind now: their temporary files, agents'
                                                 files for worktrees that are gone, old build output (docs/disk-space.md);
                                                 --dry: only say what would go
-  herdr-projects web-ui [link|unlink]          the board inside the herdr web UI: how it stands; point the web UI's shared link at it, or back
+  herdr-projects web-ui [link|unlink]          the board inside the web UI (Ovis): how it stands; point the web UI's shared link at it, or back
   herdr-projects voice [end|test]              voice calls here: where the ElevenLabs key is found (ELEVENLABS_API_KEY,
                                                 or ~/.herdr-projects/settings/elevenlabs.json), the call helper on this
                                                 computer, how the last call sounded, a call on now; end hangs it up;

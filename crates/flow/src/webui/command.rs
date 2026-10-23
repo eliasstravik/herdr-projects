@@ -1,9 +1,9 @@
-//! `herdr-projects web-ui`: how the board in the herdr web UI stands, and the one setup step by hand.
+//! `herdr-projects web-ui`: how the board in the web UI (Ovis) stands, and the one setup step by hand.
 //!   web-ui           where the web UI is, whether the front door is up, and which links go through it
 //!   web-ui link      point the web UI's shared link at the front door (the yes the board asks for)
 //!   web-ui unlink    point it back; the board does not ask again (`web-ui link` does it later)
 //! `remove-extras` runs `leave`: the link goes back and the front door stops.
-use super::find::web_ui;
+use super::find::{web_ui, WebUi, OLD, OVIS};
 use super::keep::{door_file, door_info, ensure_door};
 use super::link::{self, address_of};
 use crate::extras::{extras, note};
@@ -21,7 +21,7 @@ pub fn offer() -> Vec<String> {
 pub fn decline() { note(json!({ "webUi": "no" })); }
 pub fn link_now() -> Value {
     if extras().s("webUi") == "removed" { note(json!({ "webUi": "" })); } // asked for again
-    let Some(to) = web_ui(true) else { return json!({ "ok": false, "msg": "The herdr web UI plugin is not installed (or `board.webUi` is `none`), so there is nothing to show the board in." }) };
+    let Some(to) = web_ui(true) else { return json!({ "ok": false, "msg": format!("The web UI (Ovis) is not installed in herdr (its plugin {OVIS}, or {OLD} before the rename), or `board.webUi` is `none`: there is nothing to show the board in.") }) };
     ensure_door();
     let Some(door) = door_info() else { return json!({ "ok": false, "msg": "The front door is not up yet. Try again in a few seconds." }) };
     let urls = link::link(to.port, door.i("port") as u16);
@@ -45,6 +45,14 @@ pub fn leave() -> Value {
     if let Some(s) = crate::review_page::server_info() { unsafe { libc::kill(s.i("pid") as i32, libc::SIGTERM); } }
     out
 }
+/// The command's first line: where the web UI is, under which of its two ids and version (none for one named by hand),
+/// or why it was not found.
+pub fn found_line(to: Option<&WebUi>) -> String {
+    match to {
+        Some(w) => format!("Web UI (Ovis): found at http://{}:{}{}", w.host, w.port, if w.plugin.is_empty() { String::new() } else { format!(" ({})", [w.plugin.as_str(), &w.version].join(" ").trim()) }),
+        None => format!("Web UI (Ovis): not found{}", if crate::store::settings::lookup::setting("board.webUi", None) == json!("none") { " (board.webUi is none)".into() } else if extras().s("webUi") == "removed" { " (taken out with remove-extras; `web-ui link` brings it back)".into() } else { format!(": its plugin ({OVIS}, or {OLD} before the rename) is not installed in herdr") }),
+    }
+}
 pub fn main(args: &[String]) -> Value {
     match args.first().map(|s| s.as_str()) {
         Some("link") => return link_now(),
@@ -54,11 +62,7 @@ pub fn main(args: &[String]) -> Value {
     }
     let (to, door) = (web_ui(true), door_info());
     let links = to.as_ref().map(|w| link::look(w.port, door.as_ref().map(|d| d.i("port") as u16)));
-    let mut lines = vec![];
-    lines.push(match &to {
-        Some(w) => format!("Web UI: found at http://{}:{}{}", w.host, w.port, if w.version.is_empty() { String::new() } else { format!(" (herdr-web-ui {})", w.version) }),
-        None => format!("Web UI: not found{}", if crate::store::settings::lookup::setting("board.webUi", None) == json!("none") { " (board.webUi is none)" } else if extras().s("webUi") == "removed" { " (taken out with remove-extras; `web-ui link` brings it back)" } else { ": the plugin devswha.herdr-web-ui is not installed in herdr" }),
-    });
+    let mut lines = vec![found_line(to.as_ref())];
     lines.push(match &door { Some(d) => format!("Front door: up at {}/ (this machine only)", address_of(d.i("port") as u16)), None => "Front door: not running".into() });
     if let Some(l) = &links {
         for e in &l.ours { lines.push(format!("Link: {} goes through the front door: the Board is in the web UI there", e.url)); }

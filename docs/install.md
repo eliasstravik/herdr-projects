@@ -153,8 +153,8 @@ Everything the board keeps for you is in one folder, `~/.herdr-projects/`: [the 
 
 **Before unlinking the plugin, run `herdr-projects remove-extras`.** Herdr gives a plugin no uninstall hook, so this is
 what takes the marked blocks out of `config.toml` and removes the how-to files ([roles and commands](roles-and-commands.md)).
-With the Herdr web UI plugin installed, it also points the web UI's shared link back at the web UI and stops the board's
-front door ([the board in the Herdr web UI](web-ui.md)).
+With the web UI (Ovis) installed, it also points the web UI's shared link back at the web UI and stops the board's
+front door ([the board in the web UI (Ovis)](web-ui.md)).
 
 ## Details: which program runs
 

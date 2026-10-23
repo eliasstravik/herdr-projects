@@ -69,7 +69,7 @@ Both use names this version needs:
 - **Its processes.** Its keeper and page server (with the web UI's front door) are stopped, but only when the program
   they run is herdr-superwork's, and this version's are started. The front door opens on the port the old one had, so
   the web UI's shared link points at the new one with no change. A link that moved is brought along
-  ([the board in the Herdr web UI](web-ui.md)).
+  ([the board in the web UI (Ovis)](web-ui.md)).
 - **Its plugin**, if Herdr still has `herdr-superwork` installed, is switched off (`herdr plugin disable`, not
   removed), so its hooks no longer run the old program on the moved board.
 - **Its extras** become this version's:

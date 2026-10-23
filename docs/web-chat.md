@@ -1,6 +1,6 @@
 # The web board's chat
 
-**The chat under the [web board](web-ui.md)'s list is the Herdr web UI's own chat**: the same transcript, box, files,
+**The chat under the [web board](web-ui.md)'s list is the web UI's (Ovis's) own chat**: the same transcript, box, files,
 dictation, Stop and keyboard handling as when you open that agent from the web UI's sidebar. The board docks it under
 its list and puts one bar over it: who you talk to, how they stand, Hide and Full screen. The board's **Call** button
 stands in the box, beside the mic.

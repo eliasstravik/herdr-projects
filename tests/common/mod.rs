@@ -44,7 +44,7 @@ pub fn world_with(o: Opts) -> World {
     // herdr's socket is there (the fake answers for herdr itself): what looks for a running herdr finds one.
     let listen = std::os::unix::net::UnixListener::bind(&socket).unwrap();
     std::fs::create_dir_all(base.join("tmp")).unwrap();
-    for (k, v) in [("HOME", b("home")), ("HERDR_PROJECTS_TMP", b("tmp")), ("HERDR_PROJECTS_HOME", b("sw")), ("HERDR_SOCKET_PATH", socket.clone()), ("XDG_CONFIG_HOME", b("home/.config")), ("XDG_STATE_HOME", b("home/.state")),
+    for (k, v) in [("HOME", b("home")), ("HERDR_PROJECTS_TMP", b("tmp")), ("HERDR_PROJECTS_HOME", b("sw")), ("HERDR_SOCKET_PATH", socket.clone()), ("XDG_CONFIG_HOME", b("home/.config")), ("XDG_STATE_HOME", b("home/.state")), ("XDG_DATA_HOME", b("home/.local/share")),
         ("CLAUDE_CONFIG_DIR", b("claude")), ("CODEX_HOME", b("codex")), ("PI_CODING_AGENT_DIR", b("pi")), ("HERDR_PROJECTS_CLAUDE_JSON", b("claude.json")), ("HERDR_PROJECTS_CODEX_TOML", b("codex.toml"))] { set(k, &v); }
     for (k, v) in [("HERDR_PROJECTS_INLINE", "1"), ("HERDR_PROJECTS_SETTLE_MS", "0"), ("HERDR_PROJECTS_PR_LAG_MS", "0"), ("HERDR_PROJECTS_FETCH_PAUSE_MS", "0"), ("HERDR_PROJECTS_READY_STEP_MS", "0"), ("HERDR_PROJECTS_POLL_MS", "20"),
         ("HERDR_PROJECTS_NO_KEEPER", "1"), ("HERDR_PROJECTS_NO_SWEEP", "1"), ("HERDR_PROJECTS_FREE", "1000000000000"), ("HERDR_PROJECTS_NO_HOOK", "1"), ("HERDR_PROJECTS_NO_MODEL_LIST", "1"), ("HERDR_PROJECTS_READ_MS", "0"), ("HERDR_PROJECTS_NO_SERVER", "1"), ("HERDR_PROJECTS_LINKS", "local"),

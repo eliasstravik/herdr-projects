@@ -103,7 +103,7 @@ function draw() {
 }
 function take(out) {
   if (!root) return false;
-  if (!out.ok) { note(out.status === 401 ? "Log in to the herdr web UI to see the board." : out.msg || "The board is not answering."); return false; }
+  if (!out.ok) { note(out.status === 401 ? "Log in to the web UI (Ovis) to see the board." : out.msg || "The board is not answering."); return false; }
   note("");
   if (out.same) return true;
   mark = out.mark; snap = out;

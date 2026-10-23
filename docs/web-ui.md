@@ -1,16 +1,21 @@
-# The board in the Herdr web UI
+# The board in the web UI (Ovis)
 
-**With the [Herdr web UI](https://github.com/devswha/herdr-web-ui) plugin installed beside this one, the board is part of
+**With the web UI [Ovis](https://github.com/devswha/ovis) installed in Herdr beside this plugin, the board is part of
 that web UI**: a **Boards** section in its sidebar, one entry per machine, at the same link and behind the same login.
 It does what the terminal board does, with buttons and touch instead of keys, on a phone and on a desktop. Without the
-web UI plugin, none of this runs.
+web UI, none of this runs.
+
+Ovis was called herdr-web-ui before, and an install from then may still have its old plugin id until Ovis's installer
+moves it: the board finds it under either, `devswha.ovis` first, then `devswha.herdr-web-ui`
+([its two names](#its-two-names)).
 
 ## Setting it up
 
-1. **Install both plugins.** From then on a small **front door** of the board's own runs on this machine, in front of the
-   web UI. It starts with Herdr and is kept up by the keeper.
+1. **Install both plugins** (Ovis as [its own page](https://github.com/devswha/ovis) says). From then on a small
+   **front door** of the board's own runs on this machine, in front of the web UI. It starts with Herdr and is kept up
+   by the keeper.
 2. **Share the web UI** as it says itself (its Settings → Phone shows the `tailscale serve` command).
-3. **Say yes once.** The next time you open the board in the terminal, it asks: *Show this board in the herdr web UI?*
+3. **Say yes once.** The next time you open the board in the terminal, it asks: *Show this board in the web UI (Ovis)?*
    **Yes** points the web UI's shared link at the front door. **No** leaves the link alone for good. **Later** asks again
    the next time the board opens.
 
@@ -240,11 +245,33 @@ The board is as protected as the web UI, by the web UI:
   web UI's own private link (`tailscale serve`). A link open to the internet (Tailscale Funnel) is never pointed at it,
   and nothing here ever makes one.
 
+## Its two names
+
+The web UI was renamed from herdr-web-ui to Ovis. Ovis 0.4.13, its release at the time of writing, still has the old
+plugin id; its code after that has the new one, its installer moves an install over, and the names of its own files
+changed with it. The board reads each of them as the web UI under that id does:
+
+| What | Ovis (`devswha.ovis`) | Before the rename (`devswha.herdr-web-ui`) |
+|---|---|---|
+| Found in Herdr's plugins | first: where Herdr lists both (while Ovis's installer moves it), Ovis | when Ovis is not installed, or turned off |
+| The port a start of it settled on (`plugin-port`) | in `OVIS_STATE_DIR`, else `~/.config/ovis` (`$XDG_CONFIG_HOME/ovis`); in `~/.config/herdr-web-ui` while that still holds state of its own, as Ovis itself does when it could not move it over | in `HERDR_WEB_STATE_DIR`, else `~/.config/herdr-web-ui` |
+| Files pasted in its chat box, beside a pane | `.ovis/` in the pane's folder (or `OVIS_PASTE_DIR`) | `.herdr-web-ui/` |
+| Its settings in the browser | `ovis:settings` | `herdr-web-ui:settings` |
+
+- A task's worktree leaves both paste folders out of git (in the repo's `.git/info/exclude`; a repo whose rule was written
+  before gets `.ovis/` added the next time a task starts there).
+- The board's page reads `ovis:settings` first, then the old record (Ovis moves the old one over the first time it
+  opens): Enter sends, Files at once, and Voice input are the ones you chose there.
+- `herdr-projects web-ui` says which id it found, and its version: `Web UI (Ovis): found at http://127.0.0.1:7317
+  (devswha.ovis 0.4.13)`. Not found, it names both ids.
+- Its `PORT` and `HOST` are in the `env` or `.env` of the plugin's config folder (`herdr plugin config-dir devswha.ovis`),
+  as before.
+
 ## Why a front door
 
 The web UI has no place for an add-on (checked on herdr-web-ui 0.4.8). Its pages allow scripts and connections from its
-own address only, and may not be put in a frame (`server/static.ts` there), so the board has to come from the very
-address the web UI comes from. Changing the web UI's files is no way either: its updater builds each release from the
+own address only, and may not be put in a frame (`server/static.ts` there; Ovis 0.4.13 sends the same rules), so the
+board has to come from the very address the web UI comes from. Changing the web UI's files is no way either: its updater builds each release from the
 official code and wants a clean checkout, so a patch would be wiped by every update and could block updating.
 
 So the front door stands in front of it instead:
@@ -305,6 +332,8 @@ load online replaces the copy.
 ## When the web UI changes
 
 - **It updates itself**: nothing to do. The front door changes none of its files.
+- **It moves to its new plugin id** (Ovis's installer does that): the board finds it under the new one by itself, within
+  half a minute, and the front door follows ([its two names](#its-two-names)).
 - **It was redesigned and the sidebar's foot is gone**: a small floating **Board** button shows instead of the Boards
   section, and says once why. The board itself is unchanged.
 - **It gets an add-on slot of its own**: the front door can go. Until then, check these on a new version of the web UI:
@@ -316,7 +345,8 @@ load online replaces the copy.
   - its address parameters `ws`, `pane` and `view` (`src/lib/deepLink.ts`), and its `machine` address parameter;
   - `/api/health?scope=bridge` saying who asks, and that `/herdr-projects/` is still free;
   - what `/api/access` says about its link (`server/tailscale.ts`);
-  - `/api/machines` naming each PC's `id`, `kind`, `target` and `state`.
+  - `/api/machines` naming each PC's `id`, `kind`, `target` and `state`;
+  - its plugin id, its state folder, its paste folder and its settings record ([its two names](#its-two-names)).
 - **It changes its chat input**: the Board's box is measured against it again, with one command
   ([the web board's chat box](web-chat-box.md)).
 
@@ -386,3 +416,22 @@ UI's own restart and update (the script and the place it goes are the ones the B
 answered and one that refused), at a phone's size (390×844) and a desktop's (1280×800): All machines stood at the top of
 the Boards section and of the board's **Whose tasks to show**, and the machines under it kept their order. The terminal
 board was the same as before: it lists no boards, and `Alt+M` still goes this machine, every machine, then each other one.
+
+**Under its new name, Ovis**, checked on 2026-10-23 with Herdr 0.9.3: a scratch Herdr with Ovis's code under its new id
+(its main, `22104941`, `devswha.ovis` 0.4.13) and its release under the old id (0.4.13, `devswha.herdr-web-ui`), each
+with its own port; a board with two tasks, a real Coordinator and a real task's agent (Claude Code); the front door in
+front of it, in Chromium at a desktop's size (1280×800) and a phone's (390×844, touch):
+
+| What | Result |
+|---|---|
+| `herdr-projects web-ui`, the program before this change, Ovis installed | `not found: the plugin devswha.herdr-web-ui is not installed in herdr` |
+| `herdr-projects web-ui` now, Ovis only, then both listed | `found at http://127.0.0.1:17417 (devswha.ovis 0.4.13)` both times |
+| Ovis turned off in Herdr, the old id on | `found at … (devswha.herdr-web-ui 0.4.13)`; the front door followed it by itself within half a minute |
+| The Boards section | under Agents, above Install app and Settings, under both ids; on the phone (Ovis) folded as Agents is, with its dot |
+| A pick in it (Ovis at both sizes, the old id on the desktop) | the board opened over the page, docked on Ovis's own chat of the Coordinator, the Call button in its box; on the phone the drawer closed |
+| A message typed in Ovis's box while docked | went through the board to the Coordinator, which answered in that chat; Back closed the board and gave the page back |
+| A picture attached in Ovis's box, docked on the task's agent | kept in the task's worktree in `.ovis/`, which git leaves out (`!! .ovis/`); the box held its `@path` |
+| A browser whose settings were under the old key (Enter as a new line, 3 files at once) | Ovis moved them to `ovis:settings`; the board's box read Enter as a new line and 3 files at once there, and from `herdr-web-ui:settings` in front of the old id |
+
+Not checked: Ovis's installer moving a real install from the old id to the new one (both were linked by hand), and
+other machines under the new name (their PCs come from the same `/api/machines` as before).

@@ -150,7 +150,7 @@ Off, voice is gone, not just broken:
 
 `herdr-projects voice` says that calls are off and how to turn them on again: `herdr-projects set voice.calls on`
 (or `herdr-projects unset voice.calls`). Dictation into the chat's text box is not a call and has its own switch:
-the herdr web UI's Settings, Voice input.
+the web UI's (Ovis's) Settings, Voice input.
 
 ## How it fits together
 

@@ -65,11 +65,12 @@ pub fn relist(s: &mut State) {
         let hay = format!("{} {} {} {} {} {} {} {} {} {}", tags(s, r).join(" "), r.s("id"), r.s("title"), r.s("msg"), r.t("state"), r.s("app"), if r.b("archivedAt") { "archived" } else { "" }, r.s("description"), r.at("failure").s("title"), r.at("failure").s("detail"));
         hay.to_lowercase().contains(&f)
     }).collect() };
-    // In the archive, an archived project of this machine stands under its own heading whatever the grouping, with
-    // its tasks; alone (`0 tasks`) when it has none, but not while a find narrows the list.
-    let projects: Vec<String> = s.data.archived.iter().filter(|p| super::heads::archived_head(s, "", p)).cloned().collect();
-    let in_project = |r: &Rec| host_of(r).is_empty() && projects.iter().any(|p| p == repo_name(r));
-    let project_groups: Vec<(String, Vec<Rec>)> = projects.iter().map(|p| (p.clone(), shown.iter().filter(|r| host_of(r).is_empty() && repo_name(r) == p).cloned().collect::<Vec<_>>())).filter(|(_, l)| f.is_empty() || !l.is_empty()).collect();
+    // In the archive, an archived project (of any machine in view) stands under its own heading whatever the grouping,
+    // with its tasks; alone (`0 tasks`) when it has none, but not while a find narrows the list.
+    let projects = super::heads::archived_heads(s);
+    let in_project = |r: &Rec| projects.iter().any(|(h, p)| *h == host_of(r) && p == repo_name(r));
+    let mut names: Vec<String> = projects.iter().map(|(_, p)| p.clone()).collect(); names.sort(); names.dedup();
+    let project_groups: Vec<(String, Vec<Rec>)> = names.iter().map(|p| (p.clone(), shown.iter().filter(|r| in_project(r) && repo_name(r) == p).cloned().collect::<Vec<_>>())).filter(|(_, l)| f.is_empty() || !l.is_empty()).collect();
     let rest: Vec<Rec> = shown.iter().filter(|r| !in_project(r)).cloned().collect();
     s.grouped = if s.by_machine {
         // By machine: each machine's tasks under its heading alone (heads.rs: parts), by how much they need you.
