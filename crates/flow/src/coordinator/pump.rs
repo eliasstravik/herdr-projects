@@ -121,7 +121,7 @@ fn ensure(api: &Herdr, co: &Co) -> Res<(Obj, bool)> {
     }
     let version = installed::version_of(&k);
     c = change(co, |c| {
-        c.put("run", run.clone()); c.put("pick", Value::Null); c.put("agent", name.clone()); c.put("startedAt", now()); c.put("version", version.clone()); c.put("starting", 0);
+        c.put("run", run.clone()); c.put("pick", Value::Null); c.put("agent", name.clone()); c.put("startedAt", now()); c.put("version", version.clone()); c.put("starting", 0); c.put("rulesHash", super::rules_news::hash(&text));
         c.put("intro", !reads && resume.is_none()); // a program not known to read a rules file: one line before the first message points at it
         if resume.is_none() { c.put("session", session.clone().map(Value::String).unwrap_or(Value::Null)); c.put("transcript", Value::Null); c.put("since", began); c.put("seen", Value::Null); }
         true
@@ -201,7 +201,8 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
             let now_look = look_now(co);
             let (over, over_id) = (now_look.said.clone(), now_look.turn.as_ref().filter(|t| t.finished).map(|t| t.id.clone()).unwrap_or_default());
             let intro = get(co).map(|c| c.b("intro")).unwrap_or(false);
-            let words_in = if intro { format!("{}\n\n{}", intro_line_of(co), m.s("text")) } else { m.t("text") };
+            let (news, rules_hash) = super::rules_news::before_next(co, &get(co).unwrap_or_default());
+            let words_in = match if intro { Some(intro_line_of(co)) } else { news } { Some(head) => format!("{head}\n\n{}", m.s("text")), None => m.t("text") };
             let typed = match hand(&api, c.s("pane"), &words_in) {
                 Ok(t) => t,
                 Err(e) if e.code == "agent_blocked" || e.code == "agent_not_ready" => { unsay(); stuck = true; break; }
@@ -213,7 +214,7 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
                 for x in l.iter_mut() { if x.s("id") == id { if let Some(o) = x.as_object_mut() { o.put("sentAt", now()); } } }
                 c.put("where", trimmed(&l));
                 c.put("mark", json!({ "run": run, "seq": seq, "rest": at_rest }));
-                c.put("intro", false); c.put("sentAt", now());
+                c.put("intro", false); c.put("rulesHash", rules_hash.clone()); c.put("sentAt", now());
                 if !m.b("autopilot") { c.put("last", m.at("said").clone()); c.put("over", over.clone()); c.put("overId", over_id.clone()); } // a wake is no words of yours
                 // Who its turn is on: a task's agent that sent it (coordinator tell), and an autopilot wake (autopilot/).
                 c.put("typedFrom", m.at("sender").clone()); c.put("typedId", id.clone());

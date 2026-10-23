@@ -117,6 +117,11 @@ same file), and when you start the program in that folder by hand.
 
 - **Kept up to date.** The files are written again at every start and before every message. So a new version's rules
   are in place under a running Coordinator, which reads them at its next new chat or restart.
+- **A running one hears that they changed, once.** The board keeps a fingerprint of the rules each coordinator's
+  program started with. When the rules differ by the time the board types your next message in (a new version of the
+  board, a new `coordinator.instructions`), one line goes before it: "[The board was updated: your standing rules in
+  <file> changed; read them again.]". That happens once, and never as a message of its own: that would cost a turn
+  and could land in the middle of one. A program started by an older board, which kept no fingerprint, hears it too.
 - **Your own notes are kept.** The board owns only the block between its two marker lines. What you write above or
   below it in `AGENTS.md` or `CLAUDE.md` stays, and the Coordinator reads it too.
 - **One way per kind, never two.** The Coordinator gets no launch flag for its rules any more (it used to: Claude's and
