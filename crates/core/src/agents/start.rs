@@ -23,20 +23,14 @@ pub fn access_args(k: &str, access: &str) -> Res<Vec<String>> {
     Ok(f.iter().map(|s| s.to_string()).collect())
 }
 #[derive(Default, Clone)]
-pub struct StartOpts { pub model: String, pub effort: String, pub fast: Option<bool>, pub access: String, pub plan: Option<Vec<String>>, pub resume: String, pub session: String, pub extra: Vec<String> }
+pub struct StartOpts { pub model: String, pub effort: String, pub fast: Option<bool>, pub access: String, pub resume: String, pub session: String, pub extra: Vec<String> }
 /// The arguments a worker, a reviewer or the Coordinator of this kind is started with. `resume` reopens a known
-/// conversation; `session` names a new one; `extra` are the hook and standing-rule arguments; `plan` replaces the
-/// access flags with the program's own plan mode.
+/// conversation; `session` names a new one; `extra` are the hook and standing-rule arguments.
 pub fn start_args(k: &str, o: &StartOpts) -> Res<Vec<String>> {
     let mut out: Vec<String> = kind(k).map(|a| super::kinds::fill(a.lead, "")).unwrap_or_default(); // `hermes chat`
     if !o.resume.is_empty() { out.extend(resume_args(k, &o.resume)); } // first: Codex's `resume` is a subcommand
     if o.resume.is_empty() { out.extend(session_args(k, &o.session)); out.extend(fresh_args(k)); }
-    let access = access_args(k, if o.access.is_empty() { "full" } else { &o.access });
-    match &o.plan {
-        // An auto that cannot be is refused before the plan, not when the plan is built.
-        Some(p) => { if o.access == "auto" { access?; } out.extend(p.iter().cloned()) }
-        None => out.extend(access?),
-    }
+    out.extend(access_args(k, if o.access.is_empty() { "full" } else { &o.access })?);
     if !o.model.is_empty() { out.extend(model_args(k, &o.model)); }
     let level = effort_for(k, &o.model, &o.effort);
     if !level.is_empty() { out.extend(effort_args(k, &level)); }

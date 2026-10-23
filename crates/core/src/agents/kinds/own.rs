@@ -8,7 +8,7 @@ pub static KINDS: &[Kind] = &[
     Kind { name: "claude", min_version: "2.1.296", efforts: &["low", "medium", "high", "xhigh", "max"], access_full: &["--dangerously-skip-permissions"],
         // Auto mode: a classifier checks each action, runs the safe ones and stops the risky ones (access.rs).
         access_auto: Some((&["--permission-mode", "auto"], "2.1.111")),
-        tokens: true, rules_file: Some("CLAUDE.md"), reads_turn: true, plan_mode: true, model: &["--model", "{}"],
+        tokens: true, rules_file: Some("CLAUDE.md"), reads_turn: true, model: &["--model", "{}"],
         // Claude Code has no command that lists its models: its short names (each the newest of its kind) and the
         // full names Claude Code 2.1.301 knows. `[1m]` after one asks for the long context. On a cloud or a gateway
         // of its own (models/listed.rs `own_provider`) its names are that provider's, and not checked.

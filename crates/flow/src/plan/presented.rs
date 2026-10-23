@@ -1,10 +1,11 @@
-//! A program in its own plan mode presents its plan: the board takes it there, and the tool that would ask in the
-//! terminal is refused. `herdr-projects plan-written` is run by the hook the board passes at launch (Claude Code's
-//! PermissionRequest on ExitPlanMode, the question that would be asked in the terminal), inside the agent's turn. It
-//! saves the plan as the task's plan file and answers the question with Claude Code's structured `deny` on stdout, whose
-//! message tells the agent to stop: Claude Code shows it as "Denied by PermissionRequest hook". A refusal in PreToolUse
-//! (its `deny` or exit 2) shows as "hook error" instead, which reads as if something broke. Anything else is let
-//! through: nothing printed. Always exit 0.
+//! A Claude Code that an older board started in its own plan mode presents its plan (kept for one release): the board
+//! takes it there, and the tool that would ask in the terminal is refused. `herdr-projects plan-written` is run by the
+//! hook that board passed at launch (Claude Code's PermissionRequest on ExitPlanMode, the question that would be asked
+//! in the terminal), inside the agent's turn. It saves the plan as the task's plan file and answers the question with
+//! Claude Code's structured `deny` on stdout, whose message tells the agent to stop: Claude Code shows it as "Denied by
+//! PermissionRequest hook". Anything else is let through: nothing printed. Always exit 0. The board no longer starts
+//! Claude Code in plan mode (it plans with its usual access in the read-only mount and saves plan.md, as every program
+//! does): this file and `plan-written` go in the release after.
 use super::{open, write_plan};
 use crate::json::*;
 use crate::store::marks::token_ok;
