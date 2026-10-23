@@ -19,7 +19,7 @@ coordinator.
 
 - **The same marks as tasks**, in the marks' column left of the caret: `○` idle (also one that never ran, or was
   stopped), `◐` working, `?` it asks you (`!` it wants your OK), `✗` it could not start, on [autopilot](autopilot.md) too:
-  autopilot has no mark or colour of its own. None of a task's other marks (`◑ ◆ ✓ ◌ ◇`) is a
+  autopilot has no mark or colour of its own. None of a task's other marks (`◑ ◆ ✓ ◷ ◇`) is a
   coordinator's, and an idle coordinator is not counted in To do. Where no coordinator can run
   (`coordinator.agent none`), this machine's rows have no mark.
 - **The same right side as tasks: only the time.** `3m` while it works, `1h ago` otherwise, nothing when it never ran.

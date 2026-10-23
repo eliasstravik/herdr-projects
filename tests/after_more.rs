@@ -21,8 +21,8 @@ fn the_board_shows_what_a_task_waits_for_and_its_key_asks_before_it_starts_one_e
     let mut b = open(&w.root, 40);
     b.s.sel = id.clone(); b.load();
     let text = b.screen(120).join("\n");
-    assert!(has(&text, r"\n▌  ◌ PRJ-2 +Take it in +0s *│[^\n]*\n▌ +Queued after PRJ-1 "), "{text}");
-    assert!(has(&text, r"│  State +◌ queued after PRJ-1 · for 0s *\n[^\n]*│  Starts after +PRJ-1 *\n"), "{text}");
+    assert!(has(&text, r"\n▌  ◷ PRJ-2 +Take it in +0s *│[^\n]*\n▌ +Queued after PRJ-1 "), "{text}");
+    assert!(has(&text, r"│  State +◷ queued after PRJ-1 · for 0s *\n[^\n]*│  Starts after +PRJ-1 *\n"), "{text}");
     // The key that puts an agent on a task asks first: it starts by itself once the other is done.
     b.press(&["ctrl+s"]);
     assert!(has(&b.text(), r#"\? Start PRJ-2 "Take it in" now\? *\n +It is queued after PRJ-1 and starts by itself once that is done\. *\n +y = start now · n = let it wait"#), "{}", b.text());

@@ -3,7 +3,7 @@
 //! colours of your own cannot take that away.
 use crate::common;
 use sw::board::theme::greys::{apart, contrast, FLOOR, TODO_APART, TODO_BESIDE, TODO_DIMMER};
-use sw::board::theme::picks::{is_blue, is_pink, is_purple, AUTO_APART, AUTO_BESIDE, QUEUE_APART, QUEUE_BESIDE, REVIEW_APART, REVIEW_BESIDE, REVIEW_BLUE};
+use sw::board::theme::picks::{is_blue, is_magenta, is_purple, AUTO_APART, AUTO_BESIDE, QUEUE_APART, QUEUE_BESIDE, REVIEW_APART, REVIEW_BESIDE, REVIEW_BLUE};
 use sw::board::theme::{resolve, Pal, Seen, Theme, C};
 use sw::herdr::palette::THEME_NAMES;
 use sw::shown::ink::Ink;
@@ -21,7 +21,7 @@ const OWN: [Own; 6] = [
     ("todo", &TODO_BESIDE, 45.0, None), // a task nobody started: a dim grey, never the green of ready or the blue of a review
     ("auto", &AUTO_BESIDE, AUTO_APART, Some(is_purple)), // an automation: never taken for a status, for plain or greyed words, or lost on the background
     ("review", &REVIEW_BESIDE, REVIEW_APART, Some(is_blue)), // a review that is running, and the review tag beside passed, failed and no result
-    ("queue", &QUEUE_BESIDE, QUEUE_APART, Some(is_pink)), // a task that waits for a free slot: never taken for red, the automations' purple or any other status
+    ("queue", &QUEUE_BESIDE, QUEUE_APART, Some(is_magenta)), // a task that waits (◷): never taken for red, the automations' purple or any other status
     ("green", &["red", "subtext0"], 50.0, None), // a tag's colour alone says pass, fail or no result yet
     ("red", &["green", "subtext0"], 50.0, None),
 ];
@@ -61,7 +61,7 @@ fn every_colour_with_a_meaning_of_its_own_is_told_apart_in_every_theme_and_colou
     for name in ["catppuccin", "catppuccin-latte"] {
         for colours in yours {
             let p = pal(&custom(name, colours), "herdr"); let why = format!("{name} {colours:?}");
-            assert!(is_purple(p.auto) && is_blue(p.review) && is_pink(p.queue), "{why}");
+            assert!(is_purple(p.auto) && is_blue(p.review) && is_magenta(p.queue), "{why}");
             for (c, beside, by) in [("todo", &TODO_BESIDE[..], TODO_APART), ("auto", &AUTO_BESIDE[..], AUTO_APART), ("review", &REVIEW_BESIDE[..], REVIEW_APART), ("queue", &QUEUE_BESIDE[..], QUEUE_APART)] {
                 for k in beside { assert!(apart(p.get(c), p.get(k)) >= by, "{why}: {c} and {k}"); }
             }

@@ -257,7 +257,7 @@ fn a_task_that_waits_for_disk_space_says_so_everywhere_and_one_that_waits_for_a_
     assert!(lines[at + 1].contains("Disk nearly full on"), "{}", lines.join("\n"));
     assert!(!lines.iter().any(|l| l.contains("Waits for disk") && l.contains("free slot")), "{}", lines.join("\n"));
     let panel = sw::board::view::panel::panel(&mut bd.s, &bd.theme, &r, 100, false, 0).iter().map(|l| l.text()).collect::<Vec<_>>().join("\n");
-    assert!(panel.contains("◌ waiting for disk space, Q#1"), "{panel}");
+    assert!(panel.contains("◷ waiting for disk space, Q#1"), "{panel}");
     // The web board's row: the same line, and its place.
     let rows: Vec<Value> = common::board::web(&w, "board", json!({})).at("list").arr("groups").iter().flat_map(|g| g.arr("rows").iter().cloned()).collect();
     let wd = rows.iter().find(|x| x.s("id") == d).unwrap();

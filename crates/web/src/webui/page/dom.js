@@ -56,11 +56,10 @@ export function ink(pieces, cls = "") {
   }
   return out;
 }
-// A status mark. The round ones (an agent at work, its reviewer, a task that waits for a free slot) are drawn, all at
-// one size: as text the half disc came out a third the size of the dot, and the dotted ring is missing from many
-// fonts. Every other mark is its character (the board's own step ◇ beside the ◆ of ready).
+// A status mark. The round ones (an agent at work, its reviewer, a task that waits: a clock) are drawn, all at one
+// size: as text the half disc came out a third the size of the dot, and the clock ◷ is missing from many fonts. Every other mark is its character (the board's own step ◇ beside the ◆ of ready).
 // So is an automation's arrow going round (⟳), at the size of the round ones in any font; off, it is the same one, quiet.
-const ROUND = { "●": "full", "◑": "right", "◌": "dotted" }, TURN = "⟳";
+const ROUND = { "●": "full", "◑": "right", "◷": "clock" }, TURN = "⟳";
 export const markEl = (mark, color = "", dim = false) => h(`span.sw-mark${color ? `.sw-c-${color}` : ""}${dim ? ".sw-d" : ""}`, { "aria-hidden": "true" }, ROUND[mark] ? h(`span.sw-dot.sw-dot-${ROUND[mark]}`) : mark === TURN ? h("span.sw-turn") : mark);
 export const said = (pieces) => (pieces || []).map((p) => p.t).join("");
 // The web UI's own settings, where its page keeps them: `ovis:settings` since its rename to Ovis (which moves the old

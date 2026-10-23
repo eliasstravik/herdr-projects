@@ -1,5 +1,5 @@
 //! `--after` is a condition, tab (delegate) the start: a task only to wait for others stays in to do, its row saying
-//! nothing of it, and never starts by itself; tabbed, it is queued like a task that waits for a free slot (◌ in the grey of to do,
+//! nothing of it, and never starts by itself; tabbed, it is queued like a task that waits for a free slot (◷ in the queue's magenta,
 //! last under working, "Queued after PRJ-1") on the row, the panel, `list`, herdr's sidebar and the web Board.
 use crate::common;
 use common::board::{open, web};
@@ -75,25 +75,25 @@ fn a_tabbed_task_with_after_is_queued_like_one_that_waits_for_a_free_slot_and_st
     assert_eq!(task(&id).s("stage"), "after");
     let r = as_row(&row(&id));
     assert_eq!((r.s("state"), sw::shown::states::group_of(&r)), ("working", "working"));
-    assert_eq!(sw::shown::states::status_ink(&r), Ink::Todo, "the calm grey of to do, never a colour of its own");
+    assert_eq!(sw::shown::states::status_ink(&r), Ink::Queue, "the queue's own magenta, as a task that waits for a slot");
     assert_eq!(sw::shown::states::standing(&r), "queued after PRJ-3");
     assert_eq!(said_ink(&id), ("Queued after PRJ-3".into(), Ink::Soft), "as quiet as any task's line");
     assert_eq!(sw::shown::row_says::row_fields(&r, sw::clock::now()).percent.text(), "", "no place: it waits for a task, not a slot");
-    // On the board: ◌, under working with the queued tasks, after those that wait for a slot.
+    // On the board: ◷, under working with the queued tasks, after those that wait for a slot.
     let lines = b.screen(120);
     let at = |t: &str| lines.iter().position(|l| l.contains(t)).unwrap_or_else(|| panic!("no {t}:\n{}", lines.join("\n")));
-    assert!(lines[at("Comes after")].contains('◌') && lines[at("Comes after") + 1].contains("Queued after PRJ-3"), "{}", lines.join("\n"));
+    assert!(lines[at("Comes after")].contains('◷') && lines[at("Comes after") + 1].contains("Queued after PRJ-3"), "{}", lines.join("\n"));
     assert!(at("At work") < at("Waits for a slot") && at("Waits for a slot") < at("Comes after") && at("Comes after") < at("▾ to do"), "{}", lines.join("\n"));
     assert!(lines[at("Waits for a slot")].contains("Q#1"), "{}", lines.join("\n"));
     let panel = sw::board::view::panel::panel(&mut b.s, &b.theme, &r, 100, false, 0).iter().map(|l| l.text()).collect::<Vec<_>>().join("\n");
-    assert!(panel.contains("◌ queued after PRJ-3") && !panel.contains("Now "), "{panel}");
+    assert!(panel.contains("◷ queued after PRJ-3") && !panel.contains("Now "), "{panel}");
     // herdr's sidebar and the web Board say the same.
     let e = sw::flow::sidebar_entry::entry_of(&row(&id), "", sw::clock::now());
     assert_eq!((e.place.as_str(), e.progress.as_str()), ("queued after PRJ-3", ""));
     let s = web(&w, "board", json!({}));
     let rows: Vec<Value> = s.at("list").arr("groups").iter().flat_map(|g| g.arr("rows").iter().cloned()).collect();
     let wr = rows.iter().find(|x| x.s("id") == id).unwrap();
-    assert_eq!((wr.s("mark"), wr.s("color")), ("◌", "todo"));
+    assert_eq!((wr.s("mark"), wr.s("color")), ("◷", "queue"));
     // The task it waits for is done and a slot frees: it starts by itself, after the one that waited for the slot.
     sw::clock::advance(1000);
     sw::store::tasks::set(&dep, json!({ "stage": "done" })).unwrap();
@@ -119,7 +119,7 @@ fn a_task_queued_after_many_says_so_on_one_line_cut_as_any_other_line_is() {
     assert!(full.starts_with("Queued after PRJ-1, PRJ-2") && full.ends_with("PRJ-9"), "{full}");
     let mut b = open(&w.root, 40);
     let lines = b.screen(90);
-    let at = lines.iter().position(|l| l.contains("◌ PRJ-10")).unwrap_or_else(|| panic!("{}", lines.join("\n")));
+    let at = lines.iter().position(|l| l.contains("◷ PRJ-10")).unwrap_or_else(|| panic!("{}", lines.join("\n")));
     let list = |n: usize| lines[n].split('│').next().unwrap_or("").to_string();
     // The same cut as an agent's long line: one line, ended with …, within the list.
     assert!(list(at + 1).contains("Queued after PRJ-1, PRJ-2") && list(at + 1).trim_end().ends_with('…') && !list(at + 1).contains("PRJ-9"), "{}", lines.join("\n"));

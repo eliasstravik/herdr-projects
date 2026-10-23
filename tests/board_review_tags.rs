@@ -26,7 +26,7 @@ fn the_boards_own_steps_share_one_mark_and_the_reviewer_says_only_what_it_is_doi
     }
     // a task that waits for a free slot has a dotted ring of its own (board_queue.rs)
     let queued = with(&working, json!({ "stage": "queued", "msg": "x" }));
-    m(&v.row(&queued, 120), r"^[ ▌]◌ #\d+ Other "); m(&v.page(&queued, false), r"\n State {8}◌ waiting for a free slot ");
+    m(&v.row(&queued, 120), r"^[ ▌]◷ #\d+ Other "); m(&v.page(&queued, false), r"\n State {8}◷ waiting for a free slot ");
     // the board waiting on its way is still the board's step; the reviewer cut off and waiting to try again keeps its moon
     m(&v.row(&with(&working, json!({ "stage": "merging", "lineAt": 1, "msg": "Waiting to merge: proj/1 goes first" })), 120), r"^[ ▌]◇ #\d+ Other "); // in the line to merge
     let cut = with(&working, json!({ "stage": "reviewing", "reviewRound": 1, "waiting": { "who": "reviewer", "reason": "model is at capacity", "until": v.now + 120000, "tries": 1 } }));

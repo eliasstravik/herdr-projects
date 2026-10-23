@@ -29,14 +29,14 @@ fn the_board_paints_with_what_it_read_true_colour_the_terminals_16_colours_herdr
     assert_eq!(fg(&t, Ink::Muted), Color::Reset); // this theme's greys cannot be trusted, nor can faint: untold, greyed-out words are the text colour
     assert_eq!(fg(&t, Ink::Soft), Color::Reset); // and words that have to be read the text colour itself
     assert!(t.paints_selection()); assert_eq!(bg(&t, Ink::Selection), Color::Indexed(8)); // no selection colour in this theme: herdr's active row colour
-    assert_eq!(marks(&t), ["◐", "◑", "◇", "◌", "!", "✓", "○", "✗"]);
+    assert_eq!(marks(&t), ["◐", "◑", "◇", "◷", "!", "✓", "○", "✗"]);
     let t = load(Some(true));
     assert_eq!(fg(&t, Ink::Red), Color::Rgb(210, 15, 57)); assert_eq!(bg(&t, Ink::Selection), Color::Rgb(189, 208, 245));
     herdr_config("");
     assert!(!Theme::needs_light()); // no theme set: herdr's default, with nothing to ask
     let t = load(None);
     // A symbol of its own for each state is the board's default: no two states are told apart by colour alone.
-    assert_eq!(marks(&t), ["◐", "◑", "◇", "◌", "!", "✓", "○", "✗"]);
+    assert_eq!(marks(&t), ["◐", "◑", "◇", "◷", "!", "✓", "○", "✗"]);
     // A task that waits for you says what it needs: an answer, a yes or no, a sign-in; `!` where the kind is not known.
     // None of them is a cross: that is for what went wrong, and told from it by the mark alone, with colour off too.
     let needs: Vec<&str> = ["question", "permission", "auth", "", "nonsense"].iter().map(|k| t.mark("blocked", k)).collect();
@@ -44,7 +44,7 @@ fn the_board_paints_with_what_it_read_true_colour_the_terminals_16_colours_herdr
     assert_eq!(t.mark("error", "question"), "✗"); assert_eq!(t.mark("working", "auth"), "◐"); // the kind belongs to blocked only
     herdr_config("[ui]\nstatus_indicators = \"dots\"\n"); // herdr's dots only when its config asks for them by name
     let t = load(None);
-    assert_eq!(marks(&t), ["●", "●", "◇", "◌", "!", "●", "○", "✗"]); // herdr's dot for someone at work, as a moon is with symbols
+    assert_eq!(marks(&t), ["●", "●", "◇", "◷", "!", "●", "○", "✗"]); // herdr's dot for someone at work, as a moon is with symbols
     assert_eq!(["question", "permission", "auth", ""].map(|k| t.mark("blocked", k)), ["?", "!", "@", "!"]); // what a task needs is said with dots too
     herdr_config("");
     assert_eq!(fg(&load(None), Ink::Yellow), Color::Rgb(249, 226, 175)); // no theme set here: herdr's default, as herdr shows it
@@ -96,5 +96,5 @@ fn only_a_moon_says_someone_works_and_every_mark_is_one_column_wide() {
         let moon = "◐◑◒◓".contains(*m);
         assert_eq!(moon, ["working", "review"].contains(state) && *how != "dots" && !(*how == "web" && *state == "working"), "{how} {state}: {m}");
     }
-    assert_eq!(["board", "queue"].map(|s| mark(s, "", true)), ["◇", "◌"]); assert_eq!(["board", "queue"].map(|s| web_mark(s, "")), ["◇", "◌"]);
+    assert_eq!(["board", "queue"].map(|s| mark(s, "", true)), ["◇", "◷"]); assert_eq!(["board", "queue"].map(|s| web_mark(s, "")), ["◇", "◷"]);
 }

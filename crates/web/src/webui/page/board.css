@@ -18,9 +18,9 @@
   /* An automation: a purple, which no status of the web UI has. The board's own, pulled towards the page's text
      colour as the teal is, so it reads on light and dark alike. */
   --sw-auto: color-mix(in srgb, #a855f7 78%, var(--text, #d8d0c3));
-  /* A task that waits for a free slot: a pink, which no status of the web UI has either. The board's own, pulled
-     towards the page's text colour as the purple is. */
-  --sw-queue: color-mix(in srgb, #ec4899 80%, var(--text, #d8d0c3));
+  /* A task that waits for a free slot, or for other tasks: a magenta, which no status of the web UI has either. The
+     board's own, pulled towards the page's text colour as the purple is, and further from the purple than it is. */
+  --sw-queue: color-mix(in srgb, #e646e6 82%, var(--text, #d8d0c3));
 }
 /* Nothing that is read is under 13px on the board, whatever the web UI's two smallest sizes are elsewhere. */
 .sw-board, .sw-float { --fs-2xs: 13px; --fs-xs: 13px; }
@@ -222,11 +222,13 @@
 .sw-row.is-selected { background: var(--sw-lift); box-shadow: inset 3px 0 0 var(--accent, #f0a830); }
 .sw-row:focus-visible, .sw-more:focus-visible { outline: var(--ring, 2px solid var(--sw-yellow)); outline-offset: calc(-1 * var(--ring-offset, 2px)); }
 .sw-mark { flex: none; width: 1.25em; text-align: center; line-height: var(--lh-base, 1.5); font-size: var(--fs-md, 14px); }
-/* The round marks, drawn at one size: an agent at work (full), its reviewer (the right half), a wait for a free slot (a dotted ring). */
+/* The round marks, drawn at one size: an agent at work (full), its reviewer (the right half), a wait (a clock: a ring with its hands at three o'clock). */
 .sw-dot { display: inline-block; width: 0.72em; height: 0.72em; border-radius: 50%; border: 1.5px solid currentColor; box-sizing: border-box; vertical-align: -0.04em; }
 .sw-dot-full { background: currentColor; }
 .sw-dot-right { background: linear-gradient(90deg, transparent 50%, currentColor 50%); }
-.sw-dot-dotted { border-style: dotted; border-width: 2px; }
+.sw-dot-clock { position: relative; }
+.sw-dot-clock::before, .sw-dot-clock::after { content: ""; position: absolute; left: calc(50% - 0.75px); bottom: 50%; width: 1.5px; height: 38%; background: currentColor; transform-origin: 50% 100%; }
+.sw-dot-clock::after { height: 34%; transform: rotate(90deg); }
 /* An automation's mark, an arrow going round (⟳), drawn at the round marks' size: a ring with a gap on its upper right, and the arrow's head where the ring ends. */
 .sw-turn { display: inline-block; position: relative; width: 0.72em; height: 0.72em; vertical-align: -0.04em; }
 .sw-turn::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 95deg, currentColor 310deg, transparent 0); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px)); mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px)); }

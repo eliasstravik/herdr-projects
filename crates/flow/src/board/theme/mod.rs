@@ -3,7 +3,7 @@
 //! herdr does, so with no theme set it is herdr's default, Catppuccin, exactly as herdr shows it. herdr does not hand
 //! its theme to plugins, and a herdr opened from another machine paints with that machine's config: the board's own
 //! `board.theme` setting names a theme by hand then. The board's own colours are only for what herdr has no state for:
-//! "review" (a blue), "todo" (a dim grey), "check" (herdr's subtext0), "queue" (a pink) and "auto" (a
+//! "review" (a blue), "todo" (a dim grey), "check" (herdr's subtext0), "queue" (a magenta) and "auto" (a
 //! purple) (picks.rs). The greys are herdr's, made readable (greys.rs). With NO_COLOR set nothing is painted: marks, words
 //! and reverse video still say everything.
 pub mod answers;
@@ -107,7 +107,7 @@ pub fn resolve(cfg: &toml::Table, light: Option<bool>, want: &str, seen: Seen) -
     pal.check = pal.subtext0;
     pal.todo = greys::todo_grey(&pal, ground, text);
     pal.auto = picks::auto_purple(&pal);
-    pal.queue = picks::queue_pink(&pal, ground);
+    pal.queue = picks::queue_magenta(&pal, ground);
     let symbols = st(ui, "status_indicators") != Some("dots");
     Resolved { name: canon, pal, ground, symbols }
 }

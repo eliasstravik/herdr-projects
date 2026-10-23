@@ -186,7 +186,7 @@ Each state has a mark of its own, so no two are told apart by colour alone:
 | `◐` | the agent is working |
 | `◑` | the reviewer is working |
 | `◇` | the board's own step |
-| `◌` | queued: it waits for a free slot, or for the tasks it is tabbed to start after ([one task after another](after.md)) |
+| `◷` | queued (a clock, in magenta): it waits for a free slot, or for the tasks it is tabbed to start after ([one task after another](after.md)) |
 | `✗` | went wrong |
 | `◆` | ready to approve |
 | `✓` | done |
@@ -196,13 +196,13 @@ The `?` menu has the list too.
 
 - **A machine's row and a project's row** (and `All machines`) carry their coordinator's state with these same marks:
   `○` idle (also never ran, or stopped), `◐` it works, `?` it asks you (`!` it wants your OK), `✗` it could not start.
-  On [autopilot](autopilot.md) it keeps that mark, with `[autopilot]` after its name. The others (`◑ ◆ ✓ ◌ ◇`) are never a coordinator's
+  On [autopilot](autopilot.md) it keeps that mark, with `[autopilot]` after its name. The others (`◑ ◆ ✓ ◷ ◇`) are never a coordinator's
   ([machine and project coordinators](machine-and-project-coordinators.md)).
 
 - **Only a moon says someone works**: `◐` and `◑`, an agent or its reviewer.
 - Every mark is one column wide, and a character every monospace font has. The web board draws the same ones.
 - Herdr's `status_indicators = "dots"` brings its dots back for working (the agent's and the reviewer's) and done. The
-  board's `◇`, the `◌` of a wait for a slot, and what a waiting task needs keep their marks with dots too, since no dot
+  board's `◇`, the `◷` of a wait for a slot, and what a waiting task needs keep their marks with dots too, since no dot
   means those.
 
 ### A task that needs you
@@ -304,10 +304,10 @@ Herdr's and which the board's, and how the board follows Herdr's theme: [colours
 - **The board's own steps** are no moon but a `◇`: starting, setting up, running the check, pushing and merging, and the
   waits on the way: for the check's turn, for its turn to merge, and for GitHub's checks on its pull request
   (`Waiting for GitHub checks · 2 of 3 passed`).
-- **A task waiting for a free slot** has an empty, dotted ring, `◌`, in the dim grey of to do ([below](#a-task-that-waits-for-a-free-slot)).
+- **A task waiting for a free slot** has a clock, `◷`, in a magenta no other state has ([below](#a-task-that-waits-for-a-free-slot)).
 - **An agent or reviewer whose turn was cut off**, waiting to try again, keeps its moon: it is still the one on the task.
-- So: a blue `◑` with a bar is a running review, an amber `◐` the agent at work, a `◇` the board on it, a grey `◌` not
-  started yet, and a green `◆` ready for your yes.
+- So: a blue `◑` with a bar is a running review, an amber `◐` the agent at work, a `◇` the board on it, a magenta `◷` waiting
+  for its turn, and a green `◆` ready for your yes.
 - **A group's heading keeps its group's colour**: a task under review is filed under `working`.
 - **To do** (its heading and its `○`) is a dim grey of its own, never the plain text colour, and always readable: every
   grey on the board is held to a floor of contrast with the background.
@@ -349,16 +349,16 @@ background ([colours](colours.md)). The time of a task that is not done is drawn
 ## A task that waits for a free slot
 
 At most `board.agents` agents work at once. A task started while every slot is taken waits its turn: its row has the
-mark `◌` in the dim grey of to do, says `Waiting for a free slot` on its second line, and shows its place in the queue where a working
+mark `◷` (a clock) in magenta, says `Waiting for a free slot` on its second line, and shows its place in the queue where a working
 task has its percent: `Q#1` gets the next free slot, `Q#2` the one after.
 
 ```
  working
  ◐ HSW-151 Rewrite the board in Rust on Ratatui           █████░░░  65%  3m       9m
            Reading the list code
- ◌ HSW-152 Show automations in the main list                         Q#1           2m
+ ◷ HSW-152 Show automations in the main list                         Q#1           2m
         Waiting for a free slot
- ◌ #153 Fix the footer                                               Q#2          40s
+ ◷ #153 Fix the footer                                               Q#2          40s
         Waiting for a free slot
 ```
 
@@ -368,7 +368,7 @@ task has its percent: `Q#1` gets the next free slot, `Q#2` the one after.
   by themselves, so `working` is where they belong. A heading of their own would hold one or two rows for a minute and
   move them under another heading each time a slot frees. Their mark, colour and `Q#` tell them from the tasks at work,
   and the order says which is next. (Grouped by repo there is no status heading: they stand among their repo's tasks.)
-- **The same place is said everywhere**: the task panel's State line (`◌ waiting for a free slot, Q#2`), `list`
+- **The same place is said everywhere**: the task panel's State line (`◷ waiting for a free slot, Q#2`), `list`
   (`· waiting for a free slot, Q#2`; `--json` has `queue: 2`), `details` (`queue: { place, words }`), the message when you
   start it, Herdr's sidebar ([sidebar](sidebar.md)) and the web Board.
 - **A narrow board** keeps it too: there `Q#2` stands with the time at the end of the row's second line, so a waiting

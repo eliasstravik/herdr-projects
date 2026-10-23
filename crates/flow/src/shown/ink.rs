@@ -26,7 +26,7 @@ pub enum Ink {
     Review,
     /// The board runs the check itself: a plain light grey.
     Check,
-    /// It waits for a free slot: a pink no other state has.
+    /// It waits for a free slot, or for other tasks: a magenta no other state has.
     Queue,
     /// Nobody has started it: the dim grey of "to do".
     Todo,

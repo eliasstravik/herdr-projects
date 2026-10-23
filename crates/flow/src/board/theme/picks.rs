@@ -1,5 +1,5 @@
 //! The board's own colours, picked to fit the theme: "review", the blue of a review that is running, "auto", the
-//! purple of an automation, and "queue", the pink of a task that waits for a free slot. Each is the theme's own colour
+//! purple of an automation, and "queue", the magenta of a task that waits for a free slot. Each is the theme's own colour
 //! of that hue where it is one and told apart from all it sits beside; else the first of the board's own that is; else
 //! the one furthest from them.
 use super::greys::{apart, rgb};
@@ -56,29 +56,28 @@ pub fn auto_purple(p: &Pal) -> C {
 }
 
 pub const QUEUE_APART: f64 = 55.0;
-/// The board's pinks: for a dark ground the brighter first, for a light one the darker first.
-const DARK_PINKS: [u32; 6] = [0xf472b6, 0xff6ec7, 0xec4899, 0xf9a8d4, 0xe040a0, 0xff9ad5];
-const LIGHT_PINKS: [u32; 6] = [0xdb2777, 0xc2188b, 0xbe185d, 0xe040a0, 0x9d174d, 0xec4899];
-/// Is it a pink: a red that leans to magenta, from hot pink to rose, and not a grey.
-pub fn is_pink(c: C) -> bool {
+/// The board's magentas: for a dark ground the brighter first, for a light one the darker first.
+const DARK_MAGENTAS: [u32; 6] = [0xe056fd, 0xe879f9, 0xd946ef, 0xff55ff, 0xf0abfc, 0xc026d3];
+const LIGHT_MAGENTAS: [u32; 6] = [0xc026d3, 0xa21caf, 0xb5179e, 0x86198f, 0xd946ef, 0x9c27b0];
+/// Is it a magenta: red and blue both well over green, the purple between violet and pink, and not a grey.
+pub fn is_magenta(c: C) -> bool {
     let Some(x) = c.drawn() else { return false };
     let [r, g, b] = rgb(x);
-    let spread = r - g.min(b);
-    let hue = (60.0 * ((g - b) / if spread == 0.0 { 1.0 } else { spread }) + 360.0) % 360.0;
-    r >= g && r >= b && b > g && spread >= 50.0 && (300.0..=350.0).contains(&hue)
+    let (max, spread) = (r.max(b), r.max(b) - g);
+    let hue = if max == b { 60.0 * (4.0 + (r - g) / spread.max(1.0)) } else { (60.0 * ((g - b) / spread.max(1.0)) + 360.0) % 360.0 };
+    g < r && g < b && spread >= 50.0 && (280.0..=330.0).contains(&hue)
 }
-/// "queue": herdr's themes have no pink of their own, and no status of herdr's is one, so it is one of the board's
-/// pinks, the first that is told apart from every status colour (red above all, the nearest to it), the automations'
-/// purple, the greys, text and background, and is seen on the ground (3 to 1, what a mark needs). The `terminal`
-/// theme's sixteen have no pink (their magenta is the automations'), so there too it is one of the board's, the one
-/// that reads on a dark terminal and a light one alike.
+/// "queue": no status of herdr's is a magenta, so it is one of the board's magentas, the first that is told apart from
+/// every status colour, the automations' purple (the nearest to it), the greys, text and background, and is seen on
+/// the ground (3 to 1, what a mark needs). The `terminal` theme's own magenta is the automations', so there too it is
+/// one of the board's, the one that reads on a dark terminal and a light one alike.
 pub const QUEUE_BESIDE: [&str; 11] = ["red", "green", "yellow", "teal", "review", "todo", "auto", "text", "subtext0", "overlay0", "panel_bg"];
-pub fn queue_pink(p: &Pal, ground: C) -> C {
+pub fn queue_magenta(p: &Pal, ground: C) -> C {
     let beside = QUEUE_BESIDE.map(|k| p.get(k));
     let reads = |c: C| match (c.real(), ground.real()) { (Some(x), Some(g)) => super::greys::contrast(x, g) >= super::greys::LEAST, _ => true };
-    let fits = |c: C| is_pink(c) && reads(c) && least(c, &beside) >= QUEUE_APART;
+    let fits = |c: C| is_magenta(c) && reads(c) && least(c, &beside) >= QUEUE_APART;
     let light = ground.real().or(p.panel_bg.real()).map(is_light);
-    // A ground that cannot be known (the terminal's own) takes the middle pink first, that reads on dark and light.
-    let own: Vec<C> = match light { Some(true) => LIGHT_PINKS.to_vec(), Some(false) => DARK_PINKS.to_vec(), None => [0xec4899].into_iter().chain(DARK_PINKS).chain(LIGHT_PINKS).collect() }.into_iter().map(C::Rgb).collect();
+    // A ground that cannot be known (the terminal's own) takes the middle magenta first, that reads on dark and light.
+    let own: Vec<C> = match light { Some(true) => LIGHT_MAGENTAS.to_vec(), Some(false) => DARK_MAGENTAS.to_vec(), None => [0xd946ef].into_iter().chain(DARK_MAGENTAS).chain(LIGHT_MAGENTAS).collect() }.into_iter().map(C::Rgb).collect();
     own.iter().copied().find(|c| fits(*c)).unwrap_or_else(|| { let seen: Vec<C> = own.iter().copied().filter(|c| reads(*c)).collect(); furthest(if seen.is_empty() { &own } else { &seen }, &beside) })
 }

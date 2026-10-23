@@ -33,7 +33,7 @@
             Reading the logs
    ◐ #18    日本語のタイトルはとても長いので二倍の幅になります 🚀🚀 and then some more                                                                    ░░░░░░░░   5%                           1m
             幅の広い文字 🎉 の行
-   ◌ #3     Max length for task titles                                                                                                                              Q#2                           1m
+   ◷ #3     Max length for task titles                                                                                                                              Q#2                           1m
             Waiting for a free slot
    ▾ to do
    ○ #1     Max length for task titles                                                                                                                                                            1m ago
@@ -94,7 +94,7 @@
             Reading the logs                                                                                                    │
    ◐ #18    日本語のタイトルはとても長いので二倍の幅になります 🚀🚀 and then some more      5%                           1m     │
             幅の広い文字 🎉 の行                                                                                                │
-   ◌ #3     Max length for task titles                                                     Q#2                           1m     │
+   ◷ #3     Max length for task titles                                                     Q#2                           1m     │
             Waiting for a free slot                                                                                             │
    ▾ to do                                                                                                                      │
    ○ #1     Max length for task titles                                                                                   1m ago │
@@ -224,7 +224,7 @@
    ◐            an agent works
    ◑            its reviewer works
    ◇            the board's own step (it checks, waits for GitHub, merges)
-   ◌            queued: for a free slot (Q#1 next) or after other tasks
+   ◷            queued: for a free slot (Q#1 next) or after other tasks
    ?            asks you
    !            asks for your OK
    @            needs a login
@@ -277,7 +277,7 @@
             Reading the logs
    ◐ #18    日本語のタイトルはとても長いので二倍の幅になります 🚀🚀 and then some more                                                                    ░░░░░░░░   5%                           1m
             幅の広い文字 🎉 の行
-   ◌ #3     Max length for task titles                                                                                                                              Q#2                           1m
+   ◷ #3     Max length for task titles                                                                                                                              Q#2                           1m
             Waiting for a free slot
    ▾ to do
    ○ #1     Max length for task titles                                                                                                                                                            1m ago
