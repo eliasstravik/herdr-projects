@@ -133,6 +133,7 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
         "archive" if flags.b("done") => {
             if pos.len() > 1 { crate::fail!("archive --done takes no id: it archives every done task (of --repo NAME). Try: herdr-projects help"); }
             if flags.has("repo") && flag("repo").is_none() { crate::fail!("--repo needs a repo's name: herdr-projects archive --done --repo NAME"); }
+            if flags.has("on") { crate::fail!("--on goes with a whole project: herdr-projects archive --repo NAME --on MACHINE"); }
             let r = archive_done::archive_done(flag("repo").as_deref())?;
             (r.json(), r.said)
         }
@@ -140,10 +141,14 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
         "archive" | "restore" | "unarchive" if flags.has("repo") => {
             if pos.len() > 1 { crate::fail!("{cmd} --repo NAME takes no id: it {cmd}s the whole project. Try: herdr-projects help"); }
             let Some(repo) = flag("repo") else { crate::fail!("--repo needs a repo's name: herdr-projects {cmd} --repo NAME") };
+            // Another machine's project: done there, by that machine itself (remote/projects.rs).
+            if flags.has("on") && flag("on").is_none() { crate::fail!("--on needs a machine's name: herdr-projects {cmd} --repo NAME --on MACHINE"); }
+            if let Some(on) = flag("on").filter(|on| !crate::after::circle::is_me(on)) { return crate::remote::projects::command(&on, cmd == "archive", &repo); }
             let (said, ids) = if cmd == "archive" { archive_project::archive_project(&repo)? } else { archive_project::restore_project(&repo)? };
             let mut out = obj(json!({ "repo": repo })); out.put(if cmd == "archive" { "archived" } else { "restored" }, ids);
             (Value::Object(out), said)
         }
+        "archive" | "restore" | "unarchive" if flags.has("on") => crate::fail!("--on goes with a whole project: herdr-projects {cmd} --repo NAME --on MACHINE"),
         "archive" => { let t = archive::archive(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: archived", t.s("id"))) }
         "restore" | "unarchive" => { let t = archive::restore(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: restored", t.s("id"))) }
         "clear" => {

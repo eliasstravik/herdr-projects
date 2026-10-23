@@ -14,6 +14,7 @@ pub mod carry;
 pub mod check;
 pub mod lookup;
 pub mod own_names;
+pub mod projects;
 pub mod sidebar;
 pub mod why;
 
@@ -123,6 +124,7 @@ fn snapshot(t: &Obj) -> Value {
 /// `autopilot`: what each of its coordinators shows of autopilot (autopilot/far.rs); `version` is this side's version (a machine on an older
 /// one sends none). Pending hook events are this machine's own and are not sent. `automations`: this machine's own.
 /// `sidebar`: this machine's herdr list of machines, in the order its sidebar shows them (remote/sidebar.rs).
+/// `archived`: its archived projects, each a heading in the asking board's archive (remote/projects.rs).
 pub fn remote_list() -> Value {
     let keys = repo_keys();
     let tasks: Vec<Value> = board(true).into_iter().map(|mut t| {
@@ -139,7 +141,7 @@ pub fn remote_list() -> Value {
     let coordinator = crate::coordinator::far::sent(&crate::coordinator::look::look(&socket), ready);
     // Its machine's and its repos' coordinators that were ever talked to, by level ("machine", "project:<repo>").
     let coordinators: Obj = crate::coordinator::state::all(&socket).into_iter().filter(|co| !co.is_top()).map(|co| (co.to(), crate::coordinator::far::sent(&crate::coordinator::look::look(&co), ready))).collect();
-    json!({ "host": check::hostname(), "version": VERSION, "free": crate::leftovers::room::free_here(), "automations": automations::automations_sent(), "coordinator": coordinator, "coordinators": coordinators, "autopilot": crate::autopilot::far::sent(&socket, crate::clock::now()), "sidebar": sidebar::sent(), "tasks": tasks })
+    json!({ "host": check::hostname(), "version": VERSION, "free": crate::leftovers::room::free_here(), "automations": automations::automations_sent(), "coordinator": coordinator, "coordinators": coordinators, "autopilot": crate::autopilot::far::sent(&socket, crate::clock::now()), "sidebar": sidebar::sent(), "archived": crate::store::archived_repos::archived_repos().keys().collect::<Vec<_>>(), "tasks": tasks })
 }
 pub fn remote_main(a: &[String]) -> i32 {
     let what = a.first().cloned().unwrap_or_default();
@@ -172,6 +174,7 @@ pub fn door_with(what: &str, req: &Value, bytes: &[u8]) -> Res<Value> {
         "add" => add::door(req), // a task the asking machine adds here (remote/add.rs)
         "hello" => Ok(json!({ "ok": true, "host": check::hostname(), "version": VERSION })), // the check a machine runs on itself (remote/check.rs)
         "do" if automations::is_automation_action(req.s("action")) => automations::automation_do(req), // an automation of this machine, not a task
+        "do" if projects::is_project_action(req.s("action")) => projects::door(req), // a project of this machine archived or restored (remote/projects.rs)
         "do" if req.s("action").starts_with("autopilot-") || req.s("action").starts_with("coordinator-") => crate::autopilot::far::door(req), // a coordinator's autopilot switched, or it started or stopped, from another machine
         "do" => {
             let t = find(req.s("id"))?;
