@@ -1,6 +1,7 @@
-//! A task started from a named branch (`workspace.from develop`): fetched from origin on every start, an unknown one or
-//! one without a pull request refused with the reason, kept up with that branch (not main), a conflict with it sent to
-//! the agent, its pull request into it, the agent's own one taken only when it merges into it, and merged and cleaned up.
+//! A task started from a named branch (`workspace.from develop`): fetched from origin on every start, an unknown one
+//! refused with the reason, kept up with that branch (not main), a conflict with it sent to the agent, its pull request
+//! into it, the agent's own one taken only when it merges into it, and merged and cleaned up. With no pull request it
+//! lands by a push (workspace_from/push.rs).
 use crate::common;
 use common::*;
 use serde_json::{json, Value};
@@ -10,9 +11,12 @@ use sw::json::*;
 use sw::store::settings::change::set_value;
 use sw::store::settings::lookup::Scope;
 
+/// With no pull request: a push to that branch at origin.
+mod push;
+
 fn pr_world() -> World { world_with(Opts { repo: true, origin: true, settings: json!({ "review.when": "never" }), ..Default::default() }) }
 /// Someone else pushes a commit to a branch at the remote (made from main when it is new there): the commit.
-fn they_push(w: &World, branch: &str, file: &str, body: &str) -> String {
+pub fn they_push(w: &World, branch: &str, file: &str, body: &str) -> String {
     let n = std::fs::read_dir(&w.base).map(|d| d.count()).unwrap_or(0);
     let other = w.base.join(format!("other-{n}"));
     git(&w.base, &["clone", "-q", &w.base.join("origin.git").display().to_string(), &other.display().to_string()]);
@@ -46,14 +50,15 @@ fn a_named_branch_is_fetched_on_every_start_and_the_worktree_starts_from_it() {
 }
 
 #[test]
-fn an_unknown_branch_no_remote_or_merge_pr_off_is_refused_with_the_reason() {
+fn an_unknown_branch_or_no_remote_is_refused_with_the_reason_merge_pr_off_is_not() {
     let w = pr_world();
     from("nope");
     refused(&started(&w, "Nowhere"), "origin has no branch nope");
     they_push(&w, "develop", "d.txt", "one\n");
     from("develop");
     set_value("merge.pr", &json!(false), &Scope::you()).unwrap();
-    refused(&started(&w, "Local"), "merge.pr is off");
+    let t = started(&w, "Local");
+    assert_eq!((t.s("stage"), t.s("from")), ("working", "origin/develop"), "{}", t.at("failure"));
     let bad = |v: &str| set_value("workspace.from", &json!(v), &Scope::you()).unwrap_err().msg;
     assert!(bad("origin/develop").contains("Did you mean develop?"), "{}", bad("origin/develop"));
     assert!(bad("my branch").contains("Did you mean my-branch?"), "{}", bad("my branch"));
@@ -149,7 +154,7 @@ fn the_agents_own_pull_request_is_taken_only_when_it_merges_into_that_branch() {
 }
 
 #[test]
-fn with_merge_pr_turned_off_after_the_start_it_does_not_merge_locally() {
+fn with_merge_pr_turned_off_after_the_start_it_lands_by_a_push_not_locally() {
     let w = pr_world();
     they_push(&w, "develop", "d.txt", "one\n");
     from("develop");
@@ -165,6 +170,8 @@ fn with_merge_pr_turned_off_after_the_start_it_does_not_merge_locally() {
     let main_before = git(&w.root, &["rev-parse", "main"]);
     finish_line::approve(&id, None, false).unwrap();
     let t = settle(&id);
-    assert_eq!(t.at("failure").s("title"), "Lands on develop only through a pull request", "{}", t.at("failure"));
+    assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
+    assert_eq!(git(&w.base.join("origin.git"), &["show", "develop:f.txt"]), "v1");
     assert_eq!(git(&w.root, &["rev-parse", "main"]), main_before, "nothing merged into your checkout");
+    assert!(!gh_log(&w).contains("pr merge"), "{}", gh_log(&w));
 }

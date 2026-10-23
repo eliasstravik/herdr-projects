@@ -29,8 +29,14 @@ All of this runs with the board open or closed.
   origin does not have is refused with the reason, and the task waits as failed. If origin cannot be reached, the copy it
   last gave is used. The task keeps up with that branch, its pull request merges into it (`gh pr create --base develop`),
   a pull request the agent opened itself is taken on only while it merges into it, and `merge.checks` reads the checks of
-  a pull request into it. It needs `merge.pr` on: a local merge lands on your checkout's branch, so a named branch with
-  `merge.pr` off is refused at the start and at the merge, for now.
+  a pull request into it.
+- **A named branch with `merge.pr` off** (a host with no GitHub, so no `gh`) lands there with no pull request, also when
+  it is origin's main branch, so one repo can take tasks on several feature branches at once. The commit is built from
+  the one that was reviewed, as `merge.method` says (squash: one commit on top of the branch; merge: a merge commit of
+  the two; rebase: the reviewed commit itself), and pushed to that branch at origin
+  (`git push origin <commit>:refs/heads/develop`, within `merge.pushTimeout`). No checkout is touched, yours included, and nothing is forced: when the branch moved at origin,
+  git refuses the push, and the task catches up with it, is checked again and pushed under the same approval. A push
+  origin refuses for another reason (a protected branch, a hook) waits for you with git's own words.
 - `workspace.setup` runs. Then the agent starts in that space's root pane, with the task and its rules.
 - **Outside git**, the agent works in place, in a plain Herdr space.
 - **At most `board.agents` (4) agents work at once.** More wait their turn. Tasks that wait for you hold no slot.
@@ -139,6 +145,8 @@ it merges:
 
 - **through the pull request**, only at the commit that was reviewed. A commit pushed to the pull request meanwhile
   withdraws the approval. On a repo with a merge queue, the task waits until GitHub says the pull request is merged;
+- **by a push to the branch it started from by name**, with no pull request (`workspace.from develop`, `merge.pr` off):
+  the reviewed commit, built by `merge.method`, never forced and never through your checkout;
 - **or locally**, squashed by default.
 
 A conflict found here goes back to the agent the same way, and the merge you approved is retried after its repair. A
@@ -154,7 +162,7 @@ itself: never for you or a repo. `show <id>` lists it with the rest.
   the default branch. A pull request the agent opened itself gets the lines it lacks added (`gh pr edit`); so does one
   opened before the setting was said, right before it merges. Changed or cleared since, the board takes its own lines of
   the issues no longer named off again before it merges; while it cannot, nothing merges (the task says why).
-- **With no pull request** (a local merge), and through one that merges into another branch than the default, the
+- **With no pull request** (a local merge, or a push to a named branch), and through one that merges into another branch than the default, the
   board closes each with `gh issue close` once the merge has landed, with a comment naming the task and the merge commit.
   So it does for work the agent put on main itself (`Already merged in #133`); work that needed no change closes none.
 
@@ -273,8 +281,8 @@ and finish again.
   date.
 
 **"Main" is where the task will land**: the remote's main when it lands through a pull request, or the branch it was
-started from by name (`workspace.from develop`). Otherwise (no remote, or `pr` off), the branch your checkout was on when
-the task first finished. For those, checking out another branch merges
+started from by name (`workspace.from develop`), with or without one. Otherwise (no remote, or `pr` off and no branch
+named), the branch your checkout was on when the task first finished. For those, checking out another branch merges
 nothing into waiting tasks, and they are held as "behind main" until your checkout is back on it.
 
 ### A review that passed is not repeated for a merge of main

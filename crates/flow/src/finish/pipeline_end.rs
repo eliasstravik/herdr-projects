@@ -3,6 +3,7 @@
 use super::auto_merge::by_itself;
 use super::hand_over::hand_over;
 use super::review::run_review;
+use super::review_screen::with_screen;
 use super::shared::{approval_message_with, fail, failure, first_line, FailHow};
 use crate::clock::now;
 use crate::err::Res;
@@ -73,7 +74,7 @@ pub fn after_review(c: Ctx, g: &mut Guard) -> Res<()> {
         // The task keeps every review it had. A review the provider cut off is not one: it is not on the list.
         if !r.cut { let entry = r.review.clone().map(Value::Object).unwrap_or_else(|| json!({ "error": r.error })); g.set(|t| log_review(t, &entry))?; }
         let Some(rv) = r.review else {
-            let mut f = failure("review", if r.auth { "Needs a login" } else { "Review failed" }, &format!("Review failed: {}", r.error), "Investigate the reviewer failure, then finish again for a fresh review. Do not bypass review or merge approval.");
+            let mut f = failure("review", if r.auth { "Needs a login" } else { "Review failed" }, &with_screen(&format!("Review failed: {}", r.error), &r.screen), "Investigate the reviewer failure, then finish again for a fresh review. Do not bypass review or merge approval.");
             if r.auth { f.put("auth", true); }
             f.put("msg", if r.auth { "The reviewer needs a login".to_string() } else { format!("Review failed: {}. Retry the task to review again", one_line(&r.error, 200)) });
             fail(g, f, FailHow { patch: obj(json!({ "review": null })), ..Default::default() })?;
