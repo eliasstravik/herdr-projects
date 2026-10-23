@@ -159,9 +159,9 @@ each such file over its own SSH link to that machine, and the words name it wher
   your words: never a path the agent there cannot open.
 - **A machine on an older version** cannot take files: the board says so. Update `herdr-projects` there.
 
-## In the Herdr web UI
+## In the web UI (Ovis)
 
 The web Board shows other machines as `Alt+M` does, acts on their tasks, and opens their agents in the web UI's own view
 of that machine, when the web UI has that machine as one of its PCs. The terminal board works in the web UI's terminal
 view too, on this machine and on another. What works how, and what the board says when something is missing:
-[the board in the Herdr web UI](web-ui.md).
+[the board in the web UI (Ovis)](web-ui.md).

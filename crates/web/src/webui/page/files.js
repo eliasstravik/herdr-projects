@@ -8,8 +8,8 @@
 // `@<path> `, as in the web UI. What is sent names each picture as `@<path>`, which is how the agent reads it (`expand`,
 // docs/image-paste.md). Its limits are the web UI's: 8 MB a file, three on their
 // way at a time, and as many at once as its Settings → Chat → Files at once says.
-/* global window, document, localStorage, URL, setTimeout */
-import { h, icon, post } from "./dom.js";
+/* global window, document, URL, setTimeout */
+import { h, icon, post, webUiSettings } from "./dom.js";
 
 const MOST = 8 * 1024 * 1024, AT_ONCE = 3, LONGEST = 20000;
 const PREVIEW = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"];
@@ -18,7 +18,7 @@ export const mention = (path) => `@${path} `;
 export const chip = (n) => `[Image ${n}]`;
 const CHIP = /^\[Image (\d+)\] $/u;
 // How many files one pick, paste or drop takes: the web UI's own setting, where it keeps it (20 unless set).
-export const perPick = () => { try { const n = JSON.parse(localStorage.getItem("herdr-web-ui:settings") || "{}").attachLimit; return Number.isFinite(n) ? Math.min(50, Math.max(1, Math.round(n))) : 20; } catch { return 20; } };
+export const perPick = () => { const n = webUiSettings().attachLimit; return Number.isFinite(n) ? Math.min(50, Math.max(1, Math.round(n))) : 20; };
 const mb = (n) => `${Math.ceil((n / (1024 * 1024)) * 10) / 10} MB`;
 // The web UI's insertLeadingMention: at the start, after a leading /command (it must stay first to be one) and after
 // the paths of files picked before it that are still there. Whole or not at all (`length` 0): a cut path names no file.

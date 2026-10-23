@@ -70,9 +70,9 @@ a `closing-1.md` beside `data` and `settings` comes from. Now:
 - **The how-to file** in each agent program's own skills folder (`~/.claude/skills/herdr-projects` and the others), and
   **the marked blocks** in Herdr's `config.toml`. They have to be where those programs read them.
   `herdr-projects remove-extras` takes them out ([installing](install.md)).
-- **The web UI's shared link.** With the Herdr web UI plugin installed, and only after a yes: where that web UI's shared
-  link (`tailscale serve`) points, so the Board shows in it. `herdr-projects web-ui unlink` and `remove-extras` point it
-  back ([the board in the Herdr web UI](web-ui.md)).
+- **The web UI's shared link.** With the web UI (Ovis) installed, and only after a yes: where that web UI's shared link
+  (`tailscale serve`) points, so the Board shows in it. `herdr-projects web-ui unlink` and `remove-extras` point it back
+  ([the board in the web UI (Ovis)](web-ui.md)).
 - **The trust mark for a repo**, in the agent program's own settings (`~/.claude.json`, `~/.codex/config.toml`).
 - **This repo's own test runner** keeps what already passed in `~/.cache/herdr-projects-check` ([testing](testing.md)).
   That is a cache of a tool for working on this code, not something the board keeps for you: delete it any time.

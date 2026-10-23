@@ -69,7 +69,7 @@ pub fn start(args: &Value, role: impl FnOnce() -> Result<String, String>) -> (u1
         let Some((c, k)) = call::take_ticket(ticket) else { return (410, json!({ "ok": false, "msg": "This call link was used already or is too old. Press the call key on the board again." })) };
         (c, k)
     } else {
-        match role() { Ok(r) if r == "drive" => {}, Ok(_) => return (403, json!({ "ok": false, "msg": "This device can only watch." })), Err(_) => return (401, json!({ "ok": false, "msg": "Log in to the herdr web UI first." })) }
+        match role() { Ok(r) if r == "drive" => {}, Ok(_) => return (403, json!({ "ok": false, "msg": "This device can only watch." })), Err(_) => return (401, json!({ "ok": false, "msg": "Log in to the web UI (Ovis) first." })) }
         let page: String = args.s("client").chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-').take(40).collect();
         if page.is_empty() { return (400, json!({ "ok": false, "msg": "The request could not be read." })); }
         let b = crate::webui::web::client(&page);

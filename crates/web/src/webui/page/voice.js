@@ -7,15 +7,14 @@
 // settings: its server (`/api/voice`, which the page reaches as the web UI's own page does, through the front door)
 // when it has a key, else the browser's speech recognition; its Settings → Voice input (shown on auto only where it
 // can work, and not on a phone), its language and its tidying. Its limits: two minutes, 10 MB.
-/* global window, document, navigator, localStorage, fetch, FormData, Blob, MediaRecorder, AudioContext, performance, requestAnimationFrame, cancelAnimationFrame, TextDecoder */
-import { h, icon } from "./dom.js";
+/* global window, document, navigator, fetch, FormData, Blob, MediaRecorder, AudioContext, performance, requestAnimationFrame, cancelAnimationFrame, TextDecoder */
+import { h, icon, webUiSettings } from "./dom.js";
 
 const HOLD_MS = 300, MAX_SECONDS = 120, MAX_BYTES = 10 * 1024 * 1024, SILENT_RMS = 0.003, SILENT_AFTER = 3000, BARS = 7, LONGEST = 20000;
 const TYPES = [["audio/webm;codecs=opus", "webm"], ["audio/mp4", "m4a"], ["audio/webm", "webm"], ["audio/ogg;codecs=opus", "ogg"]];
 // The web UI's own words for what went wrong.
 const NOTES = { insecure: "Voice input needs HTTPS", permission: "Microphone permission was denied", no_mic: "No microphone found", not_configured: "Add an OpenAI API key in Settings > Voice input",
   provider_auth: "The OpenAI key was refused", provider: "Transcription failed", network: "Transcription failed", too_large: "Recording is too long", no_speech: "No speech was heard", unsupported: "This browser cannot record audio" };
-const settings = () => { try { return JSON.parse(localStorage.getItem("herdr-web-ui:settings") || "{}") || {}; } catch { return {}; } };
 // Its Settings → Voice input: on, off, or auto (the default): on a computer, where dictation can work.
 export const wants = (s, phone) => { const v = ["on", "off", "auto"].includes(s.voiceInput) ? s.voiceInput : "auto"; return v === "on" || (v === "auto" && !phone); };
 const locale = (s) => (typeof s.voiceLanguage === "string" && s.voiceLanguage !== "auto" ? s.voiceLanguage : navigator.languages?.[0] || navigator.language || "en-US");
@@ -117,7 +116,7 @@ export function voiceEl({ box, write, say, keywords = () => [] }) {
     } catch (e) { if (take !== t) return; close(t); take = null; stopLoop(); set("idle"); fail(e?.name === "NotAllowedError" || e?.name === "SecurityError" ? "permission" : "no_mic"); }
   }
   async function transcribe(t, blob) {
-    const s = settings(), form = new FormData(), lang = locale(s).split("-")[0].toLowerCase();
+    const s = webUiSettings(), form = new FormData(), lang = locale(s).split("-")[0].toLowerCase();
     form.append("audio", blob, `voice.${mime[1]}`); form.append("mode", "chat"); form.append("polish", s.voicePolishChat === false ? "0" : "1");
     form.append("keywords", JSON.stringify([...new Set(keywords().map((k) => k.trim()).filter((k) => k && k.length <= 80))].slice(0, 50)));
     form.append("language", /^[a-z]{2}$/.test(lang) ? lang : "en");
@@ -135,7 +134,7 @@ export function voiceEl({ box, write, say, keywords = () => [] }) {
   }
   function startBrowser(t) {
     const r = new Speech(); t.recognition = r;
-    r.lang = locale(settings()); r.continuous = true; r.interimResults = true;
+    r.lang = locale(webUiSettings()); r.continuous = true; r.interimResults = true;
     r.onaudiostart = () => { if (take === t) { t.at = t.loud = performance.now(); set("recording"); } };
     r.onresult = (e) => { let fin = "", mid = ""; for (const x of e.results) { if (x.isFinal) fin += x[0].transcript; else mid += x[0].transcript; } t.final = fin; partial.textContent = (fin + mid).replace(/\s+/g, " ").trim(); };
     r.onerror = (e) => { if (!["no-speech", "aborted"].includes(e.error) && !t.discard) fail({ "not-allowed": "permission", "service-not-allowed": "permission", "audio-capture": "no_mic", network: "network" }[e.error] || "provider"); };
@@ -195,7 +194,7 @@ export function voiceEl({ box, write, say, keywords = () => [] }) {
   // Which engine, once the web UI has said whether its server has a key; shown only where the web UI would show it.
   const refresh = async () => {
     if (dead) return;
-    const s = settings(), want = wants(s, window.matchMedia?.("(max-width: 768px)").matches);
+    const s = webUiSettings(), want = wants(s, window.matchMedia?.("(max-width: 768px)").matches);
     const st = want ? await voiceStatus() : null;
     engine = !want || !window.isSecureContext ? null : st?.configured && mime ? "server" : Speech ? "browser" : null;
     wrap.hidden = !want || (s.voiceInput !== "on" && !engine);
