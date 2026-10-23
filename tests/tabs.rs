@@ -28,7 +28,7 @@ fn the_agents_tab_is_named_agent_each_review_opens_a_tab_named_after_its_round_u
     assert_eq!(made.len(), 2);
     for (i, c) in made.iter().enumerate() {
         assert!(c.starts_with(&format!("tab create --workspace {} --cwd {} --label Reviewer #{} ", t.at("link").s("workspace"), t.s("worktree"), i + 1)), "{c}");
-        assert!(c.ends_with(" --no-focus"), "{c}"); assert!(c.contains("--env HERDR_PROJECTS_DATA_DIR="), "{c}");
+        assert!(c.ends_with(" --no-focus"), "{c}"); assert!(c.contains("--env HERDR_PROJECTS_HOME="), "{c}");
     }
     // never a pane beside the agent's, and nothing was focused
     assert!(calls_like(&w, "^pane split").is_empty()); assert!(w.state().arr("focus").is_empty());
