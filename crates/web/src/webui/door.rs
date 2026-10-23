@@ -135,7 +135,7 @@ fn ours(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstream) {
     if head.method == "GET" {
         if call == "hello" { return json_out(&mut client, 200, &json!({ "ok": true, "role": role })); }
         if call == "boards" { let pcs = super::pcs::ask_pcs(head, &to); let out = super::web::call(&client_id, "boards", json!({ "role": role }), &machine, pcs); return answer(&mut client, out, &role); }
-        if call == "board" { let pcs = if needs_pcs("board") { super::pcs::ask_pcs(head, &to) } else { None }; let out = super::web::call(&client_id, "board", json!({ "have": q.get("have").cloned().unwrap_or_default(), "role": role }), &machine, pcs); return answer(&mut client, out, &role); }
+        if call == "board" { let pcs = if needs_pcs("board") { super::pcs::ask_pcs(head, &to) } else { None }; let ui = super::attach::far::Door { head, to: to.clone() }; let out = super::web::call_with(&client_id, "board", json!({ "have": q.get("have").cloned().unwrap_or_default(), "role": role }), &machine, pcs, Some(&ui)); return answer(&mut client, out, &role); }
         return json_out(&mut client, 404, &json!({ "ok": false, "msg": "Not found" }));
     }
     if head.method != "POST" || !(CHANGES.contains(&call.as_str()) || LOOKS.contains(&call.as_str())) { return json_out(&mut client, 404, &json!({ "ok": false, "msg": "Not found" })); }

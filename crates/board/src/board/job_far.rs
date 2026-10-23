@@ -183,12 +183,12 @@ pub fn web_open(id: &str, far: Option<(Machine, String, String, String)>) -> Don
             Err(why) => Done::fail(unanswered(&host, &why)),
             Ok(j) if !j.b("ok") => Done::fail(j.t("msg")),
             Ok(j) => { let p = if j.b("pane") { j.t("pane") } else { pane }; let ws = if j.b("workspace") { j.t("workspace") } else { p.split(':').next().unwrap_or("").to_string() };
-                Done::default().and(Then::Go(json!({ "machine": pc, "pane": p, "workspace": ws, "view": if j.at("hasAgent") == &json!(false) { "terminal" } else { "chat" } }))) }
+                Done::default().and(Then::Go(json!({ "machine": pc, "pane": p, "workspace": ws, "view": if j.at("hasAgent") == &json!(false) { "terminal" } else { "chat" }, "space": format!("{host}: {id}") }))) }
         };
     }
     let Some(t) = get(id) else { return Done::fail(format!("{id} is gone.")) };
     if let Err(e) = crate::flow::live::assert_live(&t) { return Done::fail(e.msg); }
     let (pane, _, _) = match crate::delegate::jobs::reopen(id, false) { Ok(x) => x, Err(e) => return Done::say(e.msg, Ink::Yellow) };
     let has_agent = Herdr::new(Some(t.at("link").t("socket"))).agent_get(pane.s("pane_id")).ok().flatten().is_some();
-    Done::default().and(Then::Go(json!({ "pane": pane.t("pane_id"), "workspace": pane.t("workspace_id"), "view": if has_agent { "chat" } else { "terminal" } })))
+    Done::default().and(Then::Go(json!({ "pane": pane.t("pane_id"), "workspace": pane.t("workspace_id"), "view": if has_agent { "chat" } else { "terminal" }, "space": crate::flow::sidebar::space_label(&t) })))
 }

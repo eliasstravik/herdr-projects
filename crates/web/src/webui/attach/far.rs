@@ -12,16 +12,17 @@ use crate::remote::Machine;
 use crate::webui::pcs::{pc_of, Pc};
 use crate::webui::proxy::{ask_with, caller_headers, Head};
 
-/// The web UI as the front door reaches it: its PCs (asked only for a file that goes to another machine), and one POST
-/// of JSON to a path of its API, answered with its status and what it said (None: it did not answer). Tests stand in
-/// for it.
-pub trait WebUi { fn pcs(&self) -> Option<Vec<Pc>>; fn post(&self, path: &str, body: &Value) -> Option<(u16, Value)>; }
+/// The web UI as the front door reaches it: its PCs (asked only for a file that goes to another machine; `pcs_now`
+/// not from what was kept, for a pane just reopened: webui/going.rs), and one POST of JSON to a path of its API,
+/// answered with its status and what it said (None: it did not answer). Tests stand in for it.
+pub trait WebUi { fn pcs(&self) -> Option<Vec<Pc>>; fn pcs_now(&self) -> Option<Vec<Pc>> { self.pcs() } fn post(&self, path: &str, body: &Value) -> Option<(u16, Value)>; }
 /// The front door's: the web UI at `to`, asked with the headers of the request the file came in.
 pub struct Door<'a> { pub head: &'a Head, pub to: (String, u16) }
 /// How long a file may take to reach the other machine through the web UI.
 const WAIT_MS: u64 = 120_000;
 impl WebUi for Door<'_> {
     fn pcs(&self) -> Option<Vec<Pc>> { crate::webui::pcs::ask_pcs(self.head, &self.to) }
+    fn pcs_now(&self) -> Option<Vec<Pc>> { crate::webui::pcs::ask_pcs_now(self.head, &self.to) }
     fn post(&self, path: &str, body: &Value) -> Option<(u16, Value)> {
         let mut h: Vec<(String, String)> = caller_headers(self.head).into_iter().filter(|(k, _)| !k.eq_ignore_ascii_case("x-herdr-machine")).collect();
         h.push(("Content-Type".into(), "application/json".into()));

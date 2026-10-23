@@ -64,7 +64,7 @@ fn another_machines_agent_opens_in_the_web_uis_view_of_that_machines_pane_and_wh
     let s = open(vec![pc("local", "home", "", true), mine.clone()]);
     let last = far.asked().last().cloned().unwrap();
     assert_eq!((last.0.as_str(), last.1.as_str(), &last.2), ("vm-a", "do", &json!({ "action": "reopen", "id": "far/1" })));
-    assert_eq!(s.at("go"), &json!({ "n": 1, "machine": "pc-9", "pane": "w3:p2", "workspace": "w3", "view": "chat" }));
+    assert_eq!(s.at("go"), &json!({ "n": 1, "machine": "pc-9", "pane": "w3:p2", "workspace": "w3", "view": "chat", "space": "vm-a: far/1" }));
     assert_eq!(s.at("canOpen"), &json!(true));
     // its agent has exited and could not be restarted: the pane's terminal, as on this machine
     reopen(json!({ "ok": true, "msg": "", "pane": "w3:p2", "workspace": "w3", "hasAgent": false }));

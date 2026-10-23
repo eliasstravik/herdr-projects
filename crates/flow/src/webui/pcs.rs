@@ -3,13 +3,16 @@
 //! the web UI's own view of that pane (`?machine=<its PC>`), and to show the board of the machine the web UI is on.
 //! Nothing is written: the front door asks the web UI, with the caller's own headers, what PCs it has
 //! (`GET /api/machines`, checked on herdr-web-ui 0.4.8), keeps the answer a few seconds, and passes on what is needed.
+//! Each PC's answer also has the panes the web UI knows there (`snapshot.panes`, checked on Ovis 0.4.13): a link to a
+//! pane it does not know yet is dropped by its page (webui/going.rs waits for it).
 use super::proxy::{ask, caller_headers, Head};
 use crate::json::*;
 use crate::remote::Machine;
 
 pub const PCS: &str = "/api/machines";
+/// `panes`: the panes the web UI knows on that PC (None: it sent no list of them).
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct Pc { pub id: String, pub name: String, pub local: bool, pub profile: String, pub to: String, pub port: u16, pub session: String, pub connected: bool, pub state: String }
+pub struct Pc { pub id: String, pub name: String, pub local: bool, pub profile: String, pub to: String, pub port: u16, pub session: String, pub connected: bool, pub state: String, pub panes: Option<Vec<String>> }
 /// What the web UI answered, as the few things the board needs of each PC; None when it is no such answer (an older
 /// web UI, a bridge that manages no PCs, a caller it does not let in).
 pub fn read_pcs(text: &str) -> Option<Vec<Pc>> {
@@ -20,7 +23,8 @@ pub fn read_pcs(text: &str) -> Option<Vec<Pc>> {
         let port = m.at("target").at("port");
         Pc { id: m.t("id"), name: if m.b("name") { m.t("name") } else { m.t("id") }, local: m.s("kind") == "local" || m.s("id") == "local", profile: m.t("herdr_profile_id"),
             to: m.at("target").t("destination"), port: port.as_u64().or_else(|| port.as_str().and_then(|p| p.parse().ok())).unwrap_or(0) as u16, session: m.at("target").t("session"),
-            connected: !off && m.s("state") == "connected", state: if off { "turned off".into() } else { m.t("state") } }
+            connected: !off && m.s("state") == "connected", state: if off { "turned off".into() } else { m.t("state") },
+            panes: m.at("snapshot").at("panes").as_array().map(|l| l.iter().map(|p| p.t("pane_id")).filter(|p| !p.is_empty()).collect()) }
     }).collect())
 }
 static KNOWN: std::sync::Mutex<(i64, Option<Vec<Pc>>)> = std::sync::Mutex::new((0, None));
@@ -33,6 +37,8 @@ pub fn ask_pcs(h: &Head, to: &(String, u16)) -> Option<Vec<Pc>> {
     *KNOWN.lock().unwrap() = (crate::clock::now(), list.clone());
     list
 }
+/// The same, asked now: what was kept is not used (a pane just reopened may not be in it).
+pub fn ask_pcs_now(h: &Head, to: &(String, u16)) -> Option<Vec<Pc>> { forget(); ask_pcs(h, to) }
 /// An SSH address as its parts: `user@host`, `host`, or herdr's `ssh://user@host:port`. An SSH alias is a host.
 pub fn address(target: &str, port: u16) -> (String, String, u16) {
     if let Some(c) = crate::re!(r"^ssh://(?:([^@/]+)@)?(\[[^\]]+\]|[^:/]+)(?::(\d+))?$").captures(target) {
