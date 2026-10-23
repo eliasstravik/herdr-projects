@@ -28,6 +28,10 @@
 | only the reports | `HERDR_PROJECTS_REPORTS_DIR` |
 | only the folder the Coordinator starts in | `HERDR_PROJECTS_COORDINATOR_DIR` |
 
+What the board starts (an agent's tab, a reviewer's, the command agents are handed) is given `HERDR_PROJECTS_HOME`, and
+a part's own variable only for a part kept somewhere else than its place in the home folder. So `HERDR_PROJECTS_HOME`
+set to a scratch folder in front of a command there moves all of it: none of the real board is reached.
+
 The `XDG_*` variables (`XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`) no longer choose a place. They are read for
 one thing only: to find where an older version kept its files, for the move below.
 

@@ -26,19 +26,30 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 // Everything the board keeps for a user is in one folder, the same on every machine: ~/.herdr-projects, with a
 // sub-folder for each kind of thing (docs/home-folder.md). HERDR_PROJECTS_HOME names another one; each sub-folder
 // has a variable of its own too. The XDG_* variables only say where an older version kept things (move_home.rs).
+// Under the tests none of them may be the real one (never_real.rs).
 pub const HOME_NAME: &str = ".herdr-projects";
 fn env(k: &str) -> Option<String> { std::env::var(k).ok().filter(|v| !v.is_empty()) }
 pub fn user_home() -> PathBuf { env("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/")) }
 pub fn home_dir() -> PathBuf { env("HERDR_PROJECTS_HOME").map(PathBuf::from).unwrap_or_else(|| user_home().join(HOME_NAME)) }
-pub fn data_dir() -> PathBuf { env("HERDR_PROJECTS_DATA_DIR").map(PathBuf::from).unwrap_or_else(|| home_dir().join("data")) }
-pub fn config_dir() -> PathBuf { env("HERDR_PROJECTS_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| home_dir().join("settings")) }
+/// Each part of the home folder: its own variable, else its place in the home folder.
+const PARTS: [(&str, &str); 3] = [("HERDR_PROJECTS_DATA_DIR", "data"), ("HERDR_PROJECTS_CONFIG_DIR", "settings"), ("HERDR_PROJECTS_REPORTS_DIR", "reports")];
+fn part((k, name): (&str, &str)) -> PathBuf { super::never_real::guard(env(k).map(PathBuf::from).unwrap_or_else(|| home_dir().join(name))) }
+pub fn data_dir() -> PathBuf { part(PARTS[0]) }
+pub fn config_dir() -> PathBuf { part(PARTS[1]) }
 /// Pages and reports an agent makes for the human that belong in no repo.
-pub fn reports_dir() -> PathBuf { env("HERDR_PROJECTS_REPORTS_DIR").map(PathBuf::from).unwrap_or_else(|| home_dir().join("reports")) }
+pub fn reports_dir() -> PathBuf { part(PARTS[2]) }
 /// The board's own folders as resolved here, for a process started somewhere that does not inherit this
-/// environment (an agent's herdr space).
+/// environment (an agent's herdr space): the home folder, and a part's own variable only for a part kept elsewhere.
+/// So HERDR_PROJECTS_HOME set to a scratch folder in front of a command there moves all of it: a part's variable
+/// handed on would have kept that part in the real board (HP-172).
 pub fn board_env() -> Vec<(String, String)> {
-    vec![("HERDR_PROJECTS_DATA_DIR".into(), absolute(&data_dir()).display().to_string()),
-         ("HERDR_PROJECTS_CONFIG_DIR".into(), absolute(&config_dir()).display().to_string())]
+    let home = absolute(&home_dir());
+    let mut out = vec![("HERDR_PROJECTS_HOME".to_string(), home.display().to_string())];
+    for (k, name) in PARTS {
+        let p = absolute(&part((k, name)));
+        if p != home.join(name) { out.push((k.to_string(), p.display().to_string())); }
+    }
+    out
 }
 pub fn tasks_dir() -> PathBuf { data_dir().join("tasks") }
 pub fn has_tasks() -> bool { tasks_dir().exists() }

@@ -91,9 +91,9 @@ fn a_board_kept_in_its_own_folder_the_agents_command_and_its_herdr_space_both_na
     unsafe { std::env::set_var("HERDR_PROJECTS_HOME", &other) }
     std::fs::create_dir_all(other.join("settings")).unwrap();
     std::fs::write(other.join("settings/config.json"), json!({ "max": 23 }).to_string()).unwrap();
-    let want = vec![("HERDR_PROJECTS_DATA_DIR".to_string(), other.join("data").display().to_string()), ("HERDR_PROJECTS_CONFIG_DIR".to_string(), other.join("settings").display().to_string())];
+    let want = vec![("HERDR_PROJECTS_HOME".to_string(), other.display().to_string())];
     let got = sw::store::files::board_env();
-    let text = read(&real_shim(&w)); // the command names both, so the agent's own environment does not count
+    let text = read(&real_shim(&w)); // the command names it, so the agent's own environment does not count
     unsafe { std::env::set_var("HERDR_PROJECTS_HOME", w.base.join("sw")) }
     assert_eq!(got, want);
     for (k, v) in &want { assert!(text.contains(&format!("export {k}='{v}'")), "{text}"); }
