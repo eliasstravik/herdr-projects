@@ -143,9 +143,9 @@ fn the_boards_calls_are_as_protected_as_the_web_uis_own() {
 fn a_web_ui_that_is_down_is_said_plainly_and_the_phone_setup_keeps_its_link() {
     let gone = Up { port: None, link: String::new(), downs: Default::default() };
     let (st, _, body) = ask(&gone, get("/", ""));
-    assert_eq!(st, 502); assert!(body.contains("The herdr web UI is not answering right now"));
+    assert_eq!(st, 502); assert!(body.contains("The web UI (Ovis) is not answering right now"));
     let (st, _, body) = ask(&gone, get("/herdr-projects/api/board", ""));
-    assert_eq!(st, 503); assert!(body.contains("The herdr web UI is not answering."));
+    assert_eq!(st, 503); assert!(body.contains("The web UI (Ovis) is not answering."));
     // a port nothing listens on: said, and the door is told to look again
     let closed = { let l = TcpListener::bind("127.0.0.1:0").unwrap(); l.local_addr().unwrap().port() };
     let down = Up { port: Some(closed), link: String::new(), downs: Default::default() };

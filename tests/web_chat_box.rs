@@ -9,14 +9,18 @@ const JS: &str = include_str!("../crates/web/src/webui/page/compose.js");
 const CHAT: &str = include_str!("../crates/web/src/webui/page/chat.js");
 const CSS: &str = include_str!("../crates/web/src/webui/page/compose.css");
 const START: &str = include_str!("../crates/web/src/webui/page/start.js");
+const DOM: &str = include_str!("../crates/web/src/webui/page/dom.js");
 const DOC: &str = include_str!("../docs/web-chat-box.md");
 fn rule(sel: &str) -> String { Regex::new(&format!(r"{} \{{([^}}]*)\}}", regex::escape(sel))).unwrap().captures(CSS).map(|c| c[1].to_string()).unwrap_or_default() }
 
 #[test]
 fn the_keys_are_the_web_uis_enter_sends_shift_enter_is_a_new_line_and_its_own_settings_can_turn_that_round() {
     assert!(JS.contains(r#"export const sendsOn = (e, enter = enterSends()) => e.key === "Enter" && !e.isComposing && e.keyCode !== 229 && !e.shiftKey && (enter ? !e.metaKey && !e.ctrlKey : !!(e.metaKey || e.ctrlKey));"#));
-    // "Enter sends" off in the web UI: read where it keeps it; nothing kept, or kept elsewhere: enter sends
-    assert!(JS.contains(r#"JSON.parse(localStorage.getItem("herdr-web-ui:settings") || "{}").enterSends !== false; } catch { return true; }"#));
+    // "Enter sends" off in the web UI: read where it keeps it, under Ovis's name first and then under its name before
+    // the rename; nothing kept, or kept elsewhere: enter sends
+    assert!(JS.contains("export const enterSends = () => webUiSettings().enterSends !== false;"));
+    assert!(DOM.contains(r#"const SETTINGS = ["ovis:settings", "herdr-web-ui:settings"];"#));
+    assert!(DOM.contains(r#"for (const key of SETTINGS) { try { const s = JSON.parse(localStorage.getItem(key) || "null"); if (s && typeof s === "object") return s; } catch {} }"#) && DOM.contains("  return {};\n}"));
 }
 
 #[test]

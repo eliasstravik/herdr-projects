@@ -28,16 +28,17 @@ pub fn free_branch(root: &Path, t: &Obj) -> String {
     while git_out(root, &["rev-parse", "--verify", &format!("refs/heads/{branch}")]).is_ok() { branch = format!("{stem}-{i}"); i += 1; }
     branch
 }
-/// The herdr web UI's folder beside a pane: the files pasted in its own chat box, or sent there from another
-/// machine's board (webui/attach/far.rs). The web UI writes no `.gitignore` in it.
-pub const WEB_UI_DIR: &str = ".herdr-web-ui";
+/// The web UI's (Ovis's) folder beside a pane, under its name since the rename and before it: the files pasted in its
+/// own chat box, or sent there from another machine's board (webui/attach/far.rs). The web UI writes no `.gitignore`
+/// in it. (Its `OVIS_PASTE_DIR` sends them out of every repo.)
+pub const WEB_UI_DIRS: [&str; 2] = [".ovis", ".herdr-web-ui"];
 /// Keep the board's folder (the files sent from the web board) and the web UI's out of the repo's status, without
 /// touching a committed file. The exclude file is shared by all of the repo's worktrees.
 pub fn exclude_rule_dir(root: &Path) {
     let own = root.join(".git").join("info");
     let file = if own.exists() { own.join("exclude") } else { match git_out(root, &["rev-parse", "--git-path", "info/exclude"]) { Ok(p) => root.join(p), Err(_) => return } };
     let cur = std::fs::read_to_string(&file).unwrap_or_default();
-    let missing: Vec<String> = [RULE_DIR, WEB_UI_DIR].iter().map(|d| format!("{d}/\n")).filter(|r| !cur.lines().any(|l| l.trim() == r.trim_end())).collect();
+    let missing: Vec<String> = [RULE_DIR].iter().chain(&WEB_UI_DIRS).map(|d| format!("{d}/\n")).filter(|r| !cur.lines().any(|l| l.trim() == r.trim_end())).collect();
     if missing.is_empty() { return; }
     if let Some(d) = file.parent() { let _ = std::fs::create_dir_all(d); }
     let add = format!("{}{}", if cur.ends_with('\n') || cur.is_empty() { "" } else { "\n" }, missing.concat());
