@@ -32,7 +32,8 @@ fn a_task_a_limit_stopped_is_read_as_one_that_needs_you_and_its_row_says_the_pla
 fn what_a_task_that_needs_you_waits_for_is_in_its_marks_colour_on_the_board_and_on_the_web_page() {
     let t = Theme::default_dark(false);
     let mut bare = asks("question"); bare.put("msg", "");
-    for r in [asks("question"), asks("permission"), asks("auth"), bare] {
+    let login = with(json!({ "state": "blocked", "kind": "auth", "stage": "failed", "msg": "", "failure": { "auth": true, "title": "Needs a login", "detail": "Not logged in", "next": "Sign in to the agent." } }));
+    for r in [asks("question"), asks("permission"), asks("auth"), bare, login] {
         let (said, ink) = (sw::shown::row_says::sentence(&r), sw::board::view::fields::mark(&t, &r).0[0].c);
         assert_eq!(said.0.iter().map(|p| p.c).collect::<Vec<_>>(), vec![ink], "{}", said.text());
         assert_eq!(sw::webui::ink::pieces(&said)[0].s("c"), "red");
