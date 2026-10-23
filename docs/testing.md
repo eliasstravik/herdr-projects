@@ -311,8 +311,19 @@ something that says when it is done: a real terminal is read until its frame is 
 
 **A test never reads or writes your real board.** `world()` gives it a home folder of its own (`HOME`,
 `HERDR_PROJECTS_HOME`), takes Herdr's own variables (a pane's id, its socket), `TMUX` and `NO_COLOR` out of the
-environment, and points Herdr at a socket of its own. When you run the program by hand while working on it, set
-`HERDR_PROJECTS_HOME` to a scratch folder first: a new version may convert what it finds in the real one.
+environment, and points Herdr at a socket of its own. A test that makes no world still has a scratch board:
+`scripts/run-tests.sh` sets `HERDR_PROJECTS_HOME` to a folder of the run's own and takes `HERDR_PROJECTS_DATA_DIR`,
+`HERDR_PROJECTS_CONFIG_DIR` and `HERDR_PROJECTS_REPORTS_DIR` out. And it sets `HERDR_PROJECTS_TESTING`: under it the
+store refuses the real `~/.herdr-projects` (found from the system's list of users, whatever `HOME` says; through a
+link too) and stops the test there, before anything is read or written in it, with a message that says what to do
+instead (`crates/core/src/store/never_real.rs`).
+
+When you run the program by hand while working on it, or a program of your own built on its code, set
+`HERDR_PROJECTS_HOME` to a scratch folder first: a new version may convert what it finds in the real one. That one
+variable is enough, also in a tab the board opened: the board hands what it starts its home folder, not the folders
+in it (only one kept elsewhere: [the home folder](home-folder.md)). Never write into the real board's folder yourself: a reviewer's probe once
+left a fake task (`probe/12`) on the human's board, because a variable it inherited named the real data folder past
+its scratch `HERDR_PROJECTS_HOME`.
 
 **A real program is started only where the program itself is what is tested.** Those tests say so in their name
 (`real_programs_…`): the command line (`tests/cli.rs`), another machine's door (`tests/remote.rs`) and the real terminal
