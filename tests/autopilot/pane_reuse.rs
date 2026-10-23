@@ -164,4 +164,11 @@ fn a_task_cleaned_up_is_not_linked_again_to_the_coordinator_in_its_repos_folder(
     let t = task(&old);
     assert_eq!(strings(t.at("terms")), vec!["term_closed".to_string()], "the coordinator's terminal taken for the task's");
     assert_ne!(t.at("last").s("status"), "working");
+    // nor does the board's refresh, with the coordinator's pane and terminal on the task's record
+    set(&old, |t| { t.put("link", rec.clone()); t.put("terms", json!([rec.t("terminal")])); t.del("last"); });
+    sw::hook::reconcile(&task(&old), &sw::herdr::Herdr::new(Some(w.socket.clone())));
+    let t = task(&old);
+    assert_eq!(t.s("stage"), "approval", "the coordinator's work taken for the task's");
+    assert_ne!(t.at("last").s("status"), "working");
+    assert!(t.at("last").b("gone"));
 }

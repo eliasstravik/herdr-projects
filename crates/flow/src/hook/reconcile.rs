@@ -21,7 +21,9 @@ pub fn reconcile(t: &Task, api: &Herdr) {
     let id = t.s("id");
     // A runner lost before its step was done: tried again once, then failed; also before the task's agent is there.
     if super::lost::retry_lost(t) { return; }
-    let mut pane = api.pane_get(t.at("link").s("pane")).filter(|p| crate::flow::live::owns_pane(t, p)); // its id handed to another: gone
+    // its id handed to another, a coordinator's above all (whatever the task has on record): gone
+    let theirs = |p: &Value| crate::flow::pane_owner::coordinators_pane(t.at("link").s("socket"), p.s("pane_id"), p.s("terminal_id"));
+    let mut pane = api.pane_get(t.at("link").s("pane")).filter(|p| crate::flow::live::owns_pane(t, p) && !theirs(p));
     if pane.is_none() { pane = relink(t, api); }
     let agent = pane.as_ref().and_then(|p| api.agent_get(p.s("pane_id")).ok().flatten());
     if agent.is_none() { check_sent(id, None, api); } // gone with typed text not taken: not started, the text kept
