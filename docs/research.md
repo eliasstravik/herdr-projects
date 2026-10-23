@@ -19,6 +19,9 @@ Every agent the board starts is told the same, in every repo:
   `~/.herdr-projects/reports/<repo>/<number>/` ([the home folder](home-folder.md)), as `index.html` (one page that
   stands by itself) or `report.md`. That folder is outside every repo, so the report cannot be committed by mistake, and
   it stays when the task's worktree goes.
+- **The folder is in its environment too**, as `HERDR_PROJECTS_TASK_REPORTS`, beside the task's id as
+  `HERDR_PROJECTS_ID` (the name `workspace.setup` has it by): the agent, its reviewers and the picker of
+  [attempts](attempts.md) all have both.
 - **When the agent finishes, the board gives the report a link**, served the way a review's evidence is: privately on
   your tailnet with `serve: tailscale`, on `127.0.0.1` with `serve: local` ([settings](settings.md)). The link opens
   `index.html` when there is one, else `report.html`, `report.md`, `README.md`, else the folder's first file.

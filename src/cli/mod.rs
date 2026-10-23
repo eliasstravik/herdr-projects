@@ -70,7 +70,8 @@ fn run(cmd: &str, a: &Args) -> Res<i32> {
     match cmd {
         // Run by an agent's own hook: silent, always 0.
         "turn-ended" => { crate::turn::turn_ended(&flag("id"), &flag("role"), &flag("token"), a.flags.i("round"), &a.pos[1..]); return Ok(0); }
-        // Run by a program in its own plan mode, when it presents its plan (plan/presented.rs): its answer on stdout, 0.
+        // Run by a Claude Code an older board started in its plan mode, when it presents its plan (plan/presented.rs,
+        // kept one release): its answer on stdout, 0.
         "plan-written" => { if let Some(j) = crate::plan::presented::presented(&flag("id"), &flag("token"), stdin_json()) { println!("{j}"); } return Ok(0); }
         "hook" => { crate::hook::hook_main(); return Ok(0); }
         "keeper" => { crate::keeper::keeper_main(); return Ok(0); }
