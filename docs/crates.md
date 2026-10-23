@@ -8,7 +8,7 @@ above it.
 | sw-core | `crates/core/` | the data (`store/`), Herdr and the agents, and small tools every part uses |
 | sw-flow | `crates/flow/` | the flow of a task: delegating, the finish line, landing, the keeper, other machines, automations |
 | sw-board | `crates/board/` | the board's screen (`board/`): its state, what a key does, what it draws |
-| sw-web | `crates/web/` | the board in the Herdr web UI (`webui/`): the front door and the web board |
+| sw-web | `crates/web/` | the board in the web UI, Ovis (`webui/`): the front door and the web board |
 | herdr-projects | `Cargo.toml`, `src/` | the command line (`cli/`) and the made pages (`docs.rs`); the library is `sw` |
 
 Why: the compiler reads a whole crate again after any edit (and once more for its tests). When it was one crate of
@@ -39,7 +39,7 @@ something from above, either move it down, or let the caller above hand it in.
     (`find.rs`), its PCs (`pcs.rs`), its link (`link.rs`, `command.rs`), passing a request on (`proxy.rs`) and the
     front door started from outside (`keep.rs`). The front door's own loop, which serves the web board, is
     `door_loop.rs` in sw-web.
-- **Handed in.** The page server (`review_page::serve_main`, sw-flow) is also the front door of the Herdr web UI. The
+- **Handed in.** The page server (`review_page::serve_main`, sw-flow) is also the front door of the web UI (Ovis). The
   command line hands it the front door's loop (`webui::door_loop::run_door`, sw-web).
 
 ## A new worktree

@@ -5,7 +5,7 @@
 // Send on the right. Its grip, its keys and its sizes are the web
 // UI's (docs/web-chat-box.md says how that was measured). What it does with the words is chat.js's.
 /* global window, document, localStorage, getComputedStyle, setTimeout, clearTimeout */
-import { h, icon } from "./dom.js";
+import { h, icon, webUiSettings } from "./dom.js";
 import { filesEl } from "./files.js";
 import { voiceEl } from "./voice.js";
 
@@ -18,7 +18,7 @@ const keepHeight = (n) => { try { if (n == null) localStorage.removeItem(HEIGHT)
 // Enter sends and shift+enter is a new line, on a phone too, unless the web UI's own Settings → Chat says that
 // enter is a new line (then ctrl or cmd with enter sends). Read from where the web UI keeps it; if it ever keeps it
 // elsewhere, enter sends.
-export const enterSends = () => { try { return JSON.parse(localStorage.getItem("herdr-web-ui:settings") || "{}").enterSends !== false; } catch { return true; } };
+export const enterSends = () => webUiSettings().enterSends !== false;
 export const sendsOn = (e, enter = enterSends()) => e.key === "Enter" && !e.isComposing && e.keyCode !== 229 && !e.shiftKey && (enter ? !e.metaKey && !e.ctrlKey : !!(e.metaKey || e.ctrlKey));
 
 // `onSend(delegate)`: send what the box holds (true: and put an agent on what it adds). `onInput()`: its words changed.

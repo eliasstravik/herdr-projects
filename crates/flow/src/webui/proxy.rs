@@ -95,7 +95,7 @@ pub fn splice(client: TcpStream, up: TcpStream) {
     pipe(up, client);
     let _ = t.join();
 }
-pub const DOWN: &str = "The herdr web UI is not answering right now. It is started again by herdr; reload in a moment.\n";
+pub const DOWN: &str = "The web UI (Ovis) is not answering right now. It is started again by herdr; reload in a moment.\n";
 pub fn bad(client: &mut TcpStream, text: &str) {
     let _ = write!(client, "HTTP/1.1 502 Bad Gateway\r\ncontent-type: text/plain; charset=utf-8\r\ncache-control: no-store\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{text}", text.len());
 }

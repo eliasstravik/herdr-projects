@@ -17,6 +17,6 @@ pub fn offered(s: &mut State, urls: Vec<String>) {
     if urls.is_empty() { return; }
     if s.ask.is_some() || s.setup.is_some() { s.web_ui_asked = false; return; }
     let detail = format!("The web UI's link ({}) then goes through a small front door of the board's own, on this machine only. It passes everything on to the web UI untouched and adds a Board entry to its menu. The login stays the web UI's. `herdr-projects web-ui unlink` points the link back.", urls.join(", "));
-    super::ask::confirm(s, "Show this board in the herdr web UI?".into(), Job::WebUiLink, Valid::Always, vec![("sayYes", "yes".into()), ("sayNo", "no".into()), ("back", "later".into())], detail, false);
+    super::ask::confirm(s, "Show this board in the web UI (Ovis)?".into(), Job::WebUiLink, Valid::Always, vec![("sayYes", "yes".into()), ("sayNo", "no".into()), ("back", "later".into())], detail, false);
     if let Some(a) = s.ask.as_mut() { a.no = Some(Job::WebUiDecline); }
 }
