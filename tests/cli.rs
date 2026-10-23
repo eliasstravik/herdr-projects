@@ -46,7 +46,7 @@ fn real_programs_add_list_report_set_unset_and_show() {
 #[test]
 fn real_programs_a_flag_a_command_does_not_know_is_refused_with_the_nearest_right_one_and_nothing_is_done() {
     let w = world();
-    refused(&w, &["list", "--archvied"], r"^list does not know --archvied\. Did you mean --archived\? It takes: --archived, --all, --query, --json, --help\. Nothing was done\.\n?$");
+    refused(&w, &["list", "--archvied"], r"^list does not know --archvied\. Did you mean --archived\? It takes: --archived, --all, --query, --pinned, --json, --help\. Nothing was done\.\n?$");
     refused(&w, &["list", "--no-archvied"], r"list does not know --no-archvied\. Did you mean --archived\?");
     refused(&w, &["add", "A task", "--reviewer", "claude"], r"add does not know --reviewer\. Did you mean --reviewer\.agent\? It takes: .*any work setting by its name");
     refused(&w, &["add", "A task", "--delgate"], r"Did you mean --delegate\?");

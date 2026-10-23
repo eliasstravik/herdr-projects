@@ -73,17 +73,18 @@ fn done_comes_last_below_to_do_with_its_fold_line_at_the_bottom() {
     assert_eq!(shape(&s), by_repo);
     s.press(&["up", "up", "up", "up", "up"]); assert_eq!(s.s.sel, older);
     s.press(&["alt+s", "alt+s"]); assert_eq!(s.s.sel, older); assert_eq!(shape(&s), by_status); // by machine, then by status
+    // A pinned done task stays among the done ones, where it always sorts (a pin moves nothing).
     sw::actions::filing::pin(&done[6]).unwrap(); s.press(&["alt+d"]); s.load();
-    let mut pinned: Vec<String> = vec![sw::board::update::remotes::shown(&s.s, ""), "pinned".into(), done[6].clone(), "needs you".into(), asks.clone(), "working".into(), working.clone(), "to do".into(), newer.clone(), older.clone(), "done".into()];
-    pinned.extend(done[..6].iter().cloned());
+    let mut pinned: Vec<String> = vec![sw::board::update::remotes::shown(&s.s, ""), "needs you".into(), asks.clone(), "working".into(), working.clone(), "to do".into(), newer.clone(), older.clone(), "done".into()];
+    pinned.extend(done[..7].iter().cloned());
     assert_eq!(shape(&s), pinned);
     s.s.sel = newer.clone(); s.load();
     sw::store::tasks::update(&newer, |t| { t.put("stage", "done"); Ok(sw::store::tasks::Change::Write) }).unwrap();
     sw::store::tasks::update(&newer, |t| { t.put("at", now); Ok(sw::store::tasks::Change::Write) }).unwrap();
     s.load();
     let mut tail: Vec<String> = vec!["to do".into(), older.clone(), "done".into(), newer.clone()];
-    tail.extend(done[..6].iter().cloned());
-    assert_eq!(shape(&s)[7..].to_vec(), tail);
+    tail.extend(done[..7].iter().cloned());
+    assert_eq!(shape(&s)[5..].to_vec(), tail);
     assert_eq!(s.s.sel, older, "the selection does not follow it down");
 }
 
