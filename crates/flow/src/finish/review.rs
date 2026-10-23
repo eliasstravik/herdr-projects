@@ -28,9 +28,9 @@ pub fn close_reviewer(id: &str) {
     let _ = update_wait(id, 10000, |t| { if t.at("link").is_object() { t.obj_mut("link").put("reviewer", Value::Null); } Ok(Change::Write) });
 }
 /// What one review gave: a verdict, or an error; `cut` when its provider ended it; `aborted` when the world moved on;
-/// `ended` when the reviewer finished (or exited) without a verdict.
+/// `ended` when the reviewer finished (or exited) without a verdict; `screen`, the reviewer's last lines when it gave none.
 #[derive(Default)]
-pub struct Reviewed { pub review: Option<Obj>, pub error: String, pub auth: bool, pub cut: bool, pub aborted: bool, pub by: String, pub cut_by: Option<Cut>, pub ended: bool }
+pub struct Reviewed { pub review: Option<Obj>, pub error: String, pub auth: bool, pub cut: bool, pub aborted: bool, pub by: String, pub cut_by: Option<Cut>, pub ended: bool, pub screen: String }
 pub fn run_review(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, to_land: bool, ch: &Obj, check: &str) -> Res<Reviewed> { run_review_with(id, g, text, change, to_land, ch, check, None) }
 #[allow(clippy::too_many_arguments)]
 pub fn run_review_with(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, to_land: bool, ch: &Obj, check: &str, plan: Option<&Plan>) -> Res<Reviewed> {
