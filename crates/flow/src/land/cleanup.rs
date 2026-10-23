@@ -13,6 +13,7 @@ use crate::herdr::cli::{args, current_socket, socket_exists};
 use crate::herdr::Herdr;
 use crate::json::*;
 use super::in_use::{self, InUse, Why};
+use crate::leftovers::ends::Ended;
 use crate::runner::{claim, release, sh};
 use crate::store::marks::tilde;
 use crate::store::repos::{cwd_of, folder_of, git_out};
@@ -22,11 +23,12 @@ use crate::store::tasks::{get, update_wait, Change, Task};
 use std::cell::{Cell, RefCell};
 use std::path::Path;
 
-/// What a clean-up kept, and, when it was put off, what it saw for the next try.
+/// What a clean-up kept, what it ended right before the worktree went and what still runs (`ends`), and, when it was
+/// put off, what it saw for the next try.
 #[derive(Default, Debug)]
-pub struct Cleanup { pub kept: Vec<String>, pub in_use: Vec<String>, pub retry: bool, pub turn: bool, pub comp: Value, pub tip: String, pub still: Value, pub event_seq: i64 }
+pub struct Cleanup { pub kept: Vec<String>, pub ends: Ended, pub in_use: Vec<String>, pub retry: bool, pub turn: bool, pub comp: Value, pub tip: String, pub still: Value, pub event_seq: i64 }
 pub struct Opts<'a> { pub delete_branch: &'a str, pub keep_unmerged: bool, pub still: Option<&'a dyn Fn() -> bool>, pub since: Option<Value>, pub first: Option<String> }
-pub fn cleanup(t: &Task, delete_branch: &str) -> Vec<String> { cleanup_with(t, Opts { delete_branch, keep_unmerged: false, still: None, since: None, first: None }).kept }
+pub fn cleanup(t: &Task, delete_branch: &str) -> Cleanup { cleanup_with(t, Opts { delete_branch, keep_unmerged: false, still: None, since: None, first: None }) }
 fn still_ms() -> i64 { std::env::var("HERDR_PROJECTS_STILL_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(120000) }
 fn settle_ms() -> i64 { std::env::var("HERDR_PROJECTS_SETTLE_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(5000) }
 #[derive(Clone, Copy)]
@@ -53,7 +55,7 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
     let tip_of = || if t.b("branch") { git_out(&root, &["rev-parse", "--verify", &format!("refs/heads/{}", t.s("branch"))]).unwrap_or_default() } else { String::new() };
     let tip = match (&o.since, &o.first) { (Some(s), _) => s.t("tip"), (None, Some(f)) => f.clone(), (None, None) => tip_of() }; // what is safe to delete is what the first look saw
     let held: RefCell<InUse> = RefCell::default(); // what kept it in use at the last look
-    let later = |kept: Vec<String>| Cleanup { kept, in_use: held.borrow().all(), retry: true, turn: turn.get(), comp: seen.borrow().clone(), tip: tip.clone(), still: quiet.borrow().clone(), event_seq: get(t.s("id")).map(|c| c.i("eventSeq")).unwrap_or(0) };
+    let later = |kept: Vec<String>| Cleanup { kept, ends: Ended::default(), in_use: held.borrow().all(), retry: true, turn: turn.get(), comp: seen.borrow().clone(), tip: tip.clone(), still: quiet.borrow().clone(), event_seq: get(t.s("id")).map(|c| c.i("eventSeq")).unwrap_or(0) };
     // An agent herdr cannot place (status "unknown"): its screen must have stood still from one attempt to a later
     // one, its saved conversation end in a finished turn, and nothing run under it.
     let at_rest = |a: &Value| -> Result<(), Why> {
@@ -133,6 +135,7 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
     let spent = o.keep_unmerged && t.b("branch") && landed();
     let wt = t.s("worktree");
     let wt_short = tilde(wt);
+    let mut ends = Ended::default();
     if !wt.is_empty() && Path::new(wt).exists() {
         if t.at("plan").b("locked") { crate::plan::lock::unlock(t); } // read-only while its plan waited: a worktree that cannot be written cannot be removed
         if !flow::git::dirty(Path::new(wt)).is_empty() { return keep(format!("{wt_short} (uncommitted changes)")); }
@@ -146,6 +149,7 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
         if in_use() { return used(); }
         if !flow::git::dirty(Path::new(wt)).is_empty() { return keep(format!("{wt_short} (uncommitted changes)")); }
         if moved() { return keep(format!("{wt_short} (new work arrived during clean-up)")); }
+        ends = super::cleanup_ends::before_removal(t); // what it left running from its folders goes first
         let removed = (|| -> crate::err::Res<()> {
             match (&api, link.b("ownsWorkspace")) {
                 (Some(api), true) => {
@@ -157,12 +161,12 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
             }
             Ok(())
         })();
-        if let Err(e) = removed { if git_out(&root, &["worktree", "remove", wt]).is_err() { return keep(format!("{wt_short} ({})", e.msg.lines().next().unwrap_or("could not be removed"))); } }
+        if let Err(e) = removed { if git_out(&root, &["worktree", "remove", wt]).is_err() { return Cleanup { ends, ..keep(format!("{wt_short} ({})", e.msg.lines().next().unwrap_or("could not be removed"))) }; } }
         let _ = git_out(&root, &["worktree", "prune"]);
         // git removed the checkout, herdr did not: its space is still there, or herdr does not say.
         if let (Some(api), true, true) = (&api, link.b("ownsWorkspace"), link.b("workspace")) {
-            let there = match api.call(args(&["workspace", "get", link.s("workspace")])) { Ok(_) => true, Err(e) if e.code.contains("not_found") => false, Err(_) => { if still { return stuck(); } true } };
-            if there && !close_space() { return stuck(); }
+            let there = match api.call(args(&["workspace", "get", link.s("workspace")])) { Ok(_) => true, Err(e) if e.code.contains("not_found") => false, Err(_) => { if still { return Cleanup { ends, ..stuck() }; } true } };
+            if there && !close_space() { return Cleanup { ends, ..stuck() }; }
         }
     } else if in_use() { return used(); } else if !close_space() { return stuck(); }
     if let Some(api) = &api { flow::spaces::close_repo_space(api, &root); }
@@ -172,7 +176,7 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
         let flag = if o.delete_branch == "always" || spent { "-D" } else { "-d" };
         if git_out(&root, &["branch", flag, t.s("branch")]).is_err() { kept.push(format!("branch {} (not merged yet)", t.s("branch"))); }
     }
-    Cleanup { kept, ..Default::default() }
+    Cleanup { kept, ends, ..Default::default() }
 }
 /// After landing: remove the leftovers when that is safe, and say where they are when it is not. A task that ended with
 /// nothing to land is tidied the same way, only its branch is deleted just when git calls it merged.
@@ -202,13 +206,17 @@ pub fn tidy(id: &str, delete_branch: &str) {
         // In use: tried again by the housekeeping pass, and after a turn of the agent only once it has been quiet a while.
         // What kept it in use, every thing, is kept with it for `details`.
         let quiet_from = if kept.turn { now() } else { prev.as_ref().map(|p| p.i("quietFrom")).unwrap_or(0) };
-        t.put("tidy", if kept.retry { json!({ "deleteBranch": delete_branch, "tip": kept.tip, "comp": kept.comp, "still": if kept.still.is_null() { Value::Null } else { kept.still.clone() }, "eventSeq": kept.event_seq, "quietFrom": quiet_from, "msg": msg, "inUse": kept.in_use }) } else { Value::Null });
+        // What it ended right before the worktree went, and what still runs for you to end (`stillRunning`, never `kept`).
+        let ends = if kept.ends.is_empty() { prev.as_ref().map(|p| p.t("ends")).unwrap_or_default() } else { kept.ends.said() };
+        if !kept.ends.left.is_empty() { t.put("stillRunning", kept.ends.left.clone()); }
+        t.put("tidy", if kept.retry { json!({ "deleteBranch": delete_branch, "tip": kept.tip, "comp": kept.comp, "still": if kept.still.is_null() { Value::Null } else { kept.still.clone() }, "eventSeq": kept.event_seq, "quietFrom": quiet_from, "msg": msg, "inUse": kept.in_use, "ends": ends }) } else { Value::Null });
         if !kept.kept.is_empty() { t.put("kept", kept.kept.clone()); } else {
             flow::task::clear_notes(t); left = true; t.del("kept"); t.put("worktree", Value::Null); t.put("cleaned", now());
             let s = t.at("link").at("socket").clone(); t.put("link", json!({ "socket": s }));
         }
         let end = if msg.ends_with('.') { "" } else { "." };
-        t.put("msg", crate::leftovers::with_said(&if kept.kept.is_empty() { msg.clone() } else { format!("{msg}{end} Kept: {}", kept.kept.join(", ")) }, freed));
+        let line = if kept.kept.is_empty() { msg.clone() } else { format!("{msg}{end} Kept: {}", kept.kept.join(", ")) };
+        t.put("msg", crate::leftovers::with_said(&crate::leftovers::then_say(&line, &ends), freed));
         Ok(Change::Write)
     });
     if left && !t.arr("attempts").is_empty() {

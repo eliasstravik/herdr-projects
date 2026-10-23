@@ -70,7 +70,7 @@ Coordinator's closing line use them too):
 | `add` | `proj/12: added`, or `proj/12: added, an agent is on it` with `--delegate` |
 | `describe`, a new title, `report` | `updated`, with what changed: `updated (description)`, `updated (title)`, `updated (done)` |
 | `delegate` | `started` |
-| `clear` | `removed` |
+| `clear` | `removed`, and what it ended first: `proj/12: removed. Ended what it started: node …/vite.js (pid 812).` ([what it left running](disk-space.md#what-it-left-running)) |
 | `archive`, `restore` | `archived`, `restored` |
 | `archive --done [--repo NAME]` | `Archived 50 done tasks of mstars.`, and what it left out: `Left out: 1 done but pinned, 2 working.` |
 | `archive --repo NAME`, `restore --repo NAME` (`--on MACHINE`: another machine's) | `Archived mstars and its 6 tasks.`, `Restored mstars and its 6 tasks.`, and the tasks it stopped first ([archiving a project](board.md#archiving-a-project)) |
