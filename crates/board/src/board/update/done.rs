@@ -49,7 +49,7 @@ pub fn apply(s: &mut State, d: Done, fx: &mut Vec<Effect>) {
             Then::Saved(name) => if s.editing.as_ref().map(|e| e.typing == name).unwrap_or(false) { if let Some(e) = s.editing.as_mut() { e.typing.clear(); } s.input.set_text(""); },
             Then::Go(to) => {
                 if s.msg.ends_with(": opening…") { s.msg.clear(); }
-                super::web::go(s, to);
+                super::web::going(s, to);
             }
             Then::SetupLeft { key, sidebar } => {
                 if !key && !sidebar { s.setup = None; }

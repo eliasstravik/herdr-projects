@@ -2,7 +2,7 @@
 // to show, and sending it what you do. It is kept fresh while it is open: asked every two seconds, drawn again only
 // where something changed. Nothing about a task is worked out here: every word, colour and button comes from the
 // board (crates/web/src/webui/*-model.js), and a button only says which key of the board it presses.
-/* global document, window, CustomEvent */
+/* global document, window, location, history, CustomEvent, PopStateEvent */
 import { h, icon, get, post } from "./dom.js";
 import { listEl } from "./list.js";
 import { panelEl, settingsEl } from "./panel.js";
@@ -96,10 +96,19 @@ function draw() {
   part("find-row").hidden = !finding;
   chat.update(snap);
   if (snap.msg && snap.msg.n !== seenMsg) { seenMsg = snap.msg.n; toast(part("toast-host"), snap.msg, () => press("back")); }
+  if (missedNote) { toast(part("toast-host"), { text: missedNote, kind: "yellow" }, () => {}); missedNote = ""; }
   // Into a task's agent (Open agent): the web UI's own view of that pane (talk.js). A task's link (Open the link): a
   // tab of its own.
-  if (snap.go && seenGo !== null && snap.go.n !== seenGo) { seenGo = snap.go.n; return snap.go.url ? void window.open(snap.go.url, "_blank", "noopener") : goTo(snap.go); }
+  if (snap.go && seenGo !== null && snap.go.n !== seenGo) { seenGo = snap.go.n; return snap.go.url ? void window.open(snap.go.url, "_blank", "noopener") : goTo(snap.go, () => missed(snap.go)); }
   seenGo = snap.go ? snap.go.n : 0;
+}
+// The web UI did not go to the pane (talk.js): the board comes back where the button was pressed (start.js follows
+// the address), and says so once it is drawn.
+let missedNote = "";
+function missed(go) {
+  missedNote = `The web UI (Ovis) did not go to ${go.space ? `“${go.space}”` : "the task's space"}. It is open in herdr: pick it in the web UI's sidebar.`;
+  history.pushState(history.state, "", `${location.pathname}${location.search}#board`);
+  window.dispatchEvent(new PopStateEvent("popstate", { state: history.state }));
 }
 function take(out) {
   if (!root) return false;

@@ -59,7 +59,7 @@ fn the_web_uis_pcs_reach_the_board_with_only_what_it_needs_with_the_pc_the_page_
     assert_eq!(machines(), 0);
     let body = r#"{"id":"allDone"}"#;
     assert_eq!(ask(&up, &format!("POST /herdr-projects/api/press?client=abc HTTP/1.1\r\nhost: 127.0.0.1\r\ncontent-length: {}\r\n{PAGE}\r\n{body}", body.len())).0, 200);
-    let far = Pc { id: "pc-1".into(), name: "far".into(), local: false, profile: String::new(), to: "me@far.example".into(), port: 2200, session: String::new(), connected: true, state: "connected".into() };
+    let far = Pc { id: "pc-1".into(), name: "far".into(), local: false, profile: String::new(), to: "me@far.example".into(), port: 2200, session: String::new(), connected: true, state: "connected".into(), panes: Some(vec!["w1:p1".into()]) }; // its panes by their ids alone
     {
         let c = sw::webui::web::client("abc"); let g = c.lock().unwrap();
         let pcs = g.s.web.pcs.clone().expect("the web UI's PCs were passed on");

@@ -113,7 +113,7 @@ dark and every palette of the web UI by itself.
 | find, the archive, grouping by status, repo or machine, all done tasks, other machines | the search button, and **Show** in More…; what is on shows as a chip under the filter row (`Find: …`, `Archive`, `By repo`, `By machine`), and its × puts the plain view back (by status, for a grouping). Whose tasks show is the filter row's first item |
 | archiving a project (`ctrl+a` on its row), restoring it in the archive | select the project's row: **Archive** is among its coordinator's buttons (Open) and in More… (`Archive this project with its tasks`), with the same question first where a task of it works, waits or is to do. In the archive, the archived project's row, selected, has **Restore this project** under it ([archiving a project](board.md#archiving-a-project)) |
 | a machine whose tasks cannot be read: a line where its tasks would be, with why and what to do | one notice over the list: `vm-a and vm-b do not answer, so their tasks are not shown. The board keeps asking by itself.`, then a line each with why (`vm-a: cannot connect (its name is not known).`) and **What to do** behind it. Its × dismisses it in that browser until another machine stops answering or one answers for another reason. A machine asked for the first time is one quiet line, `Asking vm-a for its tasks…` |
-| going into a task's agent | **Open this task's agent**: the web UI's own view of that pane (chat, or the terminal when no agent is in it) |
+| going into a task's agent | **Open this task's agent**: the web UI's own view of that pane (chat, or the terminal when no agent is in it); a closed space is opened again first ([opening a task's agent](#opening-a-tasks-agent)) |
 
 **The page speaks web and fits a thumb.**
 
@@ -143,6 +143,23 @@ browser tab until it is sent.
 
 A task on [another machine](other-machines.md) shows and acts as on the terminal board. Its agent's pane is on that
 machine: the board says so instead of opening it.
+
+## Opening a task's agent
+
+**Open this task's agent** opens the task's space again when it was closed (approving or archiving closes it), as the
+terminal board does, and the page then goes to the web UI's own view of its pane.
+
+- **The page goes only once the web UI shows that pane.** A space opened again is a new workspace and pane, and the web
+  UI's page drops an address that names a pane it does not know yet: Ovis 0.4.13 stayed on the pane it was on, and the
+  button seemed to do nothing ([#356](https://github.com/eliasstravik/herdr-projects/issues/356)). So the board asks the
+  web UI which panes it has (its `/api/machines`) until the new one is there, for 8 seconds at most. That took about a
+  second in the check below.
+- **When it still is not there, the page stays and says so**: *“HP-1 Make f” is open in herdr, but the web UI (Ovis) does
+  not show it yet, so the page stayed here. Pick it in the web UI's sidebar in a moment, or open the agent again.*
+- **The page checks that the web UI went.** Where the web UI still drops the address, it is written again a few times, a
+  second apart; then the address is put back, the Board comes back, and it says the web UI did not go to that space.
+- **A space that cannot be opened again** says why (its worktree is gone, say), and the page stays.
+- A web UI that does not say which panes it has gets the address at once, as before.
 
 ## The chat full screen
 
@@ -435,3 +452,18 @@ front of it, in Chromium at a desktop's size (1280×800) and a phone's (390×844
 
 Not checked: Ovis's installer moving a real install from the old id to the new one (both were linked by hand), and
 other machines under the new name (their PCs come from the same `/api/machines` as before).
+
+**Opening a task's agent whose space was closed** ([#356](https://github.com/eliasstravik/herdr-projects/issues/356)),
+checked on 2026-10-23 with Herdr 0.9.3: a scratch Herdr with Ovis 0.4.13 (its release, `devswha.herdr-web-ui`), the front
+door in front of it, a real task's agent (Claude Code) whose task was ready to approve, in Chromium at a desktop's size
+(1280×860):
+
+| What | Result |
+|---|---|
+| Open this task's agent, its space open | the page went to the agent's pane |
+| The same, its space closed, the program before this change | the space came back as a new workspace (`w3`) and the page was sent there at once; Ovis did not know it yet, put its address back to the pane it was on, and nothing said why |
+| The same now | the board waited for Ovis to list the new pane (about a second), and the page went there; done three times, each time a new workspace |
+| Ovis sent to a pane it never shows (the board's answer changed on its way to the page) | the address was written again three times, then put back; the Board came back with *The web UI (Ovis) did not go to “DEMO-1 Write f.txt with the word hello”…* |
+
+Not checked: another machine's task whose space was closed (the same wait, on that PC's list of panes: covered by tests),
+and Ovis's newest code, which handles that address the same way (`resolveLink`).

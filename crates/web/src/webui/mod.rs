@@ -13,6 +13,7 @@ pub mod dock;
 pub mod door;
 pub mod door_loop;
 pub mod follow;
+pub mod going;
 pub mod ink;
 pub mod model;
 pub mod page;

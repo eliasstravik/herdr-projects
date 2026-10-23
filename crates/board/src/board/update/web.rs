@@ -35,6 +35,9 @@ fn far(s: &mut State, r: &Obj, fx: &mut Vec<Effect>) {
     s.flash(format!("{host}: opening…"), Ink::Muted);
     fx.push(Effect::Run(Job::WebOpen { id: r.t("rid"), far: Some((m.machine, host, pc.id, r.at("link").t("pane"))) }));
 }
+/// The reopened pane, held until the web UI (Ovis) shows it (webui/going.rs lets it go): a link to a pane the web UI
+/// does not know yet is dropped by it, and the page stayed where it was without a word.
+pub fn going(s: &mut State, to: Value) { s.web.going = Some((to, crate::clock::now())); }
 /// The page goes to this pane: each new link is numbered, so a page follows it once.
 pub fn go(s: &mut State, mut to: Value) {
     let n = s.web.go.as_ref().map(|g| g.i("n")).unwrap_or(0) + 1;

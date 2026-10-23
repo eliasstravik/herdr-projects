@@ -157,12 +157,15 @@ pub fn call_with(client_id: &str, call: &str, args: Value, machine: &str, pcs: O
     let mut g = c.lock().unwrap();
     let c = &mut *g;
     take_in(c);
+    let seen = pcs.clone();
     super::follow::follow(c, pcs, Some(machine));
+    // An agent's pane a job went to (a reopen that answered later): the page goes once the web UI shows it.
+    super::going::settle(c, seen.clone(), ui, false);
     let drive = args.s("role") == "drive";
     let watch = || Err::<Value, String>("This device can only watch.".into());
     match call {
         "board" => { let now = crate::clock::now(); let fx = update(&mut c.s, Event::Tick(now)); effects(c, fx, true); Ok(snapshot(c, args.s("have"))) }
-        "press" => { let draft = super::view::press(c, args.s("id"), drive)?; if args.s("id") == "scope" { picked(c); } let mut o = snapshot(c, ""); o.as_object_mut().unwrap().insert("draft".into(), json!(draft)); Ok(o) }
+        "press" => { let draft = super::view::press(c, args.s("id"), drive)?; if args.s("id") == "scope" { picked(c); } super::going::settle(c, seen, ui, true); let mut o = snapshot(c, ""); o.as_object_mut().unwrap().insert("draft".into(), json!(draft)); Ok(o) }
         "send" => {
             if !drive { return watch(); }
             let to = args.at("to").as_object().map(|t| (t.t("id"), t.b("reply"), t.get("scope").and_then(|x| x.as_str()).map(|x| x.chars().take(80).collect())));
