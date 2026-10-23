@@ -8,7 +8,7 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
                                        where a default says it is. --chat: chat only, short for --chat.only true: a
                                        conversation that changes nothing and ends only when you say: finish <id>.
                                        --on: add it on another machine the board knows, as that machine adds its own)
-  herdr-projects list [--archived] [--all] [--query TEXT] [--json]
+  herdr-projects list [--archived] [--all] [--pinned] [--query TEXT] [--json]
   herdr-projects report <id> --state idle|working|blocked|done|error [--kind question|permission|auth] [--msg TEXT] [--title TEXT]
                          [--progress 0-100] [--eta MINUTES]   (your own task, with --state working: how far, and minutes left)
   herdr-projects describe <id> <text>          write or replace a task's description
@@ -36,7 +36,10 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
                                                 or when the board missed it finishing (its agent at rest, the row still "Finishing");
                                                 on a chat-only task: end the conversation, as it is
   herdr-projects details <id>                  failure details, review, next steps, and what it used against its limits
-  herdr-projects pin|archive|restore|clear <id>
+  herdr-projects archive|restore|clear <id>
+  herdr-projects pin|unpin <id | machine | project> [--on MACHINE]
+                                                pin a task, a machine or a project (or unpin it): it gets a pin mark and
+                                                shows in the board's Pinned tab. --on MACHINE: a project of another machine
   herdr-projects archive --done [--repo NAME]  archive every done task of that repo (or of every repo) in one go; one
                                                 that works, waits, is to do or is pinned stays, and is counted
   herdr-projects archive|restore --repo NAME [--on MACHINE]

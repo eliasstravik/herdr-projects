@@ -145,7 +145,7 @@ fn upgrade_never_changes_a_key_you_saved_even_one_two_repos_share_and_the_top_li
     assert_eq!(keys(), json!({ "proj": "KEEP", "beta": "BB" })); assert!(sw::store::keys_given::stand_ins().is_empty());
     // The top line: where new tasks go, with the key beside the name, in the header's quiet ink; the web board's too.
     let id = w.add("Mine"); let mut b = common::board::open(&w.root, 30); b.s.sel = id; b.load();
-    assert!(b.screen(100)[0].starts_with(" herdr-projects  proj · KEEP") && b.screen(100)[1].starts_with(" All 1 "), "{:?}", b.screen(100));
+    assert!(b.screen(100)[0].starts_with(" herdr-projects   Board   Pinned  proj · KEEP") && b.screen(100)[1].starts_with(" All 1 "), "{:?}", b.screen(100));
     let s = common::board::web_as(&w, "keys-top", "board", json!({})).unwrap();
     assert_eq!((s.at("list").at("head").s("where"), s.at("list").at("head").s("whereKey")), ("proj", "KEEP"));
 }

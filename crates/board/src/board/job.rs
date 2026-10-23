@@ -16,6 +16,8 @@ pub enum Job {
     SendFailure { id: String }, SendError { id: String }, SendReview { id: String },
     Stop { id: String, said: String },
     Pin { id: String, name: String, key: String },
+    /// This machine (`repo` empty) or one of its projects pinned (`on`) or unpinned; `to`: its coordinator's level, for its row.
+    PinPlace { repo: String, on: bool, to: String },
     Archive { id: String, said: String }, Restore { id: String, said: String },
     /// This machine's project `repo` with its tasks, to the archive and back; `said` follows what it says it did.
     ArchiveProject { repo: String, said: String }, RestoreProject { repo: String, said: String },
@@ -71,6 +73,9 @@ impl Job {
             Job::CoordRun { to, .. } | Job::Pilot { to, .. } | Job::CoordOpen { to, .. } => format!("co:\t{to}"),
             // A project archived or restored: its row, the project coordinator's.
             Job::ArchiveProject { repo, .. } | Job::RestoreProject { repo, .. } => format!("co:\tproject:{repo}"),
+            // A machine or a project pinned: its row, its coordinator's.
+            Job::PinPlace { to, .. } => format!("co:\t{to}"),
+            Job::Far { host, action, req, .. } if crate::remote::pins::is_pin_action(action) => format!("co:{host}\t{}", req.s("to")),
             Job::Far { host, action, req, .. } if action.starts_with("coordinator-") || action.starts_with("autopilot-") => format!("co:{host}\t{}", req.s("to")),
             Job::Far { host, action, req, .. } if action.starts_with("project-") => format!("co:{host}\tproject:{}", req.s("repo")),
             Job::Far { host, req, .. } => format!("{host}:{}", req.s("id")),
@@ -170,7 +175,8 @@ fn run_one(job: Job) -> Done {
             Job::SendError { id } => green(finish_line::send_error(&id)?.msg),
             Job::SendReview { id } => green(finish_line::send_review(&id)?.msg),
             Job::Stop { id, said } => { let s = talk::stop(&id)?; Done::say(talk::stopped(&said, &s.msg), Ink::Yellow) }
-            Job::Pin { id, name, key } => { let t = filing::pin(&id)?; Done::say(if t.b("pinned") { format!("Pinned {name} to the top. {key} unpins it.") } else { format!("Unpinned {name}.") }, Ink::Muted) }
+            Job::Pin { id, name, key } => { let t = filing::pin(&id)?; Done::say(if t.b("pinned") { format!("Pinned {name}. {key} unpins it.") } else { format!("Unpinned {name}.") }, Ink::Muted) }
+            Job::PinPlace { repo, on, .. } => Done::say(crate::actions::pins::pin_here((!repo.is_empty()).then_some(repo.as_str()), on)?.1, Ink::Muted),
             Job::Archive { id, said } => { archive::archive(&id)?; Done::say(said, Ink::Green).and(Then::Archived(id)) }
             Job::ArchiveProject { repo, said } => { let (r, _) = crate::actions::archive_project::archive_project(&repo)?; Done::say(format!("{r}{said}"), if r.contains("Still on the board") { Ink::Yellow } else { Ink::Green }) }
             Job::RestoreProject { repo, said } => { let (r, _) = crate::actions::archive_project::restore_project(&repo)?; Done::say(format!("{r}{said}"), Ink::Green) }

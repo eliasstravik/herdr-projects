@@ -84,7 +84,7 @@ fn the_group_has_a_colour_of_its_own_narrow_rows_a_menu_of_its_own_and_stays_wit
     // with no task at all the group is still there
     for x in sw::store::tasks::list(Default::default()) { sw::store::tasks::patch(x.s("id"), |t| t.put("archivedAt", sw::clock::now())).unwrap(); }
     s.load();
-    like(&t(&mut s, 120), r"^ herdr-projects {2}proj · PRJ\n +All 0 +Coordinators [^\n]*\n ▾ \S+  0 projects · 0 tasks\n   ▾ automations\n[ ▌]  ⟳ on {2}Look for old dependencies");
+    like(&t(&mut s, 120), r"^ herdr-projects   Board   Pinned  proj · PRJ\n +All 0 +Coordinators [^\n]*\n ▾ \S+  0 projects · 0 tasks\n   ▾ automations\n[ ▌]  ⟳ on {2}Look for old dependencies");
 }
 
 #[test]

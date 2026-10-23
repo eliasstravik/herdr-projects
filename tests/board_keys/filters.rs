@@ -38,7 +38,7 @@ fn tab_goes_round_the_filters_lit_in_their_own_colours_and_the_list_shows_only_t
     for n in 0..7 { let id = w.add(&format!("Done {n}")); sw::store::tasks::update(&id, |t| { t.put("stage", "done"); Ok(sw::store::tasks::Change::Write) }).unwrap(); }
     let mut s = open(&w.root, 40); s.s.side = false;
     let l = s.screen(120);
-    assert_eq!(l[0], " herdr-projects  proj · PRJ");
+    assert_eq!(l[0], " herdr-projects   Board   Pinned  proj · PRJ");
     assert!(regex::Regex::new(r"^ +All 9 +Coordinators 0   Needs you 1   Working 0   Ready 0   To do 1   Done 7   Automations 0$").unwrap().is_match(&l[1]), "{l:?}");
     assert!(!l.iter().any(|x| x.starts_with(" ") && x.contains("──")), "no heading has a rule: {l:?}");
     // All is lit in the plain text colour, reversed

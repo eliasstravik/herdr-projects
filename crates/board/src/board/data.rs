@@ -15,9 +15,10 @@ use std::collections::BTreeMap;
 /// Another machine, as the board knows it: its tasks as rows, its automations, its Coordinator as it sent it
 /// (coordinator/far.rs) and its machine's and repos' coordinators (`coords`, by level), and why it did not answer; `sidebar`: its herdr list of machines as it last sent it
 /// (remote/sidebar.rs), None from one that sends none; `pilots`: its coordinators' autopilot by level (autopilot/far.rs),
-/// Null from a machine on an older version; `archived`: its archived projects (remote/projects.rs).
+/// Null from a machine on an older version; `archived`: its archived projects (remote/projects.rs); `pins`: whether it
+/// and which of its projects are pinned (store/pins.rs).
 #[derive(Clone, Debug, Default)]
-pub struct Remote { pub machine: crate::remote::Machine, pub items: Vec<crate::board::state::Rec>, pub autos: Vec<Obj>, pub ok: bool, pub busy: bool, pub fail_at: i64, pub why: Option<Value>, pub version: String, pub coord: Value, pub coords: Value, pub pilots: Value, pub sidebar: Option<Vec<crate::remote::sidebar::Entry>>, pub archived: Vec<String> }
+pub struct Remote { pub machine: crate::remote::Machine, pub items: Vec<crate::board::state::Rec>, pub autos: Vec<Obj>, pub ok: bool, pub busy: bool, pub fail_at: i64, pub why: Option<Value>, pub version: String, pub coord: Value, pub coords: Value, pub pilots: Value, pub sidebar: Option<Vec<crate::remote::sidebar::Entry>>, pub archived: Vec<String>, pub pins: crate::store::pins::Pins }
 
 #[derive(Clone, Debug, Default)]
 pub struct Data {
@@ -43,6 +44,8 @@ pub struct Data {
     pub lately: Vec<String>,
     /// This machine's archived projects (store/archived_repos.rs): off the board, each a heading in the archive.
     pub archived: Vec<String>,
+    /// Whether this machine and which of its projects are pinned (store/pins.rs): a mark on their rows, and the Pinned tab.
+    pub pins: crate::store::pins::Pins,
     /// The repo the board is in (where it was opened, or where a draft was typed), its folder, and the tasks' file.
     pub repo: String, pub repo_root: String,
     /// This machine's name, for its heading on the board of every machine.
@@ -103,7 +106,7 @@ pub fn load(wants: &Wants) -> Data {
     let coords = crate::coordinator::state::all(&socket).into_iter().filter(|c| !c.is_top() && c.repo().is_none_or(|r| roots.get(r).is_some_and(|f| std::path::Path::new(f).is_dir()) && !archived.iter().any(|a| a == r))).map(|c| c.to()).collect();
     let skills = crate::board::skills::read(&wants.skills, &socket, &coord, sub.as_ref());
     Data {
-        items, autos, jobs, coord, coord_screen, sub, looks, coords, can_dispatch: crate::coordinator::who::ready(&socket), keys: repo_keys(), repos: roots.keys().cloned().collect(), roots, lately, archived,
+        items, autos, jobs, coord, coord_screen, sub, looks, coords, can_dispatch: crate::coordinator::who::ready(&socket), keys: repo_keys(), repos: roots.keys().cloned().collect(), roots, lately, archived, pins: crate::store::pins::pins(),
         session: session_name(&socket), notify: setting("board.notify", None).as_str().unwrap_or("").to_string(),
         repo: here.0, repo_root: here.1, host: crate::remote::check::hostname(),
         // herdr's approve action and a line left by the board key are for a board in a terminal, never the web board.

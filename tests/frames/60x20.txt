@@ -1,5 +1,5 @@
 == the list
- herdr-projects  proj
+ herdr-projects   Board   Pinned  proj
  All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
    ▾ working
    ◐ #2     Max length for task titles
@@ -20,7 +20,7 @@
 ────────────────────────────────────────────────────────────
   alt+o open this task's agent · ? all keys
 == the task beside it
- herdr-projects  proj
+ herdr-projects   Board   Pinned  proj
  All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
    ▾ working
    ◐ #2     Max length for task titles
@@ -76,14 +76,14 @@
                 heading
    space        talk to this row's agent, and back to the
                 top row's coordinator
- ↓ 67 more
+ ↓ 69 more
 
 ────────────────────────────────────────────────────────────
 ❯ Add a task
 ────────────────────────────────────────────────────────────
   ↑↓ pick a key · enter press it · esc close the menu
 == a draft
- herdr-projects  proj
+ herdr-projects   Board   Pinned  proj
  All 18   Needs 5   Working 9   Ready 1   To do 2   Done 1
    ▾ working
    ◐ #2     Max length for task titles

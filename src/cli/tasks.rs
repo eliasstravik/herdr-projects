@@ -71,6 +71,7 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
             } else if let Some(d) = &after { format!(", it will wait for {} to be done once it is delegated", crate::after::names(d)) } else { String::new() };
             (shown_of(t.s("id")), format!("{}: added{}{on}{}{dropped}", t.s("id"), if crate::chat_only::is_chat(&t) { " as chat only" } else if is_research(&t) { " as research only" } else { "" }, title_note(&rest(1))))
         }
+        "list" | "ls" if flags.b("pinned") => { let keys = repo_keys(); super::pins::list(board(true), &|t| line(t, &keys), &brief) }
         "list" | "ls" => {
             let q = flag("query").unwrap_or_default().trim().to_lowercase(); // a task is found by its number and its tag too: 134, #134, hsw-134
             let keys = repo_keys();
@@ -128,7 +129,8 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
         "fix" => said(finish_line::send_failure(&need(1, "an id")?)?),
         "finish" => said(finish_line::finish_anyway(&need(1, "an id")?)?),
         "details" => { let mut d = tidy(finish_line::details(&need(1, "an id")?)?); if pilot.is_some() { crate::autopilot::history::with_note(&mut d); } let s = serde_json::to_string_pretty(&d).unwrap_or_default(); (d, s) }
-        "pin" => { let t = filing::pin(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: {}", t.s("id"), if t.b("pinned") { "pinned" } else { "unpinned" })) }
+        // A task, a machine or a project, here or on another machine (cli/pins.rs).
+        "pin" | "unpin" => super::pins::command(cmd, pos, flags, &shown_of)?,
         // A round of work is over: every done task of a repo (or of every repo) in one go.
         "archive" if flags.b("done") => {
             if pos.len() > 1 { crate::fail!("archive --done takes no id: it archives every done task (of --repo NAME). Try: herdr-projects help"); }

@@ -47,6 +47,7 @@ fn open() -> Client {
     // The filter shown on the filter row, the web's own as the terminal board keeps its own.
     s.show = p.at("show").as_u64().map(|n| (n as usize).min(crate::board::update::shows::SHOWS.len() - 1)).unwrap_or(0);
     s.folded = p.arr("folded").iter().filter_map(|x| x.as_str()).map(String::from).collect();
+    crate::board::update::pinned::load(&mut s, &p); // the tab shown, the web's own (update/pinned.rs)
     Client { s, inbox: Arc::new(Mutex::new(vec![])), at: 0, machines_at: 0, boards_at: 0, id: String::new() }
 }
 pub fn client(id: &str) -> Arc<Mutex<Client>> {
@@ -74,7 +75,9 @@ pub fn save_prefs(s: &State) {
     let scope = s.web.followed.clone().unwrap_or_else(|| s.scope.clone());
     // Only a board picked on the web is kept (picked): any other save leaves the web following the terminal board.
     let own = if s.web.own_scope { json!(scope) } else { Value::Null };
-    let _ = crate::store::files::write_json(&prefs_file(), &json!({ "byRepo": s.by_repo, "byMachine": s.by_machine, "allDone": s.all_done, "ownScope": own, "folded": s.folded, "show": s.show, "chat": if s.chat_open { "open" } else { "closed" } }));
+    let mut kept = obj(json!({ "allDone": s.all_done, "ownScope": own, "chat": if s.chat_open { "open" } else { "closed" } }));
+    kept.extend(crate::board::update::pinned::saved(s)); // the grouping, the filter, the folds and the tab shown
+    let _ = crate::store::files::write_json(&prefs_file(), &Value::Object(kept));
 }
 /// Everything read again: the tasks, the closer look at the selected one and the one the chat talks to.
 pub fn reload(c: &mut Client) {

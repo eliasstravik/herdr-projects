@@ -86,7 +86,7 @@ pub fn side_of(s: &mut State, t: &Theme) -> Obj {
     let project = crate::board::update::archive_project::says(s);
     let menu: Vec<Value> = crate::board::update::menu::items(s).into_iter().filter(|i| {
         let id = entry(i.id).name;
-        !i.mine && !TERMINAL_ONLY.contains(&id) && entry(i.id).web.is_some() && !["yes", "sendBack"].contains(&id) && (id != "undo" || s.draft_away.is_some() || s.archive_undo.is_some()) && (!["stop", "archive", "pin"].contains(&id) || r.is_some() || (id == "archive" && !project.is_empty()))
+        !i.mine && !TERMINAL_ONLY.contains(&id) && entry(i.id).web.is_some() && !["yes", "sendBack"].contains(&id) && (id != "undo" || s.draft_away.is_some() || s.archive_undo.is_some()) && (!["stop", "archive", "pin"].contains(&id) || r.is_some() || (id == "archive" && !project.is_empty()) || (id == "pin" && !i.label.is_empty()))
     }).map(|i| json!({ "id": entry(i.id).name, "group": i.group, "label": i.label })).collect();
     let can_open = r.as_ref().map(|r| r.has("title") && !r.b("archivedAt") && if r.b("host") { r.at("link").b("pane") } else { is_agent(r) }).unwrap_or(false);
     obj(json!({
@@ -96,7 +96,7 @@ pub fn side_of(s: &mut State, t: &Theme) -> Obj {
         // With something typed: what enter and tab do with it.
         "send": { "enter": pick("enter"), "delegate": pick("delegate"), "place": place },
         "menu": menu,
-        "flags": { "onTask": r.is_some(), "archive": s.archive_view, "byRepo": s.by_repo, "byMachine": s.by_machine, "allDone": s.all_done, "scope": s.scope, "reply": s.reply, "open": open, "filter": s.filter },
+        "flags": { "onTask": r.is_some(), "archive": s.archive_view, "pinned": s.pinned_view, "byRepo": s.by_repo && !crate::board::update::pinned::on(s), "byMachine": s.by_machine, "allDone": s.all_done, "scope": s.scope, "reply": s.reply, "open": open, "filter": s.filter },
         // The selected task has an agent whose pane the web UI can show: on this machine, or on another of its PCs.
         "canOpen": can_open, "go": s.web.go.clone().unwrap_or(Value::Null),
     }))

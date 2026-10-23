@@ -122,7 +122,7 @@ fn ctrl_does_something_alt_only_shows_or_hides_and_no_old_key_is_left() {
     }
     // Ctrl: each does its one thing. ctrl+p pins (it is no longer the side panel), ctrl+a archives (no longer "yes").
     key(&mut s, Char('p'), c); assert!(task(&id).b("pinned")); assert_eq!(shown(&s), start);
-    assert_ne!(s.s.sel, id, "the pinned task went to the top, the selection stayed where it was"); s.s.sel = id.clone(); s.load();
+    assert_eq!(s.s.sel, id, "a pin moves nothing: the selection stays on the task");
     key(&mut s, Char('p'), c); assert!(!task(&id).b("pinned"));
     s.press(&["ctrl+l"]); assert!(s.text().contains("Nothing here waits for a yes."), "{}", s.text()); assert!(s.s.ask.is_none());
     s.s.sel = id.clone(); s.load();

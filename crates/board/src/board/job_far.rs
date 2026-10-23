@@ -34,6 +34,8 @@ pub fn dispatch(m: Machine, text: String, delegate: bool, about: String, to: Str
 /// One of the exact actions, on a task or an automation that lives on another machine.
 pub fn far(m: &Machine, host: &str, action: &str, req: Value, quiet: bool) -> Done {
     if crate::remote::projects::is_project_action(action) { return project(m, host, action == "project-archive", &req); }
+    // A machine or a project pinned there: that machine says so with its tasks (remote/pins.rs).
+    if crate::remote::pins::is_pin_action(action) { return match crate::remote::pins::ask_there(m, &req) { Ok(j) => Done::say(j.t("msg"), Ink::Muted), Err(e) => Done::fail(e.msg) }; }
     let mut req = obj(req);
     req.put("action", action);
     // A task's work settings travel with whatever starts its agent: what this machine says for it is worked out here.

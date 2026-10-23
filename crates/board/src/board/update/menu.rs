@@ -28,7 +28,7 @@ pub fn label(s: &State, k: K, r: Option<&Obj>) -> String {
             (None, w) if !w.is_empty() => if s.archive_view { format!("{w}, with its tasks as they were") } else { "archive this project with its tasks (after a yes when one works, waits or is to do)".into() },
             _ => if r.map(|r| r.b("archivedAt")).unwrap_or(false) { "restore this task".into() } else { "archive this task".into() },
         },
-        K::Pin => if r.map(|r| r.b("pinned")).unwrap_or(false) { "unpin this task".into() } else { "pin this task to the top".into() },
+        K::Pin => super::pinned::menu_label(s, r),
         K::OpenLink => r.and_then(super::link::of).map(|(what, _)| format!("open its {what} in the browser")).unwrap_or_default(),
         K::Settings => match (&s.editing, r) {
             (Some(e), _) if e.whose.mine() => "back from your settings".into(),
@@ -47,6 +47,8 @@ pub fn label(s: &State, k: K, r: Option<&Obj>) -> String {
         K::Side => format!("{} the side panel: this task, beside the list", if s.side { "hide" } else { "show" }),
         K::Panel => if s.full { "back to the list".into() } else { "show the whole task, full screen".into() },
         K::ArchiveView => format!("{} the archive", if s.archive_view { "hide" } else { "show" }),
+        K::PinnedView => super::pinned::tab_label(s),
+        K::ByRepo if super::pinned::on(s) => String::new(),
         K::ByRepo => if s.by_machine { "group by status".into() } else if s.by_repo { "group by machine: each machine's tasks under its name".into() } else { "group by repo: see which repo each task is in".into() },
         K::AllDone => if s.all_done { "show only the latest done".into() } else { "show all done".into() },
         K::Scope => {

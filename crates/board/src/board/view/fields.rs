@@ -52,14 +52,15 @@ pub fn row_title(s: &State, r: &Obj) -> String {
     if is_research(r) { t.push_str(" [research]"); }
     if r.at("automation").b("id") { t.push_str(" [auto]"); }
     if r.b("archivedAt") && !s.archive_view { t.push_str(" [archived]"); }
+    if r.b("pinned") && !r.b("archivedAt") { t.push(' '); t.push_str(crate::board::update::pinned::MARK); } // update/pinned.rs
     t
 }
 /// The title is in the base colour whatever the task's state, never bold: colour means status, and the mark carries
-/// it. What is said of it after it (`×3`, `[auto]`, `[research]`, `[chat]`, `[archived]`) is dimmed. An automation's
+/// it. What is said of it after it (`×3`, `[auto]`, `[research]`, `[chat]`, `[archived]`, the pin mark `⚑`) is dimmed. An automation's
 /// name is plain, greyed while it is off.
 pub fn name_ink(r: &Obj, s: &str) -> Inked {
     if is_auto(r) { return if auto(r).b("on") { Inked::plain(s) } else { Inked::of(s, Ink::Muted) }; }
-    let at = crate::re!(r"(?: ×\d+)?(?: \[[a-z]+\])*$").find(s).map(|m| m.start()).unwrap_or(s.len());
+    let at = crate::re!(r"(?: ×\d+)?(?: \[[a-z]+\])*(?: ⚑)?$").find(s).map(|m| m.start()).unwrap_or(s.len());
     let mut out = Inked::new();
     out.push(&s[..at], Ink::Plain);
     if at < s.len() { out.push(&s[at..], Ink::Muted); }

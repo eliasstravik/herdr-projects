@@ -96,12 +96,14 @@ pub fn fold(c: &mut Client, id: &str) {
 }
 /// A tap on the filter row: that filter shown, as tab gets there.
 pub fn show(c: &mut Client, n: usize) {
+    if crate::board::update::pinned::on(&c.s) { return; } // the Pinned tab has no filter (update/pinned.rs)
     let mut fx = vec![];
     crate::board::update::shows::set(&mut c.s, n, &mut fx);
     effects(c, fx, false);
 }
 /// The grouping back to by status (the chip of by repo or by machine, its ×), as the group key gets there going round.
 pub fn by_status(c: &mut Client) {
+    if crate::board::update::pinned::on(&c.s) { return; } // the Pinned tab is always by machine and project
     (c.s.by_repo, c.s.by_machine) = (false, false);
     relist(&mut c.s);
     super::web::save_prefs(&c.s);

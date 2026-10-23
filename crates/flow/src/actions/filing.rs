@@ -35,6 +35,8 @@ fn retitle(t: &mut Task, title: &str) {
 pub fn rename(id: &str, title: &str) -> Res<Task> { let cur = find(id)?; update(cur.s("id"), |t| { assert_unarchived(t)?; retitle(t, title); Ok(Change::Write) }) }
 pub fn describe(id: &str, text: &str) -> Res<Task> { let cur = find(id)?; update(cur.s("id"), |t| { assert_unarchived(t)?; t.put("description", text.replace('\r', "").trim()); Ok(Change::Write) }) }
 pub fn pin(id: &str) -> Res<Task> { let cur = find(id)?; update(cur.s("id"), |t| { assert_unarchived(t)?; let p = !t.b("pinned"); t.put("pinned", p); Ok(Change::Write) }) }
+/// Pinned (`on`) or not, whatever it was.
+pub fn set_pin(id: &str, on: bool) -> Res<Task> { let cur = find(id)?; update(cur.s("id"), |t| { assert_unarchived(t)?; t.put("pinned", on); Ok(Change::Write) }) }
 
 #[derive(Default)]
 pub struct Report { pub state: String, pub kind: String, pub msg: String, pub title: String, pub progress: Option<Value>, pub eta: Option<Value>, pub own: &'static str }

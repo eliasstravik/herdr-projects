@@ -33,7 +33,7 @@ fn a_yes_says_nothing_under_the_chat_its_row_says_it_and_the_menu_names_every_ke
     // the ? menu: every key it has, with its line
     s.s.sel = "proj/2".into(); s.load(); s.rows = 60; s.press(&["?"]);
     let text = s.text();
-    for line in [format!("{} +send it back: tell the agent to fix it, or to continue", k("sendBack")), format!("{} +pin this task to the top", k("pin")), format!("{} +undo", k("undo")),
+    for line in [format!("{} +send it back: tell the agent to fix it, or to continue", k("sendBack")), format!("{} +pin this task: a mark on its row, and in the Pinned tab", k("pin")), format!("{} +undo", k("undo")),
         format!("{} +find: show only the tasks that match", k("find")), format!("{} +twice: close the board", k("close")), format!("{} +hide the side panel", k("side")),
         format!("{} +show the whole task, full screen", k("panel")), format!("{} +show the archive", k("archiveView")), format!("{} +group by repo", k("byRepo")), format!("{} +show all done", k("allDone")), "65% 2m left".into()] {
         assert!(has(&text, &line), "{line}:\n{text}");
@@ -53,9 +53,9 @@ fn a_yes_says_nothing_under_the_chat_its_row_says_it_and_the_menu_names_every_ke
     assert!(has(&s.text(), &format!(r"\n[ ▌] {} restore this task · {} remove this task · esc back to the board", k("archive"), k("stop"))), "{}", s.text());
     s.press(&["alt+a", "ctrl+z"]);
     assert!(!s.s.archive_view); assert!(!task("proj/2").b("archivedAt"), "ctrl+z takes the archiving back");
-    // pinned: a group of its own on top
+    // pinned: it stays under to do, with its pin mark
     s.s.sel = "proj/2".into(); s.load(); s.press(&["ctrl+p"]);
-    assert!(has(&s.screen(80).join("\n"), r"\n   ▾ pinned *\n"), "{}", s.screen(80).join("\n"));
+    assert!(has(&s.screen(80).join("\n"), r"\n   ▾ to do *\n▌  ○ PRJ-2 Other ⚑ "), "{}", s.screen(80).join("\n"));
 }
 
 #[test]

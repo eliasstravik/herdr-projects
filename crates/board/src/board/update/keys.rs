@@ -129,7 +129,7 @@ pub fn run_as(s: &mut State, k: K, p: &Press, r: Option<&Obj>, fx: &mut Vec<Effe
         K::Unfold => super::heads::fold_key(s, false, fx),
         K::PageUp => act::move_by(s, -10),
         K::PageDown => act::move_by(s, 10),
-        K::Filter => super::shows::step(s, p, fx),
+        K::Filter => if s.pinned_view && !s.archive_view { super::pinned::fixed(s) } else { super::shows::step(s, p, fx) },
         K::Talk => act::flip_reply(s, r),
         K::Menu => s.menu = Some(crate::board::state::Menu { at: -1, ..Default::default() }),
         K::Yes => if let Some(r) = r { act::yes(s, r, fx) },
@@ -138,7 +138,7 @@ pub fn run_as(s: &mut State, k: K, p: &Press, r: Option<&Obj>, fx: &mut Vec<Effe
         K::Stop => match r { Some(r) => act::stop(s, r, fx), None => if let Some(t) = super::pilot::keyed(s) { super::pilot::run(s, &t, false, fx) } },
         K::Pilot => match super::pilot::keyed(s).filter(|_| r.is_none()) { Some(t) => super::pilot::toggle(s, &t, fx), None => s.flash(format!("{} turns a coordinator's autopilot on and off: select a machine's or a project's row.", key_name("autopilot")), Ink::Muted) },
         K::Archive => match r { Some(r) => act::archive_selected(s, r, fx), None if super::heads::selected(s).is_some() => super::archive_project::key(s, fx), None => s.flash("Select a task to archive or restore.", Ink::Muted) },
-        K::Pin => if let Some(r) = r { act::pin(s, r, fx) },
+        K::Pin => super::pinned::key(s, r, fx),
         K::OpenLink => if let Some(r) = r { super::link::open(s, r, fx) },
         K::Settings => super::edit::open(s, r, fx),
         K::Undo => act::undo(s, fx),
@@ -152,7 +152,9 @@ pub fn run_as(s: &mut State, k: K, p: &Press, r: Option<&Obj>, fx: &mut Vec<Effe
         K::Side => if !s.full { act::toggle_side(s, fx) },
         K::Panel => if s.full { act::fold_panel(s) } else { act::open_panel(s) },
         K::ArchiveView => act::toggle_archive(s),
+        K::PinnedView => super::pinned::switch(s, fx),
         // By status, by repo, by machine, and round again.
+        K::ByRepo if super::pinned::on(s) => super::pinned::fixed(s),
         K::ByRepo => { (s.by_repo, s.by_machine) = (!s.by_repo && !s.by_machine, s.by_repo); fx.push(Effect::Save); relist(s); }
         K::AllDone => { s.all_done = !s.all_done; relist(s); }
         K::Scope => super::remotes::next_scope(s, fx),

@@ -7,6 +7,7 @@ pub mod filing;
 pub mod finish_line;
 pub mod finish_stuck;
 pub mod limits;
+pub mod pins;
 pub mod plan;
 pub mod settings;
 pub mod shared;

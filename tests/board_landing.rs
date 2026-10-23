@@ -12,7 +12,7 @@ use sw::board::update::list::relist;
 use sw::json::*;
 
 const TODO: &str = "head:status\t\tto do";
-const PINNED: &str = "head:status\t\tpinned";
+const NEEDS: &str = "head:status\t\tneeds you";
 const WORKING: &str = "head:status\t\tworking";
 
 fn board(w: &World, sel: &str) -> Board { let mut s = open(&w.root, 40); s.s.sel = sel.into(); s.load(); relist(&mut s.s); s }
@@ -50,19 +50,16 @@ fn tab_on_task_after_task_goes_down_the_group_then_up_from_its_last_row_then_to_
 }
 
 #[test]
-fn pinning_and_archiving_leave_the_selection_where_you_were_and_an_emptied_group_goes_on_to_the_next() {
+fn pinning_leaves_the_task_where_it_is_and_archiving_leaves_the_selection_where_you_were() {
     let w = world();
     let [a, b, c] = <[String; 3]>::try_from(add(&w, &["One", "Two", "Three"])).unwrap();
     let mut s = board(&w, &b);
-    // Pinned, the task goes to the top: the selection stays on the row below it.
+    // Pinned, the task stays where it is (a pin moves nothing): so does the selection.
     s.press(&["ctrl+p"]);
-    assert!(task(&b).b("pinned")); assert_eq!(under(&s, PINNED), vec![b.clone()]); assert_eq!(s.s.sel, a);
-    // Unpinned from the pinned group, which it leaves empty: the next group's first task.
-    s.s.sel = b.clone(); s.load(); relist(&mut s.s);
+    assert!(task(&b).b("pinned")); assert_eq!(under(&s, TODO), vec![c.clone(), b.clone(), a.clone()]); assert_eq!(s.s.sel, b);
     s.press(&["ctrl+p"]);
-    assert!(!task(&b).b("pinned")); assert!(under(&s, PINNED).is_empty()); assert_eq!(s.s.sel, c);
+    assert!(!task(&b).b("pinned")); assert_eq!(under(&s, TODO), vec![c.clone(), b.clone(), a.clone()]); assert_eq!(s.s.sel, b);
     // Archived, the task leaves the list: the row below it (no confirmation line under the chat).
-    s.s.sel = b.clone(); s.load(); relist(&mut s.s);
     s.press(&["ctrl+a"]);
     assert!(task(&b).b("archivedAt")); assert_eq!(s.s.sel, a);
     assert!(!s.s.msg.contains("Now on"), "no confirmation line: the row is gone, the selection is on the next: {}", s.s.msg);
@@ -72,23 +69,20 @@ fn pinning_and_archiving_leave_the_selection_where_you_were_and_an_emptied_group
 
 #[test]
 fn a_folded_group_stays_folded_a_task_moved_into_it_and_the_selection_lands_on_its_heading_when_nothing_else_is_left() {
-    let w = world();
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    w.script(json!({ "worker": [{ "status": "working" }] }));
     let [a, b, c] = <[String; 3]>::try_from(add(&w, &["One", "Two", "Three"])).unwrap();
-    sw::actions::filing::pin(&a).unwrap();
     let mut s = board(&w, &b);
-    // The pinned group folded: a task pinned goes into it, which stays folded, and the selection stays among the to-dos.
-    s.s.folded.insert(PINNED.into()); relist(&mut s.s);
-    s.press(&["ctrl+p"]);
-    assert!(task(&b).b("pinned")); assert!(s.s.folded.contains(PINNED)); assert!(under(&s, PINNED).is_empty());
-    assert_eq!(s.s.sel, c, "the one above: it was the last to do");
-    // Unfolded, then the to-dos folded: the last pinned task unpinned leaves nothing to land on but the folded heading.
-    s.s.folded.clear(); relist(&mut s.s);
-    s.s.sel = b.clone(); s.load(); relist(&mut s.s); s.press(&["ctrl+p"]);
-    s.s.sel = a.clone(); s.load(); relist(&mut s.s);
-    assert_eq!(under(&s, PINNED), vec![a.clone()]);
-    s.s.folded.insert(TODO.into()); relist(&mut s.s); assert_eq!(s.s.sel, a);
-    s.press(&["ctrl+p"]);
-    assert!(!task(&a).b("pinned")); assert!(s.s.folded.contains(TODO), "it stays folded"); assert_eq!(s.s.sel, TODO);
+    // The working group folded: a task started goes into it, which stays folded, and the selection stays among the to-dos.
+    s.s.folded.insert(WORKING.into()); relist(&mut s.s);
+    s.press(&["ctrl+s"]);
+    assert!(task(&b).b("agent")); assert!(s.s.folded.contains(WORKING)); assert!(under(&s, WORKING).is_empty());
+    assert_eq!(s.s.sel, a, "the one below");
+    // The last to-dos started leave nothing to land on but the folded heading.
+    s.s.sel = c.clone(); s.load(); relist(&mut s.s); s.press(&["ctrl+s"]);
+    assert_eq!(s.s.sel, a);
+    s.press(&["ctrl+s"]);
+    assert!(task(&a).b("agent")); assert!(under(&s, TODO).is_empty()); assert!(s.s.folded.contains(WORKING), "it stays folded"); assert_eq!(s.s.sel, WORKING);
 }
 
 #[test]
@@ -103,49 +97,33 @@ fn under_a_filter_and_grouped_by_repo_the_selection_stays_on_the_row_where_you_w
     assert!(task(&c).b("archivedAt")); assert_eq!(s.s.sel, a);
     assert_eq!(under(&s, "head:status\t\tarchived"), vec![c.clone()], "still shown: it matches");
     s.press(&["ctrl+z"]); s.s.filter.clear(); relist(&mut s.s);
-    // Grouped by repo, a pinned task moves to the top of its own repo's group: the selection is on the task below it.
+    // Grouped by repo, a task archived leaves its repo's group: the selection is on the task below it.
     let mut r = board(&w, &c);
     r.press(&["alt+s"]); assert!(r.s.by_repo);
     let head = "head:repo\t\tproj";
     let before = under(&r, head);
     let at = before.iter().position(|x| *x == c).unwrap();
-    r.press(&["ctrl+p"]);
-    assert_eq!(under(&r, head)[0], c, "pinned first in its repo"); assert_eq!(r.s.sel, before[at + 1]);
-    r.press(&["alt+s"]); assert!(!r.s.by_repo);
+    r.press(&["ctrl+a"]);
+    assert!(!under(&r, head).contains(&c)); assert_eq!(r.s.sel, before[at + 1]);
+    r.press(&["ctrl+z"]); r.press(&["alt+s"]); assert!(!r.s.by_repo);
 }
 
 #[test]
 fn the_task_panel_open_keeps_its_task_the_side_panel_moves_on_and_an_action_that_moves_nothing_leaves_the_selection() {
-    let w = world();
-    let [a, b, _] = <[String; 3]>::try_from(add(&w, &["One", "Two", "Three"])).unwrap();
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    w.script(json!({ "worker": [{ "status": "working" }] }));
+    let [a, b, c] = <[String; 3]>::try_from(add(&w, &["One", "Two", "Three"])).unwrap();
     // The whole task open: what you act on stays in front of you.
     let mut s = board(&w, &b);
     s.press(&["alt+t"]); assert!(s.s.full);
-    s.press(&["ctrl+p"]); assert!(task(&b).b("pinned")); assert_eq!(s.s.sel, b); assert!(s.s.full);
-    s.press(&["ctrl+p"]); assert!(!task(&b).b("pinned")); assert_eq!(s.s.sel, b);
+    s.press(&["ctrl+s"]); assert!(task(&b).b("agent")); assert_eq!(s.s.sel, b); assert!(s.s.full);
     s.press(&["alt+t"]); assert!(!s.s.full);
     // The side panel shows the selected task: it moves on with the selection.
-    let mut side = board(&w, &b); side.s.side = true;
-    side.press(&["ctrl+p"]); assert_eq!(side.s.sel, a); side.s.sel = b.clone(); side.load(); side.press(&["ctrl+p"]); assert!(!task(&b).b("pinned"));
-    // Nothing moves: a yes or a send back with nothing to say yes to, a remove you say no to.
-    let mut n = board(&w, &b);
-    for keys in [vec!["ctrl+l"], vec!["ctrl+r"], vec!["ctrl+x", "n"]] { n.press(&keys); assert_eq!(n.s.sel, b, "{keys:?}"); }
-}
-
-#[test]
-fn a_pinned_task_keeps_its_row_whatever_its_status_so_an_action_on_it_leaves_the_selection_on_it() {
-    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
-    w.script(json!({ "worker": [{ "status": "working" }] }));
-    let [a, b] = <[String; 2]>::try_from(add(&w, &["One", "Two"])).unwrap();
-    for id in [&a, &b] { sw::actions::filing::pin(id).unwrap(); }
-    let mut s = board(&w, &b);
-    let pinned = under(&s, PINNED);
-    assert_eq!(pinned.len(), 2); assert!(under(&s, TODO).is_empty());
-    // An agent put on it, then stopped: its status changes twice, its row in the pinned group never moves.
-    s.press(&["ctrl+s"]); assert!(task(&b).b("agent")); assert_eq!(under(&s, PINNED), pinned); assert_eq!(s.s.sel, b);
-    settle(&b); s.load(); assert_eq!(task(&b).s("stage"), "working"); assert_eq!(s.s.sel, b);
-    s.press(&["ctrl+x"]); assert_eq!(task(&b).s("stage"), "stopped"); assert_eq!(under(&s, PINNED), pinned); assert_eq!(s.s.sel, b);
-    assert!(s.s.ask.is_none(), "a stop, not the question to remove");
+    let mut side = board(&w, &c); side.s.side = true;
+    side.press(&["ctrl+s"]); assert!(task(&c).b("agent")); assert_eq!(side.s.sel, a);
+    // Nothing moves: a pin and an unpin, a yes or a send back with nothing to say yes to, a remove you say no to.
+    let mut n = board(&w, &a);
+    for keys in [vec!["ctrl+p"], vec!["ctrl+p"], vec!["ctrl+l"], vec!["ctrl+r"], vec!["ctrl+x", "n"]] { n.press(&keys); assert_eq!(n.s.sel, a, "{keys:?}"); }
 }
 
 #[test]
@@ -159,7 +137,7 @@ fn the_only_task_there_is_keeps_the_selection_wherever_it_moves() {
 
 #[test]
 fn the_landing_prefers_the_group_then_tasks_over_automations_and_never_a_heading_that_is_open() {
-    let rows = vec![row(PINNED, PINNED), row("p/1", PINNED), row(TODO, TODO), row("p/2", TODO), row("p/3", TODO), row("auto:x", AUTOS)];
+    let rows = vec![row(NEEDS, NEEDS), row("p/1", NEEDS), row(TODO, TODO), row("p/2", TODO), row("p/3", TODO), row("auto:x", AUTOS)];
     let all = |skip: &[&str]| rows.iter().map(|r| r.id.clone()).filter(|i| !skip.contains(&i.as_str())).collect::<Vec<_>>();
     let open = |_: &str| false;
     assert_eq!(land(&rows, 3, &all(&["p/2"]), &open), Some("p/3".into()), "the next below");
@@ -168,7 +146,7 @@ fn the_landing_prefers_the_group_then_tasks_over_automations_and_never_a_heading
     assert_eq!(land(&rows, 4, &all(&["p/2", "p/3"]), &open), Some("p/1".into()), "the group above, not an automation below");
     assert_eq!(land(&rows, 1, &all(&["p/1", "p/2", "p/3"]), &open), Some("auto:x".into()), "an automation only when no task is left");
     let folded = |id: &str| id == TODO;
-    assert_eq!(land(&rows, 1, &[PINNED.into(), TODO.into(), "auto:x".into()], &folded), Some(TODO.into()), "a folded group's heading");
+    assert_eq!(land(&rows, 1, &[NEEDS.into(), TODO.into(), "auto:x".into()], &folded), Some(TODO.into()), "a folded group's heading");
     assert_eq!(land(&rows, 5, &all(&["auto:x"]), &open), Some("p/3".into()), "from an automation, the task above when none is left");
-    assert_eq!(land(&rows[..2], 1, &[PINNED.into()], &open), None);
+    assert_eq!(land(&rows[..2], 1, &[NEEDS.into()], &open), None);
 }

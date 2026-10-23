@@ -3,6 +3,7 @@
 //! entries herdr and the agents' hooks run are here; the commands on tasks are cli/tasks.rs.
 pub mod flags;
 pub mod help;
+pub mod pins;
 pub mod tasks;
 
 use crate::err::Res;

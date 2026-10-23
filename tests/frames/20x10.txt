@@ -1,5 +1,5 @@
 == the list
- herdr-projects
+  Board   Pinned
  All 18  tab next
 ▌ ◐ Max length for
 ▌   task titles
@@ -10,7 +10,7 @@
 ────────────────────
   alt+o open its ag…
 == the task beside it
- herdr-projects
+  Board   Pinned
 ▌ ◐ Max length for
 ▌   task titles
 ▌   Found the cause;
@@ -37,13 +37,13 @@
    ↑ ↓          move
                 bet…
                 tas…
- ↓ 275 more
+ ↓ 286 more
 ────────────────────
 ❯ Add a task
 ────────────────────
   ↑↓ pick a key
 == a draft
- herdr-projects
+  Board   Pinned
  All 18  tab next
 ▌ ◐ Max length for
 ▌   task titles

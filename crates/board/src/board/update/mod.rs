@@ -108,6 +108,7 @@ pub mod mouse;
 pub mod paste;
 pub mod pending;
 pub mod pilot;
+pub mod pinned;
 pub mod remotes;
 pub mod setup;
 pub mod shows;

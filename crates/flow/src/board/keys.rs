@@ -19,7 +19,7 @@ use std::cell::Cell;
 /// The groups, in the order the ? menu and docs/keys.md show them.
 pub const GROUPS: [(&str, &str); 3] = [("plain", "plain keys"), ("ctrl", "ctrl: does something"), ("alt", "alt: only shows or hides")];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum K { Up, Down, Fold, Unfold, Open, PageUp, PageDown, Filter, Pilot, Enter, Newline, Talk, Delegate, Back, Menu, SayYes, SayNo, Yes, SendBack, NextAttempt, Stop, Archive, Pin, OpenLink, Settings, PutBack, Undo, Find, Free, Close, Call, ChatMessage, ChatScrollUp, ChatScrollDown, Side, Panel, ArchiveView, ByRepo, AllDone, Scope }
+pub enum K { Up, Down, Fold, Unfold, Open, PageUp, PageDown, Filter, Pilot, Enter, Newline, Talk, Delegate, Back, Menu, SayYes, SayNo, Yes, SendBack, NextAttempt, Stop, Archive, Pin, OpenLink, Settings, PutBack, Undo, Find, Free, Close, Call, ChatMessage, ChatScrollUp, ChatScrollDown, Side, Panel, ArchiveView, PinnedView, ByRepo, AllDone, Scope }
 pub struct Key {
     pub id: K, pub name: &'static str, pub keys: &'static [&'static str], pub raw: &'static [&'static str], pub show: Option<&'static str>, pub gap: Option<&'static str>,
     pub group: Option<&'static str>, pub with: Option<&'static str>, pub fixed: bool, pub draft: bool, pub web: Option<&'static str>, pub help: Option<&'static str>,
@@ -69,7 +69,7 @@ pub static KEYS: &[Key] = &[
     Key { id: K::Archive, name: "archive", keys: &["ctrl+a"], raw: &[], show: None, gap: None, group: Some("ctrl"), with: None, fixed: false, draft: false, web: Some("Archive"), help: None, hint: Some("restore this task"),
         doc: Some("archive the selected task, or restore it from the archive. Archiving closes its space (its agent ends) and frees its temporary files; its worktree, branch and history stay. Restoring starts nothing. On a project's row (a repo's heading, grouped by repo, {byRepo}): archive the whole project with its tasks, after a yes when one of them works, waits or is to do; in the archive, on an archived project's heading: restore it with its tasks as they were") },
     Key { id: K::Pin, name: "pin", keys: &["ctrl+p"], raw: &[], show: None, gap: None, group: Some("ctrl"), with: None, fixed: false, draft: false, web: Some("Pin"), help: None, hint: None,
-        doc: Some("pin the selected task to the top, or unpin it") },
+        doc: Some("pin the selected row, or unpin it: a task, a project's row or a machine's row (here or on another machine). Nothing moves: the row gets a pin mark `⚑` and shows in the Pinned tab, {pinnedView} ([pinned.md](pinned.md))") },
     Key { id: K::OpenLink, name: "openLink", keys: &["ctrl+d"], raw: &[], show: None, gap: None, group: Some("ctrl"), with: None, fixed: false, draft: false, web: Some("Open the link"), help: None, hint: Some("open its report"),
         doc: Some("open the selected task's link in the browser: its report when it has one ([research.md](research.md#where-a-report-goes)), else its pull request. It opens with this machine's own opener (`open` on macOS, `xdg-open` on Linux with a display). Where nothing can open it (no opener, ssh without a display) it copies the link instead (OSC 52, as the board's copy does, [mouse.md](mouse.md)) and says so. On the web board the page opens it. On a task with neither it does nothing") },
     Key { id: K::Settings, name: "settings", keys: &["ctrl+e"], raw: &[], show: None, gap: None, group: Some("ctrl"), with: None, fixed: false, draft: false, web: Some("Settings"), help: None, hint: None,
@@ -98,6 +98,8 @@ pub static KEYS: &[Key] = &[
         doc: Some("the whole task (on an automation's row: the whole automation; on a coordinator's row: the coordinator, with its last wakes while its autopilot is on), full screen, and back to the list") },
     Key { id: K::ArchiveView, name: "archiveView", keys: &["alt+a"], raw: &[], show: None, gap: None, group: Some("alt"), with: None, fixed: false, draft: false, web: Some("Show the archive"), help: None, hint: None,
         doc: Some("the archive, and back to the board") },
+    Key { id: K::PinnedView, name: "pinnedView", keys: &["alt+i"], raw: &[], show: None, gap: None, group: Some("alt"), with: None, fixed: false, draft: false, web: Some("Pinned"), help: None, hint: None,
+        doc: Some("the Pinned tab, and back to the board: only what you pinned, a machine with its projects and tasks under it, a project with its tasks, a task alone, each under its machine and project. The board remembers which tab shows ([pinned.md](pinned.md))") },
     Key { id: K::ByRepo, name: "byRepo", keys: &["alt+s"], raw: &[], show: None, gap: None, group: Some("alt"), with: None, fixed: false, draft: false, web: Some("Group by repo"), help: None, hint: None,
         doc: Some("how the list is grouped, in turn: by status, by repo (each group under its repo's name; a row's tag never names a repo), by machine (each machine under its own heading, its tasks under it by how much they need you)") },
     Key { id: K::AllDone, name: "allDone", keys: &["alt+d"], raw: &[], show: None, gap: None, group: Some("alt"), with: None, fixed: false, draft: false, web: Some("Show all done"), help: None, hint: None,

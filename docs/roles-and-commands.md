@@ -54,7 +54,7 @@ this to the board" without being told how.
 ## Commands
 
 `add`, `list`, `report`, `describe`, `delegate`, `after` ([one task after another](after.md)), `tell`, `stop`,
-`approve`, `review`, `retry`, `fix`, `finish`, `details`, `pin`, `archive`, `restore`, `clear`, `set`, `unset`, `show`,
+`approve`, `review`, `retry`, `fix`, `finish`, `details`, `pin`, `unpin` ([pins](pinned.md)), `archive`, `restore`, `clear`, `set`, `unset`, `show`,
 `automations` ([automations](automations.md)), `machines` ([other machines](other-machines.md)), `install`, `update`
 ([installing](install.md)), `remove-extras`.
 
@@ -75,6 +75,7 @@ Coordinator's closing line use them too):
 | `archive --done [--repo NAME]` | `Archived 50 done tasks of mstars.`, and what it left out: `Left out: 1 done but pinned, 2 working.` |
 | `archive --repo NAME`, `restore --repo NAME` (`--on MACHINE`: another machine's) | `Archived mstars and its 6 tasks.`, `Restored mstars and its 6 tasks.`, and the tasks it stopped first ([archiving a project](board.md#archiving-a-project)) |
 | `approve` | `approved` |
+| `pin`, `unpin` (a task, a machine or a project; `--on MACHINE`: another machine's project) | `proj/12: pinned`, `vm-str: pinned`, `mstars on vm-b: unpinned` ([pins](pinned.md)) |
 | `stop` | `stopped`, and what it ended beside the agent: `proj/12: stopped. Ended what it started: bun …/check (pid 812).` |
 
 `stop` interrupts the agent and keeps it, so a reply goes on, and ends what it started for the task: every process

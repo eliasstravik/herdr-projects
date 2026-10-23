@@ -12,7 +12,7 @@ working colour. The task panel says the same under Status, as `Now`.
 | `Ctrl+L` | `Merging…` (after the `y`), `Approving…`, `Trying again…` or `Finishing as it is…`, depending on what it says yes to |
 | `Ctrl+R` | `Sending back…` |
 | `Ctrl+A`, `Ctrl+Z` | `Archiving…`, `Restoring…` |
-| `Ctrl+P` | `Pinning…`, `Unpinning…` |
+| `Ctrl+P` (on a task, and on a machine's or a project's row, here or on its machine) | `Pinning…`, `Unpinning…` |
 | `y` when picking an attempt | `Keeping attempt B…` |
 | `Alt+O` | `Opening…` (until its pane opens) |
 | `Space`, `Ctrl+S`, `Ctrl+X` on an automation | `Turning on…`, `Turning off…`, `Firing…`, `Removing…` |

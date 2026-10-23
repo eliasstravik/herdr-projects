@@ -5,7 +5,7 @@ how many stand in each status. The list sorts the tasks by what they need from y
 agent.
 
 ```
- herdr-projects  proj · PRJ
+ herdr-projects   Board   Pinned  proj · PRJ
  All 48   Coordinators 4   Needs you 3   Working 2   Ready 1   To do 12   Done 30   Automations 0
  ○ ▾ vm-str  1 project · 48 tasks                                                       5m ago
    ▾ needs you
@@ -35,8 +35,11 @@ agent.
 
 ## The header
 
-One line: the board's name and the repo new tasks go to (`herdr-projects  proj · PRJ`), with no folder path. Whose
-board shows and how many tasks stand in each group are on the filter row under it.
+One line: the board's name, its two tabs and the repo new tasks go to (`herdr-projects   Board   Pinned  proj · PRJ`),
+with no folder path. Whose board shows and how many tasks stand in each group are on the filter row under it.
+
+- **The tabs:** `Board` is this list, `Pinned` only what you pinned ([pins and the Pinned tab](pinned.md)). The one
+  shown is lit; the other says in red how many of its rows need you. `Alt+I` or a click switches.
 
 - In the archive it says how many tasks are archived (`archive · 7 archived`), and there is no filter row.
 - A find (`Ctrl+F`) has a line of its own under the filter row, in the accent colour, saying what it is, how many tasks
@@ -94,7 +97,8 @@ Tasks stand in five groups, in the order they need you:
 
 - **First what waits for you**, then what is being worked on (the agent, the reviewer, the board's check), then to do,
   then done. Done is history, so it is last: however long it grows, it never pushes the to-dos down.
-- **A pinned task** stays on top, above all of them.
+- **A pinned task** (or project, or machine) stays where it is, with a pin mark `⚑` after its name; the Pinned tab
+  (`Alt+I`) shows only what is pinned ([pins and the Pinned tab](pinned.md)).
 - **Grouped by repo or by machine** (`Alt+S`), each repo's or machine's rows follow the same order, so a repo's done rows are below its to-dos.
 - **Only the latest five done tasks show.** The line under them counts the rest (`↓ 73 more done (alt+d shows them)`),
   and `Alt+D` shows them all.

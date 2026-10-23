@@ -26,6 +26,7 @@ pub mod pilot;
 pub mod setup;
 pub mod shows_row;
 pub mod skills;
+pub mod tabs;
 pub mod talk;
 pub mod textbox;
 pub mod layout;

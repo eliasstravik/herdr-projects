@@ -99,7 +99,7 @@ pub fn list_of(s: &State, t: &Theme) -> Value {
     }
     let home = crate::store::files::user_home().display().to_string();
     let unread = unread(s);
-    let empty = if !s.rows.is_empty() || (!unread.is_empty() && s.scope != "*") { "" } else if !s.filter.is_empty() { "Nothing matches." } else if s.archive_view { "No archived tasks." } else { "Nothing here yet. Type what needs doing." };
+    let empty: String = if !s.rows.is_empty() || (!unread.is_empty() && s.scope != "*") { String::new() } else if !s.filter.is_empty() { "Nothing matches.".into() } else if s.archive_view { "No archived tasks.".into() } else if s.pinned_view { crate::board::update::pinned::empty_says() } else { "Nothing here yet. Type what needs doing.".into() };
     json!({
         "head": {
             // The repo new tasks go to, by its name: no folder path, and nothing for the home folder.
