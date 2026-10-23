@@ -127,5 +127,8 @@ fn merge_closes_is_one_tasks_own_list_of_issue_numbers_shown_by_show() {
     write(json!({ "merge": { "closes": [9] } }));
     let other = w.add("Other");
     assert_eq!(setting("merge.closes", Some(&task(&other))), json!("none"));
-    assert!(!show_text(&you()).contains("merge.closes"));
+    // the list of every task's settings leaves it out, and its last line says it is there
+    let shown = show_text(&you());
+    assert!(!has(&shown, r"\n[ *] merge\.closes"), "{shown}");
+    assert!(shown.ends_with("\n\nSet on one task only: merge.closes (add … --merge.closes, show <id>)"), "{shown}");
 }

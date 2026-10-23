@@ -108,7 +108,9 @@ fn the_home_space_under_another_label_is_still_found_and_a_tab_that_is_there_is_
     assert_eq!(agents(&w).len(), 1); assert_eq!(calls_of(&w, "^agent start").len(), starts); assert_eq!(calls_of(&w, "^(tab|workspace) create").len(), made);
     assert_eq!(labels(&w), vec!["tmp"]); assert_eq!(get(&w).s("pane"), now.s("pane")); assert_eq!(get(&w).s("space"), "w1"); assert!(get(&w).at("workspace").is_null());
     assert_eq!(get(&w).at("run").s("kind"), "claude"); assert_eq!(active(&w.socket, &get(&w)).unwrap_or_default(), first.s("session"));
-    assert_eq!(prompts_of(&w)[prompts_of(&w).len() - 2..].to_vec(), vec!["two", "again"]);
+    // which rules it started with went with the file: it is told once to read them again
+    let note = format!("[The board was updated: your standing rules in {} changed; read them again.]", sw::coordinator::state::home(&w.socket).join("AGENTS.md").display());
+    assert_eq!(prompts_of(&w)[prompts_of(&w).len() - 2..].to_vec(), vec!["two".to_string(), format!("{note}\n\nagain")]);
     // a tab of that name in another folder is the human's: left alone, and the Coordinator gets its own
     stop(&w.socket).unwrap(); drain();
     let theirs = api.tab_create("w1", &w.root_str(), "Coordinator", &[]).unwrap().at("root_pane").clone();
