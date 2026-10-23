@@ -12,12 +12,14 @@ after a cut-off turn, the reviewer's brief, and what you say to the Coordinator.
 |---|---|
 | `Starting` (or `About to continue`) | the board is waiting for the program to come up, or checking the text went in |
 | `Has not started yet: pressing enter again` | the text sits in the box; the board presses enter again |
-| **Not started: its instructions sit unsent in its box** | still sitting there 40 seconds after the last enter |
+| **Not started: its instructions sit unsent in its box** | still sitting there 40 seconds after the last enter, or the text never reached the agent at all (3 minutes, below) |
 
 While it waits, the row never says `working` or `finishing`.
 
 ## A task shown as not started
 
+- **Look at its pane in the error.** The error's detail ends with the last lines of the agent's terminal, read when the
+  board gave up: the text still in the box, an empty box, or whatever the program shows instead.
 - **Retry**: the "yes" key on the board, or `herdr-projects retry <id>`. It ends the agent's program, starts it again in
   the same pane and hands it the same text, word for word. The program is ended first because its box may still hold
   the old text, and typing on top would send it twice.
@@ -54,6 +56,13 @@ enter that follows (Herdr presses it 0.3 seconds after the text). Nothing was se
      then 20. It never types the text a second time.
    - An agent Herdr cannot classify (status `unknown`) is checked too: its counters and saved conversation still say
      whether it moved.
+   - **Counters that moved are not proof on their own.** A program that only draws its screen again moves Herdr's
+     counters too, with nothing in its box. When the counters moved but the agent was never seen working and its saved
+     conversation does not hold the text yet, the board keeps a light mark and looks again on its passes. It is
+     settled the moment the agent works, the words show up in its saved conversation, or the task moves on. Still
+     unsettled after 3 minutes, with the agent at rest, the board reads its pane once: the text not there either means
+     it never reached the agent, and the task says **Not started**, as above. The mark holds nothing back meanwhile: a
+     turn that ends goes to the finish line as usual.
 3. **It says so** on the row, as in the table above.
 
 ### A message typed while the agent is mid-turn
@@ -82,7 +91,9 @@ on the message is delivered: the turn's end, however much later, is the answer t
 |---|---|---|
 | `HERDR_PROJECTS_READY_MS` | 60000 | the longest the board waits for a started program to draw its screen; 0 types at once |
 | `HERDR_PROJECTS_SUBMIT_MS` | 5000 | the wait before the first extra enter; each later wait is twice the one before |
+| `HERDR_PROJECTS_CONFIRM_MS` | 180000 | how long counters that moved without a sign of work wait for a proof that the agent took the text |
 
 Very long text is handed over in a file instead: [when an agent could not start](could-not-start.md#long-rules-and-long-messages).
 
-The code is `crates/flow/src/submit.rs`. What was measured on real programs is in [checked on Herdr](checked-on-herdr.md).
+The code is `crates/flow/src/submit.rs`, with `submit/unconfirmed.rs` (counters that moved alone) and
+`submit/give_up.rs` (the task failed as not started, with its pane). What was measured on real programs is in [checked on Herdr](checked-on-herdr.md).
