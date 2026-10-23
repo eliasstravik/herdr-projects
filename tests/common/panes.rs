@@ -39,6 +39,8 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
             return ok(json!({ "type": "pane_layout", "layout": if own.is_object() { own } else { json!({ "area": area, "zoomed": false, "focused_pane_id": p.at("pane_id"), "panes": [{ "pane_id": p.at("pane_id"), "focused": true, "rect": area }], "splits": [], "tab_id": p.at("tab_id"), "workspace_id": p.at("workspace_id") }) } }));
         }
         "list" if st.b("paneListFails") => return fail("timeout", "timed out"),
+        // as herdr 0.9.3 answers for a space that is closed
+        "list" if flag("--workspace").is_some_and(|w| !st.arr("workspaces").iter().any(|x| x.s("workspace_id") == w)) => return fail("workspace_not_found", "workspace not found"),
         "list" => { let w = flag("--workspace"); let ps: Vec<Value> = st.arr("panes").iter().filter(|p| w.as_deref().map(|w| p.s("workspace_id") == w).unwrap_or(true)).map(F::pane_out).collect(); return ok(json!({ "type": "pane_list", "panes": ps })); }
         _ => {}
     }

@@ -27,6 +27,26 @@ its program keeps for itself (Claude Code's scratchpad folder, emptied), so the 
 what it makes after that goes in the sweep once nobody talked to it for an hour. While its agent works, nothing is
 touched.
 
+### What it left running
+
+Right before the worktree of a done or removed task goes, what still runs from that worktree or from its temporary
+folder is ended, by the rules of `stop` ([roles and commands](roles-and-commands.md)): the dev server or mock gateway
+its agent started for a visual check, also one that left the agent's terminal (handed to init, so nothing showed its
+space in use), and what its agent launched in its terminal. Never what runs in another of its panes (yours, its
+reviewer's), the board's own runs, or anything in your own checkout; and where herdr does not say what runs in its
+panes, nothing from its folders. Its line says what went, and names what still runs for you to end: what is not the
+board's to end, what would not end, what was started for the task and runs elsewhere now, and, where herdr does not
+say, what runs from its folders:
+
+```
+Merged into main. Ended what it started: node …/vite.js (pid 81234). Still running, end it yourself: node …/mock.js
+(pid 81240), in /home/me/wt/proj/work-12-x, from another of its panes.
+```
+
+`herdr-projects details <id>` lists what still runs under `stillRunning`. Removing a task (`clear`) says the same in
+its answer. A worktree that is kept ends nothing. Archive keeps everything, so it ends nothing either: its line only
+names what still runs from the worktree it keeps (`Still running, end it yourself: node …/vite.js (pid 81234), in …`).
+
 ## The sweep
 
 The sweep removes what tasks that ended before left: it runs when the board opens (when the last sweep is over an hour

@@ -47,7 +47,7 @@ fn archive_restore_a_reply_that_starts_it_again_and_clear_that_keeps_unsaved_wor
     let p = prompts(&w, t.at("link").s("pane"))[0].clone();
     assert!(p.contains("Continue from the state of this branch") && p.contains("Did v1.") && p.contains("one more thing"), "{p}");
     std::fs::write(std::path::Path::new(t.s("worktree")).join("unsaved.txt"), "x\n").unwrap();
-    let (_, kept) = sw::actions::archive::clear(&id).unwrap();
+    let (_, kept, _) = sw::actions::archive::clear(&id).unwrap();
     assert!(kept[0].contains("uncommitted changes"), "{kept:?}");
     assert!(std::path::Path::new(t.s("worktree")).exists());
     assert!(sw::store::tasks::get(&id).is_none());

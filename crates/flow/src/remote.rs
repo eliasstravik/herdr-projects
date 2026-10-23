@@ -218,7 +218,7 @@ pub fn door_with(what: &str, req: &Value, bytes: &[u8]) -> Res<Value> {
                     }
                     Ok(a)
                 }
-                "clear" => { let (cid, kept) = archive::clear(&id)?; ok(if kept.is_empty() { format!("{cid}: removed") } else { format!("{cid}: removed. Kept, so no work is lost: {}", kept.join(", ")) }) }
+                "clear" => { let (cid, kept, ends) = archive::clear(&id)?; ok(crate::leftovers::then_say(&if kept.is_empty() { format!("{cid}: removed") } else { format!("{cid}: removed. Kept, so no work is lost: {}", kept.join(", ")) }, &ends.said())) }
                 other => Ok(json!({ "ok": false, "msg": format!("Unknown action {other}") })),
             }
         }

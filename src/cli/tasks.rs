@@ -152,9 +152,9 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
         "archive" => { let t = archive::archive(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: archived", t.s("id"))) }
         "restore" | "unarchive" => { let t = archive::restore(&need(1, "an id")?)?; (shown_of(t.s("id")), format!("{}: restored", t.s("id"))) }
         "clear" => {
-            let (id, kept) = archive::clear(&need(1, "an id")?)?;
+            let (id, kept, ends) = archive::clear(&need(1, "an id")?)?;
             let text = if kept.is_empty() { format!("{id}: removed") } else { format!("{id}: removed. Kept, so no work is lost: {}", kept.join(", ")) };
-            (json!({ "id": id, "kept": kept }), text)
+            (json!({ "id": id, "kept": kept, "stillRunning": ends.left }), crate::leftovers::then_say(&text, &ends.said()))
         }
         "set" | "unset" | "show" => {
             let coord = if flags.b("main-coordinator") { Some("main".to_string()) } else if flags.b("machine-coordinator") { Some("machine".into()) } else { flag("project-coordinator").map(|r| format!("project:{r}")) };
