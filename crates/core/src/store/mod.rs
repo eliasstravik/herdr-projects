@@ -27,5 +27,6 @@ pub mod runs;
 pub mod said_by;
 pub mod settings;
 pub mod settings_list;
+pub mod task_cache;
 pub mod tasks;
 pub mod titles;
