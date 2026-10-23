@@ -15,9 +15,9 @@ use std::collections::BTreeMap;
 /// Another machine, as the board knows it: its tasks as rows, its automations, its Coordinator as it sent it
 /// (coordinator/far.rs) and its machine's and repos' coordinators (`coords`, by level), and why it did not answer; `sidebar`: its herdr list of machines as it last sent it
 /// (remote/sidebar.rs), None from one that sends none; `pilots`: its coordinators' autopilot by level (autopilot/far.rs),
-/// Null from a machine on an older version.
+/// Null from a machine on an older version; `archived`: its archived projects (remote/projects.rs).
 #[derive(Clone, Debug, Default)]
-pub struct Remote { pub machine: crate::remote::Machine, pub items: Vec<crate::board::state::Rec>, pub autos: Vec<Obj>, pub ok: bool, pub busy: bool, pub fail_at: i64, pub why: Option<Value>, pub version: String, pub coord: Value, pub coords: Value, pub pilots: Value, pub sidebar: Option<Vec<crate::remote::sidebar::Entry>> }
+pub struct Remote { pub machine: crate::remote::Machine, pub items: Vec<crate::board::state::Rec>, pub autos: Vec<Obj>, pub ok: bool, pub busy: bool, pub fail_at: i64, pub why: Option<Value>, pub version: String, pub coord: Value, pub coords: Value, pub pilots: Value, pub sidebar: Option<Vec<crate::remote::sidebar::Entry>>, pub archived: Vec<String> }
 
 #[derive(Clone, Debug, Default)]
 pub struct Data {

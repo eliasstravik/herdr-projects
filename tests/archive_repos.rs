@@ -11,6 +11,9 @@ use sw::board::update::heads::group_id;
 use sw::cli::flags::parse;
 use sw::json::*;
 
+/// Another machine's project, archived and restored from this board and from the shell (`--on`).
+mod far_machine;
+
 fn argv(args: &[&str]) -> Vec<String> { args.iter().map(|s| s.to_string()).collect() }
 /// The command run in this process, in the world's repo: what --json prints and what a person reads.
 fn run(w: &World, args: &[&str]) -> Result<(serde_json::Value, String), String> {

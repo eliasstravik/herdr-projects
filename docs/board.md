@@ -134,11 +134,21 @@ A project you are done with for now leaves the board whole, and comes back as it
   every task archived with it comes back as it was (to do is to do again, done is done; one that was stopped stays
   stopped until you start it), and its automations are on again. Its coordinator starts with your next message to it,
   as a stopped one does. A task you had archived on its own before stays in the archive.
+- **Another machine's project** goes the same way, from the board on every machine (`Alt+M`): `Ctrl+A` on its row
+  asks that machine to archive it, and that machine does it itself, so its coordinator stops and its automations go
+  off there. The question is the same (`Archive autopilot-tictactoe and its 3 tasks on vm-str?`), worked out from
+  that machine's tasks as the board last read them; that machine reads them again before it acts, and refuses one that
+  changed in a way that would have changed the question (a task of it works now where the board asked nothing, or it
+  holds more tasks than the board counted): `… changed on vm-str since your board read it: … Nothing was archived:
+  look again, then archive it.` In the archive its heading stands under its machine, and `Ctrl+A` there restores it.
+  A machine that cannot be reached changes nothing, and the board says so (`vm-str did not answer: …`); one on an older
+  version says to update it there first.
 - **From the shell:** `herdr-projects archive --repo mstars` (`Archived mstars and its 6 tasks. Stopped first:
   MST-4.`) and `herdr-projects restore --repo mstars` (`Restored mstars and its 6 tasks.`). They do not ask.
+  `--on vm-str` does it on another machine (`vm-str: Archived autopilot-tictactoe and its 3 tasks.`), as `add --on`
+  adds a task there.
 - The web board does the same: select the project's row, then **Archive** among its coordinator's buttons (Open) or in
-  More…; in the archive its row, selected, has **Restore this project** under it. Only this machine's projects:
-  another machine's are archived there.
+  More…; in the archive its row, selected, has **Restore this project** under it. Another machine's projects too.
 
 ### The list says what it hides
 
