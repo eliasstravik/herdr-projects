@@ -25,6 +25,7 @@ const FRESH: &[&str] = &[
     "worktree",
     "branch",
     "from",
+    "fromNamed",
     "baseSha",
     "pr",
     "prMerged",
