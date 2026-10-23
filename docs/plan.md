@@ -71,8 +71,8 @@ A look at a plan is not one of the task's review rounds: the first review of the
 
 The agent builds that plan.
 
-- The plan's own writer hears `Your plan is approved` in its conversation. Claude Code is started again in the same
-  conversation with its usual access, since its plan mode does not end by itself.
+- The plan's own writer hears `Your plan is approved` in its conversation: its program is ended and started again in the
+  same conversation, outside the read-only mount the plan was written in.
 - After a planner, the working agent starts with the task and the plan's file.
 - The review of the finished work is told of the approved plan. It checks the work against the task **and** the plan,
   and says where the build left the plan (`Left the plan` under the review in the task panel). Leaving the plan is a
@@ -85,13 +85,12 @@ The agent builds that plan.
 It is told to change nothing; to write what it understood, what it will change and where, in which order, how it will be
 checked and what it is unsure of; and to stop.
 
-- **Claude Code uses its own plan mode**: it starts with `--permission-mode plan` in place of its access flags. In that
-  mode it cannot edit unasked, and it presents its plan with its own tool (`ExitPlanMode`), which would ask in the
-  terminal. The board takes the plan there instead, through a hook it passes at launch, and tells the agent to stop.
-  The hook answers the question `ExitPlanMode` would ask (Claude Code's `PermissionRequest`) with a `deny`, so the
-  terminal shows `Denied by PermissionRequest hook`, a refusal, not a `hook error`.
-- **Every other program** (Codex, pi, Herdr's others: [agents](agents.md)) saves the plan as a file in the task's own
-  folder.
+- **Every program plans with its usual access** (Claude Code, Codex, pi, Herdr's others: [agents](agents.md)) and saves
+  the plan as a file in the task's own folder. The [read-only mount](#nothing-in-the-repo-is-changed-before-the-yes)
+  keeps the repo as it is, so the writer can still save notes, publish a page or write its closing note without
+  stopping at its pane for a yes.
+- **Claude Code's own plan mode is not used**: it asks at the pane for every write outside its plan file. A Claude Code
+  that an older board started in it still has its plan taken when it presents it, until the next release.
 
 ### A planner of its own (`plan.agent: <program>`)
 
@@ -171,7 +170,7 @@ board's own look, and the hold on the build, are for the rest.
   - Codex: `-c sandbox_mode="danger-full-access"` (with full access, `--dangerously-bypass-approvals-and-sandbox`
     already has it off). Its approvals stay as they were.
   - Claude Code: `"sandbox": {"enabled": false}` in the settings the board passes it for that launch (`--settings`),
-    in case your own settings turn its sandbox on. Its plan mode stays on.
+    in case your own settings turn its sandbox on.
   - pi has no sandbox of its own.
   After the yes the program starts again the usual way, its own sandbox as you set it.
 - `HERDR_PROJECTS_SANDBOX` picks the tool outright: `bwrap`, `sandbox-exec`, or `none` (no mount: no plan is written in
