@@ -31,7 +31,7 @@ pub fn head_lines(s: &mut State, t: &Theme, w: usize, h: usize) -> Vec<Inked> {
     // The counts of each status are on the filter row; the archive has none, so its count stays here.
     // The repo with its key beside it (`gtm-agent · AGT`), in the header's quiet ink as the rest of it.
     let where_ = if s.archive_view { "archive".to_string() } else { crate::board::tags::repo_with_key(&repo_label(&s.data.repo), s.data.keys.get(&s.data.repo).map(|k| k.as_str()).unwrap_or("")) };
-    let projects = match s.data.archived.len() { 0 => String::new(), 1 => "1 project, ".into(), p => format!("{p} projects, ") };
+    let projects = match crate::board::update::heads::archived_heads(s).len() { 0 => String::new(), 1 => "1 project, ".into(), p => format!("{p} projects, ") };
     let tally: Vec<String> = if s.archive_view { vec![format!("{projects}{} archived", c("archived"))] } else { vec![] };
     let mut rest: Vec<String> = vec![];
     if s.scope.is_empty() || s.scope == "*" || s.archive_view { rest.push(where_); }

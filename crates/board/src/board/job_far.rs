@@ -33,6 +33,7 @@ pub fn dispatch(m: Machine, text: String, delegate: bool, about: String, to: Str
 }
 /// One of the exact actions, on a task or an automation that lives on another machine.
 pub fn far(m: &Machine, host: &str, action: &str, req: Value, quiet: bool) -> Done {
+    if crate::remote::projects::is_project_action(action) { return project(m, host, action == "project-archive", &req); }
     let mut req = obj(req);
     req.put("action", action);
     // A task's work settings travel with whatever starts its agent: what this machine says for it is worked out here.
@@ -60,6 +61,17 @@ pub fn far(m: &Machine, host: &str, action: &str, req: Value, quiet: bool) -> Do
             if action == "set" || action == "auto-set" { d.then.push(Then::Saved(req.t("name"))); }
             if action == "auto-remove" { d.then.push(Then::AutoGone); }
             d
+        }
+    }
+}
+/// A project of another machine archived or restored there (remote/projects.rs), asked from what the board saw of it.
+fn project(m: &Machine, host: &str, archive: bool, req: &Value) -> Done {
+    let seen = req.at("seen").is_object().then(|| crate::remote::projects::Seen { tasks: req.at("seen").i("tasks").max(0) as usize, asked: req.at("seen").b("asked") });
+    match crate::remote::projects::ask_there(m, archive, req.s("repo"), seen) {
+        Err(e) => Done::fail(e.msg),
+        Ok(j) => {
+            let said = if archive { format!(" {} shows it; {} there brings it back.", key_name("archiveView"), key_name("archive")) } else { String::new() };
+            Done::say(format!("{host}: {}{said}", j.s("msg")), if j.s("msg").contains("Still on the board") { Ink::Yellow } else { Ink::Green })
         }
     }
 }
