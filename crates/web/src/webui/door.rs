@@ -115,9 +115,10 @@ pub fn same_origin(h: &Head) -> bool {
     if let Some(s) = site { if s != "same-origin" { return false; } }
     match h.header("origin") { None => site.is_some(), Some(o) => o.split("://").nth(1).map(|x| x.split('/').next().unwrap_or("")) == h.header("host") }
 }
-/// What a watching device may not do; and what it may (its own selection and filter, a key that only shows).
+/// What a watching device may not do; and what it may (its own selection and filter, the filter row and its grouping
+/// chip, a key that only shows). A call the page makes that is in neither is not found (tests/web_door/calls.rs).
 pub const CHANGES: [&str; 3] = ["send", "set", "attach"];
-pub const LOOKS: [&str; 6] = ["press", "pick", "find", "fold", "scope", "dock"];
+pub const LOOKS: [&str; 8] = ["press", "pick", "find", "fold", "show", "group", "scope", "dock"];
 fn ours(mut client: TcpStream, head: &Head, rest: Vec<u8>, up: &dyn Upstream) {
     let path = head.path().to_string();
     let rel = path.get(BASE.len() + 1..).unwrap_or("").to_string();

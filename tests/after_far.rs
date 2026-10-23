@@ -62,7 +62,8 @@ fn a_machine_that_does_not_answer_keeps_it_waiting_and_says_since_when() {
     answers(&far, json!([ela("open", "", json!([]))]));
     let id = w.add("Use the new API");
     run(&["delegate", &id, "--after", "vm-str:ELA-3"]).unwrap();
-    let at = sw::clock::now();
+    // The clock held: a minute that turns between here and the pass would name another time.
+    let at = sw::clock::now(); sw::clock::set(Some(at));
     far.ends("vm-str", "after", "", "ssh: connect to host vm-str port 22: Connection timed out\n", 255);
     ask_and_pass(&w);
     let line = format!("queued after vm-str:ELA-3 · waiting for vm-str: not reachable since {}", sw::after::far::clock(at));
