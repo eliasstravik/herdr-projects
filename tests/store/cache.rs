@@ -1,13 +1,13 @@
 //! The task files a look at every task reads through this process's cache (store/task_cache.rs): nothing changed is
 //! nothing parsed again; a change is seen at the next look, made here or by another process; a task folder removed is
-//! gone, and an archived task leaves the list.
+//! gone, and an archived task leaves the list. The board's look shares the tasks read, with no copy of each.
 use crate::common;
 use common::*;
 use serde_json::json;
 use sw::json::*;
 use sw::store::files::{dir_of, write_json};
 use sw::store::task_cache::parsed;
-use sw::store::tasks::{create, list, patch, remove, set, ListOpts, Task};
+use sw::store::tasks::{create, list, patch, remove, set, shared, ListOpts, Task};
 
 /// The tasks a look at every task finds, and how many files it parsed for them.
 fn look(o: ListOpts) -> (Vec<Task>, usize) { let n = parsed(); let l = list(o); (l, parsed() - n) }
@@ -74,4 +74,18 @@ fn a_task_file_rewritten_in_place_by_another_process_is_seen_at_the_next_look() 
     assert!(look(ListOpts::default()).0.is_empty());
     std::fs::write(&f, &text).unwrap();
     assert_eq!(look(ListOpts::default()).0[0].s("title"), "Aaaa");
+}
+
+#[test]
+fn the_boards_look_shares_each_task_read_with_no_copy_until_its_file_changes() {
+    let w = world();
+    for n in 1..=2 { create(&w.root, &format!("Task {n}"), "", None).unwrap(); }
+    let (a, b) = (shared(ListOpts::default()), shared(ListOpts::default()));
+    assert!(a.iter().zip(&b).all(|(x, y)| std::sync::Arc::ptr_eq(x, y)), "the same tasks, not copies");
+    patch("proj/1", |t| { t.put("title", "Changed"); }).unwrap();
+    let c = shared(ListOpts::default());
+    let one = |l: &[std::sync::Arc<Task>], id: &str| l.iter().find(|t| t.s("id") == id).unwrap().clone();
+    assert!(!std::sync::Arc::ptr_eq(&one(&a, "proj/1"), &one(&c, "proj/1")) && one(&c, "proj/1").s("title") == "Changed");
+    assert!(std::sync::Arc::ptr_eq(&one(&a, "proj/2"), &one(&c, "proj/2")), "the one unchanged is still shared");
+    assert_eq!(one(&a, "proj/1").s("title"), "Task 1", "what was handed out before stays as it was");
 }

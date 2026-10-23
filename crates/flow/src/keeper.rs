@@ -15,7 +15,7 @@ use crate::herdr::{cli::{current_socket, socket_exists}, Herdr};
 use crate::housekeeping::{housekeeping, loose, spawn_loose, Force};
 use crate::json::*;
 use crate::runner::{inline, user_env};
-use crate::store::{files::{bin, data_dir, hold_lock, proc_start, read_obj, with_lock_wait, write_json, VERSION}, marks::due, repos::cwd_of, tasks::{list, update_wait, Change, ListOpts}};
+use crate::store::{files::{bin, data_dir, hold_lock, proc_start, read_obj, with_lock_wait, write_json, VERSION}, marks::due, repos::cwd_of, tasks::{shared, update_wait, Change, ListOpts}};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
@@ -172,7 +172,7 @@ pub fn keeper_work() -> i32 {
     let first = current_socket();
     loop {
         let mut sockets = vec![first.clone()];
-        for t in list(ListOpts::default()) { let s = t.at("link").t("socket"); if !s.is_empty() && !sockets.contains(&s) { sockets.push(s); } }
+        for t in shared(ListOpts::default()) { let s = t.at("link").t("socket"); if !s.is_empty() && !sockets.contains(&s) { sockets.push(s); } }
         let mut live = 0;
         for socket in &sockets {
             let ok = socket_exists(socket) && Herdr::new(Some(socket.clone())).alive();

@@ -1,14 +1,15 @@
 //! The task files as this process last read them, so that a look at every task (the board's each second, the keeper's,
 //! the web board's) parses only the files that changed since: a file is known by its inode, size and times, which every
 //! write changes (ours rename a new file over it). A file changed lately is also compared by its bytes, as two writes in
-//! the same tick of the file system's clock can leave its times as they were.
+//! the same tick of the file system's clock can leave its times as they were. The tasks are shared, not copied.
 use super::files::*;
+use super::tasks::{as_now, Task};
 use crate::json::*;
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// How long after its last change a file's times are trusted alone: well past any file system's clock tick.
@@ -16,7 +17,8 @@ const SETTLE: Duration = Duration::from_secs(2);
 /// What the file system says of a file: a write changes at least one of these, but in the tick it was read.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Stamp { ino: u64, size: u64, mtime: (i64, i64), ctime: (i64, i64) }
-struct Seen { stamp: Stamp, task: Option<Obj>, bytes: Option<Vec<u8>> }
+/// A file as read: its task in the names of this version (None: not a task), and its bytes until it settled.
+struct Seen { stamp: Stamp, task: Option<Arc<Task>>, bytes: Option<Vec<u8>> }
 /// The tasks folder they are in, and each task by its id.
 static SEEN: Mutex<Option<(PathBuf, HashMap<String, Seen>)>> = Mutex::new(None);
 thread_local! { static PARSED: Cell<usize> = const { Cell::new(0) }; }
@@ -30,10 +32,11 @@ fn settled(s: &Stamp, now: Duration) -> bool {
     let at = |(sec, ns): (i64, i64)| Duration::new(sec.max(0) as u64, ns.clamp(0, 999_999_999) as u32);
     at(s.mtime).max(at(s.ctime)) + SETTLE < now
 }
-fn parse(bytes: &[u8]) -> Option<Obj> { match serde_json::from_slice(bytes) { Ok(Value::Object(o)) if o.b("id") => Some(o), _ => None } }
-/// The tasks of `ids` as their files hold them now, those `keep` keeps (asked of the task as read). A file gone is
-/// gone from the cache too.
-pub fn read(ids: &[String], keep: &dyn Fn(&Obj) -> bool) -> Vec<Obj> {
+/// Converted once, when parsed: what converts a task reads nothing but the task (but for a task in the shape of the
+/// settings before their move, which reads your old file too; the move writes every such task before it writes that).
+fn parse(bytes: &[u8]) -> Option<Arc<Task>> { match serde_json::from_slice(bytes) { Ok(Value::Object(o)) if o.b("id") => Some(Arc::new(as_now(o))), _ => None } }
+/// The tasks of `ids` as their files hold them now, those `keep` keeps. A file gone is gone from the cache too.
+pub fn read(ids: &[String], keep: &dyn Fn(&Task) -> bool) -> Vec<Arc<Task>> {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
     let dir = tasks_dir();
     let mut guard = SEEN.lock().unwrap_or_else(|e| e.into_inner());
