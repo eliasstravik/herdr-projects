@@ -2,8 +2,8 @@
 //! the plan is approved. The plan belongs to the task: one file in the task's own folder on the board, written once
 //! and approved once, and whoever builds is handed that file (several attempts all build the same plan). What a task
 //! keeps of it, as `plan`: asked (when the step began), by (who approves), home (the working agent's own tab and pane
-//! while a planner of its own holds the task's), writer (the planner's program and model), mode (started in its own plan
-//! mode), at/words (when last written, its first line), rounds, was (the plan that went back), review, undone, locked,
+//! while a planner of its own holds the task's), writer (the planner's program and model), mode (started in the read-only
+//! mount, so started again after the yes), at/words (when last written, its first line), rounds, was (the plan that went back), review, undone, locked,
 //! ignored, approvedAt/approvedBy, usage/took. The steps are in plan/.
 pub mod build;
 pub mod lock;
@@ -12,7 +12,6 @@ pub mod review;
 pub mod sandbox;
 pub mod untouched;
 pub mod written;
-use crate::agents::adapter::plan_mode_args;
 use crate::json::*;
 use crate::store::files::artifacts_dir;
 use crate::store::settings::lookup::setting_text;
@@ -40,15 +39,11 @@ pub fn planner(t: &Obj) -> bool { open(t) && t.at("plan").b("home") }
 pub fn approved(t: &Obj) -> bool { t.at("plan").b("approvedAt") }
 /// The step is not over: no yes yet, or a yes whose build has not started.
 pub fn pending(t: &Obj) -> bool { t.at("plan").is_object() && !t.at("plan").b("built") }
-/// Started in its program's own plan mode: only there, and only while the step is open.
-pub fn plan_args(t: &Obj, kind: &str) -> Option<Vec<String>> { if open(t) { plan_mode_args(kind) } else { None } }
 
 const NOTHING: &str = "change nothing in this folder: add, edit and delete no file, commit nothing, and run nothing that writes into it. Read and run whatever you need to understand the task.";
 const WHAT: &str = "The plan says, in plain words: what you understand the task to ask for; what will be changed and where (the files); in which order; how it will be checked; and what you are unsure of or leave out.";
-fn how(t: &Obj) -> String {
-    if plan_args(t, t.s("agent")).is_some() { "Your program was started in its own plan mode: write the plan as that mode has you do it and present it for approval the way the mode asks. The board takes the plan from there and answers that it has it: stop then, and do not present it again until you are sent a message.".into() }
-    else { format!("Save it as {} (the board's own folder for this task, not the folder you work in), replacing an older one, then stop.", plan_file(t).display()) }
-}
+/// Every program, Claude Code too, plans with its usual access (the read-only mount is the guard) and saves the file.
+fn how(t: &Obj) -> String { format!("Save it as {} (the board's own folder for this task, not the folder you work in), replacing an older one, then stop.", plan_file(t).display()) }
 const AFTER: &str = "The board looks at this folder when you stop, and puts back whatever changed in it. The plan is then read and approved, or it comes back to you with words on what to change: write it again then, whole, the same way.";
 /// The last line of the first prompt, while the step is open: the rules say the rest.
 pub const FIRST: &str = "This task starts with a plan (your rules say how): write the plan and stop. Change nothing yet.";
