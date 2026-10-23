@@ -19,7 +19,7 @@ use crate::json::*;
 use crate::limits::run::granted;
 use crate::runner::{runner_alive, spawn_runner};
 use crate::store::{failures::failure_patch, files::{data_dir, has_tasks}, handovers::fresh_list, inbox::{pending_text, take_text, untake_text}, repos::cwd_of, tasks::{get, list, update_wait, Change, ListOpts, Task}};
-use crate::submit::{hand, not_started, note_sent, rest, took};
+use crate::submit::{hand, not_started, note_sent, rest, took, unconfirmed::taken};
 use std::path::Path;
 
 /// Stages in which a finished turn nobody saw start (a short turn, a herdr restart, a lock wait) still counts.
@@ -100,7 +100,7 @@ pub fn apply(id: &str, a: &Value, api: &Herdr) {
         if status == "working" { t.put("workedAt", now()); t.del("owedTurn"); } // herdr has seen it work: an idle after this is the end of a turn, not the wait before one (state.rs)
         // What the board typed in has been taken: the agent works, or has worked since.
         if t.at("sent").b("busy") { let r = rest(t.at("sent"), a); t.put("sent", r); } // typed into a running turn: only what it does once at rest says
-        else if t.at("sent").is_object() && took(t.at("sent"), Some(a), None) == Some(true) { t.put("sent", Value::Null); }
+        else if t.at("sent").is_object() && took(t.at("sent"), Some(a), None) == Some(true) { taken(t, a); } // on the counters' word alone, confirmed later (submit/unconfirmed.rs)
         // Told "not started", and now it works: you pressed enter in its terminal yourself.
         if t.b("unsent") && status == "working" && t.s("stage") == "failed" && t.at("failure").s("stage") == "send" { t.put("unsent", Value::Null); t.put("failure", Value::Null); }
         if a.at("agent_session").b("value") { let v = a.at("agent_session").at("value").clone(); t.put("session", v); }
