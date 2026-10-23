@@ -133,7 +133,7 @@ pub fn start_build_by(id: &str, g: &mut Guard, by: &str) -> Res<()> {
 /// of its own. The worktree, the branch and the tab the plan was written in are attempt A's.
 fn fan_out(g: &mut Guard, agents: &[String]) -> Res<Task> {
     let t = g.check()?;
-    let place: Obj = ["worktree", "branch", "from", "baseSha", "repoFile", "repoRefused", "root", "ownNote"].iter().filter(|k| t.contains_key(**k)).map(|k| (k.to_string(), t.at(k).clone())).collect();
+    let place: Obj = ["worktree", "branch", "from", "fromNamed", "baseSha", "repoFile", "repoRefused", "root", "ownNote"].iter().filter(|k| t.contains_key(**k)).map(|k| (k.to_string(), t.at(k).clone())).collect();
     let l = t.at("link").clone();
     let mut made = vec![];
     for (n, agent) in agents.iter().enumerate() {
@@ -152,7 +152,7 @@ fn fan_out(g: &mut Guard, agents: &[String]) -> Res<Task> {
         let s = t.at("link").at("socket").clone(); let w = t.at("link").at("workspace").clone();
         t.put("link", json!({ "socket": s, "workspace": w, "ownsWorkspace": true }));
         let p = t.obj_mut("plan"); p.put("built", now()); p.put("locked", false); p.del("ignored");
-        for k in FORGET.iter().chain(["worktree", "branch", "from", "baseSha", "startedOnce"].iter()) { t.del(k); }
+        for k in FORGET.iter().chain(["worktree", "branch", "from", "fromNamed", "baseSha", "startedOnce"].iter()) { t.del(k); }
     })?;
     flow::sidebar::tell_sidebar(&t);
     Ok(t)
