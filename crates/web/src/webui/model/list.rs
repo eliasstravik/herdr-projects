@@ -108,6 +108,9 @@ pub fn list_of(s: &State, t: &Theme) -> Value {
             "session": if s.data.session == "default" { String::new() } else { s.data.session.clone() },
             "machines": if s.scope == "*" { let l: Vec<String> = crate::board::update::remotes::others(s).into_iter().map(|m| { let n = crate::board::update::remotes::shown(s, &m.machine.label); if m.ok { n } else { format!("{n} (no answer)") } }).collect(); if l.is_empty() { "no others found".to_string() } else { l.join(", ") } } else { String::new() },
             "only": if s.all() && s.scope != "*" { s.scope.clone() } else { String::new() }, "filter": s.filter, "host": crate::remote::check::hostname(), "version": crate::store::files::VERSION,
+            // The tabs, as the terminal board's header has them (view/tabs.rs): which shows, and how many rows need you in
+            // each, so the page says what needs you in the tab not shown.
+            "tabs": { "pinned": s.pinned_view && !s.archive_view, "board": s.tab_needs.0, "pinnedNeeds": s.tab_needs.1 },
         },
         // The filter row under the header (shows.rs).
         "shows": super::shows::shows_of(s),

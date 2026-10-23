@@ -46,7 +46,8 @@ also after it closes.
   them.
 - **Nothing pinned:** one line says how to pin something.
 - **What needs you is never out of sight.** Pinning moves nothing, so all of it stays on the board. The tab that is
-  not shown says in red how many of its rows need you: `Board 3` while you look at the Pinned tab.
+  not shown says in red how many of its rows need you: `Board 3` while you look at the Pinned tab. On the web board
+  the pin button carries that count, and in the Pinned tab a red `3 need you on the board` takes you back.
 
 ## Where pins live
 

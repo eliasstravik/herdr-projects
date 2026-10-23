@@ -173,13 +173,17 @@ fn the_web_board_has_the_pinned_tab_its_chip_and_the_pin_mark() {
     let w = world();
     let [a, b] = <[String; 2]>::try_from(add(&w, &["One", "Two"])).unwrap();
     sw::actions::filing::set_pin(&b, true).unwrap();
+    mark(&a, json!({ "stage": "asks", "msg": "Which one?" })); // it needs you, and it is not pinned
     let s = common::board::web(&w, "board", json!({}));
     assert!(!s.at("flags").b("pinned") && s.at("list").at("shows").is_object());
+    assert_eq!(s.at("list").at("head").at("tabs"), &json!({ "pinned": false, "board": 1, "pinnedNeeds": 0 }));
     let titles = |s: &serde_json::Value| s.at("list").arr("groups").iter().flat_map(|g| g.arr("rows").iter().map(|r| (r.t("id"), r.t("title"))).collect::<Vec<_>>()).collect::<Vec<_>>();
     assert!(titles(&s).contains(&(b.clone(), "Two ⚑".into())) && titles(&s).contains(&(a.clone(), "One".into())), "{:?}", titles(&s));
     let s = common::board::web(&w, "press", json!({ "id": "pinnedView" }));
     assert!(s.at("flags").b("pinned") && !s.at("flags").b("byRepo"), "no By repo chip in the tab: {}", s.at("flags"));
     assert!(s.at("list").at("shows").is_null(), "no filter row");
+    // What needs you on the board is still counted, for the page's pin button and its chip (board.js).
+    assert_eq!(s.at("list").at("head").at("tabs"), &json!({ "pinned": true, "board": 1, "pinnedNeeds": 0 }));
     assert_eq!(titles(&s), vec![(b.clone(), "Two ⚑".into())]);
     // Its filter and its grouping stay as they are.
     let s = common::board::web(&w, "group", json!({})); assert!(s.at("flags").b("pinned")); assert_eq!(titles(&s).len(), 1);
