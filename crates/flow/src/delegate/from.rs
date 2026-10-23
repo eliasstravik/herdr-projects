@@ -9,7 +9,7 @@ use crate::store::failures::failure_patch;
 use crate::store::fetch;
 use crate::store::repos::git_out;
 use crate::store::settings::from::named;
-use crate::store::settings::lookup::{setting, setting_text};
+use crate::store::settings::lookup::setting_text;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -36,14 +36,11 @@ fn main_ref(root: &Path, from: &str) -> String {
     "HEAD".into()
 }
 /// The commit-ish a task's worktree starts from: `origin/<branch>` for a named branch, fetched now. Refused, with the
-/// reason, for a branch origin does not have, a repo with no origin, or a task that would merge locally (`merge.pr`
-/// off): that lands on your checkout's branch, which is not the one named.
+/// reason, for a branch origin does not have or a repo with no origin. With `merge.pr` off it lands there by a push of
+/// its own (land/direct.rs), never on your checkout's branch.
 pub fn base_ref(root: &Path, t: &Obj) -> Res<String> {
     let from = setting_text("workspace.from", Some(t));
     let Some(b) = named(&from) else { return Ok(main_ref(root, &from)) };
-    if setting("merge.pr", Some(t)) != json!(true) && setting("research.only", Some(t)) != json!(true) {
-        crate::refuse!("workspace.from is {b}, and merge.pr is off: a local merge lands on the branch your checkout is on, not on {b}, so a task cannot start from a named branch without a pull request yet. Turn merge.pr on (herdr-projects set merge.pr true), or set workspace.from to main or here.");
-    }
     if !has_origin(root) { crate::refuse!("workspace.from is {b}, a branch at the remote, and this repo has no remote named origin. Add the remote, or set workspace.from to main or here."); }
     let spec = format!("+refs/heads/{b}:refs/remotes/origin/{b}");
     let ran = fetch::with_repo_lock(root, || Ok(quiet_git(root, &["fetch", "--no-tags", "origin", &spec]).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())
@@ -56,13 +53,16 @@ pub fn base_ref(root: &Path, t: &Obj) -> Res<String> {
     if git_out(root, &["rev-parse", "--verify", "-q", &format!("refs/remotes/origin/{b}")]).is_ok() { return Ok(format!("origin/{b}")); }
     crate::refuse!("Could not fetch {b} (workspace.from) from origin, and it was never fetched here: {said}. Make sure origin can be reached without a password (git fetch origin {b}), then delegate again.")
 }
+/// Does this task's start name a branch (`workspace.from develop`)? Kept on it as `fromNamed`: it then lands on that
+/// branch, also when that is origin's main (sync.rs).
+pub fn named_start(t: &Obj) -> bool { named(&setting_text("workspace.from", Some(t))).is_some() }
 /// A start refused before anything was made: the task waits, failed, with the reason and what to do.
 pub fn refuse_start(g: &mut Guard, why: &str) -> Res<()> {
     let first = why.split(". ").next().unwrap_or(why).trim_end_matches('.').to_string();
     let t = g.set(|t| {
         t.put("stage", "failed"); t.put("msg", format!("Could not start: {first}"));
         for (k, v) in failure_patch(&obj(json!({ "stage": "start", "title": "Could not start from that branch", "detail": why, "agentCanFix": false, "auth": false,
-            "next": "Change workspace.from or merge.pr as the reason says, then delegate again." }))) { t.insert(k, v); }
+            "next": "Change workspace.from or the remote as the reason says, then delegate again." }))) { t.insert(k, v); }
     })?;
     flow::sidebar::tell_sidebar(&t);
     Ok(())

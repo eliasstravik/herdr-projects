@@ -15,7 +15,7 @@ use crate::store::tasks::{get, update_wait, Change, Task};
 use std::path::Path;
 
 /// What of an attempt is the task's once it is chosen, and who took over from whom in it.
-const TAKEN: [&str; 33] = ["worktree", "branch", "from", "baseSha", "repoFile", "repoRefused", "agent", "session", "transcript", "said", "summary", "usage", "model", "hooked", "agentVersion", "handled", "terms", "last",
+const TAKEN: [&str; 34] = ["worktree", "branch", "from", "fromNamed", "baseSha", "repoFile", "repoRefused", "agent", "session", "transcript", "said", "summary", "usage", "model", "hooked", "agentVersion", "handled", "terms", "last",
     "startedAgentAt", "workedAt", "workAt", "armedAt", "ownNote", "stat", "checkedHead", "checkedWith", "syncedTo", "syncSeen", "syncBranch", "fallbacks", "on", "tried", "handovers"];
 fn api_of(t: &Obj) -> Option<Herdr> { let s = t.at("link").t("socket"); (!s.is_empty() && (crate::herdr::cli::fake().is_some() || socket_exists(&s))).then(|| Herdr::new(Some(s))) }
 /// `by`: who chose ("you", "reviewer", or "check" when it was the only one that passed).
