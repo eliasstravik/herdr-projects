@@ -140,7 +140,7 @@ fn install_writes_the_launcher_for_this_program() {
     let said = install(&exe);
     let text = read(&launcher);
     assert!(text.starts_with("#!/bin/sh\n") && text.contains(&format!("exec '{}' \"$@\"", exe.display())), "{text}");
-    assert!(text.contains(&format!("export HERDR_PROJECTS_DATA_DIR='{}'", b.join("sw/data").display())), "{text}");
+    assert!(text.contains(&format!("export HERDR_PROJECTS_HOME='{}'", b.join("sw").display())), "{text}");
     assert_eq!(sw::store::move_home::launcher_target(text.lines().last().unwrap()), Some(exe.display().to_string()), "the move reads it back");
     assert!(said.starts_with(&format!("{} runs {}", launcher.display(), exe.display())), "{said}");
     assert!(said.contains(&format!("export PATH=\"{}:$PATH\"", launcher.parent().unwrap().display())), "{said}");
