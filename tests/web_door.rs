@@ -10,6 +10,9 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use sw::json::*;
 use sw::webui::door::{handle, same_origin, Upstream};
+// The page, the door and the board agreeing on the board's calls: its own file, a module of this one (tests/main.rs is
+// at its size).
+mod calls;
 
 /// A stand-in for the herdr web UI: its page, its login check, its PCs, a stream, an upload, a socket upgrade.
 struct FakeUi { port: u16, seen: Arc<Mutex<Vec<String>>> }
