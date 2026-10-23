@@ -3,13 +3,14 @@
 //! Seen on herdr 0.9.3 with claude 2.1.296: `agent start` answers "ready" as soon as the program is the pane's
 //! foreground process, which on a loaded machine is seconds before it has drawn anything; `agent prompt` pastes the
 //! text and presses enter 300 ms later, and a program still starting keeps the text and drops the enter.
+pub mod give_up;
+pub mod unconfirmed;
 use crate::agents::hand_limits::hand_over;
 use crate::agents::installed::said_to;
 use crate::board::keys::key_name;
 use crate::clock::now;
 use crate::herdr::{cli::HerdrError, Herdr};
 use crate::json::*;
-use crate::store::failures::failure_patch;
 use crate::store::files::marker_alive;
 use crate::store::repos::cwd_of;
 use crate::store::tasks::{get, update_wait, Change, Task};
@@ -70,6 +71,11 @@ pub fn rest(mark: &Value, a: &Value) -> Value {
 pub fn shown(kind: &str, file: Option<&Path>, session: &str, cwd: &Path, mark: &Value, text: &str) -> Option<bool> {
     let since = if mark.b("typedAt") { mark.i("typedAt") } else { mark.i("at") };
     said_to(kind, file, session, cwd, text, since)
+}
+/// The same for a task's agent, with the session found when the task has none yet.
+fn said_of(t: &Task, m: &Value) -> Option<bool> {
+    let session = if t.b("session") { t.t("session") } else { crate::agents::adapter::find_session(t.s("agent"), &cwd_of(t), t.i("startedAgentAt"), &crate::delegate::task_line(t)).unwrap_or_default() };
+    shown(t.s("agent"), t.so("transcript").map(Path::new), &session, &cwd_of(t), m, m.s("text"))
 }
 /// "Not started": the board gave up on what it typed. What ended then is still not its answer.
 pub fn not_started(t: &Task) -> bool { t.s("stage") == "failed" && t.at("failure").s("stage") == "send" && t.b("unsent") }
@@ -138,6 +144,7 @@ pub fn note_sent(id: &str, mark: Option<Value>, text: &str, first: bool) {
             }
             None => t.put("sent", Value::Null),
         }
+        t.del("unconfirmed"); // what was typed before is not looked for any more
         Ok(Change::Write)
     });
 }
@@ -148,25 +155,14 @@ pub const NOT_STARTED: &str = "Not started: its instructions sit unsent in its b
 pub fn check_sent(id: &str, a: Option<&Value>, api: &Herdr) {
     let Some(t) = get(id) else { return };
     let m = t.at("sent").clone();
-    if !m.is_object() { return; }
-    let mine = |c: &Task| c.at("sent").is_object() && c.at("sent").at("at") == m.at("at") && c.at("sent").at("tries") == m.at("tries");
+    if !m.is_object() { return unconfirmed::check(&t, a, api); }
+    let mine = |c: &Task| give_up::mine(c, "sent", &m);
     let clear = || { let _ = update_wait(id, 10000, |c| { if !mine(c) { return Ok(Change::Keep); } c.put("sent", Value::Null); Ok(Change::Write) }); };
     if t.s("stage") != "working" { return clear(); } // stopped, or taken over by a step of the finish line
-    let said = || -> Option<bool> {
-        let session = if t.b("session") { t.t("session") } else { crate::agents::adapter::find_session(t.s("agent"), &cwd_of(&t), t.i("startedAgentAt"), &crate::delegate::task_line(&t)).unwrap_or_default() };
-        shown(t.s("agent"), t.so("transcript").map(Path::new), &session, &cwd_of(&t), &m, m.s("text"))
-    };
-    // The board says "not started" instead of showing work that is not going on; the text is kept for retry.
-    let lost = |detail: String, next: String| {
-        let _ = update_wait(id, 10000, |c| {
-            if !mine(c) || c.s("stage") != "working" { return Ok(Change::Keep); }
-            c.put("sent", Value::Null);
-            c.put("unsent", json!({ "text": m.at("text"), "first": m.b("first"), "at": if m.b("typedAt") { m.at("typedAt").clone() } else { m.at("at").clone() }, "typed": true }));
-            c.put("stage", "failed"); c.put("msg", NOT_STARTED); c.put("turnOpen", false); c.put("watch", Value::Null);
-            for (k, v) in failure_patch(&obj(json!({ "stage": "send", "title": "The agent has not started on its instructions", "auth": false, "agentCanFix": false, "detail": detail, "next": next }))) { c.insert(k, v); }
-            Ok(Change::Write)
-        });
-    };
+    let said = || said_of(&t, &m);
+    // The board says "not started" instead of showing work that is not going on, with what the pane shows; the text is
+    // kept for retry (submit/give_up.rs).
+    let lost = |detail: String, next: String| give_up::fail(id, "sent", &m, &detail, &next, &give_up::screen(api, t.at("link").s("pane"), a.map(|a| a.s("agent_status"))));
     let secs = (((now() - m.i("at")) as f64 / 1000.0).round() as i64).max(1);
     if a.is_none() && marker_alive(t.at("runner")) { return; } // a job of the board's own is starting its program again
     let Some(a) = a else {
@@ -179,7 +175,12 @@ pub fn check_sent(id: &str, a: Option<&Value>, api: &Herdr) {
         if at_rest(a) { let _ = update_wait(id, 10000, |c| { if !mine(c) { return Ok(Change::Keep); } let r = rest(c.at("sent"), a); c.put("sent", r); Ok(Change::Write) }); }
         return;
     }
-    if took(&m, Some(a), None) != Some(false) { return clear(); }
+    match took(&m, Some(a), None) {
+        Some(false) => {}
+        // Only herdr's counters moved: a light mark is kept to confirm it (submit/unconfirmed.rs).
+        Some(true) if unconfirmed::only_moved(&m, a) => { let _ = update_wait(id, 10000, |c| { if !mine(c) { return Ok(Change::Keep); } unconfirmed::taken(c, a); Ok(Change::Write) }); return; }
+        _ => return clear(),
+    }
     let pressed = if m.b("pressedAt") { m.i("pressedAt") } else { m.i("at") };
     if now() - pressed < wait_ms(Some(&m)) { return; }
     if took(&m, Some(a), said()) == Some(true) { return clear(); }

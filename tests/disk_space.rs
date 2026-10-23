@@ -35,13 +35,16 @@ fn the_agent_and_the_reviewer_start_with_the_task_s_own_temporary_folder_and_are
     assert!(tmp.display().to_string().len() < w.base.join("tmp").display().to_string().len() + 30, "short, for the sockets programs make in it");
     use std::os::unix::fs::PermissionsExt;
     assert_eq!(std::fs::metadata(&tmp).unwrap().permissions().mode() & 0o777, 0o700);
-    // herdr hands a worktree's space no environment: the pane's shell is given it right before the program starts
+    // herdr hands a worktree's space no environment: the pane's shell is given it right before the program starts, with
+    // the task's id and its own folder among the reports
     let all = calls(&w);
-    let export = all.iter().position(|c| c.starts_with("pane run") && c.contains(&format!("export TMPDIR={0} TMP={0} TEMP={0} CLAUDE_CODE_TMPDIR={0}", tmp.display()))).expect("the export");
+    let reports = sw::research::report_folder(&t);
+    let export = all.iter().position(|c| c.starts_with("pane run") && c.contains(&format!("export TMPDIR={0} TMP={0} TEMP={0} CLAUDE_CODE_TMPDIR={0} HERDR_PROJECTS_ID=proj/1 HERDR_PROJECTS_TASK_REPORTS={1}", tmp.display(), reports.display()))).expect("the export");
     let start = all.iter().position(|c| c.starts_with("agent start sw-proj-1 ")).unwrap();
     assert!(export < start, "{all:?}");
     // the reviewer's tab has it from the start
-    assert!(all.iter().any(|c| c.starts_with("tab create") && c.contains(&format!("--env TMPDIR={}", tmp.display()))), "{all:?}");
+    let reviewer = all.iter().find(|c| c.starts_with("tab create") && c.contains(&format!("--env TMPDIR={}", tmp.display()))).unwrap_or_else(|| panic!("{all:?}"));
+    assert!(reviewer.contains("--env HERDR_PROJECTS_ID=proj/1") && reviewer.contains(&format!("--env HERDR_PROJECTS_TASK_REPORTS={}", reports.display())), "{reviewer}");
     let rules = sw::delegate::rules::rules(&t);
     assert!(rules.contains(&format!("in your own temporary folder, {} (your $TMPDIR), never loose in /tmp or in a home folder", tmp.display())), "{rules}");
     assert!(rules.contains("stop the servers and background processes you started, unless the human asked you to keep one running"), "{rules}");
@@ -172,9 +175,11 @@ fn a_board_command_a_task_s_agent_runs_leaves_that_task_s_temporary_folder_behin
     let w = world();
     let id = w.add("Agent's own");
     let tmp = sw::temp::made(&task(&id));
-    let names = ["TMPDIR", "TMP", "TEMP", "CLAUDE_CODE_TMPDIR"];
+    let names = ["TMPDIR", "TMP", "TEMP", "CLAUDE_CODE_TMPDIR", "HERDR_PROJECTS_ID", "HERDR_PROJECTS_TASK_REPORTS"];
     let had: Vec<_> = names.iter().map(|k| std::env::var_os(k)).collect();
-    for (k, v) in sw::temp::env(&task(&id)) { unsafe { std::env::set_var(k, v) } }
+    let env = sw::temp::env(&task(&id));
+    assert_eq!(env.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(), names);
+    for (k, v) in env { unsafe { std::env::set_var(k, v) } }
     sw::temp::leave_task_env();
     for k in names { assert!(std::env::var_os(k).is_none(), "{k}"); }
     // a TMPDIR of yours stays (a path of its own: the tests' folder is in a task's when a task's agent runs them)

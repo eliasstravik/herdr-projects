@@ -1,7 +1,8 @@
 //! A task's own temporary folder: what its agent and its reviewers make for a while (test projects, previews, venvs,
 //! smoke installs) goes there, as their `TMPDIR`, and it goes when the task ends (docs/disk-space.md). Its path is
 //! short (`/tmp/hp-1000/3f9a2c/HP-96`): programs make their sockets in it, a socket's path may not pass 108 bytes, and
-//! Claude Code makes its own folder in it only when that stays under 44.
+//! Claude Code makes its own folder in it only when that stays under 44. The task's id and its report folder are given
+//! with it.
 use crate::agents::scratch::uid;
 use crate::json::*;
 use crate::store::files::{absolute, data_dir};
@@ -30,17 +31,26 @@ pub fn made(t: &Obj) -> PathBuf {
 }
 /// The names a program reads its temporary folder from.
 const NAMES: [&str; 4] = ["TMPDIR", "TMP", "TEMP", "CLAUDE_CODE_TMPDIR"];
+/// The names that say which task it works on: the task's id (the name the hooks have it by) and the task's own folder
+/// among the board's reports (not `HERDR_PROJECTS_REPORTS_DIR`, the folder of them all, which the board reads).
+const TASK: [&str; 2] = ["HERDR_PROJECTS_ID", "HERDR_PROJECTS_TASK_REPORTS"];
 /// Is this a task's temporary folder, or inside one?
 pub fn in_task_folder(p: &std::path::Path) -> bool { let own = format!("hp-{}", uid()); p.components().any(|c| c.as_os_str() == own.as_str()) }
 /// The board's own run, started by a task's agent (a `report`, an `add`): it does not keep that task's temporary
-/// folder, or a task it starts would have its own folder inside it, and lose it when that task ends.
+/// folder, or a task it starts would have its own folder inside it, and lose it when that task ends. Nor that task's id
+/// and report folder: the board reads neither, and what it starts is given its own.
 pub fn leave_task_env() {
     for k in NAMES { if std::env::var_os(k).map(|v| in_task_folder(std::path::Path::new(&v))).unwrap_or(false) { unsafe { std::env::remove_var(k) } } }
+    for k in TASK { unsafe { std::env::remove_var(k) } }
 }
-/// The environment of a program the board starts for the task: every name programs read their temporary folder from.
+/// The environment of a program the board starts for the task: every name programs read their temporary folder from,
+/// then the task's id and its report folder.
 pub fn env(t: &Obj) -> Vec<(String, String)> {
     let d = of(t).display().to_string();
-    NAMES.iter().map(|k| (k.to_string(), d.clone())).collect()
+    let mut all: Vec<(String, String)> = NAMES.iter().map(|k| (k.to_string(), d.clone())).collect();
+    all.push((TASK[0].into(), t.t("id")));
+    all.push((TASK[1].into(), crate::research::report_folder(t).display().to_string()));
+    all
 }
 /// The board's own folders and the task's temporary folder (made now), for a tab or a space opened for the task.
 pub fn task_env(t: &Obj) -> Vec<(String, String)> { made(t); [crate::store::files::board_env(), env(t)].concat() }
