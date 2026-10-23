@@ -201,8 +201,8 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
             let now_look = look_now(co);
             let (over, over_id) = (now_look.said.clone(), now_look.turn.as_ref().filter(|t| t.finished).map(|t| t.id.clone()).unwrap_or_default());
             let intro = get(co).map(|c| c.b("intro")).unwrap_or(false);
-            let (news, rules_hash) = super::rules_news::before_next(co, &get(co).unwrap_or_default());
-            let words_in = match if intro { Some(intro_line_of(co)) } else { news } { Some(head) => format!("{head}\n\n{}", m.s("text")), None => m.t("text") };
+            let (news, rules_hash) = super::rules_news::before_next(co, &get(co).unwrap_or_default(), m.b("autopilot"));
+            let words_in = super::rules_news::with_head(if intro { Some(intro_line_of(co)) } else { news }, m.s("text"), m.b("autopilot"));
             let typed = match hand(&api, c.s("pane"), &words_in) {
                 Ok(t) => t,
                 Err(e) if e.code == "agent_blocked" || e.code == "agent_not_ready" => { unsay(); stuck = true; break; }

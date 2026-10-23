@@ -1,6 +1,6 @@
-//! Waking a coordinator on autopilot: its timer only when the board changed (the free look), the board's events in its
-//! area once each, its awake hours, the gap after a turn and the wakes a day, one wake in the queue at most, and no wake
-//! while it is mid-turn or a message of yours waits for it.
+//! Waking a coordinator on autopilot: its timer only when the board changed (the free look) while its own work is under
+//! way (idle, tests/autopilot/idle.rs), the board's events in its area once each, its awake hours, the gap after a turn
+//! and the wakes a day, one wake in the queue at most, and no wake while it is mid-turn or a message of yours waits.
 use crate::common;
 use common::pilot::*;
 use common::*;
@@ -23,27 +23,31 @@ fn own_task(co: &Co, w: &World, title: &str) -> String {
 }
 
 #[test]
-fn the_timer_wakes_only_when_the_board_changed_and_its_own_adds_wake_it_not() {
+fn while_its_own_work_is_under_way_the_timer_wakes_only_when_the_board_changed_and_its_own_adds_wake_it_not() {
     let w = pilot_world();
     let co = proj(&w);
-    on_and_quiet(&w, &co, &["--autopilot.every", "1h", "--autopilot.when", "none"]);
-    // an hour on, nothing changed: no wake, no model, no tokens
+    on_and_quiet(&w, &co, &["--autopilot.every", "1h", "--autopilot.when", "none", "--autopilot.startAtOnce", "no"]);
+    // idle with room, its timer wakes it (autopilot/idle.rs); in that turn it adds a task, which then waits for the human
     minutes(61); tick(&w);
-    assert_eq!(prompts_of(&w, &co).len(), 1);
+    assert_eq!(prompts_of(&w, &co).len(), 2);
+    let id = own_task(&co, &w, "Its own");
+    sw::store::tasks::set(&id, json!({ "stage": "approval" })).unwrap();
+    tick(&w); // the board sees the turn's end: what it did is in the snapshot
+    // an hour on, its own work under way and nothing changed: no wake, no model, no tokens
+    minutes(61); tick(&w);
+    assert_eq!(prompts_of(&w, &co).len(), 2);
     assert!(record(&co).arr("pending").is_empty());
     // the human adds a task: the next timer wakes it
     w.add("Fix the docs index");
-    minutes(30); tick(&w); assert_eq!(prompts_of(&w, &co).len(), 1, "not before its timer");
+    minutes(30); tick(&w); assert_eq!(prompts_of(&w, &co).len(), 2, "not before its timer");
     minutes(31); tick(&w);
-    assert_eq!(prompts_of(&w, &co).len(), 2);
-    assert_eq!(last_prompt(&w, &co), "Autopilot: Regular check-in");
-    // what its own turn did (a task it added in it) is in the snapshot taken when that turn ended: no wake for it
-    own_task(&co, &w, "Its own");
-    tick(&w); // the board sees the turn's end
-    minutes(61); tick(&w);
-    assert_eq!(prompts_of(&w, &co).len(), 2);
-    w.add("And yours"); minutes(61); tick(&w);
     assert_eq!(prompts_of(&w, &co).len(), 3);
+    assert_eq!(last_prompt(&w, &co), "Autopilot: Regular check-in");
+    tick(&w);
+    minutes(61); tick(&w);
+    assert_eq!(prompts_of(&w, &co).len(), 3);
+    w.add("And yours"); minutes(61); tick(&w);
+    assert_eq!(prompts_of(&w, &co).len(), 4);
 }
 
 #[test]

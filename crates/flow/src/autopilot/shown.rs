@@ -1,7 +1,8 @@
 //! A coordinator's autopilot as it is shown, in the same words on its row, in its panel, on the command line and to
 //! another machine: nothing while it is off. On, its state word (shown first wins: `needs you`, `could not start`,
 //! `working`, `asleep`, `at its limit`, `on`), its line (`autopilot on · every 1h + events · last HSW-92 · next in
-//! 40m`), its row's status line, as a task's (`Autopilot · next check-in in 12m · 3 of 20 today`, `Working on HSW-92`),
+//! 40m`), its row's status line, as a task's (`Autopilot · next check-in in 12m · 3 of 20 today`, `Working on HSW-92`,
+//! `Autopilot idle: last 3 wakes added nothing · …`, `Autopilot stalled: no check-in for 3h · …`),
 //! its goal, today's counts, its settings in plain words (`*` on this time's) and its last wakes.
 use super::care::needing;
 use super::limits::{board_tasks, room, today};
@@ -30,15 +31,17 @@ pub fn triggers(co: &Co) -> String {
     let (every, when) = (words(co, "autopilot.every"), words(co, "autopilot.when"));
     match (every != "none", when != "none") { (true, true) => format!("every {every} + events"), (true, false) => format!("every {every}"), (false, true) => "events".into(), _ => "no timer, no events".into() }
 }
-/// When it next wakes, in words: "next in 40m", "waits for its hours", "" (nothing to say).
-pub fn next_words(co: &Co, ap: &Obj, now: i64) -> String {
+/// When it next wakes, in words: "next in 40m", "waits for its hours", "" (nothing to say). Idle, its timer's gap is
+/// the backed-off one (idle.rs).
+pub fn next_words(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String {
     if !awake(&words(co, "autopilot.hours"), now) { return "waits for its hours".into(); }
     let ended = ap.i("endAt").max(ap.i("since"));
     let gap = ended + ms(&words(co, "autopilot.gap"));
     if !ap.arr("pending").is_empty() { return if gap > now { format!("next in {}", age(gap - now)) } else { String::new() }; }
     let every = ms(&words(co, "autopilot.every"));
     if every == 0 { return String::new(); }
-    let at = (ended.max(ap.i("timerAt")) + every).max(gap);
+    let backed = if super::idle::idle(co, ap, board, now) { ended + super::idle::timer_gap(every, ap) } else { 0 };
+    let at = (ended.max(ap.i("timerAt")) + every).max(backed).max(gap);
     if at > now { format!("next in {}", age(at - now)) } else { String::new() }
 }
 /// The last task it added, as the board names it ("" none).
@@ -67,7 +70,10 @@ pub fn status(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String {
         _ if !busy.is_empty() => join(vec![format!("Working on {}", if busy.len() > 2 { format!("{}, {} and {} more", busy[0], busy[1], busy.len() - 2) } else { busy.join(" and ") }), day]),
         "asleep" => join(vec!["Autopilot".into(), format!("asleep outside {}", words(co, "autopilot.hours")), day]),
         "at its limit" => join(vec!["Autopilot".into(), "at today's limit".into(), day]),
-        _ => join(vec!["Autopilot".into(), next_words(co, ap, now).replace("next in", "next check-in in"), day]),
+        _ => {
+            let idle = super::idle::words(co, ap, board, now, ms(&words(co, "autopilot.every")));
+            join(vec![if idle.is_empty() { "Autopilot".into() } else { format!("Autopilot {idle}") }, next_words(co, ap, board, now).replace("next in", "next check-in in"), day])
+        }
     }
 }
 /// Today's adds against their limit, for its row's column: `2 of 5 added`.
@@ -78,7 +84,8 @@ pub fn line_of(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String {
     if st.is_empty() { return String::new(); }
     let state = if st == "could not start" { format!("could not start: {}", ap.s("couldNot")) } else { st.to_string() };
     let last = last_added(ap);
-    [format!("autopilot {state}"), triggers(co), if last.is_empty() { String::new() } else { format!("last {last}") }, next_words(co, ap, now)].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ")
+    let idle = if st == "on" { super::idle::words(co, ap, board, now, ms(&words(co, "autopilot.every"))) } else { String::new() };
+    [format!("autopilot {state}"), triggers(co), idle, if last.is_empty() { String::new() } else { format!("last {last}") }, next_words(co, ap, board, now)].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ")
 }
 /// Its settings as the panel says them, each with whether this time's value it is.
 pub fn settings_of(co: &Co) -> Vec<(String, String, bool)> {
@@ -106,7 +113,7 @@ pub fn view(co: &Co, now: i64) -> Value {
     let board = board_tasks();
     let wakes: Vec<Value> = ap.arr("wakes").iter().rev().cloned().collect();
     json!({ "on": true, "state": state_word(co, &ap, &board, now), "line": line_of(co, &ap, &board, now), "goal": words(co, "autopilot.goal"),
-        "today": today(co, &ap, &board, now).say(), "couldNot": ap.at("couldNot"), "next": next_words(co, &ap, now), "last": last_added(&ap),
+        "today": today(co, &ap, &board, now).say(), "couldNot": ap.at("couldNot"), "next": next_words(co, &ap, &board, now), "last": last_added(&ap),
         "lastId": last_id(&ap), "status": status(co, &ap, &board, now), "added": added_words(co, &ap, &board, now),
         "settings": settings_of(co).into_iter().map(|(l, v, o)| json!({ "label": l, "value": v, "once": o })).collect::<Vec<_>>(), "wakes": wakes })
 }

@@ -13,6 +13,8 @@ use sw::store::settings::places::yours;
 
 /// Who added a task: a project coordinator's add in another repo names it, in `details` and in that repo's history.
 mod added_by;
+/// Idle with room: its timer wakes it all the same, backs off after wakes that added nothing, and its row says so.
+mod idle;
 /// One that never ran: sent as off, and `Tab` from another machine starts it.
 mod never_ran;
 /// A pane id herdr handed out again: a done task's old pane given to a coordinator is the coordinator's.

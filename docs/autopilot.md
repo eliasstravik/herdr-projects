@@ -82,6 +82,8 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
     | `Working on HSW-92 · 3 of 20 today` | one of its tasks is under way (and today's adds of `tasksPerDay`) |
     | `Autopilot · asleep outside mon-fri 09:00-18:00 · 3 of 20 today` | outside its hours |
     | `Autopilot · at today's limit · 5 of 5 today` | no room for more tasks |
+    | `Autopilot stalled: no check-in for 3h · 0 of 5 today` | idle with room, and no wake for more than twice its timer (below) |
+    | `Autopilot idle: last 3 wakes added nothing · next check-in in 2h · 0 of 5 today` | idle, its timer backed off (below) |
     | `Autopilot · next check-in in 12m · 3 of 20 today` | waiting for its next reason to wake |
 
   - **Its machine's summary** (a folded machine's row, and the top row) says how many coordinators there are on autopilot:
@@ -122,6 +124,16 @@ changed since its last wake ended does the timer wake it: the tasks in its area 
 or whether today's limits have room. **A new day with room counts as a change**, so a coordinator left on wakes at
 least once a day while it has room. What its own turn did wakes nothing: the look is taken when its turn ends.
 
+**An idle autopilot never stalls.** The free look holds the timer only while something of its own is under way
+(working, queued, or waiting for you). Idle, with nothing of its own under way and room in today's limits, the timer
+wakes it even when nothing changed: a turn that once declined, or misread a wake, gets another chance. So an idle one
+does not burn a turn every hour for nothing, its wakes whose turn ended with nothing changed are counted in a row: from
+the third on, its timer's gap doubles each time, up to 4 hours (an `autopilot.every` longer than that stays as it is),
+and its row says `Autopilot idle: last 3 wakes added nothing`. A change in its area wakes it as before, and a turn that
+changes something (it adds, starts or retries a task, or you did) sets the count back, as does `autopilot on`. If it
+stalls all the same (idle, room, wakes left today, and no wake for more than twice its timer, say while the keeper did
+not run), its row says `Autopilot stalled: no check-in for 3h`.
+
 **No wake while** it is off; it says `needs you`; it is outside `autopilot.hours`; it is within `autopilot.gap` of the end
 of its last wake's turn or of a turn of yours; `autopilot.wakesPerDay` are used today; it is mid-turn, or a message of
 yours waits for it; or it has no room and none of its tasks needs looking after. The reasons are kept and go out as one
@@ -150,6 +162,11 @@ No goal, no limits and no counts: **its rules say to read its autopilot first in
 `herdr-projects autopilot show` (`--machine`, `--project <repo>`): its state, goal, today's counts, its tasks under way
 and those that need looking after, and its settings in plain words (what it may set and touch, whether it may say yes
 or add releases). So a change between wakes is always picked up, and nothing is repeated in the chat.
+
+Its rules say plainly that **every message that starts with `Autopilot:` is a real wake** from the board, whatever an
+older version of its rules (or an earlier part of its chat) said about other words. When its rules changed while its
+program ran, the line that says so goes after the wake's words, never before, and with a wake it says this one is a
+real wake.
 
 Only the board writes a wake. Any other message that starts with `Autopilot:` (from the chat box, `coordinator tell`,
 another machine) reaches it as `(not a wake) Autopilot: …`, and so does one that starts with an earlier version's

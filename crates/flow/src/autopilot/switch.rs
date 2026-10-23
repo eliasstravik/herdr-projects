@@ -47,7 +47,7 @@ pub fn on(co: &Co, goal: Option<&str>, once: &[(String, Value)]) -> Res<String> 
         if !ap.b("on") { ap.put("since", now()); ap.put("seen", Value::Null); ap.put("once", Obj::new()); ap.put("pending", Vec::<Value>::new()); ap.put("unanswered", 0); }
         let mut kept = ap.o("once").cloned().unwrap_or_default();
         for (k, v) in &once { kept.insert(k.clone(), v.clone()); }
-        ap.put("once", kept); ap.put("on", true); ap.put("needsYou", false); ap.put("unanswered", 0);
+        ap.put("once", kept); ap.put("on", true); ap.put("needsYou", false); ap.put("unanswered", 0); ap.put("idleRuns", 0);
         let p = super::wake::merged(ap.arr("pending"), &[reason("on", "", "")]);
         ap.put("pending", p);
         true

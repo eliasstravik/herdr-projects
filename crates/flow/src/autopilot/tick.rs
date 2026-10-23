@@ -4,9 +4,11 @@
 //! reasons; and when nothing holds it back the reasons go out as one wake. Nothing holds it back once: it is awake by
 //! its hours, past `autopilot.gap` since its last turn ended (but for the wake of turning on), under
 //! `autopilot.wakesPerDay`, at rest with no message of yours waiting, and with room or a task that needs looking after.
-//! A reason that is only the timer goes only when the free look (look.rs) finds the board changed.
+//! A reason that is only the timer goes only when the free look (look.rs) finds the board changed, or when it is idle
+//! with room (idle.rs), then at most as often as its backed-off timer allows.
 use super::care::needing;
 use super::events::{look as events, reason};
+use super::idle::{idle, noted, timer_gap};
 use super::limits::{board_tasks, room};
 use super::look::snapshot;
 use super::record::{change, count, roll, words};
@@ -46,7 +48,7 @@ pub fn tick(co: &Co, board: &[Obj], now: i64) {
     let _ = change(co, |ap, c| {
         if !ap.b("on") { return false; }
         roll(ap, now);
-        let ended_at = |ap: &mut Obj, c: &Obj| { ap.put("endAt", now); ap.put("seenId", c.t("typedId")); let s = snapshot(co, ap, board, now); ap.put("snap", s); };
+        let ended_at = |ap: &mut Obj, c: &Obj, wake: bool| { ap.put("endAt", now); ap.put("seenId", c.t("typedId")); let s = snapshot(co, ap, board, now); noted(ap, &s, wake); ap.put("snap", s); };
         let judge = |ap: &mut Obj, answered: bool| {
             let mut w = ap.arr("wakes").to_vec();
             if let Some(last) = w.last_mut() { last["answered"] = json!(answered); }
@@ -60,13 +62,13 @@ pub fn tick(co: &Co, board: &[Obj], now: i64) {
             let mark = c.at("mark");
             if *rest && !seq.is_null() && mark.i("run") == c.i("startedAt") && *seq != *mark.at("seq") && c.b("typedId") && c.s("typedId") != ap.s("seenId") {
                 let typed = ap.at("wake").b("typedAt");
-                ended_at(ap, c);
+                ended_at(ap, c, typed);
                 if typed { judge(ap, true); ap.put("wake", Value::Null); }
             }
         }
         // 15 minutes on: a typed wake whose turn has not ended, or one still held in the queue, is unanswered.
         if ap.at("wake").is_object() && now - ap.at("wake").i(if ap.at("wake").b("typedAt") { "typedAt" } else { "at" }) >= ANSWER_MS {
-            if ap.at("wake").b("typedAt") { judge(ap, false); ap.put("wake", Value::Null); ended_at(ap, c); }
+            if ap.at("wake").b("typedAt") { judge(ap, false); ap.put("wake", Value::Null); ended_at(ap, c, false); }
             else { pull_back(c, ap, true); judge(ap, false); ap.put("endAt", now); }
         }
         // A start that failed: not a wake. Only turning on stays waiting, and the gap starts as if a turn had ended.
@@ -100,8 +102,10 @@ pub fn tick(co: &Co, board: &[Obj], now: i64) {
         if ap.b("needsYou") || ask_first || !awake(&hours, now) || ap.i("woke") >= per_day || busy { return true; }
         if !on_wake && now < ended + gap { return true; }
         if !room(co, ap, board, now) && needing(ap, board, approve).is_empty() { return true; }
-        // A reason that is only the timer goes only when the board changed since its last wake ended.
-        if pending.iter().all(|r| r.s("why") == "timer") && ap.s("snap") == snapshot(co, ap, board, now) { ap.put("pending", Vec::<Value>::new()); return true; }
+        // A reason that is only the timer goes only when the board changed since its last wake ended, or when it is idle
+        // with room and its timer, backed off after wakes that changed nothing, is due: an idle autopilot never stalls.
+        let due_idle = idle(co, ap, board, now) && now >= ended + timer_gap(every, ap);
+        if pending.iter().all(|r| r.s("why") == "timer") && !due_idle && ap.s("snap") == snapshot(co, ap, board, now) { ap.put("pending", Vec::<Value>::new()); return true; }
         let text = text_of(&pending);
         queue(c, ap, &text, &pending); kick = true;
         ap.put("pending", Vec::<Value>::new());
