@@ -1,7 +1,8 @@
 //! A task started from a named branch with `merge.pr` off (`workspace.from develop`): it starts, and lands by a push of
 //! a commit built from the reviewed one to that branch at origin, your checkout untouched. Tasks on one branch build on
-//! each other, two branches each move on their own, a branch that moved is caught up with and checked again,
-//! `merge.method` and `merge.by` are kept, and a push origin refuses waits for you with git's own words.
+//! each other, two branches each move on their own, origin's main named lands there too, a branch that moved is caught
+//! up with and checked again, `merge.method` and `merge.by` are kept, and a push origin refuses waits for you with
+//! git's own words.
 use crate::common;
 use super::they_push;
 use common::*;
@@ -93,6 +94,27 @@ fn two_feature_branches_at_once_each_push_moves_only_its_own_branch() {
     assert_eq!((has(&w, "feature-a", "fa.txt").is_some(), has(&w, "feature-a", "fb.txt").is_some()), (true, false));
     assert_eq!((has(&w, "feature-b", "fb.txt").is_some(), has(&w, "feature-b", "fa.txt").is_some()), (true, false));
     assert_eq!((origin(&w, "main"), git(&w.root, &["rev-parse", "main"])), (main, mine), "main is untouched");
+}
+
+#[test]
+fn a_named_branch_that_is_origins_main_lands_there_too_never_in_your_checkout() {
+    let w = push_world(json!({}));
+    let d1 = they_push(&w, "develop", "d.txt", "one\n");
+    // develop is origin's main branch, and your checkout is on main
+    git(&bare(&w), &["symbolic-ref", "HEAD", "refs/heads/develop"]);
+    git(&w.root, &["fetch", "-q", "origin"]); git(&w.root, &["remote", "set-head", "origin", "develop"]);
+    from("develop");
+    let mine = git(&w.root, &["rev-parse", "HEAD"]);
+    w.script(json!({ "worker": [work("f.txt")] }));
+    let id = to_approval(&w, "On origin's main");
+    let t = task(&id);
+    assert_eq!((t.s("from"), t.s("baseSha")), ("origin/develop", d1.as_str()));
+    assert_eq!(sw::sync::lands_on(&t), "develop");
+    let t = approved(&id);
+    assert_eq!((t.s("stage"), t.s("msg")), ("done", "Merged into develop at origin."), "{}", t.at("failure"));
+    assert_eq!(git(&bare(&w), &["rev-parse", "develop^"]), d1); assert!(has(&w, "develop", "f.txt").is_some());
+    assert_eq!((git(&w.root, &["symbolic-ref", "--short", "HEAD"]), git(&w.root, &["rev-parse", "HEAD"])), ("main".into(), mine), "your checkout is untouched");
+    assert!(!w.root.join("f.txt").exists() && git(&w.root, &["status", "--porcelain"]).is_empty());
 }
 
 #[test]

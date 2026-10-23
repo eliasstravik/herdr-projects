@@ -108,10 +108,10 @@ pub fn land_core(id: &str, g: &mut Guard) -> Res<()> {
     let root = folder_of(t.s("id"));
     let tree = sync::tree_of(&t);
     let how = setting_text("merge.method", Some(&t)); // read right before the merge. squash by default
-    let named = sync::named_base(&root, &t);
-    if let Some(b) = &named { if !onto_named(g, &t, &root, b)? { return Ok(()); } }
-    // Started from a named branch with no pull request: pushed there at origin (direct.rs), your checkout untouched.
-    let direct = named.filter(|_| !t.b("pr") && !tree.is_empty());
+    if let Some(b) = sync::named_base(&root, &t) { if !onto_named(g, &t, &root, &b)? { return Ok(()); } }
+    // Started from a named branch (origin's main too) with no pull request: pushed there at origin (direct.rs), your
+    // checkout untouched.
+    let direct = sync::pushed_to(&root, &t).filter(|_| !tree.is_empty());
     if !tree.is_empty() {
         let tp = Path::new(&tree);
         let pre = (|| -> Res<Option<&'static str>> {

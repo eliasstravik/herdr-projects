@@ -30,11 +30,11 @@ All of this runs with the board open or closed.
   last gave is used. The task keeps up with that branch, its pull request merges into it (`gh pr create --base develop`),
   a pull request the agent opened itself is taken on only while it merges into it, and `merge.checks` reads the checks of
   a pull request into it.
-- **A named branch with `merge.pr` off** (a host with no GitHub, so no `gh`) lands there with no pull request, so one repo
-  can take tasks on several feature branches at once. The commit is built from the one that was reviewed, as
-  `merge.method` says (squash: one commit on top of the branch; merge: a merge commit of the two; rebase: the reviewed
-  commit itself), and pushed to that branch at origin (`git push origin <commit>:refs/heads/develop`, within
-  `merge.pushTimeout`). No checkout is touched, yours included, and nothing is forced: when the branch moved at origin,
+- **A named branch with `merge.pr` off** (a host with no GitHub, so no `gh`) lands there with no pull request, also when
+  it is origin's main branch, so one repo can take tasks on several feature branches at once. The commit is built from
+  the one that was reviewed, as `merge.method` says (squash: one commit on top of the branch; merge: a merge commit of
+  the two; rebase: the reviewed commit itself), and pushed to that branch at origin
+  (`git push origin <commit>:refs/heads/develop`, within `merge.pushTimeout`). No checkout is touched, yours included, and nothing is forced: when the branch moved at origin,
   git refuses the push, and the task catches up with it, is checked again and pushed under the same approval. A push
   origin refuses for another reason (a protected branch, a hook) waits for you with git's own words.
 - `workspace.setup` runs. Then the agent starts in that space's root pane, with the task and its rules.

@@ -53,6 +53,9 @@ pub fn base_ref(root: &Path, t: &Obj) -> Res<String> {
     if git_out(root, &["rev-parse", "--verify", "-q", &format!("refs/remotes/origin/{b}")]).is_ok() { return Ok(format!("origin/{b}")); }
     crate::refuse!("Could not fetch {b} (workspace.from) from origin, and it was never fetched here: {said}. Make sure origin can be reached without a password (git fetch origin {b}), then delegate again.")
 }
+/// Does this task's start name a branch (`workspace.from develop`)? Kept on it as `fromNamed`: it then lands on that
+/// branch, also when that is origin's main (sync.rs).
+pub fn named_start(t: &Obj) -> bool { named(&setting_text("workspace.from", Some(t))).is_some() }
 /// A start refused before anything was made: the task waits, failed, with the reason and what to do.
 pub fn refuse_start(g: &mut Guard, why: &str) -> Res<()> {
     let first = why.split(". ").next().unwrap_or(why).trim_end_matches('.').to_string();

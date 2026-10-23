@@ -3,7 +3,7 @@
 use super::launch::{again_prompt, agent_now, exists, resumable, start_agent, unsent_prompt};
 use super::rules::{first_prompt, turned_words};
 use super::config_lock::making;
-use super::from::{base_ref, refuse_start};
+use super::from::{base_ref, named_start, refuse_start};
 use super::worktree::{copy_includes, exclude_rule_dir, free_branch};
 use crate::agents::start_failed as sf;
 use crate::board::keys::key_name;
@@ -113,7 +113,7 @@ fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
             // The repo's own file, read from the commit the worktree starts from: its facts, and what it was refused.
             let (facts, refused) = repo_file(&root, Some(&base));
             exclude_rule_dir(&root);
-            patch = obj(json!({ "worktree": dir, "branch": branch, "from": from, "baseSha": base, "repoFile": facts, "repoRefused": refused, "fresh": true, "ownNote": true }));
+            patch = obj(json!({ "worktree": dir, "branch": branch, "from": from, "fromNamed": named_start(&t), "baseSha": base, "repoFile": facts, "repoRefused": refused, "fresh": true, "ownNote": true }));
             copy = true;
         } else {
             res = api.workspace_create(&root.display().to_string(), &label, &board_env())?;

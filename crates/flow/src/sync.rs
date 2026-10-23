@@ -36,11 +36,16 @@ pub fn named_base(root: &Path, t: &Obj) -> Option<String> {
     let b = t.s("from").strip_prefix("origin/").filter(|b| *b != "HEAD")?;
     (b != default_branch(root)).then(|| b.to_string())
 }
+/// The branch a task's start named (`fromNamed`), origin's main too.
+fn by_name(t: &Obj) -> Option<String> { t.s("from").strip_prefix("origin/").filter(|b| t.b("fromNamed") && *b != "HEAD").map(str::to_string) }
+/// The branch a task with no pull request lands on by a push of its own (land/direct.rs): the one it started from by
+/// name, also when that is origin's main. Never the branch your checkout is on.
+pub fn pushed_to(root: &Path, t: &Obj) -> Option<String> { if t.b("pr") { None } else { named_base(root, t).or_else(|| by_name(t)) } }
 /// Where a task lands decides what "main" is for it: through its pull request, the remote's main (or the branch it was
 /// started from by name, always); otherwise the branch your checkout is on.
-pub fn via_remote(root: &Path, t: &Obj) -> bool { t.b("pr") || (setting("merge.pr", Some(t)) == json!(true) && has_origin(root)) || (has_origin(root) && named_base(root, t).is_some()) }
+pub fn via_remote(root: &Path, t: &Obj) -> bool { t.b("pr") || (setting("merge.pr", Some(t)) == json!(true) && has_origin(root)) || (has_origin(root) && pushed_to(root, t).is_some()) }
 /// "main", or the branch a task lands on when it was started from one by name: for the words that name it.
-pub fn main_word(t: &Obj) -> String { named_base(&folder_of(t.s("id")), t).unwrap_or_else(|| "main".into()) }
+pub fn main_word(t: &Obj) -> String { named_base(&folder_of(t.s("id")), t).or_else(|| by_name(t)).unwrap_or_else(|| "main".into()) }
 /// The branch a task's work lands on, in words, for the question that asks before a merge.
 pub fn lands_on(t: &Obj) -> String {
     let root = folder_of(t.s("id"));
@@ -76,7 +81,7 @@ fn remote_main(root: &Path, t: &Obj, tree: &Path) -> Result<(String, String), St
     let mut b = main_branch(root, t);
     let mut fetched = fetch_main(tree, &b);
     // Origin's main is not called main and was never named here (no origin/HEAD): asked of origin once.
-    if fetched.as_ref().is_err_and(|e| fetch::no_such_branch(&e.msg)) && named_base(root, t).is_none() && fetch::learn_origin_head(root) {
+    if fetched.as_ref().is_err_and(|e| fetch::no_such_branch(&e.msg)) && named_base(root, t).is_none() && by_name(t).is_none() && fetch::learn_origin_head(root) {
         let d = default_branch(root);
         if d != b { b = d; fetched = fetch_main(tree, &b); }
     }
