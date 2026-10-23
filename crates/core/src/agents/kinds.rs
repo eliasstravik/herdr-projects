@@ -52,8 +52,6 @@ pub struct Kind {
     pub since: &'static [(&'static str, &'static str)],
     /// It can read its own conversation back (a reader in read_turn.rs).
     pub reads_turn: bool,
-    /// It has a plan mode of its own, where nothing is changed (plan/).
-    pub plan_mode: bool,
     pub lead: &'static [&'static str],
     pub model: &'static [&'static str],
     /// The model names it takes (models.rs).
@@ -136,7 +134,7 @@ pub const NO_MODELS: Models = Models { list: &[], read: Read::None, server: &[],
 /// What an entry has that it does not name.
 pub const BASE: Kind = Kind {
     name: "", program: "", aliases: &[], min_version: "0", efforts: &[], efforts_read: EffortsRead::Help, access_full: &[], access_ask: Some(&[]), access_auto: None, fast: false, tokens: false,
-    interrupt: "esc", rules_file: None, since: &[], reads_turn: false, plan_mode: false, lead: &[], model: &[], models: NO_MODELS, effort: &[], effort_note: "",
+    interrupt: "esc", rules_file: None, since: &[], reads_turn: false, lead: &[], model: &[], models: NO_MODELS, effort: &[], effort_note: "",
     resume: &[], session: &[], fresh: &[], standing: &[], headless: None, integration: "", needs_integration: false, login: None, cannot: &[], checked: "",
 };
 mod herdr;

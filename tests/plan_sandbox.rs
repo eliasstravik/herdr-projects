@@ -53,9 +53,9 @@ fn each_platform_names_its_own_tool_and_a_program_s_own_sandbox_is_off_inside_se
     let w = world();
     let hooks = w.base.join("hook-agent.json");
     std::fs::write(&hooks, r#"{"hooks":{"Stop":[]}}"#).unwrap();
-    let got = Tool::SandboxExec.unnested("claude", &["--permission-mode".into(), "plan".into(), "--settings".into(), hooks.display().to_string()]);
+    let got = Tool::SandboxExec.unnested("claude", &["--dangerously-skip-permissions".into(), "--settings".into(), hooks.display().to_string()]);
     let copy = w.base.join("hook-agent.sandbox-off.json");
-    assert_eq!(got, vec!["--permission-mode".to_string(), "plan".into(), "--settings".into(), copy.display().to_string()]);
+    assert_eq!(got, vec!["--dangerously-skip-permissions".to_string(), "--settings".into(), copy.display().to_string()]);
     assert_eq!(serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&copy).unwrap()).unwrap(), json!({ "hooks": { "Stop": [] }, "sandbox": { "enabled": false } }));
     use std::os::unix::fs::PermissionsExt;
     assert_eq!(std::fs::metadata(&copy).unwrap().permissions().mode() & 0o777, 0o600);

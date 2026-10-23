@@ -11,7 +11,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// The hook's call back into the board, at each turn end.
-pub struct Hook { pub shim: String, pub id: String, pub role: String, pub token: String, pub round: i64, pub dir: PathBuf, pub plan: bool }
+pub struct Hook { pub shim: String, pub id: String, pub role: String, pub token: String, pub round: i64, pub dir: PathBuf }
 fn hook_command(h: &Hook) -> Vec<String> {
     let mut c = vec![h.shim.clone(), "turn-ended".into(), "--id".into(), h.id.clone(), "--role".into(), h.role.clone(), "--token".into(), h.token.clone()];
     if h.role == "reviewer" { c.extend(["--round".to_string(), h.round.to_string()]); }
@@ -27,19 +27,12 @@ fn write_private(file: &Path, text: &str) -> Res<()> {
 pub fn hook_args(kind: &str, h: &Hook) -> Res<Option<Vec<String>>> {
     match kind {
         // A settings file of the task's own, added to the user's settings for this one launch (the user's own hooks
-        // still run). The hooks are asynchronous, so a slow or failing one never holds the agent's turn. In plan mode
-        // the plan is presented with ExitPlanMode, which asks in the terminal: the board takes the plan at that question
-        // (PermissionRequest, which runs even when the user allows ExitPlanMode) and answers no (plan/presented.rs).
+        // still run). The hooks are asynchronous, so a slow or failing one never holds the agent's turn.
         "claude" => {
             let command = hook_command(h).iter().map(|s| shq(s)).collect::<Vec<_>>().join(" ");
             let file = h.dir.join(format!("hook-{}.json", h.role));
             let one = json!([{ "hooks": [{ "type": "command", "command": command, "async": true }] }]);
-            let mut hooks = obj(json!({ "Stop": one, "StopFailure": one }));
-            if h.plan {
-                let plan_cmd = [h.shim.as_str(), "plan-written", "--id", &h.id, "--token", &h.token].iter().map(|s| shq(s)).collect::<Vec<_>>().join(" ");
-                hooks.put("PermissionRequest", json!([{ "matcher": "ExitPlanMode", "hooks": [{ "type": "command", "command": plan_cmd }] }]));
-            }
-            write_private(&file, &json!({ "hooks": hooks }).to_string())?;
+            write_private(&file, &json!({ "hooks": { "Stop": one, "StopFailure": one } }).to_string())?;
             Ok(Some(vec!["--settings".into(), file.display().to_string()]))
         }
         // Codex runs one `notify` program at each turn end. Given at launch it would replace one the user configured,
@@ -188,8 +181,6 @@ pub fn effort_args(kind: &str, e: &str) -> Vec<String> { super::kinds::kind(kind
 pub fn fast_args(kind: &str, on: bool) -> Vec<String> {
     match (kind, on) { ("codex", true) => vec!["-c".into(), "service_tier=\"fast\"".into()], ("codex", false) => vec!["-c".into(), "service_tier=\"default\"".into()], _ => vec![] }
 }
-/// In place of the access flags: the program's own plan mode, where an edit asks in the terminal.
-pub fn plan_mode_args(kind: &str) -> Option<Vec<String>> { (kind == "claude").then(|| vec!["--permission-mode".into(), "plan".into()]) }
 /// A headless command for the Watcher: the program, its arguments, and what goes in on its stdin.
 pub struct OneShot { pub command: String, pub args: Vec<String>, pub stdin: Option<String> }
 pub fn one_shot(kind: &str, model: &str, effort: &str, prompt: &str, system: &str, lean: bool) -> Option<OneShot> {
