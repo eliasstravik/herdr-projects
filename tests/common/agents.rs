@@ -1,9 +1,9 @@
 //! The fake herdr's agents: started in a pane, prompted, sent keys, read. Each prompt plays the next step of the
 //! script for its role (worker, reviewer for a name ending in -r, picker for -pick, the Coordinator): it writes files,
 //! commits, writes the closing note, the plan, the verdict or the comparison where the board tells an agent to, and
-//! may end its turn with a recorded ending (tests/fixtures/endings) and run the agent's own turn-end report. A step's
-//! `then` is a step of the same turn played later: on the board's `after`-th look at the agent (3; 0: never), or by
-//! `go_on`.
+//! may end its turn with a recorded ending (tests/fixtures/endings) and run the agent's own turn-end report, or close
+//! its terminal (`closed`). A step's `then` is a step of the same turn played later: on the board's `after`-th look at
+//! the agent (3; 0: never), or by `go_on`.
 use super::herdr::{arr, fail, ok, out, FakeHerdr as F, Out};
 use super::worktrees::git;
 use serde_json::{json, Value};
@@ -67,8 +67,11 @@ pub fn agent(f: &F, verb: &str, arg2: &str, argv: &[String], flag: &dyn Fn(&str)
         "get" => {
             if st.b("agentGetFails") { return fail("timeout", "timed out"); }
             let due = { let a = &mut st["panes"][pi]["agent"]; a.at("then").is_object() && a.i("thenIn") > 0 && { let n = a.i("thenIn") - 1; a["thenIn"] = json!(n); n == 0 } };
+            let id = st["panes"][pi].t("pane_id");
             if due { drop(st); go_on(f, pi); st = f.st.borrow_mut(); }
-            let p = st["panes"][pi].clone(); ok(json!({ "type": "agent_info", "agent": F::agent_out(&p) }))
+            // The rest of its turn may have closed its terminal, or ended the agent.
+            let Some(p) = st.arr("panes").iter().find(|p| p.s("pane_id") == id && p.at("agent").is_object()).cloned() else { return fail("agent_not_found", &format!("agent target {arg2} not found")) };
+            ok(json!({ "type": "agent_info", "agent": F::agent_out(&p) }))
         }
         "prompt" => {
             if st["panes"][pi]["agent"].s("status") == "blocked" { return fail("agent_blocked", "agent is blocked"); }
@@ -184,6 +187,7 @@ fn run(f: &F, pi: usize, prompt: &str, step: Value) {
     if step.b("session") { st["panes"][pi]["agent"]["session"] = step.at("session").clone(); }
     if step.b("screen") { st["panes"][pi]["agent"]["screen"] = step.at("screen").clone(); }
     if step.b("exit") { st["panes"][pi]["agent"] = Value::Null; return; }
+    if step.b("closed") { arr(&mut st, "panes").remove(pi); F::drop_empty(&mut st); return; } // its terminal closed
     if step.at("then").is_object() { let a = &mut st["panes"][pi]["agent"]; a["then"] = step.at("then").clone(); a["thenIn"] = json!(if step.has("after") { step.i("after") } else { 3 }); }
     let status = if step.b("status") { step.t("status") } else { "done".into() };
     if status != "working" { F::bump(&mut st, pi, &status, status == "done" || status == "idle"); }
