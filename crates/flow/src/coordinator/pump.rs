@@ -106,7 +106,8 @@ fn ensure(api: &Herdr, co: &Co) -> Res<(Obj, bool)> {
     while taken.contains(&name) { name = format!("{}-{n}", co.agent_name()); n += 1; }
     let began = now();
     change(co, |c| { c.put("starting", began); true })?;
-    let args = start::start_args(&k, &start::StartOpts { model: run.t("model"), effort: run.t("effort"), access: if run.b("access") { run.t("access") } else { "full".into() }, fast: run.b("fast").then_some(true), resume: resume.clone().unwrap_or_default(), session: session.clone().unwrap_or_default(), extra: launch, ..Default::default() })?;
+    let opts = start::prepare(&k, &home(co), start::StartOpts { model: run.t("model"), effort: run.t("effort"), access: if run.b("access") { run.t("access") } else { "full".into() }, fast: run.b("fast").then_some(true), resume: resume.clone().unwrap_or_default(), session: session.clone().unwrap_or_default(), extra: launch })?;
+    let args = start::start_args(&k, &opts)?;
     let mut blocked = false;
     match api.agent_start(&name, &k, pane.s("pane_id"), &args, 60000) {
         Ok(_) => { settle(api, pane.s("pane_id"), &std::iter::once(crate::agents::kinds::program(&k).to_string()).chain(args).collect::<Vec<_>>().join(" ")); }
@@ -123,7 +124,7 @@ fn ensure(api: &Herdr, co: &Co) -> Res<(Obj, bool)> {
     c = change(co, |c| {
         c.put("run", run.clone()); c.put("pick", Value::Null); c.put("agent", name.clone()); c.put("startedAt", now()); c.put("version", version.clone()); c.put("starting", 0); c.put("rulesHash", super::rules_news::hash(&text));
         c.put("intro", !reads && resume.is_none()); // a program not known to read a rules file: one line before the first message points at it
-        if resume.is_none() { c.put("session", session.clone().map(Value::String).unwrap_or(Value::Null)); c.put("transcript", Value::Null); c.put("since", began); c.put("seen", Value::Null); }
+        if resume.is_none() { c.put("session", Some(opts.session.clone()).filter(|s| !s.is_empty()).map(Value::String).unwrap_or(Value::Null)); c.put("transcript", Value::Null); c.put("since", began); c.put("seen", Value::Null); }
         true
     })?;
     Ok((c, blocked))

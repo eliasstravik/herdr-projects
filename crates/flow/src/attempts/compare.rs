@@ -98,6 +98,8 @@ fn compare(id: &str, g: &mut Guard, t: &Task) -> Res<Obj> {
     let ws = t.at("link").t("workspace");
     let err = |e: &str| Ok(obj(json!({ "error": e, "by": k })));
     if ws.is_empty() || api.workspace_get(&ws).is_none() { return Ok(obj(json!({ "error": "the task's space is gone, so nobody compared the attempts" }))); }
+    let x = launch_extras(t, "reviewer", &k, 0, "", None)?;
+    let opts = start::prepare(&k, &cwd, start::StartOpts { model: model.clone(), effort: effort.clone(), fast: Some(who.fast), access: who.access.clone(), session: x.session.clone().unwrap_or_default(), ..Default::default() })?;
     let made = api.tab_create(&ws, &cwd.display().to_string(), flow::tabs::PICKER_TAB, &crate::temp::task_env(t))?;
     let tab = if made.at("tab").b("tab_id") { made.at("tab").t("tab_id") } else { made.at("root_pane").t("tab_id") };
     let pane = if made.at("root_pane").is_object() { made.at("root_pane").t("pane_id") } else { api.panes(Some(&ws))?.into_iter().find(|p| p.s("tab_id") == tab).map(|p| p.t("pane_id")).unwrap_or_default() };
@@ -107,10 +109,9 @@ fn compare(id: &str, g: &mut Guard, t: &Task) -> Res<Obj> {
     let mut name: String = format!("sw-{repo}-{}-pick", t.t("n")).chars().take(32).collect();
     if taken.contains(&name) { name = format!("{}-{:04}", name.chars().take(27).collect::<String>(), now() % 10000); }
     let started_at = now();
-    let x = launch_extras(t, "reviewer", &k, 0, "", None)?;
-    g.set(|t| { t.obj_mut("link").put("reviewer", json!({ "pane": pane, "tab": tab, "agent": name, "kind": k })); t.put("reviewSession", x.session.clone().map(Value::String).unwrap_or(Value::Null)); })?;
+    g.set(|t| { t.obj_mut("link").put("reviewer", json!({ "pane": pane, "tab": tab, "agent": name, "kind": k })); t.put("reviewSession", Some(opts.session.clone()).filter(|s| !s.is_empty()).map(Value::String).unwrap_or(Value::Null)); })?;
     let start_with = |hook: Vec<String>| -> Res<()> {
-        let args = start::start_args(&k, &start::StartOpts { model: model.clone(), effort: effort.clone(), fast: Some(who.fast), access: who.access.clone(), session: x.session.clone().unwrap_or_default(), extra: hook, ..Default::default() })?;
+        let args = start::start_args(&k, &start::StartOpts { extra: hook, ..opts.clone() })?;
         match api.agent_start(&name, &k, &pane, &args, 60000) { Ok(_) => { crate::submit::settle(&api, &pane, &std::iter::once(crate::agents::kinds::program(&k).to_string()).chain(args).collect::<Vec<_>>().join(" ")); Ok(()) } Err(e) if e.code == "agent_not_ready" => Ok(()),
             Err(e) => Err(crate::agents::start_failed::say(&api, &crate::agents::start_failed::Start { kind: &k, setting: "reviewer.agent", again: "pick again" }, &pane, &e.message, &crate::store::files::dir_of(t.s("id")).join("runner.log")).into()) }
     };

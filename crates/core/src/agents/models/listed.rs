@@ -6,7 +6,7 @@ use super::super::kinds::{kind, program, Read};
 use crate::clock::now;
 use crate::json::*;
 use crate::store::files::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 const KEPT: i64 = 3_600_000;
@@ -75,8 +75,14 @@ pub fn listed(k: &str, fresh: bool) -> Listing {
 pub fn list_command(k: &str) -> String { std::iter::once(program(k)).chain(kind(k).map(|a| a.models.list).unwrap_or(&[]).iter().copied()).collect::<Vec<_>>().join(" ") }
 /// What the program printed; None when it is not installed here; Err: why it gave nothing.
 pub fn run(prog: &str, args: &[&str]) -> Result<Option<String>, String> {
+    run_in(prog, args, None)
+}
+/// The same bounded command, in the directory whose project configuration it must read.
+pub fn run_in(prog: &str, args: &[&str], cwd: Option<&Path>) -> Result<Option<String>, String> {
     let cmd = std::iter::once(prog).chain(args.iter().copied()).collect::<Vec<_>>().join(" ");
-    let child = match Command::new(prog).args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+    let mut command = Command::new(prog);
+    if let Some(cwd) = cwd { command.current_dir(cwd); }
+    let child = match command.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
         Ok(c) => c,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(format!("`{cmd}` could not be run: {e}")),

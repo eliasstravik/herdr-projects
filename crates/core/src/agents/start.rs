@@ -24,6 +24,10 @@ pub fn access_args(k: &str, access: &str) -> Res<Vec<String>> {
 }
 #[derive(Default, Clone)]
 pub struct StartOpts { pub model: String, pub effort: String, pub fast: Option<bool>, pub access: String, pub resume: String, pub session: String, pub extra: Vec<String> }
+/// Prepare a session once before any launch retry or repeated argument generation.
+pub fn prepare(k: &str, cwd: &std::path::Path, o: StartOpts) -> Res<StartOpts> {
+    if k == "opencode" && super::opencode::v2() { super::opencode::prepare(cwd, o) } else { Ok(o) }
+}
 /// The arguments a worker, a reviewer or the Coordinator of this kind is started with. `resume` reopens a known
 /// conversation; `session` names a new one; `extra` are the hook and standing-rule arguments.
 pub fn start_args(k: &str, o: &StartOpts) -> Res<Vec<String>> {
