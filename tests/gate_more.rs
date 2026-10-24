@@ -105,6 +105,21 @@ fn review_must_fix_is_major_by_default_yours_or_one_tasks_and_review_rounds_0_se
 }
 
 #[test]
+fn review_pr_comment_off_posts_no_comment_but_the_review_still_runs() {
+    let w = world_with(Opts { repo: true, origin: true, ..Default::default() });
+    w.script(json!({ "worker": [{ "files": { "f.txt": "1\n" }, "commit": "v1", "note": "Did v1." }], "reviewer": [{ "verdict": { "meets": true, "text": "Looked at it.", "findings": [] } }] }));
+    assert_eq!(setting("review.prComment", None), json!(true));
+    let id = w.add("Quiet pull request");
+    assert_eq!(sw::cli::main(vec!["set".into(), "review.prComment".into(), "false".into(), "--task".into(), id.clone()]), 0);
+    delegate(&id);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure"));
+    assert!(t.at("review").b("meets"), "{}", t.at("review"));
+    let log = gh_log(&w);
+    assert!(!log.contains("pr comment"), "{log}");
+}
+
+#[test]
 fn the_pull_request_and_the_review_page_show_every_finding_those_below_the_gate_marked_not_required() {
     let w = world_with(Opts { repo: true, origin: true, ..Default::default() });
     w.script(json!({ "worker": [{ "files": { "f.txt": "1\n" }, "commit": "v1", "note": "Did v1." }], "reviewer": [{ "verdict": { "meets": true, "text": "Looked at it.", "findings": [finding("minor", "The name could be clearer", json!({}))] } }] }));
