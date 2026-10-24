@@ -54,7 +54,8 @@ The severity says what the fault does:
   that stopped it (one herdr did not report as a dialog) is there to see, before you retry.
 
 Findings below the gate still show on the review page, in the task panel and in a comment on the pull request, marked
-as not required.
+as not required. `review.prComment` turned off, the board posts no review comment on the pull request: the review
+still runs, is judged at the gate and shows on the review page and in the task panel.
 
 ## Merging by itself
 
