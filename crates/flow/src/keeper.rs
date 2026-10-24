@@ -168,6 +168,7 @@ pub fn refresh_said(rows: &[Obj], now_ms: i64) {
     }
 }
 pub fn keeper_work() -> i32 {
+    crate::agents::transcript::remember_misses(); // asked every second: a missing conversation is not searched for each time
     let mut fails: HashMap<String, u32> = HashMap::new(); // socket -> failed calls in a row
     let first = current_socket();
     loop {

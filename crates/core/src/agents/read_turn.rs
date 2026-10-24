@@ -248,7 +248,7 @@ pub fn find_file(root: &Path, test: &dyn Fn(&str) -> bool, depth: usize) -> Vec<
     }
     let mut hits = vec![];
     walk(root, depth, test, &mut hits);
-    let mtime = |p: &PathBuf| std::fs::metadata(p).and_then(|m| m.modified()).ok();
-    hits.sort_by(|a, b| mtime(b).cmp(&mtime(a)));
+    // Each file's time is read once: a comparison that read it would ask the disk n·log n times.
+    hits.sort_by_cached_key(|p| std::cmp::Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok()));
     hits
 }
