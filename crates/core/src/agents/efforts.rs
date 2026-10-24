@@ -115,6 +115,7 @@ fn said(a: &Kind, ask: Ask) -> Option<Said> {
 /// The levels this program takes, for this model where it has its own. None: it takes no effort when the board
 /// starts it.
 pub fn levels(k: &str, model: &str, ask: Ask) -> Option<Levels> {
+    if k == "opencode" && super::opencode::v2() { return Some(Levels::default()); } // variants are checked against the launch directory's API catalog
     let a = kind(k).filter(|a| !a.effort.is_empty())?;
     let table = Levels { levels: a.efforts.iter().map(|s| s.to_string()).collect(), ..Default::default() };
     if a.efforts_read == EffortsRead::Table { return Some(table); }
@@ -133,6 +134,7 @@ pub fn levels_by(k: &str) -> Vec<(String, Vec<String>)> {
 /// when the effort is `default`. A level not on a list it says itself is asked again first (`ask` not Kept).
 pub fn why_not(k: &str, model: &str, level: &str, ask: Ask) -> Option<String> {
     if level.is_empty() || level == "default" { return None; }
+    if k == "opencode" && super::opencode::v2() { return None; }
     let a = kind(k)?;
     if a.effort.is_empty() {
         return Some(if a.effort_note.is_empty() { format!("{k} takes no effort level when the board starts it: leave it at default.") } else { format!("{}: leave it at default.", a.effort_note) });

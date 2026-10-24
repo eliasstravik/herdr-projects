@@ -73,8 +73,12 @@ fn a_level_the_program_does_not_take_is_refused_with_the_ones_it_does() {
     refused("reviewer.effort", "ultra", r#"claude has no effort "ultra": it takes low, medium, high, xhigh, max, as `claude --help` lists them"#);
     taken("reviewer.agent", "cursor");
     refused("reviewer.effort", "high", r"cursor takes its effort in the model's name: cursor/claude-opus-4-8\[effort=high\]: leave it at default\.");
+    let f = sw::store::files::data_dir().join("versions.json");
+    let mut all = sw::store::files::read_json(&f).unwrap();
+    all["opencode"] = json!({ "v": "2.1.4", "at": sw::clock::now(), "found": true });
+    sw::store::files::write_json(&f, &all).unwrap();
     taken("reviewer.agent", "opencode");
-    refused("reviewer.effort", "high", r"opencode takes no effort level when the board starts it");
+    taken("reviewer.effort", "high");
     // The Coordinator for one use: its effort is checked against the model it is given.
     assert!(sw::coordinator::who::pick_of("codex/gpt-6-luna", "ultra").unwrap_err().msg.contains("codex's gpt-6-luna has no effort \"ultra\""));
     assert_eq!(sw::coordinator::who::pick_of("codex/gpt-6.1-sol", "ultra").unwrap().unwrap().s("effort"), "ultra");
@@ -95,6 +99,17 @@ fn where_the_levels_cannot_be_read_the_table_s_are_used() {
     refused("worker.effort", "minimal", r#"agy has no effort "minimal": it takes low, medium, high, xhigh, max"#);
     // A program whose table names no levels takes any.
     assert_eq!(why_not("grok", "", "whatever", Ask::Fresh), None);
+}
+
+#[test]
+fn opencode_v1_still_refuses_effort_it_cannot_receive_at_launch() {
+    let _w = world();
+    let f = sw::store::files::data_dir().join("versions.json");
+    let mut all = sw::store::files::read_json(&f).unwrap();
+    all["opencode"] = json!({ "v": "1.18.34", "at": sw::clock::now(), "found": true });
+    sw::store::files::write_json(&f, &all).unwrap();
+    taken("worker.agent", "opencode");
+    refused("worker.effort", "high", r"opencode takes no effort level when the board starts it");
 }
 
 #[test]

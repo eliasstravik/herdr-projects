@@ -60,10 +60,11 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
     if plan::planner(&t) { flow::tabs::name_tab(&api, t.at("link").s("tab"), flow::tabs::PLANNER_TAB); } else { flow::tabs::name_agent_tab(&api, t.at("link").s("tab"), Some(&t)); }
     let x = launch_extras(&t, "agent", &kind, 0, &rules(&t), resume)?;
     let fast = if plan::planner(&t) { None } else { Some(who.fast) };
+    let opts = start::prepare(&kind, &cwd_of(&t), start::StartOpts { model: model.clone(), effort: level.clone(), fast, access: who.access.clone(), resume: resume.unwrap_or("").into(), session: x.session.clone().unwrap_or_default(), extra: vec![] })?;
     let args = |hooked: bool| -> Res<Vec<String>> {
         let mut extra = if hooked { x.hook.clone() } else { vec![] };
         extra.extend(x.rules.clone());
-        start::start_args(&kind, &start::StartOpts { model: model.clone(), effort: level.clone(), fast, access: who.access.clone(), resume: resume.unwrap_or("").into(), session: x.session.clone().unwrap_or_default(), extra })
+        start::start_args(&kind, &start::StartOpts { extra, ..opts.clone() })
     };
     let (mut blocked, mut hooked) = (false, x.hooked);
     let pane = t.at("link").t("pane");
@@ -86,7 +87,8 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
     // herdr calls the program ready before it has drawn anything; text typed that early loses its enter (submit.rs).
     if !prompt.is_empty() && !blocked { let launch = std::iter::once(crate::agents::kinds::program(&kind).to_string()).chain(args(hooked)?).collect::<Vec<_>>().join(" "); crate::submit::settle(&api, &pane, &launch); }
     // The send time arms the pipeline: nothing older than this counts as the turn's end.
-    let (session, version, boxed) = (resume.map(String::from).or(x.session.clone()), x.version.clone(), plan::sandbox::boxed(&t));
+    let session = Some(if opts.resume.is_empty() { opts.session.clone() } else { opts.resume.clone() }).filter(|s| !s.is_empty());
+    let (version, boxed) = (x.version.clone(), plan::sandbox::boxed(&t));
     let t = g.set(|t| {
         t.put("stage", "working"); t.put("armedAt", now()); t.put("expectedWake", Value::Null); t.put("turnOpen", true); t.put("turnBy", "start"); t.put("msg", "");
         t.obj_mut("link").put("agent", name.clone());

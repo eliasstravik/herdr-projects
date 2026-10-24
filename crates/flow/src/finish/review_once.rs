@@ -67,6 +67,8 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
     let mut pane_tab: Option<(String, String)> = None;
     let (mut error, mut review, mut auth, mut cut, mut ended): (String, Option<Obj>, bool, Option<Cut>, bool) = (String::new(), None, false, None, false);
     let run = (|| -> Res<()> {
+        let x = launch_extras(&t, "reviewer", &rkind, round, "", None)?;
+        let opts = start::prepare(&rkind, &folder, start::StartOpts { model: rmodel.clone(), effort: reffort.clone(), fast: Some(who.fast), access: who.access.clone(), session: x.session.clone().unwrap_or_default(), ..Default::default() })?;
         installed::pre_trust(&rkind, &if t.b("root") { PathBuf::from(t.s("root")) } else { folder_of(t.s("id")) }, &who.access);
         close_reviewer(id); // a tab left over from an interrupted round
         // Its own tab, never focused: the human stays where they are, and the agent's tab and the board keep their size.
@@ -79,12 +81,10 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
         let mut name: String = format!("{base}-r").chars().take(32).collect();
         if taken.contains(&name) { name = format!("{}-{:04}", name.chars().take(27).collect::<String>(), now() % 10000); }
         let started_at = now(); // a turn-end report older than this is from a try of this review that was cut off
-        let x = launch_extras(&t, "reviewer", &rkind, round, "", None)?;
-        t = g.set(|t| { t.obj_mut("link").put("reviewer", json!({ "pane": pane, "tab": made.tab, "terminal": made.terminal, "agent": name, "kind": rkind })); t.put("reviewSession", x.session.clone().map(Value::String).unwrap_or(Value::Null)); })?;
+        t = g.set(|t| { t.obj_mut("link").put("reviewer", json!({ "pane": pane, "tab": made.tab, "terminal": made.terminal, "agent": name, "kind": rkind })); t.put("reviewSession", Some(opts.session.clone()).filter(|s| !s.is_empty()).map(Value::String).unwrap_or(Value::Null)); })?;
         flow::sidebar::tell_sidebar(&t); // the reviewer's pane has its entry in herdr's sidebar from the start
-        let opts = |hook: Vec<String>| start::StartOpts { model: rmodel.clone(), effort: reffort.clone(), fast: Some(who.fast), access: who.access.clone(), session: x.session.clone().unwrap_or_default(), extra: hook, ..Default::default() };
         let start_with = |hook: Vec<String>| -> Res<()> {
-            let args = start::start_args(&rkind, &opts(hook))?;
+            let args = start::start_args(&rkind, &start::StartOpts { extra: hook, ..opts.clone() })?;
             let r = if plan.is_some() { crate::plan::sandbox::start_program(&api, &get(id).unwrap_or(t.clone()), &name, &rkind, &pane, &args, "reviewer") } else { api.agent_start(&name, &rkind, &pane, &args, 60000).map(|_| ()) };
             match r { Ok(()) => { crate::submit::settle(&api, &pane, &std::iter::once(crate::agents::kinds::program(&rkind).to_string()).chain(args).collect::<Vec<_>>().join(" ")); Ok(()) } Err(e) if e.code == "agent_not_ready" => Ok(()),
                 Err(e) => Err(start_failed::say(&api, &start_failed::Start { kind: &rkind, setting: "reviewer.agent", again: "retry the review" }, &pane, &e.message, &crate::store::files::dir_of(id).join("runner.log")).into()) }
