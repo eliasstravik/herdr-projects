@@ -23,15 +23,18 @@ use std::path::Path;
 pub fn word(c: &Value) -> String { [c.s("conclusion"), c.s("state"), c.s("status")].into_iter().find(|s| !s.is_empty()).unwrap_or("").to_uppercase() }
 pub fn name(c: &Value) -> String { if c.b("name") { c.t("name") } else { c.t("context") } }
 pub enum Look { Passed, Running(Vec<String>), Failed(Vec<Value>) }
-/// Keep the latest instance of each named check. GitHub supplies timestamps for check runs and commit statuses;
-/// a numeric run/status ID breaks equal timestamps. Without comparable ordering, retain the less optimistic result.
+/// Keep the latest instance of each check within its workflow. Different workflows may have jobs with the same
+/// name and event; a successful job in one must never hide another workflow's failed or pending job.
+/// GitHub supplies timestamps for check runs and commit statuses; a numeric ID breaks equal timestamps.
+/// Without comparable ordering, retain the less optimistic result.
 pub fn newest(checks: &[Value]) -> Vec<Value> {
     let mut chosen: Vec<Value> = Vec::new();
     for c in checks {
         if let Some(at) = chosen.iter().position(|old| name(old).eq_ignore_ascii_case(&name(c))
             && old.b("run") == c.b("run")
             && old.s("__typename") == c.s("__typename")
-            && old.s("event") == c.s("event")) {
+            && old.s("event") == c.s("event")
+            && old.s("workflowName").eq_ignore_ascii_case(c.s("workflowName"))) {
             let old = &chosen[at];
             let stamp = |v: &Value| [v.s("startedAt"), v.s("createdAt"), v.s("updatedAt"), v.s("completedAt")].into_iter().find(|s| !s.is_empty()).unwrap_or("").to_string();
             let a = stamp(old);
@@ -102,30 +105,26 @@ pub struct Judged { pub look: Look, pub flows: Vec<String>, pub unread: Vec<Stri
 /// with its run on the commit not there yet or not through (all of its jobs, every member of a matrix). Failed: a
 /// check, or such a run. None listed and nothing of that: "none to wait for", unless an outside CI reports in this
 /// repo, or the pull request had checks before (`prChecksSeen`). Read without the Checks permission (readable.rs),
-/// another app's check is never listed: a required check not listed is waited for while anything readable is still out, then it is one that could not be read, not one to wait for.
+/// a required check absent from Actions jobs and commit statuses still waits: missing permission is no proof it passed.
 pub fn judge(t: &Obj, head: &str, read: &readable::Read, root: &Path, base: &str) -> Judged {
     let latest = newest(read.listed());
-    let (listed, blind) = (latest.as_slice(), !read.unread.is_empty());
+    let listed = latest.as_slice();
     let look = sort(listed);
     if let Look::Failed(_) = look { return Judged { look, flows: vec![], unread: vec![] }; }
-    let mut flows = expected::flows_state(t, root, base, head);
+    let flows = expected::flows_state(t, root, base, head);
     if !flows.failed.is_empty() { return Judged { look: Look::Failed(flows.failed), flows: vec![], unread: vec![] }; }
     let names: Vec<String> = listed.iter().map(name).collect();
     let mut wait = missing(t, head, read.via(), listed);
-    let required: Vec<String> = expected::required(root, base).into_iter().filter(|n| !names.contains(n) && !wait.contains(n)).collect();
-    let mut unread = vec![];
-    // Read blind, a required check waits beside the workflows (by name, not as one seen listed), so that what is
-    // readable passing is enough to look again.
-    if !blind { wait.extend(required); }
-    else if matches!(look, Look::Passed) && wait.is_empty() && flows.waiting.is_empty() { unread = required; }
-    else { for n in required { if !flows.waiting.contains(&n) { flows.waiting.push(n); } } }
+    let required: Vec<String> = expected::required(root, base).into_iter().filter(|n| !names.iter().any(|seen| seen.eq_ignore_ascii_case(n)) && !wait.iter().any(|seen| seen.eq_ignore_ascii_case(n))).collect();
+    // Every required context must actually be listed, even when the fallback cannot read other apps' check runs.
+    wait.extend(required);
     let look = match look {
         Look::Running(r) => Look::Running(unique(r.into_iter().chain(wait))),
         Look::Passed if !wait.is_empty() => Look::Running(wait),
         Look::Passed if !flows.waiting.is_empty() || (listed.is_empty() && (t.b("prChecksSeen") || expected::outside_ci(root, base))) => Look::Running(vec![]),
         x => x,
     };
-    Judged { look, flows: flows.waiting, unread }
+    Judged { look, flows: flows.waiting, unread: vec![] }
 }
 /// What was not looked at, said on the task that merges: what the token cannot read, and the required checks not found
 /// in what it read.

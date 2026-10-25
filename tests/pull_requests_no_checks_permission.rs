@@ -86,6 +86,60 @@ fn fallback_job_history_keeps_latest_pending_and_old_failure_does_not_override_n
 }
 
 #[test]
+fn fallback_same_job_name_in_different_workflows_cannot_hide_failure() {
+    let w = pr_world(json!({ "review.rounds": 0 }));
+    let id = to_approval(&w, "Two workflows, one failed build");
+    let head = task(&id).t("prHead");
+    let s = json!({ "noChecks": true, "view": none(&head), "statuses": [],
+        "runs": [
+            [".github/workflows/alpha.yml", "completed", "success", "https://github.com/o/r/actions/runs/5", "Alpha", "pull_request", "2026-10-25T01:00:00Z"],
+            [".github/workflows/beta.yml", "completed", "success", "https://github.com/o/r/actions/runs/6", "Beta", "pull_request", "2026-10-25T02:00:00Z"]
+        ],
+        "jobs": {
+            "5": [["build", "completed", "failure", "https://github.com/o/r/actions/runs/5/job/50", "50", "2026-10-25T01:00:00Z"]],
+            "6": [["build", "completed", "success", "https://github.com/o/r/actions/runs/6/job/60", "60", "2026-10-25T02:00:00Z"]]
+        }
+    });
+    w.gh_says(s);
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure"));
+    assert_eq!(strings(t.at("prFailure").at("checks")), vec!["build"]);
+    assert!(!merged(&w), "newer Beta success must not hide Alpha failure");
+    poll_prs();
+    assert!(task(&id).b("prFailure"), "housekeeping must keep Alpha failure");
+}
+
+#[test]
+fn fallback_same_job_name_in_different_workflows_keeps_pending_until_it_passes() {
+    let w = pr_world(json!({ "review.rounds": 0 }));
+    let id = to_approval(&w, "Two workflows, one pending build");
+    let head = task(&id).t("prHead");
+    let make = |status: &str, conclusion: &str| json!({ "noChecks": true, "view": none(&head), "statuses": [],
+        "runs": [
+            [".github/workflows/alpha.yml", "completed", "success", "https://github.com/o/r/actions/runs/5", "Alpha", "pull_request", "2026-10-25T01:00:00Z"],
+            [".github/workflows/beta.yml", "completed", "success", "https://github.com/o/r/actions/runs/6", "Beta", "pull_request", "2026-10-25T02:00:00Z"]
+        ],
+        "jobs": {
+            "5": [["build", status, conclusion, "https://github.com/o/r/actions/runs/5/job/50", "50", "2026-10-25T01:00:00Z"]],
+            "6": [["build", "completed", "success", "https://github.com/o/r/actions/runs/6/job/60", "60", "2026-10-25T02:00:00Z"]]
+        }
+    });
+    w.gh_says(make("in_progress", ""));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "merging", "{}", t.at("failure"));
+    assert!(!merged(&w), "later Beta success must not hide Alpha pending");
+    poll_prs();
+    assert!(!merged(&w), "housekeeping must keep Alpha pending");
+    w.gh_says(make("completed", "success"));
+    poll_prs();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{} {}", t.at("failure"), gh_log(&w));
+    assert!(merged(&w), "after Alpha and Beta are both successful");
+}
+
+#[test]
 fn passed_jobs_and_statuses_merge_and_the_task_says_what_it_could_not_read() {
     let w = pr_world(json!({}));
     let id = to_approval(&w, "Fine-grained, green");
@@ -172,7 +226,7 @@ fn running_jobs_and_pending_statuses_are_waited_for_then_it_merges_and_github_is
 }
 
 #[test]
-fn no_ci_at_all_merges_at_once_and_a_required_check_no_token_can_read_is_named_not_waited_for() {
+fn no_ci_at_all_merges_but_required_check_unreadable_by_token_still_blocks() {
     let w = pr_world(json!({}));
     let id = to_approval(&w, "Fine-grained, no CI");
     let head = task(&id).t("prHead");
@@ -182,7 +236,7 @@ fn no_ci_at_all_merges_at_once_and_a_required_check_no_token_can_read_is_named_n
     let t = settle(&id);
     assert_eq!(t.s("stage"), "done", "{} {}", t.at("failure"), gh_log(&w)); assert!(merged(&w)); no_login_asked(&t, &id);
     drop(w);
-    // the branch requires a check of another app: waited for while the job runs, then named on the task as not read
+    // A required check that the token cannot read must remain outstanding even after other jobs pass.
     let w = pr_world(json!({}));
     let id = to_approval(&w, "Fine-grained, required app");
     let head = task(&id).t("prHead");
@@ -194,8 +248,18 @@ fn no_ci_at_all_merges_at_once_and_a_required_check_no_token_can_read_is_named_n
     w.gh_says(s);
     poll_prs();
     let t = settle(&id);
-    assert_eq!(t.s("stage"), "done", "{}", t.at("failure")); assert!(merged(&w));
-    assert!(t.s("msg").contains("the required check app/scan (listed by no GitHub Actions job and no commit status)"), "{}", t.s("msg"));
+    assert_eq!(t.s("stage"), "merging", "{}", t.at("failure")); assert!(!merged(&w));
+    assert!(strings(t.at("checksWait").at("names")).contains(&"app/scan".to_string()), "missing required check must be visible: {}", t.at("checksWait"));
+    assert!(t.s("msg").contains("Waiting for GitHub checks"), "{}", t.s("msg"));
+    // Once an actual status on this same head reports success, it may merge normally.
+    let mut s = says(&head, ("completed", "success"), json!([job("build", "completed", "success", 9)]),
+        json!([["app/scan", "success", "https://github.com/o/r/status/scan", "66", "2026-10-25T03:00:00Z"]]));
+    s["required"] = json!(["build", "app/scan"]);
+    w.gh_says(s);
+    poll_prs();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{} {}", t.at("failure"), gh_log(&w));
+    assert!(merged(&w));
 }
 
 #[test]
