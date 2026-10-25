@@ -23,8 +23,29 @@ use std::path::Path;
 pub fn word(c: &Value) -> String { [c.s("conclusion"), c.s("state"), c.s("status")].into_iter().find(|s| !s.is_empty()).unwrap_or("").to_uppercase() }
 pub fn name(c: &Value) -> String { if c.b("name") { c.t("name") } else { c.t("context") } }
 pub enum Look { Passed, Running(Vec<String>), Failed(Vec<Value>) }
+/// Keep the latest instance of each named check. GitHub supplies timestamps for check runs and commit statuses;
+/// a numeric run/status ID breaks equal timestamps. Without comparable ordering, retain the less optimistic result.
+pub fn newest(checks: &[Value]) -> Vec<Value> {
+    let mut chosen: Vec<Value> = Vec::new();
+    for c in checks {
+        if let Some(at) = chosen.iter().position(|old| name(old).eq_ignore_ascii_case(&name(c))) {
+            let old = &chosen[at];
+            let stamp = |v: &Value| [v.s("startedAt"), v.s("createdAt"), v.s("updatedAt"), v.s("completedAt")].into_iter().find(|s| !s.is_empty()).unwrap_or("").to_string();
+            let a = stamp(old);
+            let b = stamp(c);
+            let numeric = |v: &Value| v.at("id").as_u64().or_else(|| v.s("id").parse::<u64>().ok()).or_else(|| v.at("databaseId").as_u64());
+            let newer = if !a.is_empty() && !b.is_empty() && a != b { b > a }
+                else if let (Some(x), Some(y)) = (numeric(old), numeric(c)) { y > x }
+                else { rank(c) > rank(old) };
+            if newer { chosen[at] = c.clone(); }
+        } else { chosen.push(c.clone()); }
+    }
+    chosen
+}
+fn rank(c: &Value) -> u8 { let w = word(c); if CHECK_BAD.contains(&w.as_str()) { 2 } else if CHECK_GOOD.contains(&w.as_str()) { 0 } else { 1 } }
 /// One failed check is enough: the others are not waited for.
 pub fn sort(checks: &[Value]) -> Look {
+    let checks = newest(checks);
     let failed: Vec<Value> = checks.iter().filter(|c| CHECK_BAD.contains(&word(c).as_str())).cloned().collect();
     if !failed.is_empty() { return Look::Failed(failed); }
     let running = unique(checks.iter().filter(|c| !CHECK_GOOD.contains(&word(c).as_str())).map(name));
@@ -45,7 +66,8 @@ pub fn unique(names: impl IntoIterator<Item = String>) -> Vec<String> {
 /// the list, a workflow not through).
 pub fn waiting_words(listed: &[Value], waited: &[String], flows: &[String]) -> String {
     let is = |a: &str, b: &str| a.eq_ignore_ascii_case(b);
-    let (runs, checks): (Vec<&Value>, Vec<&Value>) = listed.iter().partition(|c| c.b("run"));
+    let latest = newest(listed);
+    let (runs, checks): (Vec<&Value>, Vec<&Value>) = latest.iter().partition(|c| c.b("run"));
     let workflows = unique(runs.iter().map(|c| name(c)).chain(flows.iter().cloned()));
     let a_workflow = |n: &str| workflows.iter().any(|f| is(f, n));
     let waits = |n: &str| waited.iter().chain(flows).any(|w| is(w, n));
@@ -79,7 +101,8 @@ pub struct Judged { pub look: Look, pub flows: Vec<String>, pub unread: Vec<Stri
 /// repo, or the pull request had checks before (`prChecksSeen`). Read without the Checks permission (readable.rs),
 /// another app's check is never listed: a required check not listed is waited for while anything readable is still out, then it is one that could not be read, not one to wait for.
 pub fn judge(t: &Obj, head: &str, read: &readable::Read, root: &Path, base: &str) -> Judged {
-    let (listed, blind) = (read.listed(), !read.unread.is_empty());
+    let latest = newest(read.listed());
+    let (listed, blind) = (latest.as_slice(), !read.unread.is_empty());
     let look = sort(listed);
     if let Look::Failed(_) = look { return Judged { look, flows: vec![], unread: vec![] }; }
     let mut flows = expected::flows_state(t, root, base, head);
