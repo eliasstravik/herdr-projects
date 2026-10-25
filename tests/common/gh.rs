@@ -78,19 +78,19 @@ impl FakeGh {
             }
             // Does the branch a pull request merges into have checks: `base: { "check-runs": n, "status": n }`, or
             // `baseFail` (GitHub cannot say). None by default.
-            // A run's jobs: `jobs: { "<run id>": [[name, status, conclusion, url], …] }`.
+            // A run's jobs: `jobs: { "<run id>": [[name, status, conclusion, url, id?, startedAt?], …] }`.
             ("api", p) if p.contains("/actions/runs/") && p.contains("/jobs") => {
                 let run = p.split("/actions/runs/").nth(1).unwrap_or("").split('/').next().unwrap_or("");
                 ok(&rows(c.at("jobs").at(run)))
             }
-            // A commit's workflow runs: `runs: [[path, status, conclusion, url, name?], …]`, given as id, path, status,
-            // conclusion, url and name (the id from the url's `/runs/<id>`, the name "CI" if none).
+            // A commit's workflow runs: `runs: [[path, status, conclusion, url, name?, event?, startedAt?], …]`,
+            // given as id, path, status, conclusion, url, name, event, startedAt (id from URL).
             ("api", p) if p.contains("/actions/runs") => if c.b("actionsFail") { fail("gh: Resource not accessible by personal access token (HTTP 403)") } else {
                 ok(&c.arr("runs").iter().enumerate().map(|(i, r)| {
                     let x = strings(r);
                     let at = |i: usize| x.get(i).cloned().unwrap_or_default();
                     let id = at(3).split("/runs/").nth(1).map(|r| r.chars().take_while(|c| c.is_ascii_digit()).collect::<String>()).filter(|s| !s.is_empty()).unwrap_or((i + 1).to_string());
-                    [id, at(0), at(1), at(2), at(3), if x.len() > 4 { at(4) } else { "CI".into() }].join("\t")
+                    [id, at(0), at(1), at(2), at(3), if x.len() > 4 { at(4) } else { "CI".into() }, at(5), at(6)].join("\t")
                 }).collect::<Vec<_>>().join("\n"))
             },
             // The pull request's commit's statuses: `statuses: [[context, state, url], …]`.

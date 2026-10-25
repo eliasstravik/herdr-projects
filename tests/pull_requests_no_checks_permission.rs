@@ -23,6 +23,69 @@ fn no_login_asked(t: &Obj, id: &str) {
 }
 
 #[test]
+fn fallback_status_history_merges_only_when_newest_of_same_context_passed() {
+    // Real fine-grained-token route: the statuses API returns both records for one context on this head.
+    let w = pr_world(json!({ "review.rounds": 0 }));
+    let id = to_approval(&w, "Status rerun");
+    let head = task(&id).t("prHead");
+    let mut api = says(&head, ("completed", "success"), json!([]), json!([
+        ["deploy", "failure", "", "41", "2026-10-24T01:00:00Z"],
+        ["deploy", "success", "", "42", "2026-10-24T02:00:00Z"]
+    ]));
+    api["runs"] = json!([]);
+    w.gh_says(api);
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{} {}", t.at("failure"), gh_log(&w));
+    assert!(merged(&w));
+    assert!(gh_log(&w).contains("commits/"), "statuses must come through the fallback API");
+    drop(w);
+
+    let w = pr_world(json!({ "review.rounds": 0 }));
+    let id = to_approval(&w, "New status fails");
+    let head = task(&id).t("prHead");
+    let mut api = says(&head, ("completed", "success"), json!([]), json!([
+        ["deploy", "failure", "", "44", "2026-10-24T03:00:00Z"],
+        ["deploy", "success", "", "43", "2026-10-24T02:00:00Z"]
+    ]));
+    api["runs"] = json!([]);
+    w.gh_says(api);
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "approval", "{}", t.at("failure"));
+    assert_eq!(strings(t.at("prFailure").at("checks")), vec!["deploy"]);
+    assert!(!merged(&w));
+}
+
+#[test]
+fn fallback_job_history_keeps_latest_pending_and_old_failure_does_not_override_new_success() {
+    let w = pr_world(json!({}));
+    let id = to_approval(&w, "Rerun jobs");
+    let head = task(&id).t("prHead");
+    let make = |new_status: &str, new_conclusion: &str| json!({
+        "noChecks": true, "view": none(&head), "statuses": [],
+        "runs": [
+            [".github/workflows/ci.yml", "completed", "failure", "https://github.com/o/r/actions/runs/5", "CI", "pull_request", "2026-10-24T01:00:00Z"],
+            [".github/workflows/ci.yml", new_status, new_conclusion, "https://github.com/o/r/actions/runs/6", "CI", "pull_request", "2026-10-24T02:00:00Z"]
+        ],
+        "jobs": {
+            "5": [["build", "completed", "failure", "https://github.com/o/r/actions/runs/5/job/50", "50", "2026-10-24T01:00:00Z"]],
+            "6": [["build", new_status, new_conclusion, "https://github.com/o/r/actions/runs/6/job/60", "60", "2026-10-24T02:00:00Z"]]
+        }
+    });
+    w.gh_says(make("in_progress", ""));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "merging", "{}", t.at("failure"));
+    assert!(!merged(&w), "latest pending still waits");
+    w.gh_says(make("completed", "success"));
+    poll_prs();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{} {}", t.at("failure"), gh_log(&w));
+    assert!(merged(&w), "newest run and job passed on same head");
+}
+
+#[test]
 fn passed_jobs_and_statuses_merge_and_the_task_says_what_it_could_not_read() {
     let w = pr_world(json!({}));
     let id = to_approval(&w, "Fine-grained, green");

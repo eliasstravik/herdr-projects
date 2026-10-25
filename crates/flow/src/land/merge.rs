@@ -188,7 +188,7 @@ pub fn land_core(id: &str, g: &mut Guard) -> Res<()> {
         if m.status != 0 {
             // GitHub's checks are still running, or a required review is missing: the approval is remembered.
             let v: Value = super::readable::pr_view(&root, &pr, "reviewDecision").map(|r| r.view).unwrap_or(json!({}));
-            let states: Vec<String> = v.arr("statusCheckRollup").iter().map(|c| if c.b("conclusion") { c.t("conclusion") } else { c.t("state") }.to_uppercase()).collect();
+            let states: Vec<String> = super::checks::newest(v.arr("statusCheckRollup")).iter().map(|c| if c.b("conclusion") { c.t("conclusion") } else { c.t("state") }.to_uppercase()).collect();
             let waiting = !states.iter().any(|s| CHECK_BAD.contains(&s.as_str())) && v.s("reviewDecision") != "CHANGES_REQUESTED" && (states.iter().any(|s| !CHECK_GOOD.contains(&s.as_str())) || v.s("reviewDecision") == "REVIEW_REQUIRED");
             if waiting { g.set(|t| { t.put("failure", Value::Null); t.put("autoMerge", true); t.put("autoMergeLocal", true); let m = format!("Approved: merges when GitHub's checks pass ({})", t.s("pr")); t.put("msg", m); })?; return Ok(()); }
             let out = [m.stdout.trim(), m.stderr.trim()].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n");

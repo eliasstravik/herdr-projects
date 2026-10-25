@@ -20,6 +20,52 @@ fn with_ci(w: &World, workflow: &str, files: Value) {
 }
 
 #[test]
+fn workflow_rerun_on_same_head_replaces_old_failure_but_keeps_pending_and_new_failure() {
+    let spec = "name: CI\non:\n  pull_request:\njobs:\n  build:\n    runs-on: x\n";
+    let runs = |new: (&str, &str)| json!([
+        [CI, "completed", "failure", "https://github.com/o/r/actions/runs/5", "CI", "pull_request", "2026-10-24T01:00:00Z"],
+        [CI, new.0, new.1, "https://github.com/o/r/actions/runs/6", "CI", "pull_request", "2026-10-24T02:00:00Z"]
+    ]);
+    let w = pr_world(json!({}));
+    with_ci(&w, spec, json!({"f.txt":"v1"}));
+    let id = to_approval(&w, "Workflow latest pending");
+    let head = task(&id).t("prHead");
+    w.gh_says(json!({"view": none(&head), "runs": runs(("in_progress", ""))}));
+    finish_line::approve(&id, None, false).unwrap();
+    assert_eq!(settle(&id).s("stage"), "merging", "latest pending must wait");
+    assert!(!merged(&w));
+    w.gh_says(json!({"view": listed(&head, json!([job("build", "SUCCESS")])), "runs": runs(("completed", "success"))}));
+    poll_prs();
+    assert_eq!(settle(&id).s("stage"), "done", "latest pass over old failure");
+    assert!(merged(&w));
+    drop(w);
+    let w = pr_world(json!({"review.rounds":0}));
+    with_ci(&w, spec, json!({"f.txt":"v1"}));
+    let id = to_approval(&w, "Workflow newest failure");
+    let head = task(&id).t("prHead");
+    w.gh_says(json!({"view": none(&head), "runs": [
+        [CI, "completed", "success", "https://github.com/o/r/actions/runs/5", "CI", "pull_request", "2026-10-24T01:00:00Z"],
+        [CI, "completed", "failure", "https://github.com/o/r/actions/runs/6", "CI", "pull_request", "2026-10-24T02:00:00Z"]
+    ]}));
+    finish_line::approve(&id, None, false).unwrap();
+    assert_eq!(settle(&id).s("stage"), "approval", "latest workflow failed");
+    assert!(!merged(&w));
+}
+
+#[test]
+fn missing_required_check_still_blocks_when_ordinary_rollup_can_be_read() {
+    let w = pr_world(json!({}));
+    let id = to_approval(&w, "Required check absent");
+    let head = task(&id).t("prHead");
+    w.gh_says(json!({"view": listed(&head, json!([job("build", "SUCCESS")])), "required": ["build", "security"]}));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "merging", "{}", t.at("failure"));
+    assert!(t.at("checksWait").arr("names").iter().any(|n| n == "security"));
+    assert!(!merged(&w));
+}
+
+#[test]
 fn a_workflow_that_runs_for_the_pull_request_is_waited_for_until_its_run_is_through_whatever_is_listed_so_far() {
     // it starts only once the pull request is ready: right after `gh pr ready` GitHub lists nothing, and has no run
     let w = pr_world(json!({}));

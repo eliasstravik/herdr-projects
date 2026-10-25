@@ -28,7 +28,10 @@ pub enum Look { Passed, Running(Vec<String>), Failed(Vec<Value>) }
 pub fn newest(checks: &[Value]) -> Vec<Value> {
     let mut chosen: Vec<Value> = Vec::new();
     for c in checks {
-        if let Some(at) = chosen.iter().position(|old| name(old).eq_ignore_ascii_case(&name(c))) {
+        if let Some(at) = chosen.iter().position(|old| name(old).eq_ignore_ascii_case(&name(c))
+            && old.b("run") == c.b("run")
+            && old.s("__typename") == c.s("__typename")
+            && old.s("event") == c.s("event")) {
             let old = &chosen[at];
             let stamp = |v: &Value| [v.s("startedAt"), v.s("createdAt"), v.s("updatedAt"), v.s("completedAt")].into_iter().find(|s| !s.is_empty()).unwrap_or("").to_string();
             let a = stamp(old);

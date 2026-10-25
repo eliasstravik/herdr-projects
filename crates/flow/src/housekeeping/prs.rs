@@ -54,7 +54,7 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
     let mine = was.as_ref().map(|w| if w.at("mergeIntent").b("verifiedHead") { w.at("mergeIntent").t("verifiedHead") } else { w.t("prHead") }).unwrap_or_default();
     let head = j.t("headRefOid");
     let late_for = if was.as_ref().map(|w| w.b("autoMerge")).unwrap_or(false) && !mine.is_empty() && !head.is_empty() && head != mine && remote_head(&root, was.as_ref().unwrap().s("branch")) == mine { mine.clone() } else { String::new() };
-    let checks: Vec<Value> = j.arr("statusCheckRollup").to_vec();
+    let checks = checks::newest(j.arr("statusCheckRollup"));
     // With `merge.checks` at `none` a failed check on GitHub blocks nothing (land/checks.rs).
     let ignored = was.as_ref().map(|w| !checks::looked_at(w)).unwrap_or(false);
     let bad: Vec<Value> = if ignored { vec![] } else { checks.iter().filter(|c| CHECK_BAD.contains(&checks::word(c).as_str())).cloned().collect() };

@@ -55,21 +55,21 @@ pub fn pr_view(root: &Path, pr: &str, fields: &str) -> Result<Read, String> {
 }
 
 /// One GitHub Actions run of a commit.
-pub struct Run { pub id: String, pub path: String, pub status: String, pub conclusion: String, pub url: String, pub name: String }
+pub struct Run { pub id: String, pub path: String, pub status: String, pub conclusion: String, pub url: String, pub name: String, pub event: String, pub started: String }
 /// Every page of a list GitHub gives at most 100 to a page, each item a line of `jq`.
 fn every_page(root: &Path, path: &str, jq: &str) -> GhOut { gh(&["api", "--paginate", path, "--jq", jq], root, 60000) }
 /// The commit's GitHub Actions runs (the Actions permission reads them), all of them.
 pub fn runs(root: &Path, head: &str) -> Result<Vec<Run>, GhOut> {
-    let r = every_page(root, &format!("repos/{{owner}}/{{repo}}/actions/runs?head_sha={head}&per_page=100"), ".workflow_runs[] | [.id, .path, .status, (.conclusion // \"\"), .html_url, .name] | @tsv");
+    let r = every_page(root, &format!("repos/{{owner}}/{{repo}}/actions/runs?head_sha={head}&per_page=100"), ".workflow_runs[] | [.id, .path, .status, (.conclusion // \"\"), .html_url, .name, .event, (.run_started_at // .created_at // \"\")] | @tsv");
     if r.status != 0 { return Err(r); }
     Ok(r.stdout.lines().filter(|l| !l.trim().is_empty()).map(|l| {
         let x: Vec<String> = l.split('\t').map(String::from).collect();
         let at = |i: usize| x.get(i).cloned().unwrap_or_default();
-        Run { id: at(0), path: at(1), status: at(2), conclusion: at(3), url: at(4), name: at(5) }
+        Run { id: at(0), path: at(1), status: at(2), conclusion: at(3), url: at(4), name: at(5), event: at(6), started: at(7) }
     }).collect())
 }
-fn check_run(name: &str, status: &str, conclusion: &str, url: &str, flow: &str) -> Value {
-    json!({ "__typename": "CheckRun", "name": name, "status": status.to_uppercase(), "conclusion": conclusion.to_uppercase(), "detailsUrl": url, "workflowName": flow })
+fn check_run(name: &str, status: &str, conclusion: &str, url: &str, flow: &str, id: &str, started: &str) -> Value {
+    json!({ "__typename": "CheckRun", "name": name, "status": status.to_uppercase(), "conclusion": conclusion.to_uppercase(), "detailsUrl": url, "workflowName": flow, "id": id, "startedAt": started })
 }
 /// The commit's checks, from what a fine-grained token reads, every page of them: each of its runs as itself (still
 /// running or failed, whatever its jobs listed so far say; `run`), then each of the run's jobs, and each of its commit
@@ -78,22 +78,25 @@ fn of_commit(root: &Path, head: &str) -> Result<Vec<Value>, String> {
     let mut out: Vec<Value> = vec![];
     let runs = runs(root, head).map_err(|r| format!("GitHub Actions runs (gh api …/actions/runs): {}", said(&r)))?;
     for run in runs {
-        let mut me = check_run(&run.name, &run.status, &run.conclusion, &run.url, &run.name); me["run"] = json!(true);
+        let mut me = check_run(&run.name, &run.status, &run.conclusion, &run.url, &run.name, &run.id, &run.started); me["run"] = json!(true);
+        me["event"] = json!(run.event);
         out.push(me);
-        let r = every_page(root, &format!("repos/{{owner}}/{{repo}}/actions/runs/{}/jobs?per_page=100", run.id), ".jobs[] | [.name, .status, (.conclusion // \"\"), .html_url] | @tsv");
+        let r = every_page(root, &format!("repos/{{owner}}/{{repo}}/actions/runs/{}/jobs?per_page=100", run.id), ".jobs[] | [.name, .status, (.conclusion // \"\"), .html_url, .id, (.started_at // .created_at // \"\")] | @tsv");
         if r.status != 0 { continue; }
         out.extend(r.stdout.lines().filter(|l| !l.trim().is_empty()).map(|l| {
             let x: Vec<&str> = l.split('\t').collect();
             let at = |i: usize| x.get(i).copied().unwrap_or("");
-            check_run(at(0), at(1), at(2), at(3), &run.name)
+            let mut check = check_run(at(0), at(1), at(2), at(3), &run.name, at(4), at(5));
+            check["event"] = json!(run.event);
+            check
         }));
     }
-    let r = every_page(root, &format!("repos/{{owner}}/{{repo}}/commits/{head}/status?per_page=100"), ".statuses[] | [.context, .state, (.target_url // \"\")] | @tsv");
+    let r = every_page(root, &format!("repos/{{owner}}/{{repo}}/commits/{head}/status?per_page=100"), ".statuses[] | [.context, .state, (.target_url // \"\"), .id, (.created_at // \"\")] | @tsv");
     if r.status != 0 { return Err(format!("commit statuses (gh api …/commits/{head}/status): {}", said(&r))); }
     for l in r.stdout.lines().filter(|l| !l.trim().is_empty()) {
         let x: Vec<&str> = l.split('\t').collect();
         let at = |i: usize| x.get(i).copied().unwrap_or("");
-        out.push(json!({ "__typename": "StatusContext", "context": at(0), "state": at(1).to_uppercase(), "targetUrl": at(2) }));
+        out.push(json!({ "__typename": "StatusContext", "context": at(0), "state": at(1).to_uppercase(), "targetUrl": at(2), "id": at(3), "createdAt": at(4) }));
     }
     Ok(out)
 }

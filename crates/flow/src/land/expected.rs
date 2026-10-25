@@ -35,10 +35,20 @@ pub fn flows_state(t: &Obj, root: &Path, base: &str, head: &str) -> Flows {
     let mut out = Flows::default();
     for (file, flow) in flows {
         let mine: Vec<&super::readable::Run> = runs.iter().filter(|x| x.path.split('@').next() == Some(file.as_str())).collect();
+        // Push and pull-request runs are distinct checks. Within each event, only the most recent rerun of
+        // this workflow on the same head counts. Without event metadata, retain every run conservatively.
+        let mut observed: Vec<Value> = mine.iter().filter(|x| x.event.is_empty()).map(|x| json!({
+            "status": x.status, "conclusion": x.conclusion, "detailsUrl": x.url
+        })).collect();
+        let by_event: Vec<Value> = mine.iter().filter(|x| !x.event.is_empty()).map(|x| json!({
+            "name": x.event, "status": x.status, "conclusion": x.conclusion, "detailsUrl": x.url,
+            "startedAt": x.started, "id": x.id
+        })).collect();
+        observed.extend(super::checks::newest(&by_event));
         let up = |s: &str| s.to_uppercase();
-        if let Some(bad) = mine.iter().find(|x| up(&x.status) == "COMPLETED" && CHECK_BAD.contains(&up(&x.conclusion).as_str())) {
-            out.failed.push(json!({ "name": flow.name, "conclusion": up(&bad.conclusion), "detailsUrl": bad.url }));
-        } else if mine.is_empty() || mine.iter().any(|x| up(&x.status) != "COMPLETED" || !CHECK_GOOD.contains(&up(&x.conclusion).as_str())) {
+        if let Some(bad) = observed.iter().find(|x| up(x.s("status")) == "COMPLETED" && CHECK_BAD.contains(&up(x.s("conclusion")).as_str())) {
+            out.failed.push(json!({ "name": flow.name, "conclusion": up(bad.s("conclusion")), "detailsUrl": bad.s("detailsUrl") }));
+        } else if observed.is_empty() || observed.iter().any(|x| up(x.s("status")) != "COMPLETED" || !CHECK_GOOD.contains(&up(x.s("conclusion")).as_str())) {
             out.waiting.push(flow.name.clone());
         }
     }

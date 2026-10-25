@@ -64,6 +64,41 @@ fn numeric_ids_break_ties_and_missing_timestamps_remain_conservative() {
 }
 
 #[test]
+fn pr_housekeeping_uses_latest_run_instead_of_retriggering_an_old_failure() {
+    let w = pr_world(json!({"review.rounds": 0}));
+    let id = to_approval(&w, "Housekeeping stale failure");
+    let head = task(&id).t("prHead");
+    let mut view = none(&head);
+    view["statusCheckRollup"] = json!([
+        {"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"FAILURE","startedAt":"2026-10-24T01:00:00Z"},
+        {"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS","startedAt":"2026-10-24T02:00:00Z"}
+    ]);
+    w.gh_says(json!({"view":view}));
+    poll_prs();
+    let t = task(&id);
+    assert_eq!(t.s("prState"), "passing");
+    assert!(!t.b("prFailure"), "old failure was superseded: {}", t.at("prFailure"));
+    finish_line::approve(&id, None, false).unwrap();
+    assert_eq!(settle(&id).s("stage"), "done");
+    assert!(merged(&w));
+    drop(w);
+    let w = pr_world(json!({"review.rounds": 0}));
+    let id = to_approval(&w, "Housekeeping latest failed");
+    let head = task(&id).t("prHead");
+    let mut view = none(&head);
+    view["statusCheckRollup"] = json!([
+        {"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"FAILURE","startedAt":"2026-10-24T02:00:00Z"},
+        {"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS","startedAt":"2026-10-24T01:00:00Z"}
+    ]);
+    w.gh_says(json!({"view":view}));
+    poll_prs();
+    let t = task(&id);
+    assert_eq!(t.s("prState"), "failing");
+    assert_eq!(strings(t.at("prFailure").at("checks")), vec!["build"]);
+    assert!(!merged(&w));
+}
+
+#[test]
 fn checks_still_running_the_merge_waits_and_says_so_then_merges_once_they_pass() {
     let w = pr_world(json!({}));
     let id = to_approval(&w, "Waits for CI");

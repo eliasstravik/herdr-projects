@@ -17,9 +17,9 @@ fn url(run: i64) -> String { format!("https://github.com/o/r/actions/runs/{run}"
 /// What a fine-grained token reads of the commit: the workflow's run for the push (5) and for the pull request (6),
 /// each with its one job, as `(status, conclusion)`.
 fn actions(head: &str, push: (&str, &str), pull: (&str, &str)) -> Value {
-    let job = |run: i64, (s, c): (&str, &str)| json!([["check", s, c, format!("{}/job/{}", url(run), run * 10)]]);
+    let job = |run: i64, (s, c): (&str, &str)| json!([["check", s, c, format!("{}/job/{}", url(run), run * 10), format!("{}", run * 10), if run == 5 { "2026-10-24T01:00:00Z" } else { "2026-10-24T02:00:00Z" }]]);
     json!({ "noChecks": true, "view": none(head), "statuses": [],
-        "runs": [[CI, push.0, push.1, url(5), "Check"], [CI, pull.0, pull.1, url(6), "Check"]],
+        "runs": [[CI, push.0, push.1, url(5), "Check", "push", "2026-10-24T01:00:00Z"], [CI, pull.0, pull.1, url(6), "Check", "pull_request", "2026-10-24T02:00:00Z"]],
         "jobs": { "5": job(5, push), "6": job(6, pull) } })
 }
 const GOING: (&str, &str) = ("in_progress", "");
