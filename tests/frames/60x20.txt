@@ -72,8 +72,8 @@
    tab          the next filter on top: all, coordinators,
                 needs you, working, ready, to do, done,
                 automations, pinned
-   enter        send what is typed; else fold or unfold a
-                heading
+   enter        send what is typed; else go into the task's
+                agent, or fold or unfold a heading
    space        talk to this row's agent, and back to the
                 top row's coordinator
  ↓ 68 more

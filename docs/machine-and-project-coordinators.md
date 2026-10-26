@@ -60,7 +60,7 @@ uncounted.
 - **`Alt+O` goes into its agent**: its real Herdr pane, as on a task. A coordinator that is not running is started
   first; another machine's is gone into there. A status group's heading (`to do`, `done`) has no agent.
 - **`Enter` folds and unfolds** a heading (all machines, a machine, a repo, a status group), as `←` and `→` do. On a
-  task's row `Enter` does nothing: it never opens a chat. `←` on a task's row goes to its heading. A click on a heading
+  task's row `Enter` goes into its agent, as `Alt+O` does: it never opens a chat. `←` on a task's row goes to its heading. A click on a heading
   folds it too.
 
 ## The chat box names who it talks to

@@ -1,6 +1,6 @@
 //! The rows of coordinators, read as tasks' rows: the top row (All machines, or the one machine) the board opens on,
 //! a task's marks for where each coordinator stands, its time on the right and its live second line; enter folds a
-//! heading and does nothing on a task, alt+o goes into a row's agent, ← and → fold, ← on a task goes to its heading;
+//! heading and goes into a task's agent, alt+o goes into a row's agent, ← and → fold, ← on a task goes to its heading;
 //! one that asks you stands under Needs you; ctrl+s, ctrl+x and ctrl+o say on the row what is under way, never under the
 //! chat when it worked.
 use crate::common;
@@ -62,9 +62,9 @@ fn the_board_opens_on_its_top_row_enter_folds_and_alt_o_goes_into_a_rows_coordin
     let j = jobs(s.hold("alt+o")); assert!(j.is_empty(), "{j}");
     assert!(s.s.msg.contains("has no agent to go into"), "{}", s.s.msg);
     s.press(&["enter"]); assert!(s.s.folded.contains(&todo)); s.press(&["enter"]); assert!(!s.s.folded.contains(&todo));
-    // a task's row: enter with nothing typed does nothing at all
+    // a task's row: enter with nothing typed goes into its agent, as alt+o does (this one has none yet)
     s.s.sel = id.clone(); s.load(); s.s.msg.clear();
-    let fx = s.hold("enter"); assert!(fx.is_empty() && s.s.msg.is_empty() && s.s.sel == id, "{fx:?} {}", s.s.msg);
+    s.press(&["enter"]); assert!(s.s.msg.contains("No agent has been on this yet") && s.s.sel == id, "{}", s.s.msg);
     // ← on a task goes to the heading it stands under; ← there folds it, → unfolds it
     s.press(&["left"]); assert_eq!(s.s.sel, todo);
     s.press(&["left"]); assert!(s.s.folded.contains(&s.s.sel));

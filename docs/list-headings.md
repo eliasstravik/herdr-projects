@@ -54,7 +54,7 @@ opens on it. The archive has none.
 - **`←` on a heading folds it.** Its tasks hide, its caret turns to `▸`, and it says how many tasks it holds
   (`▸ open-crm  4 tasks`), and how many automations where it holds some (`▸ vm-str  7 tasks, 1 automation`,
   [automations](automations.md)). `→` unfolds it. `←` on a task's row goes to its heading.
-- **`Enter` on a heading folds it and unfolds it too**; on a task's row it does nothing. `Alt+O` goes into a row's
+- **`Enter` on a heading folds it and unfolds it too**; on a task's row it goes into its agent. `Alt+O` goes into a row's
   agent: on a machine's or a project's row its coordinator, on a task its agent.
 - **A click on a heading** folds it and unfolds it ([mouse](mouse.md)).
 - The hint line says what `Enter` will do (`enter fold`, `enter unfold`), and the `?` menu lists `Enter`, `←` and `→`.

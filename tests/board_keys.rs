@@ -1,5 +1,5 @@
 //! The board's keys on a test world: typing adds a task, ctrl+s puts an agent on it, space replies to it, alt+o opens
-//! the agent (enter on a task's row does nothing); ctrl+x stops an agent and asks to remove only where none runs; and while the text box holds words it owns the
+//! the agent (and so does enter on a task's row, with nothing typed); ctrl+x stops an agent and asks to remove only where none runs; and while the text box holds words it owns the
 //! keyboard, so no shortcut fires in the middle of a draft.
 use crate::common;
 use common::board::{open, open_with};
@@ -30,14 +30,15 @@ fn typing_adds_a_task_tab_delegates_space_replies_and_enter_opens_the_agent() {
     assert_eq!(task("proj/1").s("title"), "Add a greeting");
     assert_eq!((s.s.sel.as_str(), s.s.value()), ("proj/1", String::new()));
     assert!(has(&s.text(), r"\n[ ▌] ctrl\+s put an agent on this task · space talk about this task · esc close · \? all keys"), "{}", s.text());
-    // enter on a task's row with nothing typed: nothing at all; alt+o goes into its agent, and it has none yet
-    let fx = s.hold("enter"); assert!(fx.is_empty() && s.s.msg.is_empty(), "{fx:?} {}", s.s.msg);
+    // enter on a task's row with nothing typed goes into its agent, as alt+o does, and it has none yet
+    s.press(&["enter"]); assert!(s.text().contains("No agent has been on this yet"), "{}", s.text());
     s.press(&["alt+o"]); assert!(s.text().contains("No agent has been on this yet"));
     s.press(&["ctrl+s"]);
     settle("proj/1"); s.load();
     let t = s.text();
     assert!(has(&t, r"\n   ▾ working +[^\n]*\n[ ▌]  ◐ PRJ-\d+ +Add a greeting"), "{t}");
     assert!(!has(&t, "On its screen|Editing greet|esc to interrupt"), "nothing of the program's screen is shown");
+    let (enter, open) = (s.hold("enter"), s.hold("alt+o")); assert!(!enter.is_empty() && format!("{enter:?}") == format!("{open:?}"), "{enter:?} {open:?}");
     assert!(t.contains(&format!("alt+o open this task's agent · space talk to the agent · {} stop the agent · esc close · ? all keys", key_name("stop"))), "{t}");
     s.press(&["space"]);
     assert!(has(&s.text(), r"│  ❯ Send message to the agent"), "{}", s.text());

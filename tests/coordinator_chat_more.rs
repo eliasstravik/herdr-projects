@@ -129,7 +129,7 @@ fn enter_goes_into_a_tasks_agent_the_chats_head_line_at_every_width_and_a_narrow
     let title = "Add a greeting that is polite, friendly and never cut short";
     let t = w.add(title); delegate(&t); settle(&t);
     w.add("Somebody else"); sw::actions::archive::clear("proj/2").unwrap(); // the old test's numbers: this one is PRJ-3
-    // Into a task's agent is alt+o (enter does nothing on its row): herdr shows that agent's pane.
+    // Into a task's agent is alt+o, or enter with nothing typed: herdr shows that agent's pane.
     w.script(json!({ "worker": [{ "status": "working", "screen": "● Editing greet.sh\n" }] }));
     let u = w.add("Still at it"); delegate(&u); settle(&u);
     let mut g = open(&w.root, 34); g.s.sel = u.clone(); g.load(); g.press(&["space"]);
@@ -145,7 +145,8 @@ fn enter_goes_into_a_tasks_agent_the_chats_head_line_at_every_width_and_a_narrow
         assert!(sw::text::width(&l[at]) == cols && l[at + 1].starts_with("│ "), "at {cols}: {l:?}");
     }
     assert!(g.screen(40).iter().any(|x| x.starts_with("╭─") && x.contains("PRJ-3")), "{:?}", g.screen(40));
-    g.press(&["enter"]); assert!(w.state().arr("focus").is_empty(), "enter on a task's row does nothing");
+    let pane = format!("agent {}", task(&u).at("link").s("pane"));
+    g.press(&["enter"]); assert!(!g.closed); assert_eq!(text(w.state().arr("focus").last().unwrap()), pane, "enter on a task's row goes into its agent");
     g.press(&["alt+o"]); assert!(!g.closed); assert_eq!(text(w.state().arr("focus").last().unwrap()), format!("agent {}", task(&u).at("link").s("pane"))); // into its agent: the board stays
     // A narrow window is the same chat: space talks to the task's agent and opens nothing. On the whole task (alt+t) the
     // chat folds to its edge (the ladder) and the line you type on. Space again goes back to the top row's coordinator.

@@ -82,7 +82,8 @@
                 text)
    tab          the next filter on top: all, coordinators, needs you, working,
                 ready, to do, done, automations, pinned
-   enter        send what is typed; else fold or unfold a heading
+   enter        send what is typed; else go into the task's agent, or fold or
+                unfold a heading
    space        talk to this row's agent, and back to the top row's coordinator
    esc          back, one step at a time (as a popup, the board closes on the
                 last one)
@@ -91,8 +92,7 @@
    /            typed first: pick a skill of whom you talk to
 
  ctrl: does something
-   ctrl+l       yes: approve the merge, say yes, retry, take it as it is
- ↓ 47 more
+ ↓ 48 more
 
 ────────────────────────────────────────────────────────────────────────────────
 ❯ Add a task

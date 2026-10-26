@@ -85,6 +85,8 @@ fn press(s: &mut State, p: &Press, fx: &mut Vec<Effect>) {
     } }
     // On a heading, with nothing typed: fold it, or unfold it ({open} goes into its coordinator).
     if enter && text.is_empty() && super::heads::selected(s).is_some() { let id = s.sel.clone(); return super::heads::toggle(s, &id, fx); }
+    // On a task's row, with nothing typed: go into its agent, as {open} does.
+    if enter && text.is_empty() { if let Some(r) = &r { return act::open_agent(s, r, fx); } }
     if enter { return act::enter(s, &text, r.as_ref(), fx); }
     // On a coordinator's row, with nothing typed: autopilot on (update/pilot.rs).
     if start && text.is_empty() && r.is_none() { if let Some(t) = super::pilot::keyed(s) { return super::pilot::run(s, &t, true, fx); } }

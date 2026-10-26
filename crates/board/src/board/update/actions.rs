@@ -36,7 +36,7 @@ pub fn has_agent(r: &Obj) -> bool { is_agent(r) && (r.b("host") || crate::flow::
 
 // ---- enter and tab ---------------------------------------------------------------------------------------------------
 pub fn enter(s: &mut State, text: &str, r: Option<&Obj>, fx: &mut Vec<Effect>) {
-    if text.is_empty() { return; } // with nothing typed, enter does nothing on a task's row: the open key goes into its agent
+    if text.is_empty() { return; } // with nothing typed on a task's row, enter goes into its agent (update/keys.rs)
     if let Some(t) = super::coords::talking(s) { let w = s.value(); return super::coords::send(s, &t, w.trim(), fx); }
     // Who gets it is who the chat names: the selected task's agent after space, the Coordinator otherwise.
     if s.reply { if let Some(r) = r {

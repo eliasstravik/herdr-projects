@@ -60,7 +60,7 @@
    pgup pgdn    a page of tasks up or
                 down (in the whole
                 task: a page of its
- ↓ 107 more
+ ↓ 108 more
 
 ────────────────────────────────────────
 ❯ Add a task
