@@ -46,7 +46,7 @@ pub fn start_asked() {
         if std::fs::remove_file(&f).is_err() { continue; } // another pass took it
         let job = job_of(&o);
         if job.0.is_empty() || job.1.is_empty() || done.contains(&job) { continue; }
-        super::spawn_runner(&job.0, &job.1, &job.2.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+        super::spawn_admitted(&job.0, &job.1, &job.2.iter().map(|s| s.as_str()).collect::<Vec<_>>());
         done.push(job);
     }
 }

@@ -37,7 +37,12 @@ pub fn reap(mut ch: std::process::Child) -> u32 {
 }
 /// Start a detached runner for one job on one task. Returns at once.
 pub fn spawn_runner(job: &str, id: &str, extra: &[&str]) -> u32 {
+    if job == "land" && !crate::finish::line::reserve(id) { return 0; }
     if crate::plan::sandbox::inside::boxed() || outside::hands_over() { return outside::ask(job, id, extra); }
+    spawn_admitted(job, id, extra)
+}
+/// The keeper consumes an already-admitted request; land_job still validates its reservation before doing work.
+fn spawn_admitted(job: &str, id: &str, extra: &[&str]) -> u32 {
     if inline() { JOBS.with(|j| j.borrow_mut().push((job.into(), id.into(), extra.iter().map(|s| s.to_string()).collect()))); return 0; }
     user_env();
     let dir = if id == "-" { data_dir() } else { dir_of(id) };

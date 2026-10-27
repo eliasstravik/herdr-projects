@@ -9,7 +9,7 @@ use crate::json::*;
 use crate::research::{turn_refusal, RESEARCH};
 use crate::runner::{runner_alive, spawn_runner};
 use crate::store::attempts::attempts_of;
-use crate::store::files::{with_lock_wait, SLOT_STAGES};
+use crate::store::files::with_lock_wait;
 use crate::store::handovers::fresh_list;
 use crate::store::settings::change::checked;
 use crate::store::settings::lookup::{setting, setting_text, Scope};
@@ -135,10 +135,12 @@ pub fn delegate_with(id: &str, asked: Vec<(String, Value)>, w: Wait) -> Res<Task
 pub fn start_queued(socket: &str) -> Vec<String> {
     // A task done several times at once is split into its attempts first: each then waits for a slot of its own.
     for w in list(ListOpts::default()) { if w.s("stage") == "queued" && w.at("link").s("socket") == socket { let _ = crate::attempts::fan_out::fan_out(w.s("id")); } }
+    // Ready serial heads get first use of released capacity; author refill shares their slots lock.
+    crate::finish::line::line_pass(&list(ListOpts::default()));
     let mut started = vec![];
     let _ = with_lock_wait("slots", 5000, || {
         let all = list(ListOpts { attempts: true, ..Default::default() });
-        let mut busy = all.iter().filter(|t| SLOT_STAGES.contains(&t.s("stage")) && !t.b("autoMerge")).count() as i64; // a remembered auto-merge runs nothing
+        let mut busy = all.iter().filter(|t| crate::finish::line::occupies_slot(t)).count() as i64;
         let waiting = crate::shown::queue::order(all.iter(), socket); // the order the board says (Q#1, Q#2 …)
         let max = setting("board.agents", None).as_i64().unwrap_or(4);
         for w in waiting {

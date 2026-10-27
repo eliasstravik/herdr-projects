@@ -163,3 +163,126 @@ fn several_tasks_may_merge_at_once_they_go_one_at_a_time_each_catches_up_once_an
     assert_eq!(checks(&w), ran + 2);
     for id in [&b, &c] { assert_eq!(prompts(&w, task(id).at("link").s("pane")).len(), 1); }
 }
+
+mod slots {
+//! Productive admission: parked serial waiters release slots, pending landings reserve them atomically with authors.
+use crate::common::*;
+use serde_json::{json, Value};
+use sw::finish::line::{claim_land, line_pass, occupies_slot, reserve};
+use sw::json::*;
+use sw::store::tasks::{list, update, Change, ListOpts};
+
+fn patch(id: &str, f: impl FnOnce(&mut sw::store::tasks::Task)) { update(id, |t| { f(t); Ok(Change::Write) }).unwrap(); }
+fn parked(w: &World, name: &str) -> String {
+    let id = w.add(name);
+    patch(&id, |t| { t.put("stage", "merging"); t.put("lineAt", sw::clock::now()); t.put("runner", Value::Null); }); id
+}
+fn queued(w: &World) -> String {
+    let id = w.add("Next author");
+    patch(&id, |t| { t.put("stage", "queued"); t.put("queuedAt", sw::clock::now()); t.put("link", json!({"socket": w.socket})); }); id
+}
+fn busy() -> usize { list(ListOpts { attempts: true, ..Default::default() }).iter().filter(|t| occupies_slot(t)).count() }
+fn jobs() -> Vec<String> { sw::runner::JOBS.with(|j| j.borrow().iter().filter(|(k, _, _)| k == "land").map(|(_, id, _)| id.clone()).collect()) }
+
+#[test]
+fn merge_slots_parked_waiters_allow_refill_but_live_heads_and_runnerless_authors_count() {
+    let w = world_with(Opts { settings: json!({"board.agents": 3}), ..Default::default() });
+    let author = w.add("Working author without pipeline runner");
+    patch(&author, |t| t.put("stage", "working"));
+    let head = parked(&w, "Active serial head");
+    patch(&head, |t| { let mut m = sw::store::files::marker(); m.put("job", "land"); t.put("lineTurn", m.at("started").clone()); t.put("runner", m); });
+    for n in 0..9 { parked(&w, &format!("Parked {n}")); }
+    let first = queued(&w); let second = queued(&w);
+    assert_eq!(busy(), 2);
+    assert_eq!(sw::actions::start::start_queued(&w.socket), vec![first.clone()]);
+    assert_eq!(task(&first).s("stage"), "starting");
+    assert_eq!(task(&second).s("stage"), "queued");
+    assert_eq!(busy(), 3, "pending author reservation counts before it has a runner");
+    assert!(jobs().is_empty());
+    let unknown = parked(&w, "Unknown runner");
+    patch(&unknown, |t| t.put("runner", json!({"pid": 99999999})));
+    assert!(occupies_slot(&task(&unknown)), "unknown/dead markers are not safely parked");
+    patch(&unknown, |t| { t.put("runner", Value::Null); t.put("lineReserved", "unknown"); });
+    assert!(occupies_slot(&task(&unknown)), "unknown pending reservations remain counted");
+}
+
+#[test]
+fn merge_slots_serial_head_has_priority_and_pending_launch_is_not_admitted_twice() {
+    let w = world_with(Opts { settings: json!({"board.agents": 1}), ..Default::default() });
+    let first = parked(&w, "First merge"); let second = parked(&w, "Second merge"); let author = queued(&w);
+    assert!(sw::actions::start::start_queued(&w.socket).is_empty());
+    assert_eq!(jobs(), vec![first.clone()]); assert_eq!(busy(), 1);
+    line_pass(&list(ListOpts::default()));
+    assert_eq!(jobs(), vec![first.clone()], "pending detached launch reserves the repo and shared slot");
+    assert!(!reserve(&second)); assert_eq!(task(&author).s("stage"), "queued");
+    assert!(claim_land(&first).unwrap().is_some());
+    assert!(claim_land(&first).unwrap().is_none(), "duplicate launch cannot steal a live runner");
+    assert_eq!(busy(), 1);
+    patch(&first, |t| { t.put("stage", "done"); t.put("runner", Value::Null); });
+    assert!(sw::actions::start::start_queued(&w.socket).is_empty());
+    assert_eq!(jobs(), vec![first, second]); assert_eq!(busy(), 1);
+}
+
+#[test]
+fn merge_slots_expired_reservation_cannot_start_after_capacity_was_reused() {
+    let w = world_with(Opts { settings: json!({"board.agents": 1}), ..Default::default() });
+    let land = parked(&w, "Delayed launch");
+    assert!(reserve(&land));
+    sw::clock::advance(sw::hook::GRACE_MS + 1);
+    let author = w.add("A real working author"); patch(&author, |t| t.put("stage", "working"));
+    assert!(claim_land(&land).unwrap().is_none()); assert!(!reserve(&land)); assert_eq!(busy(), 1);
+    patch(&author, |t| t.put("stage", "done"));
+    assert!(reserve(&land)); assert!(claim_land(&land).unwrap().is_some()); assert_eq!(busy(), 1);
+}
+
+#[test]
+fn merge_slots_author_and_landing_race_share_one_last_slot() {
+    let w = world_with(Opts { settings: json!({"board.agents": 1}), ..Default::default() });
+    let land = parked(&w, "Merge racing refill"); let author = queued(&w);
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let b = barrier.clone(); let id = land.clone();
+    let a = std::thread::spawn(move || { b.wait(); reserve(&id) });
+    let b = barrier.clone(); let socket = w.socket.clone();
+    let c = std::thread::spawn(move || { b.wait(); sw::actions::start::start_queued(&socket) });
+    a.join().unwrap(); c.join().unwrap();
+    assert_eq!(busy(), 1);
+    assert!(task(&land).b("lineReserved")); assert_eq!(task(&author).s("stage"), "queued");
+    assert!(claim_land(&land).unwrap().is_some()); assert_eq!(busy(), 1);
+}
+
+#[test]
+fn merge_slots_keeper_handoff_reserves_before_refill_and_is_consumed_once() {
+    let w = world_with(Opts { settings: json!({"board.agents": 1}), ..Default::default() });
+    let land = parked(&w, "Keeper merge"); let author = queued(&w);
+    let file = sw::store::files::data_dir().join("keeper.json");
+    std::fs::write(file, json!({"version": "1.2.23", "pid": std::process::id(), "at": sw::clock::now()}).to_string()).unwrap();
+    {
+        let _caller = sw::runner::outside::by_command();
+        assert!(sw::runner::outside::hands_over());
+        assert!(sw::actions::start::start_queued(&w.socket).is_empty());
+        assert_eq!(busy(), 1); assert!(jobs().is_empty());
+        assert_eq!(sw::runner::outside::asked().len(), 1);
+        line_pass(&list(ListOpts::default()));
+        assert_eq!(sw::runner::outside::asked().len(), 1);
+    }
+    assert_eq!(task(&author).s("stage"), "queued");
+    sw::runner::outside::start_asked(); sw::runner::outside::start_asked();
+    assert_eq!(jobs(), vec![land.clone()]); assert_eq!(busy(), 1);
+    assert!(claim_land(&land).unwrap().is_some());
+    assert!(claim_land(&land).unwrap().is_none());
+}
+
+#[test]
+fn merge_slots_direct_land_cannot_bypass_capacity_or_unknown_reservation() {
+    let w = world_with(Opts { settings: json!({"board.agents": 1}), ..Default::default() });
+    let land = parked(&w, "Direct entry"); let author = w.add("Live author");
+    patch(&author, |t| t.put("stage", "working"));
+    assert!(claim_land(&land).unwrap().is_none());
+    patch(&author, |t| t.put("stage", "done"));
+    patch(&land, |t| t.put("lineReserved", "unknown"));
+    assert!(claim_land(&land).unwrap().is_none());
+    patch(&land, |t| t.put("lineReserved", Value::Null));
+    assert!(claim_land(&land).unwrap().is_some()); assert_eq!(busy(), 1);
+}
+
+}

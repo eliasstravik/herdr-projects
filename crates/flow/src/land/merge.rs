@@ -9,7 +9,7 @@ use crate::finish::line::take_turn;
 use crate::flow;
 use crate::flow::git::{gh, pr_number, CHECK_BAD, CHECK_GOOD};
 use crate::json::*;
-use crate::runner::{claim, is_aborted, release, Guard};
+use crate::runner::{is_aborted, release, Guard};
 use crate::store::failures::{failure_patch, is_auth_failure};
 use crate::store::keys::{repo_keys, task_ref};
 use crate::store::repos::{folder_of, git_out, git_slow};
@@ -19,7 +19,7 @@ use crate::sync;
 use std::path::Path;
 
 pub fn land_job(id: &str) {
-    let Ok(Some(t)) = claim(id, "land", |_| {}) else { return };
+    let Ok(Some(t)) = crate::finish::line::claim_land(id) else { return };
     if t.s("stage") != "merging" { release(id, false); return; }
     let mut g = Guard::new(id);
     g.expect(&t, &[]);
