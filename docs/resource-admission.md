@@ -71,8 +71,11 @@ and retries of an unsubmitted prompt use the same gate.
 Reservations persist in the board data folder's `admission.json`. They do not
 expire just because a start was slow or its runner exited. A worker reservation
 is released after the board observes it work, before another fresh probe is
-read. A confirmed stopped, failed or finished task with no running turn or
-runner releases its reservation. Missing task records, corrupt reservation
+read. A failed or canceled claim can be released if the board never attempted its
+launch. A possible launch is different: missing turn data is not proof it
+stopped. Such a reservation needs observed worker progress, a fresh confirmed
+idle/done observation after its launch attempt, or an explicitly finished task.
+A later claim cannot downgrade a possible launch to an unlaunched claim. Missing task records, corrupt reservation
 files and uncertain state retain the budget and refuse further starts. Reviewer
 reservations are retained until a confirmed stopped or finished task. This is
 conservative; do not erase the ledger to recover capacity while starts may be

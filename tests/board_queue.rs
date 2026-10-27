@@ -217,3 +217,23 @@ fn resource_admission_unknown_or_ambiguous_panes_hold_and_coordinator_exemption_
     }
     assert!(sw::admission::pane("shared", denied).unwrap_err().message.contains("Ambiguous"));
 }
+
+#[test]
+fn resource_admission_failed_claims_release_but_unknown_launches_keep_their_budget() {
+    let w = world(); resource_gate(); sw::clock::set(Some(100000));
+    let a = task(&w.add("Setup fails")); let b = task(&w.add("Next claim"));
+    sw::admission::with_probe(std::rc::Rc::new(|| Ok(resource_reading())), || {
+        sw::admission::claim(&a, "worker", || Ok(())).unwrap();
+        sw::store::tasks::update(a.s("id"), |t| { t.put("stage", "failed"); Ok(sw::store::tasks::Change::Write) }).unwrap();
+        sw::admission::claim(&b, "worker", || Ok(())).unwrap();
+        sw::store::tasks::update(b.s("id"), |t| { t.put("stage", "done"); t.put("turnOpen", false); Ok(sw::store::tasks::Change::Write) }).unwrap();
+        sw::admission::run(&a, "worker", || Ok(())).unwrap();
+        sw::clock::advance(60000);
+        assert!(sw::admission::claim(&b, "worker", || Ok(())).is_err(), "a failed task with missing turn data is not proof its launch stopped");
+        sw::store::tasks::update(a.s("id"), |t| {
+            t.put("turnOpen", false); t.put("last", json!({ "status": "done", "at": sw::clock::now() }));
+            Ok(sw::store::tasks::Change::Write)
+        }).unwrap();
+        sw::admission::claim(&b, "worker", || Ok(())).unwrap();
+    });
+}

@@ -25,7 +25,10 @@ pub struct Reading {
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct Reservation { task: String, role: String, at: i64, worked_at: i64 }
+struct Reservation { task: String, role: String, at: i64, worked_at: i64, phase: Phase }
+#[derive(Clone, Copy, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum Phase { Claim, Launch }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Ledger { schema: u8, reservations: BTreeMap<String, Reservation> }
@@ -50,10 +53,15 @@ fn snapshot(command: &str) -> Result<Reading, String> {
         || ![1, 2, 4].contains(&r.pressure) { return Err("Missing, invalid or stale host reading".into()); }
     Ok(r)
 }
-fn stopped(t: &Task) -> bool {
-    ["done", "stopped", "failed"].contains(&t.s("stage")) && !crate::store::files::marker_alive(t.at("runner"))
-        && !t.b("turnOpen") && t.at("last").s("status") != "working"
+fn stopped(t: &Task, r: &Reservation) -> bool {
+    if crate::store::files::marker_alive(t.at("runner")) { return false; }
+    if t.s("stage") == "done" && t.at("turnOpen") == &json!(false) { return true; }
+    if !["stopped", "failed", "todo"].contains(&t.s("stage")) { return false; }
+    if r.phase == Phase::Claim { return true; }
+    r.role == "worker" && t.at("turnOpen") == &json!(false)
+        && ["idle", "done"].contains(&t.at("last").s("status")) && t.at("last").i("at") >= r.at
 }
+
 fn ledger() -> Result<Ledger, String> {
     let path = data_dir().join("admission.json");
     if std::fs::metadata(&path).is_ok_and(|m| m.len() > 1024 * 1024) { return Err("Oversized resource reservation ledger".into()); }
@@ -68,11 +76,11 @@ fn ledger() -> Result<Ledger, String> {
     }
     Ok(value)
 }
-fn reserve(t: &Task, role: &str, command: &str) -> Result<(), String> {
+fn reserve(t: &Task, role: &str, phase: Phase, command: &str) -> Result<(), String> {
     let mut ledger = ledger()?;
     ledger.reservations.retain(|_, r| {
         let Some(task) = get(&r.task) else { return true };
-        !stopped(&task) && !(r.role == "worker" && task.i("workedAt") > r.worked_at && task.i("workedAt") >= r.at)
+        !stopped(&task, r) && !(r.role == "worker" && task.i("workedAt") > r.worked_at && task.i("workedAt") >= r.at)
     });
     let r = snapshot(command)?;
     if r.pressure == 4 || (r.pressure == 2 && r.free_percent <= 30.0)
@@ -88,15 +96,22 @@ fn reserve(t: &Task, role: &str, command: &str) -> Result<(), String> {
     if r.load1.max(r.load5) + (pending + 1.0) * CPU > f64::from(r.cores) * 0.8 {
         return Err("Waiting for load, including pending agent reservations".into());
     }
-    ledger.reservations.entry(key).or_insert_with(|| Reservation { task: t.t("id"), role: role.into(), at: now(), worked_at: t.i("workedAt") });
+    let reservation = ledger.reservations.entry(key).or_insert_with(|| Reservation { task: t.t("id"), role: role.into(), at: now(), worked_at: t.i("workedAt"), phase });
+    if phase == Phase::Launch { reservation.phase = Phase::Launch; }
     write_json(&data_dir().join("admission.json"), &serde_json::to_value(&ledger).map_err(|e| e.to_string())?).map_err(|e| e.msg)
 }
 
+pub fn claim<T>(t: &Task, role: &str, action: impl FnOnce() -> Result<T, HerdrError>) -> Result<T, HerdrError> {
+    admit(t, role, Phase::Claim, action)
+}
 pub fn run<T>(t: &Task, role: &str, action: impl FnOnce() -> Result<T, HerdrError>) -> Result<T, HerdrError> {
+    admit(t, role, Phase::Launch, action)
+}
+fn admit<T>(t: &Task, role: &str, phase: Phase, action: impl FnOnce() -> Result<T, HerdrError>) -> Result<T, HerdrError> {
     let Some(command) = enabled() else { return action() };
     if !["worker", "reviewer"].contains(&role) { return Err(err("Unknown admission role")); }
     with_lock_wait("resource-admission", 5000, || {
-        reserve(t, role, &command).map_err(crate::err::Error::new)
+        reserve(t, role, phase, &command).map_err(crate::err::Error::new)
     }).map_err(|e| err(e.msg))?;
     action()
 
