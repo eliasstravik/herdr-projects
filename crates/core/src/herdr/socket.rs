@@ -10,6 +10,7 @@ use std::time::Duration;
 fn request(method: &str, params: &Value) -> String { format!("{}\n", json!({ "id": "herdr-projects", "method": method, "params": params })) }
 /// One request: its result, or what herdr refused it with (`code`: "popup_not_open").
 pub fn ask(method: &str, params: &Value, socket: Option<&str>) -> HRes<Value> {
+    if socket.map(super::backend::is_rex).unwrap_or(false) { return Err(HerdrError { code: "unsupported".into(), message: "Rex has no herdr socket.".into() }); }
     if let Some(f) = fake() { return f.ask(method, params); }
     let path = socket.map(String::from).unwrap_or_else(current_socket);
     let no = |m: String| HerdrError { code: "no_server".into(), message: m };
@@ -29,6 +30,7 @@ pub fn popup_close(socket: Option<&str>) -> HRes<bool> {
 /// Told each time herdr shows another tab: `on(tab id)` on a thread of its own. `started`: called once herdr has taken
 /// the subscription. A connection that fails or ends is left at that.
 pub fn on_tab_shown(socket: Option<String>, on: impl Fn(String) + Send + 'static, started: impl FnOnce() + Send + 'static) {
+    if socket.as_deref().map(super::backend::is_rex).unwrap_or(false) { return; } // Rex: no tab events (docs/rex.md)
     std::thread::spawn(move || {
         let path = socket.unwrap_or_else(current_socket);
         let Ok(mut s) = UnixStream::connect(&path) else { return };

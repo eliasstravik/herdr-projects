@@ -1,85 +1,59 @@
-//! herdr's commands, bound to one herdr session (by socket path): spaces, tabs, panes, agents and the rest. `None` as
-//! the socket means whatever this process would talk to.
-use super::cli::{args, kids, run, run_raw, HRes, HerdrError};
+//! The board's handle on its terminal: one session of herdr or one Rex server, named by its socket (backend.rs). It
+//! passes each call to that backend, and keeps what is the same on both: a start tried again until the shell is at
+//! its prompt, what runs in a pane, and how an agent is ended. `None` as the socket means whatever this process
+//! would talk to.
+use super::backend::{for_socket, TerminalBackend};
+use super::cli::{args, kids, HRes, HerdrError};
 use crate::json::*;
 
 #[derive(Clone, Debug, Default)]
 pub struct Herdr { pub socket: Option<String> }
-fn envs(env: &[(String, String)]) -> Vec<String> { env.iter().flat_map(|(k, v)| ["--env".to_string(), format!("{k}={v}")]).collect() }
 
 impl Herdr {
     pub fn new(socket: Option<String>) -> Self { Herdr { socket } }
+    /// The backend this handle's socket names.
+    /// No socket inside a Rex block is that Rex server (`HERDR_PROJECTS_SOCKET`); elsewhere herdr's own choice.
+    pub fn backend(&self) -> Box<dyn TerminalBackend> { for_socket(self.rex_socket().as_deref().or(self.socket.as_deref())) }
+    fn rex_socket(&self) -> Option<String> {
+        match &self.socket { Some(s) => Some(s.clone()).filter(|s| super::backend::is_rex(s)), None => Some(super::cli::current_socket()).filter(|s| super::backend::is_rex(s)) }
+    }
+    pub fn is_rex(&self) -> bool { self.rex_socket().is_some() }
     pub fn socket_path(&self) -> String { self.socket.clone().unwrap_or_else(super::cli::current_socket) }
-    pub fn call(&self, a: Vec<String>) -> HRes<Value> { run(self.socket.as_deref(), &a, 30000, "") }
-    pub fn call_t(&self, a: Vec<String>, timeout_ms: u64) -> HRes<Value> { run(self.socket.as_deref(), &a, timeout_ms, "") }
-    pub fn alive(&self) -> bool { self.call_t(args(&["workspace", "list"]), 5000).is_ok() }
+    pub fn call(&self, a: Vec<String>) -> HRes<Value> { self.backend().call(a, 30000) }
+    pub fn call_t(&self, a: Vec<String>, timeout_ms: u64) -> HRes<Value> { self.backend().call(a, timeout_ms) }
+    pub fn alive(&self) -> bool { if self.is_rex() { self.backend().workspaces().is_ok() } else { self.call_t(args(&["workspace", "list"]), 5000).is_ok() } }
     // ---- layout
-    pub fn workspaces(&self) -> HRes<Vec<Value>> { Ok(self.call(args(&["workspace", "list"]))?.arr("workspaces").to_vec()) }
-    pub fn workspace_get(&self, id: &str) -> Option<Value> { self.call(args(&["workspace", "get", id])).ok().map(|r| r.at("workspace").clone()).filter(|v| !v.is_null()) }
-    pub fn workspace_create(&self, cwd: &str, label: &str, env: &[(String, String)]) -> HRes<Value> {
-        let mut a = args(&["workspace", "create", "--cwd", cwd]);
-        if !label.is_empty() { a.extend(args(&["--label", label])); }
-        a.extend(envs(env)); a.push("--no-focus".into());
-        self.call(a)
-    }
-    pub fn workspace_close(&self, id: &str) -> HRes<Value> { self.call(args(&["workspace", "close", id])) }
-    pub fn workspace_focus(&self, id: &str) -> HRes<Value> { self.call(args(&["workspace", "focus", id])) }
-    pub fn tab_focus(&self, id: &str) -> HRes<Value> { self.call(args(&["tab", "focus", id])) }
+    pub fn workspaces(&self) -> HRes<Vec<Value>> { self.backend().workspaces() }
+    pub fn workspace_get(&self, id: &str) -> Option<Value> { self.backend().workspace_get(id) }
+    pub fn workspace_create(&self, cwd: &str, label: &str, env: &[(String, String)]) -> HRes<Value> { self.backend().workspace_create(cwd, label, env) }
+    pub fn workspace_close(&self, id: &str) -> HRes<Value> { self.backend().workspace_close(id) }
+    pub fn workspace_focus(&self, id: &str) -> HRes<Value> { self.backend().workspace_focus(id) }
+    pub fn tab_focus(&self, id: &str) -> HRes<Value> { self.backend().tab_focus(id) }
     /// A new tab in a space, with one pane at its shell. Never focused: the human stays where they are.
-    pub fn tab_create(&self, workspace: &str, cwd: &str, label: &str, env: &[(String, String)]) -> HRes<Value> {
-        let mut a = args(&["tab", "create", "--workspace", workspace]);
-        if !cwd.is_empty() { a.extend(args(&["--cwd", cwd])); }
-        if !label.is_empty() { a.extend(args(&["--label", label])); }
-        a.extend(envs(env)); a.push("--no-focus".into());
-        self.call(a)
-    }
-    pub fn tabs(&self, workspace: &str) -> HRes<Vec<Value>> { Ok(self.call(args(&["tab", "list", "--workspace", workspace]))?.arr("tabs").to_vec()) }
-    pub fn tab_get(&self, id: &str) -> Option<Value> { self.call(args(&["tab", "get", id])).ok().map(|r| r.at("tab").clone()).filter(|v| !v.is_null()) }
-    pub fn tab_rename(&self, id: &str, label: &str) -> Option<Value> { self.call(args(&["tab", "rename", id, label])).ok() }
-    pub fn tab_close(&self, id: &str) -> Option<Value> { self.call(args(&["tab", "close", id])).ok() }
-    pub fn worktree_create(&self, cwd: &str, branch: &str, base: &str, label: &str) -> HRes<Value> {
-        let mut a = args(&["worktree", "create", "--cwd", cwd, "--branch", branch]);
-        if !base.is_empty() { a.extend(args(&["--base", base])); }
-        if !label.is_empty() { a.extend(args(&["--label", label])); }
-        a.push("--no-focus".into());
-        self.call_t(a, 120000)
-    }
-    pub fn worktree_open(&self, cwd: &str, path: &str, label: &str) -> HRes<Value> {
-        let mut a = args(&["worktree", "open", "--cwd", cwd, "--path", path]);
-        if !label.is_empty() { a.extend(args(&["--label", label])); }
-        a.push("--no-focus".into());
-        self.call_t(a, 60000)
-    }
-    pub fn worktree_remove(&self, workspace: &str, force: bool) -> HRes<Value> {
-        let mut a = args(&["worktree", "remove", "--workspace", workspace]);
-        if force { a.push("--force".into()); }
-        self.call_t(a, 120000)
-    }
+    pub fn tab_create(&self, workspace: &str, cwd: &str, label: &str, env: &[(String, String)]) -> HRes<Value> { self.backend().tab_create(workspace, cwd, label, env) }
+    pub fn tabs(&self, workspace: &str) -> HRes<Vec<Value>> { self.backend().tabs(workspace) }
+    pub fn tab_get(&self, id: &str) -> Option<Value> { self.backend().tab_get(id) }
+    pub fn tab_rename(&self, id: &str, label: &str) -> Option<Value> { self.backend().tab_rename(id, label) }
+    pub fn tab_close(&self, id: &str) -> Option<Value> { self.backend().tab_close(id) }
+    pub fn worktree_create(&self, cwd: &str, branch: &str, base: &str, label: &str) -> HRes<Value> { self.backend().worktree_create(cwd, branch, base, label) }
+    pub fn worktree_open(&self, cwd: &str, path: &str, label: &str) -> HRes<Value> { self.backend().worktree_open(cwd, path, label) }
+    pub fn worktree_remove(&self, workspace: &str, force: bool) -> HRes<Value> { self.backend().worktree_remove(workspace, force) }
     // ---- panes
-    pub fn panes(&self, workspace: Option<&str>) -> HRes<Vec<Value>> {
-        let mut a = args(&["pane", "list"]);
-        if let Some(w) = workspace { a.extend(args(&["--workspace", w])); }
-        Ok(self.call(a)?.arr("panes").to_vec())
-    }
-    pub fn pane_get(&self, id: &str) -> Option<Value> { self.call(args(&["pane", "get", id])).ok().map(|r| r.at("pane").clone()).filter(|v| !v.is_null()) }
-    /// Where a pane sits in herdr's own window: its tab's area, every pane's rect, and whether one is zoomed.
-    pub fn pane_layout(&self, id: &str) -> Option<Value> { self.call_t(args(&["pane", "layout", "--pane", id]), 3000).ok().map(|r| r.at("layout").clone()).filter(|v| !v.is_null()) }
+    pub fn panes(&self, workspace: Option<&str>) -> HRes<Vec<Value>> { self.backend().panes(workspace) }
+    pub fn pane_get(&self, id: &str) -> Option<Value> { self.backend().pane_get(id) }
+    /// Where a pane sits in its window: its tab's area, every pane's rect, and whether one is zoomed.
+    pub fn pane_layout(&self, id: &str) -> Option<Value> { self.backend().pane_layout(id) }
     /// Put the keyboard on one pane of the tab that shows: zoom it (zooming focuses), and take the zoom off again
     /// unless the tab was zoomed (herdr 0.9.3 has no "focus this pane").
     pub fn pane_focus(&self, id: &str) -> HRes<()> {
         let Some(before) = self.pane_layout(id) else { return Ok(()) };
         if before.s("focused_pane_id") == id { return Ok(()); }
-        self.call(args(&["pane", "zoom", id, "--on"]))?;
-        if !before.b("zoomed") { let _ = self.call(args(&["pane", "zoom", id, "--off"])); }
+        self.backend().pane_zoom(id, true)?;
+        if !before.b("zoomed") { let _ = self.backend().pane_zoom(id, false); }
         Ok(())
     }
-    pub fn pane_split(&self, id: &str, cwd: &str, direction: &str, env: &[(String, String)]) -> HRes<Value> {
-        let mut a = args(&["pane", "split", id, "--direction", direction]);
-        if !cwd.is_empty() { a.extend(args(&["--cwd", cwd])); }
-        a.extend(envs(env)); a.push("--no-focus".into());
-        Ok(self.call(a)?.at("pane").clone())
-    }
-    fn process_info(&self, id: &str) -> Option<Value> { self.call(args(&["pane", "process-info", "--pane", id])).ok().map(|r| r.at("process_info").clone()) }
+    pub fn pane_split(&self, id: &str, cwd: &str, direction: &str, env: &[(String, String)]) -> HRes<Value> { self.backend().pane_split(id, cwd, direction, env) }
+    fn process_info(&self, id: &str) -> Option<Value> { self.backend().process_info(id) }
     /// Is nothing but its shell running in the pane? Unknown counts as busy.
     pub fn pane_idle(&self, id: &str) -> bool {
         let Some(i) = self.process_info(id) else { return false };
@@ -111,16 +85,11 @@ impl Herdr {
         kids(i.i("shell_pid")).map(|k| k.iter().all(|p| front.contains(p))).unwrap_or(false)
     }
     /// A pane, with whatever runs in it, into a new tab of another space. Never focused.
-    pub fn pane_move(&self, id: &str, workspace: &str, label: &str) -> HRes<Value> {
-        let mut a = args(&["pane", "move", id, "--new-tab", "--workspace", workspace]);
-        if !label.is_empty() { a.extend(args(&["--label", label])); }
-        a.push("--no-focus".into());
-        Ok(self.call(a)?.at("move_result").clone())
-    }
-    pub fn pane_close(&self, id: &str) -> Option<Value> { self.call(args(&["pane", "close", id])).ok() }
+    pub fn pane_move(&self, id: &str, workspace: &str, label: &str) -> HRes<Value> { self.backend().pane_move(id, workspace, label) }
+    pub fn pane_close(&self, id: &str) -> Option<Value> { self.backend().pane_close(id) }
     /// Run a command in the pane, at its shell: typed and entered.
-    pub fn pane_run(&self, id: &str, command: &str) -> HRes<Value> { self.when_at_prompt(id, || self.call(args(&["pane", "run", id, command]))) }
-    /// End the program in the pane's foreground, so the pane is at its shell again. True once herdr sees no agent there.
+    pub fn pane_run(&self, id: &str, command: &str) -> HRes<Value> { self.when_at_prompt(id, || self.backend().pane_run(id, command)) }
+    /// End the program in the pane's foreground, so the pane is at its shell again. True once no agent is seen there.
     pub fn pane_quit(&self, id: &str, wait_ms: i64) -> bool {
         let gone = || matches!(self.agent_get(id), Ok(None));
         let info = self.process_info(id);
@@ -134,51 +103,26 @@ impl Herdr {
         }
         gone()
     }
-    pub fn pane_read(&self, id: &str, source: &str, lines: Option<i64>) -> HRes<String> {
-        let mut a = args(&["pane", "read", id, "--source", source]);
-        if let Some(n) = lines { a.extend(args(&["--lines", &n.to_string()])); }
-        run_raw(self.socket.as_deref(), &a, 30000, "")
-    }
-    pub fn metadata(&self, id: &str, extra: &[String]) -> Option<Value> {
-        let mut a = args(&["pane", "report-metadata", id, "--source", "plugin:herdr-projects"]);
-        a.extend(extra.iter().cloned());
-        self.call(a).ok()
-    }
+    pub fn pane_read(&self, id: &str, source: &str, lines: Option<i64>) -> HRes<String> { self.backend().pane_read(id, source, lines) }
+    pub fn metadata(&self, id: &str, extra: &[String]) -> Option<Value> { self.backend().metadata(id, extra) }
     // ---- agents
-    pub fn agents(&self) -> HRes<Vec<Value>> { Ok(self.call(args(&["agent", "list"]))?.arr("agents").to_vec()) }
+    pub fn agents(&self) -> HRes<Vec<Value>> { self.backend().agents() }
     /// The agent in a pane (or by name), or None when no agent is there.
-    pub fn agent_get(&self, target: &str) -> HRes<Option<Value>> {
-        match self.call(args(&["agent", "get", target])) {
-            Ok(r) => Ok(Some(r.at("agent").clone()).filter(|v| !v.is_null())),
-            Err(e) if ["agent_not_found", "not_found", "agent_not_running", "pane_not_found"].contains(&e.code.as_str()) => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-    /// A program herdr sees at work only through its own integration is never started without it (kinds.rs
-    /// `needs_integration`): herdr would never say its turn ended. Its status unknown (an older herdr): it is started.
-    pub fn integration_ready(&self, kind: &str) -> HRes<()> {
-        let Some(k) = crate::agents::kinds::kind(kind).filter(|k| k.needs_integration) else { return Ok(()) };
-        let status = run_raw(self.socket.as_deref(), &args(&["integration", "status"]), 15000, "").unwrap_or_default();
-        let line = status.lines().find(|l| l.trim_start().starts_with(&format!("{}:", k.integration)) || l.trim_start().starts_with(&format!("{} (", k.integration)));
-        if line.map(|l| l.contains("not installed")).unwrap_or(false) {
-            return Err(HerdrError { code: "integration_missing".into(), message: format!("{kind} needs herdr's own integration, or herdr cannot see when it works: run `herdr integration install {}`, then try again.", k.integration) });
-        }
-        Ok(())
-    }
+    pub fn agent_get(&self, target: &str) -> HRes<Option<Value>> { self.backend().agent_get(target) }
+    pub fn integration_ready(&self, kind: &str) -> HRes<()> { self.backend().integration_ready(kind) }
     pub fn agent_start(&self, name: &str, kind: &str, pane: &str, extra: &[String], timeout_ms: u64) -> HRes<Value> {
         self.integration_ready(kind)?;
-        let mut a = args(&["agent", "start", name, "--kind", kind, "--pane", pane, "--timeout", &timeout_ms.to_string()]);
-        if !extra.is_empty() { a.push("--".into()); a.extend(extra.iter().cloned()); }
+        let b = self.backend();
         // A shell not at its prompt yet takes no long line: waited for and tried again (shell_ready.rs).
-        match self.when_at_prompt(pane, || self.call_t(a.clone(), timeout_ms + 15000).map(|r| r.at("agent").clone())) {
+        match self.when_at_prompt(pane, || b.agent_start(name, kind, pane, extra, timeout_ms)) {
             Ok(r) => Ok(r),
-            // A program that quits as it starts (on an argument it does not know) leaves herdr waiting for it until the
-            // timeout. What it printed says why.
-            // One that runs on, unseen, is behind a launcher herdr cannot see through (kilo and qodercli from npm: a node
-            // script that starts the program as its child).
+            // A program that quits as it starts (on an argument it does not know) leaves the backend waiting for it
+            // until the timeout. What it printed says why.
+            // One that runs on, unseen, is behind a launcher the backend cannot see through (kilo and qodercli from
+            // npm: a node script that starts the program as its child).
             Err(e) if e.code == "timeout" && self.agent_get(pane).ok().flatten().is_none() => Err(match self.quit_with(pane, kind) {
                 Some(why) => HerdrError { code: e.code, message: format!("{kind} quit as it started: {why}") },
-                None => HerdrError { message: format!("{}: herdr did not see {kind} come up in its pane. If it runs there, it is behind a launcher that hides it from herdr (kilo and qodercli installed with npm are): install its standalone program (docs/agents.md).", e.message), code: e.code },
+                None => HerdrError { message: format!("{}: {} did not see {kind} come up in its pane. If it runs there, it is behind a launcher that hides it (kilo and qodercli installed with npm are): install its standalone program (docs/agents.md).", e.message, b.name()), code: e.code },
             }),
             Err(e) => Err(e),
         }
@@ -192,49 +136,24 @@ impl Herdr {
         let from = before.iter().rposition(|l| l.starts_with(prompt) && l.contains(kind)).map(|i| i + 1).unwrap_or(0);
         before[from..].iter().find(|l| l.to_lowercase().contains("error")).map(|l| l.chars().take(300).collect())
     }
-    pub fn agent_prompt(&self, target: &str, text: &str) -> HRes<Value> { self.call_t(args(&["agent", "prompt", target, text]), 60000) }
+    pub fn agent_prompt(&self, target: &str, text: &str) -> HRes<Value> { self.backend().agent_prompt(target, text) }
     /// Text typed into a pane as it is, with no enter.
-    pub fn pane_text(&self, id: &str, text: &str) -> HRes<Value> { self.call(args(&["pane", "send-text", id, text])) }
-    pub fn agent_keys(&self, target: &str, keys: &[&str]) -> HRes<Value> { let mut a = args(&["agent", "send-keys", target]); a.extend(args(keys)); self.call(a) }
-    pub fn agent_focus(&self, target: &str) -> HRes<Value> { self.call(args(&["agent", "focus", target])) }
-    pub fn agent_read(&self, target: &str, source: &str, lines: Option<i64>) -> HRes<String> {
-        let mut a = args(&["agent", "read", target, "--source", source]);
-        if let Some(n) = lines { a.extend(args(&["--lines", &n.to_string()])); }
-        run_raw(self.socket.as_deref(), &a, 60000, "")
-    }
+    pub fn pane_text(&self, id: &str, text: &str) -> HRes<Value> { self.backend().pane_text(id, text) }
+    pub fn agent_keys(&self, target: &str, keys: &[&str]) -> HRes<Value> { self.backend().agent_keys(target, keys) }
+    pub fn agent_focus(&self, target: &str) -> HRes<Value> { self.backend().agent_focus(target) }
+    pub fn agent_read(&self, target: &str, source: &str, lines: Option<i64>) -> HRes<String> { self.backend().agent_read(target, source, lines) }
     // ---- the rest
-    /// The board in a tab of its own, an ordinary pane that stays when you go elsewhere. Answers that pane's id (herdr
-    /// answers the pane itself).
-    pub fn open_board(&self) -> HRes<Option<String>> {
-        let p = self.call(args(&["plugin", "pane", "open", "--plugin", "herdr-projects", "--entrypoint", "board", "--placement", "tab"]))?.at("plugin_pane").at("pane").clone();
-        Ok(p.as_str().or(p.so("pane_id")).filter(|s| !s.is_empty()).map(String::from))
-    }
-    /// The board in herdr's popup. herdr refuses with `ui_busy` while a popup, anybody's, is open.
-    pub fn open_board_popup(&self, width: &str, height: &str) -> HRes<Value> {
-        let mut a = args(&["plugin", "pane", "open", "--plugin", "herdr-projects", "--entrypoint", "board", "--placement", "popup"]);
-        if !width.is_empty() { a.extend(args(&["--width", width])); }
-        if !height.is_empty() { a.extend(args(&["--height", height])); }
-        self.call(a)
-    }
+    /// The board in a tab of its own, an ordinary pane that stays when you go elsewhere. Answers that pane's id.
+    pub fn open_board(&self) -> HRes<Option<String>> { self.backend().open_board() }
+    /// The board in a popup. herdr refuses with `ui_busy` while a popup, anybody's, is open.
+    pub fn open_board_popup(&self, width: &str, height: &str) -> HRes<Value> { self.backend().open_board_popup(width, height) }
     /// The plugins herdr has installed.
-    pub fn plugins(&self) -> Vec<Value> {
-        run_raw(None, &args(&["plugin", "list", "--json"]), 8000, "").ok().and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            .map(|j| if j.at("result").at("plugins").is_array() { j.at("result").arr("plugins").to_vec() } else { j.arr("plugins").to_vec() }).unwrap_or_default()
-    }
-    pub fn plugin_config_dir(&self, id: &str) -> String { run_raw(None, &args(&["plugin", "config-dir", id]), 5000, "").map(|s| s.trim().to_string()).unwrap_or_default() }
-    pub fn machines(&self) -> Vec<Value> {
-        let Some(j) = run_raw(None, &args(&["machine", "list", "--json"]), 30000, "").ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else { return vec![] };
-        if let Some(a) = j.as_array() { return a.clone(); }
-        if j.at("machines").is_array() { j.arr("machines").to_vec() } else { j.at("result").arr("machines").to_vec() }
-    }
+    pub fn plugins(&self) -> Vec<Value> { self.backend().plugins() }
+    pub fn plugin_config_dir(&self, id: &str) -> String { self.backend().plugin_config_dir(id) }
+    pub fn machines(&self) -> Vec<Value> { self.backend().machines() }
 }
 /// Takes a pane's terminal back from whatever else is attached to it.
-pub fn take_terminal(h: &Herdr, pane: &str, cols: u16, rows: u16) -> HRes<()> {
-    let id = h.call_t(args(&["pane", "get", pane]), 5000)?.at("pane").t("terminal_id");
-    if id.is_empty() { return Err(HerdrError { code: "pane_not_found".into(), message: "herdr does not know this pane.".into() }); }
-    run_raw(h.socket.as_deref(), &args(&["terminal", "session", "control", &id, "--takeover", "--cols", &cols.to_string(), "--rows", &rows.to_string()]), 5000, "")?;
-    Ok(())
-}
+pub fn take_terminal(h: &Herdr, pane: &str, cols: u16, rows: u16) -> HRes<()> { h.backend().take_terminal(pane, cols, rows) }
 /// The size herdr shows a pane at, from `pane layout`: its rectangle, or the whole tab while it is the zoomed one.
 pub fn shown_of(layout: &Value, pane: &str) -> Option<(u16, u16, bool)> {
     let panes = layout.arr("panes");

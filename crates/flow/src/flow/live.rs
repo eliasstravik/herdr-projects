@@ -115,6 +115,8 @@ pub fn board(include_archived: bool) -> Vec<Obj> {
 pub fn assert_live(t: &Task) -> Res<()> {
     if !is_agent_task(t) { crate::fail!("No agent has been on {} yet. Delegate it first.", t.s("id")); }
     let here = current_socket();
+    // A task on Rex is reached from any board: Rex is asked by its own program, not through this session.
+    if crate::herdr::backend::is_rex(t.at("link").s("socket")) { return Ok(()); }
     if t.at("link").s("socket") != here { crate::fail!("{} lives in herdr session {}. Open the board there.", t.s("id"), session_name(t.at("link").s("socket"))); }
     if crate::herdr::cli::fake().is_none() && (!socket_exists(&here) || !Herdr::new(Some(here)).alive()) { crate::fail!("herdr is not running."); }
     Ok(())

@@ -28,19 +28,27 @@ pub fn fake() -> Option<Rc<dyn Fake>> { FAKE.with(|x| x.borrow().clone()) }
 
 pub fn bin() -> String { std::env::var("HERDR_BIN_PATH").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| "herdr".into()) }
 fn config_home() -> PathBuf { std::env::var("XDG_CONFIG_HOME").ok().filter(|s| !s.is_empty()).map(PathBuf::from).unwrap_or_else(|| crate::store::files::user_home().join(".config")) }
-/// The session a plain command talks to: the pane it runs in, else the default session.
+/// The session a plain command talks to: the one the board named for the terminal it runs in
+/// (`HERDR_PROJECTS_SOCKET`: a Rex block the board made), else the herdr pane it runs in, else herdr's default session.
 pub fn current_socket() -> String {
+    if let Ok(s) = std::env::var("HERDR_PROJECTS_SOCKET") { if !s.is_empty() { return s; } }
+    herdr_socket()
+}
+/// The herdr session a plain command talks to: the pane it runs in, else the default session.
+pub fn herdr_socket() -> String {
     if let Ok(s) = std::env::var("HERDR_SOCKET_PATH") { if !s.is_empty() { return s; } }
     let base = config_home().join("herdr");
     match std::env::var("HERDR_SESSION") { Ok(s) if !s.is_empty() => base.join("sessions").join(s).join("herdr.sock"), _ => base.join("herdr.sock") }.display().to_string()
 }
 pub fn session_name(socket: &str) -> String {
+    if super::backend::is_rex(socket) { return super::backend::rex_server(socket).map(|s| format!("rex {s}")).unwrap_or_else(|| "rex".into()); }
     let parts: Vec<&str> = socket.split('/').collect();
     let n = parts.len();
     if n >= 3 && parts[n - 1] == "herdr.sock" && parts[n - 3] == "sessions" { parts[n - 2].to_string() } else { "default".into() }
 }
 pub fn in_herdr() -> bool { std::env::var("HERDR_ENV").as_deref() == Ok("1") }
-pub fn socket_exists(socket: &str) -> bool { use std::os::unix::fs::FileTypeExt; std::fs::metadata(socket).map(|m| m.file_type().is_socket()).unwrap_or(false) }
+/// Is the session there? A Rex server is asked when it is used, not here.
+pub fn socket_exists(socket: &str) -> bool { if super::backend::is_rex(socket) { return true; } use std::os::unix::fs::FileTypeExt; std::fs::metadata(socket).map(|m| m.file_type().is_socket()).unwrap_or(false) }
 
 /// Runs the program: what it gave, or why it could not be run. `timeout_ms` ends a program that takes longer.
 pub fn launch(socket: Option<&str>, args: &[String], input: &str, timeout_ms: u64) -> HRes<Ran> {
