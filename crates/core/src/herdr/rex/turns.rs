@@ -6,16 +6,14 @@
 use super::registry;
 use crate::json::*;
 
-/// herdr's agent status for a state a program reports.
+/// herdr's agent status for a state a program reports. `error` is a program that failed and stopped: its turn ended.
 pub fn status_of(state: &str) -> &'static str {
-    match state { "working" | "busy" | "running" => "working", "blocked" | "waiting" | "input" | "error" | "failed" => "blocked", "done" | "finished" => "done", "idle" | "ready" => "idle", _ => "unknown" }
+    match state { "working" | "busy" | "running" => "working", "blocked" | "waiting" | "input" => "blocked", "done" | "finished" | "error" | "failed" => "done", "idle" | "ready" => "idle", _ => "unknown" }
 }
 /// The newest record a program reported for a block (`program_status`'s `records`), owned by `pid` when given.
 pub fn newest(ps: &Value, pid: i64) -> Option<Value> {
     let recs = ps.arr("records");
-    let mine: Vec<&Value> = recs.iter().filter(|r| pid == 0 || r.at("owner").i("pid") == pid || r.at("owner").i("pid") == 0).collect();
-    let pool = if mine.is_empty() { recs.iter().collect() } else { mine };
-    pool.into_iter().max_by(|a, b| a.t("updated_at").cmp(&b.t("updated_at"))).cloned()
+    recs.iter().filter(|r| pid == 0 || r.at("owner").i("pid") == pid || r.at("owner").i("pid") == 0).max_by(|a, b| a.t("updated_at").cmp(&b.t("updated_at"))).cloned()
 }
 /// One reading applied to the block's counters: (status, state_change_seq, completion_seq).
 pub fn observe(server: Option<&str>, block: &str, rec: Option<&Value>) -> (String, i64, Value) {

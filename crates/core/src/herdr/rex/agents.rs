@@ -6,7 +6,7 @@ use crate::clock::{now, sleep_ms};
 use crate::herdr::cli::{args, HRes};
 use crate::json::*;
 
-fn shq(s: &str) -> String { if !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || "-_./=:@%+,".contains(c)) { s.into() } else { format!("'{}'", s.replace('\'', "'\\''")) } }
+pub fn shq(s: &str) -> String { if !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || "-_./=:@%+,".contains(c)) { s.into() } else { format!("'{}'", s.replace('\'', "'\\''")) } }
 /// herdr's key names in Rex's (`esc` is `escape`, `C-c` is `ctrl+c`).
 pub fn key(k: &str) -> String {
     match k { "esc" => "escape".into(), "return" => "enter".into(), _ => k.strip_prefix("C-").map(|c| format!("ctrl+{c}")).unwrap_or_else(|| k.to_string()) }
@@ -28,7 +28,7 @@ impl Rex {
         let fg = p.arr("foreground_processes").first().cloned().unwrap_or(Value::Null);
         if super::screen::SHELLS.contains(&fg.s("name")) && now() - a.i("started") > 15000 { return None; } // back at its shell: gone
         let ps = run::block(self.srv(), block, "program_status", Value::Null).unwrap_or(Value::Null);
-        let rec = turns::newest(&ps, 0);
+        let rec = turns::newest(&ps, fg.i("pid")); // only what this program reported: a record an earlier one left is not its
         let (status, seq, comp) = turns::observe(self.srv(), block, rec.as_ref());
         let window = reg.at("blocks").at(block).t("window");
         let space = registry::space_of_window(reg, &window).map(|s| s.0).unwrap_or_default();

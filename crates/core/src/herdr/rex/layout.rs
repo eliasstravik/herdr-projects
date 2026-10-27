@@ -82,13 +82,17 @@ impl Rex {
     }
     pub fn space_close(&self, id: &str) -> HRes<Value> {
         let Some(s) = registry::space(&registry::read(self.srv()), id) else { return Err(run::err("workspace_not_found", "no such space")) };
-        let live: Vec<String> = self.view(s.s("session")).map(|v| Self::windows_of(&v).into_iter().map(|w| w.0).collect()).unwrap_or_default();
+        let live: Vec<String> = Self::windows_of(&self.view(s.s("session"))?).into_iter().map(|w| w.0).collect();
         let open: Vec<String> = strings(s.at("windows")).into_iter().filter(|w| live.contains(w)).collect();
         if !open.is_empty() { let mut a = args(&["window", "close"]); a.extend(open); run::rex(self.srv(), &a, "", 15000)?; }
         registry::change(self.srv(), |r| if let Some(o) = r["spaces"].as_object_mut() { o.remove(id); })?;
         Ok(json!({ "type": "ok" }))
     }
-    pub fn space_focus(&self, id: &str) -> HRes<Value> { self.window_focus(id) }
+    /// Its first window still open (the one its id names may have closed).
+    pub fn space_focus(&self, id: &str) -> HRes<Value> {
+        let first = self.windows(id)?.into_iter().next().ok_or_else(|| run::err("workspace_not_found", "the space has no window left"))?;
+        self.window_focus(first.s("tab_id"))
+    }
     pub fn window_focus(&self, id: &str) -> HRes<Value> { run::rex(self.srv(), &args(&["window", "focus", id]), "", 15000)?; Ok(json!({ "type": "ok" })) }
     /// A new tab of a space: a window in its session (`tab create`'s answer).
     pub fn window_create(&self, space: &str, cwd: &str, label: &str, env: &[(String, String)]) -> HRes<Value> {
@@ -127,7 +131,7 @@ impl Rex {
             Some(f) => f,
             None => {
                 let (window, block) = match first { Some(f) => f, None => self.new_window(&session, &cwd, "board", &env)? };
-                run::rex(self.srv(), &args(&["send", "-b", &block]), &format!("{} board\n", crate::store::files::bin().display()), 15000)?;
+                run::rex(self.srv(), &args(&["send", "-b", &block]), &format!("{} board\n", super::agents::shq(&crate::store::files::bin().display().to_string())), 15000)?;
                 (window, block)
             }
         };

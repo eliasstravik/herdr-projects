@@ -60,6 +60,8 @@ impl Rex {
             .ok_or_else(|| run::err("workspace_not_found", "not a linked worktree space"))?;
         let mut a = vec!["worktree", "remove"]; if force { a.push("--force"); }
         let path = s.t("cwd"); a.push(&path);
+        // A worktree git would not remove keeps its space: refused before any window closes.
+        if !force && !git(&path, &["status", "--porcelain"]).map(|o| o.is_empty()).unwrap_or(false) { return Err(run::err("worktree_remove_failed", format!("{path} has changes: not removed"))); }
         // Its windows first: none is left in a folder that is gone, and one Rex would not close keeps the worktree.
         self.space_close(space)?;
         git(s.at("worktree").s("repo_root"), &a).map_err(|e| run::err("worktree_remove_failed", e))?;

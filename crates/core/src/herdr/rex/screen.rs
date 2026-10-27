@@ -50,14 +50,14 @@ impl Rex {
     pub fn block_split(&self, id: &str, cwd: &str, direction: &str, env: &[(String, String)]) -> HRes<Value> {
         let (_, window) = self.where_is(id)?;
         let dir = match direction { "down" => "below", "up" => "above", "left" => "left", _ => "right" };
+        let cwd = if cwd.is_empty() { registry::read(self.srv()).at("blocks").at(id).t("cwd") } else { cwd.to_string() }; // as herdr: the anchor's folder
         let mut a = args(&["split", "-b", id, "--split", dir, "--focus=false", "--json"]);
-        if !cwd.is_empty() { a.extend(args(&["-c", cwd])); }
+        if !cwd.is_empty() { a.extend(args(&["-c", &cwd])); }
         a.extend(super::layout::shell_cmd(env, &self.socket()));
         let made = run::rex_json(self.srv(), &a, 30000)?;
         let block = [made.t("block_id"), made.arr("block_ids").first().and_then(|b| b.as_str()).unwrap_or_default().to_string()].into_iter().find(|b| !b.is_empty()).unwrap_or_default();
         let reg = registry::read(self.srv());
         let space = registry::space_of_window(&reg, &window).map(|s| s.0).unwrap_or_default();
-        let cwd = if cwd.is_empty() { reg.at("blocks").at(id).t("cwd") } else { cwd.to_string() };
         registry::change(self.srv(), |r| r["blocks"][&block] = json!({ "window": window, "cwd": cwd }))?;
         Ok(self.pane_out(&block, &space, &window, &cwd, ""))
     }

@@ -164,6 +164,9 @@ fn a_worktree_is_gits_with_a_window_in_it_and_goes_with_its_space() {
     assert!(made.at("workspace").at("worktree").b("is_linked_worktree"));
     let ws = made.at("workspace").t("workspace_id");
     assert_eq!(h.worktree_open("", &path, "").unwrap().b("already_open"), true);
+    std::fs::write(std::path::Path::new(&path).join("new.txt"), "x").unwrap();
+    assert_eq!(h.worktree_remove(&ws, false).unwrap_err().code, "worktree_remove_failed");
+    assert!(h.workspace_get(&ws).is_some(), "a worktree with changes keeps its space");
     h.worktree_remove(&ws, true).unwrap();
     assert!(!std::path::Path::new(&path).exists());
     assert!(h.workspace_get(&ws).is_none());
@@ -179,7 +182,8 @@ fn an_agent_is_typed_at_the_shell_its_turns_are_what_it_reports_and_a_prompt_is_
     let a = b.agent_start("worker 1", "claude", &pane, &["--model".into(), "x y".into()], 5000).unwrap();
     assert_eq!(a.s("agent"), "claude");
     assert!(f.sent().iter().any(|s| s.s("text") == "claude --model 'x y'"), "{:?}", f.sent());
-    assert_eq!(h.agent_get("worker 1").unwrap().map(|a| a.t("agent_status")), Some("unknown".into()));
+    f.with_block(&pane, |b| b["records"] = json!([{ "state": "done", "updated_at": "0", "owner": { "pid": 99 } }]));
+    assert_eq!(h.agent_get("worker 1").unwrap().map(|a| a.t("agent_status")), Some("unknown".into()), "an earlier program's done is not this one's");
     f.report(&pane, "working", "1");
     let working = h.agent_get(&pane).unwrap().unwrap();
     assert_eq!(working.s("agent_status"), "working");
