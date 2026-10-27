@@ -235,5 +235,14 @@ fn resource_admission_failed_claims_release_but_unknown_launches_keep_their_budg
             Ok(sw::store::tasks::Change::Write)
         }).unwrap();
         sw::admission::claim(&b, "worker", || Ok(())).unwrap();
+        sw::clock::advance(1);
+        sw::store::tasks::update(b.s("id"), |t| {
+            t.put("stage", "starting"); t.put("last", json!({ "status": "done", "at": sw::clock::now() }));
+            Ok(sw::store::tasks::Change::Write)
+        }).unwrap();
+        sw::clock::advance(1000);
+        sw::admission::run(&task(b.s("id")), "worker", || Ok(())).unwrap();
+        sw::store::tasks::update(b.s("id"), |t| { t.put("stage", "failed"); Ok(sw::store::tasks::Change::Write) }).unwrap();
+        assert!(sw::admission::claim(&a, "worker", || Ok(())).is_err(), "an idle observation before the launch attempt cannot release the new launch");
     });
 }

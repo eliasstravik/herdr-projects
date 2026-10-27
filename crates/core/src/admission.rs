@@ -97,7 +97,9 @@ fn reserve(t: &Task, role: &str, phase: Phase, command: &str) -> Result<(), Stri
         return Err("Waiting for load, including pending agent reservations".into());
     }
     let reservation = ledger.reservations.entry(key).or_insert_with(|| Reservation { task: t.t("id"), role: role.into(), at: now(), worked_at: t.i("workedAt"), phase });
-    if phase == Phase::Launch { reservation.phase = Phase::Launch; }
+    if phase == Phase::Launch {
+        reservation.phase = Phase::Launch; reservation.at = now(); reservation.worked_at = t.i("workedAt");
+    }
     write_json(&data_dir().join("admission.json"), &serde_json::to_value(&ledger).map_err(|e| e.to_string())?).map_err(|e| e.msg)
 }
 

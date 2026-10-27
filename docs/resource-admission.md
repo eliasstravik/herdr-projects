@@ -75,7 +75,9 @@ read. A failed or canceled claim can be released if the board never attempted it
 launch. A possible launch is different: missing turn data is not proof it
 stopped. Such a reservation needs observed worker progress, a fresh confirmed
 idle/done observation after its launch attempt, or an explicitly finished task.
-A later claim cannot downgrade a possible launch to an unlaunched claim. Missing task records, corrupt reservation
+A later claim cannot downgrade a possible launch to an unlaunched claim. Each
+actual launch attempt starts a new observation epoch; an earlier idle reading
+cannot release that new attempt. Missing task records, corrupt reservation
 files and uncertain state retain the budget and refuse further starts. Reviewer
 reservations are retained until a confirmed stopped or finished task. This is
 conservative; do not erase the ledger to recover capacity while starts may be
