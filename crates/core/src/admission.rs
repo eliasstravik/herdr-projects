@@ -95,9 +95,9 @@ pub fn run<T>(t: &Task, role: &str, action: impl FnOnce() -> Result<T, HerdrErro
     let Some(command) = enabled() else { return action() };
     if !["worker", "reviewer"].contains(&role) { return Err(err("Unknown admission role")); }
     with_lock_wait("resource-admission", 5000, || {
-        reserve(t, role, &command).map_err(crate::err::Error::new)?;
-        Ok(action())
-    }).map_err(|e| err(e.msg))?
+        reserve(t, role, &command).map_err(crate::err::Error::new)
+    }).map_err(|e| err(e.msg))?;
+    action()
 
 }
 

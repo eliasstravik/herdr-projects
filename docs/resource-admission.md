@@ -58,7 +58,8 @@ Admission requires:
 - Swap usage growth and swapouts no higher than 1 MiB/s, independently.
 
 The probe and resource reservation are protected by one cross-process board
-lock. Queue claims reserve memory before a detached runner can start. Each
+lock. The reservation persists after that lock is released, so waiting for an
+agent to draw its first screen does not block other admissions. Queue claims reserve memory before a detached runner can start. Each
 actual launch, including shell-readiness retries, reads the probe again. A
 resource collapse during worktree setup therefore leaves the task queued, with
 its prepared worktree and exact launch prompt retained. Wakes, inbox delivery
