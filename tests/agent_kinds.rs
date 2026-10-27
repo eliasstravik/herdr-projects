@@ -17,6 +17,7 @@ mod skills;
 mod skills_more;
 /// Trusting a repo in Codex's config.toml, read as TOML (#314).
 mod codex_trust;
+mod pi_trust;
 
 fn args(k: &str, o: StartOpts) -> Vec<String> { start_args(k, &o).unwrap() }
 fn opts(model: &str, effort: &str) -> StartOpts { StartOpts { model: model.into(), effort: effort.into(), ..Default::default() } }
