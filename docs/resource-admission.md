@@ -91,6 +91,14 @@ host resources. The existing slot count and FIFO order still apply. This change
 does not add priority scheduling, a second host governor, or process-curtailment
 logic. Running-work intervention belongs to the existing host backstop.
 
+## Read admission without changing it
+
+`herdr-projects admission --json` returns schema 1 with `limit`, `active` and
+`waiting`. It uses the allocator's slot predicate and lock, including attempts.
+Queued rows include their resource-hold reason or slot/dependency cause. Invalid,
+unreadable or unrecognized task data returns an error, never a zero active count.
+This does not add timed task waits or replace their lifecycle protocol.
+
 ## Verify in a scratch board
 
 Run `npm run check board-queue`. The existing queue tests exercise competing

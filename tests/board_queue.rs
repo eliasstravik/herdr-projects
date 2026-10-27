@@ -258,3 +258,20 @@ fn resource_admission_zero_limit_closes_the_queue_even_with_healthy_resources() 
         assert!(!calls(&w).iter().any(|c| c.starts_with("agent start ")));
     });
 }
+
+#[test]
+fn resource_admission_snapshot_matches_the_allocator_and_errors_on_unknown_inventory() {
+    let w = world();
+    let a = w.add("Slot holder"); let b = w.add("Queued task");
+    sw::store::tasks::update(&a, |t| { t.put("stage", "working"); Ok(sw::store::tasks::Change::Write) }).unwrap();
+    sw::store::tasks::update(&b, |t| { t.put("stage", "queued"); Ok(sw::store::tasks::Change::Write) }).unwrap();
+    let (snapshot, _) = sw::cli::tasks::command("admission", &sw::cli::flags::parse(&["admission".into(), "--json".into()])).unwrap();
+    assert_eq!(snapshot.i("schema"), 1);
+    assert_eq!(snapshot.arr("active")[0].s("id"), a);
+    assert_eq!(snapshot.arr("waiting")[0].s("id"), b);
+    sw::store::tasks::update(&a, |t| { t.put("stage", "unknown-future-stage"); Ok(sw::store::tasks::Change::Write) }).unwrap();
+    assert!(sw::admission::status().is_err());
+    std::fs::write(sw::store::files::file_of(&a), "not-json").unwrap();
+    assert!(sw::admission::status().is_err());
+    assert!(sw::actions::start::start_queued(&w.socket).is_empty());
+}

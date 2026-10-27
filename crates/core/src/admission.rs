@@ -1,12 +1,14 @@
 //! Fresh resource checks and persistent reservations at queue claims, process starts and session wakes.
 mod probe;
+mod census;
+pub use census::{occupies_slot, status, tasks as slot_tasks};
 
 use crate::clock::now;
 use crate::herdr::cli::HerdrError;
 use crate::json::*;
 use crate::store::files::{data_dir, with_lock_wait, write_json};
 use crate::store::settings::lookup::setting_text;
-use crate::store::tasks::{get, list, ListOpts, Task};
+use crate::store::tasks::{get, Task};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -122,7 +124,7 @@ fn admit<T>(t: &Task, role: &str, phase: Phase, action: impl FnOnce() -> Result<
 fn task_for_pane(pane: &str) -> Result<(Task, &'static str), HerdrError> {
     if pane.is_empty() { return Err(err("Missing task pane for resource admission")); }
     let mut found = vec![];
-    for t in list(ListOpts { attempts: true, ..Default::default() }) {
+    for t in census::tasks().map_err(|e| err(e.msg))? {
         if t.at("link").s("pane") == pane { found.push((t.clone(), "worker")); }
         if t.at("link").at("reviewer").s("pane") == pane { found.push((t, "reviewer")); }
     }

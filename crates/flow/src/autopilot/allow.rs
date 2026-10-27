@@ -13,7 +13,7 @@ use crate::json::*;
 use crate::store::tasks::find;
 
 /// Commands that only read.
-const READS: [&str; 5] = ["list", "ls", "show", "details", "models"];
+const READS: [&str; 6] = ["admission", "list", "ls", "show", "details", "models"];
 fn sub(pos: &[String]) -> &str { pos.get(1).map(|s| s.as_str()).unwrap_or("") }
 fn reads(cmd: &str, pos: &[String]) -> bool {
     READS.contains(&cmd) || (cmd == "autopilot" && !["on", "off"].contains(&sub(pos))) || (cmd == "coordinator" && ["where", "status", ""].contains(&sub(pos)))

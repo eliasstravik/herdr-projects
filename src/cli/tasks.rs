@@ -43,6 +43,7 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
     // Another machine's task (`vm-b:web/7`): the action is that machine's (remote/act.rs).
     if let Some(out) = crate::remote::act::far_command(cmd, pos, flags, pilot.is_some())? { if let Some(co) = &pilot { crate::autopilot::allow::note(co, cmd, pos); } return Ok(out); }
     let out = match cmd {
+        "admission" => (crate::admission::status()?, String::new()),
         "add" | "new" => {
             need(1, "a title")?;
             let (settings, research) = pick_choices(flags); // the task's own from the start, an agent on it or not

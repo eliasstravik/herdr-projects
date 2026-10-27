@@ -9,6 +9,7 @@ pub const HELP: &str = r#"herdr-projects: a work board for herdr
                                        conversation that changes nothing and ends only when you say: finish <id>.
                                        --on: add it on another machine the board knows, as that machine adds its own)
   herdr-projects list [--archived] [--all] [--pinned] [--query TEXT] [--json]
+  herdr-projects admission --json             read the slot limit, holders and queued resource holds
   herdr-projects report <id> --state idle|working|blocked|done|error [--kind question|permission|auth] [--msg TEXT] [--title TEXT]
                          [--progress 0-100] [--eta MINUTES]   (your own task, with --state working: how far, and minutes left)
   herdr-projects describe <id> <text>          write or replace a task's description
