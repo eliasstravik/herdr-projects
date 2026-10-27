@@ -6,7 +6,10 @@ resource probe adds a fresh check at queue claims, actual program starts and
 prompts that wake existing task sessions. It also gates reviewer program starts;
 a refused reviewer start follows the existing retryable review-error path rather
 than starting a model under pressure.
-The Coordinator and programs started by hand are outside this task gate.
+The Coordinator has an explicit, scoped exemption in its own caller. Programs
+started by hand outside the board are outside this task gate. With the gate
+enabled, an unknown or ambiguous task-pane binding holds instead of bypassing
+the resource check.
 
 Enable it with an absolute executable path, not a shell command:
 

@@ -36,7 +36,7 @@ fn look_typed(co: &Co, c: &Obj) {
     let was = mark.clone();
     let text = mark.t("text");
     let m2 = mark.clone();
-    let r = look(&Herdr::new(Some(co.socket.clone())), c.s("pane"), &mut mark, Some(&|| said_in(co, &m2, &text)));
+    let r = crate::admission::coordinator(c.s("pane"), || look(&Herdr::new(Some(co.socket.clone())), c.s("pane"), &mut mark, Some(&|| said_in(co, &m2, &text))));
     let done = matches!(r, "took" | "unknown" | "lost");
     if done || mark != was {
         let (at, typed_at) = (c.at("typed").at("at").clone(), c.at("typed").at("typedAt").clone());
@@ -108,7 +108,7 @@ fn ensure(api: &Herdr, co: &Co) -> Res<(Obj, bool)> {
     change(co, |c| { c.put("starting", began); true })?;
     let args = start::start_args(&k, &start::StartOpts { model: run.t("model"), effort: run.t("effort"), access: if run.b("access") { run.t("access") } else { "full".into() }, fast: run.b("fast").then_some(true), resume: resume.clone().unwrap_or_default(), session: session.clone().unwrap_or_default(), extra: launch, ..Default::default() })?;
     let mut blocked = false;
-    match api.agent_start(&name, &k, pane.s("pane_id"), &args, 60000) {
+    match crate::admission::coordinator(pane.s("pane_id"), || api.agent_start(&name, &k, pane.s("pane_id"), &args, 60000)) {
         Ok(_) => { settle(api, pane.s("pane_id"), &std::iter::once(crate::agents::kinds::program(&k).to_string()).chain(args).collect::<Vec<_>>().join(" ")); }
         Err(e) if e.code == "agent_not_ready" => blocked = true, // a dialog is in the way: what you said waits
         Err(e) => {
@@ -203,7 +203,7 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
             let intro = get(co).map(|c| c.b("intro")).unwrap_or(false);
             let (news, rules_hash) = super::rules_news::before_next(co, &get(co).unwrap_or_default(), m.b("autopilot"));
             let words_in = super::rules_news::with_head(if intro { Some(intro_line_of(co)) } else { news }, m.s("text"), m.b("autopilot"));
-            let typed = match hand(&api, c.s("pane"), &words_in) {
+            let typed = match crate::admission::coordinator(c.s("pane"), || hand(&api, c.s("pane"), &words_in)) {
                 Ok(t) => t,
                 Err(e) if e.code == "agent_blocked" || e.code == "agent_not_ready" => { unsay(); stuck = true; break; }
                 Err(e) => { unsay(); return Err(e.into()); }
@@ -226,7 +226,7 @@ fn run_pump(co: &Co, taken: &mut HashSet<String>) -> Res<()> {
             let words = if busy { [get(co).map(|c| c.at("typed").t("text")).unwrap_or_default(), m.t("text")].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n") } else { m.t("text") };
             change(co, |c| { c.put("typed", if busy { let mut t = typed.as_ref().and_then(|t| t.as_object().cloned()).unwrap_or_default(); t.put("text", words.clone()); Value::Object(t) } else { Value::Null }); true })?;
             let mark = typed.clone().unwrap_or(Value::Null);
-            if !confirm(&api, c.s("pane"), typed, Some(&|| said_in(co, &mark, &words))) { crate::fail!("{UNSENT}"); }
+            if !crate::admission::coordinator(c.s("pane"), || confirm(&api, c.s("pane"), typed, Some(&|| said_in(co, &mark, &words)))) { crate::fail!("{UNSENT}"); }
         }
         if stuck { break; }
     }

@@ -31,6 +31,7 @@ struct Reservation { task: String, role: String, at: i64, worked_at: i64 }
 struct Ledger { schema: u8, reservations: BTreeMap<String, Reservation> }
 type Probe = Rc<dyn Fn() -> Result<Reading, String>>;
 thread_local! { static PROBE: RefCell<Option<Probe>> = const { RefCell::new(None) }; }
+thread_local! { static COORDINATOR: RefCell<Option<String>> = const { RefCell::new(None) }; }
 
 pub fn with_probe<T>(probe: Probe, action: impl FnOnce() -> T) -> T {
     struct Reset(Option<Probe>);
@@ -101,14 +102,25 @@ pub fn run<T>(t: &Task, role: &str, action: impl FnOnce() -> Result<T, HerdrErro
 
 }
 
-pub fn task_for_pane(pane: &str) -> Option<(Task, &'static str)> {
-    list(ListOpts { attempts: true, ..Default::default() }).into_iter().find_map(|t| {
-        if t.at("link").s("pane") == pane { Some((t, "worker")) }
-        else if t.at("link").at("reviewer").s("pane") == pane { Some((t, "reviewer")) }
-        else { None }
-    })
+fn task_for_pane(pane: &str) -> Result<(Task, &'static str), HerdrError> {
+    if pane.is_empty() { return Err(err("Missing task pane for resource admission")); }
+    let mut found = vec![];
+    for t in list(ListOpts { attempts: true, ..Default::default() }) {
+        if t.at("link").s("pane") == pane { found.push((t.clone(), "worker")); }
+        if t.at("link").at("reviewer").s("pane") == pane { found.push((t, "reviewer")); }
+    }
+    if found.len() > 1 { return Err(err("Ambiguous task pane for resource admission")); }
+    found.pop().ok_or_else(|| err("Unknown task pane for resource admission"))
+}
+pub fn coordinator<T>(pane: &str, action: impl FnOnce() -> T) -> T {
+    struct Reset(Option<String>);
+    impl Drop for Reset { fn drop(&mut self) { COORDINATOR.with(|p| *p.borrow_mut() = self.0.take()); } }
+    let _reset = Reset(COORDINATOR.with(|p| p.replace(Some(pane.into()))));
+    action()
 }
 pub fn pane<T>(pane: &str, action: impl FnOnce() -> Result<T, HerdrError>) -> Result<T, HerdrError> {
     if enabled().is_none() { return action(); }
-    match task_for_pane(pane) { Some((t, role)) => run(&t, role, action), None => action() }
+    if !pane.is_empty() && COORDINATOR.with(|p| p.borrow().as_deref() == Some(pane)) { return action(); }
+    let (t, role) = task_for_pane(pane)?;
+    run(&t, role, action)
 }

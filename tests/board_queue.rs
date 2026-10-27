@@ -200,3 +200,20 @@ fn real_programs_resource_probe_is_bounded_and_rejects_failures_without_launchin
     }
     assert!(!std::fs::read_dir(sw::store::files::data_dir()).unwrap().filter_map(Result::ok).any(|e| e.file_name().to_string_lossy().starts_with("admission-probe-")));
 }
+
+#[test]
+fn resource_admission_unknown_or_ambiguous_panes_hold_and_coordinator_exemption_is_scoped() {
+    let w = world(); resource_gate();
+    let denied = || -> Result<(), sw::herdr::cli::HerdrError> { panic!("unknown binding started work") };
+    assert!(sw::admission::pane("unknown", denied).is_err());
+    sw::admission::coordinator("coordinator", || {
+        assert!(sw::admission::pane("coordinator", || Ok(())).is_ok());
+        assert!(sw::admission::pane("other", denied).is_err());
+    });
+    assert!(sw::admission::pane("coordinator", denied).is_err());
+    for name in ["First binding", "Duplicate binding"] {
+        let id = w.add(name);
+        sw::store::tasks::update(&id, |t| { t.obj_mut("link").put("pane", "shared"); Ok(sw::store::tasks::Change::Write) }).unwrap();
+    }
+    assert!(sw::admission::pane("shared", denied).unwrap_err().message.contains("Ambiguous"));
+}
