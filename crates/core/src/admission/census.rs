@@ -1,7 +1,7 @@
 //! Strict task inventory and the admission snapshot: unreadable or unknown task data never becomes an empty board.
 use crate::err::{Error, Res};
 use crate::json::*;
-use crate::store::files::{file_of, read_obj, tasks_dir, with_lock_wait, SLOT_STAGES, STAGES};
+use crate::store::files::{dir_of, read_obj, tasks_dir, with_lock_wait, SLOT_STAGES, STAGES};
 use crate::store::settings::lookup::setting;
 use crate::store::tasks::Task;
 
@@ -17,7 +17,8 @@ pub fn tasks() -> Res<Vec<Task>> {
             let id = format!("{}/{}", repo.file_name().to_string_lossy(), name);
             if name.is_empty() || !(name.bytes().all(|b| b.is_ascii_digit()) || crate::store::attempts::is_attempt_id(&id)) { continue; }
             if !number.file_type()?.is_dir() { return Err(Error::new("Unreadable task inventory entry")); }
-            let t = read_obj(&file_of(&id)).ok_or_else(|| Error::new("Unreadable or invalid task in admission inventory"))?;
+            let t = read_obj(&dir_of(&id).join("task.json")).ok_or_else(|| Error::new("Unreadable or invalid task in admission inventory"))?;
+            let t = crate::store::tasks::as_now(t);
             if t.s("id") != id || !STAGES.contains(&t.s("stage")) { return Err(Error::new("Unknown task identity or stage in admission inventory")); }
             if !t.b("archivedAt") { out.push(t); }
         }

@@ -271,7 +271,7 @@ fn resource_admission_snapshot_matches_the_allocator_and_errors_on_unknown_inven
     assert_eq!(snapshot.arr("waiting")[0].s("id"), b);
     sw::store::tasks::update(&a, |t| { t.put("stage", "unknown-future-stage"); Ok(sw::store::tasks::Change::Write) }).unwrap();
     assert!(sw::admission::status().is_err());
-    std::fs::write(sw::store::files::file_of(&a), "not-json").unwrap();
+    std::fs::write(sw::store::files::dir_of(&a).join("task.json"), "not-json").unwrap();
     assert!(sw::admission::status().is_err());
     assert!(sw::actions::start::start_queued(&w.socket).is_empty());
 }
