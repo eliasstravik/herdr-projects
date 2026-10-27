@@ -70,18 +70,28 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
     // Its temporary folder, as TMPDIR and the rest: removed with all in it when the task ends (temp.rs).
     let tmp = crate::temp::made(&t);
     let _ = api.pane_run(&pane, &crate::temp::export_line(&t));
-    let mut start_with = |with_hook: bool| -> Res<()> {
+    let mut start_with = |with_hook: bool| -> Result<(), crate::herdr::cli::HerdrError> {
         // In a read-only mount while its plan waits (plan/sandbox.rs).
-        match plan::sandbox::start_program(&api, &t, &name, &kind, &pane, &args(with_hook)?, "writer") {
+        match plan::sandbox::start_program(&api, &t, &name, &kind, &pane, &args(with_hook).map_err(|e| crate::herdr::cli::HerdrError { code: "failed".into(), message: e.msg })?, "writer") {
             Ok(()) => Ok(()),
             Err(e) if e.code == "agent_not_ready" => { blocked = true; Ok(()) } // a dialog is in the way: the text waits in the inbox
-            Err(e) => Err(e.into()),
+            Err(e) => Err(e),
         }
     };
-    if let Err(e) = start_with(hooked) { // once more without the hook arguments, from a clean shell prompt
-        if !hooked || e.msg.contains("canonical mode") { return Err(e); } // its shell was never at its prompt: tried again already
-        start_failed::tidy(&api, &pane, &start_failed::screen_of(&api, &pane));
-        hooked = false; start_with(false)?;
+    let mut launch = start_with(hooked);
+    if let Err(e) = &launch {
+        if hooked && e.code != "admission_hold" && !e.message.contains("canonical mode") {
+            start_failed::tidy(&api, &pane, &start_failed::screen_of(&api, &pane));
+            hooked = false;
+            launch = start_with(false);
+        }
+    }
+    if let Err(e) = launch {
+        if e.code == "admission_hold" {
+            g.set(|t| { t.put("stage", "queued"); t.put("resourceStart", json!({ "prompt": prompt, "resume": resume })); t.put("resourceHold", e.message.clone()); t.put("msg", e.message.clone()); })?;
+            return Ok("held");
+        }
+        return Err(e.into());
     }
     // herdr calls the program ready before it has drawn anything; text typed that early loses its enter (submit.rs).
     if !prompt.is_empty() && !blocked { let launch = std::iter::once(crate::agents::kinds::program(&kind).to_string()).chain(args(hooked)?).collect::<Vec<_>>().join(" "); crate::submit::settle(&api, &pane, &launch); }
@@ -91,6 +101,7 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
         t.put("stage", "working"); t.put("armedAt", now()); t.put("expectedWake", Value::Null); t.put("turnOpen", true); t.put("turnBy", "start"); t.put("msg", "");
         t.obj_mut("link").put("agent", name.clone());
         if !(t.i("workAt") >= t.i("since") && t.has("workAt")) { t.put("workAt", now()); }
+        t.del("resourceStart"); t.del("resourceHold");
         t.put("startedAgentAt", now()); t.put("exitedAt", Value::Null); t.put("tmp", tmp.display().to_string());
         t.put("hooked", hooked); t.put("agentVersion", version.clone()); t.put("sent", Value::Null); t.put("unsent", Value::Null);
         if plan::open(t) { t.obj_mut("plan").put("mode", boxed); } // in the mount: started again after the yes (plan/build.rs)

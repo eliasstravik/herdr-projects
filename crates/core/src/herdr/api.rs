@@ -99,7 +99,10 @@ impl Herdr {
     }
     pub fn pane_close(&self, id: &str) -> Option<Value> { self.call(args(&["pane", "close", id])).ok() }
     /// Run a command in the pane, at its shell: typed and entered.
-    pub fn pane_run(&self, id: &str, command: &str) -> HRes<Value> { self.when_at_prompt(id, || self.call(args(&["pane", "run", id, command]))) }
+    pub fn pane_run(&self, id: &str, command: &str) -> HRes<Value> { self.pane_run_with(id, command, |start| start()) }
+    pub fn pane_run_with(&self, id: &str, command: &str, mut gate: impl FnMut(&dyn Fn() -> HRes<Value>) -> HRes<Value>) -> HRes<Value> {
+        self.when_at_prompt(id, || gate(&|| self.call(args(&["pane", "run", id, command]))))
+    }
     /// End the program in the pane's foreground, so the pane is at its shell again. True once herdr sees no agent there.
     pub fn pane_quit(&self, id: &str, wait_ms: i64) -> bool {
         let gone = || matches!(self.agent_get(id), Ok(None));
@@ -146,11 +149,15 @@ impl Herdr {
         Ok(())
     }
     pub fn agent_start(&self, name: &str, kind: &str, pane: &str, extra: &[String], timeout_ms: u64) -> HRes<Value> {
+        self.agent_start_with(name, kind, pane, extra, timeout_ms, |start| crate::admission::pane(pane, start))
+    }
+    pub fn agent_start_with(&self, name: &str, kind: &str, pane: &str, extra: &[String], timeout_ms: u64,
+        mut gate: impl FnMut(&dyn Fn() -> HRes<Value>) -> HRes<Value>) -> HRes<Value> {
         self.integration_ready(kind)?;
         let mut a = args(&["agent", "start", name, "--kind", kind, "--pane", pane, "--timeout", &timeout_ms.to_string()]);
         if !extra.is_empty() { a.push("--".into()); a.extend(extra.iter().cloned()); }
         // A shell not at its prompt yet takes no long line: waited for and tried again (shell_ready.rs).
-        match self.when_at_prompt(pane, || self.call_t(a.clone(), timeout_ms + 15000).map(|r| r.at("agent").clone())) {
+        match self.when_at_prompt(pane, || gate(&|| self.call_t(a.clone(), timeout_ms + 15000).map(|r| r.at("agent").clone()))) {
             Ok(r) => Ok(r),
             // A program that quits as it starts (on an argument it does not know) leaves herdr waiting for it until the
             // timeout. What it printed says why.
@@ -172,7 +179,7 @@ impl Herdr {
         let from = before.iter().rposition(|l| l.starts_with(prompt) && l.contains(kind)).map(|i| i + 1).unwrap_or(0);
         before[from..].iter().find(|l| l.to_lowercase().contains("error")).map(|l| l.chars().take(300).collect())
     }
-    pub fn agent_prompt(&self, target: &str, text: &str) -> HRes<Value> { self.call_t(args(&["agent", "prompt", target, text]), 60000) }
+    pub fn agent_prompt(&self, target: &str, text: &str) -> HRes<Value> { crate::admission::pane(target, || self.call_t(args(&["agent", "prompt", target, text]), 60000)) }
     /// Text typed into a pane as it is, with no enter.
     pub fn pane_text(&self, id: &str, text: &str) -> HRes<Value> { self.call(args(&["pane", "send-text", id, text])) }
     pub fn agent_keys(&self, target: &str, keys: &[&str]) -> HRes<Value> { let mut a = args(&["agent", "send-keys", target]); a.extend(args(keys)); self.call(a) }

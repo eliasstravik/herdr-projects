@@ -77,3 +77,126 @@ fn the_queue_colour_is_a_magenta_of_its_own_in_every_theme() {
     // As docs/colours.md has them: herdr's default and the terminal's own colours.
     assert_eq!((resolve(&toml::Table::new(), None, "herdr", Seen::default()).pal.queue, t.queue), (sw::board::theme::C::Rgb(0xe056fd), sw::board::theme::C::Rgb(0xd946ef)));
 }
+
+fn resource_reading() -> sw::admission::Reading {
+    sw::admission::Reading { schema: 1, sampled_at: sw::clock::now(), total_bytes: 40 << 30,
+        available_bytes: 10 << 30, cores: 14, load1: 8.0, load5: 8.0, pressure: 2,
+        free_percent: 45.0, swap_growth_bytes_per_second: 0.0, swapout_bytes_per_second: 0.0 }
+}
+fn resource_gate() {
+    sw::store::settings::change::set_value("board.admission", &json!("/host/probe"), &sw::store::settings::lookup::Scope::you()).unwrap();
+}
+
+#[test]
+fn resource_admission_serializes_concurrent_claims_and_keeps_pending_reservations() {
+    let w = world(); resource_gate();
+    let a = task(&w.add("First claim")); let b = task(&w.add("Second claim"));
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let threads: Vec<_> = [a.clone(), b.clone()].into_iter().map(|t| {
+        let barrier = barrier.clone();
+        std::thread::spawn(move || {
+            sw::admission::with_probe(std::rc::Rc::new(|| Ok(resource_reading())), || {
+                barrier.wait(); sw::admission::run(&t, "worker", || Ok(())).is_ok()
+            })
+        })
+    }).collect();
+    let admitted = threads.into_iter().map(|t| t.join().unwrap()).filter(|ok| *ok).count();
+    assert_eq!(admitted, 1, "one memory budget must not be spent by two callers");
+    sw::admission::with_probe(std::rc::Rc::new(|| Ok(resource_reading())), || {
+        let ledger = sw::store::files::read_json(&sw::store::files::data_dir().join("admission.json")).unwrap();
+        assert_eq!(ledger.at("reservations").as_object().unwrap().len(), 1);
+        let pending = ledger.at("reservations").as_object().unwrap().values().next().unwrap();
+        let other = if pending.s("task") == a.s("id") { &b } else { &a };
+        assert!(sw::admission::run(other, "worker", || Ok(())).is_err(), "another invocation cannot forget a pending start");
+    });
+}
+
+#[test]
+fn resource_admission_rechecks_between_claim_and_actual_program_start() {
+    let w = world(); resource_gate();
+    let count = std::rc::Rc::new(std::cell::Cell::new(0)); let seen = count.clone();
+    sw::admission::with_probe(std::rc::Rc::new(move || {
+        let n = seen.get(); seen.set(n + 1); let mut r = resource_reading();
+        if n > 0 { r.available_bytes = 1; } Ok(r)
+    }), || {
+        w.script(json!({ "worker": [{ "status": "working" }] }));
+        let id = w.add("Resource collapse before launch"); delegate(&id);
+        let t = settle(&id);
+        assert_eq!(t.s("stage"), "queued");
+        assert!(t.at("resourceStart").b("prompt"), "hold retains the exact launch text");
+        assert!(!calls(&w).iter().any(|c| c.starts_with("agent start ")), "the allocated slot alone must not authorize a program start");
+    });
+    assert!(count.get() >= 2);
+}
+
+#[test]
+fn resource_admission_holds_wake_prompts_without_losing_the_inbox_text() {
+    let w = world();
+    w.script(json!({ "worker": [{ "status": "working" }] }));
+    let id = w.add("Wake later"); delegate(&id); let t = settle(&id);
+    resource_gate();
+    let before = calls(&w).len();
+    sw::admission::with_probe(std::rc::Rc::new(|| { let mut r = resource_reading(); r.available_bytes = 1; Ok(r) }), || {
+        assert_eq!(sw::flow::send::deliver(&t, "Keep this exact wake", None, false).unwrap(), "queued");
+    });
+    let pending = sw::store::inbox::pending_text(&id);
+    assert_eq!(pending.last().unwrap().s("text"), "Keep this exact wake");
+    assert!(!calls(&w)[before..].iter().any(|c| c.starts_with("agent prompt ")));
+}
+
+#[test]
+fn resource_admission_checks_load_growth_staleness_and_unknown_readings() {
+    let w = world(); resource_gate(); let t = task(&w.add("Safe refusal"));
+    for change in 0..6 {
+        sw::admission::with_probe(std::rc::Rc::new(move || {
+            if change == 5 { return Err("timeout".into()); }
+            let mut r = resource_reading();
+            match change { 0 => r.load5 = 30.0, 1 => r.pressure = 4, 2 => r.swapout_bytes_per_second = 2_000_000.0,
+                3 => r.sampled_at -= 3000, _ => r.load1 = f64::NAN }
+            Ok(r)
+        }), || assert!(sw::admission::run(&t, "worker", || -> Result<(), sw::herdr::cli::HerdrError> { panic!("unsafe start") }).is_err()));
+    }
+}
+
+#[test]
+fn resource_admission_releases_only_after_work_is_observed_and_snapshot_is_fresh() {
+    let w = world(); resource_gate();
+    sw::clock::set(Some(100000));
+    let a = task(&w.add("Pending")); let b = task(&w.add("Next"));
+    sw::admission::with_probe(std::rc::Rc::new(|| Ok(resource_reading())), || {
+        sw::admission::run(&a, "worker", || Ok(())).unwrap();
+        sw::clock::advance(60000);
+        assert!(sw::admission::run(&b, "worker", || Ok(())).is_err(), "time alone is not proof of a started agent");
+        sw::store::tasks::update(a.s("id"), |t| { t.put("workedAt", sw::clock::now()); Ok(sw::store::tasks::Change::Write) }).unwrap();
+        sw::admission::run(&b, "worker", || Ok(())).unwrap();
+    });
+}
+
+#[test]
+fn resource_admission_corrupt_reservation_state_holds_instead_of_forgetting_claims() {
+    let w = world(); resource_gate(); let t = task(&w.add("Unknown claims"));
+    std::fs::write(sw::store::files::data_dir().join("admission.json"), "not-json").unwrap();
+    sw::admission::with_probe(std::rc::Rc::new(|| Ok(resource_reading())), || {
+        assert!(sw::admission::run(&t, "worker", || -> Result<(), sw::herdr::cli::HerdrError> { panic!("unknown reservations") }).is_err());
+    });
+}
+
+#[test]
+fn real_programs_resource_probe_is_bounded_and_rejects_failures_without_launching_agents() {
+    use std::os::unix::fs::PermissionsExt;
+    let w = world(); let t = task(&w.add("Native probe"));
+    let path = w.base.join("host-reading");
+    sw::store::settings::change::set_value("board.admission", &json!(path.display().to_string()), &sw::store::settings::lookup::Scope::you()).unwrap();
+    let write = |body: &str| {
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+    };
+    write(&format!("printf '%s' '{}'", serde_json::to_string(&resource_reading()).unwrap()));
+    sw::admission::run(&t, "worker", || Ok(())).unwrap();
+    for body in ["exit 1", "printf not-json", "exec /usr/bin/yes", "exec /bin/sleep 30"] {
+        write(body);
+        let error = sw::admission::run(&t, "worker", || -> Result<(), sw::herdr::cli::HerdrError> { panic!("probe failure launched work") }).unwrap_err();
+        assert_eq!(error.code, "admission_hold");
+    }
+    assert!(!std::fs::read_dir(sw::store::files::data_dir()).unwrap().filter_map(Result::ok).any(|e| e.file_name().to_string_lossy().starts_with("admission-probe-")));
+}

@@ -22,7 +22,7 @@ use std::path::PathBuf;
 pub fn deliver(t: &Task, text: &str, wake: Option<Value>, first: bool) -> Res<&'static str> {
     match hand(&h(t), t.at("link").s("pane"), text) {
         Ok(mark) => { note_sent(t.s("id"), mark, text, first); Ok("sent") }
-        Err(e) if e.code == "agent_blocked" || e.code == "agent_not_ready" => {
+        Err(e) if e.code == "agent_blocked" || e.code == "agent_not_ready" || e.code == "admission_hold" => {
             let extra = wake.map(|w| obj(json!({ "wake": w }))).unwrap_or_default();
             queue_text(t.s("id"), text, extra)?;
             Ok("queued")

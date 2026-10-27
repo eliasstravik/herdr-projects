@@ -64,9 +64,10 @@ fn herr(code: &str, msg: String) -> HerdrError { HerdrError { code: code.into(),
 /// the plan's `writer` or its `reviewer`, named where it cannot start.
 pub fn start_program(api: &Herdr, t: &Obj, name: &str, kind: &str, pane: &str, args: &[String], who: &str) -> Result<(), HerdrError> {
     if open(t) && guarded(t).is_some() && !sandbox_ok() { return Err(herr("failed", no_mount(t.s("id"), who))); } // never a plan's writer or reviewer in a repo without it
-    if !boxed(t) { return api.agent_start(name, kind, pane, args, 60000).map(|_| ()); }
+    let role = if who == "reviewer" { "reviewer" } else { "worker" };
+    if !boxed(t) { return api.agent_start_with(name, kind, pane, args, 60000, |start| crate::admission::run(t, role, start)).map(|_| ()); }
     api.integration_ready(kind)?;
-    api.pane_run(pane, &boxed_command(t, name, kind, args))?;
+    api.pane_run_with(pane, &boxed_command(t, name, kind, args), |start| crate::admission::run(t, role, start))?;
     let step = std::env::var("HERDR_PROJECTS_READY_STEP_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(250u64);
     let until = crate::clock::now() + 60000;
     loop {

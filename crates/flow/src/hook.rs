@@ -274,7 +274,7 @@ fn deliver_inbox(t: &Task, api: &Herdr) {
         Err(e) => {
             let _ = untake_text(id, items.len());
             let _ = update_wait(id, 10000, |t| { for (k, v) in &before { t.put(k, v.clone()); } Ok(Change::Write) });
-            if e.code != "agent_blocked" && e.code != "agent_not_ready" { log(&e.message); }
+            if e.code != "agent_blocked" && e.code != "agent_not_ready" && e.code != "admission_hold" { log(&e.message); }
         }
     }
 }

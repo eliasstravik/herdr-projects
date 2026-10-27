@@ -144,7 +144,7 @@ pub fn review_once(id: &str, g: &mut Guard, text: &str, change: Option<&Value>, 
             else if !blocked && cur.s("stage") == "reviewneeds" { g.set(|t| { t.put("stage", "reviewing"); t.put("msg", "Under review"); })?; g.allow(&["reviewneeds"]); }
             let at_rest = a.as_ref().map(|a| a.s("agent_status") == "idle" || a.s("agent_status") == "done").unwrap_or(false);
             if !sent && at_rest {
-                match crate::submit::hand(&api, &pane, &brief) { Ok(m) => { crate::store::said_by::note_board(id, &brief); comp_at_send = a.as_ref().map(|a| a.at("completion_seq").clone()).unwrap_or(Value::Null); *mark_cell.borrow_mut() = m; sent = true; sent_at = now(); } Err(e) => { if e.code != "agent_blocked" && e.code != "agent_not_ready" { sent = true; sent_at = now(); } } }
+                match crate::submit::hand(&api, &pane, &brief) { Ok(m) => { crate::store::said_by::note_board(id, &brief); comp_at_send = a.as_ref().map(|a| a.at("completion_seq").clone()).unwrap_or(Value::Null); *mark_cell.borrow_mut() = m; sent = true; sent_at = now(); } Err(e) => { if e.code != "agent_blocked" && e.code != "agent_not_ready" && e.code != "admission_hold" { sent = true; sent_at = now(); } } }
             } else if mark_cell.borrow().is_some() && a.is_some() {
                 // The brief was typed: did the reviewer start on it? If not, enter is pressed again; never typed twice.
                 let mut m = mark_cell.borrow().clone().unwrap();

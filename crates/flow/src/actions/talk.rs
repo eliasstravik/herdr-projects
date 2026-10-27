@@ -98,7 +98,7 @@ pub fn rearm(t: &mut Task, keep_intent: bool, live: bool, chat: bool) -> Res<()>
     if !chat { t.del("chat"); }
     else if flow::chat::begin(t, "board", live && runner_alive(t)) == flow::chat::Began::During { granted(t); return Ok(()); }
     granted(t); // stopped at a limit: your word gives it the limit once more
-    for k in ["tidy", "waiting", "cutRetry"] { t.put(k, Value::Null); }
+    for k in ["tidy", "waiting", "cutRetry", "resourceStart"] { t.put(k, Value::Null); }
     fresh_list(t);
     if t.at("failure").s("stage") == "send" { t.put("failure", Value::Null); } // what you say now goes into the same box
     t.put("armedAt", now()); t.put("expectedWake", Value::Null); t.put("turnOpen", true); t.put("turnBy", "reply"); t.put("selfBlocked", Value::Null); t.put("blocked", Value::Null);

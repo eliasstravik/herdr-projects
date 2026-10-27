@@ -67,6 +67,11 @@ pub fn delegate_job(id: &str) {
     release(id, false);
 }
 fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
+    if t.at("resourceStart").is_object() {
+        let held = t.at("resourceStart").clone();
+        start_agent(id, g, held.s("prompt"), held.so("resume"))?;
+        return Ok(());
+    }
     let api = flow::task::h(&t);
     let root = folder_of(t.s("id"));
     let label = flow::sidebar::space_label(&t);
@@ -238,7 +243,7 @@ pub fn reopen(id: &str, restart: bool) -> Res<(Value, bool, Task)> {
     if !has_agent && restart && resumable(&t) && !marker_alive(t.at("runner")) {
         let (stage, armed) = (t.at("stage").clone(), t.at("armedAt").clone());
         let mut g = Guard::free(t.s("id"));
-        if start_agent(t.s("id"), &mut g, "", Some(t.s("session"))).is_ok() { has_agent = true; }
+        if start_agent(t.s("id"), &mut g, "", Some(t.s("session"))).is_ok_and(|s| s != "held") { has_agent = true; }
         let _ = update_wait(t.s("id"), 10000, |c| { c.put("stage", stage.clone()); c.put("armedAt", armed.clone()); c.put("turnOpen", false); Ok(Change::Write) }); // nothing was asked of it
     }
     Ok((pane, has_agent, get(t.s("id")).unwrap_or(t)))

@@ -112,8 +112,10 @@ pub fn look(api: &Herdr, pane: &str, mark: &mut Value, said: Option<&dyn Fn() ->
     let proof = said.and_then(|f| f());
     if took(mark, a.as_ref(), proof) == Some(true) { return "took"; }
     if mark.i("tries") >= TRIES { return "lost"; }
-    if let Some(m) = mark.as_object_mut() { let n = m.i("tries") + 1; m.put("tries", n); m.put("pressedAt", now()); }
-    let _ = api.agent_keys(pane, &["enter"]);
+    if crate::admission::pane(pane, || {
+        if let Some(m) = mark.as_object_mut() { let n = m.i("tries") + 1; m.put("tries", n); m.put("pressedAt", now()); }
+        api.agent_keys(pane, &["enter"]).map(|_| ())
+    }).is_err() { return "wait"; }
     "pressed"
 }
 /// The same, waited for: for a detached job that has nothing else to do meanwhile. False when the text was lost.

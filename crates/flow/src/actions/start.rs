@@ -144,7 +144,13 @@ pub fn start_queued(socket: &str) -> Vec<String> {
         for w in waiting {
             if busy >= max { break; }
             if crate::leftovers::room::still_waiting(w) { continue; } // no room on the disk yet: no runner for it
-            let t = update(w.s("id"), |t| { if t.s("stage") != "queued" { return Ok(Change::Keep); } crate::hook::ask_start(t); t.put("msg", ""); Ok(Change::Write) })?;
+            let t = match crate::admission::run(w, "worker", || update(w.s("id"), |t| {
+                if t.s("stage") != "queued" { return Ok(Change::Keep); }
+                crate::hook::ask_start(t); t.put("resourceHold", Value::Null); t.put("msg", ""); Ok(Change::Write)
+            }).map_err(|e| crate::herdr::cli::HerdrError { code: "failed".into(), message: e.msg })) {
+                Ok(t) => t,
+                Err(e) => { let _ = update(w.s("id"), |t| { t.put("resourceHold", e.message.clone()); t.put("msg", e.message.clone()); Ok(Change::Write) }); break; }
+            };
             if t.s("stage") != "starting" { continue; }
             busy += 1;
             started.push(t.t("id"));
