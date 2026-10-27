@@ -17,7 +17,10 @@ Enable it with an absolute executable path, not a shell command:
 herdr-projects set board.admission /usr/local/bin/herdr-host-reading
 ```
 
-The default is `none`, which preserves slot-only admission. The command is your
+The default is `none`, which preserves slot-only admission. `board.agents 0`
+closes queue admission explicitly, including when the probe reports healthy
+resources. It does not stop already running work; that belongs to the host
+backstop. The command is your
 board setting, never a repository's setting. It receives no arguments and must
 only read host telemetry. It writes one JSON object to stdout and exits:
 

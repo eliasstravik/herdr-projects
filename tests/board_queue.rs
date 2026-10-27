@@ -246,3 +246,15 @@ fn resource_admission_failed_claims_release_but_unknown_launches_keep_their_budg
         assert!(sw::admission::claim(&a, "worker", || Ok(())).is_err(), "an idle observation before the launch attempt cannot release the new launch");
     });
 }
+
+#[test]
+fn resource_admission_zero_limit_closes_the_queue_even_with_healthy_resources() {
+    let w = world(); resource_gate();
+    sw::store::settings::change::set_value("board.agents", &json!(0), &sw::store::settings::lookup::Scope::you()).unwrap();
+    sw::admission::with_probe(std::rc::Rc::new(|| Ok(resource_reading())), || {
+        let id = w.add("Explicitly closed admission"); delegate(&id);
+        assert_eq!(task(&id).s("stage"), "queued");
+        assert!(sw::actions::start::start_queued(&w.socket).is_empty());
+        assert!(!calls(&w).iter().any(|c| c.starts_with("agent start ")));
+    });
+}
