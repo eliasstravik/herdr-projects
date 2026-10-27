@@ -49,7 +49,7 @@ impl RexFake for FakeRex {
                 out(json!({ "window_id": win.at("window_id"), "block_ids": [win["blocks"][0].at("block_id")] }))
             }
             ("window", "close") => { for s in st["sessions"].as_array_mut().unwrap() { s["windows"].as_array_mut().unwrap().retain(|x| !a[2..].contains(&x.t("window_id"))); } out(json!({})) }
-            ("window", "rename") | ("window", "focus") | ("block", "focus") => out(json!({})),
+            ("window", "rename") | ("window", "focus") | ("block", "focus") | ("block", "zoom") => { st["sent"].as_array_mut().unwrap().push(json!({ "do": format!("{} {}", w(0), w(1)), "id": a.get(2) })); out(json!({})) }
             ("split", _) => {
                 let b = self.block(&flag("-c"));
                 let anchor = flag("-b");
@@ -127,6 +127,32 @@ fn a_space_is_a_window_of_its_repos_session_with_the_boards_socket_in_its_shell(
     assert_eq!(h.workspaces().unwrap().len(), 1);
     set_fake(None);
 }
+
+#[test]
+fn the_board_opens_in_its_own_window_started_once_and_two_repos_of_one_name_are_two_sessions() {
+    let w = world();
+    let (f, h) = rex(&w);
+    let _cwd = Cwd::set(&w.root);
+    let b = h.backend();
+    let first = b.open_board().unwrap().unwrap();
+    assert_eq!(b.open_board().unwrap(), Some(first.clone()), "found again, not made again");
+    let starts = f.sent().iter().filter(|s| s.s("text").ends_with(" board\n")).count();
+    assert_eq!(starts, 1, "{:?}", f.sent());
+    assert!(f.sent().iter().any(|s| s.s("do") == "window focus"), "the board is shown");
+    let other = w.base.join("elsewhere").join(w.root.file_name().unwrap());
+    std::fs::create_dir_all(&other).unwrap();
+    common::git(&other, &["init", "-q"]);
+    h.workspace_create(&other.display().to_string(), "", &[]).unwrap();
+    assert_eq!(f.st.borrow().arr("sessions").len(), 2);
+    h.pane_focus(&first).unwrap();
+    assert_eq!(f.sent().last().unwrap().s("do"), "block focus");
+    set_fake(None);
+}
+
+/// The test's working folder, put back when it ends.
+struct Cwd(std::path::PathBuf);
+impl Cwd { fn set(p: &std::path::Path) -> Self { let old = std::env::current_dir().unwrap(); std::env::set_current_dir(p).unwrap(); Cwd(old) } }
+impl Drop for Cwd { fn drop(&mut self) { let _ = std::env::set_current_dir(&self.0); } }
 
 #[test]
 fn a_worktree_is_gits_with_a_window_in_it_and_goes_with_its_space() {

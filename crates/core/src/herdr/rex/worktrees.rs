@@ -16,9 +16,14 @@ pub fn repo_root(cwd: &str) -> Option<String> {
     let common = git(cwd, &["rev-parse", "--path-format=absolute", "--git-common-dir"]).ok()?;
     Some(common.strip_suffix("/.git").map(String::from).unwrap_or_else(|| git(cwd, &["rev-parse", "--show-toplevel"]).unwrap_or(common)))
 }
+fn short(s: &str) -> String { sha1_smol::Sha1::from(s).digest().to_string()[..8].to_string() }
+/// `worktrees/<repo>-<its path's hash>/<branch>`: a branch whose name had to change gets its own hash too, so no two
+/// repos or branches share a folder.
 fn dest(root: &str, branch: &str) -> PathBuf {
     let safe: String = branch.chars().map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '-' }).collect();
-    crate::store::files::data_dir().join("worktrees").join(Path::new(root).file_name().unwrap_or_default()).join(safe)
+    let safe = if safe == branch { safe } else { format!("{safe}-{}", short(branch)) };
+    let repo = format!("{}-{}", Path::new(root).file_name().unwrap_or_default().to_string_lossy(), short(root));
+    crate::store::files::data_dir().join("worktrees").join(repo).join(safe)
 }
 fn linked(path: &str, root: &str) -> Value { json!({ "checkout_path": path, "repo_root": root, "is_linked_worktree": true }) }
 
@@ -30,7 +35,11 @@ impl Rex {
         let base = if base.is_empty() { "HEAD" } else { base };
         let r = if exists { git(&root, &["worktree", "add", &ds, branch]) } else { git(&root, &["worktree", "add", "--no-track", "-b", branch, &ds, base]) };
         r.map_err(|e| run::err("worktree_create_failed", e))?;
-        let mut made = self.space_create(&ds, label, &[], linked(&ds, &root))?;
+        // No space for it: the worktree goes again (and a branch made for it), so a retry starts clean.
+        let mut made = match self.space_create(&ds, label, &[], linked(&ds, &root)) {
+            Ok(m) => m,
+            Err(e) => { let _ = git(&root, &["worktree", "remove", "--force", &ds]); if !exists { let _ = git(&root, &["branch", "-D", branch]); } return Err(e); }
+        };
         made["type"] = json!("worktree_created");
         made["worktree"] = json!({ "path": ds, "branch": branch, "open_workspace_id": made.at("workspace").at("workspace_id") });
         Ok(made)
@@ -51,8 +60,9 @@ impl Rex {
             .ok_or_else(|| run::err("workspace_not_found", "not a linked worktree space"))?;
         let mut a = vec!["worktree", "remove"]; if force { a.push("--force"); }
         let path = s.t("cwd"); a.push(&path);
-        git(s.at("worktree").s("repo_root"), &a).map_err(|e| run::err("worktree_remove_failed", e))?;
+        // Its windows first: none is left in a folder that is gone, and one Rex would not close keeps the worktree.
         self.space_close(space)?;
+        git(s.at("worktree").s("repo_root"), &a).map_err(|e| run::err("worktree_remove_failed", e))?;
         Ok(json!({ "type": "worktree_removed" }))
     }
 }

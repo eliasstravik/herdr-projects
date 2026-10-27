@@ -46,6 +46,7 @@ impl Herdr {
     /// Put the keyboard on one pane of the tab that shows: zoom it (zooming focuses), and take the zoom off again
     /// unless the tab was zoomed (herdr 0.9.3 has no "focus this pane").
     pub fn pane_focus(&self, id: &str) -> HRes<()> {
+        if self.is_rex() { return self.backend().agent_focus(id).map(|_| ()); } // a block is focused by its id
         let Some(before) = self.pane_layout(id) else { return Ok(()) };
         if before.s("focused_pane_id") == id { return Ok(()); }
         self.backend().pane_zoom(id, true)?;

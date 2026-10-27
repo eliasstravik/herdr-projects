@@ -12,13 +12,11 @@ pub fn shell_cmd(env: &[(String, String)], socket: &str) -> Vec<String> {
     c.extend([std::env::var("SHELL").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| "/bin/zsh".into()), "-l".into()]);
     c
 }
-/// The project a folder belongs to: its repo's main folder's name (a worktree counts as its repo's).
-pub fn project_of(cwd: &str) -> String {
-    let common = std::process::Command::new("git").args(["-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"]).output().ok()
-        .filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
-    let root = if common.ends_with("/.git") { common.trim_end_matches("/.git").to_string() } else { cwd.to_string() };
-    std::path::Path::new(&root).file_name().map(|n| n.to_string_lossy().into_owned()).filter(|n| !n.is_empty()).unwrap_or_else(|| "home".into())
-}
+/// The project a folder belongs to: its repo's main folder (a worktree counts as its repo's), else the folder itself.
+/// Its key is that whole path, so two repos of one name are two projects.
+pub fn project_of(cwd: &str) -> String { super::worktrees::repo_root(cwd).unwrap_or_else(|| cwd.to_string()) }
+/// A project's session's label: `hp-<folder name>`.
+fn session_label(project: &str) -> String { format!("hp-{}", std::path::Path::new(project).file_name().map(|n| n.to_string_lossy().into_owned()).filter(|n| !n.is_empty()).unwrap_or_else(|| "root".into())) }
 
 impl Rex {
     pub fn sessions(&self) -> HRes<Vec<Value>> { Ok(run::rex_json(self.srv(), &args(&["ls", "--json"]), 15000)?.arr("sessions").to_vec()) }
@@ -28,12 +26,13 @@ impl Rex {
     pub fn windows_of(view: &Value) -> Vec<(String, String, Vec<String>)> {
         view.arr("windows").iter().map(|w| (w.t("window_id"), w.t("label"), w.arr("layers").iter().flat_map(|l| l.arr("blocks").iter().map(|b| b.t("block_id"))).collect())).collect()
     }
-    /// The session of a project, made when there is none: (session id, the window it was made with).
+    /// The session of a project, made when there is none: (session id, the window it was made with). Only a session
+    /// the board made is used: never one of the same name somebody else has.
     fn project_session(&self, project: &str, cwd: &str, label: &str, env: &[(String, String)]) -> HRes<(String, Option<(String, String)>)> {
         let live = self.sessions()?;
         let known = registry::read(self.srv()).at("projects").t(project);
-        if let Some(s) = live.iter().find(|s| s.s("session_id") == known || (known.is_empty() && s.s("label") == format!("hp-{project}"))) { return Ok((s.t("session_id"), None)); }
-        let mut a = args(&["new", &format!("hp-{project}"), "-c", cwd, "--window", label, "--json"]);
+        if let Some(s) = live.iter().find(|s| !known.is_empty() && s.s("session_id") == known) { return Ok((s.t("session_id"), None)); }
+        let mut a = args(&["new", &session_label(project), "-c", cwd, "--window", label, "--json"]);
         a.extend(shell_cmd(env, &self.socket()));
         let made = run::rex_json(self.srv(), &a, 30000)?;
         let s = made.t("session_id");
@@ -83,8 +82,9 @@ impl Rex {
     }
     pub fn space_close(&self, id: &str) -> HRes<Value> {
         let Some(s) = registry::space(&registry::read(self.srv()), id) else { return Err(run::err("workspace_not_found", "no such space")) };
-        let mut a = args(&["window", "close"]); a.extend(strings(s.at("windows")));
-        let _ = run::rex(self.srv(), &a, "", 15000);
+        let live: Vec<String> = self.view(s.s("session")).map(|v| Self::windows_of(&v).into_iter().map(|w| w.0).collect()).unwrap_or_default();
+        let open: Vec<String> = strings(s.at("windows")).into_iter().filter(|w| live.contains(w)).collect();
+        if !open.is_empty() { let mut a = args(&["window", "close"]); a.extend(open); run::rex(self.srv(), &a, "", 15000)?; }
         registry::change(self.srv(), |r| if let Some(o) = r["spaces"].as_object_mut() { o.remove(id); })?;
         Ok(json!({ "type": "ok" }))
     }
@@ -120,10 +120,18 @@ impl Rex {
     /// The board's own window, in the session of the folder it was started in: made once, then found again.
     pub fn board(&self) -> HRes<String> {
         let cwd = std::env::current_dir().map(|d| d.display().to_string()).unwrap_or_else(|_| "/".into());
-        let (session, _) = self.project_session(&project_of(&cwd), &cwd, "board", &[])?;
-        if let Some((_, _, b)) = Self::windows_of(&self.view(&session)?).into_iter().find(|w| w.1 == "board") { if let Some(b) = b.first() { return Ok(b.clone()); } }
-        let (_, block) = self.new_window(&session, &cwd, "board", &crate::store::files::board_env())?;
-        run::rex(self.srv(), &args(&["send", "-b", &block, &format!("{} board\n", crate::store::files::bin().display())]), "", 15000)?;
+        let env = crate::store::files::board_env();
+        let (session, first) = self.project_session(&project_of(&cwd), &cwd, "board", &env)?;
+        let found = if first.is_some() { None } else { Self::windows_of(&self.view(&session)?).into_iter().find(|w| w.1 == "board" && !w.2.is_empty()).map(|w| (w.0, w.2[0].clone())) };
+        let (window, block) = match found {
+            Some(f) => f,
+            None => {
+                let (window, block) = match first { Some(f) => f, None => self.new_window(&session, &cwd, "board", &env)? };
+                run::rex(self.srv(), &args(&["send", "-b", &block]), &format!("{} board\n", crate::store::files::bin().display()), 15000)?;
+                (window, block)
+            }
+        };
+        self.window_focus(&window)?;
         Ok(block)
     }
     /// The few herdr command lines the board sends as they are (`workspace get`, `rename`, `report-metadata`).

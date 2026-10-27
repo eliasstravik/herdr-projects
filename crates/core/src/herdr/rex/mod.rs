@@ -49,7 +49,7 @@ impl TerminalBackend for Rex {
     fn pane_get(&self, id: &str) -> Option<Value> { self.block_get(id) }
     /// Rex lays a window out in fractions, not in cells: no size to hand over (held.rs falls back).
     fn pane_layout(&self, _id: &str) -> Option<Value> { None }
-    fn pane_zoom(&self, id: &str, on: bool) -> HRes<Value> { let (s, _) = self.where_is(id)?; run::api(self.srv(), "session.zoom_block", &json!({ "session_id": s, "block_id": id, "zoom": on })) }
+    fn pane_zoom(&self, id: &str, on: bool) -> HRes<Value> { run::rex(self.srv(), &super::cli::args(&["block", "zoom", "-b", id, if on { "--on" } else { "--off" }]), "", 15000).map(|_| json!({ "type": "ok" })) }
     fn pane_split(&self, id: &str, cwd: &str, direction: &str, env: &[(String, String)]) -> HRes<Value> { self.block_split(id, cwd, direction, env) }
     fn process_info(&self, id: &str) -> Option<Value> { self.processes(id) }
     /// Rex moves a block only inside its own session: the board's move to another space is refused.
@@ -67,7 +67,7 @@ impl TerminalBackend for Rex {
     fn agent_start(&self, name: &str, kind: &str, pane: &str, extra: &[String], timeout_ms: u64) -> HRes<Value> { self.start(name, kind, pane, extra, timeout_ms) }
     fn agent_prompt(&self, target: &str, text: &str) -> HRes<Value> { self.prompt(target, text) }
     fn agent_keys(&self, target: &str, keys: &[&str]) -> HRes<Value> { self.keys(target, keys) }
-    fn agent_focus(&self, target: &str) -> HRes<Value> { let b = self.block_of(target)?; let (s, _) = self.where_is(&b)?; run::api(self.srv(), "session.focus_block", &json!({ "session_id": s, "block_id": b })) }
+    fn agent_focus(&self, target: &str) -> HRes<Value> { let b = self.block_of(target)?; run::rex(self.srv(), &super::cli::args(&["block", "focus", &b]), "", 15000).map(|_| json!({ "type": "ok" })) }
     fn agent_read(&self, target: &str, source: &str, lines: Option<i64>) -> HRes<String> { let b = self.block_of(target)?; self.read(&b, source, lines) }
     fn open_board(&self) -> HRes<Option<String>> { self.board().map(Some) }
     /// No popup on Rex yet: the board opens in its own window.
