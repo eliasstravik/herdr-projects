@@ -101,7 +101,9 @@ fn the_ssh_connection_socket_fits_a_long_home_folder() {
     unsafe { std::env::set_var("HERDR_PROJECTS_HOME", w.base.join("Users/alexandrsukhryn/.herdr-projects")) };
     let path = || { let (_, a) = sw::remote::ssh_command(&sw::remote::Machine { target: "me@vm-a".into(), ..Default::default() }, "true", false); a.iter().find_map(|x| x.strip_prefix("ControlPath=").map(String::from)).unwrap() };
     let p = path();
-    assert!(p.ends_with("/%C") && p.len() - 2 + 57 <= 103, "{p}: {} bytes", p.len() - 2 + 57);
+    let short = format!("{}/hp-{}/ssh/%C", std::env::var("HERDR_PROJECTS_TMP").unwrap(), sw::agents::scratch::uid());
+    assert_eq!(p, short, "out of the board's folder, whatever its length");
+    assert!(format!("/tmp/hp-{}/ssh/", u32::MAX).len() + 57 <= 103, "where it lives outside a test, for any user");
     let dir = std::path::Path::new(&p).parent().unwrap();
     assert_eq!(std::fs::metadata(dir).unwrap().permissions().mode() & 0o777, 0o700);
     std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755)).unwrap();
