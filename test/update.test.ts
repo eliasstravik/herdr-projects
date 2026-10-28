@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { UpdateStatus } from '../shared/types.ts'
-import { Supervisor } from '../scripts/supervisor.ts'
+import { codeOf, Supervisor } from '../scripts/supervisor.ts'
 import { head, refDirs, releasesOf, update } from '../scripts/update.ts'
 
 /** a stand-in Shepherdr checkout: its build writes the screen saying which version it is */
@@ -103,6 +103,26 @@ describe('a release', () => {
 })
 
 describe('the supervisor', () => {
+  test('knows when its own code changed: its file or one it imports, not types only or files it never runs', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shep-code-'))
+    const w = (f: string, text: string) => writeFileSync(join(dir, f), text)
+    w('main.ts', "import { a } from './a.ts'\nimport type { T } from './types.ts'\nconst b = await import('./b.ts')\n")
+    w('a.ts', "export { c } from './c.ts'\nexport const a = 1\n")
+    w('b.ts', 'export const b = 1\n')
+    w('c.ts', 'export const c = 1\n')
+    w('types.ts', 'export type T = 1\n')
+    w('other.ts', 'export const o = 1\n')
+    const was = codeOf(join(dir, 'main.ts'))
+    w('types.ts', 'export type T = 2\n')
+    w('other.ts', 'export const o = 2\n')
+    expect(codeOf(join(dir, 'main.ts'))).toBe(was)
+    for (const f of ['c.ts', 'b.ts', 'main.ts']) {
+      const before = codeOf(join(dir, 'main.ts'))
+      w(f, `${readFileSync(join(dir, f), 'utf8')}// changed\n`)
+      expect(codeOf(join(dir, 'main.ts'))).not.toBe(before)
+    }
+  })
+
   /** a supervisor on a fixture; `calls` are the voice calls the server says are on, each time it is asked */
   function setup(calls: number[] = []) {
     const f = fixture()

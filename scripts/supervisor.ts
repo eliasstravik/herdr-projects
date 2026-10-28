@@ -1,7 +1,8 @@
 // What the supervisor decides: when to make a release, when to restart on it (only once no voice call is on, with new
 // calls stopped), and when to take a release back. scripts/supervise.ts wires it to the server process and watchers.
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import type { UpdateStatus } from '../shared/types.ts'
 import { prune, releasesOf, update } from './update.ts'
 
@@ -43,6 +44,11 @@ export class Supervisor {
   private save(s: Omit<UpdateStatus, 'at'>) {
     this.status = { ...s, at: this.now() }
     this.d.save(this.status)
+  }
+
+  /** a release is being made or started */
+  get working() {
+    return this.busy
   }
 
   /** the folder the server runs from */
@@ -117,4 +123,25 @@ export class Supervisor {
     this.save({ ...this.trial.from, state: 'failed', commit: r.commit, subject: r.subject, error: "the new version stopped as it started:\nsee Shepherdr's server.log" })
     this.trial = null
   }
+}
+
+/** The code a script runs: its file and every file it imports from the checkout (types only don't count), as one
+ *  hash. The supervisor starts itself again when its own changes (supervise.ts). */
+export function codeOf(entry: string): string {
+  const h = createHash('sha256')
+  const seen = new Set<string>()
+  const walk = (f: string) => {
+    if (seen.has(f)) return
+    seen.add(f)
+    let text: string
+    try {
+      text = readFileSync(f, 'utf8')
+    } catch {
+      return h.update(`${f}: gone`)
+    }
+    h.update(f).update(text)
+    for (const m of text.matchAll(/^\s*(?:import|export)\s+(?!type\b)[^'"]*?from\s+['"](\.[^'"]+)['"]|import\(\s*['"](\.[^'"]+)['"]\s*\)/gm)) walk(resolve(dirname(f), m[1] ?? m[2]))
+  }
+  walk(resolve(entry))
+  return h.digest('hex').slice(0, 16)
 }

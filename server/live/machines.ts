@@ -377,8 +377,8 @@ export class Machines extends Emitter<Events> {
     for (const l of this.links.values()) await this.poll(l)
   }
 
-  private async poll(l: Link) {
-    if (!l.rec.url) return
+  private async poll(l: Link): Promise<void> {
+    if (!l.rec.url && !this.moved(l)) return
     try {
       const r = await fetch(`${l.rec.url}/api/snapshot`, { signal: AbortSignal.timeout(4000) })
       if (!r.ok) throw new Error(String(r.status))
@@ -399,12 +399,29 @@ export class Machines extends Emitter<Events> {
       }
       this.emit('snapshot')
     } catch {
+      if (this.moved(l)) return this.poll(l)
       if (l.reachable || l.down === undefined) {
         l.reachable = false
         l.down = l.down ?? Date.now()
         this.emit('snapshot')
       }
     }
+  }
+
+  /** Its worker was started again out of this server's hands (shepherdr doctor while another server ran, by hand)
+   *  and serves at another address: its server.json says where, and that worker is taken as this machine's. */
+  private moved(l: Link): boolean {
+    if (l.busy) return false
+    const s = readJson<{ port?: number; pid?: number }>(join('machines', dirOf(l.saved.label), 'server.json'), {})
+    const url = s.port ? `http://127.0.0.1:${s.port}` : ''
+    if (!url || url === l.rec.url) return false
+    const w = s.pid === l.worker?.pid ? l.worker : running(s.pid)
+    if (!w) return false
+    if (w !== l.worker) this.own(l, w)
+    l.rec.url = url
+    // the live link is made again at the new address on its first answer
+    l.reachable = false
+    return true
   }
 
   private connect(l: Link) {

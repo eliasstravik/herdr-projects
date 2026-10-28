@@ -47,6 +47,7 @@ back, and it waits until you stop typing, finish a voice call or stop talking to
 screen itself changed. If an update fails, Shepherdr keeps running the last version, says so at the top of every screen
 (tap Why for the error) and tries again on the next commit. It follows the checkout herdr links, so a merge on GitHub
 arrives once that checkout pulls it; `shepherdr merge` pulls main there itself after merging a pull request. A change to
-the updater itself (`scripts/supervise.ts`, `supervisor.ts`, `update.ts`) takes effect at the next herdr start.
+the updater itself (`scripts/supervise.ts` and what it imports) starts it again on the new code, with the server, once
+that release is past its trial and no voice call is on.
 
 By hand: `bun run build && bun server/main.ts` serves on `http://127.0.0.1:7787` (`SHEPHERDR_PORT` to change it).

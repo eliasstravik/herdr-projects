@@ -2,34 +2,38 @@
 // main), the plugin list file changes, or the human's own plugins or their list (~/.shepherdr/plugins) change, it makes a release (scripts/update.ts) and restarts the server on it, once no
 // voice call is on (scripts/supervisor.ts); open screens then reload themselves. The server always runs from a frozen
 // release, so a later merge can't change what runs. A failed update keeps the running version, and update.json says
-// why (the screen shows it).
+// why (the screen shows it). A merge that changes the supervisor's own code starts it again on that code.
 import { spawn, type ChildProcess } from 'node:child_process'
-import { mkdirSync, watch } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, watch, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { HOME, readJson, writeJson } from '../server/store.ts'
 import type { UpdateStatus } from '../shared/types.ts'
-import { Supervisor } from './supervisor.ts'
+import { codeOf, Supervisor, TRIAL } from './supervisor.ts'
 import { refDirs } from './update.ts'
 
 const ROOT = join(import.meta.dir, '..')
 const PORT = Number(process.env.SHEPHERDR_PORT ?? 7787)
 let child: ChildProcess | null = null
 let stopping = false
+/** the code this supervisor runs, as it started */
+const CODE = codeOf(import.meta.path)
+
+/** stop new voice calls (or let them start again) and say how many are on; a server that doesn't answer has none */
+async function drain(on: boolean) {
+  try {
+    const r = await fetch(`http://127.0.0.1:${PORT}/api/drain`, { method: 'POST', body: JSON.stringify({ on }), signal: AbortSignal.timeout(2000) })
+    return ((await r.json()) as { calls: number }).calls
+  } catch {
+    return 0
+  }
+}
 
 const sup = new Supervisor({
   root: ROOT,
   home: HOME,
   status: readJson<UpdateStatus | null>('update.json', null),
   save: (s) => writeJson('update.json', s),
-  // a server that doesn't answer has no call to cut
-  drain: async (on) => {
-    try {
-      const r = await fetch(`http://127.0.0.1:${PORT}/api/drain`, { method: 'POST', body: JSON.stringify({ on }), signal: AbortSignal.timeout(2000) })
-      return ((await r.json()) as { calls: number }).calls
-    } catch {
-      return 0
-    }
-  },
+  drain,
   restart: () => child?.kill('SIGTERM'),
   sleep: (ms) => Bun.sleep(ms),
   log: (m) => console.log(m),
@@ -56,8 +60,39 @@ function soon(force = false) {
     timer = null
     const f = forced
     forced = false
-    sup.check(f)
+    void sup.check(f).then(renew)
   }, 1000)
+}
+
+let renewing = false
+/** A merge changed the supervisor's own code (it ran on older code until herdr started it again): it starts itself
+ *  again on the new code, with the server, once the new release is past its trial, no update is being made and no
+ *  voice call is on. */
+async function renew() {
+  if (renewing || stopping || codeOf(import.meta.path) === CODE) return
+  renewing = true
+  await Bun.sleep(TRIAL + 5000)
+  while (sup.working || (await drain(true)) > 0) {
+    await drain(false)
+    await Bun.sleep(5000)
+  }
+  console.log("the supervisor's own code changed: starting it again on it")
+  stopping = true
+  const was = child
+  if (was && was.exitCode === null && was.signalCode === null) {
+    was.kill('SIGTERM')
+    await new Promise((done) => was.once('exit', done))
+  }
+  const next = spawn(process.execPath, [import.meta.path], { cwd: process.cwd(), detached: true, stdio: ['ignore', 'inherit', 'inherit'], env: process.env })
+  next.unref()
+  // herdr's stop and start (scripts/plugin.ts) find the new one
+  const pidFile = join(process.env.HERDR_PLUGIN_STATE_DIR ?? join(HOME, 'run'), 'supervisor.pid')
+  try {
+    if (existsSync(pidFile) && Number(readFileSync(pidFile, 'utf8')) === process.pid) writeFileSync(pidFile, String(next.pid))
+  } catch {
+    /* plugin.ts asks the server for its supervisor as well */
+  }
+  process.exit(0)
 }
 
 watch(join(ROOT, 'plugins.json'), () => soon(true))

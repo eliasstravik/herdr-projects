@@ -349,7 +349,7 @@ describe('a restart of the main server (an update)', () => {
     const { Machines, codeVersion } = await import('../server/live/machines.ts')
     writeJson('machines/far/last.json', { saved, snap, chats: [{ key: 'p:far:web', cli: 'Claude Code', messages: [{ id: 'm1', who: 'agent', at: 1, text: 'Done.' }] }] })
     writeJson('machines/far/server.json', { port: w.port, pid: w.pid, code: code || codeVersion() })
-    return { HOME, Machines }
+    return { HOME, Machines, writeJson }
   }
 
   test('what each machine showed comes back at once, connecting, and its worker on the same code is taken back', async () => {
@@ -375,6 +375,29 @@ describe('a restart of the main server (an update)', () => {
     } finally {
       m.stop()
       process.kill(w.pid)
+    }
+  })
+
+  test('a worker started again out of its hands (the doctor, by hand) is followed to its new address', async () => {
+    const w = await oldWorker()
+    const { Machines, writeJson } = await before(w, '')
+    const m = new Machines(async () => [saved])
+    const next = await oldWorker()
+    try {
+      const l = m.list().find((x) => x.rec.machine === 'far')!
+      for (let i = 0; i < 250 && !l.reachable; i++) await Bun.sleep(20)
+      expect(l.reachable).toBe(true)
+      // the old worker stops, and a new one serves on another port, as the doctor leaves it
+      process.kill(w.pid)
+      writeJson('machines/far/server.json', { port: next.port, pid: next.pid })
+      for (let i = 0; i < 500 && !(l.reachable && l.rec.url.endsWith(`:${next.port}`)); i++) await Bun.sleep(20)
+      expect(l.rec.url).toBe(`http://127.0.0.1:${next.port}`)
+      expect(l.reachable).toBe(true)
+      expect(l.worker?.pid).toBe(next.pid)
+    } finally {
+      m.stop()
+      if (w.alive()) process.kill(w.pid)
+      process.kill(next.pid)
     }
   })
 
