@@ -64,6 +64,11 @@ pub fn tell_as(id: &str, text: &str, keep_intent: bool, chat: bool) -> Res<Said>
     }
     if cur.s("stage") == "pick" { crate::fail!("{cid} waits for you to pick one of its attempts. Pick first: your words then go to that one's agent."); }
     cleaning_up(&cur)?;
+    // Its start (or its build, after the plan's yes) is under way: the words wait for the agent it starts, which takes them.
+    if cur.s("stage") == "starting" {
+        queue_text(&cid, &words, Obj::new())?;
+        return Ok(say(cur, format!("{cid}: your message goes to the agent once it has started")));
+    }
     // A reply to work that ended and was cleaned up starts a new round with that message, in a fresh worktree.
     if cur.s("stage") == "done" && flow::git::cleaned_up(&cur) {
         queue_text(&cid, &words, Obj::new())?;
