@@ -66,7 +66,8 @@ impl FakeHerdr {
         let a = p.at("agent");
         let mut o = json!({ "agent": a.at("kind"), "agent_status": a.at("status"), "name": a.at("name"), "pane_id": p.at("pane_id"), "workspace_id": p.at("workspace_id"), "tab_id": p.at("tab_id"), "terminal_id": p.at("terminal_id"), "cwd": p.at("cwd"), "foreground_cwd": p.at("cwd"), "state_change_seq": a.at("seq") });
         if p.b("display_agent") { o["display_agent"] = p.at("display_agent").clone(); }
-        if !a.at("completion").is_null() { o["completion_seq"] = a.at("completion").clone(); }
+        // As real herdr: no completion_seq while a turn is going, only once it has ended.
+        if !a.at("completion").is_null() && a.s("status") != "working" { o["completion_seq"] = a.at("completion").clone(); }
         if a.b("session") { o["agent_session"] = json!({ "kind": "id", "value": a.at("session") }); }
         o
     }

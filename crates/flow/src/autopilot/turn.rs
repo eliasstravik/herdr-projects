@@ -1,6 +1,6 @@
 //! Whose turn a coordinator's command belongs to, found as a start-key turn is (coordinator/requests.rs: tab_turn): the
 //! caller's pane is that coordinator's, it is still in the turn the last message started (the same run, at rest when
-//! that message went in, `completion_seq` unchanged), and that message was an autopilot wake. A message of yours typed
+//! that message went in, `completion_seq` unchanged or left out while it works), and that message was an autopilot wake. A message of yours typed
 //! in after it ends the autopilot turn: what follows is on your word. A turn a task's agent or reviewer started (its
 //! `coordinator tell`) is found the same way.
 use crate::coordinator::co::Co;
@@ -22,7 +22,7 @@ pub fn caller() -> Option<Co> {
 /// Is it still in the turn its last typed message started?
 fn in_that_turn(c: &Obj, socket: &str) -> bool {
     if c.at("mark").i("run") != c.i("startedAt") || !c.b("pane") { return false; }
-    Herdr::new(Some(socket.to_string())).agent_get(c.s("pane")).ok().flatten().map(|a| *a.at("completion_seq") == *c.at("mark").at("seq")).unwrap_or(false)
+    Herdr::new(Some(socket.to_string())).agent_get(c.s("pane")).ok().flatten().map(|a| crate::herdr::turns::same_turn(&a, c.at("mark").at("seq"))).unwrap_or(false)
 }
 /// The last message typed in was its wake, it went in at rest, and the turn it started has not ended.
 pub fn autopilot_turn(co: &Co) -> bool {

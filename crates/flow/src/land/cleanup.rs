@@ -75,7 +75,7 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
         let (true, Some(api), true) = (still, &api, link.b("pane")) else { return None };
         match api.agent_get(link.s("pane")) {
             Ok(Some(a)) => {
-                *seen.borrow_mut() = a.at("completion_seq").clone();
+                *seen.borrow_mut() = crate::herdr::turns::completion(&a);
                 let st = a.s("agent_status");
                 let busy = st == "working" || st == "blocked";
                 let (unknown, why) = if st == "idle" || st == "done" { (!api.pane_childless(link.s("pane"), a.s("agent")), Why::Beside) } else if busy { (false, Why::Turn) } else { at_rest(&a).err().map(|w| (true, w)).unwrap_or((false, Why::Turn)) };

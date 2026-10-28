@@ -44,7 +44,7 @@ fn tab_turn_of(pane: &str, co: &Co) -> bool {
     if pane.is_empty() || (c.s("pane") != pane && c.s("paneWas") != pane) || !c.at("mark").b("rest") || c.at("mark").i("run") != c.i("startedAt") { return false; }
     let open: Vec<&Value> = c.arr("where").iter().filter(|x| x.b("sentAt") && !x.b("handled")).collect();
     if open.is_empty() || !open.iter().all(|x| x.b("delegate")) { return false; }
-    Herdr::new(Some(socket.to_string())).agent_get(c.s("pane")).ok().flatten().map(|a| *a.at("completion_seq") == *c.at("mark").at("seq")).unwrap_or(false)
+    Herdr::new(Some(socket.to_string())).agent_get(c.s("pane")).ok().flatten().map(|a| crate::herdr::turns::same_turn(&a, c.at("mark").at("seq"))).unwrap_or(false)
 }
 /// The Coordinator's own folder (or one inside it) is never where the human is working, nor the machine coordinator's.
 pub fn in_home(dir: &Path, socket: &str) -> bool {

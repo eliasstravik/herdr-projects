@@ -19,6 +19,8 @@ mod idle;
 mod never_ran;
 /// A pane id herdr handed out again: a done task's old pane given to a coordinator is the coordinator's.
 mod pane_reuse;
+/// A wake's turn while herdr leaves completion_seq out: still the wake's, and what it starts is counted.
+mod working_turn;
 
 #[test]
 fn on_needs_a_goal_saves_it_as_the_coordinators_own_and_wakes_it_with_a_message_in_its_chat() {
