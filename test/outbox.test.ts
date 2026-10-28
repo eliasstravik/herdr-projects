@@ -1,6 +1,6 @@
 // What you send shows at once, then gives way to the message from the agent's log: no gap, no double.
 import { describe, expect, test } from 'bun:test'
-import { expire, keyOf, partsOf, reasonOf, SEND_TIMEOUT, settle, type Outgoing } from '../src/outbox.ts'
+import { expire, KEEP_SENT, keyOf, partsOf, prune, reasonOf, SEND_TIMEOUT, settle, type Outgoing } from '../src/outbox.ts'
 import type { Chat, Message } from '../shared/types.ts'
 
 const T = 1_700_000_000_000
@@ -99,9 +99,22 @@ describe('over time', () => {
     expect(cur[0]).toMatchObject({ state: 'sent' })
     // noted now and then, not on every tick
     expect(expire(cur, cur[0].busyAt! + 10_000, working(true))).toBe(cur)
-    // the agent stopped: five minutes more to show up, then it fails
-    expect(expire(cur, cur[0].busyAt! + 4 * 60_000, working(false))[0].state).toBe('sent')
-    expect(expire(cur, cur[0].busyAt! + 6 * 60_000, working(false))[0]).toMatchObject({ state: 'failed', lost: true })
+    // the agent stopped: two minutes more to show up, then it is not delivered
+    expect(expire(cur, cur[0].busyAt! + KEEP_SENT - 10_000, working(false))[0].state).toBe('sent')
+    expect(expire(cur, cur[0].busyAt! + KEEP_SENT + 10_000, working(false))[0]).toMatchObject({ state: 'failed', lost: true })
+  })
+  test('an agent that seems to work for good keeps it no more than half an hour', () => {
+    let cur = [out({ state: 'sent', serverAt: T })]
+    for (let now = T; now < T + 29 * 60_000; now += 10_000) cur = expire(cur, now, () => true)
+    expect(cur[0].state).toBe('sent')
+    expect(expire(cur, T + 31 * 60_000, () => true)[0]).toMatchObject({ state: 'failed', lost: true })
+  })
+  test('a screen loading drops ones older than a day, and ones for a chat that is gone', () => {
+    const o = [out(), out({ cid: 'c2', at: T - 25 * 3_600_000 }), out({ cid: 'c3', chat: 'gone' })]
+    expect(prune(o, T).map((x) => x.cid)).toEqual(['c1', 'c3'])
+    expect(prune(o, T, (c) => c === 'gtm').map((x) => x.cid)).toEqual(['c1'])
+    const kept = [out()]
+    expect(prune(kept, T, () => true)).toBe(kept)
   })
   test('one the server says could not go in after waiting fails; one sent again meanwhile is left on its way', () => {
     const c: Chat = { ...chat(), failed: [{ cid: 'c1', error: "The agent didn't take it" }] }

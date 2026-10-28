@@ -38,8 +38,12 @@ export interface Outgoing {
 
 /** how long Send waits for the server to answer */
 export const SEND_TIMEOUT = 20_000
-/** one that went in but never came back from the log fails after this */
-const KEEP_SENT = 5 * 60_000
+/** one that went in but never came back from the log is not delivered after this, from when its agent last worked */
+export const KEEP_SENT = 2 * 60_000
+/** and after this however long its agent seems to work (one that stays working for good would keep it forever) */
+const KEEP_BUSY = 30 * 60_000
+/** a screen keeps no pending one longer than this */
+const KEEP_OUT = 24 * 60 * 60_000
 /** one waiting that the chat never showed waiting (a machine out of reach) fails after this */
 const KEEP_WAITING = 30 * 60_000
 
@@ -124,6 +128,7 @@ export function expire(out: Outgoing[], now: number, working: (chat: string) => 
       return { ...o, state: 'failed' as const, error, lost }
     }
     if (o.state === 'sending' && now - o.at > SEND_TIMEOUT + 5000) return fail('No answer from Shepherdr.')
+    if (o.state === 'sent' && !o.waiting && now - (o.wentAt ?? o.at) > KEEP_BUSY) return fail("It didn't show up in the chat.", true)
     if (o.state === 'sent' && !o.waiting && working(o.chat)) {
       // noted now and then, not on every tick: it is saved with the rest
       if (now - (o.busyAt ?? 0) < 30_000) return o
@@ -135,6 +140,13 @@ export function expire(out: Outgoing[], now: number, working: (chat: string) => 
     return o
   })
   return changed ? next : out
+}
+
+/** what a screen keeps when it loads: none older than a day, and none for a chat that is gone (exists: whether a chat
+ *  is still there, once the screen knows) */
+export function prune(out: Outgoing[], now: number, exists?: (chat: string) => boolean): Outgoing[] {
+  const next = out.filter((o) => now - o.at < KEEP_OUT && (!exists || exists(o.chat)))
+  return next.length === out.length ? out : next
 }
 
 /** how it shows: a bubble for the text, one for each file, like what comes back; nothing while the chat shows it */
@@ -174,7 +186,7 @@ const STORE = 'shepherdr.outbox'
 export function loadOutbox(): Outgoing[] {
   try {
     const v = JSON.parse(localStorage.getItem(STORE) ?? '[]')
-    return Array.isArray(v) ? v : []
+    return Array.isArray(v) ? prune(v, Date.now()) : []
   } catch {
     return []
   }

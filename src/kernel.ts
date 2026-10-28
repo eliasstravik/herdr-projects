@@ -1,7 +1,7 @@
 // The screen's small kernel: plugin slots, the store (server data + what's on screen), and the link to the server.
 import { useSyncExternalStore, type FC, type ReactNode } from 'react'
 import { buildId } from '@shared/build.ts'
-import { expire, loadOutbox, saveOutbox, settle, type Outgoing } from './outbox.ts'
+import { expire, loadOutbox, prune, saveOutbox, settle, type Outgoing } from './outbox.ts'
 import { keptOf, mayReload, type Kept } from './reload.ts'
 import { OPEN_WITHIN, PONG_WITHIN, retryIn, SAY_LOST_AFTER } from './link.ts'
 import { groupFor, groupTasks, loadAllDone, loadGroups, loadShut, namesFor, saveAllDone, saveGroups, saveShut, shownGroup, type GroupBy, type Groups, type TaskGroup } from './groups.ts'
@@ -709,6 +709,7 @@ export function connect() {
       state = { ...state, snap: msg.snapshot }
       stayOnShown()
       fromOldPin(msg.snapshot)
+      putOutbox(prune(state.outbox, Date.now(), chatIn(msg.snapshot)))
     } else if (msg.type === 'chat') {
       state = { ...state, chats: { ...state.chats, [msg.chat.key]: msg.chat } }
       putOutbox(settle(state.outbox, msg.chat))
@@ -1100,6 +1101,12 @@ export function placeKind(snap: Snapshot, p: Place) {
 /** the open task's agent, whose chat is on screen */
 export function agentChat(ui: UI, snap: Snapshot) {
   return taskOf(snap, ui.task)?.agent ?? null
+}
+
+/** whether a chat is still there: a space's coordinator's, or a task's agent's (an archived task's too) */
+export function chatIn(snap: Snapshot) {
+  const keys = new Set([...snap.places.map((p) => p.chat), ...snap.tasks.flatMap((t) => (t.agent ? [t.agent.chat] : []))])
+  return (key: string) => keys.has(key)
 }
 
 /** "GTM-15 agent", "gtm" */
