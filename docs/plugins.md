@@ -53,6 +53,23 @@ plugin's parts: yours where you replaced it, so every plugin gets the same one),
 (React, clsx, Heroicons). A plugin folder sits where a base one does, so a base plugin's relative imports
 (`../../server/plugin-api.ts`) work in a copy too.
 
+**A theme.** There is no theme slot: Shepherdr's colours are CSS variables on `:root` (light) and
+`:root[data-theme=dark]` in `src/styles.css` (`--bg`, `--fg`, `--accent` and the rest), so a plugin sets its own by
+rendering a `<style>` from the `overlays` slot:
+
+```tsx
+import { definePlugin } from '@client/kernel.ts'
+
+const css = ':root{--accent:#2563eb} :root[data-theme=dark]{--accent:#60a5fa}'
+
+export default definePlugin({
+  name: 'blue',
+  setup(reg) {
+    reg.overlays.push(() => <style>{css}</style>)
+  },
+})
+```
+
 **The contract.** `definePlugin` (the screen's in `src/kernel.ts`, the server's in `server/plugin-api.ts`) and the
 slots below are public: plugins outside the repo rely on them, so they change only with care.
 

@@ -8,7 +8,7 @@
 
 <p align="center"><a href="https://github.com/eliasstravik/shepherdr/blob/main/docs/get-started.md"><img src="assets/buttons/install-shepherdr.svg" alt="Install Shepherdr" /></a></p>
 
-<p align="center"><sub>✓&nbsp;Free &nbsp; ✓&nbsp;Runs&nbsp;on&nbsp;your&nbsp;machines,&nbsp;private&nbsp;on&nbsp;your&nbsp;tailnet &nbsp; ✓&nbsp;macOS&nbsp;and&nbsp;Linux,&nbsp;herdr&nbsp;0.9+</sub></p>
+<p align="center"><sub>✓&nbsp;Free,&nbsp;MIT&nbsp;licensed &nbsp; ✓&nbsp;Runs&nbsp;on&nbsp;your&nbsp;machines,&nbsp;private&nbsp;on&nbsp;your&nbsp;tailnet &nbsp; ✓&nbsp;macOS&nbsp;and&nbsp;Linux,&nbsp;herdr&nbsp;0.9+</sub></p>
 
 <br />
 
@@ -38,6 +38,10 @@ Keep your attention on decisions. Shepherdr starts, follows and puts away the ta
 
 Each space's chat is in the middle and its tasks on the right, by what they need: `Needs you`, `Ready`, `Merging`, `Working`, `Queued`, `To do` and `Done`. A working task's dot fills like a pie with its % done and its minutes left, and its second line says what it is doing (`Fixing the two failing tests`). The sidebar groups your [spaces](docs/spaces.md) by machine, with Pinned and sections of your own, and marks the ones that wait on you. On a desktop, [split view](docs/chat.md) puts up to three chats, task lists or artifacts side by side.
 
+### 🧩 Make it yours: everything is a plugin
+
+Places, chats, tasks, artifacts, the terminal, the browser, voice, alerts, Autopilot: every part of Shepherdr is a plugin, and yours sit beside them in `~/.shepherdr/plugins/<name>/`. Write one yourself or ask an agent to build it. Add a feature to any of the screen's slots (a bar at the top, a menu item, a side panel tab, a settings page, a key), change or replace any built-in part by giving yours its name (copy it there and edit it), and switch any plugin off in Settings → Plugins. A theme of your own works the same way: Shepherdr's colours are CSS variables that a plugin can set. Updates never touch that folder, so you keep every new release without a fork: save a file and Shepherdr rebuilds and restarts in seconds, and a plugin that breaks is set aside with its error while the rest runs. [Plugins](docs/plugins.md) has a hello world and every slot.
+
 ### ⚡ Stop briefing every agent yourself
 
 Write what needs doing to a space's coordinator: it makes it a task or several, each with a brief and a Settings block that says how it is reviewed and merged. Each agent starts on Claude Code, Codex, pi or another CLI herdr can start, in a worktree of its own, at once or as soon as the machine has room. Want more control? Ask for it "for later", "after SHE-12", or "ask me before merging". Turn on [Autopilot](docs/autopilot.md) and the coordinator works on its own between your messages, or add [automations](docs/autopilot.md) that start tasks on a schedule.
@@ -60,7 +64,7 @@ An agent that asks you something, wants a permission or a plan approved shows un
 
 <table align="center">
 <tr>
-<td align="center" valign="top"><sub>For developers who run coding agents in herdr on macOS or Linux</sub><br /><h2>Free</h2><div align="left">&nbsp;&nbsp;&nbsp;✓&nbsp; A coordinator for every space that turns what you write into tasks<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Every task on its own worktree and branch, with its own agent<br />&nbsp;&nbsp;&nbsp;✓&nbsp; A review by fresh eyes before it merges, through a pull request on GitHub<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Cards, alerts and voice calls on your phone, tablet or desktop<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Every machine you saved in herdr, from one app<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Autopilot, automations, artifacts, a shared browser and split view</div></td>
+<td align="center" valign="top"><sub>For developers who run coding agents in herdr on macOS or Linux</sub><br /><h2>Free</h2><div align="left">&nbsp;&nbsp;&nbsp;✓&nbsp; A coordinator for every space that turns what you write into tasks<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Every task on its own worktree and branch, with its own agent<br />&nbsp;&nbsp;&nbsp;✓&nbsp; A review by fresh eyes before it merges, through a pull request on GitHub<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Cards, alerts and voice calls on your phone, tablet or desktop<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Every machine you saved in herdr, from one app<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Your own plugins and themes, kept through every update<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Autopilot, automations, artifacts, a shared browser and split view</div></td>
 </tr>
 <tr>
 <td align="center"><a href="https://github.com/eliasstravik/shepherdr/blob/main/docs/get-started.md"><img src="assets/buttons/install-shepherdr.svg" alt="Install Shepherdr" /></a></td>
@@ -121,7 +125,7 @@ They are soft. A task's review, merge and rules are lines in its brief, and its 
 
 ### What does it cost?
 
-Shepherdr is free. Your agent CLI's usual usage charges still apply: every task is a full agent session plus a review, each coordinator spends tokens on each message and on Autopilot's heartbeat, and voice calls use your ElevenLabs account.
+Shepherdr is free and [MIT licensed](LICENSE). Your agent CLI's usual usage charges still apply: every task is a full agent session plus a review, each coordinator spends tokens on each message and on Autopilot's heartbeat, and voice calls use your ElevenLabs account.
 
 ## Open Shepherdr in three steps
 
@@ -129,4 +133,4 @@ Shepherdr is free. Your agent CLI's usual usage charges still apply: every task 
 
 <p align="center"><a href="https://github.com/eliasstravik/shepherdr/blob/main/docs/get-started.md"><img src="assets/buttons/install-shepherdr.svg" alt="Install Shepherdr" /></a></p>
 
-<p align="center"><sub>✓&nbsp;Free &nbsp; ✓&nbsp;Runs&nbsp;on&nbsp;your&nbsp;machines,&nbsp;private&nbsp;on&nbsp;your&nbsp;tailnet &nbsp; ✓&nbsp;macOS&nbsp;and&nbsp;Linux,&nbsp;herdr&nbsp;0.9+</sub></p>
+<p align="center"><sub>✓&nbsp;Free,&nbsp;MIT&nbsp;licensed &nbsp; ✓&nbsp;Runs&nbsp;on&nbsp;your&nbsp;machines,&nbsp;private&nbsp;on&nbsp;your&nbsp;tailnet &nbsp; ✓&nbsp;macOS&nbsp;and&nbsp;Linux,&nbsp;herdr&nbsp;0.9+</sub></p>

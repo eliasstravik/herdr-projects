@@ -2,6 +2,7 @@
   "name": "shepherdr",
   "version": "2.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Run many coding agents across machines from a phone, tablet or desktop. A herdr plugin.",
   "scripts": {
