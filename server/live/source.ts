@@ -929,6 +929,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     const x = this.restartable(key)
     const h = fitHarness({ ...x.want, ...to, kind: to.kind ?? x.want.kind })
     // refused before anything is saved
+    if (x.t && ended(x.t)) throw new Error(`${x.t.id} is Done already: it has no agent to restart.`)
+    if (x.t && !x.t.worktree) throw new Error(`${x.t.id} hasn't started yet: it starts on what its brief says.`)
     if (!this.engine.installed(h.kind)) throw new Error(`${CLI_NAME[h.kind] ?? h.kind} isn't installed on this machine.`)
     if (save) {
       const at = x.space ? { space: x.space } : ('machine' as const)
@@ -2336,7 +2338,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     const cli = one(p, 'agent')
     const kind = cli === undefined ? undefined : kindOf(cli)
     if (cli !== undefined && !kind) throw new Error(`No CLI called ${cli}; herdr starts ${CLIS.join(', ')}`)
-    const info = (await this.act({ type: 'restart-info', chat: key })) as { ok: boolean; error?: string; info?: RestartInfo }
+    const info = (await this.act({ type: 'restart-info', chat: key })) as { ok: boolean; error?: string; info?: RestartInfo; waiting?: boolean }
+    if (info.waiting) throw new Error(`${target}'s machine is out of reach: restart it once it is back.`)
     if (!info.ok || !info.info) throw new Error(info.error ?? 'It could not be restarted.')
     const on = kind ?? info.info.want.kind
     // what Settings say unless named: the model and effort only where they fit the CLI it restarts on

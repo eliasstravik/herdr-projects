@@ -65,8 +65,8 @@ function Sheet({ chat, name }: Opening) {
   const [save, setSave] = useState(false)
   useEffect(() => {
     act({ type: 'restart-info', chat })
-      .then((r: { ok?: boolean; error?: string; info?: RestartInfo }) => {
-        if (!r.info) return setError(r.error || 'It could not be restarted.')
+      .then((r: { ok?: boolean; error?: string; info?: RestartInfo; waiting?: boolean }) => {
+        if (!r.info) return setError(r.waiting ? 'Its machine is out of reach: restart it once it is back.' : r.error || 'It could not be restarted.')
         setInfo(r.info)
         setKind(r.info.want.kind)
         setModel(r.info.want.model ?? '')
