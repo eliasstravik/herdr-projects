@@ -55,17 +55,16 @@ pub fn pr_view(root: &Path, pr: &str, fields: &str) -> Result<Read, String> {
     Ok(Read { view: v, unread: vec![UNREAD.to_string()], fault })
 }
 
-/// A number in a GitHub Actions link after `part` (`/actions/runs/<run>/job/<job>`): None where it has none.
-fn link_id(c: &Value, part: &str) -> Option<u64> { c.s("detailsUrl").split(part).nth(1).and_then(|r| r.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()) }
-/// GitHub's list with each check only as last run: a job run again in the same workflow run (its later job id), or a
-/// check or status of the same name started later. One that cannot be told older (no job id, no start time, the same
-/// time) is kept, so that a failure is never dropped for a guess.
+/// The GitHub Actions run a check is a job of (`/actions/runs/<run>/job/<job>`): None for any other check.
+fn run_of(c: &Value) -> Option<u64> { c.s("detailsUrl").split("/actions/runs/").nth(1).and_then(|r| r.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()) }
+/// GitHub's list with each check only as last run: one of the same name (in the same workflow run) that began after it
+/// was over is it run again. Two of a name that ran side by side are two checks, and one whose times are not known
+/// (not started yet, gh's `0001-…`) is kept, so that a failure is never dropped for a guess.
 pub fn newest(checks: &[Value]) -> Vec<Value> {
-    let key = |c: &Value| (c.s("__typename").to_string(), c.s("workflowName").to_string(), if c.b("name") { c.t("name") } else { c.t("context") }, link_id(c, "/actions/runs/"));
-    let older = |a: &Value, b: &Value| match (link_id(a, "/job/"), link_id(b, "/job/")) {
-        (Some(x), Some(y)) => x < y,
-        _ => { let (x, y) = (a.s("startedAt"), b.s("startedAt")); !x.is_empty() && !y.is_empty() && x < y }
-    };
+    let key = |c: &Value| (c.s("__typename").to_string(), c.s("workflowName").to_string(), if c.b("name") { c.t("name") } else { c.t("context") }, run_of(c));
+    let known = |s: &str| !s.is_empty() && !s.starts_with("0001");
+    // A status has one time, when it was set.
+    let older = |a: &Value, b: &Value| { let (end, start) = (if a.b("completedAt") { a.s("completedAt") } else { a.s("startedAt") }, b.s("startedAt")); known(end) && known(start) && end < start };
     checks.iter().filter(|c| !checks.iter().any(|o| key(o) == key(c) && older(c, o))).cloned().collect()
 }
 

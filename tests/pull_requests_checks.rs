@@ -190,7 +190,10 @@ fn every_failing_check_has_the_end_of_its_log_sent_not_only_the_first_three() {
     assert_eq!(t.at("prFailure").s("detail").matches("test parses_flags ... FAILED").count(), 4, "{}", t.at("prFailure"));
 }
 
-fn rerun(conclusion: &str, url: &str) -> Value { json!({ "__typename": "CheckRun", "name": "build", "status": "COMPLETED", "conclusion": conclusion, "workflowName": "CI", "detailsUrl": url }) }
+/// `build` of the workflow CI, run from minute `from` to minute `to`.
+fn rerun(conclusion: &str, url: &str, from: u8, to: u8) -> Value {
+    json!({ "__typename": "CheckRun", "name": "build", "status": "COMPLETED", "conclusion": conclusion, "workflowName": "CI", "detailsUrl": url, "startedAt": format!("2026-10-28T10:{from:02}:00Z"), "completedAt": format!("2026-10-28T10:{to:02}:00Z") })
+}
 fn rollup_of(head: &str, checks: Value) -> Value { json!({ "state": "OPEN", "headRefOid": head, "statusCheckRollup": checks, "comments": [], "reviews": [], "author": { "login": "me" } }) }
 
 #[test]
@@ -200,13 +203,15 @@ fn a_check_run_again_is_judged_by_its_newest_run_and_another_runs_failure_still_
     let id = to_approval(&w, "Flaky build");
     let head = task(&id).t("prHead");
     let (old, new) = ("https://github.com/o/r/actions/runs/11/job/22", "https://github.com/o/r/actions/runs/11/job/23");
-    w.gh_says(json!({ "view": rollup_of(&head, json!([rerun("FAILURE", old), rerun("SUCCESS", new)])) }));
+    w.gh_says(json!({ "view": rollup_of(&head, json!([rerun("FAILURE", old, 0, 5), rerun("SUCCESS", new, 7, 12)])) }));
     finish_line::approve(&id, None, false).unwrap();
     let t = settle(&id);
     assert_eq!(t.s("stage"), "done", "{} {}", t.t("msg"), t.at("failure")); assert!(merged(&w), "{}", gh_log(&w));
     drop(w);
-    // the run again failed: not merged; and a failure in another workflow run (its run for the push) is its own check
-    for checks in [json!([rerun("SUCCESS", old), rerun("FAILURE", new)]), json!([rerun("FAILURE", "https://github.com/o/r/actions/runs/10/job/21"), rerun("SUCCESS", new)])] {
+    // the run again failed: not merged; a failure in another workflow run (its run for the push) is its own check; and
+    // so is another job of the same name that ran beside it
+    for checks in [json!([rerun("SUCCESS", old, 0, 5), rerun("FAILURE", new, 7, 12)]), json!([rerun("FAILURE", "https://github.com/o/r/actions/runs/10/job/21", 0, 5), rerun("SUCCESS", new, 7, 12)]),
+        json!([rerun("FAILURE", old, 0, 5), rerun("SUCCESS", new, 1, 6)])] {
         let w = pr_world(json!({ "review.rounds": 0 }));
         let id = to_approval(&w, "Still failing");
         let head = task(&id).t("prHead");
