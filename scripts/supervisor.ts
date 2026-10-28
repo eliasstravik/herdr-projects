@@ -51,6 +51,11 @@ export class Supervisor {
     return this.busy
   }
 
+  /** a new release runs on trial: it is taken back if it stops now */
+  get onTrial() {
+    return !!this.trial && this.now() <= this.trial.until
+  }
+
   /** the folder the server runs from */
   dir(): string {
     const name = this.current

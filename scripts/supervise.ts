@@ -4,12 +4,13 @@
 // release, so a later merge can't change what runs. A failed update keeps the running version, and update.json says
 // why (the screen shows it). A merge that changes the supervisor's own code starts it again on that code.
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, watch, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { HOME, readJson, writeJson } from '../server/store.ts'
 import type { UpdateStatus } from '../shared/types.ts'
-import { codeOf, Supervisor, TRIAL } from './supervisor.ts'
-import { refDirs } from './update.ts'
+import { codeOf, Supervisor } from './supervisor.ts'
+import { refDirs, run as runCmd } from './update.ts'
 
 const ROOT = join(import.meta.dir, '..')
 const PORT = Number(process.env.SHEPHERDR_PORT ?? 7787)
@@ -65,16 +66,25 @@ function soon(force = false) {
 }
 
 let renewing = false
+/** new code of its own that didn't load: not tried again */
+let broken = ''
 /** A merge changed the supervisor's own code (it ran on older code until herdr started it again): it starts itself
  *  again on the new code, with the server, once the new release is past its trial, no update is being made and no
- *  voice call is on. */
+ *  voice call is on. A release that failed, or new code that doesn't load, leaves this one running as it is. */
 async function renew() {
-  if (renewing || stopping || codeOf(import.meta.path) === CODE) return
+  const state = () => sup.status?.state
+  const now = codeOf(import.meta.path)
+  if (renewing || stopping || now === CODE || now === broken || state() !== 'ok') return
   renewing = true
-  await Bun.sleep(TRIAL + 5000)
-  while (sup.working || (await drain(true)) > 0) {
+  while (state() !== 'ok' || sup.onTrial || sup.working || (await drain(true)) > 0) {
     await drain(false)
+    if (state() === 'failed') return void (renewing = false)
     await Bun.sleep(5000)
+  }
+  if (!(await loads())) {
+    broken = now
+    await drain(false)
+    return void (renewing = false)
   }
   console.log("the supervisor's own code changed: starting it again on it")
   stopping = true
@@ -93,6 +103,15 @@ async function renew() {
     /* plugin.ts asks the server for its supervisor as well */
   }
   process.exit(0)
+}
+
+/** the supervisor's new code and everything it imports load (as a release's server is checked, update.ts) */
+async function loads() {
+  const scratch = mkdtempSync(join(tmpdir(), 'shepherdr-check-'))
+  const r = await runCmd([process.execPath, 'build', import.meta.path, '--target', 'bun', '--outdir', scratch], ROOT)
+  rmSync(scratch, { recursive: true, force: true })
+  if (!r.ok) console.log(`the supervisor's new code doesn't load; it goes on as it is\n${r.out}`)
+  return r.ok
 }
 
 watch(join(ROOT, 'plugins.json'), () => soon(true))
