@@ -648,6 +648,13 @@ export class Agents extends Emitter<Events> {
     return w === 'stale' && (a.agent_status === 'working' || a.agent_status === 'blocked') ? undefined : w
   }
 
+  /** whether its hooks last said it was at work, even while it is gone: a turn its log shows over is over */
+  wasWorking(key: string) {
+    const r = this.records[key]
+    const said = r?.hooks ? this.hooks.read(mirrored(r.hooks)).said : undefined
+    return said?.state === 'working' && !this.endedSince?.(key, said.at)
+  }
+
   /** being started or stopped right now */
   busy(key: string) {
     return this.starting.has(key) || this.stopping.has(key)

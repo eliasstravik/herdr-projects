@@ -27,7 +27,7 @@ export interface RevivalTimes {
   grace: number
   /** how long after the try before each try may go: as many tries as gaps */
   gaps: number[]
-  /** how long it runs well after its last try before its tries count again from none */
+  /** how long it runs well without a break before its tries count again from none */
   steady: number
 }
 
@@ -36,6 +36,8 @@ export class Revivals {
   private wrong = new Map<string, number>()
   private tries = new Map<string, number[]>()
   private given = new Set<string>()
+  /** since when it has been seen running well, without a break */
+  private well = new Map<string, number>()
   /** whether it was at work when last seen running: told to carry on once it is back */
   private working = new Map<string, boolean>()
 
@@ -50,11 +52,12 @@ export class Revivals {
     return !!this.working.get(key)
   }
 
-  /** seen running well: once that lasts past its last try, its tries are forgotten */
+  /** seen running well: once that lasts a while without a break, its tries are forgotten */
   fine(key: string, now = Date.now()) {
     this.wrong.delete(key)
-    const last = this.tries.get(key)?.at(-1)
-    if (last !== undefined && now - last < this.times.steady) return
+    const since = this.well.get(key) ?? now
+    this.well.set(key, since)
+    if (now - since < this.times.steady) return
     this.tries.delete(key)
     this.given.delete(key)
   }
@@ -62,10 +65,12 @@ export class Revivals {
   /** not looked at (herdr out of reach, or an agent not to keep running): seen wrong from the next look */
   skip(key: string) {
     this.wrong.delete(key)
+    this.well.delete(key)
   }
 
   /** seen wrong: 'go' to start it again now, 'give-up' once when its tries are used up, else nothing yet */
   seen(key: string, now = Date.now()): 'go' | 'give-up' | undefined {
+    this.well.delete(key)
     const since = this.wrong.get(key) ?? now
     this.wrong.set(key, since)
     if (now - since < this.times.grace || this.given.has(key)) return undefined

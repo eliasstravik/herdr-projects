@@ -47,7 +47,7 @@ describe('tries at starting it again', () => {
     for (const t of [500, 1000, 5000]) expect(r.seen('a', t)).toBeUndefined()
   })
 
-  test('running well a while after its last try counts from none again; a moment of it does not', () => {
+  test('running well a while without a break counts from none again; a moment of it does not', () => {
     const r = new Revivals(times)
     r.seen('a', 0)
     expect(r.seen('a', 20)).toBe('go')
@@ -56,9 +56,20 @@ describe('tries at starting it again', () => {
     r.seen('a', 30)
     expect(r.seen('a', 50)).toBeUndefined()
     expect(r.seen('a', 80)).toBe('go')
-    r.fine('a', 1000)
-    r.seen('a', 1010)
-    expect(r.seen('a', 1030)).toBe('go')
+    // well for a while, but with a break: still its third try, after the gap
+    r.fine('a', 400)
+    r.seen('a', 900)
+    r.fine('a', 920)
+    r.fine('a', 1500)
+    r.seen('a', 1510)
+    expect(r.seen('a', 1530)).toBe('go')
+    // well without a break as long as steady: from none again
+    r.fine('a', 1540)
+    r.fine('a', 2140)
+    r.seen('a', 2150)
+    expect(r.seen('a', 2170)).toBe('go')
+    r.seen('a', 2180)
+    expect(r.seen('a', 2200)).toBeUndefined()
   })
 
   test('given up, it starts again only once it ran well for a while (the human restarted it)', () => {
@@ -67,6 +78,7 @@ describe('tries at starting it again', () => {
     expect(r.seen('a', 1)).toBe('give-up')
     r.fine('a', 50)
     expect(r.seen('a', 60)).toBeUndefined()
+    r.fine('a', 100)
     r.fine('a', 200)
     expect(r.seen('a', 210)).toBe('go')
   })
