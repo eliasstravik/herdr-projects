@@ -19,7 +19,10 @@ fn repo_of(cwd: &Path) -> PathBuf {
 pub fn worktree(f: &F, st: &mut Value, verb: &str, flag: &dyn Fn(&str) -> Option<String>, force: bool) -> Out {
     match verb {
         "create" => {
-            let root = repo_of(Path::new(&flag("--cwd").unwrap_or_default()));
+            let cwd = flag("--cwd").unwrap_or_default();
+            // As herdr does: never from a linked worktree, which git names apart from its repo's main checkout.
+            if git(Path::new(&cwd), &["rev-parse", "--git-dir"]).ok() != git(Path::new(&cwd), &["rev-parse", "--git-common-dir"]).ok() { return fail("linked_worktree_source", "New and open worktree actions start from the repo parent workspace."); }
+            let root = repo_of(Path::new(&cwd));
             let branch = flag("--branch").unwrap_or_default();
             let safe: String = branch.chars().map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '-' }).collect();
             let dest = f.dir.join("worktrees").join(root.file_name().unwrap_or_default()).join(safe);

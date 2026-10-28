@@ -44,12 +44,14 @@ pub fn primary_root(folder: &Path) -> PathBuf {
     known_repos().values().map(|v| PathBuf::from(text(v))).find(|p| p.join(".git").is_file() && git_dirs(p).map(|(o, c)| o == c && c == common).unwrap_or(false)).unwrap_or(root)
 }
 pub fn is_repo(folder: &Path) -> bool { git_root(folder).join(".git").exists() }
-/// Whether tasks in a folder's repo get worktrees of their own: it is a main checkout, not a linked worktree.
+/// Whether tasks in a repo's folder get worktrees of their own: git works there, its `.git` a folder or a file. (A
+/// repo's folder is its main checkout, or a linked worktree whose main checkout git cannot name: one of a
+/// `--separate-git-dir` repo first seen from there.)
 pub fn can_worktree(folder: &Path) -> bool {
     let root = git_root(folder);
     match fs::metadata(root.join(".git")) {
         Ok(m) if m.is_dir() => true,
-        Ok(_) => git_dirs(&root).map(|(own, common)| own == common).unwrap_or(false),
+        Ok(_) => git_dirs(&root).is_some(),
         Err(_) => false,
     }
 }

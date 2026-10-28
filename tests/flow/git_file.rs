@@ -25,7 +25,6 @@ fn a_repo_whose_git_is_a_file_gives_its_task_a_worktree() {
     let t = settle(&id);
     assert_eq!(t.s("stage"), "working", "{t:?}");
     assert!(Path::new(t.s("worktree")).exists() && t.s("worktree") != w.root_str(), "{t:?}");
-    assert!(!can_worktree(Path::new(t.s("worktree"))), "a linked worktree gets none of its own");
     assert_eq!(primary_root(Path::new(t.s("worktree"))), w.root, "the worktree belongs to the repo");
 }
 
@@ -43,6 +42,22 @@ fn a_submodule_is_a_main_checkout_and_its_worktrees_belong_to_it() {
     assert_eq!(sw::store::repos::folder_of(&format!("{id}/1")), lib);
     let tree = w.base.join("lib-tree");
     git(&lib, &["worktree", "add", "-q", "-b", "work/x", &tree.display().to_string()]);
-    assert!(!can_worktree(&tree));
     assert_eq!(primary_root(&tree), lib, "found among the known repos");
+}
+
+/// Started from a worktree of such a repo the board has not seen: git cannot name its main checkout, so the worktree is
+/// the repo's folder. Its task never works in that folder: herdr makes no worktree from a worktree, and says so.
+#[test]
+fn a_worktree_of_an_unknown_repo_whose_git_is_a_file_never_has_its_task_work_in_place() {
+    let w = world();
+    history_elsewhere(&w);
+    let hand = w.base.join("hand");
+    git(&w.root, &["worktree", "add", "-q", "-b", "mine", &hand.display().to_string()]);
+    assert_eq!(primary_root(&hand), hand);
+    w.script(json!({ "worker": [{ "status": "working", "files": { "hello.txt": "hello" } }] }));
+    let id = sw::actions::filing::add(&hand, "Add a greeting", Default::default()).unwrap().t("id");
+    delegate(&id);
+    let t = settle(&id);
+    assert_eq!((t.s("stage"), t.s("msg")), ("failed", "Could not start: New and open worktree actions start from the repo parent workspace"));
+    assert!(!hand.join("hello.txt").exists() && !t.b("worktree"));
 }
