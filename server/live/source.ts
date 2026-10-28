@@ -847,10 +847,10 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
 
   /**
    * Start (or resume) a place's coordinator: on Settings' CLI, model and effort the first time, then on what it runs on
-   * (its chat's pickers change those) until it is restarted on others (`as`, restart: interrupted first and its run
-   * ended, `first` its first message then).
+   * (its chat's pickers change those) until it is restarted on others (`as`; `restart` stops its turn and says what
+   * it is told first).
    */
-  private coordinator(id: string, o: { as?: Harness; first?: string; restart?: boolean } = {}) {
+  private coordinator(id: string, o: { as?: Harness; restart?: () => Promise<string | undefined> } = {}) {
     const c = this.places.coordinator(id)
     if (!c) throw new Error(`No place ${id}`)
     const set = this.settings.harness('coordinator', this.spaceKey(id))
@@ -862,7 +862,6 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       kind: h?.kind ?? rec!.kind,
       // '' is the CLI's own default
       ...(h ? { model: h.model ?? '', effort: h.effort ?? '', set } : {}),
-      first: o.first,
       cwd: c.cwd,
       workspace: c.workspace,
       was: (c as { was?: string }).was,
@@ -870,7 +869,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       system: coordinatorPrompt({ role: this.roleOf(id), name: c.label, path: c.path, machine: NAME }, this.places.mode(id)),
       env: agentEnv(id, ROOT),
     }
-    return o.restart ? this.agents.restart(spec, () => this.agents.stopTurn(id)) : this.agents.ensure(spec)
+    return o.restart ? this.agents.restart(spec, o.restart) : this.agents.ensure(spec)
   }
 
   /** a coordinator started again on this CLI, model and effort: the same CLI resumes its session, another takes over
@@ -882,8 +881,13 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     const words = harnessWords(h)
     const from = this.agents.record(id)?.kind
     const them = CLI_NAME[from ?? ''] ?? from ?? 'Its agent'
-    const first = !from ? undefined : from === h.kind ? hidden(resumedLine(words), 'restart') : hidden(restartLine({ from: them, to: words, chat: recentChat(this.chats.chat(id).messages, them) }), 'restart')
-    await this.coordinator(id, { as: h, first, restart: true })
+    // read once its turn has stopped: what it said meanwhile counts
+    const first = async () => {
+      await this.agents.stopTurn(id)
+      if (!from) return undefined
+      return from === h.kind ? hidden(resumedLine(words), 'restart') : hidden(restartLine({ from: them, to: words, chat: recentChat(this.chats.chat(id).messages, them) }), 'restart')
+    }
+    await this.coordinator(id, { as: h, restart: first })
     const card = `restart:${id}:${Date.now()}`
     this.chats.post(id, { id: card, card: { id: card, restart: true, text: `Restarted on ${words}` } })
     if (this.watched.includes(id)) this.emit('chat', id)

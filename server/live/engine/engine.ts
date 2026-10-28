@@ -1096,7 +1096,7 @@ export class Engine extends Emitter<Events> {
    * Its agent, in its herdr space. A worktree that is gone (a stop with no work put it away) is made again first, in
    * the same folder, so its agent's session (kept by folder) is found again; never a finished task's.
    */
-  private async launch(t: TaskRec, first?: string, made?: Made, as?: Harness, restart?: () => Promise<void>) {
+  private async launch(t: TaskRec, first?: string, made?: Made, as?: Harness, restart?: () => Promise<string | void>) {
     const key = this.key(t)
     const rec = this.agents.record(key)
     const p = this.proj(t)
@@ -1156,14 +1156,16 @@ export class Engine extends Emitter<Events> {
     const words = harnessWords(h)
     this.handing.add(t.id)
     try {
-      const first =
-        from === h.kind
-          ? hidden(resumedLine(words), 'restart')
-          : hidden(`${taskFirst(t)}\n\n${restartLine({ from: name(from), to: words, ...(await this.soFar(t, key, name(from))) })}`, 'restart')
+      // what it is told, read once its turn has stopped: what it did meanwhile counts
+      const first = async () => {
+        await this.agents.stopTurn(key)
+        if (from === h.kind) return hidden(resumedLine(words), 'restart')
+        return hidden(`${taskFirst(t)}\n\n${restartLine({ from: name(from), to: words, ...(await this.soFar(t, key, name(from))) })}`, 'restart')
+      }
+      await this.launch(t, undefined, undefined, { ...h, model: h.model ?? '', effort: h.effort ?? '' }, first)
       // a pause or a stop is over: it carries on
       t.stopped = undefined
       t.paused = undefined
-      await this.launch(t, first, undefined, { ...h, model: h.model ?? '', effort: h.effort ?? '' }, () => this.agents.stopTurn(key))
       t.agent = h
       const card = `restart:${t.id}:${Date.now()}`
       this.chats.post(key, { id: card, card: { id: card, restart: true, text: `Restarted on ${words}` } })

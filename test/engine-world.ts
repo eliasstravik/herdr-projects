@@ -65,10 +65,10 @@ export function world(herdr = fakeHerdr(), o: { boot?: string } = {}) {
     },
     interrupt: async () => undefined,
     stopTurn: async (key: string) => void (status[key] === 'working' && stopped.push(key)),
-    restart: async (s: { key: string; first?: string; cwd: string; kind: string; pane?: () => Promise<string> }, before?: () => Promise<void>) => {
-      await before?.()
+    restart: async (s: { key: string; first?: string; cwd: string; kind: string; pane?: () => Promise<string> }, before?: () => Promise<string | void>) => {
+      const first = await before?.()
       await agents.finish(s.key)
-      return agents.ensure(s)
+      return agents.ensure({ ...s, ...(first ? { first } : {}) })
     },
     forget: (key: string) => {
       delete records[key]

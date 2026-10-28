@@ -154,6 +154,8 @@ export class Agents extends Emitter<Events> {
   private timer: ReturnType<typeof setInterval> | null = null
   private sub: Subscription
   private starting = new Map<string, Promise<AgentInfo | null>>()
+  /** agents being stopped for a restart: what you send waits for the one it starts */
+  private stopping = new Set<string>()
   private delivering = new Set<string>()
   /** what went in lately with a screen's id: the chat gives the id back once it reads the message from the log */
   private delivered: OutItem[] = []
@@ -498,17 +500,24 @@ export class Agents extends Emitter<Events> {
   /* ---------- starting ---------- */
 
   /**
-   * Start this chat's agent again on what spec says: `before` first (a turn interrupted), then its run ends and it
-   * starts, resuming its session on the same CLI. Meanwhile, anything that would start it waits for this instead, and
-   * what you send waits and goes in after spec's first message.
+   * Start this chat's agent again on what spec says: `before` first (its turn stopped; what it returns is the first
+   * message then, read once the turn is over), then its run ends and it starts, resuming its session on the same CLI.
+   * Meanwhile anything that would start it waits for this instead, and what you send waits and goes in after the first
+   * message. `before` throwing leaves it as it was.
    */
-  restart(spec: Spec, before?: () => Promise<void>): Promise<AgentInfo | null> {
+  restart(spec: Spec, before?: () => Promise<string | void>): Promise<AgentInfo | null> {
     const p0 = this.starting.get(spec.key)
     const p = (async () => {
       await p0?.catch(() => undefined)
-      await before?.()
-      await this.finish(spec.key)
-      return this.launch(spec)
+      this.stopping.add(spec.key)
+      try {
+        const first = await before?.()
+        await this.finish(spec.key)
+        return await this.launch({ ...spec, ...(first ? { first } : {}) })
+      } finally {
+        this.stopping.delete(spec.key)
+        this.deliver(spec.key)
+      }
     })().finally(() => this.starting.delete(spec.key))
     this.starting.set(spec.key, p)
     return p
@@ -643,7 +652,8 @@ export class Agents extends Emitter<Events> {
   /** the same, without an agent herdr refused as not ready yet: that one is simply tried again */
   private heldBy(key: string, item?: Pick<OutItem, 'idle'>): Hold | undefined {
     const st = this.status(key)
-    if (st === 'gone' || this.info(key)?.interactive_ready === false) return 'start'
+    // stopping for a restart: what you send goes to the agent it starts on
+    if (st === 'gone' || this.stopping.has(key) || this.info(key)?.interactive_ready === false) return 'start'
     if (st === 'blocked' || this.menuUp?.(key)) return 'menu'
     if (item?.idle && st === 'working') return 'turn'
     return undefined
@@ -872,14 +882,14 @@ export class Agents extends Emitter<Events> {
   }
 
   /** a turn under way ended cleanly before its run ends (a restart): interrupted, then a few seconds for the CLI to
-   *  stop and write what it had */
-  async stopTurn(key: string, ms = 8000) {
+   *  stop and write what it had; still at work after that, it throws and is left as it is */
+  async stopTurn(key: string, ms = 15_000) {
     if (this.status(key) !== 'working') return
     await this.interrupt(key)
-    for (const end = Date.now() + ms; Date.now() < end; ) {
+    for (const end = Date.now() + ms; this.status(key) === 'working'; ) {
+      if (Date.now() > end) throw new Error('It is still working after an interrupt: try again in a moment.')
       await new Promise((r) => setTimeout(r, 500))
       await this.refresh()
-      if (this.status(key) !== 'working') break
     }
     // what it wrote last reaches its log
     await new Promise((r) => setTimeout(r, 500))
