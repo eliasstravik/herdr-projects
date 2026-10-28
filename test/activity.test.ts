@@ -349,3 +349,30 @@ describe('a chat from its log', () => {
     expect(w.chats.chat('T-2/Agent').jobs).toBeUndefined()
   })
 })
+
+describe('a long chat log', () => {
+  test('is read a piece at a time: the server answers between pieces, and the chat comes whole', async () => {
+    const w = world('claude', () => 'idle')
+    // about 12 MB: a long-lived coordinator's log
+    const pad = 'x'.repeat(20_000)
+    for (let i = 0; i < 600; i++) w.add(user(`u${i}`, `prompt ${i}`, typed), said(`a${i}`, `msg_${i}`, { type: 'text', text: `reply ${i} ${pad}` }, 'end_turn'))
+    let ticks = 0
+    const tick = setInterval(() => ticks++, 0)
+    const done = new Promise<void>((r) => (w.chats.onRead = () => r()))
+    expect(w.chats.pull('T-1/Agent')).toBe(true)
+    // the first pull read only a piece
+    const first = w.chats.chat('T-1/Agent').messages.length
+    expect(first).toBeGreaterThan(0)
+    expect(first).toBeLessThan(1200)
+    await done
+    clearInterval(tick)
+    expect(ticks).toBeGreaterThan(1)
+    const msgs = w.chats.chat('T-1/Agent').messages
+    expect(msgs).toHaveLength(1200)
+    expect(msgs.at(-1)?.text).toStartWith('reply 599 ')
+    // what it writes next is read as before
+    w.add(user('u600', 'one more', typed))
+    expect(w.chats.pull('T-1/Agent')).toBe(true)
+    expect(w.chats.chat('T-1/Agent').messages.at(-1)?.text).toBe('one more')
+  })
+})

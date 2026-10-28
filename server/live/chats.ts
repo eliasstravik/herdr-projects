@@ -286,9 +286,19 @@ export function sawReply(s: Pick<Shown, 'last' | 'on'>, text: string | undefined
   return { on: s.on || (ok && s.last !== undefined && text !== s.last), last: ok ? text : undefined }
 }
 
+/** how much of a chat's logs one pull reads: the rest is read in the background a piece at a time, so a log of a
+ *  hundred MB (a long-lived coordinator's) never holds up the server, at a restart or as it grows */
+const PIECE = 2 << 20
+
 export class Chats {
   private tails = new Map<string, LogTail>()
   private events = new Map<string, LogEvent[]>()
+  /** where each reply and usage is in its chat's events, by kind and id: a reply read in two pieces replaces the first */
+  private where = new Map<string, Map<string, number>>()
+  /** chats whose logs are still being read in the background */
+  private reading = new Set<string>()
+  /** a chat's logs were read in the background to their end: what it shows changed */
+  onRead?: (key: string) => void
   private logs = new Map<string, ChatLog>()
   private menus = new Map<string, ScreenMenu>()
   private menuAt = new Map<string, number>()
@@ -320,7 +330,7 @@ export class Chats {
 
   /** a deleted task's chat: its log goes, and all that was read of it */
   forget(key: string) {
-    for (const m of [this.tails, this.events, this.logs, this.menus, this.menuAt, this.shown]) m.delete(key)
+    for (const m of [this.tails, this.events, this.where, this.reading, this.logs, this.menus, this.menuAt, this.shown]) m.delete(key)
     rmSync(join(HOME, 'chatlog', `${safe(key)}.json`), { force: true })
   }
 
@@ -380,12 +390,21 @@ export class Chats {
 
   /* ---------- reading the CLI's logs ---------- */
 
-  /** read new lines of this chat's log files; true when anything new came */
+  /** read new lines of this chat's log files, up to PIECE of each (the rest follows in the background); true when
+   *  anything new came */
   pull(key: string): boolean {
+    const { changed, behind } = this.read(key)
+    if (behind) this.readOn(key)
+    return changed
+  }
+
+  private read(key: string): { changed: boolean; behind: boolean } {
     const r = this.agents.record(key)
-    if (!r) return false
+    if (!r) return { changed: false, behind: false }
     let changed = false
+    let behind = false
     const all = this.events.get(key) ?? []
+    const where = this.where.get(key) ?? new Map<string, number>()
     for (const f of r.logs) {
       if (!existsSync(f)) continue
       let t = this.tails.get(f)
@@ -396,17 +415,35 @@ export class Chats {
         t = new LogTail(f, reader)
         this.tails.set(f, t)
       }
-      const ev = t.read()
+      const ev = t.read(PIECE)
+      behind ||= t.behind
       for (const e of ev) {
         // a reply read in two pieces comes again with the same id and the full text: it replaces the first
-        const i = e.kind === 'agent' || e.kind === 'usage' ? all.findIndex((x) => x.kind === e.kind && x.id === e.id) : -1
-        if (i >= 0) all[i] = e
-        else all.push(e)
+        const id = e.kind === 'agent' || e.kind === 'usage' ? `${e.kind}:${e.id}` : undefined
+        const i = id === undefined ? undefined : where.get(id)
+        if (i !== undefined) all[i] = e
+        else {
+          if (id !== undefined) where.set(id, all.length)
+          all.push(e)
+        }
         changed = true
       }
     }
-    if (changed) this.events.set(key, all)
-    return changed
+    if (changed) (this.events.set(key, all), this.where.set(key, where))
+    return { changed, behind }
+  }
+
+  /** reads the rest of a chat's logs a piece at a time, letting the server answer between pieces; told once at the end */
+  private readOn(key: string) {
+    if (this.reading.has(key)) return
+    this.reading.add(key)
+    const step = () => {
+      if (!this.reading.has(key)) return
+      if (this.read(key).behind) return void setTimeout(step, 0)
+      this.reading.delete(key)
+      this.onRead?.(key)
+    }
+    setTimeout(step, 0)
   }
 
   /** tokens this chat's agent has used, across all its sessions */

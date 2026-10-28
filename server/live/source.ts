@@ -164,6 +164,10 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     this.peers?.on('alert', (a) => this.emit('alert', this.renamed(a)))
     this.peers?.on('news', (machine, n) => this.peerNews(machine, n))
     this.chats.onPost = (key) => this.fresh(key)
+    this.chats.onRead = (key) => {
+      this.emit('chat', key)
+      this.fresh(key)
+    }
     this.agents.on('status', (key, st) => {
       if (key === '*') return this.emit('snapshot')
       this.revivals.status(key, st)

@@ -20,6 +20,22 @@ import { runSync } from './box.ts'
 import { leftAtPrompt } from './commands.ts'
 import { paneWrong, type Wrong } from './revive.ts'
 
+/** a log's name (its session id), wherever it lies: one named both by its mirrored path and by its own is one log */
+const logName = (f: string) => f.slice(f.lastIndexOf('/') + 1)
+
+/** the logs with each one once, where it first came: the same log twice is read twice, and a big one holds up the server */
+export function uniqueLogs(logs: string[]): string[] {
+  const seen = new Set<string>()
+  return logs.filter((f) => !seen.has(logName(f)) && !!seen.add(logName(f)))
+}
+
+/** adds a log the record doesn't have yet; true when it was new */
+function addLog(r: AgentRecord, f: string): boolean {
+  if (r.logs.some((x) => logName(x) === logName(f))) return false
+  r.logs.push(f)
+  return true
+}
+
 /** a Claude Code session, copied into the project folder of the cwd it resumes in (Claude Code looks for it only
  *  there) from wherever it was written on that machine; its log path, or nothing when there is none */
 export function carryClaudeSession(id: string, cwd: string): string | undefined {
@@ -212,7 +228,11 @@ export class Agents extends Emitter<Events> {
 
   constructor() {
     super()
-    for (const r of Object.values(this.records)) this.byName.set(r.name, r.key)
+    // records written before logs were kept once each
+    for (const r of Object.values(this.records)) {
+      r.logs = uniqueLogs(r.logs ?? [])
+      this.byName.set(r.name, r.key)
+    }
     this.sub = new Subscription(
       (e) => this.onEvent(e),
       () => this.refresh(),
@@ -431,14 +451,12 @@ export class Agents extends Emitter<Events> {
     const r = this.records[key]
     const s = a?.agent_session
     if (!r || !s) return
-    if (s.kind === 'path' && !r.logs.includes(mirrored(s.value))) {
-      r.logs.push(mirrored(s.value))
+    if (s.kind === 'path' && addLog(r, mirrored(s.value))) {
       this.save()
       this.emit('logs', key)
     } else if (s.kind === 'id' && r.kind === 'claude') {
       const p = claudeLogPath(r.cwd, s.value)
-      if (!r.logs.includes(p)) {
-        r.logs.push(p)
+      if (addLog(r, p)) {
         r.sessionId = s.value
         this.save()
         this.emit('logs', key)
@@ -456,7 +474,7 @@ export class Agents extends Emitter<Events> {
     if (!s || s.id === r.sessionId || s.at < r.started - 5000) return
     const log = s.log ? mirrored(s.log) : claudeLogPath(r.cwd, s.id)
     r.sessionId = s.id
-    if (!r.logs.includes(log)) r.logs.push(log)
+    addLog(r, log)
     this.save()
     this.emit('logs', key)
   }
@@ -468,8 +486,7 @@ export class Agents extends Emitter<Events> {
     if (!r || (r.kind === 'claude' && r.hooks)) return
     const look = () => {
       const f = findLog(r.kind, r.cwd, since - 1000)
-      if (!f || r.logs.includes(f)) return
-      r.logs.push(f)
+      if (!f || !addLog(r, f)) return
       // Claude Code and pi resume by the id in its name; Codex by its last log
       if (r.kind !== 'codex') r.sessionId = f.match(/([0-9a-f-]{36})\.jsonl$/)?.[1] ?? r.sessionId
       this.save()
@@ -485,8 +502,7 @@ export class Agents extends Emitter<Events> {
     if (!r) return
     const since = r.started - 5000
     const f = r.kind === 'claude' ? (r.sessionId ? claudeLogPath(r.cwd, r.sessionId) : findClaudeLog(r.cwd, since)) : r.kind === 'codex' ? findCodexLog(r.cwd, since) : r.kind === 'pi' ? findPiLog(r.cwd, since) : undefined
-    if (f && !r.logs.includes(f)) {
-      r.logs.push(f)
+    if (f && addLog(r, f)) {
       this.save()
       this.emit('logs', key)
     }

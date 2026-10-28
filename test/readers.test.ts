@@ -432,6 +432,28 @@ describe('LogTail', () => {
     expect(brief(tail.read())).toEqual(['session:session-s3', 'user:x', 'user:y'])
   })
 
+  test('a read with a limit stops after whole lines past it; the next goes on, and a partial last line is not more to read', () => {
+    const f = join(dir, 'limit.jsonl')
+    const lines = Array.from({ length: 400 }, (_, i) => piUser(`e${i}`, `prompt ${i} ${'x'.repeat(1000)}`))
+    const last = piUser('e400', 'not yet whole')
+    writeFileSync(f, piSession('s1') + lines.join('') + last.slice(0, 30))
+    const tail = new LogTail(f, readerFor('pi')!)
+    const got: string[] = []
+    let reads = 0
+    do {
+      const ev = brief(tail.read(64 << 10))
+      expect(ev.length).toBeLessThan(401)
+      got.push(...ev)
+      reads++
+    } while (tail.behind)
+    expect(reads).toBeGreaterThan(3)
+    expect(got).toEqual(brief(new LogTail(f, readerFor('pi')!).read()))
+    expect(got).toHaveLength(401)
+    expect(tail.read(64 << 10)).toEqual([])
+    appendFileSync(f, last.slice(30))
+    expect(brief(tail.read(64 << 10))).toEqual(['user:not yet whole'])
+  })
+
   test('a missing file reads as nothing', () => {
     expect(new LogTail(join(dir, 'none.jsonl'), readerFor('claude')!).read()).toEqual([])
   })

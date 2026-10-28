@@ -325,3 +325,20 @@ describe('headless reviewers', () => {
     expect(new Reviewers('/no/proc/here', () => { throw new Error('no ps') }).runs('T-1/Agent')).toBe(false)
   })
 })
+
+describe('the logs an agent keeps', () => {
+  test('each once: an old record with one twice reads it once, and the same log found again is not added', () => {
+    const p = (id: string, dir = join(process.env.CLAUDE_CONFIG_DIR!, 'projects', '-w-3')) => join(dir, `${id}.jsonl`)
+    // SHE-253: a coordinator's record held its 95 MB log twice
+    writeJson('agents.json', { 'T-3/Agent': { key: 'T-3/Agent', name: 'shep-t-3', kind: 'claude', cwd: '/w/3', workspace: 'w', logs: [p('a'), p('b'), p('a'), p('c')], sessionId: 'c', started: 0 } })
+    const a = new Agents()
+    expect(a.record('T-3/Agent')!.logs).toEqual([p('a'), p('b'), p('c')])
+    // found again: by its session id, and by the path herdr names it by
+    a.discoverLog('T-3/Agent')
+    ;(a as unknown as { learnSession: (k: string, i: object) => void }).learnSession('T-3/Agent', { agent_session: { kind: 'path', value: p('a', '/elsewhere') } })
+    expect(a.record('T-3/Agent')!.logs).toEqual([p('a'), p('b'), p('c')])
+    a.save()
+    expect(JSON.parse(readFileSync(join(process.env.SHEPHERDR_HOME!, 'agents.json'), 'utf8'))['T-3/Agent'].logs).toEqual([p('a'), p('b'), p('c')])
+    a.stop()
+  })
+})

@@ -31,22 +31,32 @@ export class LogTail {
   private offset = 0
   /** the file's inode: a new one means the file was replaced */
   private ino = -1
+  /** the last read stopped at its limit, short of the file's end */
+  private more = false
 
   constructor(
     readonly file: string,
     readonly reader: Reader,
   ) {}
 
-  /** events of the complete lines written since the last read; starts over when the file shrank or was replaced */
-  read(): LogEvent[] {
+  /** more is written than read so far: a read with a limit stopped short */
+  get behind(): boolean {
+    return this.more
+  }
+
+  /** events of the complete lines written since the last read, or of about `max` bytes of them (whole lines, at least
+   *  one); starts over when the file shrank or was replaced */
+  read(max = Infinity): LogEvent[] {
     let size: number
     try {
       const st = statSync(this.file)
       if (st.ino !== this.ino || st.size < this.offset) this.restart(st.ino)
       size = st.size
     } catch {
+      this.more = false
       return []
     }
+    this.more = false
     if (size <= this.offset) return []
 
     const out: LogEvent[] = []
@@ -54,13 +64,16 @@ export class LogTail {
     try {
       fd = openSync(this.file, 'r')
     } catch {
+      this.more = false
       return []
     }
     try {
       let carry = Buffer.alloc(0)
       let pos = this.offset
-      while (pos < size) {
-        const buf = Buffer.alloc(Math.min(CHUNK, size - pos))
+      const began = this.offset
+      // past the limit, only to end a line begun
+      while (pos < size && (pos - began < max || this.offset === began)) {
+        const buf = Buffer.alloc(Math.min(CHUNK, Math.max(max, 64 << 10), size - pos))
         const got = readSync(fd, buf, 0, buf.length, pos)
         if (got <= 0) break
         pos += got
@@ -78,6 +91,7 @@ export class LogTail {
         this.offset = start + from
         if (lines.length) out.push(...this.reader.parse(lines, this.file))
       }
+      this.more = pos < size
     } finally {
       closeSync(fd)
     }
