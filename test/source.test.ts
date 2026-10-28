@@ -416,15 +416,20 @@ describe("a task's CLI, model and effort", () => {
     expect(out).toContain('coordinator.agent      Claude Code')
     expect(out).toContain("Every new task's brief ends with:\nSettings:")
   })
-  test("a coordinator starts on Settings' CLI, model and effort for coordinators", async () => {
+  test("a coordinator first starts on Settings' CLI, model and effort for coordinators", async () => {
+    // one that ran before keeps what it runs on until it is restarted (SHE-249): a new space's has never run
     const seen: { kind: string; model?: string; effort?: string }[] = []
     const ensure = src.agents.ensure
     src.agents.ensure = (async (spec: { kind: string; model?: string; effort?: string }) => (seen.push(spec), null)) as never
     try {
+      const dir = mkdtempSync(join(tmpdir(), 'shep-src-repo-'))
+      execSync('git init -q -b main && git config user.email t@t && git config user.name T && echo hi > README.md && git add -A && git commit -qm init', { cwd: dir, shell: '/bin/sh' })
+      const place = placeId.space((await src.places.add(dir, 'coord-settings')).name)
+      expect(src.agents.record(place)).toBeUndefined()
       src.settings.set('coordinator.agent', 'Codex')
       src.settings.set('coordinator.effort', 'high')
-      await (src as unknown as { coordinator(id: string): Promise<unknown> }).coordinator(placeId.home())
-      expect(seen[0]).toMatchObject({ kind: 'codex', model: '', effort: 'high' })
+      await (src as unknown as { coordinator(id: string): Promise<unknown> }).coordinator(place)
+      expect(seen.at(-1)).toMatchObject({ kind: 'codex', model: '', effort: 'high' })
     } finally {
       src.agents.ensure = ensure
       src.settings.set('coordinator.agent', null)
