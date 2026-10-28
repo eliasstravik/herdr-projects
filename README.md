@@ -23,7 +23,7 @@ The app is an overview and a remote control; herdr is the engine. A space is a f
 | **No extra software fee** | ✅ | ✅ | ✅ | ❌ |
 | **Parallel tasks on separate branches** | ✅ | ✅ | ❌ | ✅ |
 | **Same rules for every agent** | ✅ | ❌ | ✅ | ✅ |
-| **Fresh eyes review every task before it merges** | ✅ | ❌ | ❌ | ❌ |
+| **Fresh eyes review each task before it merges (on by default)** | ✅ | ❌ | ❌ | ❌ |
 | **Questions reach your phone as cards and alerts** | ✅ | ❌ | ❌ | ✅ |
 | **Several machines from one screen** | ✅ | ❌ | ❌ | ✅ |
 | **Runs on your own machines** | ✅ | ✅ | ✅ | ❌ |
@@ -60,7 +60,7 @@ An agent that asks you something, wants a permission or a plan approved shows un
 
 <table align="center">
 <tr>
-<td align="center" valign="top"><sub>For developers who run coding agents in herdr on macOS or Linux</sub><br /><h2>Free</h2><div align="left">&nbsp;&nbsp;&nbsp;✓&nbsp; A coordinator for every space that turns what you write into tasks<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Every task on its own worktree and branch, with its own agent<br />&nbsp;&nbsp;&nbsp;✓&nbsp; A review by fresh eyes and a pull request before anything merges<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Cards, alerts and voice calls on your phone, tablet or desktop<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Every machine you saved in herdr, from one app<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Autopilot, automations, artifacts, a shared browser and split view</div></td>
+<td align="center" valign="top"><sub>For developers who run coding agents in herdr on macOS or Linux</sub><br /><h2>Free</h2><div align="left">&nbsp;&nbsp;&nbsp;✓&nbsp; A coordinator for every space that turns what you write into tasks<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Every task on its own worktree and branch, with its own agent<br />&nbsp;&nbsp;&nbsp;✓&nbsp; A review by fresh eyes before it merges, through a pull request on GitHub<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Cards, alerts and voice calls on your phone, tablet or desktop<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Every machine you saved in herdr, from one app<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Autopilot, automations, artifacts, a shared browser and split view</div></td>
 </tr>
 <tr>
 <td align="center"><a href="https://github.com/eliasstravik/shepherdr/blob/main/docs/get-started.md"><img src="assets/buttons/install-shepherdr.svg" alt="Install Shepherdr" /></a></td>
@@ -83,7 +83,7 @@ You need to be comfortable in a terminal for the install. After that everything 
 
 ### How do I check that Shepherdr is running?
 
-Run the plugin action "Shepherdr status", or on the main machine:
+The plugin action "Shepherdr status" says whether it runs and where it is shared. To check every machine, run on the main one:
 
 ```bash
 shepherdr doctor
