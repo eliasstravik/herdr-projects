@@ -212,16 +212,17 @@ fn a_matrix_member_not_reported_yet_is_waited_for_and_a_workflow_that_cannot_run
 
 #[test]
 fn a_workflow_whose_types_leave_out_how_the_commit_came_is_waited_for_a_short_while_unless_its_run_is_there() {
-    // `labeled, synchronize`: a pull request opened on its head and never pushed to again gets no run of it
+    // `labeled, synchronize`: a pull request opened on its head and never pushed to again gets no run of it, and it is
+    // the repo's only check: nothing is listed
     let flow = "name: Preview\non:\n  pull_request:\n    types: [labeled, synchronize]\njobs:\n  deploy:\n    runs-on: x\n";
     let w = pr_world(json!({}));
     with_flow(&w, PREVIEW, flow);
     let id = to_approval(&w, "Preview never runs");
     let head = task(&id).t("prHead");
-    w.gh_says(json!({ "view": passed(&head) }));
+    w.gh_says(json!({ "view": none(&head) }));
     finish_line::approve(&id, None, false).unwrap();
     let t = settle(&id);
-    waits(&t, "Waiting for GitHub checks · 1 of 2 passed", "Preview"); assert!(!merged(&w));
+    waits(&t, "Waiting for GitHub checks · 0 of 1 passed", "Preview"); assert!(!merged(&w));
     sw::clock::set(Some(t.at("checksWait").i("since")));
     sw::clock::advance(MAYBE_MS - 1);
     poll_prs(); settle(&id);
@@ -240,6 +241,11 @@ fn a_workflow_whose_types_leave_out_how_the_commit_came_is_waited_for_a_short_wh
     w.gh_says(json!({ "view": passed(&head), "runs": run("in_progress", "") }));
     finish_line::approve(&id, None, false).unwrap();
     settle(&id);
+    sw::clock::advance(MAYBE_MS * 2);
+    poll_prs(); settle(&id);
+    assert_eq!(task(&id).s("stage"), "merging"); assert!(!merged(&w));
+    // GitHub does not give the commit's runs: not known to be missing, so still waited for
+    w.gh_says(json!({ "view": passed(&head), "actionsFail": true }));
     sw::clock::advance(MAYBE_MS * 2);
     poll_prs(); settle(&id);
     assert_eq!(task(&id).s("stage"), "merging"); assert!(!merged(&w));

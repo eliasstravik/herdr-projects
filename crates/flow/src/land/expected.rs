@@ -32,6 +32,8 @@ pub fn flows_for(t: &Obj, base: &str) -> Vec<(String, Flow, Runs)> {
 /// How long a workflow that may not run on this commit is waited for to start: GitHub starts a run within seconds of
 /// the event that brought the commit, or never (#420).
 pub const MAYBE_MS: i64 = 90_000;
+/// The board has waited for GitHub's checks on `head` for `ms` or longer.
+pub fn waited_past(t: &Obj, head: &str, ms: i64) -> bool { let w = t.at("checksWait"); w.s("head") == head && w.i("since") > 0 && now() - w.i("since") >= ms }
 /// GitHub Actions is turned off for the repo: GitHub says so (`enabled: false`). A token that may not ask, or any other
 /// answer, is "not off", so that nothing merges unchecked for it (#416).
 pub fn actions_off(root: &Path) -> bool {
@@ -40,13 +42,14 @@ pub fn actions_off(root: &Path) -> bool {
 }
 /// Each workflow that runs for it, against its runs on this commit: none yet, or one not finished, is waited for (by the
 /// workflow's name); one that finished and failed is a failed check. GitHub not answering: all of them are waited for.
-/// One that may not run on this commit and has no run is waited for only `MAYBE_MS` since the board began waiting.
+/// One that may not run on this commit and has no run is waited for only `MAYBE_MS` since the board began waiting
+/// (where GitHub gave the commit's runs: not given, it is waited for as the others are).
 pub fn flows_state(t: &Obj, root: &Path, base: &str, head: &str) -> Flows {
     let flows = flows_for(t, base);
     if flows.is_empty() || actions_off(root) { return Flows::default(); }
-    let runs = super::readable::runs(root, head).unwrap_or_default();
-    let w = t.at("checksWait");
-    let given_up = w.s("head") == head && w.i("since") > 0 && now() - w.i("since") >= MAYBE_MS;
+    let runs = super::readable::runs(root, head);
+    let given_up = runs.is_ok() && waited_past(t, head, MAYBE_MS);
+    let runs = runs.unwrap_or_default();
     let mut out = Flows::default();
     for (file, flow, how) in flows {
         let mine: Vec<&super::readable::Run> = runs.iter().filter(|x| x.path.split('@').next() == Some(file.as_str())).collect();

@@ -30,10 +30,12 @@ pub fn choose(t: &Obj, ch: &Obj, full: &str, tree: &str, root: &Path) -> Chosen 
     Chosen { cmd: again, since: last.t("head") }
 }
 /// GitHub runs its checks on this work before it merges: through its pull request, which waits for them
-/// (`merge.checks`), with a workflow of the branch that runs for it. Then the full suite still runs before the merge.
+/// (`merge.checks`), with a workflow of the branch that runs on each of its commits, and GitHub Actions on for the
+/// repo. Then the full suite still runs before the merge.
 fn guarded(t: &Obj, ch: &Obj, root: &Path) -> bool {
     if ch.s("merge.checks") != "github" || !t.b("pr") || !ch.b("merge.pr") { return false; }
-    !crate::land::expected::flows_for(t, &crate::sync::main_branch(root, t)).is_empty()
+    use crate::land::{expected, triggers::Runs};
+    expected::flows_for(t, &crate::sync::main_branch(root, t)).iter().any(|(_, _, r)| *r == Runs::Always) && !expected::actions_off(root)
 }
 /// Kept on the task when the full check passed: the commit it passed on (with what the check wrote committed) and
 /// the command, so that a later round may run the shorter one.

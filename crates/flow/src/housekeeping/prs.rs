@@ -127,7 +127,10 @@ fn poll_one(id: &str, pr: &str, j: &Value, via: &str) {
         if t.b("autoMerge") && t.b("checksWait") {
             // An empty list is not a pass: they have not started yet, or went from the list (checks::none_listed).
             let gone = checks::missing(t, &head, via, &checks);
-            if !failed.is_empty() || (!checks.is_empty() && all_good && gone.is_empty()) || ignored || checks::overdue(t) { t.put("autoMerge", false); t.put("autoMergeLocal", false); t.put("msg", "Merging"); then = Then::Land; }
+            // Nothing listed, with workflows waited for: the land step looks again once one that may not run has had its
+            // while to start (land/expected.rs).
+            let maybe_over = !strings(t.at("checksWait").at("flows")).is_empty() && crate::land::expected::waited_past(t, &head, crate::land::expected::MAYBE_MS);
+            if !failed.is_empty() || ((!checks.is_empty() || maybe_over) && all_good && gone.is_empty()) || ignored || checks::overdue(t) { t.put("autoMerge", false); t.put("autoMergeLocal", false); t.put("msg", "Merging"); then = Then::Land; }
             else if !checks.is_empty() && t.at("checksWait").s("head") == head {
                 // Still running: which ones is kept, so that one gone from the list later is still waited for.
                 let names = checks::unique(checks.iter().filter(|c| !CHECK_GOOD.contains(&checks::word(c).as_str())).map(checks::name).chain(gone));

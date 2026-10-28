@@ -72,6 +72,10 @@ fn without_github_guarding_the_merge_or_with_the_commit_gone_from_the_branch_eve
     let ch = work(Some(&t));
     let full = "echo full >> \"$HOME/checks.log\"";
     assert!(choose(&t, &ch, full, t.s("worktree"), &w.root).short(), "as it stands, the shorter one");
+    // GitHub Actions turned off for the repo: its workflow never runs there (#416)
+    w.gh_says(json!({ "actionsOff": true }));
+    assert!(!choose(&t, &ch, full, t.s("worktree"), &w.root).short());
+    w.gh_says(json!({}));
     git(&tree, &["commit", "-q", "--allow-empty", "-m", "elsewhere"]);
     let gone = git(&tree, &["rev-parse", "HEAD"]);
     git(&tree, &["reset", "-q", "--hard", "HEAD~1"]);
