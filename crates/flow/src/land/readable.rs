@@ -41,7 +41,7 @@ pub fn pr_view(root: &Path, pr: &str, fields: &str) -> Result<Read, String> {
     let n = pr_number(pr);
     if !refused_lately(root) {
         let r = gh(&["pr", "view", &n, "--json", &format!("{fields},statusCheckRollup")], root, 60000);
-        if let Ok(mut v) = serde_json::from_str::<Value>(&r.stdout) { v["statusCheckRollup"] = json!(newest(v.arr("statusCheckRollup"))); return Ok(Read { view: v, ..Default::default() }); }
+        if let Ok(mut v) = serde_json::from_str::<Value>(&r.stdout) { v["statusCheckRollup"] = json!(newest(root, v.arr("statusCheckRollup"))); return Ok(Read { view: v, ..Default::default() }); }
         if !refused(&r) { return Err(said(&r)); }
         remember(root);
     }
@@ -55,17 +55,36 @@ pub fn pr_view(root: &Path, pr: &str, fields: &str) -> Result<Read, String> {
     Ok(Read { view: v, unread: vec![UNREAD.to_string()], fault })
 }
 
-/// The GitHub Actions run a check is a job of (`/actions/runs/<run>/job/<job>`): None for any other check.
-fn run_of(c: &Value) -> Option<u64> { c.s("detailsUrl").split("/actions/runs/").nth(1).and_then(|r| r.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()) }
-/// GitHub's list with each check only as last run: one of the same name (in the same workflow run) that began after it
-/// was over is it run again. Two of a name that ran side by side are two checks, and one whose times are not known
-/// (not started yet, gh's `0001-…`) is kept, so that a failure is never dropped for a guess.
-pub fn newest(checks: &[Value]) -> Vec<Value> {
+/// A number in a GitHub Actions link after `part` (`/actions/runs/<run>/job/<job>`): None for any other check.
+fn link_id(c: &Value, part: &str) -> Option<u64> { c.s("detailsUrl").split(part).nth(1).and_then(|r| r.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()) }
+/// The jobs of a workflow run's latest attempt, as GitHub gives them: None where it does not.
+fn latest_jobs(root: &Path, run: u64) -> Option<Vec<u64>> {
+    let r = every_page(root, &format!("repos/{{owner}}/{{repo}}/actions/runs/{run}/jobs?filter=latest&per_page=100"), ".jobs[].id");
+    (r.status == 0).then(|| r.stdout.lines().filter_map(|l| l.trim().parse().ok()).collect())
+}
+/// GitHub's list with each check only as last run. A GitHub Actions job listed twice in its workflow run: the one of the
+/// run's latest attempt, as GitHub says it (two jobs of one name in the same attempt are two checks). Another app's
+/// check: one of the same name that began after it was over. What cannot be told (GitHub does not say, the times are not
+/// known: not started yet, gh's `0001-…`) is kept, so that a failure is never dropped for a guess.
+pub fn newest(root: &Path, checks: &[Value]) -> Vec<Value> {
+    let run_of = |c: &Value| link_id(c, "/actions/runs/");
     let key = |c: &Value| (c.s("__typename").to_string(), c.s("workflowName").to_string(), if c.b("name") { c.t("name") } else { c.t("context") }, run_of(c));
+    let mut latest: Vec<(u64, Option<Vec<u64>>)> = vec![];
+    for c in checks.iter().filter(|c| checks.iter().filter(|o| key(o) == key(c)).count() > 1) {
+        if let Some(r) = run_of(c) { if !latest.iter().any(|(x, _)| *x == r) { latest.push((r, latest_jobs(root, r))); } }
+    }
     let known = |s: &str| !s.is_empty() && !s.starts_with("0001");
     // A status has one time, when it was set.
     let older = |a: &Value, b: &Value| { let (end, start) = (if a.b("completedAt") { a.s("completedAt") } else { a.s("startedAt") }, b.s("startedAt")); known(end) && known(start) && end < start };
-    checks.iter().filter(|c| !checks.iter().any(|o| key(o) == key(c) && older(c, o))).cloned().collect()
+    let gone = |c: &Value| match run_of(c) {
+        Some(r) => {
+            let Some((_, Some(ids))) = latest.iter().find(|(x, _)| *x == r) else { return false };
+            let latest_job = |o: &Value| link_id(o, "/job/").map(|j| ids.contains(&j)).unwrap_or(false);
+            link_id(c, "/job/").is_some() && !latest_job(c) && checks.iter().any(|o| key(o) == key(c) && latest_job(o))
+        }
+        None => checks.iter().any(|o| key(o) == key(c) && older(c, o)),
+    };
+    checks.iter().filter(|c| !gone(c)).cloned().collect()
 }
 
 /// One GitHub Actions run of a commit.

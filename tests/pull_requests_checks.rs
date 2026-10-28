@@ -203,19 +203,20 @@ fn a_check_run_again_is_judged_by_its_newest_run_and_another_runs_failure_still_
     let id = to_approval(&w, "Flaky build");
     let head = task(&id).t("prHead");
     let (old, new) = ("https://github.com/o/r/actions/runs/11/job/22", "https://github.com/o/r/actions/runs/11/job/23");
-    w.gh_says(json!({ "view": rollup_of(&head, json!([rerun("FAILURE", old, 0, 5), rerun("SUCCESS", new, 7, 12)])) }));
+    w.gh_says(json!({ "view": rollup_of(&head, json!([rerun("FAILURE", old, 0, 5), rerun("SUCCESS", new, 7, 12)])), "jobs": { "11": [["23"]] } }));
     finish_line::approve(&id, None, false).unwrap();
     let t = settle(&id);
     assert_eq!(t.s("stage"), "done", "{} {}", t.t("msg"), t.at("failure")); assert!(merged(&w), "{}", gh_log(&w));
     drop(w);
     // the run again failed: not merged; a failure in another workflow run (its run for the push) is its own check; and
-    // so is another job of the same name that ran beside it
-    for checks in [json!([rerun("SUCCESS", old, 0, 5), rerun("FAILURE", new, 7, 12)]), json!([rerun("FAILURE", "https://github.com/o/r/actions/runs/10/job/21", 0, 5), rerun("SUCCESS", new, 7, 12)]),
-        json!([rerun("FAILURE", old, 0, 5), rerun("SUCCESS", new, 1, 6)])] {
+    // so is another job of the same name in the same attempt, after it or beside it, and one GitHub does not say of
+    let (both, latest) = (json!({ "11": [["22"], ["23"]] }), json!({ "11": [["23"]] }));
+    for (checks, jobs) in [(json!([rerun("SUCCESS", old, 0, 5), rerun("FAILURE", new, 7, 12)]), &latest), (json!([rerun("FAILURE", "https://github.com/o/r/actions/runs/10/job/21", 0, 5), rerun("SUCCESS", new, 7, 12)]), &latest),
+        (json!([rerun("FAILURE", old, 0, 5), rerun("SUCCESS", new, 7, 12)]), &both), (json!([rerun("FAILURE", old, 0, 5), rerun("SUCCESS", new, 1, 6)]), &both), (json!([rerun("FAILURE", old, 0, 5), rerun("SUCCESS", new, 7, 12)]), &json!({}))] {
         let w = pr_world(json!({ "review.rounds": 0 }));
         let id = to_approval(&w, "Still failing");
         let head = task(&id).t("prHead");
-        w.gh_says(json!({ "view": rollup_of(&head, checks) }));
+        w.gh_says(json!({ "view": rollup_of(&head, checks), "jobs": jobs }));
         finish_line::approve(&id, None, false).unwrap();
         let t = settle(&id);
         assert_eq!(t.at("prFailure").s("remoteKind"), "checks", "{}", t.t("msg")); assert!(!merged(&w));
