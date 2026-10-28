@@ -46,7 +46,9 @@ pub fn start_asked() {
         if std::fs::remove_file(&f).is_err() { continue; } // another pass took it
         let job = job_of(&o);
         if job.0.is_empty() || job.1.is_empty() || done.contains(&job) { continue; }
-        super::spawn_runner(&job.0, &job.1, &job.2.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+        let extra: Vec<&str> = job.2.iter().map(|s| s.as_str()).collect();
+        // A sync is started only when no runner has its task, as the pass would start it here (#401).
+        if job.0 == "sync" { super::spawn_claimed(&job.0, &job.1, &extra); } else { super::spawn_runner(&job.0, &job.1, &extra); }
         done.push(job);
     }
 }

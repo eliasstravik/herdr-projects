@@ -197,6 +197,10 @@ fn a_sync_on_its_way_is_not_asked_for_again_before_its_runner_has_taken_the_task
     // A second pass before the runner the first one asked for has started (#401)
     housekeep(&w); housekeep(&w);
     assert_eq!(sync_jobs(), 1);
+    // nor when a command hands a sync of it to the keeper's next pass
+    use sw::runner::outside::{ask, start_asked};
+    ask("sync", &id, &[]); start_asked();
+    assert_eq!(sync_jobs(), 1);
     let t = settle(&id);
     assert!(holds(tree(&t), &main) && !t.b("runner"), "{}", t.at("failure"));
 }

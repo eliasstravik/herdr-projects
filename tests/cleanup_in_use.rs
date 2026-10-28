@@ -50,6 +50,9 @@ fn a_process_beside_the_agent_is_named_with_why_it_keeps_the_space_and_a_helper_
     // and so is what it runs under it in a group of its own (a language server's telemetry, #399)
     let t = merged(&w, "lsp", |t| pane(&w, t.at("link").s("pane"), |p| p["helper"] = json!("lsp")));
     assert!(!t.b("kept") && t.b("cleaned"), "{}", kept(&t));
+    // and a language server the agent started in a group of its own, wired to it all the same
+    let t = merged(&w, "own", |t| pane(&w, t.at("link").s("pane"), |p| p["helper"] = json!("own")));
+    assert!(!t.b("kept") && t.b("cleaned"), "{}", kept(&t));
 }
 
 #[test]
