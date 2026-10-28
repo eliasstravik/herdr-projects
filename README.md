@@ -52,7 +52,7 @@ An agent that asks you something, wants a permission or a plan approved shows un
 <tr>
 <td align="center" valign="top" width="33%"><h3>1️⃣</h3><b>Install the plugin</b><br /><sub>Run <code>herdr plugin install eliasstravik/shepherdr</code>. herdr builds it and starts it at every herdr start; it gets its own Bun if you have none.</sub></td>
 <td align="center" valign="top" width="33%"><h3>2️⃣</h3><b>Share it on your tailnet</b><br /><sub>Run the plugin action "Share Shepherdr on my tailnet". It serves the app privately with <code>tailscale serve</code>, never public, and prints its link.</sub></td>
-<td align="center" valign="top" width="33%"><h3>3️⃣</h3><b>Write to a coordinator</b><br /><sub>Open the link on your phone and add it to the home screen for alerts. Pick a space and say what needs doing. <code>?</code> on a keyboard shows everything else.</sub></td>
+<td align="center" valign="top" width="33%"><h3>3️⃣</h3><b>Write to a coordinator</b><br /><sub>Open the link on your phone and add it to the home screen, then turn alerts on in Settings. Pick a space and say what needs doing. <code>?</code> on a keyboard shows everything else.</sub></td>
 </tr>
 </table>
 
@@ -83,7 +83,7 @@ You need to be comfortable in a terminal for the install. After that everything 
 
 ### How do I check that Shepherdr is running?
 
-The plugin action "Shepherdr status" says whether it runs and where it is shared. To check every machine, run on the main one:
+The plugin action "Open Shepherdr" starts it when it is not running and shows its link. To check every machine, run on the main one:
 
 ```bash
 shepherdr doctor
