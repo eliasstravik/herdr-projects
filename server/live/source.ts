@@ -827,6 +827,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     const all = sharedEverywhere()
     if (!all || !this.settings.adopt(all)) return
     this.engine.release()
+    // the restart hint of the chats open now
+    for (const k of this.watched) this.emit('chat', k)
     this.emit('snapshot')
   }
 
@@ -834,6 +836,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   private settingChanged(key: string) {
     if (key === 'tasks.archiveAfter') this.engine.autoArchive()
     if (key.startsWith('machine.')) this.engine.release()
+    // an agent's CLI, model or effort: the restart hint of the chats open now
+    if (/^(task|coordinator)\.(agent|model|effort)$/.test(key)) for (const k of this.watched) this.emit('chat', k)
     this.emit('snapshot')
   }
 
@@ -924,6 +928,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   private async restart(key: string, to: Partial<Harness>, save = false) {
     const x = this.restartable(key)
     const h = fitHarness({ ...x.want, ...to, kind: to.kind ?? x.want.kind })
+    // refused before anything is saved
+    if (!this.engine.installed(h.kind)) throw new Error(`${CLI_NAME[h.kind] ?? h.kind} isn't installed on this machine.`)
     if (save) {
       const at = x.space ? { space: x.space } : ('machine' as const)
       for (const [k, v] of [['agent', CLI_NAME[h.kind] ?? h.kind], ['model', h.model ?? 'default'], ['effort', h.effort ?? 'default']])
