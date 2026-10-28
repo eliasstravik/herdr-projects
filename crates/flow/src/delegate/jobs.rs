@@ -82,7 +82,9 @@ fn delegate_steps(id: &str, g: &mut Guard, mut t: Task) -> Res<()> {
         t = g.set(|t| { let _ = r::starts_as(t); })?;
         let turned = turned_words(&t);
         t = g.set(|t| { t.put("stage", "working"); t.put("armedAt", now()); t.put("turnOpen", true); t.put("turnBy", "start"); t.del("researchTurned"); t.del("chatTurned"); })?;
-        flow::send::deliver(&t, &flow::send::with_tail(&t, &[turned, "Continue this task.".into()].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n")), None, false)?;
+        let waiting: Vec<String> = take_text(id)?.iter().map(|m| m.t("text")).collect();
+        let words = [turned, "Continue this task.".into()].into_iter().chain(waiting.iter().cloned()).filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n");
+        if let Err(e) = flow::send::deliver(&t, &flow::send::with_tail(&t, &words), None, false) { if !waiting.is_empty() { untake_text(id, waiting.len())?; } return Err(e); }
         return Ok(());
     }
     // Room on the disk first: on a nearly full one the task waits in the queue, not fails half-way (leftovers/room.rs).
