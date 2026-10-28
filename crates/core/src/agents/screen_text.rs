@@ -31,16 +31,20 @@ fn rule(line: &str) -> bool {
     s.chars().count() >= 8 && s.chars().all(|c| ['─', '━', '═'].contains(&c))
 }
 /// The words an agent left on its screen, for a turn that ended with nothing else: what stands above its program's
-/// input box. The box is the last two rules, a few lines apart, near the end of the screen, its first line the prompt
-/// mark (Claude Code's `❯`); what is drawn under it (a mode line, a status line: Claude Code's "⏵⏵ bypass permissions
-/// on") is the program's, never the agent's words. Two rules the agent wrote itself hold no prompt mark.
+/// input box. The box is its prompt mark near the end of the screen (Claude Code's `❯`, Codex's `›`, or `>` just under
+/// a rule), with the rule over it; what is drawn under it (a mode line, a status line: Claude Code's "⏵⏵ bypass
+/// permissions on") is the program's, never the agent's words.
 pub fn agent_words(screen: &str) -> String {
     let lines: Vec<&str> = screen.split('\n').collect();
-    let full = |r: &[&str]| r.iter().filter(|l| !l.trim().is_empty()).count();
-    let rules: Vec<usize> = (0..lines.len()).filter(|i| rule(lines[*i])).collect();
-    if let [.., top, bottom] = rules[..] {
-        let prompt = lines[top + 1..bottom].iter().map(|l| edge_trim(l)).find(|l| !l.is_empty()).map(|l| l.starts_with(['❯', '>', '›'])).unwrap_or(false);
-        if prompt && full(&lines[top + 1..bottom]) <= 3 && full(&lines[bottom + 1..]) <= 8 { return screen_text(&lines[..top].join("\n")); }
+    let below = |i: usize| lines[i + 1..].iter().filter(|l| !l.trim().is_empty()).count();
+    let above = |i: usize| (0..i).rev().find(|j| !lines[*j].trim().is_empty());
+    let ruled = |i: usize| above(i).filter(|j| rule(lines[*j]));
+    let input = (0..lines.len()).rev().take_while(|i| below(*i) <= 8).find(|i| {
+        let l = edge_trim(lines[*i]);
+        l.starts_with(['❯', '›']) || (l.starts_with('>') && ruled(*i).is_some())
+    });
+    match input {
+        Some(i) => screen_text(&lines[..ruled(i).unwrap_or(i)].join("\n")),
+        None => screen_text(screen),
     }
-    screen_text(screen)
 }
