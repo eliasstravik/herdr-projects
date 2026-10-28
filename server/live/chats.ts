@@ -416,7 +416,6 @@ export class Chats {
         this.tails.set(f, t)
       }
       const ev = t.read(PIECE)
-      behind ||= t.behind
       for (const e of ev) {
         // a reply read in two pieces comes again with the same id and the full text: it replaces the first
         const id = e.kind === 'agent' || e.kind === 'usage' ? `${e.kind}:${e.id}` : undefined
@@ -428,6 +427,8 @@ export class Chats {
         }
         changed = true
       }
+      // the next log once this one is read to its end: the chat keeps its order
+      if ((behind = t.behind)) break
     }
     if (changed) (this.events.set(key, all), this.where.set(key, where))
     return { changed, behind }

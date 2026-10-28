@@ -27,8 +27,11 @@ export function readerFor(cli: string): Reader | undefined {
 const CHUNK = 4 << 20
 
 export class LogTail {
-  /** byte offset of the first line not read yet (a partial last line is read again next time) */
+  /** byte offset of the first line not read yet */
   private offset = 0
+  /** byte offset of what is read so far: from offset on, the start of a line not ended yet, kept in carry */
+  private pos = 0
+  private carry: Buffer[] = []
   /** the file's inode: a new one means the file was replaced */
   private ino = -1
   /** the last read stopped at its limit, short of the file's end */
@@ -44,41 +47,43 @@ export class LogTail {
     return this.more
   }
 
-  /** events of the complete lines written since the last read, or of about `max` bytes of them (whole lines, at least
-   *  one); starts over when the file shrank or was replaced */
+  /** events of the complete lines written since the last read, or of about `max` bytes more of the file (a line it
+   *  ends in the middle of is kept, and comes whole from a later read); starts over when the file shrank or was
+   *  replaced */
   read(max = Infinity): LogEvent[] {
     let size: number
+    this.more = false
     try {
       const st = statSync(this.file)
-      if (st.ino !== this.ino || st.size < this.offset) this.restart(st.ino)
+      if (st.ino !== this.ino || st.size < this.pos) this.restart(st.ino)
       size = st.size
     } catch {
-      this.more = false
       return []
     }
-    this.more = false
-    if (size <= this.offset) return []
+    if (size <= this.pos) return []
 
     const out: LogEvent[] = []
     let fd: number
     try {
       fd = openSync(this.file, 'r')
     } catch {
-      this.more = false
       return []
     }
     try {
-      let carry = Buffer.alloc(0)
-      let pos = this.offset
-      const began = this.offset
-      // past the limit, only to end a line begun
-      while (pos < size && (pos - began < max || this.offset === began)) {
-        const buf = Buffer.alloc(Math.min(CHUNK, Math.max(max, 64 << 10), size - pos))
-        const got = readSync(fd, buf, 0, buf.length, pos)
+      const began = this.pos
+      while (this.pos < size && this.pos - began < max) {
+        const buf = Buffer.alloc(Math.min(CHUNK, Math.max(max, 64 << 10), size - this.pos))
+        const got = readSync(fd, buf, 0, buf.length, this.pos)
         if (got <= 0) break
-        pos += got
-        const data = carry.length ? Buffer.concat([carry, buf.subarray(0, got)]) : buf.subarray(0, got)
-        const start = pos - data.length
+        this.pos += got
+        const chunk = buf.subarray(0, got)
+        // a long line goes on: joined once it ends
+        if (chunk.indexOf(10) === -1) {
+          this.carry.push(chunk)
+          continue
+        }
+        const data = this.carry.length ? Buffer.concat([...this.carry, chunk]) : chunk
+        const start = this.offset
         const lines: { text: string; offset: number }[] = []
         let from = 0
         for (let nl = data.indexOf(10); nl !== -1; nl = data.indexOf(10, from)) {
@@ -87,11 +92,11 @@ export class LogTail {
           if (text.trim()) lines.push({ text, offset: start + from })
           from = nl + 1
         }
-        carry = data.subarray(from)
+        this.carry = from < data.length ? [Buffer.from(data.subarray(from))] : []
         this.offset = start + from
         if (lines.length) out.push(...this.reader.parse(lines, this.file))
       }
-      this.more = pos < size
+      this.more = this.pos < size
     } finally {
       closeSync(fd)
     }
@@ -106,6 +111,8 @@ export class LogTail {
 
   private restart(ino: number) {
     this.offset = 0
+    this.pos = 0
+    this.carry = []
     this.ino = ino
     this.reader.reset?.(this.file)
   }
