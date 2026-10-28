@@ -52,11 +52,11 @@ fn a_submodule_is_a_main_checkout_and_its_worktrees_belong_to_it() {
     let lib = w.root.join("lib");
     assert!(lib.join(".git").is_file() && can_worktree(&lib));
     assert_eq!(primary_root(&lib.join("nested")), lib);
-    let id = sw::store::repos::repo_of(&lib).unwrap().0;
-    assert_eq!(sw::store::repos::folder_of(&format!("{id}/1")), lib);
     let tree = w.base.join("lib-tree");
     git(&lib, &["worktree", "add", "-q", "-b", "work/x", &tree.display().to_string()]);
-    assert_eq!(primary_root(&tree), lib, "found among the known repos");
+    assert_eq!(primary_root(&tree), lib, "its git folder names its checkout, seen or not");
+    let id = sw::store::repos::repo_of(&tree).unwrap().0;
+    assert_eq!(sw::store::repos::folder_of(&format!("{id}/1")), lib);
 }
 
 /// Started from a worktree of such a repo the board has not seen: git cannot name its main checkout, so the worktree is

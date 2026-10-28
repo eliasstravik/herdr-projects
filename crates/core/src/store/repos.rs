@@ -34,14 +34,17 @@ fn git_dirs(root: &Path) -> Option<(PathBuf, PathBuf)> {
     Some((l.next()?, l.next()?))
 }
 /// The primary checkout of a folder: for a linked worktree, the repo it belongs to: the known repo whose checkout's
-/// `.git` file points at the git folder they share, else the folder that holds that git folder as its `.git`.
+/// `.git` file points at the git folder they share, else the checkout that git folder names (a submodule's), else the
+/// folder that holds that git folder as its `.git`.
 pub fn primary_root(folder: &Path) -> PathBuf {
     let root = git_root(folder);
     if !fs::metadata(root.join(".git")).map(|m| m.is_file()).unwrap_or(false) { return root; }
     let Some((own, common)) = git_dirs(&root) else { return root };
     if own == common { return root; }
-    let known = known_repos().values().map(|v| PathBuf::from(text(v))).find(|p| p.join(".git").is_file() && git_dirs(p).map(|(o, c)| o == c && c == common).unwrap_or(false));
-    if let Some(p) = known { return p; }
+    let main = |p: &PathBuf| p.join(".git").is_file() && git_dirs(p).map(|(o, c)| o == c && c == common).unwrap_or(false);
+    if let Some(p) = known_repos().values().map(|v| PathBuf::from(text(v))).find(main) { return p; }
+    let named = git_out(&root, &["config", "--file", &common.join("config").display().to_string(), "core.worktree"]).ok().map(|w| real(&common.join(w)));
+    if let Some(p) = named.filter(main) { return p; }
     if common.file_name().map(|n| n == ".git").unwrap_or(false) { if let Some(p) = common.parent() { return p.to_path_buf(); } }
     root
 }
