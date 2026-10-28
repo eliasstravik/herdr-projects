@@ -105,3 +105,57 @@ fn delegating_a_landed_task_again_starts_a_new_round_in_a_fresh_worktree_never_i
     let first = prompts(&w, p.s("pane_id"))[0].clone();
     assert!(first.contains("\n\nWork"), "{first}");
 }
+
+#[test]
+fn remote_socket_alias_send_back_reaches_the_same_worker_without_restart() {
+    let w = world();
+    w.script(json!({ "worker": [{ "status": "working" }, { "status": "working" }] }));
+    let id = w.add("Socket alias recovery");
+    delegate(&id);
+    let t = settle(&id);
+    let pane = t.at("link").t("pane");
+    let before = prompts(&w, &pane).len();
+    let starts_before = starts(&w);
+    sw::store::tasks::update(&id, |t| { t.put("stage", "failed"); t.put("failure", json!({ "stage": "agent", "title": "Stopped", "detail": "socket-alias-recovery-marker", "auth": false })); Ok(sw::store::tasks::Change::Write) }).unwrap();
+    let config = w.base.join("config");
+    std::fs::create_dir(&config).unwrap();
+    std::os::unix::fs::symlink(&w.base, config.join("herdr")).unwrap();
+    unsafe { std::env::remove_var("HERDR_SOCKET_PATH"); std::env::set_var("XDG_CONFIG_HOME", &config); }
+    let answer = sw::remote::door("do", &json!({ "action": "retry", "id": id })).unwrap();
+    assert_eq!(answer.at("ok"), &json!(true));
+    let sent = prompts(&w, &pane);
+    assert_eq!(sent.len(), before + 1, "one retry reaches the existing worker");
+    assert!(sent.last().unwrap().contains("socket-alias-recovery-marker"));
+    assert_eq!(starts(&w), starts_before, "the live worker must not restart");
+    assert_eq!(row(&id).at("live").at("status"), &json!("working"));
+}
+
+#[test]
+fn remote_socket_send_back_refuses_distinct_missing_and_non_socket_targets() {
+    let w = world();
+    w.script(json!({ "worker": [{ "status": "working" }] }));
+    let id = w.add("Socket identity guard");
+    delegate(&id);
+    let t = settle(&id);
+    let pane = t.at("link").t("pane");
+    sw::store::tasks::update(&id, |t| { t.put("stage", "failed"); t.put("failure", json!({ "stage": "agent", "detail": "must-not-send", "auth": false })); Ok(sw::store::tasks::Change::Write) }).unwrap();
+    let before = prompts(&w, &pane);
+    let other = w.base.join("other.sock");
+    let _other = std::os::unix::net::UnixListener::bind(&other).unwrap();
+    let missing = w.base.join("missing.sock");
+    let dangling = w.base.join("dangling.sock");
+    std::os::unix::fs::symlink(&missing, &dangling).unwrap();
+    let regular = w.base.join("regular.sock");
+    std::fs::write(&regular, "not a socket").unwrap();
+    let regular_alias = w.base.join("regular-alias.sock");
+    std::os::unix::fs::symlink(&regular, &regular_alias).unwrap();
+    for (stored, target) in [(Path::new(&w.socket), &other), (Path::new(&w.socket), &missing), (Path::new(&w.socket), &dangling), (Path::new(&w.socket), &regular), (&missing, &dangling), (&regular, &regular_alias)] {
+        sw::store::tasks::update(&id, |t| { t.obj_mut("link").put("socket", stored.display().to_string()); Ok(sw::store::tasks::Change::Write) }).unwrap();
+        unsafe { std::env::set_var("HERDR_SOCKET_PATH", target); }
+        let saved = task(&id);
+        let error = sw::remote::door("do", &json!({ "action": "retry", "id": id })).unwrap_err();
+        assert!(error.msg.contains("lives in herdr session"), "{}", error.msg);
+        assert_eq!(prompts(&w, &pane), before, "no prompt for {}", target.display());
+        assert_eq!(task(&id), saved, "refusal leaves the task unchanged");
+    }
+}

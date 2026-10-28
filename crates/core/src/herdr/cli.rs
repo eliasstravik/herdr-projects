@@ -41,6 +41,13 @@ pub fn current_socket() -> String {
     let base = config_home().join("herdr");
     match std::env::var("HERDR_SESSION") { Ok(s) if !s.is_empty() => base.join("sessions").join(s).join("herdr.sock"), _ => base.join("herdr.sock") }.display().to_string()
 }
+/// Whether two spellings name the same session socket. Missing paths never establish alias identity.
+pub fn same_socket(a: &str, b: &str) -> bool {
+    if a == b { return true; }
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+    let (Ok(a), Ok(b)) = (std::fs::metadata(a), std::fs::metadata(b)) else { return false };
+    a.file_type().is_socket() && b.file_type().is_socket() && a.dev() == b.dev() && a.ino() == b.ino()
+}
 pub fn session_name(socket: &str) -> String {
     let parts: Vec<&str> = socket.split('/').collect();
     let n = parts.len();
