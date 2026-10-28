@@ -11,6 +11,8 @@ pub mod installed;
 pub mod kinds;
 pub mod model_refused;
 pub mod models;
+pub mod opencode_v2;
+pub mod pi_trust;
 pub mod prompts;
 pub mod provider_error;
 pub mod read_tokens;

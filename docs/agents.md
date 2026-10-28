@@ -27,10 +27,13 @@ if it asks.
 Why: Herdr reads a login page as a program at rest, so the board types the task into a logged-out program as if it were
 ready. Cursor, Devin, Grok, agy and Letta all came up at a login or setup page when tried here.
 
-A folder-trust dialog in a new worktree is a dialog like any other: the task waits for you (`needs you`). Claude Code
-and Codex are told beforehand to trust it ([how work gets done](how-work-gets-done.md)). For Codex the board adds a
+A folder-trust dialog in a new worktree is a dialog like any other: the task waits for you (`needs you`). Claude Code,
+Codex and pi are told beforehand to trust it ([how work gets done](how-work-gets-done.md)). For Codex the board adds a
 `[projects."<repo>"]` table to `~/.codex/config.toml`, only when the file reads and has no entry for the repo in any
-form (any quotes, a dotted key); an entry that says `untrusted` is left as it is.
+form (any quotes, a dotted key); an entry that says `untrusted` is left as it is. pi trusts a folder and the folders
+in it, and asks only where the folder has pi settings of its own (`.pi/settings.json`, `.pi/extensions`, …): the board
+adds the folder pi starts in (the task's worktree) to `~/.pi/agent/trust.json`, unless pi has a decision for it or a
+folder above it, the file does not read, or pi is writing it.
 
 If a start still fails, the task says why: [when an agent could not start](could-not-start.md).
 
@@ -131,7 +134,7 @@ tested). The board does not take them. Each would be one more entry in the table
 | `letta` | `letta --new --yolo` | `-m <model>`; not checked | none | its own default | none | in its first prompt | `--conversation <id>` | `letta --ephemeral -p <prompt>` | herdr's state and its closing note | `letta` | every role | flags from letta --help 0.34.15; started by herdr 0.9.3 on the board's flags (its first setup held it) |
 | `mastracode` | `mastracode` | none at start | none | its own default | none | in its first prompt | starts afresh | `mastracode --permission-mode deny --prompt <prompt>` | herdr's state and its closing note | `mastracode`, needed | Watcher only: mastracode can be told neither its model nor to work without asking when it starts (only through environment variables, which herdr's start cannot set), and it reopens its folder's last conversation, so it cannot work on a task: it can be the Watcher | flags from mastracode's own source 0.47.0 |
 | `omp` | `omp --auto-approve` | `--model=<model>`; not checked | `--thinking=<level>`; the levels `omp --help` lists, else off, minimal, low, medium, high, xhigh, max, auto | `--approval-mode=write` | none | `--append-system-prompt=<file>` | `--resume=<id>` | `omp -p --no-session --no-tools --no-skills --no-rules <prompt>` | herdr's state and its closing note | `omp`, needed | every role | flags from omp --help 18.11.1; started by herdr 0.9.3 on the board's flags (its first setup) |
-| `opencode` | `opencode --auto` | `-m <model>`; the names `opencode models` lists | none | its own default | none | in its first prompt | `--session <id>` | `opencode run <prompt>` | herdr's state and its closing note | `opencode` | every role | flags from opencode --help 1.18.34; started by herdr 0.9.3 on the board's flags |
+| `opencode` | `opencode --auto` | `-m <model>`; the names `opencode models` lists | none | its own default | none | in its first prompt | `--session <id>` | `opencode run <prompt>` | herdr's state and its closing note | `opencode` | every role | flags from opencode --help 1.18.34; started by herdr 0.9.3 on the board's flags; OpenCode 2.1.4's conversation made on a model and opened by hand |
 | `qodercli` | `qodercli --dangerously-skip-permissions` | `-m <model>`; not checked | `--reasoning-effort <level>`; the levels `qodercli --help` lists, else any level | its own default | `--permission-mode auto`, from 0.2.14 | in its first prompt | `--resume <id>` | `qodercli -p --no-session-persistence --tools "" -- <prompt>` | herdr's state and its closing note | `qodercli` | every role | flags from qodercli --help 1.1.72; npm's launcher hid it from herdr 0.9.3 |
 | `qwen` | `qwen --yolo` | `-m <model>`; not checked | none | its own default | `--approval-mode auto`, from 0.16.0 | in its first prompt | `--resume <id>` | `qwen -p <prompt>` | herdr's state and its closing note | `qwen` | every role | flags from qwen --help 0.25.2; started by herdr 0.9.3 on the board's flags |
 <!-- /made:agents -->

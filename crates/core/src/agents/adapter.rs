@@ -17,7 +17,7 @@ fn hook_command(h: &Hook) -> Vec<String> {
     if h.role == "reviewer" { c.extend(["--round".to_string(), h.round.to_string()]); }
     c
 }
-fn write_private(file: &Path, text: &str) -> Res<()> {
+pub(crate) fn write_private(file: &Path, text: &str) -> Res<()> {
     use std::os::unix::fs::OpenOptionsExt;
     let mut f = fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(file)?;
     std::io::Write::write_all(&mut f, text.as_bytes())?;
@@ -247,7 +247,8 @@ pub fn skill_dir(kind: &str) -> Option<PathBuf> {
 }
 /// Mark a repo as trusted in the program's own settings, so a new worktree starts without its "trust this folder?"
 /// dialog. Claude keeps trust per repository root in ~/.claude.json; Codex in ~/.codex/config.toml (a command-line
-/// override does not count, so the table is added to the file once: codex_trust.rs).
+/// override does not count, so the table is added to the file once: codex_trust.rs); pi in ~/.pi/agent/trust.json, per
+/// folder and the folders above it, so it is given the folder it starts in (pi_trust.rs).
 pub fn trust(kind: &str, root: &Path) -> bool {
     let root_s = root.display().to_string();
     match kind {
@@ -260,7 +261,8 @@ pub fn trust(kind: &str, root: &Path) -> bool {
             write_private(&tmp, &serde_json::to_string_pretty(&j).unwrap_or_default()).is_ok() && fs::rename(&tmp, &file).is_ok()
         }
         "codex" => super::codex_trust::trust(root),
+        "pi" => super::pi_trust::trust(root),
         _ => false,
     }
 }
-pub fn can_trust(kind: &str) -> bool { matches!(kind, "claude" | "codex") }
+pub fn can_trust(kind: &str) -> bool { matches!(kind, "claude" | "codex" | "pi") }

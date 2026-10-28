@@ -20,6 +20,11 @@ static ARG: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(?i)un
 static LOGIN: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(?i)/login\b|sign in with chatgpt|please (log|sign) ?in|select login method|log ?in to (continue|use)|not (logged|signed) in|run [`']?\w+ login").unwrap());
 static MISSING: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(?i)command not found|no such file or directory|not found in \$?path|unknown command").unwrap());
 
+/// The shell said this program is not there: a "not found" line that names it (`bash: codex: command not found`), not
+/// any such line, which a stray command in the terminal leaves too (#412).
+fn missing_here(program: &str, screen: &str) -> bool {
+    screen.lines().any(|l| MISSING.is_match(l) && l.split(|c: char| c.is_whitespace() || c == ':' || c == '\'' || c == '"' || c == '`').any(|w| w == program || w.ends_with(&format!("/{program}"))))
+}
 fn cap(s: &str) -> String { let mut c = s.chars(); c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default() }
 /// The last lines of a pane as they show, without colours: "" when it cannot be read.
 pub fn screen_of(api: &Herdr, pane: &str) -> String {
@@ -36,7 +41,7 @@ pub fn explain(s: &Start, said: &str, screen: &str) -> Why {
     let why = |short: String, next: String| Why { short, next, auth: false };
     if all.contains("too long to hand to herdr") { return why("its message was too long to hand over".into(), format!("Shorten it, then {again}.")); }
     if said.contains("herdr program was not found") { return why("herdr was not found".into(), format!("Install herdr so that `herdr` runs here, then {again}.")); }
-    if (!s.kind.is_empty() && !installed(s.kind)) || MISSING.is_match(screen) {
+    if !s.kind.is_empty() && (!installed(s.kind) || missing_here(super::kinds::program(s.kind), screen)) {
         return why(format!("{k} is not installed here"), format!("Install {k} so that `{}` runs in a terminal here, or choose another program ({}), then {again}.", super::kinds::program(k), s.setting));
     }
     if said.contains("needs herdr's own integration") { return why(format!("{k} needs herdr's own integration"), format!("Run `herdr integration install {}`, then {again}.", super::kinds::kind(k).map(|a| a.integration).unwrap_or(k))); }

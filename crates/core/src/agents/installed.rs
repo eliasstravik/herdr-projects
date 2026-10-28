@@ -73,5 +73,6 @@ pub fn said_to(k: &str, file: Option<&Path>, session: &str, cwd: &Path, text: &s
 /// cannot ask.
 pub fn full_access(k: &str, access: &str) -> bool { access != "ask" || kind(k).map(|a| a.access_ask.is_none()).unwrap_or(true) }
 pub fn interrupt_key(k: &str) -> &'static str { kind(k).map(|a| a.interrupt).unwrap_or("esc") }
-/// Best effort: a failure here only means the agent's own trust dialog shows, which the inbox handles.
-pub fn pre_trust(k: &str, root: &Path, access: &str) -> bool { adapter::can_trust(k) && full_access(k, access) && adapter::trust(k, root) }
+/// Best effort: a failure here only means the agent's own trust dialog shows, which the inbox handles. `root` is the
+/// repo, `cwd` the folder it starts in (a worktree): pi trusts a folder and those below it, not the repo's worktrees.
+pub fn pre_trust(k: &str, root: &Path, cwd: &Path, access: &str) -> bool { adapter::can_trust(k) && full_access(k, access) && adapter::trust(k, if k == "pi" { cwd } else { root }) }

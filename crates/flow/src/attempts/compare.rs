@@ -93,7 +93,7 @@ fn compare(id: &str, g: &mut Guard, t: &Task) -> Res<Obj> {
     let writes = is_research(t) && t.at("comparing").s("pick") == "reviewer";
     let brief = format!("{}\n\n{}{}", task_line_as(t, "reviewer", 0), compare_brief(t, &passed, writes), if who.instructions.is_empty() { String::new() } else { format!("\n\n{}", start::own_words(&who.instructions)) });
     let cwd = passed.first().map(|c| c.t("worktree")).filter(|w| !w.is_empty() && Path::new(w).exists()).map(PathBuf::from).unwrap_or_else(|| folder_of(t.s("id")));
-    installed::pre_trust(&k, &folder_of(t.s("id")), &who.access);
+    installed::pre_trust(&k, &folder_of(t.s("id")), &cwd, &who.access);
     close_picker(id);
     let ws = t.at("link").t("workspace");
     let err = |e: &str| Ok(obj(json!({ "error": e, "by": k })));
@@ -110,7 +110,7 @@ fn compare(id: &str, g: &mut Guard, t: &Task) -> Res<Obj> {
     let x = launch_extras(t, "reviewer", &k, 0, "", None)?;
     g.set(|t| { t.obj_mut("link").put("reviewer", json!({ "pane": pane, "tab": tab, "agent": name, "kind": k })); t.put("reviewSession", x.session.clone().map(Value::String).unwrap_or(Value::Null)); })?;
     let start_with = |hook: Vec<String>| -> Res<()> {
-        let args = start::start_args(&k, &start::StartOpts { model: model.clone(), effort: effort.clone(), fast: Some(who.fast), access: who.access.clone(), session: x.session.clone().unwrap_or_default(), extra: hook, ..Default::default() })?;
+        let args = start::start_args(&k, &start::StartOpts { model: model.clone(), effort: effort.clone(), fast: Some(who.fast), access: who.access.clone(), session: x.session.clone().unwrap_or_default(), extra: hook, folder: cwd.clone(), ..Default::default() })?;
         match api.agent_start(&name, &k, &pane, &args, 60000) { Ok(_) => { crate::submit::settle(&api, &pane, &std::iter::once(crate::agents::kinds::program(&k).to_string()).chain(args).collect::<Vec<_>>().join(" ")); Ok(()) } Err(e) if e.code == "agent_not_ready" => Ok(()),
             Err(e) => Err(crate::agents::start_failed::say(&api, &crate::agents::start_failed::Start { kind: &k, setting: "reviewer.agent", again: "pick again" }, &pane, &e.message, &crate::store::files::dir_of(t.s("id")).join("runner.log")).into()) }
     };

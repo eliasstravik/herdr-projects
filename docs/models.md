@@ -44,6 +44,10 @@ each program names its models its own way:
 | `droid`, `mastracode` | no model | chosen in the program's own settings |
 | the others | `agy/gemini-3-pro` | not checked: the names the program's own help gives |
 
+OpenCode 2's full-screen app takes no `-m` (it quits on it), so the board first makes its conversation on the model,
+in the folder it starts in (`opencode api session.create`), then opens that one: `opencode --auto --session <id>`.
+A conversation it reopens keeps the model it has. OpenCode 1 is given `-m <model>`, as before (#394).
+
 ### A wrong name is refused when you set it
 
 Not found out later, when the agent fails to start. The answer says what the program takes, and the nearest name:

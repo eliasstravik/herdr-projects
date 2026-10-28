@@ -23,21 +23,28 @@ pub fn access_args(k: &str, access: &str) -> Res<Vec<String>> {
     Ok(f.iter().map(|s| s.to_string()).collect())
 }
 #[derive(Default, Clone)]
-pub struct StartOpts { pub model: String, pub effort: String, pub fast: Option<bool>, pub access: String, pub resume: String, pub session: String, pub extra: Vec<String> }
+pub struct StartOpts { pub model: String, pub effort: String, pub fast: Option<bool>, pub access: String, pub resume: String, pub session: String, pub extra: Vec<String>, pub folder: std::path::PathBuf }
 /// The arguments a worker, a reviewer or the Coordinator of this kind is started with. `resume` reopens a known
-/// conversation; `session` names a new one; `extra` are the hook and standing-rule arguments.
+/// conversation; `session` names a new one; `extra` are the hook and standing-rule arguments; `folder` is where it starts.
 pub fn start_args(k: &str, o: &StartOpts) -> Res<Vec<String>> {
     let mut out: Vec<String> = kind(k).map(|a| super::kinds::fill(a.lead, "")).unwrap_or_default(); // `hermes chat`
     if !o.resume.is_empty() { out.extend(resume_args(k, &o.resume)); } // first: Codex's `resume` is a subcommand
     if o.resume.is_empty() { out.extend(session_args(k, &o.session)); out.extend(fresh_args(k)); }
     out.extend(access_args(k, if o.access.is_empty() { "full" } else { &o.access })?);
-    if !o.model.is_empty() { out.extend(model_args(k, &o.model)); }
+    if !o.model.is_empty() { out.extend(model_start(k, o)?); }
     let level = effort_for(k, &o.model, &o.effort);
     if !level.is_empty() { out.extend(effort_args(k, &level)); }
     if let Some(f) = o.fast { out.extend(fast_args(k, f)); }
     out.extend(o.extra.iter().cloned());
     let left_out = too_new(k);
     Ok(out.into_iter().filter(|a| !left_out.contains(&a.as_str())).collect())
+}
+/// The arguments that start it on its model. OpenCode 2 takes none: its conversation is made on the model first and
+/// opened (opencode_v2.rs), and a reopened one keeps the model it has.
+fn model_start(k: &str, o: &StartOpts) -> Res<Vec<String>> {
+    if k != "opencode" || !super::opencode_v2::is_v2() { return Ok(model_args(k, &o.model)); }
+    if !o.resume.is_empty() { return Ok(vec![]); }
+    Ok(vec!["--session".into(), super::opencode_v2::new_session(&o.folder, &o.model)?])
 }
 /// The board's arguments the installed version of this program does not take yet (kinds.rs `since`). A version that
 /// cannot be read is taken to be new.

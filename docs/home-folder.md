@@ -73,7 +73,8 @@ a `closing-1.md` beside `data` and `settings` comes from. Now:
 - **The web UI's shared link.** With the web UI (Ovis) installed, and only after a yes: where that web UI's shared link
   (`tailscale serve`) points, so the Board shows in it. `herdr-projects web-ui unlink` and `remove-extras` point it back
   ([the board in the web UI (Ovis)](web-ui.md)).
-- **The trust mark for a repo**, in the agent program's own settings (`~/.claude.json`, `~/.codex/config.toml`).
+- **The trust mark for a repo**, in the agent program's own settings (`~/.claude.json`, `~/.codex/config.toml`; pi's
+  for each task's worktree in `~/.pi/agent/trust.json`).
 - **This repo's own test runner** keeps what already passed in `~/.cache/herdr-projects-check` ([testing](testing.md)).
   That is a cache of a tool for working on this code, not something the board keeps for you: delete it any time.
 

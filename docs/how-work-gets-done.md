@@ -58,7 +58,8 @@ did. They can run anything as you, without asking: the rules and the review brie
   the risky ones: `claude --permission-mode auto`, `codex --approve-for-me` (and Cursor's, Qwen Code's, Qoder's).
   Refused for every other program ([auto mode](auto-mode.md)).
 - So a new task does not wait behind a "trust this folder?" dialog, the plugin marks the task's repo as trusted in the
-  agent's own settings (`~/.claude.json`, `~/.codex/config.toml`) before starting it. Only for a role with full or auto
+  agent's own settings (`~/.claude.json`, `~/.codex/config.toml`; for pi, the task's worktree in
+  `~/.pi/agent/trust.json`) before starting it. Only for a role with full or auto
   access.
 
 ## How the board knows a turn ended

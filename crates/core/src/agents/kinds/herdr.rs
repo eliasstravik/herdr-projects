@@ -60,10 +60,11 @@ pub static KINDS: &[Kind] = &[
         standing: &["--append-system-prompt={}"], rules_file: Some("AGENTS.md"),
         headless: Some(Headless { args: &["-p", "--no-session", "--no-tools", "--no-skills", "--no-rules"], model: &["--model={}"], system: &["--append-system-prompt={}"], prompt: ANSWER }),
         checked: "flags from omp --help 18.11.1; started by herdr 0.9.3 on the board's flags (its first setup)", ..BASE },
+    // OpenCode 2's full-screen app takes no `-m`: it is started on its model another way (opencode_v2.rs).
     Kind { name: "opencode", integration: "opencode", model: &["-m", "{}"],
         models: Models { list: &["models"], read: Read::Lines, example: "opencode/anthropic/claude-opus-5-5", ..NO_MODELS }, access_full: &["--auto"], resume: &["--session", "{}"], rules_file: Some("AGENTS.md"),
         headless: Some(Headless { args: &["run"], model: &["-m", "{}"], system: &[], prompt: ANSWER }),
-        checked: "flags from opencode --help 1.18.34; started by herdr 0.9.3 on the board's flags", ..BASE },
+        checked: "flags from opencode --help 1.18.34; started by herdr 0.9.3 on the board's flags; OpenCode 2.1.4's conversation made on a model and opened by hand", ..BASE },
     Kind { name: "qodercli", integration: "qodercli", model: &["-m", "{}"], effort: &["--reasoning-effort", "{}"], access_full: &["--dangerously-skip-permissions"],
         access_auto: Some((&["--permission-mode", "auto"], "0.2.14")),
         resume: &["--resume", "{}"], session: &["--session-id", "{}"],

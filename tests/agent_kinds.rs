@@ -19,6 +19,10 @@ mod skills_more;
 mod codex_trust;
 /// pi's saved conversations, looked for only where pi keeps the agent's folder's (#393).
 mod pi_sessions;
+/// Trusting the folder pi starts in, in its trust.json (#413).
+mod pi_trust;
+/// OpenCode 2 started on its model through a conversation made first (#394).
+mod opencode_v2;
 
 fn args(k: &str, o: StartOpts) -> Vec<String> { start_args(k, &o).unwrap() }
 fn opts(model: &str, effort: &str) -> StartOpts { StartOpts { model: model.into(), effort: effort.into(), ..Default::default() } }
