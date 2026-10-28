@@ -43,7 +43,9 @@ pub fn explain(s: &Start, said: &str, screen: &str) -> Why {
     let why = |short: String, next: String| Why { short, next, auth: false };
     if all.contains("too long to hand to herdr") { return why("its message was too long to hand over".into(), format!("Shorten it, then {again}.")); }
     if said.contains("herdr program was not found") { return why("herdr was not found".into(), format!("Install herdr so that `herdr` runs here, then {again}.")); }
-    if !s.kind.is_empty() && (!installed(s.kind) || missing_here(super::kinds::program(s.kind), screen)) {
+    // herdr's own word that the terminal was not at its prompt is why: a "not found" line on it is from before.
+    let not_at_prompt = said.contains("pane_busy") || said.contains("not an available shell") || said.contains("not at its shell prompt");
+    if !s.kind.is_empty() && (!installed(s.kind) || (!not_at_prompt && missing_here(super::kinds::program(s.kind), screen))) {
         return why(format!("{k} is not installed here"), format!("Install {k} so that `{}` runs in a terminal here, or choose another program ({}), then {again}.", super::kinds::program(k), s.setting));
     }
     if said.contains("needs herdr's own integration") { return why(format!("{k} needs herdr's own integration"), format!("Run `herdr integration install {}`, then {again}.", super::kinds::kind(k).map(|a| a.integration).unwrap_or(k))); }
@@ -61,7 +63,7 @@ pub fn explain(s: &Start, said: &str, screen: &str) -> Why {
         return why(format!("{k}{} does not take one of the board's start arguments", if v.is_empty() { String::new() } else { format!(" {v}") }), format!("Update {k} to its latest version, then {again}."));
     }
     if said.contains("quit as it started") { return why(format!("{k} quit as it started"), format!("Read what it printed (below) and fix that, then {again}.")); }
-    if said.contains("pane_busy") || said.contains("not an available shell") || said.contains("not at its shell prompt") {
+    if not_at_prompt {
         // Tried again while the shell started (shell_ready.rs): it never came up, or a program runs there.
         let (waited, slow) = if said.contains("(tried ") { (format!("The board waited for the shell's prompt and tried {} times. ", crate::herdr::shell_ready::RETRIES + 1), ", or wait until it shows its prompt") } else { (String::new(), "") };
         return why("its terminal was not at its shell prompt".into(), format!("{waited}End what runs in the task's terminal (or close it){slow}, then {again}."));

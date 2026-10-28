@@ -20,14 +20,21 @@ pub fn trust(folder: &Path) -> bool {
     // pi's own lock while it writes the file: a folder beside it (proper-lockfile).
     let lock = PathBuf::from(format!("{}.lock", file.display()));
     if let Some(d) = file.parent() { let _ = fs::create_dir_all(d); }
-    if fs::create_dir(&lock).is_err() {
-        // One left behind by a pi that quit is stale after 10 s, as pi itself takes it.
-        let old = fs::metadata(&lock).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).map(|e| e.as_secs() >= 10).unwrap_or(false);
-        if !old || fs::remove_dir(&lock).is_err() || fs::create_dir(&lock).is_err() { return false; }
-    }
+    if !locked(&lock) { return false; }
     let done = add(&file, &folder);
     let _ = fs::remove_dir(&lock);
     done
+}
+/// Taken as pi takes it: tried 10 times, 20 ms apart, while another holds it (pi, or a second start of the board's);
+/// one left behind by a pi that quit is stale after 10 s.
+fn locked(lock: &Path) -> bool {
+    for _ in 0..10 {
+        if fs::create_dir(lock).is_ok() { return true; }
+        let old = fs::metadata(lock).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).map(|e| e.as_secs() >= 10).unwrap_or(false);
+        if old { let _ = fs::remove_dir(lock); continue; }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    false
 }
 /// The file as pi reads it: None when it does not read as an object.
 fn read(file: &Path) -> Option<Obj> {

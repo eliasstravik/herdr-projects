@@ -47,9 +47,14 @@ fn pis_own_decisions_and_a_file_that_does_not_read_are_left_as_they_are() {
         assert!(!trust("pi", &w.root), "{text}");
         assert_eq!(read(&file()), text);
     }
-    // While pi itself writes the file (its lock is there), it is not written.
+    // While pi itself holds the file (its lock is there), it is not written; a lock pi left behind is taken over.
     std::fs::write(file(), "{}").unwrap();
-    std::fs::create_dir(file().with_extension("json.lock")).unwrap();
+    let lock = file().with_extension("json.lock");
+    std::fs::create_dir(&lock).unwrap();
     assert!(!trust("pi", &w.root));
     assert_eq!(read(&file()), "{}");
+    std::fs::File::open(&lock).unwrap().set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(60)).unwrap();
+    assert!(trust("pi", &w.root));
+    assert_eq!(saved(), json!({ real(&w.root): true }));
+    assert!(!lock.exists());
 }
