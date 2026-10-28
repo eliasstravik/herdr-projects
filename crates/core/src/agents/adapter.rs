@@ -27,12 +27,14 @@ fn write_private(file: &Path, text: &str) -> Res<()> {
 pub fn hook_args(kind: &str, h: &Hook) -> Res<Option<Vec<String>>> {
     match kind {
         // A settings file of the task's own, added to the user's settings for this one launch (the user's own hooks
-        // still run). The hooks are asynchronous, so a slow or failing one never holds the agent's turn.
+        // still run). The hooks are asynchronous, so a slow or failing one never holds the agent's turn. Idle
+        // compaction is off: Claude Code would otherwise shrink a finished task's session left waiting an hour, which
+        // herdr sees as a turn.
         "claude" => {
             let command = hook_command(h).iter().map(|s| shq(s)).collect::<Vec<_>>().join(" ");
             let file = h.dir.join(format!("hook-{}.json", h.role));
             let one = json!([{ "hooks": [{ "type": "command", "command": command, "async": true }] }]);
-            write_private(&file, &json!({ "hooks": { "Stop": one, "StopFailure": one } }).to_string())?;
+            write_private(&file, &json!({ "hooks": { "Stop": one, "StopFailure": one }, "idleCompaction": false }).to_string())?;
             Ok(Some(vec!["--settings".into(), file.display().to_string()]))
         }
         // Codex runs one `notify` program at each turn end. Given at launch it would replace one the user configured,

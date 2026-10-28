@@ -133,14 +133,16 @@ pub fn read_claude(file: &Path, bytes: u64) -> Option<Turn> {
                 _ => last = Some(Last::Say { id: mid, text, tool, e }),
             }
             if m.at("usage").is_object() { let u = m.at("usage"); usage = Some((u.f("input_tokens") + u.f("cache_creation_input_tokens") + u.f("cache_read_input_tokens"), u.f("output_tokens"))); if m.b("model") { model = m.t("model"); } }
-        } else if e.s("type") == "user" && m.is_object() {
+        } else if e.s("type") == "user" && m.is_object() && !e.b("isCompactSummary") {
+            // (A compaction's summary, written also when Claude Code shrinks a session left idle, is the program's own
+            // note, not a prompt: the turn before it is still the last one.)
             let text = texts(m.at("content"), &["text"]);
             if text.starts_with("[Request interrupted by user") {
                 let said = match &last { Some(Last::Say { text, .. }) => text.clone(), _ => String::new() };
                 last = Some(Last::Interrupt(e, said));
             } else {
                 last = Some(Last::User(e)); // a real prompt or a tool result: either way the agent has not answered it yet
-                if !text.trim().is_empty() && !e.b("isMeta") && !e.b("isSidechain") && !e.b("isCompactSummary") { began = when(e.at("timestamp")); }
+                if !text.trim().is_empty() && !e.b("isMeta") && !e.b("isSidechain") { began = when(e.at("timestamp")); }
             }
         }
     }
