@@ -711,9 +711,13 @@ export function connect() {
       state = { ...state, snap: msg.snapshot }
       stayOnShown()
       fromOldPin(msg.snapshot)
-      // once loaded, the first snapshot says which chats are gone (a failed one left open a day keeps its Retry)
-      if (!pruned) putOutbox(prune(state.outbox, Date.now(), chatIn(msg.snapshot)))
-      pruned = true
+      // once loaded, the first snapshot that lists every machine's chats says which are gone (one still connecting,
+      // or out of reach with nothing kept of it, lists none yet); later ones don't, so a failed one left open a day
+      // keeps its Retry
+      if (!pruned && msg.snapshot.machines.every((m) => !m.connecting && (m.status !== 'off' || msg.snapshot.places.some((p) => p.machine === m.machine)))) {
+        putOutbox(prune(state.outbox, Date.now(), chatIn(msg.snapshot)))
+        pruned = true
+      }
     } else if (msg.type === 'chat') {
       state = { ...state, chats: { ...state.chats, [msg.chat.key]: msg.chat } }
       putOutbox(settle(state.outbox, msg.chat))
