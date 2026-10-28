@@ -1001,12 +1001,14 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
 
   private async relaunch(key: string, why: Wrong) {
     this.reviving.add(key)
+    // read before it starts: its status once started says it is idle
+    const working = this.revivals.wasWorking(key)
     try {
       console.error(`shepherdr: ${key}'s agent ${why === 'stale' ? 'runs on outdated settings' : 'stopped'}: starting it again`)
       // its pane still holds it, or its shell: herdr would count that as running
       if (why !== 'gone') await this.agents.close(key)
       await (key.includes('/') ? this.resumeTaskAgent(key) : this.coordinator(key))
-      if (this.revivals.wasWorking(key)) await this.agents.send(key, hidden(relaunchedLine(), 'restart'))
+      if (working) await this.agents.send(key, hidden(relaunchedLine(), 'restart'))
     } catch (e) {
       console.error(`shepherdr: couldn't start ${key}'s agent again: ${(e as Error).message}`)
     } finally {

@@ -636,15 +636,16 @@ export class Agents extends Emitter<Events> {
   }
 
   /** what is wrong with this agent's run: gone from herdr, its CLI exited in its pane, or it runs on outdated files;
-   *  nothing while it is fine, works or asks (a turn is never cut for this), or when that can't be told */
+   *  nothing while it is fine, or when that can't be told. One on outdated files is left alone while herdr sees it at
+   *  work or asking (a turn is never cut for this); its hooks don't count, as what they last said may be from before */
   async wrong(key: string): Promise<Wrong | undefined> {
     const r = this.records[key]
-    const st = this.status(key)
-    if (!r || st === 'working' || st === 'blocked') return undefined
-    if (st === 'gone') return 'gone'
     const a = this.info(key)
-    const p = a && (await herdr.processInfo(a.pane_id).catch(() => undefined))
-    return p ? paneWrong(r.kind, p, this.filesOf(r)) : undefined
+    if (!r) return undefined
+    if (!a) return 'gone'
+    const p = await herdr.processInfo(a.pane_id).catch(() => undefined)
+    const w = p ? paneWrong(r.kind, p, this.filesOf(r)) : undefined
+    return w === 'stale' && (a.agent_status === 'working' || a.agent_status === 'blocked') ? undefined : w
   }
 
   /** being started or stopped right now */
