@@ -45,8 +45,27 @@ pub fn report_folder(t: &Task) -> PathBuf { let mut p = reports_dir(); for part 
 const FIRST: [&str; 4] = ["index.html", "report.html", "report.md", "README.md"];
 
 // ---- what agents are told ----------------------------------------------------------------------------------------------
-pub fn report_rule(t: &Task) -> String {
-    format!("A report, a review or a research result (anything you write for the human to read that is not part of the product) never goes into the repo: do not commit one, in no folder. Save it in {}/ (this task's own folder among the board's reports, outside every repo), as index.html (one page that stands by itself) or report.md. The board gives the human a private link to it.", report_folder(t).display())
+pub fn report_rule(t: &Task, base: &str) -> String {
+    format!("A report, a review or a research result (anything you write for the human to read that is not part of the product) never goes into the repo: do not commit one, in no folder. Save it in {}/ (this task's own folder among the board's reports, outside every repo), as index.html (one page that stands by itself) or report.md. {} Never give the folder's path as the report's address: a path only says where the file is, not something the human can open from another machine, and the board writes the published link itself where it has one. Inside the report, link to its own files by name (report.md, a picture beside it): the human reads it from that folder.", report_folder(t).display(), report_place(base))
+}
+/// The address of a report, as an agent is told it: the page server's own base for this task (the same one the board
+/// builds the report's link on) when it serves one, else that nothing publishes it. The host and port are the
+/// instance's own: nothing here works them out from the local path.
+pub fn report_place(base: &str) -> String {
+    if base.is_empty() {
+        "No page server publishes the report on this machine: give the file's path and say it is the file's path, not a link; the board says the same in the closing message.".into()
+    } else {
+        format!("This task's report folder is served at {base}/ (its host and port are this instance's own). The file you save there opens at that address with its own name: give that exact file as a Markdown link, for example [the report]({base}/report.md) for report.md or [the report]({base}/index.html) for index.html, in your closing note and in your last message to the human; the board puts the same published link in the closing message. The link is there when the task finishes or waits for the human. The folder on its own is not a report: it opens nothing.")
+    }
+}
+/// A short form of `report_place` for every prompt the board sends, so an agent already running under older rules is
+/// told the exact published file link the next time it hears from the board. Empty base: no link is invented.
+pub fn report_hint(base: &str) -> String {
+    if base.is_empty() {
+        "If you write a report for the human, give its local path and say that no published link exists on this machine.".into()
+    } else {
+        format!("If you write a report for the human, link the file you saved by its own name under {base}/, for example [the report]({base}/report.md); never the bare folder and never a local path.")
+    }
 }
 pub fn research_rule(t: &Task) -> String {
     let look = if t.b("worktree") { format!("worktree and at branch {}", t.s("branch")) } else { "folder".into() };
@@ -205,9 +224,19 @@ fn files_in(dir: &Path) -> Vec<String> {
     v
 }
 pub fn report_store(id: &str) -> PathBuf { artifacts_dir(id).join(REPORT) }
+/// A report as it reads in a message to a reader (the human, another task's agent): the link the board published, as a
+/// Markdown link a click opens, else that nothing publishes it with the file's path as the second thing said. The link
+/// is used whole, as `keep_report` kept it (this instance's own host and port), and never worked out from the path.
+/// "" when the task has no report at all.
+pub fn report_words(file: &str, link: &str) -> String {
+    if link.is_empty() { return String::new(); }
+    let file = if file.is_empty() { "report" } else { file };
+    if link.starts_with("http://") || link.starts_with("https://") { format!("[{file}]({link})") }
+    else { format!("{file} (no published link; the file is at {link})") }
+}
 /// The report the agent wrote, and its link: what the task remembers ({ file, link, at }), or None. The page server only
 /// serves a task's own folder in the board's data, so that folder gets a link to the report folder. `base` answers
-/// where the task's pages are served from ("" when nothing serves them: then the link is the file).
+/// where the task's report folder is served from ("" when nothing serves it: then the link is the file).
 pub fn keep_report(t: &Task, base: impl FnOnce() -> String) -> Option<Value> {
     let from = report_folder(t);
     let names = files_in(&from);
@@ -220,6 +249,39 @@ pub fn keep_report(t: &Task, base: impl FnOnce() -> String) -> Option<Value> {
         to.parent().map(|p| fs::create_dir_all(p).is_ok()).unwrap_or(false) && std::os::unix::fs::symlink(&from, &to).is_ok()
     } else { true };
     if ok { root = base(); }
-    let link = if root.is_empty() { from.join(&file).display().to_string() } else { format!("{root}/{REPORT}/{}", crate::util::url_encode(&file)) };
+    let link = if root.is_empty() { from.join(&file).display().to_string() } else { format!("{root}/{}", crate::util::url_encode(&file)) };
     Some(json!({ "file": file, "link": link, "at": now() }))
+}
+/// A closing note or message as the board hands it on: a bare path to this task's own report file (or its folder)
+/// becomes the published link the board kept for that very file. Nothing is guessed: only those exact paths are
+/// replaced, and only when the board has a published link. An agent already started under older rules is covered here.
+pub fn report_linked(text: &str, t: &Task) -> String {
+    let r = t.at("report");
+    let link = r.s("link");
+    if text.is_empty() || !(link.starts_with("http://") || link.starts_with("https://")) { return text.to_string(); }
+    let file = if r.b("file") { r.s("file") } else { "report" };
+    let shown = format!("[{file}]({link})");
+    let folder = report_folder(t).display().to_string();
+    let mut out = text.replace(&format!("{folder}/{file}"), &shown);
+    for f in [format!("{folder}/"), folder] { out = out.replace(&f, &shown); }
+    // An agent started under the old rules linked the published folder: it opens nothing. The board's kept link names
+    // the file itself, so it is used whole. Only when the text does not already hold it, so the link is never doubled.
+    if !out.contains(&link) { if let Some((base, _)) = link.rsplit_once('/') { out = out.replace(&format!("{base}/"), &link); if !out.contains(&link) { out = out.replace(base, &link); } } }
+    out
+}
+/// A message to the human as the board hands it on: the report's published link in it, as a Markdown link, once. A bare
+/// path is replaced by `report_linked`; if the message does not name the report at all, the link is added as a short
+/// "Report:" line. Where nothing publishes it, the line says so and the path comes second. Already-finished agents
+/// under older rules are covered here: the board writes the closing surfaces, not their rules.
+pub fn report_in_message(text: &str, t: &Task) -> String {
+    let text = report_linked(text, t);
+    let rep = t.at("report");
+    let link = rep.s("link");
+    let words = report_words(rep.s("file"), link);
+    if words.is_empty() { return text; }
+    // A link already in Markdown (or an autolink) is kept as it is; a bare URL becomes the Markdown link; no URL at
+    // all gets the short line.
+    if text.contains(&format!("]({link})")) || text.contains(&format!("<{link}>")) { return text; }
+    if text.contains(link) { return text.replace(link, &words); }
+    format!("{}{}Report: {}.", text, if text.is_empty() || text.ends_with('\n') { "" } else { " " }, words)
 }

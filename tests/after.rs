@@ -85,7 +85,7 @@ fn a_research_task_with_its_report_and_a_task_marked_done_without_a_merge_both_c
     let t = settle(&id);
     assert!(!["after", "queued"].contains(&t.s("stage")), "{}", t.s("stage"));
     let told = prompts(&w, t.at("link").s("pane")).join("\n");
-    assert!(told.contains("- PRJ-1 \"Look into the API\" (repo proj): done, research only, its report: https://box/report/index.html. Its closing note:\n    The API has a rate limit of 10/s."), "{told}");
+    assert!(told.contains("- PRJ-1 \"Look into the API\" (repo proj): done, research only, its report: [index.html](https://box/report/index.html). Its closing note:\n    The API has a rate limit of 10/s."), "{told}");
     assert!(told.contains("- PRJ-2 \"Talk to the vendor\" (repo proj): done.") && !told.contains("its work merged"), "{told}");
 }
 

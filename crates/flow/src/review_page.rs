@@ -73,6 +73,13 @@ pub fn artifact_base(id: &str) -> String {
     let base = if link_mode() == "tailscale" { ensure_tailscale(&info).unwrap_or(local) } else { local };
     format!("{base}/{id}")
 }
+/// Where a task's report folder is served from: `{artifact_base}/{REPORT}`, the base the report's link is built on
+/// (`keep_report`). One place, so the link the board keeps and the one it tells an agent to write are the same. Empty
+/// when nothing serves it.
+pub fn report_base(id: &str) -> String {
+    let root = artifact_base(id);
+    if root.is_empty() { String::new() } else { format!("{root}/{}", crate::research::REPORT) }
+}
 /// Write the page for a review that selected evidence, and say where it is. Nothing for a review without any.
 pub fn publish_review(enabled: bool, dir: &Path, listed: &Value, review: &Value, task: &Task, ctx: &Value) -> Option<Vec<Value>> {
     if !enabled { return Some(vec![]); }

@@ -66,9 +66,10 @@ Once every task it waits for is done, a tabbed task goes on to a free slot by it
 slot free, it waits for one: `waiting for a free slot, Q#2`.
 
 Its agent's first prompt says what came before, for each task it waited for: its id, title and repo, its closing note,
-and the pull request and merge commit where its work merged, or the report's link for research. This is taken when the
-wait ends and kept on the task (`details`: `after.handedOver`), so the other task's clean-up loses none of it. A task
-done several times at once (`attempts.by`) hands the same to each attempt's agent.
+and the pull request and merge commit where its work merged, or the report's link for research, as a Markdown link
+(`[report.md](https://…)`; a report nothing publishes is said to be unpublished, with its path second). This is taken
+when the wait ends and kept on the task (`details`: `after.handedOver`), so the other task's clean-up loses none of
+it. A task done several times at once (`attempts.by`) hands the same to each attempt's agent.
 
 ## When it cannot go on by itself
 

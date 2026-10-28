@@ -26,13 +26,16 @@ pub fn rules(t: &Obj) -> String {
     let w = work(Some(t));
     let check = command_of(w.at("check.command"));
     let words = role_of("worker", &|n| w.at(n).clone()).instructions;
+    // Where this task's report is served: the same base the board keeps the report's link on. Nothing is worked out
+    // from the local folder, and each instance keeps its own host and port.
+    let report_base = crate::review_page::report_base(t.s("id"));
     let tree = if planner { String::new() } else if t.b("worktree") && chat { c::chat_tree(t) } else if t.b("worktree") && research { r::research_tree(t) } else if t.b("worktree") {
         format!("You are in your own git worktree on branch {}; the human's checkout is elsewhere and untouched. Commit your work on this branch with clear messages. Do not push, merge into the human's branch or switch branches yourself (you may bring the base branch into your own branch to resolve a conflict). When you finish, the board runs the repo's check and opens the pull request.", t.s("branch"))
     } else { String::new() };
     let lines: Vec<String> = vec![
         if planner { plan::planner_rule(t) } else { OWN_WORK_RULE.into() },
         if plan::open(t) && !planner { plan::plan_rule(t) } else { String::new() },
-        if chat && !planner { c::chat_rule(t) } else if research && !planner { r::research_rule(t) } else { String::new() },
+        if chat && !planner { c::chat_rule(t, &report_base) } else if research && !planner { r::research_rule(t) } else { String::new() },
         tree,
         if planner { crate::temp::rule(t) } else { format!("{} {}", crate::temp::rule(t), crate::temp::STOP_RULE) },
         if !check.is_empty() && !research && !chat && !planner { format!("Your work only counts as done when this passes: {check}") } else { String::new() },
@@ -44,7 +47,7 @@ pub fn rules(t: &Obj) -> String {
         agent_board_rule(),
         crate::automations::told::automation_rule(t),
         crate::autopilot::allow::told(t),
-        if chat { String::new() } else { r::report_rule(t) },
+        if chat { String::new() } else { r::report_rule(t, &report_base) },
         format!("Before you stop, also write {} to {} (the board's own folder for this task, not the folder you work in). It is the board's fallback when it cannot read your last message.", if chat { "your last message to the human" } else { "your closing summary (or your question to the human)" }, note_file(t).display()),
     ];
     let short = say_id(t.s("id"), &repo_keys());

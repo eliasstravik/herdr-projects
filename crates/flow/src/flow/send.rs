@@ -40,7 +40,10 @@ pub fn prompt_tail(t: &Task) -> String {
             if is_research(t) { " This task is research only: change nothing in the repo, and keep your report out of it." } else { "" }, shim().display(), t.s("id"))
     };
     let note = if needs_note(t.s("agent")) || t.at("hooked") == &json!(false) { note_rule(t) } else { String::new() };
-    [rules, note].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n")
+    // Said on every prompt, for every kind, so an agent already running under older rules still hears it before it
+    // writes its closing note. Its no-server form invents no link.
+    let report = crate::research::report_hint(&crate::review_page::report_base(t.s("id")));
+    [rules, note, report].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n")
 }
 pub fn with_tail(t: &Task, text: &str) -> String { [text.to_string(), prompt_tail(t)].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n") }
 /// Where the launcher is, without writing it (`doctor` looks at it as it is).

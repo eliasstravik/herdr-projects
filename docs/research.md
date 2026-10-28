@@ -27,7 +27,18 @@ Every agent the board starts is told the same, in every repo:
   `index.html` when there is one, else `report.html`, `report.md`, `README.md`, else the folder's first file.
 
 The task panel shows the link under **Report**, beside the list and full screen (full screen also shows the file's name
-and the full link). `herdr-projects details <id>` has it as `report`. To open it:
+and the full link). `herdr-projects details <id>` has it as `report`. The board also writes it, as a Markdown link, into
+the task's closing message, into its closing note as `details` hands it to a coordinator, and into what a task that
+waited for this one is told: a reader on another machine can open it from there. Where nothing publishes a report, the
+board says it is not published and gives the file's path only as where the file is.
+
+An agent started with this version is told the published base in its own rules (`…/<repo>/<number>/report/`, with this
+instance's own host and port) and told to link the exact file it saved (`…/report/report.md`, `…/report/index.html`),
+never the bare folder: the page server serves files only, so a folder URL opens nothing. An agent already running under
+older rules is not re-instructed at its start, but every later prompt the board sends it carries the same short report
+line, and the board turns a bare path or the old published folder URL in its message into the file link it kept. The
+closing message, the closing note `details` hands on, and the note file itself carry that link; a last message already
+painted in a pane cannot be rewritten. To open it:
 
 - **`Ctrl+D`** on the task opens its report in the browser of the machine the board runs on (`open` on macOS,
   `xdg-open` on Linux with a display); on a task with no report it opens the pull request. A done task's hint line names

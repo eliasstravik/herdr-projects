@@ -20,12 +20,13 @@ use std::path::Path;
 pub fn turn_waits(g: &mut Guard, said: &str) -> Res<bool> {
     let t = g.check()?;
     if !is_chat(&t) { return Ok(false); }
-    let report = keep_report(&t, || crate::review_page::artifact_base(t.s("id")));
+    let report = keep_report(&t, || crate::review_page::report_base(t.s("id")));
     let last = said.lines().map(str::trim).filter(|l| !l.is_empty()).last().unwrap_or("").to_string();
     let w = g.set(|t| {
         t.put("stage", "asks"); t.put("kind", "question"); t.put("msg", if last.is_empty() { "Your turn".to_string() } else { one_line(&last, 2048) });
         t.put("mergeIntent", Value::Null); t.put("failure", Value::Null);
         if let Some(r) = &report { t.put("report", r.clone()); }
+        for k in ["said", "msg"] { let have = t.t(k); if !have.is_empty() { let linked = crate::research::report_linked(&have, t); t.put(k, linked); } }
     })?;
     flow::sidebar::tell_sidebar(&w);
     Ok(true)
@@ -38,7 +39,7 @@ pub fn end(g: &mut Guard, said: &str) -> Res<()> {
     let dir = if t.b("worktree") && Path::new(t.s("worktree")).exists() { t.t("worktree") } else if is_repo(&cwd) { cwd.display().to_string() } else { String::new() };
     let list = if dir.is_empty() { vec![] } else { changes_of(&t, Path::new(&dir)).unwrap_or_default() };
     let first = first_line(said);
-    let mut msg = if t.at("report").b("link") { format!("Chat ended. Report: {}", t.at("report").s("link")) } else if first.is_empty() { "Chat ended".into() } else { first };
+    let mut msg = if first.is_empty() { "Chat ended".into() } else { first };
     if !list.is_empty() { msg = format!("{msg}{} Chat only, but its agent changed the repo ({}): nothing was pushed, opened or merged.", if msg.ends_with('.') { "" } else { "." }, changed_words(&list)); }
     done(g, &t, &msg, None)
 }

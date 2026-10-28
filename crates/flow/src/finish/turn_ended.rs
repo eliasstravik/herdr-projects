@@ -234,7 +234,7 @@ fn finish_steps(id: &str, g: &mut Guard, mut t: Task, ev: Option<Value>, force: 
     }
     if t.b("cutRetry") { g.set(|t| t.put("cutRetry", Value::Null))?; } // the turn ended by itself: a later cut-off counts again
     let said = if finished { turn.as_ref().map(|x| x.said.clone()).unwrap_or_default() } else if let Some(n) = &fresh_note { n.1.clone() } else { t.t("said") };
-    if let Some(n) = &fresh_note { let _ = std::fs::write(dir_of(id).join("closing.md"), format!("{}\n", n.1)); }
+    if let Some(n) = &fresh_note { let linked = crate::research::report_linked(&n.1, &t); let _ = std::fs::write(dir_of(id).join("closing.md"), format!("{linked}\n")); }
     let agent_session = a.as_ref().map(|a| a.at("agent_session").t("value")).unwrap_or_default();
     t = g.set(|t| { keep(t); t.put("expectedWake", Value::Null); t.put("said", said.clone()); if !agent_session.is_empty() && !t.b("session") { t.put("session", agent_session.clone()); } })?;
     // Only a kind on the closing-note fallback asks by ending its note with a question: that is where its rules put one.

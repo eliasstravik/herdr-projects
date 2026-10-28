@@ -33,8 +33,20 @@ fn hold_pr_failure(g: &mut Guard, t: &mut Task) -> Res<bool> {
     Ok(true)
 }
 pub fn done(g: &mut Guard, t: &Task, msg: &str, review: Option<&Value>) -> Res<()> {
+    // A report the board published keeps its link in the closing message, as a Markdown link: the message is what the
+    // human reads on the board, in `details`, and in what an autopilot or a coordinator relays. Where nothing publishes
+    // it, the line says so and the file's path comes second (research::report_words).
+    let msg = crate::research::report_in_message(msg, t);
+    let said = crate::research::report_in_message(t.s("said"), t);
+    let summary = crate::research::report_in_message(t.s("summary"), t);
     let mark = flow::spaces::tidy_mark(t, "merged", "");
-    let d = g.set(|t| { t.put("stage", "done"); t.put("tidy", mark.clone().unwrap_or(Value::Null)); t.put("msg", one_line(msg, 2048)); t.put("failure", Value::Null); t.put("mergeIntent", Value::Null); if let Some(r) = review { t.put("review", r.clone()); } })?;
+    let d = g.set(|t| { t.put("stage", "done"); t.put("tidy", mark.clone().unwrap_or(Value::Null)); t.put("msg", one_line(&msg, 2048)); if !said.is_empty() { t.put("said", said.clone()); } if !summary.is_empty() { t.put("summary", summary.clone()); } t.put("failure", Value::Null); t.put("mergeIntent", Value::Null); if let Some(r) = review { t.put("review", r.clone()); } })?;
+    // The closing note the board keeps and the copy the finish line made: the same link, so a reader of either file
+    // sees it without the board having to hand it on. Only the exact path of this task's own report is replaced.
+    let note = flow::task::note_file(&d);
+    for f in [note.clone(), note.with_file_name("closing.md")] {
+        if let Ok(n) = std::fs::read_to_string(&f) { let linked = crate::research::report_in_message(&n, &d); if linked != n { let _ = std::fs::write(&f, linked); } }
+    }
     flow::sidebar::tell_sidebar(&d);
     crate::land::tidy(d.s("id"), "merged"); // done with nothing to merge leaves herdr's sidebar like merged work does
     Ok(())

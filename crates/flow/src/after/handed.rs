@@ -14,9 +14,9 @@ use crate::store::tasks::{get, Task};
 const NOTE_MAX: usize = 4000;
 /// A task's closing note, wherever the board has it: the note itself, the copy the finish line kept, what it said last.
 fn note_of(d: &Task) -> String {
-    if let Some((_, n)) = note_stat(d) { if !n.is_empty() { return n; } }
-    if let Ok(n) = std::fs::read_to_string(dir_of(d.s("id")).join("closing.md")) { if !n.trim().is_empty() { return n.trim().to_string(); } }
-    [d.t("summary"), d.t("said")].into_iter().map(|s| s.trim().to_string()).find(|s| !s.is_empty()).unwrap_or_default()
+    if let Some((_, n)) = note_stat(d) { if !n.is_empty() { return crate::research::report_linked(&n, d); } }
+    if let Ok(n) = std::fs::read_to_string(dir_of(d.s("id")).join("closing.md")) { if !n.trim().is_empty() { return crate::research::report_linked(n.trim(), d); } }
+    crate::research::report_linked([d.t("summary"), d.t("said")].into_iter().map(|s| s.trim().to_string()).find(|s| !s.is_empty()).unwrap_or_default().as_str(), d)
 }
 /// One task waited for, as it is now.
 pub fn of(id: &str) -> Value {
@@ -29,6 +29,7 @@ pub fn of(id: &str) -> Value {
     if d.b("prMerged") || d.s("prState") == "merged" || d.b("mergeCommit") { o.put("merged", true); }
     if d.b("mergeCommit") { o.put("commit", d.at("mergeCommit").clone()); }
     if d.at("report").b("link") { o.put("report", d.at("report").at("link").clone()); }
+    if d.at("report").b("file") { o.put("reportFile", d.at("report").at("file").clone()); }
     Value::Object(o)
 }
 /// The wait is over (or cut short by you, `early`): the task goes on to a slot like any delegated one, with what it
@@ -57,7 +58,7 @@ pub fn words(t: &Obj) -> String {
             if d.b("pr") { line.push_str(&format!(": pull request {}", d.s("pr"))); }
             if d.b("commit") { line.push_str(&format!(", merge commit {}", d.s("commit"))); }
         } else if d.b("pr") { line.push_str(&format!(", pull request {} (not merged)", d.s("pr"))); }
-        if d.b("report") { line.push_str(&format!(", {}report: {}", if d.b("research") { "research only, its " } else { "its " }, d.s("report"))); }
+        if d.b("report") { line.push_str(&format!(", {}report: {}", if d.b("research") { "research only, its " } else { "its " }, crate::research::report_words(d.s("reportFile"), d.s("report")))); }
         line.push('.');
         if d.b("note") { line.push_str(&format!(" Its closing note:\n{}", d.s("note").lines().map(|l| format!("    {l}")).collect::<Vec<_>>().join("\n"))); }
         out.push(line);

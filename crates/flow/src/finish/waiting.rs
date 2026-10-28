@@ -29,7 +29,7 @@ pub fn waits(t: &Task, turn: Option<&Turn>) -> bool {
 /// The turn is handled and the task waits, with the kind and the words its agent gave. A report that is there already
 /// gets its link: an interim report can be read while the task waits.
 pub fn stay(id: &str, t: &Task, turn: Option<&Turn>, seen: Obj, session: &str) {
-    let report = keep_report(t, || crate::review_page::artifact_base(t.s("id")));
+    let report = keep_report(t, || crate::review_page::report_base(t.s("id")));
     let _ = update_wait(id, 10000, |t| {
         let h = t.obj_mut("handled");
         for (k, v) in seen { h.insert(k, v); }
@@ -45,6 +45,9 @@ pub fn stay(id: &str, t: &Task, turn: Option<&Turn>, seen: Obj, session: &str) {
         if let Some(turn) = turn { if !turn.said.is_empty() { t.put("said", turn.said.clone()); } if let Some(f) = &turn.file { t.put("transcript", f.display().to_string()); } }
         if !session.is_empty() { t.put("session", session); }
         if let Some(r) = &report { if !(t.at("report").is_object() && t.at("report").at("file") == r.at("file") && t.at("report").at("link") == r.at("link")) { t.put("report", r.clone()); } }
+        // The turn's own words and the waiting line as the human reads them: a report they name is a link. Nothing is
+        // added to a question that names no report. An agent started under older rules is covered here.
+        for k in ["said", "msg"] { let have = t.t(k); if !have.is_empty() { let linked = crate::research::report_linked(&have, t); t.put(k, linked); } }
         Ok(Change::Write)
     });
 }

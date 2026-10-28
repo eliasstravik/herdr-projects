@@ -33,7 +33,7 @@ pub fn research_only(id: &str, g: &mut Guard, tree: &str) -> Res<Option<bool>> {
 /// The report the agent left in its folder among the reports, for any task: given its link.
 pub fn kept_report(g: &mut Guard) -> Res<Task> {
     let t = g.check()?;
-    let report = r::keep_report(&t, || crate::review_page::artifact_base(t.s("id"))).unwrap_or_else(|| t.at("report").clone());
+    let report = r::keep_report(&t, || crate::review_page::report_base(t.s("id"))).unwrap_or_else(|| t.at("report").clone());
     if report.is_null() && !t.b("report") { return Ok(t); }
     if report.is_object() && t.at("report").is_object() && report.at("file") == t.at("report").at("file") && report.at("link") == t.at("report").at("link") { return Ok(t); }
     g.set(|t| t.put("report", report.clone()))

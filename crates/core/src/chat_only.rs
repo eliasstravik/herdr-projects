@@ -46,8 +46,8 @@ pub fn starts_as(t: &mut Task) {
 }
 
 // ---- what agents are told ----------------------------------------------------------------------------------------------
-pub fn chat_rule(t: &Task) -> String {
-    format!("This task is chat only: it is a conversation with the human (a consultation, a discussion, thinking out loud), not work to deliver. Change nothing in the repo: add, edit and delete no file, and commit nothing. Talk, read, look things up and answer. You may write notes or a report into {}/ (this task's own folder among the board's reports, outside every repo) when it helps, but you never have to. Work that should follow from the conversation you suggest in words, in your answer: you add no task for it. Every time you stop, the board waits for the human's next message: nothing is checked, reviewed, pushed or merged, and you need no command to say that you wait. The conversation ends only when the human says it is done.", report_folder(t).display())
+pub fn chat_rule(t: &Task, base: &str) -> String {
+    format!("This task is chat only: it is a conversation with the human (a consultation, a discussion, thinking out loud), not work to deliver. Change nothing in the repo: add, edit and delete no file, and commit nothing. Talk, read, look things up and answer. You may write notes or a report into {}/ (this task's own folder among the board's reports, outside every repo) when it helps, but you never have to; for anything you write there for the human, {}. Work that should follow from the conversation you suggest in words, in your answer: you add no task for it. Every time you stop, the board waits for the human's next message: nothing is checked, reviewed, pushed or merged, and you need no command to say that you wait. The conversation ends only when the human says it is done.", report_folder(t).display(), crate::research::report_place(base))
 }
 pub fn chat_tree(t: &Task) -> String {
     format!("You are in your own git worktree on branch {}; the human's checkout is elsewhere and untouched. Commit nothing on this branch, and do not push, merge or switch branches.", t.s("branch"))

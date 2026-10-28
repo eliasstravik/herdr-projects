@@ -24,7 +24,7 @@ fn any_task_may_write_a_report_and_the_first_page_of_its_folder_gets_the_link() 
     let t = task(&w.add("Fix it and say why"));
     assert_eq!(keep_report(&t, String::new), None, "none written");
     write_report(t.s("id"), "notes.md", "n"); write_report(t.s("id"), "report.md", "# Why");
-    let kept = keep_report(&t, || "https://box.ts.net:8750/proj/1".into()).unwrap();
+    let kept = keep_report(&t, || "https://box.ts.net:8750/proj/1/report".into()).unwrap();
     assert_eq!((kept.s("file"), kept.s("link")), ("report.md", "https://box.ts.net:8750/proj/1/report/report.md"));
     assert_eq!(read(&sw::store::files::artifacts_dir(t.s("id")).join("report").join("report.md")), "# Why");
     write_report(t.s("id"), "index.html", "<!doctype html><title>Report</title><h1>What I found</h1>");
@@ -138,4 +138,126 @@ fn the_settings_page_has_it_with_its_plain_label_and_a_row_from_another_machine_
     assert_eq!(sw::board::view::fields::row_title(&s.s, &obj(json!({ "id": "far/1", "host": "vm-a", "title": "Their change", "research": false }))), "Their change");
     unset_value(NAME, &Scope::you()).unwrap();
     assert_eq!(sw::board::view::fields::row_title(&s.s, &obj(json!({ "id": "far/2", "host": "vm-a", "title": "Their research", "research": true }))), "Their research [research]");
+}
+
+const PANEL: &str = "https://construct.narluga-universe.ts.net:8751/panel.plak.work/27/report/report.md";
+
+#[test]
+fn a_published_report_reads_as_a_markdown_link_with_the_address_the_board_kept() {
+    assert_eq!(sw::research::report_words("report.md", PANEL), format!("[report.md]({PANEL})"));
+    // Each instance keeps its own host and port: nothing of this one is added, and nothing is cut off.
+    assert_eq!(sw::research::report_words("index.html", "https://board.example/panel/3/report/index.html"), "[index.html](https://board.example/panel/3/report/index.html)");
+    assert_eq!(sw::research::report_words("report.md", "http://127.0.0.1:35435/proj/3/report/report.md"), "[report.md](http://127.0.0.1:35435/proj/3/report/report.md)");
+}
+
+#[test]
+fn with_no_published_link_the_board_says_so_and_the_path_comes_second() {
+    let path = "/home/me/.herdr-projects/reports/proj/1/report.md";
+    assert_eq!(sw::research::report_words("report.md", path), format!("report.md (no published link; the file is at {path})"));
+    assert_eq!(sw::research::report_words("", ""), "", "no report at all says nothing");
+}
+
+#[test]
+fn a_finished_task_s_closing_message_links_its_published_report() {
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    // The agent writes the report's local path, as older rules taught it: the board hands the note on with its link.
+    let folder = sw::store::files::reports_dir().join("proj").join("1");
+    w.script(json!({ "worker": [{ "note": format!("The report is ready: {}/report.md", folder.display()) }] }));
+    let id = filing::add(&w.root, "Look into the API", filing::AddOpts { research: Some(true), ..Default::default() }).unwrap().t("id");
+    // What the board keeps once its page server has published a report (`keep_report`): used whole, as it is. The folder
+    // stays empty here, so the finish line keeps this link instead of asking a page server the test world has not.
+    sw::store::tasks::set(&id, json!({ "report": { "file": "report.md", "link": PANEL } })).unwrap();
+    delegate(&id);
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
+    let local = format!("{}/report.md", folder.display());
+    assert!(t.s("msg").contains(&format!("[report.md]({PANEL})")), "{}", t.s("msg"));
+    assert!(!t.s("msg").contains(&local), "the bare path is gone from the closing message: {}", t.s("msg"));
+    // The panel and every consumer of `said` read the link too, not only the row's `msg`.
+    assert!(t.s("said").contains(&format!("[report.md]({PANEL})")) && !t.s("said").contains(&local), "{}", t.s("said"));
+    // The whole closing note, as a coordinator or a remote `details` gets it, carries the link too.
+    let mut d = sw::actions::finish_line::details(&id).unwrap();
+    sw::autopilot::history::with_note(&mut d);
+    let note = d.s("closingNote");
+    assert!(note.contains(&format!("[report.md]({PANEL})")) && !note.contains(&local), "{note}");
+}
+
+#[test]
+fn an_agent_started_under_older_rules_has_its_old_published_folder_link_made_the_file_link() {
+    let w = world();
+    let mut t = task(&w.add("Look into the API"));
+    t.put("report", json!({ "file": "report.md", "link": PANEL }));
+    let folder = "https://construct.narluga-universe.ts.net:8751/panel.plak.work/27/report";
+    assert_eq!(sw::research::report_linked(&format!("The report is at [here]({folder}/)."), &t), format!("The report is at [here]({PANEL})."));
+    assert_eq!(sw::research::report_linked(&format!("The report is at {folder}/."), &t), format!("The report is at {PANEL}."));
+    // The kept link itself is never doubled or cut.
+    let exact = format!("The report is [report.md]({PANEL}).");
+    assert_eq!(sw::research::report_linked(&exact, &t), exact);
+    // A message naming no report at all gets the short line, once.
+    let said = sw::research::report_in_message("Done.", &t);
+    assert_eq!(said, format!("Done. Report: [report.md]({PANEL})."));
+    assert_eq!(sw::research::report_in_message(&said, &t), said);
+    // A bare URL is made Markdown too, and an autolink is left alone.
+    assert_eq!(sw::research::report_in_message(&format!("See {PANEL}."), &t), format!("See [report.md]({PANEL})."));
+    let auto = format!("See <{PANEL}>.");
+    assert_eq!(sw::research::report_in_message(&auto, &t), auto);
+}
+
+#[test]
+fn a_prompt_the_board_sends_later_tells_an_already_started_agent_about_the_report_too() {
+    let w = world();
+    let id = w.add("Fix the page");
+    for k in sw::agents::kinds::all() {
+        let mut t = task(&id); t.put("agent", k.name);
+        // Even a kind that reads its standing rules at start has the sentence on later prompts: this is how an agent
+        // already running under older rules hears the correction before its closing note.
+        let tail = sw::flow::send::prompt_tail(&t);
+        assert!(tail.contains("no published link exists on this machine"), "{}: {tail}", k.name);
+    }
+}
+
+#[test]
+fn the_rules_name_the_published_base_and_keep_each_instance_s_own_host_and_port() {
+    let t = obj(json!({ "id": "panel.plak.work/27", "repo": "panel.plak.work" }));
+    let url = "https://construct.narluga-universe.ts.net:8751/panel.plak.work/27/report";
+    let r = sw::research::report_rule(&t, url);
+    // The link names the file, not its folder: the page server serves files only, a folder URL is a 404.
+    assert!(r.contains(&format!("[the report]({url}/report.md)")) && r.contains(&format!("[the report]({url}/index.html)")), "{r}");
+    assert!(!r.contains(&format!("[the report]({url}/)")), "no folder-only link: {r}");
+    // The local folder is still said, as where to save; it is never the published address.
+    assert!(r.contains("Save it in /") && r.contains("this task's own folder among the board's reports"), "{r}");
+    assert!(!r.contains(&format!("[the report](/")), "no local path as a link: {r}");
+    // Another instance keeps its own address, whole.
+    let other = "https://board.example:9443/panel.plak.work/27/report";
+    let r = sw::research::report_rule(&t, other);
+    assert!(r.contains(&format!("[the report]({other}/report.md)")), "{r}");
+    // The short hint every prompt carries names the same file, not the bare folder.
+    let hint = sw::research::report_hint(url);
+    assert!(hint.contains(&format!("[the report]({url}/report.md)")) && !hint.contains(&format!("[{url}/]")), "{hint}");
+    // No published base: said, and no URL is invented.
+    let r = sw::research::report_rule(&t, "");
+    assert!(r.contains("No page server publishes the report on this machine") && !r.contains("http"), "{r}");
+    assert!(sw::research::report_hint("").contains("no published link exists on this machine"), "{}", sw::research::report_hint(""));
+}
+
+#[test]
+fn a_handed_over_task_reads_the_report_as_a_link_and_never_as_a_path_alone() {
+    let said = sw::after::handed::words(&obj(json!({ "afterDone": [{ "id": "proj/1", "title": "Look into the API", "repo": "proj", "done": true, "research": true, "report": PANEL, "reportFile": "report.md" }] })));
+    assert!(said.contains(&format!("research only, its report: [report.md]({PANEL}).")), "{said}");
+    let path = "/home/me/.herdr-projects/reports/proj/1/report.md";
+    let said = sw::after::handed::words(&obj(json!({ "afterDone": [{ "id": "proj/1", "title": "Look into the API", "repo": "proj", "done": true, "research": true, "report": path, "reportFile": "report.md" }] })));
+    assert!(said.contains(&format!("its report: report.md (no published link; the file is at {path}).")), "{said}");
+}
+
+#[test]
+fn every_agent_kind_is_given_the_report_rule_in_its_first_prompt_or_standing_rules() {
+    let w = world();
+    let id = w.add("Fix the page");
+    for k in sw::agents::kinds::all() {
+        let mut t = task(&id); t.put("agent", k.name);
+        let r = sw::delegate::rules::rules(&t);
+        assert!(r.contains("No page server publishes the report on this machine"), "{}: {r}", k.name);
+        // A kind whose rules are written to a standing file gets the same text; one without gets it in its first prompt.
+        if !sw::agents::adapter::has_standing(k.name) { assert!(sw::delegate::rules::first_prompt(&t).contains("No page server publishes the report on this machine"), "{}", k.name); }
+    }
 }

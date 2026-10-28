@@ -12,7 +12,7 @@ use crate::store::keys::{repo_keys, say_id};
 const DAYS: i64 = 30;
 const MOST: usize = 50;
 const NOTE: usize = 300;
-fn note_of(t: &Obj) -> String { std::fs::read_to_string(crate::flow::task::note_file(t)).unwrap_or_default().trim().to_string() }
+fn note_of(t: &Obj) -> String { crate::research::report_linked(std::fs::read_to_string(crate::flow::task::note_file(t)).unwrap_or_default().trim(), t) }
 /// Who added a task, in words (also in every `details`).
 pub fn added_by(t: &Obj) -> String {
     if t.at("autopilot").is_object() { return format!("the {}'s autopilot{}", t.at("autopilot").s("name"), if t.at("autopilot").b("machine") { format!(" on {}", t.at("autopilot").s("machine")) } else { String::new() }); }
@@ -45,9 +45,11 @@ pub fn with_history(co: &Co, v: Value, text: String) -> (Value, String) {
     let said = format!("{text}\n\nFinished, stopped and archived in your area, the last {DAYS} days (newest first):\n{}", if lines.is_empty() { "none".into() } else { lines.join("\n") });
     (json!({ "tasks": v, "history": rows }), said)
 }
-/// `details`' answer with the whole closing note.
+/// `details`' answer with the whole closing note, and the report's published link as a Markdown line after it: a
+/// coordinator on another machine reads it, and a path alone would open nothing there.
 pub fn with_note(d: &mut Value) {
     let id = d.at("task").t("id");
     let Some(t) = crate::store::tasks::get(&id) else { return };
-    if let Some(o) = d.as_object_mut() { o.put("closingNote", note_of(&t)); }
+    let closing = crate::research::report_in_message(&note_of(&t), &t);
+    if let Some(o) = d.as_object_mut() { o.put("closingNote", closing); }
 }
