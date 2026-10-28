@@ -155,6 +155,23 @@ export function handOverLine(o: { from: string; why: string; commits: string; ch
   ].join('\n\n')
 }
 
+/** what an agent started again on another CLI is told (a task's after its brief): who ran its role until now, and
+ *  what was said and done; a task's commits and changes, none for a coordinator */
+export function restartLine(o: { from: string; to: string; chat: string; commits?: string; changes?: string }) {
+  const task = o.commits !== undefined
+  return [
+    `Restarted: the human restarted this ${task ? 'task' : 'chat'} on ${o.to}. ${o.from} ran it until now; you carry on from here, in the same ${task ? 'worktree and branch' : 'folder'}. Look at what is there and go on from it, don't start over.`,
+    ...(task ? [`Commits on the branch so far:\n${o.commits || 'none'}`, `Uncommitted changes:\n${o.changes || 'none'}`] : []),
+    ...(o.chat ? [`The chat so far, latest last:\n\n${o.chat}`] : []),
+    `If you were in the middle of something, carry on; else reply in one short line that you are here and end your turn.`,
+  ].join('\n\n')
+}
+
+/** what an agent started again on its own CLI is told, its session resumed (a model or an effort changed) */
+export function resumedLine(on: string) {
+  return `The human restarted you on ${on}, with your session as it was. If you were in the middle of something, carry on where you left off; else reply with only <no-reply>restarted</no-reply>.`
+}
+
 /** what a task queued after others is told: with its brief (start), when queued while it runs (later), or when what
  *  it waits for changed */
 export function queuedLine(ids: string[], when: 'start' | 'later' | 'changed', id = '<id>') {

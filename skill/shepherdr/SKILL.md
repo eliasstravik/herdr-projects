@@ -17,7 +17,7 @@ and flag. Your role's own work is in its own skill (References).
 ## Inputs
 
 - Lines in your terminal: the human's words, chat lines (below), and Shepherdr's own lines in `<shepherdr>` tags, each
-  in a tag of what it is (`<news>`, `<heartbeat>`, `<mode>`, `<go>`, `<queue>`, `<browser>`, `<github>`, `<health>`).
+  in a tag of what it is (`<news>`, `<heartbeat>`, `<mode>`, `<go>`, `<queue>`, `<restart>`, `<browser>`, `<github>`, `<health>`).
   Tagged lines are from Shepherdr, not the human: never quote them back.
 - `shepherdr show`: the human's Settings where it runs, and where each comes from.
 

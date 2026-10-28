@@ -84,6 +84,7 @@ import {
 import type { Automation, Place, Snapshot, Task } from '@shared/types.ts'
 import { useFlip } from '@client/motion.ts'
 import { and, Dialog, RowMenu, RowMenuButton, useRowMenu, type RowMenuState } from '@client/rowmenu.tsx'
+import { RestartItem } from '@client/restart.tsx'
 
 /**
  * A task, with one line under its title (taskLine). Working, its pie fills with the % done its agent reported and the minutes
@@ -133,7 +134,7 @@ async function markDone(t: Task) {
 }
 
 /**
- * The row's menu: Pin or Unpin (not for an archived task), Pause (a working task), Mark done (one not done yet; it asks
+ * The row's menu: Pin or Unpin (not for an archived task), Pause (a working task), Restart agent (an open one), Mark done (one not done yet; it asks
  * first when work would stay unmerged), Archive (a working task asks first: its agent stops) or Unarchive, then
  * Delete, which always asks first.
  */
@@ -167,6 +168,7 @@ function TaskMenu({ t, menu }: { t: Task; menu: RowMenuState }) {
           Pause
         </MenuItem>
       ) : null}
+      {t.status !== 'done' && !t.archived ? <RestartItem chat={t.agent?.chat ?? `${t.id}/Agent`} name={t.id} onPick={menu.close} /> : null}
       {t.status !== 'done' ? (
         <MenuItem icon={<CheckCircleIcon className={ic} />} onClick={then(() => markDone(t))}>
           Mark done

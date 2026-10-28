@@ -475,3 +475,59 @@ describe('a turn the provider cut off', () => {
     expect(w.engine.view(t)).toMatchObject({ status: 'need', sub: 'Signed out' })
   })
 })
+
+describe('restarting a task agent', () => {
+  test('on its own CLI it resumes, interrupted first while it works, on the new model and effort, with a card', async () => {
+    const w = world()
+    w.engine.installed = () => true
+    const { t, key } = await started(w, repo(), 'restart-same')
+    w.agentIs(key, 'working')
+    const on = await w.engine.restart(t.id, { kind: 'claude', model: 'sonnet', effort: 'low' })
+    expect(on).toBe('Claude Code (Sonnet 5.5, low)')
+    expect(w.stopped).toEqual([key])
+    const s = w.started.filter((x) => x.key === key)
+    expect(s).toHaveLength(2)
+    expect(s[1]).toMatchObject({ kind: 'claude', model: 'claude-sonnet-5-5', effort: 'low', cwd: t.worktree })
+    // a hidden line, not the brief again
+    expect(s[1].first).toStartWith('<shepherdr><restart>')
+    expect(s[1].first).toContain('restarted you on Claude Code (Sonnet 5.5, low), with your session as it was')
+    expect(t.agent).toEqual({ kind: 'claude', model: 'claude-sonnet-5-5', effort: 'low' })
+    expect(w.posted.find((p) => p.key === key && p.id.startsWith('restart:'))?.card).toMatchObject({ restart: true, text: 'Restarted on Claude Code (Sonnet 5.5, low)' })
+  })
+
+  test('on another CLI it takes over with the brief, the branch so far and the chat; the worktree and branch stay', async () => {
+    const w = world()
+    w.engine.installed = () => true
+    const { t, key } = await started(w, repo(), 'restart-other')
+    sh('echo hi > hello.txt && git add -A && git commit -qm "Add hello.txt"', t.worktree!)
+    writeFileSync(join(t.worktree!, 'more.txt'), 'more\n')
+    w.chat.messages = [
+      { who: 'you', text: 'Say hello\n\nAdd hello.txt. Merge when done.' },
+      { who: 'agent', text: 'Added hello.txt; next the tests.' },
+    ]
+    const head = sh('git rev-parse HEAD', t.worktree!)
+    w.agentIs(key, 'idle')
+    await w.engine.restart(t.id, { kind: 'codex' })
+    const s = w.started.filter((x) => x.key === key)
+    expect(s[1]).toMatchObject({ kind: 'codex', cwd: t.worktree })
+    expect(s[1].first).toContain('Say hello\n\nAdd hello.txt. Merge when done.')
+    expect(s[1].first).toContain('Claude Code ran it until now')
+    expect(s[1].first).toContain('Add hello.txt')
+    expect(s[1].first).toContain('?? more.txt')
+    expect(s[1].first).toContain('Claude Code: Added hello.txt; next the tests.')
+    expect(w.stopped).toEqual([])
+    expect(sh('git rev-parse HEAD', t.worktree!)).toBe(head)
+    expect(sh('git branch --show-current', t.worktree!)).toBe(t.branch!)
+    expect(existsSync(join(t.worktree!, 'more.txt'))).toBe(true)
+    expect(w.engine.view(t)).toMatchObject({ on: 'Codex' })
+  })
+
+  test('a Done task, or a CLI not installed here, is refused', async () => {
+    const w = world()
+    const { t } = await started(w, repo(), 'restart-refused')
+    w.engine.installed = (k) => k === 'claude'
+    await expect(w.engine.restart(t.id, { kind: 'codex' })).rejects.toThrow("Codex isn't installed")
+    await w.engine.close(t.id)
+    await expect(w.engine.restart(t.id, { kind: 'claude' })).rejects.toThrow('Done already')
+  })
+})

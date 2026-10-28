@@ -119,6 +119,14 @@ Tasks (coordinators add them; only when the human asks, or on Autopilot)
   shepherdr task pin <id>                        only when the human asks: show it in Pinned at the top of its
                                                  tasks (it keeps its status); archiving or deleting it drops the pin
   shepherdr task unpin <id>                      put it back in its own group
+  shepherdr restart <space|id> [--agent CLI] [--model ID] [--effort LEVEL] [--save]
+                                                 only when the human asks: start a space's coordinator or a task's
+                                                 agent again on Settings' CLI, model and effort for its role (or
+                                                 these: what shepherdr models lists, or default); --save makes them
+                                                 the space's Settings too. A working agent is interrupted first. The
+                                                 same CLI resumes its session; another takes over with the chat so
+                                                 far (a task's: its brief, commits and changes too). Its worktree,
+                                                 branch and waiting messages stay; a coordinator's tasks go on
 
 Task agents
   shepherdr todo <id>                            the brief says to wait for a go: show as To do until one comes

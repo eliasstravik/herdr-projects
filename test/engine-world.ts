@@ -64,13 +64,21 @@ export function world(herdr = fakeHerdr(), o: { boot?: string } = {}) {
       if (panes[key]) await herdr.h.closePane(panes[key])
     },
     interrupt: async () => undefined,
+    stopTurn: async (key: string) => void (status[key] === 'working' && stopped.push(key)),
+    restart: async (s: { key: string; first?: string; cwd: string; kind: string; pane?: () => Promise<string> }, before?: () => Promise<void>) => {
+      await before?.()
+      await agents.finish(s.key)
+      return agents.ensure(s)
+    },
     forget: (key: string) => {
       delete records[key]
       forgot.push(key)
     },
   }
   const forgot: string[] = []
-  const posted: { key: string; id: string; question?: { kind: string; steps?: string[] } }[] = []
+  /** agents whose turn was interrupted before a restart */
+  const stopped: string[] = []
+  const posted: { key: string; id: string; question?: { kind: string; steps?: string[] }; card?: { text: string; restart?: boolean } }[] = []
   /** what the agent's chat holds: its last reply, an open card of Shepherdr's, its CLI's own question */
   const chat: { reply?: string; card?: 'plan' | 'ask'; cardTitle?: string; question?: boolean; unseen?: string[]; messages?: { who: string; text?: string; card?: object }[] } = { reply: 'Which name do you want?' }
   const chats = {
@@ -103,7 +111,7 @@ export function world(herdr = fakeHerdr(), o: { boot?: string } = {}) {
     outbox.splice(0, outbox.length, ...outbox.filter((k) => k !== key))
     engine.sent(key)
   }
-  return { engine, places, settings, started, sent, posted, status, records, news, newsTo, cards, agentIs, brief, herdr, chat, bg, forgot, said }
+  return { engine, places, settings, started, sent, posted, status, records, news, newsTo, cards, agentIs, brief, herdr, chat, bg, forgot, said, stopped }
 }
 
 export const until = async (f: () => boolean, ms = 8000) => {

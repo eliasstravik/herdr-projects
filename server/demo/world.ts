@@ -9,7 +9,8 @@ import { ARTIFACT_DATA, ARTIFACT_HTML, thumb } from './artifacts.ts'
 import { DEMO_PRS, demoWorktree } from './code.ts'
 import { demoActivity } from './activity.ts'
 import { settingsBlock } from '../live/prompts.ts'
-import { defaultOf, kindOf } from '../live/settings.ts'
+import { CLI_NAME, defaultOf, kindOf } from '../live/settings.ts'
+import { harnessWords, restartClis } from '../live/restart.ts'
 import { nextWords } from '../live/trigger.ts'
 
 const DEFAULT_WAYS = { review: defaultOf('brief.review') !== 'off', mustFix: defaultOf('review.mustFix')!, rounds: Number.parseInt(defaultOf('review.rounds')!, 10), merge: defaultOf('brief.merge')!, waitChecks: defaultOf('brief.merge') === 'after GitHub checks' }
@@ -116,6 +117,9 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
       for (const m of c.messages) m.at = at++
       if (cards[c.key]) c.messages.unshift(...cards[c.key])
     }
+    // a space whose Settings now say another CLI for its coordinator than the one it runs on
+    const moved = this.places.find((p) => !p.home && this.chats[p.chat])
+    if (moved) this.chats[moved.chat].restart = { on: 'Claude Code', want: 'Codex' }
   }
 
   /* ---------- adding projects ---------- */
@@ -589,6 +593,24 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
         t.pinned = a.on && !t.archived ? Date.now() : undefined
         this.emit('snapshot')
         return { ok: true }
+      }
+      case 'restart-info': {
+        const c = this.chat(a.chat)
+        const t = this.task(a.chat.split('/')[0])
+        const on = kindOf(c?.cli ?? '') ?? 'claude'
+        const want = c?.restart ? (kindOf(c.restart.want) ?? on) : on
+        return { ok: true, info: { role: a.chat.includes('/') ? 'task' : 'coordinator', space: this.places.find((p) => p.id === (t?.place ?? a.chat))?.name, on: { kind: on }, onWords: c?.cli ?? 'Claude Code', want: { kind: want }, clis: restartClis(['claude', 'codex', 'pi']), working: t?.status === 'work' } }
+      }
+      case 'restart': {
+        const c = this.chat(a.chat)
+        if (!c) return { ok: false, error: 'No such chat.' }
+        const kind = a.kind ?? (c.restart ? kindOf(c.restart.want) : undefined) ?? kindOf(c.cli) ?? 'claude'
+        const words = harnessWords({ kind, model: a.model, effort: a.effort })
+        c.cli = CLI_NAME[kind] ?? kind
+        c.restart = undefined
+        c.messages.push(cardMessage({ id: `restart-${id()}`, restart: true, text: `Restarted on ${words}` }, Date.now() + seq))
+        this.emit('chat', a.chat)
+        return { ok: true, on: words }
       }
       case 'pause': {
         const t = this.task(a.chat.split('/')[0])

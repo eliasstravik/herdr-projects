@@ -503,6 +503,8 @@ export interface UpdateCard {
   health?: { level: HealthLevel; machine: string }
   /** the project's base branch went red on GitHub ("main"); text says which checks failed */
   red?: string
+  /** its agent started again (text: "Restarted on Codex (GPT-6-Sol, high)") */
+  restart?: boolean
   /** a task that needs you: a copy of what it asks, answered here as in its own chat */
   ask?: CardAsk
 }
@@ -566,6 +568,37 @@ export interface Chat {
   cli: string
   /** what this CLI lets the + menu change; only what it supports is listed */
   controls?: ChatControls
+  /** Settings for its role now say something else than what its agent runs on: a calm hint offers a restart */
+  restart?: RestartHint
+}
+
+/** "Runs on {on} · Settings now say {want}", by the first that differs: the CLI, the model or the effort */
+export interface RestartHint {
+  on: string
+  want: string
+}
+
+/** a CLI the restart sheet offers; models and efforts where Shepherdr passes them (none: it runs on its own) */
+export interface RestartCli {
+  kind: string
+  name: string
+  models?: { id: string; label: string; efforts: string[] }[]
+  /** the levels its own default model takes */
+  efforts?: string[]
+}
+
+/** what the restart sheet shows: what its agent runs on now and what Settings say for its role (what it restarts with
+ *  unless changed), each a CLI kind with a model id and level (none: the CLI's own) */
+export interface RestartInfo {
+  role: 'task' | 'coordinator'
+  /** its space, whose Settings a save changes */
+  space?: string
+  on: { kind: string; model?: string; effort?: string }
+  onWords: string
+  want: { kind: string; model?: string; effort?: string }
+  clis: RestartCli[]
+  /** its agent is mid-turn: a restart interrupts it first */
+  working: boolean
 }
 
 export interface ChatControls {
@@ -816,6 +849,11 @@ export type Action =
   | { type: 'pin'; chat: string; on: boolean }
   /** pause a working task: its agent is interrupted (it stays alive) and the task is To do until written to */
   | { type: 'pause'; chat: string }
+  /** what the restart sheet shows for a coordinator (chat: its place id) or a task's agent (ID/Agent): RestartInfo */
+  | { type: 'restart-info'; chat: string }
+  /** start a coordinator or a task's agent again on this CLI, model and effort (none: the CLI's own; no kind: all as
+      Settings say for its role); save: as its space's Settings for its role too */
+  | { type: 'restart'; chat: string; kind?: string; model?: string; effort?: string; save?: boolean }
   /** mark a task done with nothing merged (shepherdr task close); refused (held) while it holds unmerged work, unless force */
   | { type: 'close'; chat: string; force?: boolean }
   /** delete a task: its agent, herdr space, worktree, branch, chat and record; refused while it holds work, unless force */

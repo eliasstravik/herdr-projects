@@ -55,6 +55,9 @@ export interface AgentRecord {
   env?: Record<string, string>
   /** where its hooks record what it reports of itself (Claude Code: readers/hooks.ts) */
   hooks?: string
+  /** the CLI, model and effort Settings said for its role when it last started on them: a change since is offered as
+   *  a restart in its chat (restart.ts) */
+  set?: { kind: string; model?: string; effort?: string }
 }
 
 export interface OutItem {
@@ -494,6 +497,23 @@ export class Agents extends Emitter<Events> {
 
   /* ---------- starting ---------- */
 
+  /**
+   * Start this chat's agent again on what spec says: `before` first (a turn interrupted), then its run ends and it
+   * starts, resuming its session on the same CLI. Meanwhile, anything that would start it waits for this instead, and
+   * what you send waits and goes in after spec's first message.
+   */
+  restart(spec: Spec, before?: () => Promise<void>): Promise<AgentInfo | null> {
+    const p0 = this.starting.get(spec.key)
+    const p = (async () => {
+      await p0?.catch(() => undefined)
+      await before?.()
+      await this.finish(spec.key)
+      return this.launch(spec)
+    })().finally(() => this.starting.delete(spec.key))
+    this.starting.set(spec.key, p)
+    return p
+  }
+
   /** start (or resume) this chat's agent; resolves once herdr says it is ready for input */
   ensure(spec: Spec): Promise<AgentInfo | null> {
     const running = this.live.get(spec.name)
@@ -510,7 +530,7 @@ export class Agents extends Emitter<Events> {
     const resume = old && old.kind === spec.kind && (old.sessionId || old.logs.length)
     const r: AgentRecord = old ?? { ...spec, logs: [], started: Date.now() }
     const from = old?.cwd
-    Object.assign(r, { name: spec.name, kind: spec.kind, cwd: spec.cwd, workspace: spec.workspace, tab: spec.tab ?? r.tab, env: spec.env ?? r.env, access: spec.access ?? r.access, model: spec.model ?? r.model, effort: spec.effort ?? r.effort, system: spec.system ?? r.system, finished: false })
+    Object.assign(r, { name: spec.name, kind: spec.kind, cwd: spec.cwd, workspace: spec.workspace, tab: spec.tab ?? r.tab, env: spec.env ?? r.env, access: spec.access ?? r.access, model: spec.model ?? r.model, effort: spec.effort ?? r.effort, system: spec.system ?? r.system, set: spec.set ?? r.set, finished: false })
     r.started = Date.now()
     if (!resume) r.sessionId = r.kind === 'codex' ? undefined : randomUUID()
     // a run of its own: what its hooks record starts over
@@ -545,9 +565,9 @@ export class Agents extends Emitter<Events> {
       }
     }
     await this.refresh()
-    // CLIs without an option for extra instructions get them first, hidden from the chat. Both wait until the CLI is ready.
-    if (r.kind !== 'claude' && r.kind !== 'pi' && !resume && r.system) this.queue(r.key, hidden(r.system))
-    if (first) this.queue(r.key, first)
+    // CLIs without an option for extra instructions get them first, hidden from the chat. Both wait until the CLI is
+    // ready, ahead of what you sent meanwhile (a restart)
+    this.queue(r.key, [r.kind !== 'claude' && r.kind !== 'pi' && !resume && r.system ? hidden(r.system) : '', first ?? ''].filter(Boolean), true)
     setTimeout(() => this.deliver(r.key), 1000)
     setTimeout(() => this.discoverLog(r.key), 3000)
     setTimeout(() => this.discoverLog(r.key), 15000)
@@ -759,8 +779,13 @@ export class Agents extends Emitter<Events> {
     return this.failures.filter((f) => f.key === key && now - f.at < 600_000).map(({ cid, error }) => ({ cid, error }))
   }
 
-  private queue(key: string, text: string) {
-    this.outbox.push({ id: randomUUID(), key, text, at: Date.now() })
+  /** ahead: before what waits for this agent already */
+  private queue(key: string, texts: string[], ahead = false) {
+    if (!texts.length) return
+    const items = texts.map((text) => ({ id: randomUUID(), key, text, at: Date.now() }))
+    const i = ahead ? this.outbox.findIndex((o) => o.key === key) : -1
+    if (i < 0) this.outbox.push(...items)
+    else this.outbox.splice(i, 0, ...items)
     this.save()
   }
 
@@ -844,6 +869,20 @@ export class Agents extends Emitter<Events> {
     this.failures = this.failures.filter((f) => f.key !== key)
     this.stranded.delete(key)
     this.save()
+  }
+
+  /** a turn under way ended cleanly before its run ends (a restart): interrupted, then a few seconds for the CLI to
+   *  stop and write what it had */
+  async stopTurn(key: string, ms = 8000) {
+    if (this.status(key) !== 'working') return
+    await this.interrupt(key)
+    for (const end = Date.now() + ms; Date.now() < end; ) {
+      await new Promise((r) => setTimeout(r, 500))
+      await this.refresh()
+      if (this.status(key) !== 'working') break
+    }
+    // what it wrote last reaches its log
+    await new Promise((r) => setTimeout(r, 500))
   }
 
   async interrupt(key: string) {

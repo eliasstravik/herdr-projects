@@ -17,13 +17,14 @@ import { readJson, writeJson } from '../../store.ts'
 import { ROOT } from '../../root.ts'
 import { has } from '../../plugins.ts'
 import { browserEnv } from '../browser.ts'
-import { hidden, type Agents } from '../agents.ts'
+import { hidden, type Agents, type Spec } from '../agents.ts'
 import type { Chats } from '../chats.ts'
 import { HOST, placeId, type Places, type Space } from '../places.ts'
-import { goLine, handOverLine, settingsBlock, prNewsLine, queuedLine, splitBrief, taskFirst, taskPrompt } from '../prompts.ts'
+import { goLine, handOverLine, restartLine, resumedLine, settingsBlock, prNewsLine, queuedLine, splitBrief, taskFirst, taskPrompt } from '../prompts.ts'
 import { inMins, type Retry } from '../retry.ts'
 import { pastTimes } from '../estimates.ts'
 import { CLI_NAME, kindOf, type Settings } from '../settings.ts'
+import { fitHarness, harnessWords, recentChat } from '../restart.ts'
 import * as G from './git.ts'
 import { Worktrees, type HerdrSpaces, type Made } from './worktrees.ts'
 
@@ -1095,7 +1096,7 @@ export class Engine extends Emitter<Events> {
    * Its agent, in its herdr space. A worktree that is gone (a stop with no work put it away) is made again first, in
    * the same folder, so its agent's session (kept by folder) is found again; never a finished task's.
    */
-  private async launch(t: TaskRec, first?: string, made?: Made, as?: Harness) {
+  private async launch(t: TaskRec, first?: string, made?: Made, as?: Harness, restart?: () => Promise<void>) {
     const key = this.key(t)
     const rec = this.agents.record(key)
     const p = this.proj(t)
@@ -1109,13 +1110,15 @@ export class Engine extends Emitter<Events> {
     // a task from before tasks kept their own CLI starts on Settings'
     const h = t.agent ?? this.settings.harness('task', this.nameOf(t))
     trustWorktree(t.worktree!, as?.kind ?? rec?.kind ?? h.kind, env)
-    return this.agents.ensure({
+    const spec: Spec = {
       access: 'full',
       key,
       name: rec?.name ?? `shep-${t.id.toLowerCase()}`,
       kind: as?.kind ?? rec?.kind ?? h.kind,
       // only its first start (or a backup's, on its CLI's own model): later, its own chat's pickers are what count
       ...(as ? { model: as.model ?? 'default', effort: as.effort } : rec ? {} : { model: h.model, effort: h.effort }),
+      // what Settings said when it started on them: a change since is offered as a restart (restart.ts)
+      ...(as || !rec ? { set: this.settings.harness('task', this.nameOf(t)) } : {}),
       cwd: t.worktree!,
       workspace: labelOf(t),
       tab: 'Agent',
@@ -1123,7 +1126,8 @@ export class Engine extends Emitter<Events> {
       env,
       first,
       pane: () => this.wt.agentPane({ home, wt: t.worktree!, label: labelOf(t), tab: 'Agent', env, made }),
-    })
+    }
+    return restart ? this.agents.restart(spec, restart) : this.agents.ensure(spec)
   }
 
   /** writing to a task whose agent stopped starts it again, with its memory */
@@ -1131,6 +1135,44 @@ export class Engine extends Emitter<Events> {
     const t = this.task(id)
     if (!t?.worktree) return Promise.resolve(null)
     return this.launch(t)
+  }
+
+  /**
+   * Its agent started again on this CLI, model and effort (the restart sheet, shepherdr restart). Mid-turn it is
+   * interrupted first. The same CLI resumes its session; another takes over with the brief, the branch's commits,
+   * what lies uncommitted and the chat's last messages. What you sent meanwhile waits for it; its worktree and branch
+   * stay as they are; a card in its chat marks it.
+   */
+  async restart(id: string, to: Harness) {
+    const t = this.req(id)
+    if (ended(t)) throw new Error(`${t.id} is Done already (${t.closed ? 'nothing to merge' : 'merged'}): it has no agent to restart.`)
+    if (!t.worktree) throw new Error(`${t.id} hasn't started yet: it starts on what its brief says.`)
+    if (this.handing.has(t.id)) throw new Error(`${t.id}'s agent is starting again already.`)
+    if (!this.installed(to.kind)) throw new Error(`${CLI_NAME[to.kind] ?? to.kind} isn't installed on this machine.`)
+    const key = this.key(t)
+    const h = fitHarness(to)
+    const from = this.agents.record(key)?.kind ?? t.agent?.kind ?? ''
+    const name = (k: string) => CLI_NAME[k] ?? k
+    const words = harnessWords(h)
+    this.handing.add(t.id)
+    try {
+      const first =
+        from === h.kind
+          ? hidden(resumedLine(words), 'restart')
+          : hidden(`${taskFirst(t)}\n\n${restartLine({ from: name(from), to: words, ...(await this.soFar(t, key, name(from))) })}`, 'restart')
+      // a pause or a stop is over: it carries on
+      t.stopped = undefined
+      t.paused = undefined
+      await this.launch(t, first, undefined, { ...h, model: h.model ?? '', effort: h.effort ?? '' }, () => this.agents.stopTurn(key))
+      t.agent = h
+      const card = `restart:${t.id}:${Date.now()}`
+      this.chats.post(key, { id: card, card: { id: card, restart: true, text: `Restarted on ${words}` } })
+    } finally {
+      this.handing.delete(t.id)
+      this.save()
+      this.settle(t)
+    }
+    return words
   }
 
   /** its agent works and its brief has gone in: it is at work on it, no longer To do */
@@ -1191,13 +1233,7 @@ export class Engine extends Emitter<Events> {
       const r = await G.git(t.worktree!, ...args)
       return r.ok ? r.out.split('\n').filter(Boolean).slice(0, 20).join('\n') : ''
     }
-    const brief = taskFirst(t).trim()
-    const said = this.chats
-      .chat(key)
-      .messages.filter((m) => m.text && !m.card && m.text.trim() !== brief)
-      .slice(-12)
-      .map((m) => `${m.who === 'you' ? 'Human' : them}: ${m.text!.length > 400 ? `${m.text!.slice(0, 400)}…` : m.text}`)
-    return { commits: await out('log', '--oneline', `${t.base}..HEAD`), changes: await out('status', '--short'), chat: said.join('\n\n') }
+    return { commits: await out('log', '--oneline', `${t.base}..HEAD`), changes: await out('status', '--short'), chat: recentChat(this.chats.chat(key).messages, them, taskFirst(t).trim()) }
   }
 
   private troubled(t: TaskRec, e: unknown) {

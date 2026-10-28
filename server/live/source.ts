@@ -7,12 +7,12 @@ import { homedir } from 'node:os'
 import { dirname, join, sep } from 'node:path'
 import { BODY_MAX, clip, lastReply, openCards, taskAlert, TITLE_MAX } from '../../shared/alerts.ts'
 import { deleteSection, moveSpace, newSection, PINNED, renameSection, sectionProblem, sortPlaces } from '../../shared/order.ts'
-import { asEmoji, doneNewestFirst, modeCard, NAME_MAX, nameProblem, slugify, STATUS_MAX, type Action, type ActivityAnswer, type ActivityAsk, type AddSpace, type Alert, type Artifact, type CardAsk, type Chat, type Question, type Folders, type Machine, type Place, type Section, type Snapshot, type Task, type TaskStatus, type UpdateCard, type WorktreeAsk } from '../../shared/types.ts'
+import { asEmoji, doneNewestFirst, modeCard, NAME_MAX, nameProblem, slugify, STATUS_MAX, type Action, type ActivityAnswer, type ActivityAsk, type AddSpace, type Alert, type Artifact, type CardAsk, type Chat, type RestartInfo, type Question, type Folders, type Machine, type Place, type Section, type Snapshot, type Task, type TaskStatus, type UpdateCard, type WorktreeAsk } from '../../shared/types.ts'
 import { Emitter, type Overview, type Source, type SourceEvents } from '../source.ts'
 import { HOME, readJson, writeJson } from '../store.ts'
 import { ROOT } from '../root.ts'
 import { wrapPage } from '../frame.ts'
-import { Agents, hidden } from './agents.ts'
+import { Agents, hidden, type Spec } from './agents.ts'
 import { herdr } from './herdr.ts'
 import { followCommand, isCommand } from './commands.ts'
 import { effortsOf, findModel, knowsModels, modelsOf, nearest } from './models.ts'
@@ -35,7 +35,8 @@ import { claudeProjectDir, piSessionDir } from './readers/find.ts'
 import { boxDir } from './mfs.ts'
 import * as task from './mfs.ts'
 import { asMode, HOME_SPACE, HOST, NAME, placeId, Places } from './places.ts'
-import { coordinatorPrompt, settingsBlock } from './prompts.ts'
+import { coordinatorPrompt, restartLine, resumedLine, settingsBlock } from './prompts.ts'
+import { fitHarness, harnessWords, recentChat, restartHint, restartInfo, type Harness } from './restart.ts'
 import { carryOn, Retries, type Retry } from './retry.ts'
 import { CATALOG, CLI_NAME, CLIS, kindOf, refuse, setForTask, Settings, type Level } from './settings.ts'
 import { startVoice } from './voice.ts'
@@ -462,7 +463,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
 
   chat(key: string): Chat | undefined {
     if (this.peers?.owner(key)) return this.peers.chat(key)
-    const c = this.chats.chat(key)
+    const c = { ...this.chats.chat(key), restart: this.restartHintOf(key) }
     return key.includes('/') ? c : this.withAsks(c)
   }
 
@@ -844,26 +845,94 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
 
   /* ---------- coordinators ---------- */
 
-  /** start (or resume) a place's coordinator */
-  private coordinator(id: string) {
+  /**
+   * Start (or resume) a place's coordinator: on Settings' CLI, model and effort the first time, then on what it runs on
+   * (its chat's pickers change those) until it is restarted on others (`as`, restart: interrupted first and its run
+   * ended, `first` its first message then).
+   */
+  private coordinator(id: string, o: { as?: Harness; first?: string; restart?: boolean } = {}) {
     const c = this.places.coordinator(id)
     if (!c) throw new Error(`No place ${id}`)
-    const h = this.settings.harness('coordinator', this.spaceKey(id))
-    return this.agents.ensure({
+    const set = this.settings.harness('coordinator', this.spaceKey(id))
+    const rec = this.agents.record(id)
+    const h = o.as ?? (rec ? undefined : set)
+    const spec: Spec = {
       key: id,
       name: c.name,
-      kind: h.kind,
-      // Settings' model and effort each time it starts ('' is the CLI's own default); its chat's pickers change them
-      // until then
-      model: h.model ?? '',
-      effort: h.effort ?? '',
+      kind: h?.kind ?? rec!.kind,
+      // '' is the CLI's own default
+      ...(h ? { model: h.model ?? '', effort: h.effort ?? '', set } : {}),
+      first: o.first,
       cwd: c.cwd,
       workspace: c.workspace,
       was: (c as { was?: string }).was,
       tab: c.tab,
       system: coordinatorPrompt({ role: this.roleOf(id), name: c.label, path: c.path, machine: NAME }, this.places.mode(id)),
       env: agentEnv(id, ROOT),
-    })
+    }
+    return o.restart ? this.agents.restart(spec, () => this.agents.stopTurn(id)) : this.agents.ensure(spec)
+  }
+
+  /** a coordinator started again on this CLI, model and effort: the same CLI resumes its session, another takes over
+   *  with its role's prompt and the chat's last words. Its tasks go on as they are; a card in its chat marks it */
+  private async restartCoordinator(id: string, to: Harness) {
+    if (!this.places.coordinator(id)) throw new Error(`No place ${id}`)
+    if (!this.engine.installed(to.kind)) throw new Error(`${CLI_NAME[to.kind] ?? to.kind} isn't installed on this machine.`)
+    const h = fitHarness(to)
+    const words = harnessWords(h)
+    const from = this.agents.record(id)?.kind
+    const them = CLI_NAME[from ?? ''] ?? from ?? 'Its agent'
+    const first = !from ? undefined : from === h.kind ? hidden(resumedLine(words), 'restart') : hidden(restartLine({ from: them, to: words, chat: recentChat(this.chats.chat(id).messages, them) }), 'restart')
+    await this.coordinator(id, { as: h, first, restart: true })
+    const card = `restart:${id}:${Date.now()}`
+    this.chats.post(id, { id: card, card: { id: card, restart: true, text: `Restarted on ${words}` } })
+    if (this.watched.includes(id)) this.emit('chat', id)
+    return words
+  }
+
+  /** a coordinator (its place id) or a task's agent (ID/Agent) restarted: its role and space, what it runs on, what
+   *  Settings say for it now and what Settings said when it last started on them */
+  private restartable(key: string) {
+    const t = key.includes('/') ? this.engine.task(key.split('/')[0]) : undefined
+    if (key.includes('/') && !t) throw new Error('No such task.')
+    if (!t && !this.places.coordinator(key)) throw new Error('No such place.')
+    const role = t ? ('task' as const) : ('coordinator' as const)
+    const space = t ? this.places.space(t.project)?.name : this.spaceKey(key)
+    const want = this.settings.harness(role, space)
+    const r = this.agents.record(key)
+    const on: Harness = r ? { kind: r.kind, model: r.model, effort: r.effort } : (t?.agent ?? want)
+    return { t, role, space, want, on, set: r?.set }
+  }
+
+  /** the calm hint a chat shows once Settings for its role say other than what its agent runs on */
+  private restartHintOf(key: string) {
+    try {
+      const x = this.restartable(key)
+      if (!this.agents.record(key) || (x.t && (ended(x.t) || x.t.archived))) return undefined
+      return restartHint(x.on, x.set, x.want)
+    } catch {
+      return undefined
+    }
+  }
+
+  /** start a coordinator or a task's agent again, on Settings' CLI, model and effort or these; save: as its space's
+   *  Settings too */
+  private async restart(key: string, to: Partial<Harness>, save = false) {
+    const x = this.restartable(key)
+    const h = fitHarness({ ...x.want, ...to, kind: to.kind ?? x.want.kind })
+    if (save) {
+      const at = x.space ? { space: x.space } : ('machine' as const)
+      for (const [k, v] of [['agent', CLI_NAME[h.kind] ?? h.kind], ['model', h.model ?? 'default'], ['effort', h.effort ?? 'default']])
+        if (this.settings.pick(`${x.role}.${k}`, at).value !== v) {
+          const r = this.settings.set(`${x.role}.${k}`, v, at)
+          if (!r.ok) throw new Error(r.error ?? `Couldn't save ${x.role}.${k}`)
+          this.settingChanged(`${x.role}.${k}`)
+        }
+    }
+    const words = x.t ? await this.engine.restart(x.t.id, h) : await this.restartCoordinator(key, h)
+    this.emit('snapshot')
+    this.emit('chat', key)
+    return words
   }
 
   /** a coordinator that runs outside its folder (another machine's started in the main machine's path for it, where
@@ -1331,6 +1400,24 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         this.emit('snapshot')
         return { ok: true }
       }
+      case 'restart-info': {
+        try {
+          const x = this.restartable(a.chat)
+          return { ok: true, info: restartInfo({ role: x.role, space: x.space, on: x.on, want: x.want, kinds: Object.keys(CLI_NAME).filter(this.engine.installed), working: this.agents.status(a.chat) === 'working' }) }
+        } catch (e) {
+          return { ok: false, error: (e as Error).message }
+        }
+      }
+      case 'restart': {
+        try {
+          if (!a.kind) return { ok: true, on: await this.restart(a.chat, {}) }
+          const kind = kindOf(a.kind)
+          if (!kind) return { ok: false, error: `No CLI called ${a.kind}.` }
+          return { ok: true, on: await this.restart(a.chat, { kind, model: a.model ?? '', effort: a.effort ?? '' }, !!a.save) }
+        } catch (e) {
+          return { ok: false, error: (e as Error).message }
+        }
+      }
       case 'close': {
         const t = this.engine.task(a.chat.split('/')[0])
         if (!t) return { ok: false, error: 'No such task.' }
@@ -1789,6 +1876,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       }
       case 'task':
         return this.taskCommand(a1, rest, p, ctx)
+      case 'restart':
+        return this.restartCommand(a1, p, ctx)
       // done is ready's old name, still taken
       case 'ready':
       case 'done': {
@@ -2220,6 +2309,35 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       }
     }
     throw new Error('shepherdr task add|list|show|tell|queue|stop|close|archive|unarchive|pin|unpin|pause|merge|delete')
+  }
+
+  /** shepherdr restart <space|id> [--agent CLI] [--model ID] [--effort LEVEL] [--save]: a task's agent restarts only
+   *  its own task's */
+  private async restartCommand(target: string | undefined, p: Parsed, ctx: { chat?: string }) {
+    const usage = 'shepherdr restart <space|task id> [--agent CLI] [--model ID] [--effort LEVEL] [--save]'
+    const odd = [...Object.keys(p.opts), ...p.flags].filter((f) => !['agent', 'model', 'effort', 'save'].includes(f))
+    if (!target || odd.length) throw new Error(odd.length ? `Restart takes no --${odd[0]}: ${usage}` : usage)
+    const t = this.engine.task(target)
+    const peer = t ? undefined : (this.peers?.list() ?? []).flatMap((l) => l.snap?.tasks ?? []).find((x) => x.id.toUpperCase() === target.toUpperCase())
+    const place = t || peer ? undefined : this.placeList().find((x) => x.name === target || x.id === target)
+    const key = t ? `${t.id}/Agent` : peer ? `${peer.id}/Agent` : place?.id
+    if (!key) throw new Error(`No space or task ${target}; ${usage}`)
+    if (ctx.chat?.includes('/') && ctx.chat !== key) throw new Error("A task's agent restarts only its own agent; ask the coordinator.")
+    const cli = one(p, 'agent')
+    const kind = cli === undefined ? undefined : kindOf(cli)
+    if (cli !== undefined && !kind) throw new Error(`No CLI called ${cli}; herdr starts ${CLIS.join(', ')}`)
+    const info = (await this.act({ type: 'restart-info', chat: key })) as { ok: boolean; error?: string; info?: RestartInfo }
+    if (!info.ok || !info.info) throw new Error(info.error ?? 'It could not be restarted.')
+    const on = kind ?? info.info.want.kind
+    // what Settings say unless named: the model and effort only where they fit the CLI it restarts on
+    const keep = on === info.info.want.kind
+    const opts = fit(p, '', on, keep ? info.info.want.model : undefined)
+    const model = 'model' in opts ? opts.model || undefined : keep ? info.info.want.model : undefined
+    const effort = 'effort' in opts ? opts.effort || undefined : keep ? info.info.want.effort : undefined
+    const r = (await this.act({ type: 'restart', chat: key, kind: on, model, effort, save: p.flags.has('save') })) as { ok: boolean; error?: string; waiting?: boolean; on?: string }
+    if (r.waiting) return `${target}'s machine is out of reach: it restarts once it is back.`
+    if (!r.ok) throw new Error(r.error ?? 'It could not be restarted.')
+    return `Restarted ${t?.id ?? peer?.id ?? place!.name} on ${r.on}${p.flags.has('save') ? `, now its space's Settings too` : ''}. A card in its chat says so.`
   }
 
   /** delete a task (its agent, herdr space, worktree, branch, chat and record) and what this side kept of its chat */

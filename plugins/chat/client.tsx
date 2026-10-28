@@ -5,7 +5,7 @@ import clsx from 'clsx'
 import { createContext, Fragment, memo, useContext, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import { act, chatName, definePlugin, getDraft, getState, goChat, has, holdReload, openTask, registry, setDraft, setOutbox, setUI, taskOf, useDraft, useSnap, useStore, useUI, type UI } from '@client/kernel.ts'
 import { keyOf, partsOf, priorOf, reasonOf, SEND_TIMEOUT, type Outgoing } from '@client/outbox.ts'
-import { AlertIcon, BackIcon, CameraIcon, CheckIcon, Count, DeleteIcon, dimmed, Dot, DownIcon, DownloadIcon, EffortIcon, Empty, field, FileIcon, ic, IconButton, LinkButton, LiveWave, MachineIcon, Menu, MenuItem, MenuSeparator, MenuSetting, MicIcon, ModelIcon, ModeIcon, MoreIcon, NextIcon, PageIcon, PlanIcon, PlusIcon, Primary, QuestionIcon, ReplyIcon, roundBtn, SearchIcon, Sent, SmileIcon, TextBox, UpIcon, useElapsed, XIcon } from '@client/ui.tsx'
+import { AlertIcon, BackIcon, CameraIcon, CheckIcon, Count, DeleteIcon, dimmed, Dot, DownIcon, DownloadIcon, EffortIcon, Empty, field, FileIcon, ic, IconButton, LinkButton, LiveWave, MachineIcon, Menu, MenuItem, MenuSeparator, MenuSetting, MicIcon, ModelIcon, ModeIcon, MoreIcon, NextIcon, PageIcon, PlanIcon, PlusIcon, Primary, QuestionIcon, ReplyIcon, RestartIcon, roundBtn, SearchIcon, Sent, SmileIcon, TextBox, UpIcon, useElapsed, XIcon } from '@client/ui.tsx'
 import { canDictate, dictate, dictSample, type Dictation } from '@client/dictation.ts'
 import { readBrief } from '@shared/brief.ts'
 import { extOf, isImage } from '@shared/files.ts'
@@ -21,6 +21,7 @@ import { Markdown } from './markdown.tsx'
 import { answeredBy, cancelReply, canReply, isArtifact, jumpTo, startReply } from './reply.ts'
 import { typing, working } from './typing.ts'
 import { JobsSheet, JobsTag, LiveLine, TurnLine } from './activity.tsx'
+import { PlaceRestartItem, RestartHint, RestartSheet, TaskRestartItem } from '@client/restart.tsx'
 
 /* ---------- messages ---------- */
 
@@ -1047,7 +1048,8 @@ const cardAside = 'shrink-0 text-[0.8125rem] text-fg2'
 
 /** Shepherdr's update card about a task: one line, a dot, its id and a few words; a tap opens the task, where its
     summary is; held (or the smiley beside it) it reacts, like a message. A mode card marks when the place's
-    coordinator went on a mode; a machine's health or a red main says what happened. Those open nothing */
+    coordinator went on a mode; a restart card what its agent started again on; a machine's health or a red main says
+    what happened. Those open nothing */
 function Card({ card: c, chat, at, press, keys, className }: { card: UpdateCard; chat: string; at?: number; press?: ReturnType<typeof useHold>; keys?: object; className?: string }) {
   const snap = useSnap()!
   // a machine's health: what crossed its limit (red) or came back under it
@@ -1071,6 +1073,16 @@ function Card({ card: c, chat, at, press, keys, className }: { card: UpdateCard;
           <span className="truncate">
             <b className="font-semibold">{c.red}</b> {c.text}
           </span>
+        </span>
+      </div>
+    )
+  // its agent started again: on what
+  if (c.restart)
+    return (
+      <div data-anchor data-restart-card {...press} {...keys} className={clsx(cardBox, className)}>
+        <RestartIcon className={clsx(ic, 'shrink-0 text-fg2')} />
+        <span className={cardLine}>
+          <span className="truncate">{c.text}</span>
         </span>
       </div>
     )
@@ -2355,8 +2367,10 @@ export default definePlugin({
         return true
       },
     })
-    reg.placeMenu.push({ order: 50, View: ({ place }) => <FindItem chatKey={place.chat} /> })
-    reg.agentMenu.push({ order: 50, View: FindItem })
+    reg.placeMenu.push({ order: 50, View: ({ place }) => <FindItem chatKey={place.chat} /> }, { order: 55, joined: true, View: PlaceRestartItem })
+    reg.agentMenu.push({ order: 50, View: FindItem }, { order: 55, View: TaskRestartItem })
+    reg.composerAbove.push({ order: 5, View: RestartHint })
+    reg.overlays.push(RestartSheet)
     reg.composerAbove.push({ order: 20, View: Attachments }, { order: 30, View: PlusMenu })
     reg.overlays.push(Photo)
     addEventListener('pointerdown', keepBox, true)

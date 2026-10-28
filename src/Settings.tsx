@@ -51,10 +51,10 @@ import {
 } from './ui.tsx'
 
 /** a setting's word as the screen says it: "Off", "On its own", "2 rounds"; a name like claude-haiku-5-5 as it is */
-const shown = (v: string) => (v === 'xhigh' ? 'Extra high' : /^[a-z][a-z ,]*$/.test(v) ? v.charAt(0).toUpperCase() + v.slice(1) : v)
+export const shown = (v: string) => (v === 'xhigh' ? 'Extra high' : /^[a-z][a-z ,]*$/.test(v) ? v.charAt(0).toUpperCase() + v.slice(1) : v)
 
 /** a setting's value and the menu of its choices; plain, as a phone's grouped rows have it (the value and ⌃⌄, no box) */
-function Pick({
+export function Pick({
   value,
   options,
   onPick,
@@ -218,7 +218,7 @@ function Choices({
 const numShown = (v: string, num: NonNullable<SettingRow['num']>) => (v === 'off' ? 'Off' : v.replace(/^(\d+(?:\.\d+)?)(\s*).*$/, (_, n, sp) => `${n}${num.unit ? `${sp}${Number(n) === 1 && num.one ? num.one : num.unit}` : ''}`))
 
 /** a value you type: a box as wide as its words, saved when you leave it (Enter too) */
-function TextValue({ value, onSave, onEdit, label }: { value: string; onSave: (v: string) => void; onEdit: () => void; label: string }) {
+export function TextValue({ value, onSave, onEdit, label }: { value: string; onSave: (v: string) => void; onEdit: () => void; label: string }) {
   const [v, setV] = useState(value)
   useEffect(() => setV(value), [value])
   return (
@@ -242,7 +242,7 @@ function TextValue({ value, onSave, onEdit, label }: { value: string; onSave: (v
 }
 
 /** on or off: the track grey off, green on, its knob sliding across (iOS's) */
-function Switch({ on, label, onChange }: { on: boolean; label: string; onChange: (on: boolean) => void }) {
+export function Switch({ on, label, onChange }: { on: boolean; label: string; onChange: (on: boolean) => void }) {
   return (
     <button
       type="button"

@@ -28,6 +28,7 @@ import { act, counts, definePlugin, getState, goPlace, manyMachines, openSplit, 
 import { and, Dialog, RowMenu, RowMenuButton, useRowMenu } from '@client/rowmenu.tsx'
 import { BackIcon, BellIcon, BellSlashIcon, Count, DeleteIcon, DownIcon, HashIcon, ic, IconButton, List, MenuItem, MenuLabel, MenuSeparator, MenuSetting, Meta, NextIcon, PinnedIcon, PinTaskIcon, PlusIcon, Primary, ReadIcon, RemoveProjectIcon, RenameIcon, rowClass, RowText, SectionIcon, ServerIcon, SplitIcon, TasksIcon, UnpinIcon } from '@client/ui.tsx'
 import { MarkRead, markPlaceRead, muted, placeUnread } from '@client/unread.ts'
+import { RestartItem } from '@client/restart.tsx'
 import { NOTIFY, NOTIFY_KEY, notifyOf, notifyRow } from '@shared/alerts.ts'
 import { kept, PINNED, sectionsIn, TOP, type PlaceOrder } from '@shared/order.ts'
 import { machineName, NAME_MAX, nameProblem, slugify, type Machine, type Place, type Section, type Snapshot } from '@shared/types.ts'
@@ -323,7 +324,7 @@ const NOTIFY_HINT: Record<(typeof NOTIFY)[number], string> = {
 }
 
 /** A space's menu: its coordinator's Notify (a choice that is what it would get anyway goes back to following it), Mark
- *  as read (its own chat, as its row shows it), Pin, Move to section (the menu turns into where it may go), Rename, and
+ *  as read (its own chat, as its row shows it), Pin, Restart agent (its coordinator), Move to section (the menu turns into where it may go), Rename, and
  *  what the row adds (Remove, but for a home space) */
 function PlaceMenu({ p, snap, menu, unread, onRename, children }: { p: Place; snap: Snapshot; menu: ReturnType<typeof useRowMenu>; unread: boolean; onRename?: () => void; children?: ReactNode }) {
   const [moving, setMoving] = useState(false)
@@ -372,6 +373,7 @@ function PlaceMenu({ p, snap, menu, unread, onRename, children }: { p: Place; sn
         Mark as read
       </MenuItem>
       <PinItem p={p} snap={snap} menu={menu} />
+      <RestartItem chat={p.chat} name={p.name} onPick={menu.close} />
       <MenuItem icon={<SectionIcon className={ic} />} hint={<NextIcon className={ic} />} aria-haspopup="menu" onClick={() => setMoving(true)}>
         Move to section
       </MenuItem>

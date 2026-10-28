@@ -20,6 +20,7 @@ export {
   ArrowsPointingInIcon as UnfitIcon,
   ArrowsPointingOutIcon as FitIcon,
   ArrowPathIcon as ReloadIcon,
+  ArrowPathRoundedSquareIcon as RestartIcon,
   ArrowTopRightOnSquareIcon as OpenIcon,
   ArrowUpIcon as UpIcon,
   ArrowUturnLeftIcon as ReplyIcon,
