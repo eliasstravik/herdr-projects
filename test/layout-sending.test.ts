@@ -87,7 +87,7 @@ describe.skipIf(!browser)('what you send shows at once', () => {
     expect(await page.evaluate(() => localStorage.getItem('shepherdr.outbox'))).toBeNull()
     await page.close()
   }, 30_000)
-  test('one still on its way can be taken out from ⋯ beside it; a reload drops old ones and ones for a chat that is gone', async () => {
+  test('one still on its way can be taken out from ⋯ beside it; a reload drops day-old ones', async () => {
     const page = await browser!.newPage({ viewport: { width: 1280, height: 800 } })
     await page.goto(url())
     const box = page.getByRole('textbox', { name: /Message/ })
@@ -97,11 +97,12 @@ describe.skipIf(!browser)('what you send shows at once', () => {
     await box.fill('Stuck one')
     await page.getByRole('button', { name: 'Send' }).click()
     await bubbles(page, 'Stuck one').waitFor()
-    // a day-old one and one for a chat that is gone, saved by an earlier visit, are gone after a reload
+    // a day-old one, saved by an earlier visit, is gone after a reload (one for a chat that is gone too, but only with
+    // every machine in reach, and this world has one out of reach: outbox.test.ts)
     await page.evaluate(() => {
       const out = JSON.parse(localStorage.getItem('shepherdr.outbox')!)
       const o = out[0]
-      out.push({ ...o, cid: 'old', text: 'From yesterday', state: 'sent', at: Date.now() - 25 * 3_600_000 }, { ...o, cid: 'gone', chat: 'no-such-chat', text: 'Nowhere', state: 'sent' })
+      out.push({ ...o, cid: 'old', text: 'From yesterday', state: 'sent', at: Date.now() - 25 * 3_600_000 })
       localStorage.setItem('shepherdr.outbox', JSON.stringify(out))
     })
     await page.reload()
