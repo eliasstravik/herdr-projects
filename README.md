@@ -70,7 +70,7 @@ An agent that asks you something, wants a permission or a plan approved shows un
 ## Updating
 
 ```bash
-herdr plugin update herdr-projects   # its plugin id is still herdr-projects, the plugin it replaced
+herdr plugin update herdr-projects   # its plugin id, from the plugin it replaced
 ```
 
 The next herdr start, or the next press of the open key, swaps the running Shepherdr for the new version. A linked checkout updates itself: when it moves to a new commit, Shepherdr builds a release of it and restarts on it, and every open screen reloads with what you were typing kept. Coming from herdr-projects, the same command takes you there. [Upgrading and updates](docs/upgrading.md) has the details.
