@@ -608,7 +608,7 @@ function Album({ msgs, chat, from, out, last: lastPart }: { msgs: Message[]; cha
                 last && c === len - 1 ? (you ? '6px' : big) : small,
                 last && !c ? (you ? big : '6px') : small,
               ].join(' ')
-              return <Tile key={keyOf(m)} msg={m} chat={chat} you={you} radius={radius} single={msgs.length === 1} more={i === 6 ? more : 0} out={!!out} />
+              return <Tile key={keyOf(m)} msg={m} chat={chat} you={you} radius={radius} single={msgs.length === 1} more={i === 6 ? more : 0} out={out} />
             })}
           </div>
         ))}
@@ -620,7 +620,7 @@ function Album({ msgs, chat, from, out, last: lastPart }: { msgs: Message[]; cha
 
 /** one picture in an album, a message of its own: a tap opens it full screen; a hold (or the smiley on it, with a
  *  mouse) reacts, and its reactions sit in its bottom right corner */
-function Tile({ msg, chat, you, radius, single, more, out }: { msg: Message; chat: Chat; you: boolean; radius: string; single: boolean; more: number; out?: boolean }) {
+function Tile({ msg, chat, you, radius, single, more, out }: { msg: Message; chat: Chat; you: boolean; radius: string; single: boolean; more: number; out?: Outgoing }) {
   const f = msg.file!
   // a picture this browser can't show (HEIC on most desktops) is a file tile, or a small one in an album
   const [broken, setBroken] = useState(false)
@@ -628,14 +628,22 @@ function Tile({ msg, chat, you, radius, single, more, out }: { msg: Message; cha
   const canReact = has('reactions') && !msg.waiting && !out
   const replies = canReply(msg, out)
   const picked = usePicked(msg.id, chat.key)
-  const hold = useHold(canReact ? (at) => openBar(chat.key, msg.id, at) : null, replies ? () => startReply(chat.key, msg) : null)
+  // one on its way offers only Remove, as a bubble does
+  const [menu, setMenu] = useState(false)
+  const pending = out && out.state !== 'failed' ? out : undefined
+  const hold = useHold(canReact ? (at) => openBar(chat.key, msg.id, at) : pending ? () => setMenu(true) : null, replies ? () => startReply(chat.key, msg) : null)
   const edge = msg.reactions?.length ? registry.messageEdge.map(({ View }, i) => <View key={i} msg={msg} chat={chat} />) : null
-  const smiley = (beside: boolean) => <Beside msg={msg} chat={chat.key} you={you} picked={picked} react={canReact} reply={replies} name={f.name} over={!beside} />
+  const smiley = (beside: boolean) => (
+    <>
+      <Beside msg={msg} chat={chat.key} you={you} picked={picked || menu} react={canReact} reply={replies} more={pending && (() => setMenu(true))} name={f.name} over={!beside} />
+      {pending && menu ? <PendingMenu out={pending} onClose={() => setMenu(false)} /> : null}
+    </>
+  )
   // on its own it is a file tile like any other file, its reactions on its bottom right corner as on a bubble
   if (broken && single)
     return (
       <div data-msg={msg.id} data-chat={chat.key} data-you={you ? '' : undefined} className="group/msg relative flex max-w-full flex-col">
-        <div data-anchor {...hold} className={clsx('relative max-w-full select-none [-webkit-touch-callout:none]', canReact && pressable, touchFor(replies))}>
+        <div data-anchor {...hold} className={clsx('relative max-w-full select-none [-webkit-touch-callout:none]', (canReact || pending) && pressable, touchFor(replies))}>
           <FileTile name={f.name} chat={chat.key} path={f.path} />
         </div>
         {edge ? <div className="relative -mt-2 flex max-w-full flex-wrap justify-end gap-1 self-end pr-2.5 pl-1 phone:-mt-2.5">{edge}</div> : null}
@@ -653,7 +661,7 @@ function Tile({ msg, chat, you, radius, single, more, out }: { msg: Message; cha
           aria-label={`Download ${f.name}`}
           {...hold}
           style={{ borderRadius: radius }}
-          className={clsx(frame, 'grid size-full place-items-center text-fg2 select-none [-webkit-touch-callout:none] hover:text-fg', canReact && pressable, touchFor(replies))}
+          className={clsx(frame, 'grid size-full place-items-center text-fg2 select-none [-webkit-touch-callout:none] hover:text-fg', (canReact || pending) && pressable, touchFor(replies))}
         >
           <span className="grid justify-items-center gap-0.5 text-[0.6875rem] phone:text-[0.75rem]">
             <FileIcon className={ic} />
@@ -669,7 +677,7 @@ function Tile({ msg, chat, you, radius, single, more, out }: { msg: Message; cha
           // one on its way isn't a message yet: it opens on its own, like a file in the message box
           onClick={() => setUI({ photo: out ? { chat: chat.key, file: f } : { chat: chat.key, msg: msg.id } })}
           style={{ borderRadius: radius }}
-          className={clsx(frame, 'select-none [-webkit-touch-callout:none]', canReact && pressable, touchFor(replies), !single && 'size-full', picked && 'outline-2 outline-offset-2 outline-(--line2)')}
+          className={clsx(frame, 'select-none [-webkit-touch-callout:none]', (canReact || pending) && pressable, touchFor(replies), !single && 'size-full', picked && 'outline-2 outline-offset-2 outline-(--line2)')}
         >
           <img
             src={fileUrl(chat.key, f.path)}

@@ -678,6 +678,8 @@ let opening: ReturnType<typeof setTimeout> | null = null
 let pinging: ReturnType<typeof setTimeout> | null = null
 let saying: ReturnType<typeof setTimeout> | null = null
 let downSince: number | null = null
+/** the outbox was cleared of what a loading screen drops */
+let pruned = false
 let tried = 0
 
 export function connect() {
@@ -709,7 +711,9 @@ export function connect() {
       state = { ...state, snap: msg.snapshot }
       stayOnShown()
       fromOldPin(msg.snapshot)
-      putOutbox(prune(state.outbox, Date.now(), chatIn(msg.snapshot)))
+      // once loaded, the first snapshot says which chats are gone (a failed one left open a day keeps its Retry)
+      if (!pruned) putOutbox(prune(state.outbox, Date.now(), chatIn(msg.snapshot)))
+      pruned = true
     } else if (msg.type === 'chat') {
       state = { ...state, chats: { ...state.chats, [msg.chat.key]: msg.chat } }
       putOutbox(settle(state.outbox, msg.chat))
