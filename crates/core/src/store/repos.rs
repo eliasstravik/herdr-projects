@@ -26,19 +26,33 @@ pub fn git_root(folder: &Path) -> PathBuf {
         if !d.pop() { return start; }
     }
 }
-/// The primary checkout of a folder: for a linked worktree, the repo it belongs to.
+/// A checkout's own git folder and the one its worktrees share, as git says: the same for a main checkout (its `.git`
+/// a folder, or a file pointing elsewhere, as `--separate-git-dir` and submodules make), not for a linked worktree.
+fn git_dirs(root: &Path) -> Option<(PathBuf, PathBuf)> {
+    let out = git_out(root, &["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"]).ok()?;
+    let mut l = out.lines().map(|x| real(Path::new(x.trim())));
+    Some((l.next()?, l.next()?))
+}
+/// The primary checkout of a folder: for a linked worktree, the repo it belongs to. Its shared git folder sits in the
+/// checkout as `.git`, or elsewhere: then the known repo that shares it.
 pub fn primary_root(folder: &Path) -> PathBuf {
     let root = git_root(folder);
-    if fs::metadata(root.join(".git")).map(|m| m.is_file()).unwrap_or(false) {
-        if let Ok(common) = git_out(&root, &["rev-parse", "--path-format=absolute", "--git-common-dir"]) {
-            let common = PathBuf::from(common);
-            if common.file_name().map(|n| n == ".git").unwrap_or(false) { if let Some(p) = common.parent() { return p.to_path_buf(); } }
-        }
-    }
-    root
+    if !fs::metadata(root.join(".git")).map(|m| m.is_file()).unwrap_or(false) { return root; }
+    let Some((own, common)) = git_dirs(&root) else { return root };
+    if own == common { return root; }
+    if common.file_name().map(|n| n == ".git").unwrap_or(false) { if let Some(p) = common.parent() { return p.to_path_buf(); } }
+    known_repos().values().map(|v| PathBuf::from(text(v))).find(|p| p.join(".git").is_file() && git_dirs(p).map(|(o, c)| o == c && c == common).unwrap_or(false)).unwrap_or(root)
 }
 pub fn is_repo(folder: &Path) -> bool { git_root(folder).join(".git").exists() }
-pub fn can_worktree(folder: &Path) -> bool { fs::metadata(git_root(folder).join(".git")).map(|m| m.is_dir()).unwrap_or(false) }
+/// Whether tasks in a folder's repo get worktrees of their own: it is a main checkout, not a linked worktree.
+pub fn can_worktree(folder: &Path) -> bool {
+    let root = git_root(folder);
+    match fs::metadata(root.join(".git")) {
+        Ok(m) if m.is_dir() => true,
+        Ok(_) => git_dirs(&root).map(|(own, common)| own == common).unwrap_or(false),
+        Err(_) => false,
+    }
+}
 /// The branch a checkout is on, or the start of its commit when it is on none.
 pub fn branch_of(folder: &Path) -> String {
     let mut git = folder.join(".git");

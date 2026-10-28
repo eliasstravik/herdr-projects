@@ -8,9 +8,13 @@ pub fn git(cwd: &Path, a: &[&str]) -> Result<String, String> {
     let o = std::process::Command::new("git").args(a).current_dir(cwd).output().map_err(|e| e.to_string())?;
     if o.status.success() { Ok(String::from_utf8_lossy(&o.stdout).trim().to_string()) } else { Err(String::from_utf8_lossy(&o.stderr).into_owned()) }
 }
-/// The repo a folder belongs to: a checkout's own folder, or the main checkout of a worktree.
+/// The repo a folder belongs to: a checkout's own folder (its `.git` a folder or a file pointing elsewhere), or the
+/// main checkout of a worktree.
 fn repo_of(cwd: &Path) -> PathBuf {
-    git(cwd, &["rev-parse", "--path-format=absolute", "--git-common-dir"]).map(|d| PathBuf::from(d).parent().map(|p| p.to_path_buf()).unwrap_or_default()).unwrap_or_else(|_| cwd.to_path_buf())
+    let dirs = git(cwd, &["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir", "--show-toplevel"]).unwrap_or_default();
+    let l: Vec<&str> = dirs.lines().collect();
+    if l.len() < 3 { return cwd.to_path_buf(); }
+    if l[0] == l[1] { PathBuf::from(l[2]) } else { PathBuf::from(l[1]).parent().map(|p| p.to_path_buf()).unwrap_or_default() }
 }
 pub fn worktree(f: &F, st: &mut Value, verb: &str, flag: &dyn Fn(&str) -> Option<String>, force: bool) -> Out {
     match verb {
