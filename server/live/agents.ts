@@ -4,7 +4,7 @@
 // text could pick an option, or is still starting; then it goes in as soon as it can.
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, watch, type FSWatcher } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { Emitter } from '../source.ts'
 import { readJson, writeJson } from '../store.ts'
 import type { TermScreen } from '../../shared/types.ts'
@@ -18,6 +18,7 @@ import * as task from './mfs.ts'
 import { boxDir, mirrored } from './mfs.ts'
 import { runSync } from './box.ts'
 import { leftAtPrompt } from './commands.ts'
+import { paneWrong, type Wrong } from './revive.ts'
 
 /** a Claude Code session, copied into the project folder of the cwd it resumes in (Claude Code looks for it only
  *  there) from wherever it was written on that machine; its log path, or nothing when there is none */
@@ -114,6 +115,9 @@ type Events = {
 
 /** where the hooks of the agents Shepherdr starts record their events */
 export const HOOKS_DIR = join(boxDir(), 'hooks')
+
+/** where an agent's instructions are kept for its CLI to read */
+const promptPath = (name: string) => join(boxDir(), 'prompts', `${name}.md`)
 
 /**
  * The one place an agent's status is decided. What the agent reports of itself wins: its CLI's own hooks today (Claude
@@ -617,11 +621,43 @@ export class Agents extends Emitter<Events> {
 
   /** instructions go in a file: long text with quotes and newlines can't travel as a shell argument */
   private promptFile(r: AgentRecord) {
-    const dir = join(boxDir(), 'prompts')
-    task.mkdirSync(dir, { recursive: true })
-    const f = join(dir, `${r.name}.md`)
+    const f = promptPath(r.name)
+    task.mkdirSync(dirname(f), { recursive: true })
     task.writeFileSync(f, r.system ?? '')
     return f
+  }
+
+  /** the files Shepherdr starts its CLI with now, by flag: its hooks' settings and its instructions. One started with
+   *  others (herdr restored an older command after it restarted) runs without them */
+  filesOf(r: AgentRecord): Record<string, string> {
+    if (r.kind === 'claude') return { '--settings': join(HOOKS_DIR, `${r.name}.settings.json`), ...(r.system ? { '--append-system-prompt-file': promptPath(r.name) } : {}) }
+    if (r.kind === 'pi' && r.system) return { '--append-system-prompt': promptPath(r.name) }
+    return {}
+  }
+
+  /** what is wrong with this agent's run: gone from herdr, its CLI exited in its pane, or it runs on outdated files;
+   *  nothing while it is fine, works or asks (a turn is never cut for this), or when that can't be told */
+  async wrong(key: string): Promise<Wrong | undefined> {
+    const r = this.records[key]
+    const st = this.status(key)
+    if (!r || st === 'working' || st === 'blocked') return undefined
+    if (st === 'gone') return 'gone'
+    const a = this.info(key)
+    const p = a && (await herdr.processInfo(a.pane_id).catch(() => undefined))
+    return p ? paneWrong(r.kind, p, this.filesOf(r)) : undefined
+  }
+
+  /** being started or stopped right now */
+  busy(key: string) {
+    return this.starting.has(key) || this.stopping.has(key)
+  }
+
+  /** its pane closed, its run not over: started again right after (an agent whose CLI exited, or on outdated files) */
+  async close(key: string) {
+    const a = this.info(key)
+    if (!a) return
+    await herdr.closePane(a.pane_id).catch(() => undefined)
+    await this.refresh()
   }
 
   /** the workspace labelled so, or the one still labelled `was` (never a repo's), renamed to it */

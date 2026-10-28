@@ -35,8 +35,9 @@ import { claudeProjectDir, piSessionDir } from './readers/find.ts'
 import { boxDir } from './mfs.ts'
 import * as task from './mfs.ts'
 import { asMode, HOME_SPACE, HOST, NAME, placeId, Places } from './places.ts'
-import { coordinatorPrompt, restartLine, resumedLine, settingsBlock } from './prompts.ts'
+import { coordinatorPrompt, relaunchedLine, restartLine, resumedLine, settingsBlock } from './prompts.ts'
 import { fitHarness, harnessWords, recentChat, restartHint, restartInfo, type Harness } from './restart.ts'
+import { Revivals, type Wrong } from './revive.ts'
 import { carryOn, Retries, type Retry } from './retry.ts'
 import { CATALOG, CLI_NAME, CLIS, kindOf, refuse, setForTask, Settings, type Level } from './settings.ts'
 import { startVoice } from './voice.ts'
@@ -112,6 +113,9 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   private lastAgentMsg = new Map<string, string>()
   /** coordinators being started again in their own folder (reseat) */
   private reseating = new Set<string>()
+  /** agents that stopped or run on outdated files, started again by Shepherdr (revive.ts) */
+  revivals = new Revivals()
+  private reviving = new Set<string>()
   /** when a busy machine last had its finished tasks' browsers closed */
   private sweptAt = 0
   devices: () => string[] = () => []
@@ -162,6 +166,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     this.chats.onPost = (key) => this.fresh(key)
     this.agents.on('status', (key, st) => {
       if (key === '*') return this.emit('snapshot')
+      this.revivals.status(key, st)
       this.engine.agentStatus(key)
       this.fresh(key)
       // its turn ended: maybe its provider cut it off (its log may say so a moment later)
@@ -231,6 +236,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     this.timers.push(setInterval(() => this.heartbeat(), 30_000))
     this.timers.push(setInterval(() => this.emit('snapshot'), 30_000))
     if (process.env.NODE_ENV !== 'test') this.timers.push(setInterval(() => this.healthTick(), 5000))
+    if (process.env.NODE_ENV !== 'test') this.timers.push(setInterval(() => void this.revive().catch(() => undefined), 15_000))
   }
 
   /** once, after Shepherdr replaced herdr-projects here (scripts/take-over.ts): what it did, in the home space's chat */
@@ -961,6 +967,61 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       .then(() => this.coordinator(key))
       .catch(() => undefined)
       .finally(() => this.reseating.delete(key))
+  }
+
+  /** an agent Shepherdr keeps running: a space's coordinator it started, or a task's agent while its task goes on */
+  private keepsRunning(key: string) {
+    const r = this.agents.record(key)
+    if (!r || r.finished || this.agents.busy(key) || this.reseating.has(key) || this.peers?.owner(key)) return false
+    if (!key.includes('/')) return !!this.places.coordinator(key)
+    return this.engine.mayRetry(key) && !!this.engine.task(key.split('/')[0])?.worktree
+  }
+
+  /**
+   * Coordinators and task agents that stopped, or run without the files Shepherdr starts them with now (herdr restored
+   * an older command after it restarted): started again, resuming their session, a few times at most (revive.ts)
+   */
+  async revive(now = Date.now()) {
+    if (!this.agents.reachable || now - this.agents.lastReach > 10_000) return
+    for (const key of Object.keys(this.agents.records)) {
+      if (this.reviving.has(key)) continue
+      if (!this.keepsRunning(key)) {
+        this.revivals.skip(key)
+        continue
+      }
+      const why = await this.agents.wrong(key)
+      if (!why) this.revivals.fine(key, now)
+      else {
+        const go = this.revivals.seen(key, now)
+        if (go === 'go') void this.relaunch(key, why)
+        else if (go === 'give-up') this.gaveUp(key, why)
+      }
+    }
+  }
+
+  private async relaunch(key: string, why: Wrong) {
+    this.reviving.add(key)
+    try {
+      console.error(`shepherdr: ${key}'s agent ${why === 'stale' ? 'runs on outdated settings' : 'stopped'}: starting it again`)
+      // its pane still holds it, or its shell: herdr would count that as running
+      if (why !== 'gone') await this.agents.close(key)
+      await (key.includes('/') ? this.resumeTaskAgent(key) : this.coordinator(key))
+      if (this.revivals.wasWorking(key)) await this.agents.send(key, hidden(relaunchedLine(), 'restart'))
+    } catch (e) {
+      console.error(`shepherdr: couldn't start ${key}'s agent again: ${(e as Error).message}`)
+    } finally {
+      this.reviving.delete(key)
+      this.emit('snapshot')
+    }
+  }
+
+  /** started again a few times and still not right: its chat says so, with an alert */
+  private gaveUp(key: string, why: Wrong) {
+    const id = `revive:${key}:${Date.now()}`
+    const what = why === 'stale' ? 'keeps running on outdated settings' : 'stopped'
+    this.chats.post(key, { id, card: { id, text: `Its agent ${what}, and starting it again didn't help. Restart it from ⋯ → Restart agent.` } })
+    if (this.watched.includes(key)) this.emit('chat', key)
+    this.alert({ id: randomUUID(), from: 'Shepherdr', title: `${this.chatName(key)} stopped`, body: `Its agent ${what}, and Shepherdr couldn't start it again.`, go: { place: key, focus: id }, tag: `revive:${key}` })
   }
 
   /** what cut off an agent's last turn, if its log says the provider did */

@@ -168,6 +168,11 @@ export function restartLine(o: { from: string; to: string; chat: string; commits
 }
 
 /** what an agent started again on its own CLI is told, its session resumed (a model or an effort changed) */
+/** what an agent Shepherdr started again by itself is told, when it was at work as it stopped */
+export function relaunchedLine() {
+  return `Your agent had stopped (herdr restarted, or it ran on outdated settings): Shepherdr started you again, with your session as it was. Carry on where you left off; if there is nothing left to do, reply with only <no-reply>relaunched</no-reply>.`
+}
+
 export function resumedLine(on: string) {
   return `The human restarted you on ${on}, with your session as it was. If you were in the middle of something, carry on where you left off; else reply with only <no-reply>restarted</no-reply>.`
 }

@@ -139,6 +139,13 @@ export interface AgentInfo {
   interactive_ready?: boolean
 }
 
+/** what runs in a pane (pane.process_info) */
+export interface ProcessInfo {
+  shell_pid?: number
+  foreground_process_group_id?: number
+  foreground_processes?: { argv?: string[]; name?: string; pid?: number }[]
+}
+
 /** a workspace's place in a herdr worktree group: a repo's own checkout, or a linked worktree nested under it */
 export interface WorktreeOf {
   checkout_path: string
@@ -200,6 +207,9 @@ export const herdr = {
       return rect ? { cols: rect.width, rows: rect.height } : null
     }),
   panes: (workspace_id: string) => rpc<{ panes: PaneInfo[] }>('pane.list', { workspace_id }).then((r) => r.panes),
+  /** what runs in a pane: its shell, and the processes in its foreground with their command lines */
+  processInfo: (pane_id: string) =>
+    rpc<{ process_info: ProcessInfo }>('pane.process_info', { pane_id }).then((r) => r.process_info),
   /** the shell sits at its prompt: nothing runs in the foreground */
   paneIdle: (pane_id: string) =>
     rpc<{ process_info: { shell_pid?: number; foreground_process_group_id?: number } }>('pane.process_info', { pane_id }).then(
