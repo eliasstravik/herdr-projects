@@ -28,6 +28,20 @@ fn a_repo_whose_git_is_a_file_gives_its_task_a_worktree() {
     assert_eq!(primary_root(Path::new(t.s("worktree"))), w.root, "the worktree belongs to the repo");
 }
 
+/// Its git folder kept elsewhere under the name `.git` (`/storage/.git`): the worktree still belongs to the checkout,
+/// not to the folder that holds the history.
+#[test]
+fn history_kept_as_another_folders_git_still_belongs_to_its_checkout() {
+    let w = world();
+    let storage = w.base.join("storage");
+    std::fs::create_dir_all(&storage).unwrap();
+    git(&w.root, &["init", "-q", "--separate-git-dir", &storage.join(".git").display().to_string()]);
+    sw::store::repos::repo_of(&w.root).unwrap();
+    let tree = w.base.join("tree");
+    git(&w.root, &["worktree", "add", "-q", "-b", "x", &tree.display().to_string()]);
+    assert_eq!(primary_root(&tree), w.root);
+}
+
 #[test]
 fn a_submodule_is_a_main_checkout_and_its_worktrees_belong_to_it() {
     let w = world();

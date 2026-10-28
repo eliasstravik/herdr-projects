@@ -33,15 +33,17 @@ fn git_dirs(root: &Path) -> Option<(PathBuf, PathBuf)> {
     let mut l = out.lines().map(|x| real(Path::new(x.trim())));
     Some((l.next()?, l.next()?))
 }
-/// The primary checkout of a folder: for a linked worktree, the repo it belongs to. Its shared git folder sits in the
-/// checkout as `.git`, or elsewhere: then the known repo that shares it.
+/// The primary checkout of a folder: for a linked worktree, the repo it belongs to: the known repo whose checkout's
+/// `.git` file points at the git folder they share, else the folder that holds that git folder as its `.git`.
 pub fn primary_root(folder: &Path) -> PathBuf {
     let root = git_root(folder);
     if !fs::metadata(root.join(".git")).map(|m| m.is_file()).unwrap_or(false) { return root; }
     let Some((own, common)) = git_dirs(&root) else { return root };
     if own == common { return root; }
+    let known = known_repos().values().map(|v| PathBuf::from(text(v))).find(|p| p.join(".git").is_file() && git_dirs(p).map(|(o, c)| o == c && c == common).unwrap_or(false));
+    if let Some(p) = known { return p; }
     if common.file_name().map(|n| n == ".git").unwrap_or(false) { if let Some(p) = common.parent() { return p.to_path_buf(); } }
-    known_repos().values().map(|v| PathBuf::from(text(v))).find(|p| p.join(".git").is_file() && git_dirs(p).map(|(o, c)| o == c && c == common).unwrap_or(false)).unwrap_or(root)
+    root
 }
 pub fn is_repo(folder: &Path) -> bool { git_root(folder).join(".git").exists() }
 /// Whether tasks in a repo's folder get worktrees of their own: git works there, its `.git` a folder or a file. (A
