@@ -12,6 +12,7 @@ pub mod add;
 pub mod automations;
 pub mod carry;
 pub mod check;
+pub mod control;
 pub mod lookup;
 pub mod own_names;
 pub mod pins;
@@ -47,8 +48,9 @@ pub fn machines() -> Vec<Machine> {
         Machine { id: m.t("id"), target: pick(&["ssh_target", "target", "ssh", "host"]), session: pick(&["remote_session", "session"]), label }
     }).filter(|m| !m.target.is_empty() && !m.label.is_empty()).collect()
 }
-/// Its own known-hosts file, so an old saved key elsewhere cannot get in the way; one shared connection per machine,
-/// so asking again every few seconds costs almost nothing. The remote side runs through a login shell so PATH is set.
+/// Its own known-hosts file, so an old saved key elsewhere cannot get in the way; one shared connection per machine
+/// (its socket: remote/control.rs), so asking again every few seconds costs almost nothing. The remote side runs
+/// through a login shell so PATH is set.
 /// `remote` holds no single quote (what it carries is cleaned or base64), so it reads alike in single quotes everywhere.
 pub fn ssh_command(m: &Machine, remote: &str, tty: bool) -> (String, Vec<String>) {
     debug_assert!(!remote.contains('\''), "{remote}");
@@ -57,7 +59,7 @@ pub fn ssh_command(m: &Machine, remote: &str, tty: bool) -> (String, Vec<String>
     let d = data_dir();
     let mut a: Vec<String> = if tty { vec!["-t".into()] } else { vec!["-o".into(), "BatchMode=yes".into()] };
     for o in ["ConnectTimeout=6", "StrictHostKeyChecking=accept-new"] { a.extend(["-o".into(), o.into()]); }
-    a.extend(["-o".into(), format!("UserKnownHostsFile={}", d.join("known_hosts").display()), "-o".into(), "ControlMaster=auto".into(), "-o".into(), format!("ControlPath={}", d.join("ssh-%C").display()), "-o".into(), "ControlPersist=120".into(), "-o".into(), "LogLevel=ERROR".into()]);
+    a.extend(["-o".into(), format!("UserKnownHostsFile={}", d.join("known_hosts").display()), "-o".into(), "ControlMaster=auto".into(), "-o".into(), format!("ControlPath={}", control::control_path()), "-o".into(), "ControlPersist=120".into(), "-o".into(), "LogLevel=ERROR".into()]);
     a.push(m.target.clone());
     a.push(login_line(&session, remote));
     ("ssh".into(), a)

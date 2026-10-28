@@ -89,3 +89,20 @@ fn real_programs_the_ssh_line_reads_alike_in_every_login_shell() {
         assert_eq!(String::from_utf8_lossy(&o.stdout), "[work] [two  spaces] [eyJhIjoxfQ==]\n", "{}: {}", shell.display(), String::from_utf8_lossy(&o.stderr));
     }
 }
+
+/// ssh's shared connection is a socket, and a socket's path may not pass 103 bytes on macOS: ssh names it with 57 of
+/// them (`%C` and a dot and 16 more while it starts), so it lives in a short folder of this user's own, whatever the
+/// board's folder is. A folder open to others is not used.
+#[test]
+fn the_ssh_connection_socket_fits_a_long_home_folder() {
+    use std::os::unix::fs::PermissionsExt;
+    let w = world();
+    unsafe { std::env::set_var("HERDR_PROJECTS_HOME", w.base.join("Users/alexandrsukhryn/.herdr-projects")) };
+    let path = || { let (_, a) = sw::remote::ssh_command(&sw::remote::Machine { target: "me@vm-a".into(), ..Default::default() }, "true", false); a.iter().find_map(|x| x.strip_prefix("ControlPath=").map(String::from)).unwrap() };
+    let p = path();
+    assert!(p.ends_with("/%C") && p.len() - 2 + 57 <= 103, "{p}: {} bytes", p.len() - 2 + 57);
+    let dir = std::path::Path::new(&p).parent().unwrap();
+    assert_eq!(std::fs::metadata(dir).unwrap().permissions().mode() & 0o777, 0o700);
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(path(), sw::store::files::data_dir().join("ssh-%C").display().to_string());
+}
