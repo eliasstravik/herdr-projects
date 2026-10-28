@@ -14,7 +14,7 @@ use crate::clock::now;
 use crate::delegate::task_line;
 use crate::flow::{git::{cancel_auto_merge, pr_number}, handled_turn::{reopened, same_turn}, live::see_terminal, pane_owner::agents_pane, sidebar::tell_sidebar, task::{is_agent_task, note_stat}};
 use crate::leftovers::sweep::ended;
-use crate::herdr::{cli::current_socket, Herdr};
+use crate::herdr::{cli::{current_socket, same_socket}, Herdr};
 use crate::json::*;
 use crate::limits::run::granted;
 use crate::runner::{runner_alive, spawn_runner};
@@ -43,7 +43,7 @@ pub fn hook_main() {
     crate::housekeeping::housekeeping(&socket, crate::housekeeping::Force::No);
 }
 pub fn log(e: &str) { let _ = std::fs::OpenOptions::new().create(true).append(true).open(data_dir().join("hook.log")).and_then(|mut f| { use std::io::Write; writeln!(f, "{} {e}", crate::clock::iso(now())) }); }
-fn mine(socket: &str) -> Vec<Task> { list(ListOpts { attempts: true, ..Default::default() }).into_iter().filter(|t| is_agent_task(t) && t.at("link").s("socket") == socket).collect() }
+fn mine(socket: &str) -> Vec<Task> { list(ListOpts { attempts: true, ..Default::default() }).into_iter().filter(|t| is_agent_task(t) && same_socket(t.at("link").s("socket"), socket)).collect() }
 fn on_gone(socket: &str, matches: impl Fn(&Task) -> bool) { let api = Herdr::new(Some(socket.into())); for t in mine(socket) { if matches(&t) { reconcile(&t, &api); } } }
 
 /// The hook looks the pane up by herdr socket path plus pane id (pane ids repeat across herdr sessions) and does

@@ -44,7 +44,7 @@ pub fn never_stepped_into(t: &Task) -> bool {
 /// Looked at once for every turn of a task that holds.
 pub fn lift_old_holds(tasks: &[Obj], socket: &str) {
     let mut since: Option<i64> = None;
-    let held = |t: &Task| t.s("stage") == "approval" && t.b("requireApproval") && t.at("holdLooked") != &json!(t.i("armedAt")) && !t.b("archivedAt") && t.at("link").s("socket") == socket && flow::task::is_agent_task(t) && setting("merge.by", Some(t)) == json!("itself");
+    let held = |t: &Task| t.s("stage") == "approval" && t.b("requireApproval") && t.at("holdLooked") != &json!(t.i("armedAt")) && !t.b("archivedAt") && crate::herdr::cli::same_socket(t.at("link").s("socket"), socket) && flow::task::is_agent_task(t) && setting("merge.by", Some(t)) == json!("itself");
     for seen in tasks {
         if !held(seen) { continue; }
         let s = *since.get_or_insert_with(rule_since);

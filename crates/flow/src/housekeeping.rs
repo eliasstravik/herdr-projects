@@ -12,7 +12,7 @@ use crate::actions::start::start_queued;
 use crate::clock::now;
 use crate::finish::{auto_merge::{auto_merge_pass, green}, line::line_pass};
 use crate::flow::{send::resume_cut, spaces::{sweep_closing, sweep_repo_spaces}, task::is_agent_task};
-use crate::herdr::{cli::socket_exists, Herdr};
+use crate::herdr::{cli::{same_socket, socket_exists}, Herdr};
 use crate::json::*;
 use crate::runner::{inline, runner_alive, spawn_claimed, spawn_runner, start_reaped, user_env, detach, JOBS};
 use crate::store::{files::{bin, data_dir, has_tasks, RUNNER_STAGES}, marks::due, old_suggestions::save_old_suggestions, repos::folder_of, retries::waiting_of, settings::lookup::setting, tasks::{get, list, ListOpts, Task}};
@@ -36,13 +36,13 @@ fn pass(socket: &str, force: Force) {
     let every = list(ListOpts { attempts: true, ..Default::default() });
     let tasks: Vec<Task> = every.iter().filter(|t| !t.b("attemptOf")).cloned().collect();
     if socket_exists(socket) {
-        let linked: Vec<&Task> = every.iter().filter(|t| is_agent_task(t) && t.at("link").s("socket") == socket && !["done", "todo", "progress", "queued", "after"].contains(&t.s("stage"))).collect();
+        let linked: Vec<&Task> = every.iter().filter(|t| is_agent_task(t) && same_socket(t.at("link").s("socket"), socket) && !["done", "todo", "progress", "queued", "after"].contains(&t.s("stage"))).collect();
         if !linked.is_empty() {
             let api = Herdr::new(Some(socket.into()));
             if api.workspaces().is_ok() { for t in linked { crate::hook::reconcile(&get(t.s("id")).unwrap_or_else(|| t.clone()), &api); } }
         }
         // A start whose runner was lost before the task had a pane: tried again once, then failed (hook/lost.rs).
-        for t in every.iter().filter(|t| !is_agent_task(t) && t.at("link").s("socket") == socket && RUNNER_STAGES.contains(&t.s("stage")) && !t.b("archivedAt")) {
+        for t in every.iter().filter(|t| !is_agent_task(t) && same_socket(t.at("link").s("socket"), socket) && RUNNER_STAGES.contains(&t.s("stage")) && !t.b("archivedAt")) {
             if let Some(t) = get(t.s("id")) { crate::hook::retry_lost(&t); }
         }
         // A task that waited for others to be done goes on to a slot once they are (after.rs).
@@ -55,7 +55,7 @@ fn pass(socket: &str, force: Force) {
         // the space is free; after a turn in the agent's own terminal only when that has been quiet for a while.
         let quiet: i64 = std::env::var("HERDR_PROJECTS_QUIET_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(600000);
         for t in &tasks {
-            if t.s("stage") != "done" || setting("workspace.cleanup", Some(t)) != json!(true) || !t.b("tidy") || t.b("archivedAt") || t.at("link").s("socket") != socket || runner_alive(t) || now() - t.at("tidy").i("quietFrom") < quiet { continue; }
+            if t.s("stage") != "done" || setting("workspace.cleanup", Some(t)) != json!(true) || !t.b("tidy") || t.b("archivedAt") || !same_socket(t.at("link").s("socket"), socket) || runner_alive(t) || now() - t.at("tidy").i("quietFrom") < quiet { continue; }
             // Read again: the list is from the pass's start, and a clean-up started since may still run (it can take
             // longer than the half minute between tries).
             if get(t.s("id")).is_none_or(|c| runner_alive(&c)) { continue; }
@@ -71,7 +71,7 @@ fn pass(socket: &str, force: Force) {
         line_pass(&tasks);
         // An agent whose turn a passing provider error cut off is told to carry on once its wait is over.
         for t in &every {
-            if let Some(w) = waiting_of(t) { if w.s("who") == "agent" && t.at("link").s("socket") == socket && now() >= w.i("until") && !runner_alive(t) { resume_cut(t.s("id")); } }
+            if let Some(w) = waiting_of(t) { if w.s("who") == "agent" && same_socket(t.at("link").s("socket"), socket) && now() >= w.i("until") && !runner_alive(t) { resume_cut(t.s("id")); } }
         }
     }
     crate::leftovers::sweep::daily(); // what ended tasks left behind, once a day
@@ -86,7 +86,7 @@ fn pass(socket: &str, force: Force) {
 fn resync(tasks: &[Task], socket: &str) {
     let mut known = HashMap::new();
     for t in tasks {
-        if !resyncable(t) || t.at("link").s("socket") != socket || tree_of(t).is_empty() || runner_alive(t) { continue; }
+        if !resyncable(t) || !same_socket(t.at("link").s("socket"), socket) || tree_of(t).is_empty() || runner_alive(t) { continue; }
         // A task that merges by itself is not brought up to date here, with every other one at once: it catches up when
         // its turn to merge comes (finish/line.rs), and so does that only once.
         if setting("merge.by", Some(t)) == json!("itself") && green(t) { continue; }

@@ -13,7 +13,7 @@ pub fn after_pass(tasks: &[Task], socket: &str) -> bool {
         if crate::runner::inline() { crate::runner::JOBS.with(|j| j.borrow_mut().push(("afterfar".into(), "-".into(), vec![]))); } else { crate::housekeeping::spawn_loose(&["run", "afterfar", "-"]); }
     }
     let mut woke = false;
-    for t in tasks.iter().filter(|t| t.s("stage") == STAGE && t.at("link").s("socket") == socket && !t.b("archivedAt")) { if refresh(t.s("id")) { woke = true; } }
+    for t in tasks.iter().filter(|t| t.s("stage") == STAGE && crate::herdr::cli::same_socket(t.at("link").s("socket"), socket) && !t.b("archivedAt")) { if refresh(t.s("id")) { woke = true; } }
     woke
 }
 /// One waiting task brought up to date; true when its wait is over and it is queued.

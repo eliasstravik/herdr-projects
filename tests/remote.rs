@@ -5,6 +5,7 @@ use common::*;
 use serde_json::json;
 use sw::json::*;
 use sw::remote::why::{known_host, not_list, unanswered, why_not, Ended};
+mod same_socket;
 
 fn end(code: i32, stdout: &str, stderr: &str) -> Ended { Ended { code: Some(code), stdout: stdout.into(), stderr: stderr.into(), timed_out: false, error: String::new(), ms: 0 } }
 

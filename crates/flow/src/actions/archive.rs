@@ -3,7 +3,7 @@ use super::talk::stop_as;
 use crate::leftovers::ends::Ended;
 use crate::err::{Error, Res};
 use crate::flow;
-use crate::herdr::{cli::current_socket, Herdr};
+use crate::herdr::{cli::{current_socket, same_socket}, Herdr};
 use crate::json::*;
 use crate::runner::runner_alive;
 use crate::store::files::{marker, with_task_lock, SLOT_STAGES};
@@ -28,7 +28,7 @@ pub fn archive(id: &str) -> Res<Task> {
     })?;
     let before = crate::land::cleanup_ends::before_archive(&t); // sorted while its panes are there (cleanup_ends.rs)
     let mut closed = false;
-    if !workspace.is_empty() && socket == current_socket() {
+    if !workspace.is_empty() && same_socket(&socket, &current_socket()) {
         let h = Herdr::new(Some(socket));
         closed = h.workspace_close(&workspace).is_ok();
         flow::spaces::close_repo_space(&h, &folder_of(t.s("id")));

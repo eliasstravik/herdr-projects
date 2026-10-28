@@ -9,7 +9,7 @@
 use super::live::{owns_pane, saved};
 use super::sidebar_entry::{entry_of, reviewer_entry, task_name, Entry};
 use super::task::is_agent_task;
-use crate::herdr::cli::{args, current_socket, session_name};
+use crate::herdr::cli::{args, current_socket, same_socket, session_name};
 use crate::herdr::Herdr;
 use crate::json::*;
 use crate::store::files::{data_dir, read_obj, write_json};
@@ -105,13 +105,13 @@ pub fn sync_sidebar(tasks: &[Obj], socket: Option<&str>, now: i64) {
     for t in tasks {
         all.push(t.clone());
         for c in t.arr("tries").iter().filter_map(|c| c.as_object()).filter(|c| !c.b("chosen")) { let mut c = c.clone(); c.put("parentStage", t.at("stage").clone()); all.push(c); }
-        if t.s("stage") == "pick" && !is_agent_task(t) && t.at("link").b("workspace") && t.at("link").s("socket") == socket && !t.b("archivedAt") {
+        if t.s("stage") == "pick" && !is_agent_task(t) && t.at("link").b("workspace") && same_socket(t.at("link").s("socket"), &socket) && !t.b("archivedAt") {
             let (api, ws) = (Herdr::new(Some(socket.clone())), t.at("link").t("workspace"));
             list.push((format!("w|{socket}|{ws}"), json!(["", ""]), Box::new(move || api.call(args(&["workspace", "report-metadata", &ws, "--source", SOURCE, "--clear-token", "summary", "--clear-token", "progress"])).is_ok())));
         }
     }
     for t in &all {
-        if !is_agent_task(t) || t.at("link").s("socket") != socket { continue; }
+        if !is_agent_task(t) || !same_socket(t.at("link").s("socket"), &socket) { continue; }
         let live = t.at("live");
         if live.b("down") { down = true; }
         // Its pane is gone, or its id is another's now: what was written there is forgotten, not taken off.

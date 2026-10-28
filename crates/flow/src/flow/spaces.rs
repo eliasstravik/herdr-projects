@@ -2,7 +2,7 @@
 //! Asked for a worktree of a repo that has no workspace open, herdr also opens the repo itself as one. Nobody asked
 //! for that space, so it is remembered here and closed again with the repo's last task space. One that existed
 //! before, or that you have since started using, is yours and is left alone.
-use crate::herdr::cli::{args, socket_exists};
+use crate::herdr::cli::{args, same_socket, socket_exists};
 use crate::herdr::Herdr;
 use crate::json::*;
 use crate::store::files::{data_dir, read_json, read_obj, write_json};
@@ -68,7 +68,7 @@ fn closing_file() -> PathBuf { data_dir().join("closing.json") }
 pub fn close_later(socket: &str, workspace: &str) {
     if socket.is_empty() || workspace.is_empty() { return; }
     let mut all: Vec<Value> = read_json(&closing_file()).and_then(|v| v.as_array().cloned()).unwrap_or_default();
-    all.retain(|x| !(x.s("socket") == socket && x.s("workspace") == workspace));
+    all.retain(|x| !(same_socket(x.s("socket"), socket) && x.s("workspace") == workspace));
     all.push(json!({ "socket": socket, "workspace": workspace }));
     let keep: Vec<Value> = all.iter().skip(all.len().saturating_sub(200)).cloned().collect();
     let _ = write_json(&closing_file(), &Value::Array(keep));
@@ -77,7 +77,7 @@ pub fn close_later(socket: &str, workspace: &str) {
 pub fn sweep_closing(socket: &str) {
     if !cleanup_on(None) { return; }
     let all: Vec<Value> = read_json(&closing_file()).and_then(|v| v.as_array().cloned()).unwrap_or_default();
-    if !all.iter().any(|x| x.s("socket") == socket) || (crate::herdr::cli::fake().is_none() && !socket_exists(socket)) { return; }
+    if !all.iter().any(|x| same_socket(x.s("socket"), socket)) || (crate::herdr::cli::fake().is_none() && !socket_exists(socket)) { return; }
     let api = Herdr::new(Some(socket.to_string()));
     let closed = |ws: &str| -> bool {
         match api.call(args(&["workspace", "get", ws])) {
@@ -91,6 +91,6 @@ pub fn sweep_closing(socket: &str) {
             }
         }
     };
-    let left: Vec<Value> = all.iter().filter(|x| x.s("socket") != socket || !closed(x.s("workspace"))).cloned().collect();
+    let left: Vec<Value> = all.iter().filter(|x| !same_socket(x.s("socket"), socket) || !closed(x.s("workspace"))).cloned().collect();
     if left.len() != all.len() { let _ = write_json(&closing_file(), &Value::Array(left)); }
 }

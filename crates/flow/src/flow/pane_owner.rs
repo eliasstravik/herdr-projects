@@ -41,7 +41,7 @@ pub fn whose(tasks: impl IntoIterator<Item = Task>, socket: &str, pane: &str) ->
     let mut now = || term.get_or_insert_with(|| terminal_of(socket, pane)).clone();
     let found = tasks.into_iter().find_map(|t| {
         let l = t.at("link");
-        if l.s("socket") != socket { return None; }
+        if !crate::herdr::cli::same_socket(l.s("socket"), socket) { return None; }
         if l.s("pane") == pane && agents_pane(&t, &now()) { return Some((t, "agent")); }
         if l.at("reviewer").s("pane") == pane && reviewers_pane(&t, &now()) { return Some((t, "reviewer")); }
         None

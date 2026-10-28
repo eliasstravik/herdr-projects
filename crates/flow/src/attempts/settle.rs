@@ -19,7 +19,7 @@ const LOST_MS: i64 = 60000;
 /// Called by the housekeeping pass for every task whose attempts are under way.
 pub fn settle_pass(tasks: &[Obj], socket: &str, now: i64) {
     for t in tasks {
-        if t.b("archivedAt") || t.at("link").s("socket") != socket || runner_alive(t) { continue; }
+        if t.b("archivedAt") || !crate::herdr::cli::same_socket(t.at("link").s("socket"), socket) || runner_alive(t) { continue; }
         if t.s("stage") == "attempts" { let _ = settle(t.s("id"), now); }
         // A comparison whose runner is gone (the machine restarted): nobody will name one, so the task waits for your pick.
         else if t.s("stage") == "reviewing" && t.b("comparing") && now - t.at("comparing").i("at") > LOST_MS { let _ = to_pick(t.s("id"), Some(json!({ "error": "the comparison stopped before the reviewer named an attempt" })), "reviewing"); }

@@ -11,7 +11,7 @@
 use crate::clock::{iso, now};
 use crate::err::Kind;
 use crate::flow::{live::board_for, sidebar::sync_sidebar, task::is_agent_task};
-use crate::herdr::{cli::{current_socket, socket_exists}, Herdr};
+use crate::herdr::{cli::{current_socket, same_socket, socket_exists}, Herdr};
 use crate::housekeeping::{housekeeping, loose, spawn_loose, Force};
 use crate::json::*;
 use crate::runner::{inline, user_env};
@@ -127,7 +127,7 @@ fn handover(own: i64) -> Result<(), String> {
 pub fn tick_once(socket: &str, watch: bool) -> Option<Vec<Obj>> {
     let mut rows = None;
     let r = with_lock_wait("tick", 0, || {
-        if socket == current_socket() { crate::automations::tick::automations_tick(now()); } // tasks made on a schedule or by a board event
+        if same_socket(socket, &current_socket()) { crate::automations::tick::automations_tick(now()); } // tasks made on a schedule or by a board event
         housekeeping(socket, Force::No);
         let rs = board_for(socket);
         sync_sidebar(&rs, Some(socket), now());
@@ -172,7 +172,7 @@ pub fn keeper_work() -> i32 {
     let first = current_socket();
     loop {
         let mut sockets = vec![first.clone()];
-        for t in shared(ListOpts::default()) { let s = t.at("link").t("socket"); if !s.is_empty() && !sockets.contains(&s) { sockets.push(s); } }
+        for t in shared(ListOpts::default()) { let s = t.at("link").t("socket"); if !s.is_empty() && !sockets.iter().any(|x| same_socket(x, &s)) { sockets.push(s); } }
         let mut live = 0;
         for socket in &sockets {
             let ok = socket_exists(socket) && Herdr::new(Some(socket.clone())).alive();

@@ -9,7 +9,7 @@ use crate::agents::installed::read_turn_of;
 use crate::clock::now;
 use crate::flow;
 use crate::herdr::api::read_screen;
-use crate::herdr::cli::{args, current_socket, socket_exists};
+use crate::herdr::cli::{args, current_socket, same_socket, socket_exists};
 use crate::herdr::Herdr;
 use crate::json::*;
 use super::in_use::{self, InUse, Why};
@@ -38,7 +38,7 @@ pub fn cleanup_with(t: &Task, o: Opts) -> Cleanup {
     let link = t.at("link");
     let sock = link.t("socket");
     // After a task ended its own herdr session is asked, whichever session this runs in. A delete acts in this one only.
-    let api = if !sock.is_empty() && (o.still.is_some() || sock == current_socket()) && socket_exists(&sock) { Some(Herdr::new(Some(sock.clone()))) } else { None };
+    let api = if !sock.is_empty() && (o.still.is_some() || same_socket(&sock, &current_socket())) && socket_exists(&sock) { Some(Herdr::new(Some(sock.clone()))) } else { None };
     let (mut ws, mut unknown) = (None::<Value>, false); // a space herdr did not answer for is not "closed already"
     if let (Some(api), true) = (&api, link.b("workspace")) {
         match api.call(args(&["workspace", "get", link.s("workspace")])) { Ok(r) => ws = Some(r.at("workspace").clone()).filter(|w| w.is_object()), Err(e) => unknown = !e.code.contains("not_found") }

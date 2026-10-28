@@ -241,7 +241,7 @@ pub fn ask_approve(id: &str, socket: &str, to: &str) -> Res<()> {
 }
 pub fn take_approve(socket: &str, me: &str) -> String {
     let Some(q) = read_obj(&approve_file()) else { return String::new() };
-    if q.s("socket") != socket { return String::new(); }
+    if !crate::herdr::cli::same_socket(q.s("socket"), socket) { return String::new(); }
     let fresh = now() - q.i("at") < 15000;
     if fresh && q.b("to") && !me.is_empty() && q.s("to") != me { return String::new(); } // the other board's
     let _ = std::fs::remove_file(approve_file());

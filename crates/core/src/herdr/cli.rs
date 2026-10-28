@@ -48,6 +48,20 @@ pub fn session_name(socket: &str) -> String {
 }
 pub fn in_herdr() -> bool { std::env::var("HERDR_ENV").as_deref() == Ok("1") }
 pub fn socket_exists(socket: &str) -> bool { use std::os::unix::fs::FileTypeExt; std::fs::metadata(socket).map(|m| m.file_type().is_socket()).unwrap_or(false) }
+/// Whether two paths name the same herdr socket: alike as text, or once links are followed (a config folder reached
+/// through a symlink spells the same session's socket another way). A socket not there yet is followed as far as its
+/// folder. Asked for every task on every pass: what a path resolves to is kept for a minute.
+pub fn same_socket(a: &str, b: &str) -> bool { a == b || (!a.is_empty() && !b.is_empty() && resolved(a) == resolved(b)) }
+fn resolved(socket: &str) -> PathBuf {
+    static SEEN: std::sync::Mutex<Option<std::collections::HashMap<String, (PathBuf, std::time::Instant)>>> = std::sync::Mutex::new(None);
+    let mut seen = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+    let seen = seen.get_or_insert_with(Default::default);
+    if let Some((p, at)) = seen.get(socket) { if at.elapsed().as_secs() < 60 { return p.clone(); } }
+    let p = Path::new(socket);
+    let r = std::fs::canonicalize(p).ok().or_else(|| Some(std::fs::canonicalize(p.parent()?).ok()?.join(p.file_name()?))).unwrap_or_else(|| p.to_path_buf());
+    seen.insert(socket.to_string(), (r.clone(), std::time::Instant::now()));
+    r
+}
 
 /// Runs the program: what it gave, or why it could not be run. `timeout_ms` ends a program that takes longer.
 pub fn launch(socket: Option<&str>, args: &[String], input: &str, timeout_ms: u64) -> HRes<Ran> {

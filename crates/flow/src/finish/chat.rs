@@ -44,7 +44,7 @@ fn done_with(t: &Task, away: bool, n: i64) -> bool {
 }
 /// The housekeeping pass's part: each chat that changed the code and that you are done with gets its one review.
 pub fn chat_pass(tasks: &[Task], socket: &str) {
-    let held: Vec<&Task> = tasks.iter().filter(|t| chat::held(t) && t.at("link").s("socket") == socket && !t.b("archivedAt") && !runner_alive(t) && !t.b("sent") && !t.b("pendingText")).collect();
+    let held: Vec<&Task> = tasks.iter().filter(|t| chat::held(t) && crate::herdr::cli::same_socket(t.at("link").s("socket"), socket) && !t.b("archivedAt") && !runner_alive(t) && !t.b("sent") && !t.b("pendingText")).collect();
     if held.is_empty() { return; }
     // A chat in the agent's own pane is left when herdr shows another space.
     let shown: Option<Vec<Value>> = if held.iter().any(|t| t.at("chat").s("via") == "terminal") { Herdr::new(Some(socket.into())).workspaces().ok() } else { None };

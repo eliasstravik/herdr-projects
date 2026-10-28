@@ -35,7 +35,7 @@ fn pending(t: &Obj) -> bool { t.s("stage") == "merging" && t.b("autoMerge") && t
 pub fn auto_merge_pass(tasks: &[Obj], socket: &str) {
     lift_old_holds(tasks, socket);
     for seen in tasks {
-        if seen.at("link").s("socket") != socket || (seen.s("stage") != "approval" && !pending(seen)) || runner_alive(seen) { continue; }
+        if !crate::herdr::cli::same_socket(seen.at("link").s("socket"), socket) || (seen.s("stage") != "approval" && !pending(seen)) || runner_alive(seen) { continue; }
         if by_itself(seen) { if green(seen) { start(seen.s("id")); } } else if pending(seen) { hold(seen); }
     }
 }

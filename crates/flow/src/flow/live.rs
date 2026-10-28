@@ -2,7 +2,7 @@
 //! `pane list` per herdr session answer for every task on the board.
 use super::task::is_agent_task;
 use crate::err::Res;
-use crate::herdr::cli::{current_socket, session_name, socket_exists};
+use crate::herdr::cli::{current_socket, same_socket, session_name, socket_exists};
 use crate::herdr::Herdr;
 use crate::json::*;
 use crate::research::is_research_among;
@@ -27,7 +27,7 @@ pub fn read_session(socket: &str) -> Session {
 pub fn live_of(t: &Task, session: &Session, here: &str) -> Value {
     if !is_agent_task(t) { return Value::Null; }
     let sock = t.at("link").s("socket");
-    if !sock.is_empty() && sock != here { return json!({ "away": session_name(sock) }); }
+    if !sock.is_empty() && !same_socket(sock, here) { return json!({ "away": session_name(sock) }); }
     let Session::Up { agents, panes } = session else { return json!({ "down": true }) };
     let pane_id = t.at("link").s("pane");
     let Some(pane) = panes.get(pane_id).filter(|p| owns_pane(t, p)) else { return json!({ "gone": true }) };
@@ -98,7 +98,7 @@ pub fn queue_place(t: &Task) -> Option<i64> {
     crate::shown::queue::places(all.iter()).into_iter().find(|(id, _)| id == t.s("id")).map(|(_, n)| n)
 }
 fn session_for(tasks: &[Arc<Task>], socket: &str) -> Session {
-    let needs = tasks.iter().any(|t| (is_agent_task(t) || !t.arr("attempts").is_empty()) && t.at("link").s("socket") == socket);
+    let needs = tasks.iter().any(|t| (is_agent_task(t) || !t.arr("attempts").is_empty()) && same_socket(t.at("link").s("socket"), socket));
     if needs { read_session(socket) } else { Session::Down }
 }
 /// This machine's tasks as one herdr session sees them (the keeper serves several sessions from one data folder).
@@ -123,7 +123,7 @@ pub fn board(include_archived: bool) -> Vec<Obj> {
 pub fn assert_live(t: &Task) -> Res<()> {
     if !is_agent_task(t) { crate::fail!("No agent has been on {} yet. Delegate it first.", t.s("id")); }
     let here = current_socket();
-    if t.at("link").s("socket") != here { crate::fail!("{} lives in herdr session {}. Open the board there.", t.s("id"), session_name(t.at("link").s("socket"))); }
+    if !same_socket(t.at("link").s("socket"), &here) { crate::fail!("{} lives in herdr session {}. Open the board there.", t.s("id"), session_name(t.at("link").s("socket"))); }
     if crate::herdr::cli::fake().is_none() && (!socket_exists(&here) || !Herdr::new(Some(here)).alive()) { crate::fail!("herdr is not running."); }
     Ok(())
 }
