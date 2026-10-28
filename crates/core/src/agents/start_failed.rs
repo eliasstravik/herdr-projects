@@ -18,12 +18,14 @@ pub struct Start<'a> { pub kind: &'a str, pub setting: &'a str, pub again: &'a s
 static MODEL: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(?i)\bmodel\b[^\n]{0,80}\b(not found|does not exist|doesn't exist|unknown|invalid|not supported|unsupported|not available|isn't available|no access|not allowed)\b|\b(unknown|invalid|unsupported) model\b").unwrap());
 static ARG: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(?i)unexpected argument|unknown (option|argument|flag)|unrecognized (option|argument)|invalid (option|argument)").unwrap());
 static LOGIN: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(?i)/login\b|sign in with chatgpt|please (log|sign) ?in|select login method|log ?in to (continue|use)|not (logged|signed) in|run [`']?\w+ login").unwrap());
-static MISSING: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(?i)command not found|no such file or directory|not found in \$?path|unknown command").unwrap());
 
-/// The shell said this program is not there: a "not found" line that names it (`bash: codex: command not found`), not
-/// any such line, which a stray command in the terminal leaves too (#412).
+/// The shell said this program is not there, in its own words: `bash: codex: command not found`, `zsh: command not
+/// found: codex`, `/usr/local/bin/codex: No such file or directory`, fish's `Unknown command: codex`. Not any such line,
+/// which a stray command in the terminal leaves too, nor a file of that name another program did not find (#412).
 fn missing_here(program: &str, screen: &str) -> bool {
-    screen.lines().any(|l| MISSING.is_match(l) && l.split(|c: char| c.is_whitespace() || c == ':' || c == '\'' || c == '"' || c == '`').any(|w| w == program || w.ends_with(&format!("/{program}"))))
+    let p = regex::escape(program);
+    let said = regex::Regex::new(&format!(r"(?im)(^|[\s:])(/\S*/)?{p}: (command not found|not found|no such file or directory)|(command not found|unknown command):? {p}\s*$")).unwrap();
+    said.is_match(screen)
 }
 fn cap(s: &str) -> String { let mut c = s.chars(); c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default() }
 /// The last lines of a pane as they show, without colours: "" when it cannot be read.

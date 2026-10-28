@@ -153,8 +153,11 @@ fn an_installed_agent_is_not_called_missing_for_another_commands_not_found_line(
     let w = explain(&s, "agent target pane w8M:p1 is not an available shell (tried 4 times in 7 s)", noise);
     assert_eq!(w.short, "its terminal was not at its shell prompt");
     // The shell saying that codex itself is not there still is "not installed", in either shell's words.
-    for screen in ["bash: codex: command not found", "zsh: command not found: codex", "/bin/sh: 1: codex: not found in PATH"] {
+    for screen in ["bash: codex: command not found", "zsh: command not found: codex", "/bin/sh: 1: codex: not found", "bash: /usr/local/bin/codex: No such file or directory", "fish: Unknown command: codex"] {
         assert_eq!(explain(&s, "timed out waiting for agent startup", screen).short, "codex is not installed here", "{screen}");
     }
-    assert_eq!(explain(&s, "timed out waiting for agent startup", "codexx: command not found").short, "codex did not come up within a minute");
+    // Another program, or a file named like it that another program did not find: not codex missing.
+    for screen in ["codexx: command not found", "ls: cannot access '/tmp/codex': No such file or directory", "cat: codex/notes: No such file or directory"] {
+        assert_eq!(explain(&s, "timed out waiting for agent startup", screen).short, "codex did not come up within a minute", "{screen}");
+    }
 }
