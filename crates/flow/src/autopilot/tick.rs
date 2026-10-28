@@ -60,6 +60,11 @@ pub fn tick(co: &Co, board: &[Obj], now: i64) {
         // The turn the last message typed in started has ended: a wake's is answered.
         if let Some((rest, seq)) = &look {
             let mark = c.at("mark");
+            // The wake's own turn ended: one typed straight into its terminal after it, while herdr leaves completion_seq
+            // out, is not autopilot's (turn.rs).
+            if *rest && !seq.is_null() && mark.i("run") == c.i("startedAt") && *seq != *mark.at("seq") && ap.at("turn").s("id") == c.s("typedId") {
+                if let Some(t) = ap.get_mut("turn").and_then(|t| t.as_object_mut()) { t.put("ended", true); }
+            }
             if *rest && !seq.is_null() && mark.i("run") == c.i("startedAt") && *seq != *mark.at("seq") && c.b("typedId") && c.s("typedId") != ap.s("seenId") {
                 let typed = ap.at("wake").b("typedAt");
                 ended_at(ap, c, typed);
