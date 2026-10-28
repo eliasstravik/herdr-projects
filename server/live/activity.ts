@@ -269,7 +269,8 @@ export class JobLogs {
       if (this.logs.size > 40) this.logs.delete(this.logs.keys().next().value!)
     }
     l.used = Date.now()
-    const fresh = l.tail.read()
+    // a piece at a time: a long log is read on over the next looks (the chat looks once a second)
+    const fresh = l.tail.read(4 << 20)
     if (fresh.length) l.ev.push(...fresh.filter((e) => e.kind === 'step' || e.kind === 'step-end' || e.kind === 'turn-start' || e.kind === 'turn-end'))
     return l.ev
   }
