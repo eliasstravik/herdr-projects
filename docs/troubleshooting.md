@@ -140,7 +140,8 @@ task panel ends in `Kept:` and says why:
   its input and output are wired to the agent and its errors go to no terminal. Otherwise it `streams to the terminal`,
   `is not wired to its agent` (a file, `/dev/null`, a pipe nobody in the agent's group holds), `has its input or output
   closed`, or `cannot be looked at` (the system does not say). A process under the agent in a group of its own (a dev
-  server it started) `runs in a group of its own`; one its pane's shell runs `runs in the background of its shell`.
+  server it started) `runs in a group of its own` (one under a helper is the helper's own, and keeps nothing); one its
+  pane's shell runs `runs in the background of its shell`.
 - **`; and 2 more`**: the line names the first thing only. `herdr-projects details <id>` lists every one, under `inUse`.
 - **It names one of the agent's own helpers** (an MCP server, a language server): that is a bug. Please open an issue
   with the `Kept:` line and the `inUse` list of `herdr-projects details <id>`.

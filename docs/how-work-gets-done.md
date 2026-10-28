@@ -39,7 +39,8 @@ All of this runs with the board open or closed.
   origin refuses for another reason (a protected branch, a hook) waits for you with git's own words.
 - `workspace.setup` runs. Then the agent starts in that space's root pane, with the task and its rules.
 - **Outside git**, the agent works in place, in a plain Herdr space.
-- **At most `board.agents` (4) agents work at once.** More wait their turn. Tasks that wait for you hold no slot.
+- **At most `board.agents` (4) agents work at once.** More wait their turn. Tasks that wait for you hold no slot, nor
+  does one waiting in line to merge behind another.
 
 ## Agents run with full access by default
 
@@ -361,8 +362,9 @@ itself, and its worktree and branch are removed. `workspace.cleanup false` keeps
   (including one a finished agent left running in the background).
 - What an agent program keeps running as part of itself is no such command: its MCP servers, or its own program under
   an npm wrapper (`codex` installed with npm). They are in the agent's own process group, and an MCP server's input and
-  output are wired to the agent itself (a pipe or a socket the agent holds the other end of). So a finished agent with
-  MCP servers is closed like any other. A command whose streams go elsewhere (the terminal, a file, `/dev/null`) keeps
+  output are wired to the agent itself (a pipe or a socket the agent holds the other end of). What such a helper runs
+  under it is its own too (a language server's telemetry, in a group of its own). So a finished agent with MCP or
+  language servers is closed like any other. A command whose streams go elsewhere (the terminal, a file, `/dev/null`) keeps
   the space open, in the agent's group or not, and so does one in a group of its own. What cannot be told counts as a
   command.
 - Nor is one Herdr could not answer for, or whose Herdr session is not running: then nothing of the task is touched.
