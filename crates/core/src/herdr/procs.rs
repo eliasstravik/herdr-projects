@@ -87,7 +87,7 @@ fn linux(pid: i64, group: &[i64]) -> Wiring {
 }
 /// Elsewhere (macOS): `lsof` names a pipe's or socket's own address (`d`) and its other end's (`n->0x…`).
 fn lsof(pid: i64, group: &[i64]) -> Wiring {
-    let pids: Vec<String> = group.iter().map(|p| p.to_string()).collect();
+    let pids: Vec<String> = group.iter().chain((!group.contains(&pid)).then_some(&pid)).map(|p| p.to_string()).collect(); // itself too, when outside the group
     let Ok(o) = Command::new("lsof").args(["-n", "-P", "-p", &pids.join(","), "-F", "pfdn"]).output() else { return Wiring::Unknown };
     if o.stdout.is_empty() { return Wiring::Unknown; }
     let (mut p, mut fd) = (0i64, String::new());
