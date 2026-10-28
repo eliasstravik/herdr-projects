@@ -152,8 +152,10 @@ fn a_plan_and_several_attempts_the_plan_is_approved_once_then_every_attempt_is_h
     assert!(t.arr("attempts").is_empty() && !t.at("fallbacks").b("attempts") && kids(&id).is_empty());
     let (tree, pane, space) = (t.t("worktree"), t.at("link").t("pane"), t.at("link").t("workspace"));
     approve(&id);
+    tell(&id, "Also add g.txt."); // told before the build ran: every attempt gets it
     let t = settle(&id);
     assert_eq!(t.s("stage"), "attempts", "{}", t.at("failure"));
+    assert!(sw::store::inbox::take_text(&id).unwrap().is_empty());
     assert!(t.at("plan").b("built"));
     assert_eq!(t.at("plan").s("approvedBy"), "you");
     assert!(!t.b("worktree") && !t.at("link").b("pane"));
@@ -176,6 +178,7 @@ fn a_plan_and_several_attempts_the_plan_is_approved_once_then_every_attempt_is_h
         let first = prompts(&w, c.at("link").s("pane"))[0].clone();
         assert!(first.starts_with(&format!("Work board task {}, role: agent.", c.s("id"))), "{first}");
         assert!(first.contains(&format!("read {} first, and build exactly that plan", P::plan_file(&t).display())), "{first}");
+        assert!(prompts(&w, c.at("link").s("pane")).iter().any(|p| p.contains("Also add g.txt.")), "{}: {:?}", c.s("letter"), prompts(&w, c.at("link").s("pane")));
         let ch = sw::store::settings::lookup::work(Some(c));
         let brief = sw::finish::review_brief::review_brief(c, &sw::finish::review_brief::Brief { text: "Done.", change: None, to_land: false, ch: &ch, earlier: None, check: "" });
         assert!(brief.contains("built from a plan that was approved before the work began"));

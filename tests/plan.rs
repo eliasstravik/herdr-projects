@@ -119,3 +119,16 @@ fn a_tell_right_after_the_yes_waits_for_the_build_and_goes_with_it() {
     let last = prompts(&w, t.at("link").s("pane")).last().cloned().unwrap_or_default();
     assert!(last.contains("approved plan") && last.contains("Also add g.txt."), "{last}");
 }
+
+#[test]
+fn a_tell_while_the_start_runs_its_setup_waits_for_the_agent() {
+    let w = plan_world(json!({ "worker.agent": "codex" }));
+    let id = w.add("Work");
+    delegate(&id);
+    settle(&id);
+    // As if the start's runner still ran the repo's setup: the start must not be cut off by the words.
+    sw::store::tasks::update(&id, |t| { t.put("stage", "setup"); Ok(sw::store::tasks::Change::Write) }).unwrap();
+    sw::actions::talk::tell(&id, "Also add g.txt.", false).unwrap();
+    assert_eq!(task(&id).s("stage"), "setup");
+    assert_eq!(sw::store::inbox::take_text(&id).unwrap().iter().map(|m| m.t("text")).collect::<Vec<_>>(), vec!["Also add g.txt."]);
+}

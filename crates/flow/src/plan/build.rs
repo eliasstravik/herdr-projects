@@ -18,7 +18,7 @@ use crate::json::*;
 use crate::runner::Guard;
 use crate::store::attempts::{attempt_agents, create_attempt, LETTERS};
 use crate::store::files::board_env;
-use crate::store::inbox::{take_text, untake_text};
+use crate::store::inbox::{queue_text, take_text, untake_text};
 use crate::store::repos::{cwd_of, is_repo};
 use crate::store::settings::lookup::{setting, setting_text};
 use crate::store::settings::values::agent_of;
@@ -143,6 +143,8 @@ fn fan_out(g: &mut Guard, agents: &[String]) -> Res<Task> {
         else { for (a, b) in &place { extra.insert(a.clone(), b.clone()); } extra.put("startedOnce", true); extra.put("link", json!({ "socket": l.at("socket"), "workspace": l.at("workspace"), "tab": l.at("tab"), "pane": l.at("pane"), "terminal": l.at("terminal"), "ownsWorkspace": false, "reviewer": null })); }
         made.push(create_attempt(&t, LETTERS[n], agent, extra)?);
     }
+    // Words told after the yes waited for the build: every attempt's agent gets them with its first message.
+    for m in take_text(t.s("id"))? { for c in &made { queue_text(c.s("id"), m.s("text"), Obj::new())?; } }
     let t = g.set(|t| {
         t.put("stage", "attempts"); t.put("msg", ""); t.put("since", now()); t.put("app", Value::Null); t.del("kind"); t.put("turnOpen", false); t.put("expectedWake", Value::Null); t.put("watch", Value::Null);
         t.put("attempts", made.iter().map(|c| json!({ "id": c.at("id"), "letter": c.at("letter"), "agent": c.at("settings").at("worker.agent") })).collect::<Vec<_>>());
