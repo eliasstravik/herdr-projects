@@ -1,7 +1,8 @@
-# The map of which file holds what: made in your own folder (herdr-projects docs), never committed.
-docs/where-things-live.md
-/target/
-/examples/
-# The program bin/run.sh downloads for this platform, with its version and its download lock.
-/bin/herdr-projects-*
-/bin/.herdr-projects-*
+node_modules/
+dist/
+.releases/
+generated/
+.env
+*.log
+user-plugins/
+user-plugins.json

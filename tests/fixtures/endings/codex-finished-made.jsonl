@@ -1,2 +1,0 @@
-{"timestamp": "2026-10-12T13:00:00.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "phase": "final_answer", "content": [{"type": "output_text", "text": "I looked at it and it seems fine."}]}}
-{"timestamp": "2026-10-12T13:00:00.100Z", "type": "event_msg", "payload": {"type": "task_complete", "turn_id": "made-turn", "last_agent_message": "I looked at it and it seems fine."}}

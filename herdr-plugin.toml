@@ -1,58 +1,62 @@
+# The id stays herdr-projects, the plugin Shepherdr replaces: herdr refuses an update whose id changed, so someone on
+# herdr-projects lands on Shepherdr with `herdr plugin update` (README, Upgrading from herdr-projects).
 id = "herdr-projects"
-name = "Projects"
-version = "1.2.27"
-# The oldest herdr this plugin was actually verified on.
-min_herdr_version = "0.9.3"
-description = "A work board: one list of tasks, each delegated one an ordinary herdr agent in its own space"
+name = "Shepherdr"
+version = "2.0.0"
+min_herdr_version = "0.9.0"
+description = "Run many coding agents across machines from a phone, tablet or desktop: places, coordinator chats, one agent per task"
 platforms = ["linux", "macos"]
 
-# Commands go through bin/run.sh: herdr starts them with its server's environment, which may lack the user's PATH. It
-# runs the program built here, or the one downloaded for this platform from this version's GitHub release.
-
-# Gets the program when the plugin is installed: downloads it, or builds it from source when it cannot.
 [[build]]
-command = ["sh", "bin/run.sh", "--fetch"]
+command = ["sh", "scripts/need-bun.sh", "install", "--frozen-lockfile"]
+platforms = ["linux", "macos"]
 
+[[build]]
+command = ["sh", "scripts/need-bun.sh", "run", "build"]
+platforms = ["linux", "macos"]
+
+# One-shot per herdr start: brings Shepherdr up if it is not already answering, or swaps an older version for this one.
 [[startup]]
-command = ["sh", "bin/run.sh", "hook"]
+command = ["sh", "scripts/need-bun.sh", "scripts/plugin.ts", "start"]
+platforms = ["linux", "macos"]
 
+# herdr-projects' key (prefix+a by default) named this action: it keeps working after the update.
 [[actions]]
 id = "open"
-title = "Open the work board"
-command = ["sh", "bin/run.sh", "open"]
+title = "Open Shepherdr"
+command = ["sh", "scripts/need-bun.sh", "scripts/plugin.ts", "open"]
+platforms = ["linux", "macos"]
 
 [[actions]]
-id = "coordinator"
-title = "Go into the Coordinator's chat"
-command = ["sh", "bin/run.sh", "open-coordinator"]
+id = "start"
+title = "Start Shepherdr"
+contexts = ["workspace"]
+command = ["sh", "scripts/need-bun.sh", "scripts/plugin.ts", "start"]
+platforms = ["linux", "macos"]
 
 [[actions]]
-id = "approve-current"
-title = "Approve the task in the focused pane (the board asks first)"
-contexts = ["pane"]
-command = ["sh", "bin/run.sh", "approve-current"]
+id = "stop"
+title = "Stop Shepherdr"
+contexts = ["workspace"]
+command = ["sh", "scripts/need-bun.sh", "scripts/plugin.ts", "stop"]
+platforms = ["linux", "macos"]
 
-[[events]]
-on = "pane.agent_status_changed"
-command = ["sh", "bin/run.sh", "hook"]
+[[actions]]
+id = "status"
+title = "Shepherdr status"
+contexts = ["workspace"]
+command = ["sh", "scripts/need-bun.sh", "scripts/plugin.ts", "status"]
+platforms = ["linux", "macos"]
 
-# An agent exiting to its shell fires this (released) on herdr 0.9.3.
-[[events]]
-on = "pane.agent_detected"
-command = ["sh", "bin/run.sh", "hook"]
-
-[[events]]
-on = "pane.closed"
-command = ["sh", "bin/run.sh", "hook"]
-
-[[events]]
-on = "worktree.removed"
-command = ["sh", "bin/run.sh", "hook"]
+[[actions]]
+id = "share"
+title = "Share Shepherdr on my tailnet"
+contexts = ["workspace"]
+command = ["sh", "scripts/need-bun.sh", "scripts/plugin.ts", "share"]
+platforms = ["linux", "macos"]
 
 [[panes]]
-id = "board"
-title = "Work board"
-# A tab of its own unless you choose the popup (`board.open`): the board key then opens this pane as herdr's popup
-# instead, a window over everything (src/board/run/place.rs).
-placement = "tab"
-command = ["sh", "bin/run.sh", "board"]
+id = "link"
+title = "Shepherdr"
+command = ["sh", "scripts/link.sh"]
+platforms = ["linux", "macos"]

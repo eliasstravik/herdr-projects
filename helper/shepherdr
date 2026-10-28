@@ -1,0 +1,54 @@
+#!/usr/bin/perl
+# The shepherdr command on a machine Shepherdr runs from the main one: it sends its words to Shepherdr through the
+# SSH tunnel the main machine keeps open to this folder (main.sock) and prints the answer. Put here by Shepherdr.
+use strict;
+use warnings;
+use Cwd ();
+use File::Basename ();
+use IO::Socket::UNIX;
+use Encode ();
+use JSON::PP;
+
+my $dir = File::Basename::dirname(Cwd::abs_path($0));
+my $sock = "$dir/../main.sock";
+my $stdin;
+# the words that take a text on stdin: a secret, a new HEARTBEAT.md
+if (@ARGV && ($ARGV[0] eq 'secret' || ($ARGV[0] eq 'heartbeat' && ($ARGV[1] // '') eq 'set')) && !-t STDIN) { local $/; $stdin = <STDIN>; }
+my $u = sub { Encode::decode('UTF-8', $_[0]) };
+my %body = (args => [map { $u->($_) } @ARGV], cwd => $u->(Cwd::getcwd()));
+$body{chat} = $u->($ENV{SHEPHERDR_CHAT}) if $ENV{SHEPHERDR_CHAT};
+$body{stdin} = $u->($stdin) if defined $stdin;
+my $json = JSON::PP->new->utf8->canonical->encode(\%body);
+my $s = IO::Socket::UNIX->new(Type => SOCK_STREAM(), Peer => $sock);
+unless ($s) {
+  print STDERR "Shepherdr can't be reached from this machine right now (its link from the main machine is down). Check the machine in Shepherdr, or run shepherdr doctor on the main machine.\n";
+  exit 2;
+}
+print $s "POST /api/cli HTTP/1.0\r\nHost: shepherdr\r\nContent-Type: application/json\r\nContent-Length: " . length($json) . "\r\n\r\n$json";
+# shepherdr merge answers within 90 s: no answer a little after that means none is coming (Shepherdr restarted, or the
+# tunnel dropped and left this end open), never a wait on and on. The same words as server/cli.ts's
+my $merge = @ARGV && ($ARGV[0] eq 'merge' || ($ARGV[0] eq 'task' && ($ARGV[1] // '') eq 'merge'));
+my $wait = $merge ? ($ENV{SHEPHERDR_MERGE_WAIT} // 110000) : 0;
+my $res = eval {
+  local $SIG{ALRM} = sub { die "no answer\n" };
+  alarm(int(($wait + 999) / 1000)) if $wait;
+  my $r = do { local $/; <$s> };
+  alarm(0);
+  $r;
+};
+close $s;
+unless (defined $res || !$merge) {
+  my $id = ($ARGV[0] eq 'merge' ? $ARGV[1] : $ARGV[2]) // '<id>';
+  my $secs = int(($wait + 999) / 1000);
+  print STDERR "shepherdr merge $id got no answer from Shepherdr in $secs s (it may have restarted). Don't leave it running: see where it is with shepherdr task show $id, and unless it says Merged, run shepherdr merge $id again; it finishes the merge, or says it is merged.\n";
+  exit 1;
+}
+my ($head, $resp) = split /\r\n\r\n/, $res // '', 2;
+my $j = eval { JSON::PP->new->utf8->decode($resp // '') };
+unless ($j) {
+  print STDERR "Shepherdr gave no answer.\n";
+  exit 2;
+}
+binmode STDOUT, ':utf8';
+print $j->{out} // '';
+exit($j->{code} // 0);

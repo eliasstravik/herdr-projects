@@ -1,9 +1,0 @@
-{"type": "system", "subtype": "compact_boundary", "level": "info", "isMeta": false, "isSidechain": false, "content": "Conversation compacted", "compactMetadata": {"trigger": "auto", "preTokens": 375172, "durationMs": 59065, "postTokens": 17756}, "uuid": "00000000-0000-4000-8000-00000000c001", "timestamp": "2026-10-24T07:41:25.101Z"}
-{"type": "user", "isSidechain": false, "isCompactSummary": true, "isVisibleInTranscriptOnly": true, "message": {"role": "user", "content": "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\n1. Primary Request and Intent: (cut)"}, "uuid": "00000000-0000-4000-8000-00000000c002", "timestamp": "2026-10-24T07:41:25.102Z"}
-{"type": "attachment", "isSidechain": false, "attachment": {"type": "file", "filename": "src/example.ts"}, "uuid": "00000000-0000-4000-8000-00000000c003", "timestamp": "2026-10-24T07:41:25.103Z"}
-{"type": "attachment", "isSidechain": false, "attachment": {"type": "compact_file_reference", "filename": "src/example.ts"}, "uuid": "00000000-0000-4000-8000-00000000c007", "timestamp": "2026-10-24T07:41:25.107Z"}
-{"type": "system", "subtype": "informational", "level": "notice", "isMeta": false, "isSidechain": false, "content": "Compacted while idle, before the prompt cache expired · turn off with \"idleCompaction\": false in settings.json", "uuid": "00000000-0000-4000-8000-00000000c008", "timestamp": "2026-10-24T07:41:25.108Z"}
-{"type": "last-prompt", "lastPrompt": "(cut)"}
-{"type": "ai-title", "aiTitle": "(cut)"}
-{"type": "mode", "mode": "normal"}
-{"type": "permission-mode", "permissionMode": "bypassPermissions"}

@@ -1,0 +1,110 @@
+# The whole check (types, every test with the browser ones, the build) on GitHub's runners, on every push to main (a
+# merge): the full suite runs here, not on the machine the agents work on (AGENTS.md). Pull requests get no run: a task
+# merges once its own quick checks pass, and Shepherdr tells the coordinator when main goes red. A branch can still be
+# checked by hand: gh workflow run check.yml --ref <branch>.
+#
+# Lean, as GitHub bills each job by the minute, rounded up: the types and the build share one job, and the tests run
+# split over three runners (bun test --shard, balanced by each file's time on the last run), which also note which
+# lines of the screen each browser test runs. Whatever doesn't change between runs comes from the cache.
+name: Check
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+concurrency:
+  group: check-${{ github.ref }}
+  # a newer push makes an older run moot: its verdict covers the older commits too
+  cancel-in-progress: true
+
+env:
+  # tests that make commits need someone to make them, whatever HOME they run with
+  GIT_AUTHOR_NAME: CI
+  GIT_AUTHOR_EMAIL: ci@localhost
+  GIT_COMMITTER_NAME: CI
+  GIT_COMMITTER_EMAIL: ci@localhost
+  # each file's time on the last run, which balances the shards (scripts/test.ts keeps it there)
+  TIMINGS: node_modules/.cache/shepherdr-test/timings.json
+
+jobs:
+  types:
+    name: types and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run build
+
+  test:
+    name: test (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      # every shard finishes, so one run shows every failure
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      # Chromium's headless shell for playwright-core, at the version it wants (the runner has the libraries it needs),
+      # and WebKit, Safari's engine, for an iPhone's tests (layout-iphone.test.ts), with the libraries it needs
+      - id: playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-shell-webkit-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - if: steps.playwright.outputs.cache-hit != 'true'
+        run: bun x playwright-core install --only-shell chromium && bun x playwright-core install webkit
+      - run: bun x playwright-core install-deps webkit
+      # the screen the browser tests open (test/web.ts), built from these files: a build of other files is left unused
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/shepherdr-test/dist-*
+          key: screen-maps-${{ hashFiles('index.html', 'vite.config.ts', 'tsconfig.json', 'package.json', 'bun.lock', 'plugins.json', 'src/**', 'plugins/**', 'shared/**', 'public/**') }}
+      # the newest times any shard saved: each carries every file's time forward, with its own files' fresh ones
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.TIMINGS }}
+          key: test-timings-${{ github.run_id }}
+          restore-keys: test-timings-
+      # Which lines of the screen each of this shard's browser tests runs, for the test runs on the agents' machine: a
+      # change to the screen there runs only the browser tests that reach it (test/screen-map.ts puts the shards' maps
+      # of main's newest green run together)
+      - run: bun run test --shard=${{ matrix.shard }}/3 --map=screen-map.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screen-map-${{ matrix.shard }}
+          path: screen-map.json
+          if-no-files-found: ignore
+          retention-days: 30
+      # only a help: it never fails the check
+      - if: always()
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: ${{ env.TIMINGS }}
+          key: test-timings-${{ github.run_id }}-${{ matrix.shard }}

@@ -1,2 +1,0 @@
-{"type": "user", "uuid": "made-h4", "message": {"role": "user", "content": "<task-notification>\n<task-id>a1b2c3d4e5f6a7b8c</task-id>\n<tool-use-id>toolu_made_h1</tool-use-id>\n<status>completed</status>\n<summary>Agent \"Check the plans\" finished</summary>\n<result>The plans hold.</result>\n</task-notification>"}}
-{"type": "assistant", "uuid": "made-h5", "message": {"id": "msg_made_h5", "role": "assistant", "content": [{"type": "text", "text": "The helper is back. The verdict is written."}], "stop_reason": "end_turn"}}
