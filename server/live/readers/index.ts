@@ -42,6 +42,11 @@ export class LogTail {
     readonly reader: Reader,
   ) {}
 
+  /** how much of the file is read so far, in bytes */
+  get done(): number {
+    return this.pos
+  }
+
   /** more is written than read so far: a read with a limit stopped short */
   get behind(): boolean {
     return this.more

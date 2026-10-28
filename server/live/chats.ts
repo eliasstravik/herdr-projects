@@ -390,7 +390,7 @@ export class Chats {
 
   /* ---------- reading the CLI's logs ---------- */
 
-  /** read new lines of this chat's log files, up to PIECE of each (the rest follows in the background); true when
+  /** read new lines of this chat's log files, up to PIECE in all (the rest follows in the background); true when
    *  anything new came */
   pull(key: string): boolean {
     const { changed, behind } = this.read(key)
@@ -403,6 +403,7 @@ export class Chats {
     if (!r) return { changed: false, behind: false }
     let changed = false
     let behind = false
+    let left = PIECE
     const all = this.events.get(key) ?? []
     const where = this.where.get(key) ?? new Map<string, number>()
     for (const f of r.logs) {
@@ -415,7 +416,9 @@ export class Chats {
         t = new LogTail(f, reader)
         this.tails.set(f, t)
       }
-      const ev = t.read(PIECE)
+      const was = t.done
+      const ev = t.read(left)
+      left -= Math.max(0, t.done - was)
       for (const e of ev) {
         // a reply read in two pieces comes again with the same id and the full text: it replaces the first
         const id = e.kind === 'agent' || e.kind === 'usage' ? `${e.kind}:${e.id}` : undefined
@@ -428,7 +431,7 @@ export class Chats {
         changed = true
       }
       // the next log once this one is read to its end: the chat keeps its order
-      if ((behind = t.behind)) break
+      if ((behind = t.behind || left <= 0)) break
     }
     if (changed) (this.events.set(key, all), this.where.set(key, where))
     return { changed, behind }

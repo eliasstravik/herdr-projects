@@ -23,10 +23,17 @@ import { paneWrong, type Wrong } from './revive.ts'
 /** a log's name (its session id), wherever it lies: one named both by its mirrored path and by its own is one log */
 const logName = (f: string) => f.slice(f.lastIndexOf('/') + 1)
 
-/** the logs with each one once, where it first came: the same log twice is read twice, and a big one holds up the server */
+/** the logs with each one once, where it first came, by the path it was named by last (a session carried to another
+ *  folder goes on there): the same log twice is read twice, and a big one holds up the server */
 export function uniqueLogs(logs: string[]): string[] {
-  const seen = new Set<string>()
-  return logs.filter((f) => !seen.has(logName(f)) && !!seen.add(logName(f)))
+  const at = new Map<string, number>()
+  const out: string[] = []
+  for (const f of logs) {
+    const i = at.get(logName(f))
+    if (i === undefined) (at.set(logName(f), out.length), out.push(f))
+    else out[i] = f
+  }
+  return out
 }
 
 /** adds a log the record doesn't have yet; true when it was new */
