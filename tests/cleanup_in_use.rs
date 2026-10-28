@@ -1,6 +1,6 @@
 //! A clean-up put off because its space is in use says what keeps it: a turn in its agent's terminal, an agent herdr
 //! does not answer for, a process beside the agent that is not its helper (by name, and why), or another of its panes.
-//! A helper wired to the agent keeps nothing; `details` lists every thing.
+//! A helper wired to the agent keeps nothing, nor does what it runs; `details` lists every thing.
 use crate::common;
 use common::*;
 use serde_json::{json, Value};
@@ -46,6 +46,9 @@ fn a_process_beside_the_agent_is_named_with_why_it_keeps_the_space_and_a_helper_
     ends(&with(&w, "job", json!(true)), "node …/server.js (pid 2) runs in the background of its shell");
     // an MCP server wired to the agent is part of it: nothing is kept
     let t = merged(&w, "helper", |t| pane(&w, t.at("link").s("pane"), |p| p["helper"] = json!(true)));
+    assert!(!t.b("kept") && t.b("cleaned"), "{}", kept(&t));
+    // and so is what it runs under it in a group of its own (a language server's telemetry, #399)
+    let t = merged(&w, "lsp", |t| pane(&w, t.at("link").s("pane"), |p| p["helper"] = json!("lsp")));
     assert!(!t.b("kept") && t.b("cleaned"), "{}", kept(&t));
 }
 

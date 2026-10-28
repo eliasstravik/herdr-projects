@@ -103,9 +103,21 @@ pub fn transcript(kind: &str, session: &str, cwd: &Path) -> Option<PathBuf> {
             find_file(&claude_home().join("projects"), &|n| n == want, 1).into_iter().next()
         }
         "codex" => { let want = format!("{session}.jsonl"); find_file(&codex_home().join("sessions"), &|n| n.ends_with(&want), 4).into_iter().next() }
-        "pi" => { let want = format!("_{session}.jsonl"); find_file(&pi_home().join("sessions"), &|n| n.ends_with(&want), 1).into_iter().next() }
+        // Also where it was saved before its folder moved (the Coordinator's, under the board's old home).
+        "pi" => { let (want, was) = (format!("_{session}.jsonl"), crate::store::move_home::moved_from(cwd)); pi_files(&[Some(cwd), was.as_deref()].into_iter().flatten().collect::<Vec<_>>(), &|n| n.ends_with(&want)).into_iter().next() }
         _ => None,
     }
+}
+/// pi keeps each working folder's conversations in a folder of their own, named after its path (`--home-me-app--`).
+fn pi_folder(cwd: &Path) -> PathBuf { let p = cwd.display().to_string(); pi_home().join("sessions").join(format!("--{}--", p.strip_prefix(['/', '\\']).unwrap_or(&p).replace(['/', '\\', ':'], "-"))) }
+/// pi's conversations of these working folders (as given, and their real paths), newest first: only those folders are
+/// read, never every folder of a long history (#393).
+fn pi_files(cwds: &[&Path], test: &dyn Fn(&str) -> bool) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = vec![];
+    for d in cwds.iter().flat_map(|c| [real(c), c.to_path_buf()]).map(|c| pi_folder(&c)) { if !dirs.contains(&d) { dirs.push(d); } }
+    let mut hits: Vec<PathBuf> = dirs.iter().flat_map(|d| find_file(d, test, 0)).collect();
+    hits.sort_by_key(|f| std::cmp::Reverse(mtime_ms(f)));
+    hits
 }
 fn mtime_ms(f: &Path) -> Option<i64> { fs::metadata(f).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64) }
 fn first_line(s: &str) -> &str { s.split('\n').next().unwrap_or("") }
@@ -139,7 +151,7 @@ pub fn latest_session(kind: &str, cwd: &Path, since: i64, was: Option<&Path>) ->
             None
         }
         "pi" => {
-            for f in find_file(&pi_home().join("sessions"), &|n| n.ends_with(".jsonl"), 1) {
+            for f in pi_files(&[Some(cwd), was].into_iter().flatten().collect::<Vec<_>>(), &|n| n.ends_with(".jsonl")) {
                 if mtime_ms(&f).map(|m| m < since).unwrap_or(true) { return None; }
                 let head = head_of(&f, 8192);
                 let Ok(meta) = serde_json::from_str::<Value>(first_line(&head)) else { continue };

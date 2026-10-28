@@ -122,6 +122,8 @@ pub fn settle(id: &str) -> Obj {
 pub fn row(id: &str) -> Obj { sw::flow::live::board(true).into_iter().find(|t| t.s("id") == id).unwrap_or_default() }
 pub fn delegate(id: &str) { sw::actions::start::delegate(id, vec![]).unwrap_or_else(|e| panic!("delegate {id}: {}", e.msg)); }
 pub fn read(p: &Path) -> String { std::fs::read_to_string(p).unwrap_or_default() }
+/// The folder pi keeps a working folder's conversations in, under its sessions: named after its path (`--home-me-app--`).
+pub fn pi_folder(cwd: &Path) -> String { let p = cwd.display().to_string(); format!("--{}--", p.strip_prefix('/').unwrap_or(&p).replace(['/', '\\', ':'], "-")) }
 /// The pane's agent, as the fake herdr has it now.
 pub fn agent_of(w: &World, pane: &str) -> Value { w.state().arr("panes").iter().find(|p| p.s("pane_id") == pane).map(|p| p.at("agent").clone()).unwrap_or(Value::Null) }
 pub fn prompts(w: &World, pane: &str) -> Vec<String> { agent_of(w, pane).arr("prompts").iter().map(text).collect() }

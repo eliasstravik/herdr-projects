@@ -1,6 +1,7 @@
 //! Auto-merge under way: turned on while tasks wait (a green one merges at the reviewed commit, one you stepped into
 //! asks, an old hold of a review sent back is told from a real one), main moving under a task that may merge (a
-//! conflicting catch-up goes to the agent and is reviewed), and several such tasks going one at a time.
+//! conflicting catch-up goes to the agent and is reviewed), and several such tasks going one at a time: one waiting in
+//! line holds no agent slot.
 use crate::common;
 use common::*;
 use serde_json::{json, Value};
@@ -162,4 +163,18 @@ fn several_tasks_may_merge_at_once_they_go_one_at_a_time_each_catches_up_once_an
     // each took main in once, behind the merge ahead of it, and was checked once: two checks, not a chase
     assert_eq!(checks(&w), ran + 2);
     for id in [&b, &c] { assert_eq!(prompts(&w, task(id).at("link").s("pane")).len(), 1); }
+}
+
+#[test]
+fn a_task_waiting_in_line_to_merge_holds_no_agent_slot_the_one_merging_does() {
+    let w = world_with(Opts { repo: true, settings: json!({ "board.agents": 2, "review.when": "never" }), ..Default::default() });
+    let (a, b) = (w.add("A merges"), w.add("B waits behind A"));
+    // A is at the head of the line, its runner at work; B waits behind it and runs nothing
+    update(&a, |t| { let mut m = sw::store::files::marker(); m.put("job", "land"); t.put("lineTurn", m.at("started").clone()); t.put("runner", Value::Object(m)); t.put("stage", "merging"); Ok(Change::Write) }).unwrap();
+    update(&b, |t| { t.put("stage", "merging"); t.put("lineAt", sw::clock::now()); t.put("msg", waiting_msg(&a)); Ok(Change::Write) }).unwrap();
+    assert!(in_line(&task(&b)) && !in_line(&task(&a)));
+    // Two slots: A holds one, so one new task starts and the next waits for a slot
+    let (c, d) = (w.add("C"), w.add("D"));
+    delegate(&c); delegate(&d);
+    assert_eq!((task(&c).t("stage"), task(&d).t("stage")), ("starting".into(), "queued".into()));
 }

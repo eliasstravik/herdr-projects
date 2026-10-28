@@ -29,20 +29,21 @@ pub fn found(pid: i64) -> String {
 }
 
 /// What runs in the pane beside the program `agent`: a process of its group that is not its helper, one in a group of
-/// its own under it, a job of its shell.
+/// its own under it (not under a helper), a job of its shell.
 pub fn beside_agent(api: &Herdr, id: &str, agent: &str, all: bool) -> Vec<String> {
     let Some(i) = api.process_info(id) else { return vec![UNSAID.into()] };
     let procs: Vec<&Value> = i.arr("foreground_processes").iter().filter(|p| crate::gate::is_int(p.at("pid"))).collect();
     let front: Vec<i64> = procs.iter().map(|p| p.i("pid")).collect();
     if front.is_empty() { return vec![UNSAID.into()]; }
     let lead = i.i("foreground_process_group_id");
-    let mut out = vec![];
+    let (mut out, mut helpers) = (vec![], vec![]);
     for p in &procs {
         if p.i("pid") == lead || (!agent.is_empty() && p.s("name") == agent) { continue; }
         let w = wiring(p.i("pid"), &front);
-        if w != Wiring::Agent { out.push(format!("{} {}", listed(p), w.words())); if !all { return out; } }
+        if w != Wiring::Agent { out.push(format!("{} {}", listed(p), w.words())); if !all { return out; } } else { helpers.push(p.i("pid")); }
     }
-    for p in &procs {
+    // What a helper runs under it is the helper's own (a language server's telemetry): it goes down with it (#399).
+    for p in procs.iter().filter(|p| !helpers.contains(&p.i("pid"))) {
         match kids(p.i("pid")) {
             Ok(k) => for c in k.iter().filter(|c| !front.contains(c)) { out.push(format!("{} runs in a group of its own", found(*c))); if !all { return out; } },
             Err(_) => { out.push(format!("what {} runs cannot be listed", listed(p))); if !all { return out; } }

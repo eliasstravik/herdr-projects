@@ -5,7 +5,7 @@
 //! or through a link, with words that say what to do instead; a test's own folder is fine, and outside them nothing is.
 use crate::common;
 use crate::move_home as util;
-use common::{world_with, Opts};
+use common::{pi_folder, world_with, Opts};
 use serde_json::json;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -82,21 +82,22 @@ fn the_coordinators_conversation_is_found_again_after_its_folder_moved_for_every
     // Saved by each program while the folder was in the old place: Claude Code keys its file by that folder's path.
     let was = h.data.join("coordinator/default/chat");
     let dashed = |p: &Path| p.display().to_string().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect::<String>();
-    let files = [("claude", claude.join("projects").join(dashed(&was)).join("abc.jsonl")), ("codex", codex.join("sessions/2026/rollout-2026-abc.jsonl")), ("pi", pi.join("sessions/--old--/2026_abc.jsonl"))];
+    let files = [("claude", claude.join("projects").join(dashed(&was)).join("abc.jsonl")), ("codex", codex.join("sessions/2026/rollout-2026-abc.jsonl")), ("pi", pi.join("sessions").join(pi_folder(&was)).join("2026_abc.jsonl"))];
     for (_, f) in &files { put(f, "{}\n", None); }
     h.run();
     let now = h.to.join("data/coordinator/default/chat");
     assert_eq!(read(&now.join("note.txt")), "its folder"); assert_eq!(std::fs::canonicalize(&was).unwrap(), now);
+    // (moved_from reads this process's home: it is the old home now.)
+    unsafe { std::env::set_var("HOME", &h.home); std::env::set_var("HERDR_PROJECTS_HOME", &h.to); }
     // Found by its id from the new folder, so a restart reopens the same conversation (pump.rs resumes what it finds).
     for (kind, f) in &files { assert_eq!(sw::agents::adapter::transcript(kind, "abc", &now).as_ref(), Some(f), "{kind}"); }
     // A Coordinator started before the move still knows its folder by the old path: a new chat it begins there is
-    // saved under that path, and is still followed. (moved_from reads this process's home: it is the old home now.)
-    unsafe { std::env::set_var("HOME", &h.home); std::env::set_var("HERDR_PROJECTS_HOME", &h.to); }
+    // saved under that path, and is still followed.
     assert_eq!(moved_from(&now), Some(was.clone())); assert_eq!(moved_from(&h.to.join("data")), Some(h.data.clone())); assert_eq!(moved_from(&h.home.join("elsewhere")), None);
     let id = "11111111-2222-3333-4444-555555555555";
     put(&files[0].1.parent().unwrap().join(format!("{id}.jsonl")), "{\"type\":\"user\"}\n", None);
     put(&codex.join("sessions/2026/rollout-2026-new.jsonl"), &format!("{}\n", json!({ "timestamp": sw::clock::iso(sw::clock::now()), "type": "session_meta", "payload": { "id": "new-codex", "cwd": was, "source": "cli" } })), None);
-    put(&pi.join("sessions/--old--/2026_new.jsonl"), &format!("{}\n", json!({ "type": "session", "id": "new-pi", "cwd": was })), None);
+    put(&pi.join("sessions").join(pi_folder(&was)).join("2026_new.jsonl"), &format!("{}\n", json!({ "type": "session", "id": "new-pi", "cwd": was })), None);
     use sw::agents::adapter::latest_session;
     assert_eq!(["claude", "codex", "pi"].map(|k| latest_session(k, &now, 0, Some(&was))), [Some(id.to_string()), Some("new-codex".into()), Some("new-pi".into())]);
     assert_eq!(["claude", "codex", "pi"].map(|k| latest_session(k, &now, 0, None)), [None, None, None]);

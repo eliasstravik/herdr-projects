@@ -1,7 +1,8 @@
 //! Main merged into a task's branch by the board itself, before the check and the review and whenever main moves while
 //! it waits: the agent hears of it only on a real conflict; a review is repeated only where the update touched the
 //! task's own files; a worktree off its own branch is never checked or put up for approval. Under `merge.sync approve`
-//! a waiting task is only test-merged: a conflict still goes to its agent, and main is merged after your yes.
+//! a waiting task is only test-merged: a conflict still goes to its agent, and main is merged after your yes. One sync
+//! at a time: one on its way is not asked for again.
 use crate::common;
 use common::*;
 use serde_json::json;
@@ -185,4 +186,17 @@ fn with_approve_main_is_merged_and_checked_after_your_yes_and_the_work_lands() {
     assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
     assert_eq!(checks(&w), 2, "the branch with main merged in is checked before it lands");
     assert!(holds(&w.root, &target)); assert_eq!(read(&w.root.join("f.txt")), "v1\n"); assert_eq!(read(&w.root.join("g.txt")), "from main\n");
+}
+
+#[test]
+fn a_sync_on_its_way_is_not_asked_for_again_before_its_runner_has_taken_the_task_and_that_runner_takes_it() {
+    let w = world_with(Opts { repo: true, settings: json!({ "review.when": "never" }), ..Default::default() });
+    let id = to_approval(&w, "Once");
+    let main = main_moves(&w, "g.txt", "from main\n");
+    sw::runner::JOBS.with(|j| j.borrow_mut().clear());
+    // A second pass before the runner the first one asked for has started (#401)
+    housekeep(&w); housekeep(&w);
+    assert_eq!(sync_jobs(), 1);
+    let t = settle(&id);
+    assert!(holds(tree(&t), &main) && !t.b("runner"), "{}", t.at("failure"));
 }

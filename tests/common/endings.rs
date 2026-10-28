@@ -33,7 +33,7 @@ pub fn end_turn(f: &F, pi: usize, prompt: &str, step: &Value) {
         }
         "pi" => {
             let id = arg(&["--session-id"]);
-            let file = env_path("PI_CODING_AGENT_DIR").join("sessions").join("x").join(format!("2026_{id}.jsonl"));
+            let file = env_path("PI_CODING_AGENT_DIR").join("sessions").join(super::pi_folder(Path::new(&real))).join(format!("2026_{id}.jsonl"));
             let mut open = vec![];
             if !file.exists() { open.push(json!({ "type": "session", "id": id, "cwd": real, "timestamp": iso })); }
             open.push(json!({ "type": "message", "id": format!("u{seq}"), "timestamp": iso, "message": { "role": "user", "content": [{ "type": "text", "text": prompt }] } }));

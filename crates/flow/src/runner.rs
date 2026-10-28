@@ -50,6 +50,24 @@ pub fn spawn_runner(job: &str, id: &str, extra: &[&str]) -> u32 {
     detach(&mut c);
     start_reaped(&mut c)
 }
+/// Start a runner for `job` unless one already has the task. The look and the marker are one step under the task lock,
+/// and the marker names the new process, which finds it its own when it claims the task: a second caller before that
+/// claim (another pass, or a pass started from a stale list) finds the task taken (#401). Returns whether it started one.
+pub fn spawn_claimed(job: &str, id: &str, extra: &[&str]) -> bool {
+    if crate::plan::sandbox::inside::boxed() || outside::hands_over() { spawn_runner(job, id, extra); return true; } // started out there, unseen
+    let mut started = false;
+    let _ = update_wait(id, 10000, |t| {
+        if runner_alive(t) { return Ok(Change::Keep); }
+        let pid = spawn_runner(job, id, extra) as i64;
+        // In a test the job runs later in this very process.
+        let mut m = if inline() { marker() } else if pid > 0 { obj(json!({ "pid": pid, "start": proc_start(pid), "started": crate::clock::now() })) } else { return Ok(Change::Keep) };
+        m.put("job", job);
+        t.put("runner", m);
+        started = true;
+        Ok(Change::Write)
+    });
+    started
+}
 /// Tests drain the jobs that would have been detached.
 pub fn drain_jobs(run: &dyn Fn(&str, &str, &[String])) {
     loop {

@@ -14,7 +14,7 @@ use crate::finish::{auto_merge::{auto_merge_pass, green}, line::line_pass};
 use crate::flow::{send::resume_cut, spaces::{sweep_closing, sweep_repo_spaces}, task::is_agent_task};
 use crate::herdr::{cli::socket_exists, Herdr};
 use crate::json::*;
-use crate::runner::{inline, runner_alive, spawn_runner, start_reaped, user_env, detach, JOBS};
+use crate::runner::{inline, runner_alive, spawn_claimed, spawn_runner, start_reaped, user_env, detach, JOBS};
 use crate::store::{files::{bin, data_dir, has_tasks, RUNNER_STAGES}, marks::due, old_suggestions::save_old_suggestions, repos::folder_of, retries::waiting_of, settings::lookup::setting, tasks::{get, list, ListOpts, Task}};
 use crate::sync::{fetch_main, known_target, main_branch, resyncable, tree_of, via_remote};
 use std::collections::HashMap;
@@ -91,7 +91,7 @@ fn resync(tasks: &[Task], socket: &str) {
         // its turn to merge comes (finish/line.rs), and so does that only once.
         if setting("merge.by", Some(t)) == json!("itself") && green(t) { continue; }
         let target = known_target(t, &mut known);
-        if !target.is_empty() && (target != t.s("syncSeen") || t.b("syncBlocked")) && now() >= t.i("syncRetryAt") { spawn_runner("sync", t.s("id"), &[]); }
+        if !target.is_empty() && (target != t.s("syncSeen") || t.b("syncBlocked")) && now() >= t.i("syncRetryAt") { spawn_claimed("sync", t.s("id"), &[]); }
     }
 }
 /// Ask the remote where main is, for every repo with a task waiting: main also moves without the board (a merge on
@@ -106,7 +106,7 @@ pub fn fetch_mains() {
         let b = main_branch(&root, &t);
         let k = format!("{}|{b}", root.display());
         let ok = *done.entry(k).or_insert_with(|| fetch_main(&root, &b).is_ok());
-        if !ok && !t.b("syncBlocked") { spawn_runner("sync", t.s("id"), &["--force"]); }
+        if !ok && !t.b("syncBlocked") { spawn_claimed("sync", t.s("id"), &["--force"]); }
     }
 }
 /// A detached job that belongs to no single task.

@@ -138,7 +138,8 @@ pub fn start_queued(socket: &str) -> Vec<String> {
     let mut started = vec![];
     let _ = with_lock_wait("slots", 5000, || {
         let all = list(ListOpts { attempts: true, ..Default::default() });
-        let mut busy = all.iter().filter(|t| SLOT_STAGES.contains(&t.s("stage")) && !t.b("autoMerge")).count() as i64; // a remembered auto-merge runs nothing
+        // A remembered auto-merge runs nothing, nor does a task waiting in line to merge (finish/line.rs).
+        let mut busy = all.iter().filter(|t| SLOT_STAGES.contains(&t.s("stage")) && !t.b("autoMerge") && !crate::finish::line::in_line(t)).count() as i64;
         let waiting = crate::shown::queue::order(all.iter(), socket); // the order the board says (Q#1, Q#2 …)
         let max = setting("board.agents", None).as_i64().unwrap_or(4);
         for w in waiting {
