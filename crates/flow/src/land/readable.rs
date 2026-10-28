@@ -2,7 +2,8 @@
 //! check-runs API) needs the Checks permission, which a fine-grained token cannot have (GitHub gives it to GitHub Apps
 //! only): where GitHub refuses it, the list is made of what such a token reads, the jobs of the commit's GitHub Actions
 //! runs (every matrix member, with the link to its log) and its commit statuses (an outside CI, Vercel), in the same
-//! shape, and what cannot be read that way (another app's check runs) is named, to be said on the task. Used by
+//! shape, and what cannot be read that way (another app's check runs) is named, to be said on the task. A check run
+//! again keeps its older runs in GitHub's list: only its newest one counts (#404). Used by
 //! checks.rs, merge.rs and the pull requests' watch (housekeeping/prs.rs).
 use crate::clock::now;
 use crate::flow::git::{gh, pr_number, GhOut};
@@ -40,7 +41,7 @@ pub fn pr_view(root: &Path, pr: &str, fields: &str) -> Result<Read, String> {
     let n = pr_number(pr);
     if !refused_lately(root) {
         let r = gh(&["pr", "view", &n, "--json", &format!("{fields},statusCheckRollup")], root, 60000);
-        if let Ok(v) = serde_json::from_str::<Value>(&r.stdout) { return Ok(Read { view: v, ..Default::default() }); }
+        if let Ok(mut v) = serde_json::from_str::<Value>(&r.stdout) { v["statusCheckRollup"] = json!(newest(v.arr("statusCheckRollup"))); return Ok(Read { view: v, ..Default::default() }); }
         if !refused(&r) { return Err(said(&r)); }
         remember(root);
     }
@@ -52,6 +53,20 @@ pub fn pr_view(root: &Path, pr: &str, fields: &str) -> Result<Read, String> {
     let (checks, fault) = match of_commit(root, &v.t("headRefOid")) { Ok(c) => (c, String::new()), Err(e) => (vec![], e) };
     v["statusCheckRollup"] = json!(checks);
     Ok(Read { view: v, unread: vec![UNREAD.to_string()], fault })
+}
+
+/// A number in a GitHub Actions link after `part` (`/actions/runs/<run>/job/<job>`): None where it has none.
+fn link_id(c: &Value, part: &str) -> Option<u64> { c.s("detailsUrl").split(part).nth(1).and_then(|r| r.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()) }
+/// GitHub's list with each check only as last run: a job run again in the same workflow run (its later job id), or a
+/// check or status of the same name started later. One that cannot be told older (no job id, no start time, the same
+/// time) is kept, so that a failure is never dropped for a guess.
+pub fn newest(checks: &[Value]) -> Vec<Value> {
+    let key = |c: &Value| (c.s("__typename").to_string(), c.s("workflowName").to_string(), if c.b("name") { c.t("name") } else { c.t("context") }, link_id(c, "/actions/runs/"));
+    let older = |a: &Value, b: &Value| match (link_id(a, "/job/"), link_id(b, "/job/")) {
+        (Some(x), Some(y)) => x < y,
+        _ => { let (x, y) = (a.s("startedAt"), b.s("startedAt")); !x.is_empty() && !y.is_empty() && x < y }
+    };
+    checks.iter().filter(|c| !checks.iter().any(|o| key(o) == key(c) && older(c, o))).cloned().collect()
 }
 
 /// One GitHub Actions run of a commit.

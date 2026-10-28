@@ -74,42 +74,57 @@ fn paths_ok(f: &[(String, Vec<String>)], files: &Option<Vec<String>>) -> bool {
     if let Some(p) = get(f, "paths-ignore") { return files.iter().any(|x| !matches(p, x)); }
     true
 }
+/// Whether a workflow runs on the pull request's head: never, maybe (its `types` hold only some of the events that bring
+/// a head, `opened` for the first, `synchronize` for each one pushed after: GitHub starts no run of it on a head that
+/// came the other way, #420), or always.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Runs { Never, Maybe, Always }
+fn on_head(types: Option<&Vec<String>>) -> Runs {
+    let Some(t) = types else { return Runs::Always };
+    let has = |e: &str| t.iter().any(|x| x == e);
+    if has("opened") && has("synchronize") { Runs::Always }
+    else if ["opened", "synchronize", "reopened", "ready_for_review"].iter().any(|e| has(e)) { Runs::Maybe } else { Runs::Never }
+}
 /// Does this workflow run for the pull request (or for the pushes to its branch)?
-pub fn runs_for(flow: &Flow, pr: &Pr) -> bool {
-    flow.on.iter().any(|(event, f)| match event.as_str() {
-        "pull_request" | "pull_request_target" => branch_ok(f, pr.base) && paths_ok(f, &pr.files)
-            && get(f, "types").map(|t| t.iter().any(|t| ["opened", "synchronize", "reopened", "ready_for_review"].contains(&t.as_str()))).unwrap_or(true),
-        "push" => (get(f, "branches").is_some() || get(f, "branches-ignore").is_some() || (get(f, "tags").is_none() && get(f, "tags-ignore").is_none()))
-            && branch_ok(f, pr.branch) && paths_ok(f, &pr.files),
-        _ => false,
-    })
+pub fn runs_for(flow: &Flow, pr: &Pr) -> Runs {
+    flow.on.iter().map(|(event, f)| match event.as_str() {
+        "pull_request" | "pull_request_target" if branch_ok(f, pr.base) && paths_ok(f, &pr.files) => on_head(get(f, "types")),
+        "push" if (get(f, "branches").is_some() || get(f, "branches-ignore").is_some() || (get(f, "tags").is_none() && get(f, "tags-ignore").is_none()))
+            && branch_ok(f, pr.branch) && paths_ok(f, &pr.files) => Runs::Always,
+        _ => Runs::Never,
+    }).max().unwrap_or(Runs::Never)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn runs(f: &Flow, p: &Pr) -> bool { runs_for(f, p) != Runs::Never }
     fn pr(files: &[&str]) -> Pr<'static> { Pr { base: "main", branch: "work/1-x", files: Some(files.iter().map(|s| s.to_string()).collect()) } }
     #[test]
     fn a_workflow_runs_for_a_pull_request_as_github_decides_it() {
         let ci = parse("ci.yml", "name: Check\non:\n  push:\n    branches: [\"**\"]\n  pull_request:\njobs:\n  check:\n    runs-on: x\n");
-        assert_eq!(ci.name, "Check"); assert!(runs_for(&ci, &pr(&["a.rs"])));
+        assert_eq!(ci.name, "Check"); assert!(runs(&ci, &pr(&["a.rs"])));
         let src = parse("s.yml", "on:\n  pull_request:\n    paths:\n      - 'src/**'\n      - '!src/docs/**'\njobs: {}\n");
-        assert!(runs_for(&src, &pr(&["src/a/b.rs"])) && !runs_for(&src, &pr(&["docs/x.md"])) && !runs_for(&src, &pr(&["src/docs/x.md"])));
+        assert!(runs(&src, &pr(&["src/a/b.rs"])) && !runs(&src, &pr(&["docs/x.md"])) && !runs(&src, &pr(&["src/docs/x.md"])));
         let rel = parse("r.yml", "on:\n  pull_request:\n    branches: [release]\n");
-        assert!(!runs_for(&rel, &pr(&["a"])));
+        assert!(!runs(&rel, &pr(&["a"])));
         let tags = parse("t.yml", "on:\n  push:\n    tags: [\"v*\"]\n  workflow_dispatch:\n");
-        assert!(!runs_for(&tags, &pr(&["a"])));
+        assert!(!runs(&tags, &pr(&["a"])));
         let only = parse("o.yml", "on:\n  push:\n    branches: [main]\n");
-        assert!(!runs_for(&only, &pr(&["a"])));
-        assert!(runs_for(&parse("p.yml", "on: [push, pull_request]\n"), &pr(&[])));
-        assert!(!runs_for(&parse("l.yml", "on:\n  pull_request:\n    types: [labeled]\n"), &pr(&["a"])));
+        assert!(!runs(&only, &pr(&["a"])));
+        assert!(runs(&parse("p.yml", "on: [push, pull_request]\n"), &pr(&[])));
+        assert!(!runs(&parse("l.yml", "on:\n  pull_request:\n    types: [labeled]\n"), &pr(&["a"])));
+        // types that leave out how a head comes (opened, or a push after it): maybe, not always (#420)
+        let types = |t: &str| runs_for(&parse("t.yml", &format!("on:\n  pull_request:\n    types: [{t}]\n")), &pr(&["a"]));
+        assert_eq!((types("opened, synchronize"), types("labeled, synchronize"), types("ready_for_review"), types("opened")), (Runs::Always, Runs::Maybe, Runs::Maybe, Runs::Maybe));
+        assert_eq!(runs_for(&parse("b.yml", "on:\n  push:\n  pull_request:\n    types: [labeled, synchronize]\n"), &pr(&["a"])), Runs::Always, "its pushes run it");
         // the same, written inline
         let src = parse("s.yml", "on: {pull_request: {paths: ['src/**', '!src/docs/**']}}\njobs: {}\n");
-        assert!(runs_for(&src, &pr(&["src/a.rs"])) && !runs_for(&src, &pr(&["docs/x.md"])) && !runs_for(&src, &pr(&["src/docs/x.md"])));
-        assert!(!runs_for(&parse("r.yml", "on:\n  pull_request: {branches: [release]}\n"), &pr(&["a"])));
-        assert!(runs_for(&parse("q.yml", "\"on\": {pull_request: {branches: main}}\n"), &pr(&["a"])));
+        assert!(runs(&src, &pr(&["src/a.rs"])) && !runs(&src, &pr(&["docs/x.md"])) && !runs(&src, &pr(&["src/docs/x.md"])));
+        assert!(!runs(&parse("r.yml", "on:\n  pull_request: {branches: [release]}\n"), &pr(&["a"])));
+        assert!(runs(&parse("q.yml", "\"on\": {pull_request: {branches: main}}\n"), &pr(&["a"])));
         assert_eq!(parse("x.yml", "name: [unclosed\n").name, "x.yml");
-        assert!(runs_for(&parse("x.yml", "on: {pull_request: [unclosed\n"), &pr(&["a"])), "unreadable: waited for, never missed");
+        assert!(runs(&parse("x.yml", "on: {pull_request: [unclosed\n"), &pr(&["a"])), "unreadable: waited for, never missed");
         assert!(glob("**/*.js", "a.js") && glob("**/*.js", "x/y/a.js") && !glob("*.js", "x/a.js") && glob("feature/*", "feature/a") && !glob("feature/*", "feature/a/b"));
     }
 }

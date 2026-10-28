@@ -1,7 +1,7 @@
 //! GitHub's checks on the pull request, looked at before it merges (`merge.checks`): still running, the merge waits
 //! and says so; failed, nothing merges and the failure goes back to the agent with the check's name and its log,
 //! within `review.rounds`, then waits for you (`approve` refuses, `--anyway` merges); stuck past `check.timeout`, it
-//! waits for you; `none` merges as before.
+//! waits for you; `none` merges as before. A check run again is judged by its newest run (#404).
 use crate::common;
 use common::*;
 use serde_json::{json, Value};
@@ -188,4 +188,31 @@ fn every_failing_check_has_the_end_of_its_log_sent_not_only_the_first_three() {
     let t = settle(&id);
     for n in 1..=4 { assert!(gh_log(&w).contains(&format!("run view --job {n} --log-failed")), "job {n}: {}", gh_log(&w)); }
     assert_eq!(t.at("prFailure").s("detail").matches("test parses_flags ... FAILED").count(), 4, "{}", t.at("prFailure"));
+}
+
+fn rerun(conclusion: &str, url: &str) -> Value { json!({ "__typename": "CheckRun", "name": "build", "status": "COMPLETED", "conclusion": conclusion, "workflowName": "CI", "detailsUrl": url }) }
+fn rollup_of(head: &str, checks: Value) -> Value { json!({ "state": "OPEN", "headRefOid": head, "statusCheckRollup": checks, "comments": [], "reviews": [], "author": { "login": "me" } }) }
+
+#[test]
+fn a_check_run_again_is_judged_by_its_newest_run_and_another_runs_failure_still_counts() {
+    // its job failed, was run again in the same workflow run, and passed: merged
+    let w = pr_world(json!({}));
+    let id = to_approval(&w, "Flaky build");
+    let head = task(&id).t("prHead");
+    let (old, new) = ("https://github.com/o/r/actions/runs/11/job/22", "https://github.com/o/r/actions/runs/11/job/23");
+    w.gh_says(json!({ "view": rollup_of(&head, json!([rerun("FAILURE", old), rerun("SUCCESS", new)])) }));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{} {}", t.t("msg"), t.at("failure")); assert!(merged(&w), "{}", gh_log(&w));
+    drop(w);
+    // the run again failed: not merged; and a failure in another workflow run (its run for the push) is its own check
+    for checks in [json!([rerun("SUCCESS", old), rerun("FAILURE", new)]), json!([rerun("FAILURE", "https://github.com/o/r/actions/runs/10/job/21"), rerun("SUCCESS", new)])] {
+        let w = pr_world(json!({ "review.rounds": 0 }));
+        let id = to_approval(&w, "Still failing");
+        let head = task(&id).t("prHead");
+        w.gh_says(json!({ "view": rollup_of(&head, checks) }));
+        finish_line::approve(&id, None, false).unwrap();
+        let t = settle(&id);
+        assert_eq!(t.at("prFailure").s("remoteKind"), "checks", "{}", t.t("msg")); assert!(!merged(&w));
+    }
 }

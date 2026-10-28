@@ -1,7 +1,9 @@
 //! GitHub's checks the pull request is to get, waited for before GitHub lists them (land/expected.rs): each workflow
 //! that runs for the pull request (its triggers as GitHub reads them: events, branches, paths) until its run on the
 //! commit is through, every job and matrix member of it; a check the branch requires; a check gone from the list; with
-//! nothing listed, an outside CI that reports in the repo; and a repo with no checks at all, which merges at once.
+//! nothing listed, an outside CI that reports in the repo; and a repo with no checks at all, which merges at once. A
+//! workflow whose trigger types may leave this commit out is waited for only a short while to start (#420); none is
+//! where the repo has GitHub Actions turned off (#416).
 use crate::common;
 use crate::pull_requests_checks::{merged, none, passed, pr_world, running, view, waits};
 use common::*;
@@ -9,11 +11,16 @@ use serde_json::{json, Value};
 use sw::actions::finish_line;
 use sw::housekeeping::poll_prs;
 use sw::json::*;
+use sw::land::expected::MAYBE_MS;
 
 const CI: &str = ".github/workflows/ci.yml";
 fn run(status: &str, conclusion: &str) -> Value { json!([CI, status, conclusion, "https://github.com/o/r/actions/runs/5"]) }
 fn job(name: &str, conclusion: &str) -> Value { json!({ "__typename": "CheckRun", "name": name, "status": if conclusion.is_empty() { "IN_PROGRESS" } else { "COMPLETED" }, "conclusion": conclusion, "workflowName": "CI" }) }
 fn listed(head: &str, checks: Value) -> Value { json!({ "state": "OPEN", "headRefOid": head, "statusCheckRollup": checks, "comments": [], "reviews": [], "author": { "login": "me" } }) }
+const PREVIEW: &str = ".github/workflows/preview.yml";
+fn with_flow(w: &World, path: &str, workflow: &str) {
+    w.script(json!({ "worker": [{ "files": { "f.txt": "v1\n", path: workflow }, "commit": "v1", "note": "Did v1." }] }));
+}
 fn with_ci(w: &World, workflow: &str, files: Value) {
     let mut f = files; f[CI] = json!(workflow);
     w.script(json!({ "worker": [{ "files": f, "commit": "v1", "note": "Did v1." }] }));
@@ -201,4 +208,65 @@ fn a_matrix_member_not_reported_yet_is_waited_for_and_a_workflow_that_cannot_run
     finish_line::approve(&id, None, false).unwrap();
     let t = settle(&id);
     assert_eq!(t.s("stage"), "done", "{}", t.at("failure")); assert!(merged(&w));
+}
+
+#[test]
+fn a_workflow_whose_types_leave_out_how_the_commit_came_is_waited_for_a_short_while_unless_its_run_is_there() {
+    // `labeled, synchronize`: a pull request opened on its head and never pushed to again gets no run of it
+    let flow = "name: Preview\non:\n  pull_request:\n    types: [labeled, synchronize]\njobs:\n  deploy:\n    runs-on: x\n";
+    let w = pr_world(json!({}));
+    with_flow(&w, PREVIEW, flow);
+    let id = to_approval(&w, "Preview never runs");
+    let head = task(&id).t("prHead");
+    w.gh_says(json!({ "view": passed(&head) }));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    waits(&t, "Waiting for GitHub checks · 1 of 2 passed", "Preview"); assert!(!merged(&w));
+    sw::clock::set(Some(t.at("checksWait").i("since")));
+    sw::clock::advance(MAYBE_MS - 1);
+    poll_prs(); settle(&id);
+    assert_eq!(task(&id).s("stage"), "merging", "not yet: it may still start"); assert!(!merged(&w));
+    sw::clock::advance(1);
+    poll_prs();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{}", t.at("failure")); assert!(merged(&w), "{}", gh_log(&w));
+    drop(w); // one world at a time: each holds the tests' one lock
+    // the same workflow with its run on the commit: waited for until it is through, however long that takes
+    let w = pr_world(json!({}));
+    with_flow(&w, PREVIEW, flow);
+    let id = to_approval(&w, "Preview runs");
+    let head = task(&id).t("prHead");
+    let run = |status: &str, conclusion: &str| json!([[PREVIEW, status, conclusion, "https://github.com/o/r/actions/runs/7", "Preview"]]);
+    w.gh_says(json!({ "view": passed(&head), "runs": run("in_progress", "") }));
+    finish_line::approve(&id, None, false).unwrap();
+    settle(&id);
+    sw::clock::advance(MAYBE_MS * 2);
+    poll_prs(); settle(&id);
+    assert_eq!(task(&id).s("stage"), "merging"); assert!(!merged(&w));
+    w.gh_says(json!({ "view": passed(&head), "runs": run("completed", "success") }));
+    poll_prs();
+    assert_eq!(settle(&id).s("stage"), "done"); assert!(merged(&w));
+}
+
+#[test]
+fn with_github_actions_turned_off_the_workflows_kept_in_the_repo_are_not_waited_for() {
+    let w = pr_world(json!({}));
+    with_flow(&w, ".github/workflows/ci.yml", "name: Build\non: [pull_request]\njobs:\n  build:\n    runs-on: x\n");
+    let id = to_approval(&w, "CI moved elsewhere");
+    let head = task(&id).t("prHead");
+    let woodpecker = view(&head, json!({ "__typename": "StatusContext", "context": "ci/woodpecker/pr/linux", "state": "SUCCESS" }));
+    w.gh_says(json!({ "view": woodpecker, "actionsOff": true }));
+    finish_line::approve(&id, None, false).unwrap();
+    let t = settle(&id);
+    assert_eq!(t.s("stage"), "done", "{} {}", t.t("msg"), t.at("failure")); assert!(merged(&w), "{}", gh_log(&w));
+    assert!(gh_log(&w).contains("actions/permissions"), "{}", gh_log(&w));
+    drop(w);
+    // still running there: still waited for
+    let w = pr_world(json!({}));
+    with_flow(&w, ".github/workflows/ci.yml", "name: Build\non: [pull_request]\njobs:\n  build:\n    runs-on: x\n");
+    let id = to_approval(&w, "Outside CI running");
+    let head = task(&id).t("prHead");
+    w.gh_says(json!({ "view": view(&head, json!({ "__typename": "StatusContext", "context": "ci/woodpecker/pr/linux", "state": "PENDING" })), "actionsOff": true }));
+    finish_line::approve(&id, None, false).unwrap();
+    waits(&settle(&id), "Waiting for GitHub checks · 0 of 1 passed", "ci/woodpecker/pr/linux"); assert!(!merged(&w));
 }

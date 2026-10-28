@@ -12,6 +12,7 @@ use sw::json::*;
 /// (how many of the repo's last pull requests had checks). A fine-grained token: `noChecks` (GitHub refuses it the
 /// checks list, GraphQL's `statusCheckRollup` and the check-runs API, as it does a token with no Checks permission),
 /// `jobs` (each run's jobs), `statuses` (the commit's statuses), `actionsFail` (it may not read Actions either).
+/// `actionsOff`: GitHub Actions is turned off for the repo.
 /// `noLogin`: gh is not logged in where it runs (a keeper started without the login shell's GH_TOKEN): every call fails.
 /// `prs`: the pull requests GitHub has for a head branch (`pr list --head`), each { number, url, state }; none by
 /// default. `archived`: the repo is archived on GitHub (`repo view`). `origin`: the bare repo the board pushes to; the
@@ -83,6 +84,8 @@ impl FakeGh {
                 let run = p.split("/actions/runs/").nth(1).unwrap_or("").split('/').next().unwrap_or("");
                 ok(&rows(c.at("jobs").at(run)))
             }
+            // Is GitHub Actions on for the repo: `actionsOff` says it is not.
+            ("api", p) if p.ends_with("/actions/permissions") => ok(if c.b("actionsOff") { "false" } else { "true" }),
             // A commit's workflow runs: `runs: [[path, status, conclusion, url, name?], …]`, given as id, path, status,
             // conclusion, url and name (the id from the url's `/runs/<id>`, the name "CI" if none).
             ("api", p) if p.contains("/actions/runs") => if c.b("actionsFail") { fail("gh: Resource not accessible by personal access token (HTTP 403)") } else {
