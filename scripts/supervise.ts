@@ -66,6 +66,8 @@ function soon(force = false) {
 }
 
 let renewing = false
+/** the supervisor on new code while it takes over: a stop meanwhile stops it too */
+let handover: ChildProcess | null = null
 /** new code of its own that didn't load: not tried again */
 let broken = ''
 /** A merge changed the supervisor's own code (it ran on older code until herdr started it again): it starts itself
@@ -94,6 +96,24 @@ async function renew() {
     await new Promise((done) => was.once('exit', done))
   }
   const next = spawn(process.execPath, [import.meta.path], { cwd: process.cwd(), detached: true, stdio: ['ignore', 'inherit', 'inherit'], env: process.env })
+  handover = next
+  // herdr's stop and start (scripts/plugin.ts) find the new one
+  const pidFile = join(process.env.HERDR_PLUGIN_STATE_DIR ?? join(HOME, 'run'), 'supervisor.pid')
+  const mine = (() => {
+    try {
+      return existsSync(pidFile) && Number(readFileSync(pidFile, 'utf8')) === process.pid
+    } catch {
+      return false
+    }
+  })()
+  const pidIs = (pid: number) => {
+    try {
+      if (mine) writeFileSync(pidFile, String(pid))
+    } catch {
+      /* plugin.ts asks the server for its supervisor as well */
+    }
+  }
+  pidIs(next.pid!)
   // the new one has its server answering in time, or this one takes back over as it was
   let gone = false
   next.once('exit', () => (gone = true))
@@ -107,6 +127,8 @@ async function renew() {
     try {
       process.kill(-next.pid!, 'SIGTERM')
     } catch {}
+    pidIs(process.pid)
+    handover = null
     broken = now
     stopping = false
     renewing = false
@@ -114,13 +136,6 @@ async function renew() {
     return run()
   }
   next.unref()
-  // herdr's stop and start (scripts/plugin.ts) find the new one
-  const pidFile = join(process.env.HERDR_PLUGIN_STATE_DIR ?? join(HOME, 'run'), 'supervisor.pid')
-  try {
-    if (existsSync(pidFile) && Number(readFileSync(pidFile, 'utf8')) === process.pid) writeFileSync(pidFile, String(next.pid))
-  } catch {
-    /* plugin.ts asks the server for its supervisor as well */
-  }
   process.exit(0)
 }
 
@@ -152,6 +167,9 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const)
   process.on(sig, () => {
     stopping = true
     child?.kill('SIGTERM')
+    try {
+      if (handover?.pid) process.kill(-handover.pid, 'SIGTERM')
+    } catch {}
     process.exit(0)
   })
 
