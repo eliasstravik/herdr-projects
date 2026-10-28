@@ -14,7 +14,7 @@
 
 ## Keep every project moving while you're away from the keyboard
 
-The app is an overview and a remote control; herdr is the engine. A space is a folder on a machine with its own coordinator, and each task gets its own agent on its own branch in a git worktree. Your checkout is never touched. You answer the cards that need you and let the rest run, from whichever screen is in your hand.
+The app is an overview and a remote control; herdr is the engine. A space is a folder on a machine with its own coordinator, and each task gets its own agent on its own branch in a git worktree. No agent works in your checkout: it only gets main moved forward when a task merges. You answer the cards that need you and let the rest run, from whichever screen is in your hand.
 
 ## Choose between briefing each agent by hand, one long agent session, a cloud agents product, or mission control for herdr
 
@@ -40,7 +40,7 @@ Each space's chat is in the middle and its tasks on the right, by what they need
 
 ### ⚡ Stop briefing every agent yourself
 
-Write what needs doing to a space's coordinator: it makes it a task or several, each with a brief and a Settings block that says how it is reviewed and merged. Each agent starts at once on Claude Code, Codex, pi or another CLI herdr can start, in a worktree of its own. Want more control? Ask for it "for later", "after SHE-12", or "ask me before merging". Turn on [Autopilot](docs/autopilot.md) and the coordinator works on its own between your messages, or add [automations](docs/autopilot.md) that start tasks on a schedule.
+Write what needs doing to a space's coordinator: it makes it a task or several, each with a brief and a Settings block that says how it is reviewed and merged. Each agent starts on Claude Code, Codex, pi or another CLI herdr can start, in a worktree of its own, at once or as soon as the machine has room. Want more control? Ask for it "for later", "after SHE-12", or "ask me before merging". Turn on [Autopilot](docs/autopilot.md) and the coordinator works on its own between your messages, or add [automations](docs/autopilot.md) that start tasks on a schedule.
 
 ### 💬 Know when a task needs an answer
 
@@ -101,7 +101,7 @@ No. Shepherdr runs on your own machine, keeps its files there, talks to your loc
 
 ### Will it touch my branches or worktrees on its own?
 
-Only the ones it made. Every task works in its own worktree, on its own branch `work/<n>-<slug>`, never in your checkout. By default a task merges on its own once its review is done and its quick checks pass; set Settings → How tasks work → Merge to "ask me first", or say so for one task. On GitHub it merges through the task's pull request. When a task is done its worktree and branch are removed; one with uncommitted or unmerged work stays, and Shepherdr says so.
+Only the ones it made. Every task works in its own worktree, on its own branch `work/<n>-<slug>`, never in your checkout; a merge only moves your main forward (fast-forward, or a squash merge when there's no GitHub remote). By default a task merges on its own once its review is done and its quick checks pass; set Settings → How tasks work → Merge to "ask me first", or say so for one task. On GitHub it merges through the task's pull request. When a task is done its worktree and branch are removed; one with uncommitted or unmerged work stays, and Shepherdr says so.
 
 ### Where do my tasks live?
 
@@ -113,7 +113,7 @@ Yes. Shepherdr is installed once, on the main machine. Every other machine you s
 
 ### Do I have to start every task through a coordinator?
 
-Yes: tasks are made only through a space's coordinator, so every one gets a brief and the same rules. Just ask in your own words. An [automation](docs/autopilot.md) adds tasks on a schedule or when something happens, such as a merge.
+Mostly. The app has no new-task button: you ask a space's coordinator in your own words and it adds the task (`shepherdr task add`), so every one gets a brief and the same rules. An [automation](docs/autopilot.md) adds tasks on a schedule or when something happens, such as a merge.
 
 ### What if the safety settings aren't enough?
 
