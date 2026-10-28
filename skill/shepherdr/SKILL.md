@@ -124,7 +124,7 @@ about that element, its cropped shot as an attachment:
 
 A plugin you make for the human (a change to Shepherdr's own screen just for them) goes in
 `~/.shepherdr/plugins/<name>/` on the main machine, never in the repo; one with a built-in plugin's name replaces it.
-Shepherdr rebuilds and restarts with it in seconds. How to write one: the README's Your own plugins, in Shepherdr's
+Shepherdr rebuilds and restarts with it in seconds. How to write one: `docs/plugins.md` (Your own plugins), in Shepherdr's
 checkout.
 
 ### Alerts

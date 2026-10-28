@@ -1,6 +1,6 @@
 # Working on Shepherdr
 
-How to run, build and lay out the code: [README.md](README.md), Develop.
+How to run, build and lay out the code: [docs/develop.md](docs/develop.md).
 
 ## Tests
 
@@ -21,8 +21,9 @@ How to run, build and lay out the code: [README.md](README.md), Develop.
 ## Plugins
 
 - `definePlugin` (`src/kernel.ts`, `server/plugin-api.ts`) and the slots of `Registry` (`src/kernel.ts`) are a public
-  contract: the human's own plugins in `~/.shepherdr/plugins` rely on them (README, Your own plugins). Change them with
-  care, keep old names working where you can, update the README's list, and say so in your done summary.
+  contract: the human's own plugins in `~/.shepherdr/plugins` rely on them ([docs/plugins.md](docs/plugins.md), Your
+  own plugins). Change them with care, keep old names working where you can, update that page's list, and say so in
+  your done summary.
 - A plugin the human asks you to make for them goes in `~/.shepherdr/plugins/<name>/`, never in the repo.
 
 ## Releases

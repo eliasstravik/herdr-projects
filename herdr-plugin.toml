@@ -1,5 +1,5 @@
 # The id stays herdr-projects, the plugin Shepherdr replaces: herdr refuses an update whose id changed, so someone on
-# herdr-projects lands on Shepherdr with `herdr plugin update` (README, Upgrading from herdr-projects).
+# herdr-projects lands on Shepherdr with `herdr plugin update` (docs/upgrading.md).
 id = "herdr-projects"
 name = "Shepherdr"
 version = "2.0.0"

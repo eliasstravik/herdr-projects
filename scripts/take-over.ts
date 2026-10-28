@@ -1,6 +1,6 @@
 // Once, when herdr has installed Shepherdr in place of herdr-projects (`herdr plugin update`, same plugin id): the old
 // herdr-projects is tidied away, and nothing of it is brought over. ~/.herdr-projects is never changed, so going back
-// to herdr-projects (README, Going back) finds everything as it was. Before anything outside it changes, a copy goes
+// to herdr-projects (docs/upgrading.md, Going back) finds everything as it was. Before anything outside it changes, a copy goes
 // to ~/.herdr-projects-backup-<date>/: herdr-projects' agent skill (it tells agents to run commands that are gone now)
 // and herdr's config.toml (its marked sidebar rows show herdr-projects' own fields, which are gone too; its marked
 // key stays, as it opens Shepherdr now). Then its keeper and page server stop, and a tailnet link its page server took
