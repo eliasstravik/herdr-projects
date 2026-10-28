@@ -71,9 +71,11 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
     // Its temporary folder, as TMPDIR and the rest: removed with all in it when the task ends (temp.rs).
     let tmp = crate::temp::made(&t);
     let _ = api.pane_run(&pane, &crate::temp::export_line(&t));
+    let mut used: Vec<String> = vec![]; // the arguments it was started on: built once a try (OpenCode 2 makes a conversation)
     let mut start_with = |with_hook: bool| -> Res<()> {
+        used = args(with_hook)?;
         // In a read-only mount while its plan waits (plan/sandbox.rs).
-        match plan::sandbox::start_program(&api, &t, &name, &kind, &pane, &args(with_hook)?, "writer") {
+        match plan::sandbox::start_program(&api, &t, &name, &kind, &pane, &used, "writer") {
             Ok(()) => Ok(()),
             Err(e) if e.code == "agent_not_ready" => { blocked = true; Ok(()) } // a dialog is in the way: the text waits in the inbox
             Err(e) => Err(e.into()),
@@ -85,7 +87,7 @@ pub fn start_agent(id: &str, g: &mut Guard, prompt: &str, resume: Option<&str>) 
         hooked = false; start_with(false)?;
     }
     // herdr calls the program ready before it has drawn anything; text typed that early loses its enter (submit.rs).
-    if !prompt.is_empty() && !blocked { let launch = std::iter::once(crate::agents::kinds::program(&kind).to_string()).chain(args(hooked)?).collect::<Vec<_>>().join(" "); crate::submit::settle(&api, &pane, &launch); }
+    if !prompt.is_empty() && !blocked { let launch = std::iter::once(crate::agents::kinds::program(&kind).to_string()).chain(used).collect::<Vec<_>>().join(" "); crate::submit::settle(&api, &pane, &launch); }
     // The send time arms the pipeline: nothing older than this counts as the turn's end.
     let (session, version, boxed) = (resume.map(String::from).or(x.session.clone()), x.version.clone(), plan::sandbox::boxed(&t));
     let t = g.set(|t| {

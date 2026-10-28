@@ -77,6 +77,7 @@ fn an_opencode_2_worker_on_a_model_starts_in_its_worktree_on_it() {
     assert_eq!(starts.len(), 1, "{starts:?}");
     assert!(starts[0].contains("--session ses_e7c1b6aa9ffeem8cVS1H4QRVgx"), "{}", starts[0]);
     assert!(!starts[0].contains(" -m "), "{}", starts[0]);
+    assert_eq!(made.borrow().len(), 1, "one conversation made, the one it was started on");
     let body: Value = serde_json::from_str(&made.borrow()[0][3]).unwrap();
     assert_eq!(body["location"]["directory"], json!(t.s("worktree")), "made in the task's own worktree");
 }
