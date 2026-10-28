@@ -64,4 +64,9 @@ fn a_screen_with_no_input_box_is_kept_whole() {
     // a rule the agent wrote itself, far from the end, is not taken for a box
     let ruled = format!("Part one\n{}\nPart two\n{}\nline\nline\nline\nline\nline\nline\nline\nline\nline", "─".repeat(20), "─".repeat(20));
     assert!(words(&ruled).contains("Part two"), "{}", words(&ruled));
+    // two rules the agent wrote itself near the end hold no prompt: kept
+    let parts = format!("Intro\n{}\nDetails\n{}\nConclusion", "─".repeat(20), "─".repeat(20));
+    assert!(words(&parts).contains("Conclusion"), "{}", words(&parts));
+    // an older Claude Code's input box, with edges, and a line typed into it
+    assert_eq!(words("Done here.\n╭──────────────╮\n│ > half typed │\n╰──────────────╯\n  ? for shortcuts"), "Done here.");
 }

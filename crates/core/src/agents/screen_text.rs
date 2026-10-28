@@ -31,14 +31,16 @@ fn rule(line: &str) -> bool {
     s.chars().count() >= 8 && s.chars().all(|c| ['─', '━', '═'].contains(&c))
 }
 /// The words an agent left on its screen, for a turn that ended with nothing else: what stands above its program's
-/// input box. The box is the last two rules, a few lines apart, near the end of the screen; what is drawn under it (a
-/// mode line, a status line: Claude Code's "⏵⏵ bypass permissions on") is the program's, never the agent's words.
+/// input box. The box is the last two rules, a few lines apart, near the end of the screen, its first line the prompt
+/// mark (Claude Code's `❯`); what is drawn under it (a mode line, a status line: Claude Code's "⏵⏵ bypass permissions
+/// on") is the program's, never the agent's words. Two rules the agent wrote itself hold no prompt mark.
 pub fn agent_words(screen: &str) -> String {
     let lines: Vec<&str> = screen.split('\n').collect();
     let full = |r: &[&str]| r.iter().filter(|l| !l.trim().is_empty()).count();
     let rules: Vec<usize> = (0..lines.len()).filter(|i| rule(lines[*i])).collect();
     if let [.., top, bottom] = rules[..] {
-        if full(&lines[top + 1..bottom]) <= 3 && full(&lines[bottom + 1..]) <= 8 { return screen_text(&lines[..top].join("\n")); }
+        let prompt = lines[top + 1..bottom].iter().map(|l| edge_trim(l)).find(|l| !l.is_empty()).map(|l| l.starts_with(['❯', '>', '›'])).unwrap_or(false);
+        if prompt && full(&lines[top + 1..bottom]) <= 3 && full(&lines[bottom + 1..]) <= 8 { return screen_text(&lines[..top].join("\n")); }
     }
     screen_text(screen)
 }
