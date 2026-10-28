@@ -179,8 +179,16 @@ export function RestartHint({ chatKey }: { chatKey: string; cli: string }) {
   }
   return (
     <div data-restart-hint className="flex justify-center pb-1.5">
-      <div className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-bubble py-1 pr-1 pl-2.5 text-[0.8125rem]/5 text-fg2 phone:text-[0.875rem]/5">
-        <span className="truncate">{error ?? `Runs on ${hint.on} · Settings now say ${hint.want}`}</span>
+      <div className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-full bg-bubble py-1 pr-1 pl-2.5 text-[0.8125rem]/5 text-fg2 phone:text-[0.875rem]/5">
+        {/* narrow, what it runs on gives way first: what Settings now say stays whole */}
+        {error ? (
+          <span className="truncate">{error}</span>
+        ) : (
+          <>
+            <span className="min-w-8 truncate">Runs on {hint.on} </span>
+            <span className="max-w-[60%] shrink-0 truncate">· Settings now say {hint.want}</span>
+          </>
+        )}
         <button type="button" disabled={busy} onClick={go} className="press-dim shrink-0 rounded-full px-1.5 font-medium text-fg enabled:hover:bg-hover disabled:opacity-40">
           {busy ? 'Restarting…' : error ? 'Try again' : 'Restart'}
         </button>
