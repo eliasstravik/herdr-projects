@@ -636,15 +636,17 @@ export class Agents extends Emitter<Events> {
   }
 
   /** what is wrong with this agent's run: gone from herdr, its CLI exited in its pane, or it runs on outdated files;
-   *  nothing while it is fine, or when that can't be told. One on outdated files is left alone while herdr sees it at
+   *  nothing while it is fine, null when herdr can't say. One on outdated files is left alone while herdr sees it at
    *  work or asking (a turn is never cut for this); its hooks don't count, as what they last said may be from before */
-  async wrong(key: string): Promise<Wrong | undefined> {
+  async wrong(key: string): Promise<Wrong | undefined | null> {
     const r = this.records[key]
     const a = this.info(key)
     if (!r) return undefined
     if (!a) return 'gone'
-    const p = await herdr.processInfo(a.pane_id).catch(() => undefined)
-    const w = p ? paneWrong(r.kind, p, this.filesOf(r)) : undefined
+    const p = await herdr.processInfo(a.pane_id).catch(() => null)
+    // herdr didn't say: neither well nor wrong
+    if (!p) return null
+    const w = paneWrong(r.kind, p, this.filesOf(r))
     return w === 'stale' && (a.agent_status === 'working' || a.agent_status === 'blocked') ? undefined : w
   }
 
@@ -660,12 +662,21 @@ export class Agents extends Emitter<Events> {
     return this.starting.has(key) || this.stopping.has(key)
   }
 
-  /** its pane closed, its run not over: started again right after (an agent whose CLI exited, or on outdated files) */
-  async close(key: string) {
-    const a = this.info(key)
-    if (!a) return
-    await herdr.closePane(a.pane_id).catch(() => undefined)
-    await this.refresh()
+  /** started again by `start` (that resumes its session), its pane closed first where it still holds it (its CLI
+   *  exited, or runs on outdated files). Meanwhile what you send waits for the one it starts, as in a restart */
+  async relaunch(key: string, close: boolean, start: () => Promise<unknown>) {
+    this.stopping.add(key)
+    try {
+      const a = close ? this.info(key) : undefined
+      if (a) {
+        await herdr.closePane(a.pane_id).catch(() => undefined)
+        await this.refresh()
+      }
+      await start()
+    } finally {
+      this.stopping.delete(key)
+      this.deliver(key)
+    }
   }
 
   /** the workspace labelled so, or the one still labelled `was` (never a repo's), renamed to it */

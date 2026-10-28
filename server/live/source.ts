@@ -990,6 +990,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         continue
       }
       const why = await this.agents.wrong(key)
+      if (why === null) continue
       if (!why) this.revivals.fine(key, now)
       else {
         const go = this.revivals.seen(key, now)
@@ -1006,8 +1007,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     try {
       console.error(`shepherdr: ${key}'s agent ${why === 'stale' ? 'runs on outdated settings' : 'stopped'}: starting it again`)
       // its pane still holds it, or its shell: herdr would count that as running
-      if (why !== 'gone') await this.agents.close(key)
-      await (key.includes('/') ? this.resumeTaskAgent(key) : this.coordinator(key))
+      await this.agents.relaunch(key, why !== 'gone', () => (key.includes('/') ? this.resumeTaskAgent(key) : this.coordinator(key)))
       if (working) await this.agents.send(key, hidden(relaunchedLine(), 'restart'))
     } catch (e) {
       console.error(`shepherdr: couldn't start ${key}'s agent again: ${(e as Error).message}`)
