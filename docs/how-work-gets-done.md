@@ -70,7 +70,9 @@ The plugin starts every agent itself, and passes at launch:
 - **the task's rules** as a standing system prompt: a file, or for Codex inline when short
   ([long rules and long messages](could-not-start.md#long-rules-and-long-messages)).
 
-Nothing is written to your own agent settings, and your own hooks keep running.
+Nothing is written to your own agent settings, and your own hooks keep running. Claude Code's launch settings also turn
+its idle compaction off (`"idleCompaction": false`): it would shrink the session of a finished task left waiting about
+an hour, which Herdr counts as a turn. A compaction in the saved conversation is never read as a new prompt either.
 
 At each turn's end, the hook runs `herdr-projects turn-ended` (silent, at most two seconds, protected by a per-launch
 secret). The finish line then reads the end of that agent's saved conversation: its last message, an API or login error,
@@ -92,7 +94,8 @@ never finishes a task. The turn counts as ended when:
   one, as the fallback.
 
 Otherwise the task is held as "Stopped without a summary": `Ctrl+R` tells the agent to continue, `Ctrl+L` takes the work
-as it is.
+as it is. Its message is the agent's last words on its screen: what stands above the program's input box, never the
+status line or mode line drawn under it.
 
 A task whose finish the board missed (its agent at rest, the row still "Finishing") is finished with `Ctrl+L` or
 `herdr-projects finish <id>`. What the agent said last is the summary.
