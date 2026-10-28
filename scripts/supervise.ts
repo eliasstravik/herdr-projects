@@ -70,7 +70,7 @@ let renewing = false
 let broken = ''
 /** A merge changed the supervisor's own code (it ran on older code until herdr started it again): it starts itself
  *  again on the new code, with the server, once the new release is past its trial, no update is being made and no
- *  voice call is on. A release that failed, or new code that doesn't load, leaves this one running as it is. */
+ *  voice call is on. A release that failed, or new code that doesn't load or start Shepherdr, leaves this one running. */
 async function renew() {
   const state = () => sup.status?.state
   const now = codeOf(import.meta.path)
@@ -94,6 +94,25 @@ async function renew() {
     await new Promise((done) => was.once('exit', done))
   }
   const next = spawn(process.execPath, [import.meta.path], { cwd: process.cwd(), detached: true, stdio: ['ignore', 'inherit', 'inherit'], env: process.env })
+  // the new one has its server answering in time, or this one takes back over as it was
+  let gone = false
+  next.once('exit', () => (gone = true))
+  let up = false
+  for (let i = 0; i < 60 && !gone && !up; i++) {
+    await Bun.sleep(1000)
+    up = await fetch(`http://127.0.0.1:${PORT}/api/snapshot`, { signal: AbortSignal.timeout(1500) }).then((r) => r.ok, () => false)
+  }
+  if (!up) {
+    console.log("the supervisor's new code didn't start Shepherdr; it goes on as it was")
+    try {
+      process.kill(-next.pid!, 'SIGTERM')
+    } catch {}
+    broken = now
+    stopping = false
+    renewing = false
+    await Bun.sleep(1000)
+    return run()
+  }
   next.unref()
   // herdr's stop and start (scripts/plugin.ts) find the new one
   const pidFile = join(process.env.HERDR_PLUGIN_STATE_DIR ?? join(HOME, 'run'), 'supervisor.pid')
