@@ -1,6 +1,6 @@
 # Builds the program for every platform and attaches it to the GitHub release of a version tag.
 #
-# Runs when a tag `v*` is pushed (`git tag v1.2.26 && git push origin v1.2.26`), or by hand with a tag to build the files
+# Runs when a tag `v*` is pushed (`git tag v1.2.27 && git push origin v1.2.27`), or by hand with a tag to build the files
 # of an existing release again; by hand with `dry_run` it builds and checks every file but attaches nothing, to test the
 # workflow itself. Each file is `herdr-projects-<os>-<arch>` (os linux|macos, arch x86_64|aarch64) with its `.sha256`
 # beside it: bin/run.sh and `herdr-projects update` download exactly these names. The Linux files are static (musl), so
@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: The tag to build, e.g. v1.2.26
+        description: The tag to build, e.g. v1.2.27
         required: true
       dry_run:
         description: Build and check every file, but attach nothing to the release

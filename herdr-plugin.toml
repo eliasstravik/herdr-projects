@@ -1,6 +1,6 @@
 id = "herdr-projects"
 name = "Projects"
-version = "1.2.26"
+version = "1.2.27"
 # The oldest herdr this plugin was actually verified on.
 min_herdr_version = "0.9.3"
 description = "A work board: one list of tasks, each delegated one an ordinary herdr agent in its own space"
