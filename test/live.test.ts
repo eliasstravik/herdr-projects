@@ -11,6 +11,7 @@ const { parseMenu } = await import('../server/live/chats.ts')
 const { Automations } = await import('../server/live/automations.ts')
 const T = await import('../server/live/trigger.ts')
 const { CATALOG, Settings, effortFor, setForTask } = await import('../server/live/settings.ts')
+const { parseAgy, setModels } = await import('../server/live/models.ts')
 const { readBrief } = await import('../shared/brief.ts')
 const { Heartbeats, heartbeatFile } = await import('../server/live/heartbeat.ts')
 const { coordinatorPrompt, settingsBlock, splitBrief, taskPrompt } = await import('../server/live/prompts.ts')
@@ -541,6 +542,15 @@ describe('settings', () => {
     expect(s.set('reviewer.effort', 'ultra').error).toBe('Antigravity takes default · low · medium · high · xhigh · max.')
     expect(s.set('reviewer.effort', 'high').ok).toBe(true)
     expect(s.harness('reviewer')).toEqual({ kind: 'agy', model: 'gemini-4-argon-high', effort: 'high' })
+    // once agy listed its models, they are picked by their names, which say their level
+    setModels('agy', parseAgy('gemini-4-argon-high\tGemini 4 Argon (High)\n', '--effort  Reasoning effort (low|medium|high|xhigh|max)'))
+    try {
+      expect(s.set('reviewer.model', 'Gemini 4 Argon (High)').ok).toBe(true)
+      expect(s.harness('reviewer').model).toBe('gemini-4-argon-high')
+      expect(s.set('reviewer.model', 'gemini-9').error).toBe('Antigravity has no model gemini-9. Pick one of: default · Gemini 4 Argon (High).')
+    } finally {
+      setModels('agy', undefined)
+    }
     for (const k of ['reviewer.agent', 'reviewer.model', 'reviewer.effort']) s.set(k, null)
     // an agy task agent runs on its own model: Shepherdr starts it with none
     expect(s.set('task.agent', 'agy').ok).toBe(true)

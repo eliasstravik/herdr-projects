@@ -687,7 +687,8 @@ export function refuse(key: string, value: string): string | undefined {
   const cli = key === 'task.agent' || key === 'coordinator.agent' || (key === 'task.fallback' && value.trim().toLowerCase() !== 'off')
   if (cli && !kindOf(value)) return `${value} is not an agent herdr can start.`
   if (key === 'reviewer.agent' && !REVIEWERS.includes(CLI_NAME[kindOf(value) ?? ''] ?? '')) return `Pick one of: ${REVIEWERS.join(' · ')}.`
-  if (key.endsWith('.model') && !/^[\w.:/@[\] -]+$/.test(value.trim())) return 'Write a model id like claude-opus-5-5, or default.'
+  // a name from a picker too: Antigravity's say their level, Gemini 4 Argon (High)
+  if (key.endsWith('.model') && !/^[\w.:/@[\]() -]+$/.test(value.trim())) return 'Write a model id like claude-opus-5-5, or default.'
   const num = numOf(key)
   if (key === 'heartbeat.when' || key === 'heartbeat.on') {
     try {
