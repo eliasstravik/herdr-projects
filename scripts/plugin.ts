@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, wr
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { takeOver } from './take-over.ts'
+import { prepare } from './prepare.ts'
 
 const ROOT = resolve(process.env.HERDR_PLUGIN_ROOT ?? join(import.meta.dir, '..'))
 const STATE = process.env.HERDR_PLUGIN_STATE_DIR ?? join(process.env.SHEPHERDR_HOME ?? join(homedir(), '.shepherdr'), 'run')
@@ -73,6 +74,7 @@ async function start(): Promise<boolean> {
   } catch (e) {
     console.log(`Tidying away herdr-projects failed: ${(e as Error).message}`)
   }
+  let replace: Awaited<ReturnType<typeof running>> = null
   if (await answering()) {
     const r = await running()
     const same = !r || (real(r.root) === real(ROOT) && r.version === VERSION)
@@ -82,14 +84,21 @@ async function start(): Promise<boolean> {
       return true
     }
     console.log(`Shepherdr ${r.version} is running from ${r.root}: restarting it on ${VERSION} from ${ROOT}`)
-    await kill(r.supervisor)
+    replace = r
+  }
+  const error = await prepare(ROOT)
+  if (error) {
+    console.error(`Shepherdr preparation failed: ${error}`)
+    return false
+  }
+  if (replace) {
+    await kill(replace.supervisor!)
     if (await answering()) {
-      console.log(`Shepherdr ${r.version} did not stop; see ${LOG}`)
+      console.log(`Shepherdr ${replace.version} did not stop; see ${LOG}`)
       return false
     }
   }
   mkdirSync(STATE, { recursive: true })
-  if (!existsSync(join(ROOT, 'dist', 'index.html'))) spawnSync(process.execPath, ['run', 'build'], { cwd: ROOT, stdio: 'inherit' })
   const out = openSync(LOG, 'a')
   const child = spawn(process.execPath, [join(ROOT, 'scripts', 'supervise.ts')], {
     cwd: ROOT,
@@ -138,6 +147,7 @@ function tailnetName() {
 /** the open action (herdr-projects' old key opens it too): start it when needed, and show its link over the pane */
 async function open() {
   const up = await start()
+  if (!up) process.exitCode = 1
   const say = up ? `Shepherdr is at ${link()}` : `Shepherdr did not start yet; see ${LOG}`
   console.log(say)
   // an action's own output shows nowhere in herdr: a small pane says it until Enter closes it
@@ -153,7 +163,7 @@ function share() {
 }
 
 const cmd = process.argv[2]
-if (cmd === 'start') await start()
+if (cmd === 'start') { if (!(await start())) process.exitCode = 1 }
 else if (cmd === 'open') await open()
 else if (cmd === 'stop') await stop()
 else if (cmd === 'status') await status()

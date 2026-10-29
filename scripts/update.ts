@@ -118,10 +118,14 @@ export async function update(
 }
 
 /** build the screen and check the server's code loads; why not, or null */
-async function buildAndCheck(dir: string, bun: string): Promise<{ error: string; out: string } | null> {
+export async function buildAndCheck(dir: string, bun: string): Promise<{ error: string; out: string } | null> {
   const b = await run([bun, 'run', 'build'], dir)
   if (!b.ok || !existsSync(join(dir, 'dist', 'index.html'))) return { error: `the build failed:\n${tail(b.out)}`, out: b.out }
-  // the server runs from source: check it and everything it imports still loads
+  return checkServer(dir, bun)
+}
+
+/** The server runs from source: check it and everything it imports still loads. */
+export async function checkServer(dir: string, bun: string): Promise<{ error: string; out: string } | null> {
   const scratch = mkdtempSync(join(tmpdir(), 'shepherdr-check-'))
   const s = await run([bun, 'build', join(dir, 'server', 'main.ts'), '--target', 'bun', '--outdir', scratch], dir)
   rmSync(scratch, { recursive: true, force: true })
