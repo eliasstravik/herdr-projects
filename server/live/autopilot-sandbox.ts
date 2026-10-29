@@ -43,7 +43,7 @@ export function sandboxArgs(o: { cwd: string; repo: string; home: string; state:
 export function capturedTranscript(root: string, kind: string, file: string) {
   const uuid = file.match(/([0-9a-f]{8}-[0-9a-f-]{27})\.jsonl$/i)?.[1]
   const name = createHash('sha256').update(file).digest('hex').slice(0, 24) + (uuid ? `-${uuid}` : '') + '.jsonl'
-  return join(root, kind === 'claude' ? '.claude/projects' : kind === 'codex' ? '.codex/sessions' : '.pi/agent/sessions', name)
+  return join(root, kind === 'claude' ? '.claude/projects' : kind === 'codex' ? '.codex/sessions' : '.pi/agent/sessions', file.includes('/subagents/') ? 'subagents' : '', name)
 }
 function privateDestination(root: string, file: string) {
   const parts = file.slice(root.length + 1).split('/')

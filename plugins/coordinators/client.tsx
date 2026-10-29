@@ -32,7 +32,7 @@ function AutopilotSwitch({ place }: { place: Place }) {
   const on = place.mode === 'autopilot'
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const state = useSnap().settings.find((section) => section.name === 'Autopilot' && section.level === place.id)?.rows.find((row) => row.label === 'State')?.value
+  const state = useSnap()?.settings.find((section) => section.name === 'Autopilot' && section.level === place.id)?.rows.find((row) => row.label === 'State')?.value
   const change = async (keepWorkers = false) => {
     if (busy) return
     setBusy(true); setError('')

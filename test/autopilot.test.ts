@@ -1,12 +1,12 @@
 // Isolated fixtures only. No real provider, coordinator, login, settings or Herdr process is used.
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 process.env.SHEPHERDR_HOME = mkdtempSync(join(tmpdir(), 'shep-pilot-test-'))
 process.env.HERDR_SOCKET_PATH = join(process.env.SHEPHERDR_HOME, 'absent.sock')
 const { PilotRuns, AUTOPILOT_KINDS, hostList, pilotCommand, pilotProblem, reserveTraffic } = await import('../server/live/autopilot.ts')
-const { sandboxArgs, publicAddress, providerConfig } = await import('../server/live/autopilot-sandbox.ts')
+const { sandboxArgs, publicAddress, providerConfig, capturedTranscript } = await import('../server/live/autopilot-sandbox.ts')
 const { Settings } = await import('../server/live/settings.ts')
 const { herdr } = await import('../server/live/herdr.ts')
 const { Agents, isolatedReady } = await import('../server/live/agents.ts')
@@ -118,6 +118,38 @@ describe('capabilities and exact launch settings', () => {
 })
 
 describe('fresh replacement, failures and worker ownership', () => {
+  test.each(['send', 'deliver'])('%s rechecks ownership after delayed input preflight', async (path) => {
+    const a = new Agents(), key = 'preflight', r: AgentRecord = { key, name: key, kind: 'codex', cwd: '/fixture', workspace: 'fixture', launch: 'old', logs: [], started: 1 }
+    a.records[key] = r
+    let release!: () => void
+    a.beforeInput = () => new Promise<void>((resolve) => { release = resolve })
+    a.acceptInput = (item) => !item.generation || item.generation === r.launch
+    const prompt = spyOn(herdr, 'prompt').mockResolvedValue(undefined as never)
+    try {
+      if (path === 'deliver') (a as unknown as { outbox: unknown[] }).outbox = [{ key, id: 'old', launch: 'old', text: 'old startup', at: 1 }]
+      const pending = path === 'send' ? a.send(key, 'old wake', { generation: 'old' }) : a.deliver(key)
+      await Promise.resolve()
+      r.launch = 'new'; release(); await pending
+      expect(prompt).not.toHaveBeenCalled()
+      expect(a.waiting(key)).toHaveLength(0)
+    } finally { prompt.mockRestore(); a.stop() }
+  })
+  test.each(['claude', 'codex'])('%s main chat excludes newer helpers and headless reviewers', (kind) => {
+    const a = new Agents(), captures = mkdtempSync(join(tmpdir(), 'pilot-main-captures-'))
+    const id = '00000000-0000-4000-8000-000000000001'
+    const main = capturedTranscript(captures, kind, `.config/${id}.jsonl`)
+    const helper = capturedTranscript(captures, kind, '.config/subagents/child.jsonl')
+    const reviewer = capturedTranscript(captures, kind, '.config/reviewer.jsonl')
+    for (const f of [main, helper, reviewer]) mkdirSync(join(f, '..'), { recursive: true })
+    const meta = (source: unknown) => JSON.stringify({ type: 'session_meta', payload: { cwd: '/fixture', source } }) + '\n'
+    writeFileSync(main, kind === 'codex' ? meta('cli') : '{}\n')
+    writeFileSync(helper, kind === 'codex' ? meta({ subagent: {} }) : '{}\n')
+    writeFileSync(reviewer, kind === 'codex' ? meta('exec') : '{}\n')
+    for (const f of [helper, reviewer]) utimesSync(f, new Date(), new Date(Date.now() + 1000))
+    a.records.main = { key: 'main', name: 'main', kind, sessionId: kind === 'claude' ? id : undefined, cwd: '/fixture', workspace: 'fixture', logs: [], started: Date.now(), isolation: { run: 'r', home: '/absent', captures, control: '/absent', path: '/absent' } }
+    try { a.discoverLog('main'); expect(a.record('main')!.logs).toEqual([main]) }
+    finally { a.stop() }
+  })
   test('old startup instructions are discarded on handover while a queued human message survives', async () => {
     const a = new Agents(), key = 'handover'
     const state = a as unknown as { outbox: { key: string; id: string; text: string; at: number; launch?: string; cid?: string }[]; live: Map<string, unknown> }

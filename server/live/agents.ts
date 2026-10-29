@@ -13,7 +13,7 @@ import { readJson, writeJson } from '../store.ts'
 import type { AgentRuntime, TermScreen } from '../../shared/types.ts'
 import { herdr, Subscription, type AgentInfo, type AgentStatus, type HerdrError, type HerdrEvent } from './herdr.ts'
 import { ClaudeSessions, Reviewers, screenBackground, sessionBackground, type Background } from './readers/background.ts'
-import { claudeHome, claudeLogPath, findClaudeLog, findCodexLog, findLog, findPiLog, logKind } from './readers/find.ts'
+import { claudeHome, claudeLogPath, findClaudeLog, findCodexLog, findLog, findPiLog, logKind, mainCodexLog } from './readers/find.ts'
 import { effortFor, modelArg } from './models.ts'
 import { tag } from './chatlines.ts'
 import { hookSettings, HookLogs, type Said } from './readers/hooks.ts'
@@ -650,6 +650,7 @@ export class Agents extends Emitter<Events> {
     const r = this.records[key]
     if (!r || (r.kind === 'claude' && r.hooks)) return
     const look = () => {
+      if (r.isolation) { this.discoverLog(key); return }
       const f = findLog(r.kind, r.cwd, since - 1000)
       if (!f || !addLog(r, f)) return
       // Claude Code and pi resume by the id in its name; Codex by its last log
@@ -677,7 +678,7 @@ export class Agents extends Emitter<Events> {
       const dir = join(r.isolation.captures ?? r.isolation.home, r.kind === 'claude' ? '.claude/projects' : r.kind === 'codex' ? '.codex/sessions' : '.pi/agent/sessions')
       if (!r.isolation.captures || !privateRuntimePath(r.isolation.captures, dir)) return
       const files = Array.from(new Bun.Glob('**/*.jsonl').scanSync({ cwd: dir, absolute: true, onlyFiles: true, throwErrorOnBrokenSymlink: false })).filter((f) => privateRuntimePath(r.isolation!.captures!, f) && statSync(f).mtimeMs >= since).sort((a,b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
-      const f = files.find((f) => !f.includes('/subagents/'))
+      const f = files.find((f) => !f.includes('/subagents/') && (r.kind === 'codex' ? mainCodexLog(f, r.cwd, true) : !r.sessionId || f.endsWith(`${r.sessionId}.jsonl`)))
       if (f && addLog(r, f)) { this.save(); this.emit('logs', key) }
       return
     }
@@ -985,6 +986,7 @@ export class Agents extends Emitter<Events> {
       if (this.status(key) === 'gone') throw new Error(this.reachable ? "The agent isn't running." : "Can't reach herdr.")
     }
     await this.beforeInput?.(key)
+    if (item.launch && item.launch !== this.records[key]?.launch || this.acceptInput && !this.acceptInput(item)) return { waiting: false, item }
     // what waits goes first, so nothing overtakes it
     let hold: Hold | undefined
     if (!this.holdOf(key, item) && !this.outbox.some((o) => o.key === key)) {
@@ -1054,6 +1056,7 @@ export class Agents extends Emitter<Events> {
           continue
         }
         await this.beforeInput?.(key)
+        if (next.launch && next.launch !== this.records[key]?.launch || this.acceptInput && !this.acceptInput(next)) { this.outbox = this.outbox.filter((o) => o !== next); this.save(); continue }
         if (this.heldBy(key, next)) return
         await this.put(key, next)
         this.unready.delete(key)

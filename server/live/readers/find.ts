@@ -88,6 +88,17 @@ const ymd = (d: Date, utc: boolean) =>
     ? [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()]
     : [d.getFullYear(), d.getMonth() + 1, d.getDate()]
 
+/** Reuse the native rollout identity checks for host-owned isolated captures. */
+export function mainCodexLog(file: string, cwd: string, interactiveOnly = false) {
+  try {
+    const meta = JSON.parse(firstLine(file) ?? '')
+    const p = meta?.type === 'session_meta' ? meta.payload : undefined
+    return !!p && typeof p.cwd === 'string' && trimSlash(p.cwd) === trimSlash(cwd)
+      && p.thread_source !== 'subagent' && !(p.source && typeof p.source === 'object' && 'subagent' in p.source)
+      && (!interactiveOnly || p.source === 'cli')
+  } catch { return false }
+}
+
 /** the day folders a session started since sinceMs can be in: today, yesterday and sinceMs's day, local and UTC */
 function codexDayDirs(sinceMs?: number): string[] {
   const now = Date.now()
@@ -125,16 +136,7 @@ export function findCodexLog(cwd: string, sinceMs = 0): string | undefined {
   }
   files.sort((a, b) => b.m - a.m)
   for (const { f } of files) {
-    let meta: any
-    try {
-      meta = JSON.parse(firstLine(f) ?? '')
-    } catch {
-      continue
-    }
-    const p = meta?.type === 'session_meta' ? meta.payload : undefined
-    if (!p || typeof p.cwd !== 'string' || trimSlash(p.cwd) !== want) continue
-    if (p.thread_source === 'subagent' || (p.source && typeof p.source === 'object' && 'subagent' in p.source)) continue
-    return f
+    if (mainCodexLog(f, want)) return f
   }
   return undefined
 }
