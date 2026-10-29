@@ -543,8 +543,8 @@ export class Settings {
 
   /** the pages of every level this machine holds: Everywhere (the main machine's, which its others share), this
    *  machine, and each of its spaces. `checklist`: the HEARTBEAT.md of a level's place (its id), shown last under
-   *  Autopilot */
-  sections(devices: string[], machines: { name: string; state: string }[], plugins: SettingSection | null, host = 'this machine', spaces: string[] = [], name = host, checklist?: (place: string) => string): SettingSection[] {
+   *  Autopilot. `pushFailed`: the last alert a push service turned down, under Alerts on */
+  sections(devices: string[], machines: { name: string; state: string }[], plugins: SettingSection | null, host = 'this machine', spaces: string[] = [], name = host, checklist?: (place: string) => string, pushFailed?: string): SettingSection[] {
     const levels: { l: Level; id: string }[] = [
       { l: 'all', id: 'all' },
       { l: 'machine', id: `m:${host}` },
@@ -560,7 +560,7 @@ export class Settings {
         ? { 'brief.review': text('review'), 'reviewer.agent': text('reviewer'), 'review.mustFix': text('mustFix'), 'review.rounds': text('rounds'), 'brief.merge': text('merge') }
         : {}
       return s.rows.map((r) => {
-        if (r.key === 'alerts') return { ...r, value: devices.length ? devices.join(', ') : 'No device yet' }
+        if (r.key === 'alerts') return { ...r, value: devices.length ? devices.join(', ') : 'No device yet', ...(pushFailed ? { warn: pushFailed } : {}) }
         const p = this.pick(r.key, l)
         const here = p.from === kindOfLevel(l)
         const up = above(l)

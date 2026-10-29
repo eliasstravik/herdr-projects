@@ -119,6 +119,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   /** when a busy machine last had its finished tasks' browsers closed */
   private sweptAt = 0
   devices: () => string[] = () => []
+  /** the last alert a push service turned down, until one to that device goes through (push.ts) */
+  pushFailure: () => { at: number; device: string; reason: string } | null = () => null
   /** the main machine runs every other machine saved in herdr, each from a worker of its own (machines.ts); a worker
    *  is one of those (box.ts) */
   peers: Machines | null = BOX ? null : new Machines(process.env.NODE_ENV === 'test' ? null : undefined)
@@ -466,9 +468,16 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         ['~', ...this.places.spaces.map((p) => p.name)],
         NAME,
         (id) => this.heartbeats.read(id, this.roleOf(id)),
+        this.pushFailed(),
       ).concat(peers.flatMap((l) => (l.snap?.settings ?? []).filter((x) => x.machine === l.rec.machine))),
       user: this.user,
     }
+  }
+
+  /** "Last alert to a phone failed 5m ago: 403 BadJwtToken", or nothing while alerts go through */
+  private pushFailed() {
+    const f = this.pushFailure()
+    return f ? `Last alert to ${f.device} failed ${age(f.at) === 'now' ? 'just now' : `${age(f.at)} ago`}: ${f.reason}` : undefined
   }
 
   chat(key: string): Chat | undefined {
@@ -2151,7 +2160,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       }
       case 'doctor': {
         if (BOX) throw new Error(`shepherdr doctor checks every machine from the main one: run it there (${HOST} is run from it over SSH).`)
-        const own = `${NAME} (this machine, the main one): herdr ${this.agents.reachable ? 'answers' : 'does not answer'}${this.browsers ? `; shared browser ${this.browsers.status().ready ? 'ready' : this.browsers.status().hint}` : ''}`
+        const failed = this.pushFailed()
+        const own = `${NAME} (this machine, the main one): herdr ${this.agents.reachable ? 'answers' : 'does not answer'}${this.browsers ? `; shared browser ${this.browsers.status().ready ? 'ready' : this.browsers.status().hint}` : ''}${failed ? `; ${failed.toLowerCase()}` : ''}`
         return [own, ...((await this.peers?.doctor()) ?? [])].join('\n')
       }
       case 'secret': {
