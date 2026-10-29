@@ -262,6 +262,26 @@ describe('closed with nothing to merge', () => {
     expect(w.engine.keptLeftovers()[0]).toStartWith(`${t.id} `)
     await w.engine.sweep()
     expect(existsSync(t.worktree!)).toBe(true)
+    // you remove it by hand: the next sweep stops listing it
+    sh(`git worktree remove --force ${t.worktree} && git branch -D ${t.branch}`, dir)
+    await w.engine.sweep()
+    expect(w.engine.keptLeftovers()).toEqual([])
+  })
+
+  test('main here behind the remote: a task with nothing to merge, started from the remote, is put away all the same', async () => {
+    const w = world()
+    const origin = repo()
+    const dir = mkdtempSync(join(tmpdir(), 'shep-clone-'))
+    sh(`git clone -q ${origin} . && git config user.email t@t && git config user.name T`, dir)
+    // someone else's work lands on the remote; main here never pulled it
+    writeFileSync(join(origin, 'theirs.txt'), 'theirs\n')
+    sh('git add -A && git commit -qm theirs', origin)
+    const { t } = await started(w, dir, 'behind')
+    expect(existsSync(join(t.worktree!, 'theirs.txt'))).toBe(true)
+    expect(sh('git log --format=%s main', dir)).toBe('init')
+    expect(await w.engine.close(t.id, 'Answered.')).toEqual({ kept: [] })
+    expect(existsSync(t.worktree!)).toBe(false)
+    expect(branches(dir)).toBe('')
   })
 
   test('a Ready task closed without a summary keeps what it said when done', async () => {

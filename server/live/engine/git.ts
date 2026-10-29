@@ -170,8 +170,24 @@ export async function squashesOf(repo: string, base: string, id: string) {
  * makes that commit; a branch with no work has its starting point's), squash-merging it now onto the parent of one of
  * `squashes` (its task's squash merges into `base`) makes that very commit, so nothing came after the merge (not even
  * a commit undoing part of it), however main has moved on since, or merging it into `base` would change nothing.
+ * The remote's `base` counts too: a task starts from it, and `base` here may never have caught up with it.
  */
 export async function landed(repo: string, ref: string, base: string, squashes: string[] = []) {
+  if (await landedOn(repo, ref, base, squashes)) return true
+  const remote = await remoteOf(repo, base)
+  return !!remote && landedOn(repo, ref, remote, squashes)
+}
+
+/** `base` as the remote has it: its upstream, else origin's branch of that name; null when there is none */
+async function remoteOf(repo: string, base: string) {
+  for (const r of [`${base}@{upstream}`, `refs/remotes/origin/${base}`]) {
+    const full = await git(repo, 'rev-parse', '--verify', '--quiet', '--symbolic-full-name', r)
+    if (full.ok && full.out) return full.out
+  }
+  return null
+}
+
+async function landedOn(repo: string, ref: string, base: string, squashes: string[]) {
   const tree = await git(repo, 'rev-parse', '--verify', '--quiet', `${ref}^{tree}`)
   if (!tree.ok) return false
   const trees = await git(repo, 'log', '--format=%T', '-n', '5000', base)

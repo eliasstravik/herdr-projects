@@ -1975,6 +1975,11 @@ export class Engine extends Emitter<Events> {
       if (!p || st === 'working' || (t.cleaned && st !== 'gone')) continue
       const left = !t.cleaned || (!!t.worktree && existsSync(t.worktree)) || (!!t.branch && (await G.branchExists(p.path, t.branch))) || !!(await this.wt.spaceOf(t.worktree, labelOf(t), spaces))
       if (left) await this.cleanup(t, true).catch(() => undefined)
+      // what it kept was removed by hand since: shepherdr status no longer lists it
+      else if (t.kept) {
+        t.kept = undefined
+        this.save()
+      }
     }
     await this.wt.closeRepoSpaces()
   }
