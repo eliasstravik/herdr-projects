@@ -4,6 +4,7 @@
 // what its agent runs on (restartHint) come from here.
 import type { Message, RestartCli, RestartHint, RestartInfo } from '../../shared/types.ts'
 import { effortFor, effortsOf, findModel, modelArg, modelsOf } from './models.ts'
+import { chatProblem } from './readers/index.ts'
 import { CLI_NAME } from './settings.ts'
 import type { Harness } from './engine/engine.ts'
 
@@ -55,7 +56,7 @@ export function restartHint(on: Harness, set: Harness | undefined, want: Harness
 
 /** each CLI the sheet offers: its models (with the levels each takes) where Shepherdr passes them */
 export function restartClis(kinds: string[]): RestartCli[] {
-  return kinds.map((kind) => {
+  return kinds.filter((kind) => !chatProblem(kind)).map((kind) => {
     const c = modelsOf(kind)
     return {
       kind,
@@ -93,6 +94,8 @@ export function recentChat(messages: Message[], them: string, skip?: string) {
 
 /** Reject unsupported choices before restarting or saving anything; never silently round effort. */
 export function harnessProblem(h: Harness): string | undefined {
+  const problem = chatProblem(h.kind)
+  if (problem) return problem
   const c = modelsOf(h.kind)
   const m = h.model && h.model !== 'default' ? h.model : undefined
   if (!c && (m || (h.effort && h.effort !== 'default'))) return `${name(h.kind)} does not support model or effort selection.`

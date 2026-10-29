@@ -871,3 +871,41 @@ describe('projects', () => {
     expect(placeId.machine()).toBe(`m:${HOST}`)
   })
 })
+
+describe('interactive chat capabilities', () => {
+  test('Settings offers runtime-readable kinds and rejects unsupported selections without changing defaults', async () => {
+    const { CHAT_KINDS, readerFor } = await import('../server/live/readers/index.ts')
+    const { LOG_FINDERS } = await import('../server/live/readers/find.ts')
+    const { KIND, REVIEWERS } = await import('../server/live/settings.ts')
+    const settings = new Settings({ everywhere: {}, machine: {}, spaces: {} })
+    const legacy = new Settings({ everywhere: { 'task.agent': 'Antigravity' }, machine: {}, spaces: {} })
+    expect(legacy.get('task.agent')).toBe('Antigravity')
+    for (const key of ['task.agent', 'coordinator.agent', 'task.fallback']) {
+      const row = CATALOG.flatMap((s) => s.rows).find((r) => r.key === key)!
+      expect(row.options!.filter((v) => v !== 'off').map((v) => KIND[v])).toEqual(CHAT_KINDS)
+      const before = settings.get(key)
+      for (const value of ['Antigravity', 'Gemini', 'Cursor']) {
+        expect(settings.set(key, value)).toMatchObject({ ok: false, error: expect.stringContaining('no chat log reader') })
+        expect(settings.get(key)).toBe(before)
+      }
+    }
+    for (const kind of CHAT_KINDS) {
+      expect(readerFor(kind)).toBeDefined()
+      expect(LOG_FINDERS[kind]).toBeFunction()
+    }
+    expect(settings.set('task.fallback', 'off').ok).toBe(true)
+    expect(REVIEWERS).toEqual(['Codex', 'Claude Code', 'pi'])
+  })
+
+  test('unsupported starts and restarts fail before callbacks or agent state changes', async () => {
+    const { Agents } = await import('../server/live/agents.ts')
+    const agents = new Agents()
+    const spec = { key: 'unsupported-chat', name: 'unsupported-chat', kind: 'agy', cwd: '/tmp', workspace: 'test' }
+    let stopped = false
+    await expect(agents.ensure(spec)).rejects.toThrow('no chat log reader')
+    await expect(agents.restart(spec, async () => { stopped = true })).rejects.toThrow('no chat log reader')
+    expect(stopped).toBe(false)
+    expect(agents.record(spec.key)).toBeUndefined()
+    agents.stop()
+  })
+})

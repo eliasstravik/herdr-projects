@@ -1,3 +1,4 @@
+import { chatProblem } from './readers/index.ts'
 import { LinkBackoff } from './recovery.ts'
 // Every agent Shepherdr talks to is an ordinary herdr agent. This keeps which herdr agent and which log files belong
 // to each chat, starts and resumes agents, and sends what you write: at once, even while the agent works (Claude Code,
@@ -649,6 +650,8 @@ export class Agents extends Emitter<Events> {
    * message. `before` throwing leaves it as it was.
    */
   restart(spec: Spec, before?: () => Promise<string | void>): Promise<AgentInfo | null> {
+    const problem = chatProblem(spec.kind)
+    if (problem) return Promise.reject(new Error(problem))
     const p0 = this.starting.get(spec.key)
     const p = (async () => {
       await p0?.catch(() => undefined)
@@ -668,6 +671,8 @@ export class Agents extends Emitter<Events> {
 
   /** start (or resume) this chat's agent; resolves once herdr says it is ready for input */
   ensure(spec: Spec): Promise<AgentInfo | null> {
+    const problem = chatProblem(spec.kind)
+    if (problem) return Promise.reject(new Error(problem))
     const running = this.live.get(spec.name)
     if (running) return this.bindRoute({ ...this.records[spec.key], ...spec } as AgentRecord, running.pane_id).then(() => running)
     const p0 = this.starting.get(spec.key)

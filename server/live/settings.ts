@@ -6,6 +6,7 @@
 // Settings come in two groups: what agents are told (only words in their prompts) and how Shepherdr runs (the rest).
 // The main machine keeps the Everywhere level; a worker for another machine (machines.ts) reads it from the main
 // machine's file as it changes, and its shepherdr set for Everywhere is run there.
+import { CHAT_KINDS, chatProblem } from './readers/index.ts'
 import { cpus, totalmem } from 'node:os'
 import { NOTIFY, NOTIFY_DEFAULT, NOTIFY_KEY } from '../../shared/alerts.ts'
 import type { SettingSection, TriggerRow } from '../../shared/types.ts'
@@ -15,7 +16,7 @@ import { settingsBlock, settingsLines, SEVERITIES, type Said, type Ways } from '
 import { effortFor, effortsOf, findModel, knowsModels, LEVELS, modelsOf } from './models.ts'
 import { eventRules, eventsText, eventWords, nextWords, OWN_ZONE, timeRule, timeWords, validZone, type EventRule } from './trigger.ts'
 
-/** every agent kind herdr can start (any of them works; chats are read for the ones with a log reader) */
+/** every agent kind herdr can start (interactive chat requires runtime log discovery and a reader) */
 const FALLBACK_KINDS = ['pi', 'claude', 'codex', 'gemini', 'cursor', 'devin', 'agy', 'cline', 'omp', 'mastracode', 'opencode', 'copilot', 'kimi', 'kiro', 'droid', 'amp', 'grok', 'hermes', 'kilo', 'qodercli', 'qwen', 'letta', 'maki', 'muse']
 
 function herdrKinds(): string[] {
@@ -34,10 +35,11 @@ function herdrKinds(): string[] {
 const NAMES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', pi: 'pi', opencode: 'OpenCode', qodercli: 'Qoder', agy: 'Antigravity', omp: 'Oh My Pi', mastracode: 'Mastra Code', copilot: 'GitHub Copilot' }
 const nameOf = (kind: string) => NAMES[kind] ?? kind[0].toUpperCase() + kind.slice(1)
 const KINDS = herdrKinds()
-// the three with log readers first, then the rest as herdr lists them
-const ORDER = ['claude', 'codex', 'pi', ...KINDS.filter((k) => !['claude', 'codex', 'pi'].includes(k))].filter((k) => KINDS.includes(k))
+// chat-readable kinds first, then the rest as herdr lists them
+const ORDER = [...CHAT_KINDS, ...KINDS.filter((k) => !CHAT_KINDS.includes(k))].filter((k) => KINDS.includes(k))
 
 export const CLIS: string[] = ORDER.map(nameOf)
+export const CHAT_CLIS = ORDER.filter((kind) => CHAT_KINDS.includes(kind)).map(nameOf)
 export const KIND: Record<string, string> = Object.fromEntries(ORDER.map((k) => [nameOf(k), k]))
 export const CLI_NAME: Record<string, string> = Object.fromEntries(ORDER.map((k) => [k, nameOf(k)]))
 
@@ -173,12 +175,12 @@ export const CATALOG: Section[] = [
   {
     // which agent (CLI), model and effort each kind of agent starts with
     name: 'Agents',
-    about: "What each kind of agent starts with. Default is the agent's own model or effort. Backup takes a task over when its agent can't go on. A coordinator can pick others for one task.",
+    about: "What each kind of agent starts with. Default is the agent's own model or effort. Backup takes a task over when its agent can't go on. Chat choices need a chat log reader; other installed CLIs cannot show replies here. Headless review is separate.",
     rows: [
-      ...agentRows('Tasks', 'task', [...CLIS], 'default', 'default'),
-      ...agentRows('Coordinators', 'coordinator', [...CLIS], 'default', 'default'),
+      ...agentRows('Tasks', 'task', [...CHAT_CLIS], 'default', 'default'),
+      ...agentRows('Coordinators', 'coordinator', [...CHAT_CLIS], 'default', 'default'),
       // a backup agent takes a task over where its agent can't go on (engine.ts cantGoOn)
-      { group: 'Backup', label: 'Agent', key: 'task.fallback', value: 'Codex', options: ['off', ...CLIS] },
+      { group: 'Backup', label: 'Agent', key: 'task.fallback', value: 'Codex', options: ['off', ...CHAT_CLIS] },
       { group: 'Backup', label: 'Model', key: 'backup.model', value: 'default', text: true },
       { group: 'Backup', label: 'Effort', key: 'backup.effort', value: 'default', options: [...EFFORTS] },
     ],
@@ -357,7 +359,8 @@ export class Settings {
     if (!KEYS.includes(key)) return { ok: false, error: `No setting ${key}` }
     if (!levelsOf(key).includes(kindOfLevel(l))) return { ok: false, error: levelsOf(key).includes('machine') ? `${key} is set Everywhere or for one machine, not a space.` : `${key} is set Everywhere only.` }
     if (value !== null) {
-      const err = refuse(key, value) ?? this.unfit(key, value, l)
+      const chat = key === 'task.agent' || key === 'coordinator.agent' || (key === 'task.fallback' && value.trim().toLowerCase() !== 'off')
+      const err = refuse(key, value) ?? (chat ? chatProblem(kindOf(value) ?? value) : undefined) ?? this.unfit(key, value, l)
       if (err) return { ok: false, error: err }
       const num = numOf(key)
       // a number is kept with its unit, however it was written ("13", "1.5x", "80 %")

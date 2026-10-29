@@ -4,23 +4,29 @@ import { closeSync, openSync, readSync, statSync } from 'node:fs'
 import { ClaudeReader } from './claude.ts'
 import { CodexReader } from './codex.ts'
 import { PiReader } from './pi.ts'
+import { LOG_FINDERS } from './find.ts'
 import type { LogEvent, Reader } from './types.ts'
 
 export { ClaudeReader, CodexReader, PiReader }
 
+const READERS: Record<string, () => Reader> = {
+  claude: () => new ClaudeReader(),
+  codex: () => new CodexReader(),
+  pi: () => new PiReader(),
+}
+
+/** Kinds with both runtime log discovery and a transcript reader. */
+export const CHAT_KINDS = Object.keys(READERS).filter((kind) => !!LOG_FINDERS[kind])
+
+export function chatProblem(kind: string): string | undefined {
+  if (!CHAT_KINDS.includes(kind)) return `${kind} does not support Shepherdr chat: no chat log reader is available. Choose ${CHAT_KINDS.join(', ')}. Headless review support is separate.`
+}
+
 /** a fresh reader for herdr's agent kind (readers remember open questions and split replies per file) */
 export function readerFor(cli: string): Reader | undefined {
-  switch (cli.toLowerCase()) {
-    case 'claude':
-    case 'claude-code':
-    case 'claudecode':
-      return new ClaudeReader()
-    case 'codex':
-      return new CodexReader()
-    case 'pi':
-      return new PiReader()
-  }
-  return undefined
+  const kind = cli.toLowerCase()
+  const key = kind === 'claude-code' || kind === 'claudecode' ? 'claude' : kind
+  return Object.hasOwn(READERS, key) ? READERS[key]() : undefined
 }
 
 // read big files a piece at a time; Claude Code logs reach tens of MB

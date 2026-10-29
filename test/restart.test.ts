@@ -95,8 +95,15 @@ describe('visible launch settings and supported restart choices', () => {
     expect(harnessProblem({ kind: 'codex', model: 'claude-opus-5-5' })).toContain('no available model')
     expect(harnessProblem({ kind: 'codex', model: 'gpt-6-luna', effort: 'ultra' })).toContain('does not support')
     expect(harnessProblem({ kind: 'gemini', effort: 'high' })).toContain('does not support')
-    expect(harnessProblem({ kind: 'gemini', model: 'default', effort: 'default' })).toBeUndefined()
+    expect(harnessProblem({ kind: 'gemini', model: 'default', effort: 'default' })).toContain('no chat log reader')
     expect(harnessProblem({ kind: 'pi', model: 'provider/model', effort: 'high' })).toBeUndefined()
     expect(harnessProblem({ kind: 'codex', effort: 'high' })).toBeUndefined()
   })
+})
+
+test('restart offers readable chat kinds, including when the current agent has no reader', () => {
+  const info = restartInfo({ role: 'task', on: { kind: 'agy' }, want: { kind: 'codex' }, kinds: ['agy', 'gemini', 'cursor', 'claude', 'codex', 'pi'], working: false })
+  expect(info.on.kind).toBe('agy')
+  expect(info.clis.map((c) => c.kind)).toEqual(['claude', 'codex', 'pi'])
+  expect(harnessProblem({ kind: 'agy' })).toContain('Headless review support is separate')
 })

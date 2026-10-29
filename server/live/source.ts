@@ -2601,6 +2601,10 @@ function harnessOf(p: Parsed, settings: Settings): { kind?: string; model?: stri
   const cli = one(p, 'agent')
   const kind = cli === undefined ? undefined : kindOf(cli)
   if (cli !== undefined && !kind) throw new Error(`No CLI called ${cli}; herdr starts ${CLIS.join(', ')}`)
+  if (kind) {
+    const problem = harnessProblem({ kind })
+    if (problem) throw new Error(problem)
+  }
   const h = settings.harness('task')
   return { ...(kind ? { kind } : {}), ...fit(p, '', kind ?? h.kind, kind && kind !== h.kind ? undefined : h.model) }
 }

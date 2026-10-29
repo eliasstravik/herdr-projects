@@ -150,12 +150,16 @@ export function piSessionDir(cwd: string): string {
 /** the newest pi session log for this cwd, changed at or after sinceMs */
 export const findPiLog = (cwd: string, sinceMs?: number) => newestLog(piSessionDir(cwd), sinceMs)
 
+/** Runtime log discovery, also used to decide which kinds can supply chat. */
+export const LOG_FINDERS: Record<string, (cwd: string, sinceMs?: number) => string | undefined> = {
+  claude: findClaudeLog,
+  codex: findCodexLog,
+  pi: findPiLog,
+}
+
 /** the newest log of this CLI for this cwd */
 export function findLog(cli: string, cwd: string, sinceMs?: number): string | undefined {
-  if (cli === 'claude') return findClaudeLog(cwd, sinceMs)
-  if (cli === 'codex') return findCodexLog(cwd, sinceMs)
-  if (cli === 'pi') return findPiLog(cwd, sinceMs)
-  return undefined
+  return Object.hasOwn(LOG_FINDERS, cli) ? LOG_FINDERS[cli](cwd, sinceMs) : undefined
 }
 
 /** which CLI wrote this log, by where it lies: an agent a backup took over from has logs of two CLIs */

@@ -77,3 +77,25 @@ describe.skipIf(!browser)('notification settings', () => {
     }
   })
 })
+
+describe.skipIf(!browser)('chat agent choices', () => {
+  test('Agents explains the chat limit and offers only readable agents', async () => {
+    const page = await browser!.newPage({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true })
+    try {
+      await page.goto(url())
+      await page.getByRole('button', { name: 'Places', exact: true }).click()
+      await page.getByRole('button', { name: 'Settings', exact: true }).click()
+      const settings = page.getByRole('region', { name: 'Settings' })
+      await settings.getByRole('button', { name: 'Agents', exact: true }).click()
+      expect(await settings.textContent()).toContain('other installed CLIs cannot show replies here')
+      expect(await settings.textContent()).toContain('Headless review is separate')
+      for (const group of ['Tasks', 'Coordinators', 'Backup']) {
+        await settings.getByRole('heading', { name: group, exact: true }).locator('..').getByRole('button', { name: /^Agent:/ }).click()
+        const choices = await page.getByRole('menuitemradio').allTextContents()
+        expect(choices.map((v) => v.trim())).toEqual(group === 'Backup' ? ['Off', 'Claude Code', 'Codex', 'Pi'] : ['Claude Code', 'Codex', 'Pi'])
+        await page.keyboard.press('Escape')
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
+    } finally { await page.close() }
+  })
+})
