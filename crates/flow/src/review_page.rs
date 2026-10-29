@@ -6,10 +6,9 @@ pub mod render;
 pub use render::{render_review_page, select_evidence, web_url, REVIEW_FILE};
 
 use crate::json::*;
-use crate::store::files::{artifacts_dir, bin, data_dir, pid_alive, proc_start, read_json, write_json};
+use crate::store::files::{artifacts_dir, bin, data_dir, dir_of, pid_alive, proc_start, read_json, reports_dir, write_json};
 use crate::store::tasks::Task;
 use std::path::Path;
-use std::sync::OnceLock;
 
 fn serve_file() -> std::path::PathBuf { data_dir().join("serve.json") }
 fn server_alive(info: &Value) -> bool { info.b("pid") && pid_alive(info.i("pid")) && (!info.b("start") || proc_start(info.i("pid")).as_deref() == Some(info.s("start"))) }
@@ -58,11 +57,16 @@ fn ensure_tailscale(info: &Value) -> Option<String> {
 }
 /// How links are shared is fixed: privately on your tailnet when Tailscale is installed here, else 127.0.0.1.
 pub fn link_mode() -> &'static str {
-    static MODE: OnceLock<&'static str> = OnceLock::new();
-    MODE.get_or_init(|| {
-        let has = std::process::Command::new("sh").args(["-c", "command -v tailscale"]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status().map(|s| s.success()).unwrap_or(false);
-        if std::env::var("HERDR_PROJECTS_LINKS").as_deref() == Ok("local") || !has { "local" } else { "tailscale" }
-    })
+    let has = std::process::Command::new("sh").args(["-c", "command -v tailscale"]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status().map(|s| s.success()).unwrap_or(false);
+    if std::env::var("HERDR_PROJECTS_LINKS").as_deref() == Ok("local") || !has { "local" } else { "tailscale" }
+}
+/// The address the page server really has now, from its own record: the private Tailscale host and port it was shared
+/// on, else this machine's loopback. "" when nothing is recorded. It never starts a server and never guesses.
+pub fn public_root() -> String {
+    let Some(info) = server_info() else { return String::new() };
+    let ts = info.at("ts");
+    if ts.b("port") && ts.i("target") == info.i("port") && ts.b("host") { format!("https://{}:{}", ts.s("host"), ts.i("port")) }
+    else { format!("http://127.0.0.1:{}", info.i("port")) }
 }
 /// Where a task's saved artifacts are served from. Falls back to local when Tailscale is absent or sharing fails.
 pub fn artifact_base(id: &str) -> String {
@@ -88,22 +92,78 @@ pub fn publish_review(enabled: bool, dir: &Path, listed: &Value, review: &Value,
 fn kind_of(file: &Path) -> &'static str {
     match file.extension().map(|e| e.to_string_lossy().to_lowercase()).as_deref() {
         Some("html") => "text/html; charset=utf-8", Some("png") => "image/png", Some("jpg") | Some("jpeg") => "image/jpeg", Some("gif") => "image/gif", Some("webp") => "image/webp",
-        Some("svg") => "image/svg+xml", Some("mp4") => "video/mp4", Some("webm") => "video/webm", Some("txt") | Some("md") | Some("log") => "text/plain; charset=utf-8",
+        Some("svg") => "image/svg+xml", Some("mp4") => "video/mp4", Some("webm") => "video/webm", Some("txt") | Some("log") => "text/plain; charset=utf-8",
+        Some("md") => "text/markdown; charset=utf-8",
         Some("json") => "application/json", Some("css") => "text/css", Some("js") => "text/javascript", Some("pdf") => "application/pdf", _ => "application/octet-stream",
     }
 }
-/// One artifact file, when the path names one: /<repo>/<n>/<file…>, nothing hidden, nothing outside the folder.
+/// A name the board will not serve from a task's folders, even if an agent put it there.
+fn private_file(file: &Path) -> bool {
+    let name = file.file_name().map(|x| x.to_string_lossy().to_lowercase()).unwrap_or_default();
+    ["secret", "token", "credential", "password", "passwd", "id_rsa", "id_ed25519", "private-key", "api-key", "apikey", "transcript", "conversation"]
+        .iter().any(|x| name.contains(x)) || [".pem", ".key", ".p12", ".pfx", ".jks", ".env"].iter().any(|x| name.ends_with(x))
+}
+/// The canonical roots a served path may resolve into: the task's artifacts, its report folder, and its two closing
+/// notes (symlinked into artifacts). Anything else, including a symlink an agent made to a private file, is refused.
+fn allowed_target(id: &str, request: &[&str], file: &Path) -> bool {
+    let Ok(canon) = file.canonicalize() else { return false };
+    let ok_under = |root: &Path| root.canonicalize().map(|r| canon.starts_with(&r)).unwrap_or(false);
+    if ok_under(&artifacts_dir(id)) || ok_under(&reports_dir().join(id.split('/').next().unwrap_or("")).join(id.split('/').nth(1).unwrap_or(""))) { return true; }
+    let task = dir_of(id);
+    if request.len() == 1 && ["closing-note.md", "closing.md"].contains(&request[0]) {
+        return ["closing-note.md", "closing.md"].iter().any(|n| task.join(n).canonicalize().map(|x| x == canon).unwrap_or(false));
+    }
+    false
+}
+/// The file one artifact path names. A report is served straight from the reports folder too, so an index.html written
+/// there before any finish line registered it still opens (the board does not have to create a link first). Nothing
+/// hidden, nothing outside the allowed folders, nothing private.
 pub fn artifact_file(path: &str) -> Option<std::path::PathBuf> {
     let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
     if parts.len() < 3 || parts.iter().any(|p| *p == ".." || p.starts_with('.')) { return None; }
-    let base = artifacts_dir(&format!("{}/{}", parts[0], parts[1]));
-    let file = parts[2..].iter().fold(base.clone(), |p, x| p.join(x));
-    (file.starts_with(&base) && file.is_file()).then_some(file)
+    let id = format!("{}/{}", parts[0], parts[1]);
+    let rest = &parts[2..];
+    let reports = reports_dir().join(parts[0]).join(parts[1]);
+    let (base, rel): (std::path::PathBuf, Vec<&str>) = if rest[0] == crate::research::REPORT && reports.is_dir() { (reports, rest[1..].to_vec()) } else { (artifacts_dir(&id), rest.to_vec()) };
+    if rel.is_empty() { return None; }
+    let mut file = rel.iter().fold(base.clone(), |p, x| p.join(x));
+    // The closing note lives in the task's own folder; older artifacts had a symlink, newer ones need not.
+    if !file.is_file() && rel.len() == 1 && ["closing-note.md", "closing.md"].contains(&rel[0]) { file = dir_of(&id).join(rel[0]); }
+    if !file.is_file() || private_file(&file) || !allowed_target(&id, &rel, &file) { return None; }
+    Some(file)
 }
+/// A directory that has an entry page: where to send a visitor, never a listing.
+fn index_redirect(path: &str) -> Option<String> {
+    let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
+    if parts.len() < 2 || parts.iter().any(|p| *p == ".." || p.starts_with('.')) { return None; }
+    let id = format!("{}/{}", parts[0], parts[1]);
+    let rest = &parts[2..];
+    let reports = reports_dir().join(parts[0]).join(parts[1]);
+    let from_reports = rest.first() == Some(&crate::research::REPORT) && reports.is_dir();
+    let (base, rel): (std::path::PathBuf, Vec<&str>) = if from_reports { (reports, rest[1..].to_vec()) } else { (artifacts_dir(&id), rest.to_vec()) };
+    let dir = rel.iter().fold(base, |p, x| p.join(x));
+    if !dir.is_dir() { return None; }
+    let index = dir.join("index.html");
+    if !index.is_file() || private_file(&index) { return None; }
+    let mut out = format!("/{id}");
+    if from_reports { out.push_str("/report"); }
+    for p in &rel { out.push('/'); out.push_str(p); }
+    out.push_str("/index.html");
+    (artifact_file(&out).map(|f| f == index).unwrap_or(false)).then_some(out)
+}
+const CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; media-src 'self'; font-src 'none'; script-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'";
 pub fn serve_artifact(path: &str) -> crate::http::Response {
     use crate::http::Response;
+    let clean = path.trim_end_matches('/');
+    if path.ends_with('/') || !clean.is_empty() && artifact_file(clean).is_none() {
+        if let Some(to) = index_redirect(clean) { return Response::new(302, "text/plain; charset=utf-8", "").with("location", &to).with("cache-control", "no-store"); }
+    }
     match artifact_file(path).and_then(|f| std::fs::read(&f).ok().map(|b| (f, b))) {
-        Some((f, body)) => Response::new(200, kind_of(&f), body).with("cache-control", "no-store").with("x-content-type-options", "nosniff"),
+        Some((f, body)) => {
+            let mut r = Response::new(200, kind_of(&f), body).with("cache-control", "no-store").with("x-content-type-options", "nosniff").with("content-disposition", "inline").with("referrer-policy", "no-referrer");
+            if kind_of(&f).starts_with("text/html") || kind_of(&f).starts_with("image/svg") { r = r.with("content-security-policy", CSP); }
+            r
+        }
         None => Response::text(404, "Not found"),
     }
 }

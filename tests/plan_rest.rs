@@ -29,7 +29,7 @@ fn plan_ready_is_said_everywhere_the_worktree_stays_untouched_and_the_work_is_re
     delegate(&id);
     let t = settle(&id);
     assert_eq!(t.s("stage"), "plan", "{}", t.at("failure"));
-    assert_eq!(t.at("plan").s("link"), P::plan_file(&t).display().to_string());
+    assert_eq!(t.at("plan").s("link"), P::plan_page(&t).display().to_string());
     assert!(!t.at("plan").b("undone"), "nothing got in, so nothing had to be put back");
     assert!(is_locked(&t));
     assert_eq!(t.at("plan").at("mode"), &json!(true));
@@ -54,7 +54,7 @@ fn plan_ready_is_said_everywhere_the_worktree_stays_untouched_and_the_work_is_re
     assert!(heads.iter().position(|h| h == "Plan").unwrap_or(0) > 0, "{heads:?}");
     // (under this machine's row, the top row)
     let g = page.at("list").arr("groups").iter().find(|g| g.s("name") == "needs you").cloned().unwrap_or_else(|| panic!("{}", page.at("list")));
-    assert_eq!(g.arr("rows")[0].arr("says").iter().map(|x| x.t("t")).collect::<String>(), "Plan ready · Plan");
+    assert!(g.arr("rows")[0].arr("says").iter().map(|x| x.t("t")).collect::<String>().starts_with("Plan ready · Plan"), "{}", g.arr("rows")[0]);
     // Sent back and written again: still nothing in the repo.
     sw::actions::talk::tell(&id, "Make it smaller.", false).unwrap();
     let t = settle(&id);

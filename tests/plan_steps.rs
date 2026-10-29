@@ -114,7 +114,7 @@ fn a_plan_review_that_cannot_start_leaves_the_plan_for_your_yes_and_the_yes_buil
     tell(&id, "Once more.");
     let t = settle(&id);
     assert_eq!((t.s("stage"), t.s("kind")), ("plan", "permission"), "{}", t.at("failure"));
-    assert!(t.s("msg").starts_with("The plan's review could not run (") && t.s("msg").ends_with("): yours to judge"), "{}", t.s("msg"));
+    assert!(t.s("msg").starts_with("The plan's review could not run (") && t.s("msg").contains("): yours to judge"), "{}", t.s("msg"));
     assert!(t.at("plan").at("reviewFailed").s("why").contains("its reviewer must run where the repo cannot be written"), "{}", t.at("plan"));
     assert!(!t.at("plan").at("reviewFailed").s("why").contains("its writer"));
     assert!(t.at("failure").is_null() && is_locked(&t) && t.at("plan").b("locked"));

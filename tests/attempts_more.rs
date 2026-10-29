@@ -96,7 +96,9 @@ fn research_only_several_reports_the_reviewer_reads_them_and_the_chosen_report_i
     assert_eq!(t.at("picked").s("letter"), "A", "{} {} {}", t.s("stage"), t.at("comparison"), t.at("failure"));
     assert_eq!(t.at("comparison").at("wrote"), &json!(true));
     assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
-    assert_eq!(read(&sw::research::report_folder(&t).join(t.at("report").s("file"))), "# A\n", "the chosen attempt's report is the task's");
+    let task_report = sw::research::report_folder(&t);
+    assert_eq!(read(&task_report.join("report.md")), "# A\n", "the chosen attempt's report is the task's source");
+    assert!(task_report.join("index.html").is_file(), "and it is published as a page");
     assert_eq!(git(&w.root, &["branch", "--list", "work/*"]), "", "nothing of it stays in the repo");
     // what it was told
     let mut asked = t.clone(); asked.put("comparing", json!({ "pick": "reviewer" }));

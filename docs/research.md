@@ -16,15 +16,22 @@ herdr-projects add "Why is the build slow?" --research
 Every agent the board starts is told the same, in every repo:
 
 - **It writes the report into the task's own folder among the board's reports**:
-  `~/.herdr-projects/reports/<repo>/<number>/` ([the home folder](home-folder.md)), as `index.html` (one page that
-  stands by itself) or `report.md`. That folder is outside every repo, so the report cannot be committed by mistake, and
-  it stays when the task's worktree goes.
+  `~/.herdr-projects/reports/<repo>/<number>/` ([the home folder](home-folder.md)), as `report.md` (preferred: the board
+  renders it as a navigable `index.html`) or as `index.html` when the report genuinely needs a page of its own. That
+  folder is outside every repo, so the report cannot be committed by mistake, and it stays when the task's worktree
+  goes. Short, plain, sanitised `.txt` or `.log` files beside it are linked as evidence; no secret, credential, private
+  log or whole transcript is published, and no evidence is invented.
 - **The folder is in its environment too**, as `HERDR_PROJECTS_TASK_REPORTS`, beside the task's id as
   `HERDR_PROJECTS_ID` (the name `workspace.setup` has it by): the agent, its reviewers and the picker of
   [attempts](attempts.md) all have both.
-- **When the agent finishes, the board gives the report a link**, served the way a review's evidence is: privately on
-  your tailnet with `serve: tailscale`, on `127.0.0.1` with `serve: local` ([settings](settings.md)). The link opens
-  `index.html` when there is one, else `report.html`, `report.md`, `README.md`, else the folder's first file.
+- **The board gives the report a link**, served the way a review's evidence is: privately on your tailnet with
+  `serve: tailscale`, on `127.0.0.1` with `serve: local` ([settings](settings.md)). The link opens the readable
+  `index.html`; the Markdown source and the evidence it may link are beside it. An `index.html` written at the root of
+  the report folder is served as it is, even when no finish line registered it (a manual close, or a send that failed
+  afterwards): the board resolves it from the folder and the page server's own record, never from a guessed URL.
+- **Publication is not approval, and a local path is not a link.** The board's words give the complete published URL
+  as well as a Markdown link; when nothing serves the page it says so and shows the local path only as the secondary
+  fact.
 
 The task panel shows the link under **Report**, beside the list and full screen (full screen also shows the file's name
 and the full link). `herdr-projects details <id>` has it as `report`. To open it:

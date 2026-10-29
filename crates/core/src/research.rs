@@ -6,6 +6,7 @@
 use crate::clock::now;
 use crate::err::Res;
 use crate::json::*;
+use crate::page::{self, Kind};
 use crate::store::files::{artifacts_dir, reports_dir};
 pub use crate::store::old_research::RESEARCH;
 use crate::store::repos::{branch_of, cwd_of, git_out};
@@ -46,7 +47,7 @@ const FIRST: [&str; 4] = ["index.html", "report.html", "report.md", "README.md"]
 
 // ---- what agents are told ----------------------------------------------------------------------------------------------
 pub fn report_rule(t: &Task) -> String {
-    format!("A report, a review or a research result (anything you write for the human to read that is not part of the product) never goes into the repo: do not commit one, in no folder. Save it in {}/ (this task's own folder among the board's reports, outside every repo), as index.html (one page that stands by itself) or report.md. The board gives the human a private link to it.", report_folder(t).display())
+    format!("A report, a review or a research result (anything you write for the human to read that is not part of the product) never goes into the repo: do not commit one, in no folder. Save it in {}/ (this task's own folder among the board's reports, outside every repo), as report.md (preferred: the board renders it as a navigable index.html and links its evidence), or as index.html when the report genuinely needs a page of its own. The board publishes the page and gives the human a private link to it: do not present a local path as the delivery link. Evidence you want shown goes in the same folder as short, plain .txt or .log files, sanitised: no secrets, credentials, private logs or whole transcripts; never invent evidence.", report_folder(t).display())
 }
 pub fn research_rule(t: &Task) -> String {
     let look = if t.b("worktree") { format!("worktree and at branch {}", t.s("branch")) } else { "folder".into() };
@@ -210,16 +211,38 @@ pub fn report_store(id: &str) -> PathBuf { artifacts_dir(id).join(REPORT) }
 /// where the task's pages are served from ("" when nothing serves them: then the link is the file).
 pub fn keep_report(t: &Task, base: impl FnOnce() -> String) -> Option<Value> {
     let from = report_folder(t);
-    let names = files_in(&from);
-    let file = FIRST.iter().find(|n| names.iter().any(|x| x == *n)).map(|s| s.to_string()).or_else(|| names.first().cloned())?;
+    // The source gets a readable page beside it. An agent's own index.html is kept exactly as it is.
+    let title = if t.b("title") { t.t("title") } else { t.t("id") };
+    let _ = page::ensure_page(&from, "report.md", &title, Kind::Report);
     let to = report_store(t.s("id"));
-    let mut root = String::new();
     let there = fs::read_link(&to).ok();
     let ok = if there.as_deref() != Some(from.as_path()) {
         let _ = fs::remove_dir_all(&to); let _ = fs::remove_file(&to);
         to.parent().map(|p| fs::create_dir_all(p).is_ok()).unwrap_or(false) && std::os::unix::fs::symlink(&from, &to).is_ok()
     } else { true };
-    if ok { root = base(); }
+    report_view_with(t, || if ok { base() } else { String::new() })
+}
+/// The report as it stands on disk, even when no finish line ever registered it: the page a human can open, its source
+/// Markdown and the evidence the board will link. It never edits the task and never invents a URL: `base` is where the
+/// page server really serves this task ("" when nothing serves it, and then the link is the file).
+pub fn report_view_with(t: &Task, base: impl FnOnce() -> String) -> Option<Value> {
+    let from = report_folder(t);
+    let title = if t.b("title") { t.t("title") } else { t.t("id") };
+    let _ = page::ensure_page(&from, "report.md", &title, Kind::Report);
+    let names = files_in(&from);
+    let file = FIRST.iter().find(|n| names.iter().any(|x| x == *n)).map(|s| s.to_string()).or_else(|| names.first().cloned())?;
+    let root = base();
     let link = if root.is_empty() { from.join(&file).display().to_string() } else { format!("{root}/{REPORT}/{}", crate::util::url_encode(&file)) };
-    Some(json!({ "file": file, "link": link, "at": now() }))
+    let source = if names.iter().any(|x| x == "report.md") { "report.md".to_string() } else { String::new() };
+    let evidence = page::evidence_files(&from);
+    let at = fs::metadata(from.join(&file)).and_then(|m| m.modified()).ok().and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64).unwrap_or_else(now);
+    Some(json!({ "file": file, "link": link, "at": at, "source": if source.is_empty() { Value::Null } else { json!(source) }, "evidence": evidence }))
+}
+/// The link words the board shows a human: Markdown and the complete URL, so both a renderer and a plain terminal see it.
+pub fn report_words(t: &Task) -> String {
+    let r = t.at("report");
+    if !r.is_object() || !r.b("link") { return "No report was found.".into(); }
+    let url = r.t("link");
+    if url.starts_with("http://") || url.starts_with("https://") { format!("Report: [Open report]({url}) — direct link: {url}") }
+    else { format!("Report written but not published (no page server link): {url}") }
 }

@@ -48,7 +48,7 @@ fn research_only_the_rules_say_how_to_wait_and_how_to_finish_an_interim_report_a
     let t = settle(&id);
     assert_eq!((t.s("stage"), t.s("kind"), t.s("msg"), t.arr("reviews").len()), ("asks", "question", "Question 13 of 15", 0), "{}", t.at("failure"));
     assert_eq!(row(&id).s("state"), "blocked");
-    assert_eq!(t.at("report").s("file"), "report.md");
+    assert_eq!(t.at("report").s("file"), "index.html");
     assert_eq!(reviewers(&w), 0);
     // Finished, with the same report: now it is reviewed and done.
     w.script(json!({ "worker": [{ "status": "working" }] }));

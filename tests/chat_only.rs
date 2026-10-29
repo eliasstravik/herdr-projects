@@ -86,7 +86,7 @@ fn yes_on_the_board_or_finish_ends_it_as_done_with_the_last_message_or_the_repor
     assert_eq!(run(&w, &["finish", &id]), format!("{id}: ending the chat"));
     let t = settle(&id);
     assert_eq!(t.s("stage"), "done", "{}", t.at("failure"));
-    assert!(t.s("msg").starts_with("Chat ended. Report: ") && t.s("msg").contains("report.md"), "{}", t.s("msg"));
+    assert!(t.s("msg").starts_with("Chat ended.") && t.s("msg").contains("index.html"), "{}", t.s("msg"));
     assert!(t.s("msg").contains("Chat only, but its agent changed the repo (1 change in the repo): nothing was pushed, opened or merged."), "{}", t.s("msg"));
     assert!(!t.b("pr"));
     assert_eq!(git(&w.root, &["ls-remote", "origin"]).lines().filter(|l| l.contains("work/")).count(), 0, "nothing pushed");

@@ -6,7 +6,7 @@
 use super::build::{start_build, start_build_by};
 use super::review::{points_of, review_plan};
 use super::untouched::{held_failure, put_back, undone_words};
-use super::{approved, back_words_from, plan_file, plan_link, plan_mark, read_plan, wanted, write_plan};
+use super::{approved, back_words_from, plan_file, plan_link, plan_mark, plan_words, read_plan, wanted, write_plan};
 use crate::clock::now;
 use crate::err::Res;
 use crate::finish::shared::{fail, FailHow};
@@ -90,9 +90,11 @@ pub fn ready(g: &mut Guard, undone: &[String]) -> Res<Task> {
         t.put("stage", "plan"); t.put("kind", "permission"); t.put("turnOpen", false); t.put("expectedWake", Value::Null); t.put("watch", Value::Null);
         let words = t.at("plan").t("words");
         let failed = t.at("plan").at("reviewFailed").t("why");
-        let msg = if !failed.is_empty() { format!("The plan's review could not run ({failed}): yours to judge") }
+        let base = if !failed.is_empty() { format!("The plan's review could not run ({failed}): yours to judge") }
             else if rv.is_object() && !gate::passes(&rv) { format!("The reviewer did not pass the plan ({}): yours to judge", gate::tally(&rv)) }
             else if !undone.is_empty() { format!("{words} · {}", undone_words(undone)) } else if !words.is_empty() { words } else { "The plan is written".into() };
+        let published = plan_words(t);
+        let msg = if published.is_empty() { base } else { format!("{base} · {published}") };
         t.put("msg", msg);
     })?;
     flow::sidebar::tell_sidebar(&t);

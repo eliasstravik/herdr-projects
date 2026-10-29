@@ -34,7 +34,12 @@ fn hold_pr_failure(g: &mut Guard, t: &mut Task) -> Res<bool> {
 }
 pub fn done(g: &mut Guard, t: &Task, msg: &str, review: Option<&Value>) -> Res<()> {
     let mark = flow::spaces::tidy_mark(t, "merged", "");
-    let d = g.set(|t| { t.put("stage", "done"); t.put("tidy", mark.clone().unwrap_or(Value::Null)); t.put("msg", one_line(msg, 2048)); t.put("failure", Value::Null); t.put("mergeIntent", Value::Null); if let Some(r) = review { t.put("review", r.clone()); } })?;
+    let report_link = t.at("report").t("link");
+    let msg = if t.at("report").is_object() && !report_link.is_empty() && !msg.contains(&report_link) { format!("{msg} · {}", crate::research::report_words(t)) } else { msg.to_string() };
+    let mut d = g.set(|t| { t.put("stage", "done"); t.put("tidy", mark.clone().unwrap_or(Value::Null)); t.put("msg", one_line(&msg, 2048)); t.put("failure", Value::Null); t.put("mergeIntent", Value::Null); if let Some(r) = review { t.put("review", r.clone()); } })?;
+    if let Some(closing) = flow::task::closing_view(&d, || crate::review_page::artifact_base(d.s("id"))) {
+        d = g.set(|t| { t.put("closing", closing.clone()); })?;
+    }
     flow::sidebar::tell_sidebar(&d);
     crate::land::tidy(d.s("id"), "merged"); // done with nothing to merge leaves herdr's sidebar like merged work does
     Ok(())

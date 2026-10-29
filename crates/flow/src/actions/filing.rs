@@ -90,6 +90,15 @@ pub fn report(id: &str, r: Report) -> Res<Task> {
         }
         Ok(Change::Write)
     })?;
+    // A report or a closing note written before a manual close still gets its page and link.
+    let mut t = t;
+    if r.state == "done" {
+        let report = crate::research::keep_report(&t, || crate::review_page::artifact_base(t.s("id")));
+        let closing = flow::task::closing_view(&t, || crate::review_page::artifact_base(t.s("id")));
+        if report.is_some() || closing.is_some() {
+            t = update(t.s("id"), |t| { if let Some(r) = &report { t.put("report", r.clone()); } if let Some(c) = &closing { t.put("closing", c.clone()); } Ok(Change::Write) })?;
+        }
+    }
     // Called done by you: its space leaves herdr's sidebar as after a merge. Unmerged work stays on its branch.
     if r.state == "done" && flow::task::is_agent_task(&t) { flow::sidebar::tell_sidebar(&t); spawn_runner("cleanup", t.s("id"), &["--merged"]); }
     Ok(t)

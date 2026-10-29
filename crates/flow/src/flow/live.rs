@@ -79,6 +79,23 @@ pub fn shown(t: &Task, session: &Session, here: &str, seen: &mut BTreeMap<String
     // Research only or not is worked out here, by the machine that owns the task: a row says it.
     out.put("research", is_research_among(t, seen));
     out.put("chatOnly", crate::chat_only::is_chat_among(t, seen));
+    // A report or a plan that exists on disk but was never registered (a manual close, a send that failed afterwards)
+    // still gets its real link here. The record is read from the page server and the folder; no URL is guessed.
+    let rep = out.at("report");
+    let stale = !rep.is_object() || !rep.b("link") || !rep.t("link").starts_with("http") || rep.s("file").ends_with(".md") || rep.t("link").ends_with(".md");
+    if stale && !t.b("host") {
+        let old_base = rep.t("link").rsplit_once("/report/").map(|(b, _)| b.to_string()).unwrap_or_default();
+        let live_base = crate::review_page::artifact_base(t.s("id"));
+        let base = if live_base.is_empty() { old_base } else { live_base };
+        if let Some(view) = crate::research::report_view_with(t, || base.clone()) { out.put("report", view); }
+    }
+    if out.at("plan").is_object() && out.at("plan").b("at") {
+        let link = out.at("plan").t("link");
+        if !link.starts_with("http") || link.ends_with("/plan.md") {
+            let fresh = crate::plan::plan_link(t, || crate::review_page::artifact_base(t.s("id")));
+            if fresh != link { out.obj_mut("plan").put("link", fresh); }
+        }
+    }
     pick(&mut out, &sh);
     out
 }

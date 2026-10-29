@@ -4,6 +4,7 @@
 //! where it was told to when it started as that attempt.
 use crate::herdr::Herdr;
 use crate::json::*;
+use crate::page::{self, Kind};
 use crate::store::files::dir_of;
 use crate::store::repos::cwd_of;
 use std::path::PathBuf;
@@ -33,6 +34,20 @@ pub fn clear_notes(t: &Obj) {
     if !t.b("ownNote") { files.push(old_note_file(t)); }
     for f in files { let _ = std::fs::remove_dir_all(&f); let _ = std::fs::remove_file(&f); }
     let _ = std::fs::remove_dir(cwd_of(t).join(OLD_RULE_DIR));
+}
+/// The closing summary as a readable page and its link, when there is one. The note itself is never changed.
+pub fn closing_view(t: &Obj, base: impl FnOnce() -> String) -> Option<Value> {
+    let note = note_file(t);
+    if !note.is_file() { return None; }
+    let dir = dir_of(t.s("id")).join("artifacts").join("closing");
+    let title = if t.b("title") { t.t("title") } else { t.t("id") };
+    let make_page = t.s("stage") == "done";
+    if make_page { let _ = std::fs::create_dir_all(&dir); let _ = page::ensure_page(&dir, "../../closing-note.md", &title, Kind::Closing); }
+    let root = base();
+    let page = make_page && dir.join("index.html").is_file();
+    let entry = if page { "closing/index.html" } else { "closing-note.md" };
+    let link = if root.is_empty() { if page { dir.join("index.html").display().to_string() } else { note.display().to_string() } } else { format!("{root}/{entry}") };
+    Some(json!({ "file": if page { "index.html" } else { "closing-note.md" }, "link": link, "source": "closing-note.md" }))
 }
 pub fn is_agent_task(t: &Obj) -> bool { t.at("link").b("pane") }
 /// The herdr session a task's agents live in.
