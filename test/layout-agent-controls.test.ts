@@ -8,13 +8,13 @@ describe.skipIf(!browser)('composer + agent controls', () => {
   test('both chats hide controls until + opens at phone, tablet and desktop widths; picks wait for Restart and cancel changes nothing', async () => {
     const p = world.snapshot().places.find((x) => !x.home)!
     const key = 'GTM-17/Agent'
-    for (const width of [320, 768, 1440]) {
+    for (const [width, colorScheme] of [[320, 'light'], [768, 'dark'], [1440, 'light']] as const) {
       for (const task of [false, true]) {
         const chat = task ? key : p.chat
         world.chats[chat].agent = { kind: 'codex', model: 'gpt-6-sol', effort: 'high' }
         world.chats[chat].cli = 'Codex'
         const before = JSON.stringify(world.chats[chat].agent)
-        const page = await browser!.newPage({ viewport: { width, height: 900 } })
+        const page = await browser!.newPage({ viewport: { width, height: 900 }, colorScheme })
         await page.goto(`http://127.0.0.1:${server!.port}/?place=${encodeURIComponent(p.id)}${task ? '&task=GTM-17' : ''}`)
         const controls = page.locator('[data-agent-controls]').last()
         await page.locator('[data-composer]').last().waitFor()
@@ -28,8 +28,13 @@ describe.skipIf(!browser)('composer + agent controls', () => {
         await controls.getByRole('menuitem', { name: /^Model:/ }).click()
         const sheet = page.getByRole('alertdialog')
         await sheet.locator('[data-restart]').waitFor()
-        expect(await sheet.textContent()).toContain('Applies to this chat after Restart')
-        expect(await sheet.getByRole('switch').getAttribute('aria-checked')).toBe('false')
+        expect(await sheet.textContent()).not.toMatch(/Recorded launch|Settings for|unknown|CLI|resumes|meanwhile/)
+        expect(await sheet.getByRole('button', { name: 'Model: GPT-6-Sol', exact: true }).count()).toBe(1)
+        expect(await sheet.getByRole('switch', { name: new RegExp(`Use for future ${task ? 'task agents' : 'coordinators'}`) }).getAttribute('aria-checked')).toBe('false')
+        const box = (await sheet.boundingBox())!
+        expect(box.x).toBeGreaterThanOrEqual(0)
+        expect(box.x + box.width).toBeLessThanOrEqual(width)
+        expect(box.height).toBeLessThan(400)
         await sheet.getByRole('button', { name: /^Agent: / }).click()
         await page.getByRole('menuitemradio', { name: 'Claude Code', exact: true }).click()
         // A model from Codex cannot leak into Claude; the new CLI starts from Default.

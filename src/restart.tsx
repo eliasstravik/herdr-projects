@@ -1,6 +1,4 @@
-// Restarting an agent from the screen: a space's coordinator, or a task's agent. The sheet (from a ⋯ menu) shows what
-// it runs on now and what it restarts with, Settings' CLI, model and effort for its role, changed for this restart only
-// or saved as its space's. The composer + menu opens the same sheet without a separate Settings mismatch banner.
+// Restart picks for either chat role, used once or saved for its space. Opened from the + or ⋯ menu.
 import clsx from 'clsx'
 import { ChevronUpDownIcon } from '@heroicons/react/20/solid'
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
@@ -78,7 +76,6 @@ function Sheet({ chat, name, current }: Opening) {
   const cli = info?.clis.find((c) => c.kind === kind)
   const levels = levelsOf(cli, model)
   const unavailable = !!(model && cli?.models?.length && !cli.models.some((m) => m.id === model))
-  const defaultEffort = model ? cli?.models?.find((m) => m.id === model)?.defaultEffort : cli?.defaultEffort
   const pickKind = (k: string) => {
     const c = info?.clis.find((x) => x.kind === k)
     setKind(k)
@@ -100,10 +97,11 @@ function Sheet({ chat, name, current }: Opening) {
   }
   const task = chat.includes('/')
   const other = !!info && kind !== info.on.kind
+  const changed = !!info && (kind !== info.want.kind || model !== (info.want.model ?? '') || effort !== (info.want.effort ?? ''))
   const label = (id: string) => (id ? (modelsOf(cli).find((m) => m.id === id)?.label ?? id) : DEFAULT)
   return (
     <Dialog
-      title={task ? `Restart ${name}’s agent?` : `Restart ${name}’s coordinator?`}
+      title={task ? `Restart ${name} agent?` : 'Restart coordinator?'}
       onCancel={close}
       buttons={
         <Primary autoFocus disabled={!info || busy || unavailable} onClick={go}>
@@ -113,10 +111,6 @@ function Sheet({ chat, name, current }: Opening) {
     >
       {info ? (
         <div data-restart className="flex flex-col gap-4">
-          <p>
-            {info.onKnown === false ? 'No recorded launch. Proposed start' : 'Recorded launch'}: {info.onWords}.{info.working ? ' It is working: it stops cleanly first.' : ''}
-          </p>
-          <p className="text-sm text-fg3">Applies to this chat after Restart. Default uses the CLI’s configuration. Terminal changes are not observed.</p>
           <div className="flex flex-col gap-2.5 text-fg">
             <Line label="Agent">
               <Pick label="Agent" value={cli?.name ?? kind} options={info.clis.map((c) => c.name)} onPick={(n) => pickKind(info.clis.find((c) => c.name === n)!.kind)} />
@@ -128,27 +122,21 @@ function Sheet({ chat, name, current }: Opening) {
                 ) : (
                   <TextValue label="Model" value={model || DEFAULT} onEdit={() => undefined} onSave={(v) => pickModel(v.trim() === DEFAULT ? '' : v.trim())} />
                 )
-              ) : <span className="text-fg3">Default · selection unsupported</span>}
+              ) : <span className="text-fg3">Default</span>}
             </Line>
             {cli?.models && levels.length ? (
               <Line label="Effort">
                 <Pick label="Effort" value={effort || DEFAULT} options={[DEFAULT, ...levels]} ordered onPick={(v) => setEffort(v === DEFAULT ? '' : v)} />
               </Line>
-            ) : <Line label="Effort"><span className="text-fg3">Default · no supported levels</span></Line>}
+            ) : <Line label="Effort"><span className="text-fg3">Default</span></Line>}
             {unavailable ? <p className="text-need-fg">{model} is unavailable. Choose Default or an available model before restarting.</p> : null}
-            <p className="text-sm text-fg3">Settings for this {info.role}: {info.want.kind} · {info.want.model || 'Default model'} · {info.want.effort || 'Default effort'}. </p>
-            <button type="button" className="self-start text-sm underline" onClick={() => { setKind(info.want.kind); setModel(info.want.model ?? ''); setEffort(info.want.effort ?? '') }}>Use Settings for this restart</button>
-            <Line label={saveWords(info)}>
-              <Switch label={saveWords(info)} on={save} onChange={setSave} />
-            </Line>
+            {changed || save ? (
+              <Line label={saveWords(info)}>
+                <Switch label={saveWords(info)} on={save} onChange={setSave} />
+              </Line>
+            ) : null}
           </div>
-          <p className="text-sm text-fg3">{cli?.defaultModel ? `Catalog default model: ${label(cli.defaultModel)}. ` : 'Effective default model is unknown. '}{defaultEffort ? `Catalog default effort: ${defaultEffort}. ` : 'Effective default effort is unknown. '}CLI configuration can override catalog defaults.</p>
-          <p className="text-[0.8125rem] text-fg3 phone:text-[0.875rem]">
-            {other
-              ? `${cli?.name ?? shown(kind)} takes over with the chat so far${task ? ', the brief and the work on its branch' : ''}.`
-              : 'It resumes its session.'}{' '}
-            {task ? 'Its worktree and branch stay as they are.' : 'Its tasks keep going.'} What you send meanwhile waits for it.
-          </p>
+          {other ? <p className="text-sm text-fg3">{cli?.name ?? shown(kind)} starts a new session with this chat{task ? ', the brief and branch' : ''}.</p> : null}
           {error ? <p className="text-need-fg">{error}</p> : null}
         </div>
       ) : (
@@ -159,12 +147,12 @@ function Sheet({ chat, name, current }: Opening) {
 }
 
 /** "Save as nas's setting", for its role's agents there from now on */
-const saveWords = (i: RestartInfo) => i.space ? `Save as ${i.space === '~' ? 'the home space' : i.space}’s setting` : 'Save as this machine’s setting'
+const saveWords = (i: RestartInfo) => `Use for future ${i.role === 'task' ? 'task agents' : 'coordinators'} ${i.space ? `in ${i.space === '~' ? 'the home space' : i.space}` : 'on this machine'}`
 
 function Line({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-h-9 items-center justify-between gap-3">
-      <span className="truncate">{label}</span>
+      <span className="min-w-0">{label}</span>
       {children}
     </div>
   )
