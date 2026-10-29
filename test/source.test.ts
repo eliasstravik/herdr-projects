@@ -380,6 +380,12 @@ describe("a task's CLI, model and effort", () => {
     const picked = await src.cli(['task', 'add', 'Odd', '--desc', 'x', '--reviewer', 'agy', '--reviewer-effort', 'high'], { chat: place })
     expect(picked.code).toBe(1)
     expect(picked.out).toContain('Antigravity runs on its own')
+    // nor does Settings' effort for Codex reach it
+    src.settings.set('reviewer.effort', 'high')
+    const plainAgy = src.engine.task(id((await src.cli(['task', 'add', 'Antigravity, Settings high', '--desc', 'x', '--reviewer', 'agy'], { chat: place })).out))!
+    expect(plainAgy.reviewer).toEqual({ kind: 'agy' })
+    expect(plainAgy.desc).toContain('(its default model and effort). Run it headless as agy ')
+    src.settings.set('reviewer.effort', null)
   })
   test('task add --set changes a line of its Settings block for that task alone, marked as set by its coordinator', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'shep-src-repo-'))
