@@ -279,7 +279,8 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
           const r = (await box.boundingBox())!
           expect(r.x + r.width).toBeLessThanOrEqual(375)
         }
-        expect(await region.locator('dd .truncate').evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth).map((e) => e.textContent))).toEqual([])
+        // Ignore invisible sizing spans and content inside a closed disclosure.
+        expect(await region.locator('dd .truncate').evaluateAll((els) => els.filter((e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden' && e.scrollWidth > e.clientWidth).map((e) => e.textContent))).toEqual([])
         return region
       }
       const back = async (region: Locator) => {

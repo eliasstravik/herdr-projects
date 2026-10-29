@@ -1436,18 +1436,23 @@ describe("Autopilot's heartbeat", () => {
       const show = (await src.cli(['show'], { chat: place })).out
       expect(show).toContain('Heartbeat on Autopilot: Every 30 minutes (')
       expect(show).toContain("news that wakes it at once: all news, the rest waits for the heartbeat. Each brings the place's HEARTBEAT.md")
+      // Restore only this fake run after editing while OFF; never start a real CLI in this fixture.
+      src.places.setMode(place, 'autopilot'); run.state = 'on'
       // once given, the next is the rule's next run
       src.heartbeat(t0 + 40 * min)
       expect(beats()).toHaveLength(1)
       src.heartbeat(t0 + 62 * min)
       expect(beats()).toHaveLength(2)
       // an empty HEARTBEAT.md, edited in Settings: no heartbeat
+      src.places.setMode(place, 'regular'); run.state = 'stopped'
       expect(await src.act({ type: 'setting', key: 'heartbeat.md', value: '', place })).toEqual({ ok: true })
       expect(src.snapshot().settings.find((x) => x.level === place && x.name === 'Autopilot')!.rows.find((r) => r.key === 'heartbeat.md')).toMatchObject({ value: '', doc: true })
+      src.places.setMode(place, 'autopilot'); run.state = 'on'
       src.heartbeat(t0 + 93 * min)
       expect(beats()).toHaveLength(2)
       // off Autopilot: no heartbeat however long it waits
       src.places.setMode(place, 'regular')
+      run.state = 'stopped'
       src.heartbeats.switched(place, false)
       await src.act({ type: 'setting', key: 'heartbeat.md', value: '- check things', place })
       src.heartbeat(t0 + 300 * min)
