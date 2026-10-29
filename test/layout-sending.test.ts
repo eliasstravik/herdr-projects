@@ -415,3 +415,23 @@ describe.skipIf(!browser)('what the best chats do', () => {
       await page.close()
     }, 30_000)
 })
+
+
+describe.skipIf(!browser)('held messages', () => {
+  test('links to the blocking question without answering or offering Send now', async () => {
+    const page = await browser!.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true })
+    try {
+      await page.goto(`${url()}&task=GTM-14`)
+      const held = page.locator('[data-msg]').filter({ hasText: 'Also update the README.' })
+      await held.getByText('Waiting for your answer above.', { exact: false }).waitFor()
+      const link = held.getByRole('button', { name: 'Go to question' })
+      await link.click()
+      expect(await page.locator('[data-flash]').textContent()).toContain('Allow: rm -rf template/skills/old?')
+      expect(await page.getByRole('button', { name: 'Send now', exact: true }).count()).toBe(0)
+      expect(world.chat('GTM-14/Agent').messages.find((m) => m.question?.id === 'f4')?.question?.sent).toBeUndefined()
+      expect(await held.isVisible()).toBe(true)
+    } finally {
+      await page.close()
+    }
+  })
+})

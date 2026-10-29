@@ -617,7 +617,7 @@ function Space({ p, snap, sort, at }: { p: Place; snap: Snapshot; sort: Sort; at
                 setTimeout(() => setRemoving(p))
               }}
             >
-              Remove
+              Remove from Shepherdr…
             </MenuItem>
           )}
         </PlaceMenu>
@@ -697,7 +697,7 @@ function RemoveBox({ p, snap }: { p: Place; snap: Snapshot }) {
         </Primary>
       }
     >
-      <p>Its folder and code stay on disk. Shepherdr only forgets it, and its coordinator closes.</p>
+      <p>Its files and folder stay on disk. Shepherdr only forgets it, and its coordinator closes.</p>
       <p className="mt-1.5">
         {open.length
           ? `${open.length > 1 ? `Its ${open.length} open tasks` : 'Its open task'}${open.length <= 4 ? ` (${and(open)})` : ''} ${open.length > 1 ? 'hide' : 'hides'} with it; ${open.length > 1 ? 'their worktrees and branches stay' : 'its worktree and branch stay'}. Add the space again to bring them and its chat back.`

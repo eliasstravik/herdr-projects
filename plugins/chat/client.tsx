@@ -93,7 +93,7 @@ function Bubble({ msg, chat, from, out, last }: { msg: Message; chat: Chat; from
       }
     : {}
   // a file waiting to go in shows faded, without a line saying so
-  const body = !!(msg.text || msg.answered || (msg.waiting && !msg.file))
+  const body = !!(msg.text || msg.answered || msg.waiting)
   const reacted = !!msg.reactions?.length
   const edge = registry.messageEdge.map(({ View }, i) => <View key={i} msg={msg} chat={chat} />)
   // reactions sit on the bubble's bottom right corner, yours and the agent's alike (like iMessage and WhatsApp); a row
@@ -185,7 +185,13 @@ function Bubble({ msg, chat, from, out, last }: { msg: Message; chat: Chat; from
                     ) : null}
                   </div>
                 ) : null}
-                {msg.waiting ? <div className="text-[0.75rem] text-fg2 phone:text-[0.8125rem]">{waitLine(msg.waitsFor)}</div> : null}
+                {msg.waiting ? <div className="text-[0.75rem] text-fg2 phone:text-[0.8125rem]">{msg.waitsFor === 'menu' ? <>
+                  Waiting for your answer above.{' '}
+                  {(() => {
+                    const blocker = chat.messages.findLast((m) => m.question?.sent === undefined && !!m.question && !m.waiting)
+                    return blocker ? <LinkButton onClick={() => jumpTo(chat.key, blocker.id, { card: true })}>Go to question</LinkButton> : null
+                  })()}
+                </> : waitLine(msg.waitsFor)}</div> : null}
                 {msg.text ? <div ref={text} data-text>{you ? <YourText text={msg.text} /> : <Fold id={msg.id}><Markdown text={msg.text} /></Fold>}</div> : null}
               </div>,
               true,
@@ -222,7 +228,7 @@ function Bubble({ msg, chat, from, out, last }: { msg: Message; chat: Chat; from
 /** why one you sent waits: a busy agent takes it at once, so only a menu (typing could pick an option), an agent still
  *  starting, a CLI command mid-turn or a machine out of reach hold it */
 function waitLine(why: Message['waitsFor']) {
-  if (why === 'menu') return "Held until its question is answered, so it can't pick an option"
+  if (why === 'menu') return 'Waiting for your answer above.'
   if (why === 'start') return 'Goes in once the agent has started'
   if (why === 'turn') return 'Goes in once the agent finishes this step'
   return 'Goes in once it can be reached'

@@ -55,6 +55,7 @@ export {
   FolderOpenIcon,
   GlobeAltIcon as GlobeIcon,
   ListBulletIcon as TasksIcon,
+  LockClosedIcon as LockIcon,
   MagnifyingGlassIcon as SearchIcon,
   MicrophoneIcon as MicIcon,
   MinusCircleIcon,
@@ -1005,16 +1006,21 @@ export function Head({ children, className }: { children: ReactNode; className?:
 
 /** A phone screen's top: round buttons either side, the title centred and as wide as the buttons leave room for; a
  *  mark after the subtitle */
-export function PhoneTop({ left, dot, icon, p, name, kind, mark, right, report }: { left?: ReactNode; dot?: Status; icon?: ReactNode; p?: number; name: string; kind?: ReactNode; mark?: ReactNode; right?: ReactNode; report?: Report }) {
+export function PhoneTop({ left, dot, icon, p, name, kind, mark, right, report, expandName }: { left?: ReactNode; dot?: Status; icon?: ReactNode; p?: number; name: string; kind?: ReactNode; mark?: ReactNode; right?: ReactNode; report?: Report; expandName?: boolean }) {
+  const [expanded, setExpanded] = useState(false)
   return (
     // under a bar at the top (offline, a call) the notch is already kept clear
-    <div data-kb data-chrome className="relative grid shrink-0 grid-cols-[1fr_minmax(0,auto)_1fr] items-center gap-2 border-b border-line px-3 pt-[calc(env(safe-area-inset-top)+6px)] pb-1.5 [[data-topbar]~*_&]:pt-1.5">
+    <div data-kb data-chrome className={clsx('relative grid shrink-0 items-center gap-2 border-b border-line px-3 pt-[calc(env(safe-area-inset-top)+6px)] pb-1.5 [[data-topbar]~*_&]:pt-1.5', expandName ? 'grid-cols-[auto_minmax(0,1fr)_auto]' : 'grid-cols-[1fr_minmax(0,auto)_1fr]')}>
       <div className="flex gap-1">{left}</div>
       <div className="min-w-0 text-center">
         <div className="flex items-center justify-center gap-1.5 font-semibold">
           {dot ? <Dot s={dot} p={p} halo /> : null}
           {icon}
-          <span className="truncate">{name}</span>
+          {expandName ? (
+            <button type="button" aria-label={`${expanded ? 'Collapse' : 'Show full'} task title: ${name}`} aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className={clsx('min-w-0 text-left break-words', !expanded && 'line-clamp-2')}>
+              {name}
+            </button>
+          ) : <span className="truncate">{name}</span>}
         </div>
         {mark && !report ? (
           // a mark (a coordinator's mode) ends the subtitle line, whole; the words before it give way first
@@ -1023,8 +1029,9 @@ export function PhoneTop({ left, dot, icon, p, name, kind, mark, right, report }
             {mark}
           </div>
         ) : (
-          <div className={clsx('text-[0.8125rem]/[18px] text-fg2', !report && 'truncate')}>{report ? <ReportLine w={report} head wrap /> : kind}</div>
+          <div className={clsx('text-[0.8125rem]/[18px] text-fg2', !report && 'truncate')}>{expandName ? kind : report ? <ReportLine w={report} head wrap /> : kind}</div>
         )}
+        {expandName && report ? <div className="text-[0.8125rem]/[18px] text-fg2"><ReportLine w={report} head wrap /></div> : null}
       </div>
       <div className="flex justify-end gap-1">{right}</div>
     </div>

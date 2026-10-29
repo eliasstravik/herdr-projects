@@ -335,7 +335,7 @@ function whereOf(snap: Snapshot, t: Task, names: TaskGroup['names']) {
 /** what to ask for a task where none is: the one space's coordinator, else any */
 function noTasks(snap: Snapshot, list: ListView) {
   const one = list.level === 2 ? snap.places.find((p) => p.id === list.chips[0]) : undefined
-  return one ? `No tasks yet. Ask ${one.name} to add one.` : 'No tasks here yet.'
+  return one ? `No tasks yet. Ask ${one.name} to add one.` : 'No tasks yet. Ask a coordinator to add one.'
 }
 
 /** The lists' tasks: what their chips hold (placeId, the place picked, is for plugins of old) */
@@ -414,7 +414,7 @@ function TaskList(_: { placeId: string }) {
               ) : (
                 // only To do shows empty; with no tasks at all it says how one comes
                 <div data-flip={`empty:${g.key}`}>
-                  <Empty className="pt-0.5 text-fg3">{order.length ? 'Nothing waiting.' : noTasks(snap, view)}</Empty>
+                  <Empty className="pt-0.5 text-fg3">{order.length ? 'No tasks to do yet. Ask a coordinator to add one.' : noTasks(snap, view)}</Empty>
                 </div>
               )}
               {g.more || g.less ? (
@@ -425,7 +425,7 @@ function TaskList(_: { placeId: string }) {
             </div>,
           ]
         })}
-        {q && !groups.length ? <Empty className="pt-3 text-fg3">No tasks match “{q}”.</Empty> : null}
+        {q && !groups.length ? <Empty className="pt-3 text-fg3">No tasks match “{q}”. Try another search or change the filters.</Empty> : null}
         {footer}
       </div>
     </>
@@ -577,7 +577,7 @@ function ArchivedList({ list: view }: { list: ListView }) {
           ))}
         </List>
       ) : (
-        <Empty className="pt-0.5 text-fg3">Nothing archived.</Empty>
+        <Empty className="pt-0.5 text-fg3">No archived tasks. Archive a task from its menu to keep it here.</Empty>
       )}
       <Empty className="pt-3 text-fg3">Archived tasks keep their chat and summary. Search finds them too.</Empty>
     </div>

@@ -412,3 +412,31 @@ describe.skipIf(!browser)('a coordinator working in the background', () => {
     })
   }, 30_000)
 })
+
+
+describe.skipIf(!browser)('clear phone task titles', () => {
+  test('a long task name can be expanded while its ID and progress stay visible', async () => {
+    const task = world.tasks.find((t) => t.id === 'GTM-14')!
+    const was = task.name
+    const name = 'Bundle skills into the template with clear instructions for every machine and every new project'
+    task.name = name
+    const page = await browser!.newPage({ viewport: { width: 320, height: 740 }, hasTouch: true })
+    try {
+      await page.goto(`${url()}&task=GTM-14`)
+      const title = page.getByRole('button', { name: `Show full task title: ${name}` })
+      await title.waitFor()
+      const header = page.locator('[data-chrome]').filter({ has: title })
+      expect(await header.textContent()).toContain('GTM-14 · Claude Code')
+      expect(await header.textContent()).toContain('62%')
+      expect(await title.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(true)
+      await title.click()
+      const expanded = page.getByRole('button', { name: `Collapse task title: ${name}` })
+      expect(await expanded.getAttribute('aria-expanded')).toBe('true')
+      expect(await expanded.evaluate((e) => e.scrollHeight <= e.clientHeight + 1)).toBe(true)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    } finally {
+      task.name = was
+      await page.close()
+    }
+  })
+})

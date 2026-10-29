@@ -757,11 +757,12 @@ describe.skipIf(!browser)('removing a space', () => {
       const at = (await row.boundingBox())!
       expect(box.x).toBeGreaterThanOrEqual(at.x + at.width)
       expect(Math.abs(box.y - at.y)).toBeLessThan(8)
-      await page.getByRole('menuitem', { name: 'Remove', exact: true }).click()
+      expect(await page.getByRole('menuitem').last().textContent()).toContain('Remove from Shepherdr…')
+      await page.getByRole('menuitem', { name: 'Remove from Shepherdr…', exact: true }).click()
       const ask = page.getByRole('alertdialog', { name: 'Remove gtm from Shepherdr?' })
       await ask.waitFor()
       const words = (await ask.textContent())!
-      expect(words).toContain('Its folder and code stay on disk.')
+      expect(words).toContain('Its files and folder stay on disk.')
       expect(words).toContain('Its 5 open tasks hide with it')
       // Escape keeps it, and the focus goes back to its ⋯
       await page.keyboard.press('Escape')
@@ -774,7 +775,7 @@ describe.skipIf(!browser)('removing a space', () => {
       expect(await ring()).toBe('none')
       // a right click opens the same menu
       await row.click({ button: 'right' })
-      await page.getByRole('menuitem', { name: 'Remove', exact: true }).click()
+      await page.getByRole('menuitem', { name: 'Remove from Shepherdr…', exact: true }).click()
       await ask.getByRole('button', { name: 'Remove' }).click()
       await row.waitFor({ state: 'detached' })
       await page.waitForURL(/place=vm-str%2Fhome/)
@@ -784,7 +785,7 @@ describe.skipIf(!browser)('removing a space', () => {
       const home = page.locator('#places li[data-home]').filter({ hasText: 'home' }).last()
       await home.click({ button: 'right' })
       await page.getByRole('menuitem', { name: 'Rename', exact: true }).waitFor()
-      expect(await page.getByRole('menuitem', { name: 'Remove', exact: true }).count()).toBe(0)
+      expect(await page.getByRole('menuitem', { name: 'Remove from Shepherdr…', exact: true }).count()).toBe(0)
       await page.keyboard.press('Escape')
       expect(await world.act({ type: 'space-remove', place: 'p:vm-str:~' })).toEqual({ ok: false, error: "home is vm-str's home space: it can be renamed, not removed." })
     } finally {
@@ -798,7 +799,7 @@ describe.skipIf(!browser)('removing a space', () => {
     await page.goto(url())
     const row = page.locator('#places li', { hasText: 'herdr-projects' })
     await row.click({ button: 'right' })
-    await page.getByRole('menuitem', { name: 'Remove', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Remove from Shepherdr…', exact: true }).click()
     const ask = page.getByRole('alertdialog', { name: 'herdr-projects can’t be removed yet' })
     await ask.waitFor()
     expect(await ask.textContent()).toContain('HP-202 is still working. Pause it or let it finish first.')
@@ -827,7 +828,7 @@ describe.skipIf(!browser)('removing a space', () => {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [at] })
       await page.waitForTimeout(700)
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-      await page.getByRole('menuitem', { name: 'Remove', exact: true }).tap()
+      await page.getByRole('menuitem', { name: 'Remove from Shepherdr…', exact: true }).tap()
       // the hold didn't open the space
       expect(page.url()).not.toContain('lilla-varlden')
       const ask = page.getByRole('alertdialog', { name: 'Remove lilla-varlden from Shepherdr?' })
@@ -920,9 +921,9 @@ describe.skipIf(!browser)('the order of places', () => {
       const y = box.y + box.height / 2
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
       await page.waitForTimeout(600)
-      await page.getByRole('menuitem', { name: 'Remove', exact: true }).waitFor()
+      await page.getByRole('menuitem', { name: 'Remove from Shepherdr…', exact: true }).waitFor()
       for (let i = 1; i <= 8; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - i * 8 }] })
-      expect(await page.getByRole('menuitem', { name: 'Remove', exact: true }).count()).toBe(0)
+      expect(await page.getByRole('menuitem', { name: 'Remove from Shepherdr…', exact: true }).count()).toBe(0)
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
       await settled(page)
       expect(await order(page, nav)).toEqual(['mac', 'home', 'lilla-varlden', 'nas', 'home', 'vm-str', 'home', 'herdr-projects', 'gtm'])

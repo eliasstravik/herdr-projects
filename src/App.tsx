@@ -58,7 +58,7 @@ import {
   MoreIcon,
   PageIcon,
   PhoneTop,
-  PinIcon,
+  LockIcon,
   PlaceIcon,
   RoundButton,
   SearchIcon,
@@ -341,36 +341,29 @@ function TaskColumn({ snap }: { snap: Snapshot }) {
   )
 }
 
-/** Pins the Tasks and Artifacts lists' chips, so they stay whatever place is picked, or lets them follow it again.
- *  Pinned, a wide screen's says so (a phone's top bar does) */
+/** Locks the lists' filters while switching spaces; the stored pin behaviour stays compatible. */
 function PinButton() {
   const pinned = useStore((s) => listsPinned(s.ui, s.snap!))
   const phone = useUI((u) => u.device === 'phone')
-  const name = 'Pinned'
-  const label = pinned ? 'Unpin: follow the space picked' : 'Pin these filters'
+  const name = pinned ? 'Locked' : 'Lock'
+  const label = pinned ? 'Locked: unlock filters to follow the space picked' : 'Lock filters: keep them when switching spaces'
   if (phone)
     return (
       <RoundButton label={label} pressed={pinned} onClick={togglePin}>
-        <PinIcon className={ic} />
+        <LockIcon className={ic} />
       </RoundButton>
-    )
-  if (!pinned)
-    return (
-      <IconButton label={label} onClick={togglePin}>
-        <PinIcon className={ic} />
-      </IconButton>
     )
   return (
     <button
       type="button"
       aria-label={label}
-      aria-pressed
-     
+      aria-pressed={pinned}
+      title={label}
       onClick={togglePin}
-      className="press-dim inline-flex h-7 max-w-40 min-w-7 shrink items-center justify-center gap-1.5 rounded-full bg-sel px-2 text-[0.8125rem] text-fg coarse:h-9 @sm/side:pr-2.5"
+      className={clsx('press-dim inline-flex h-7 max-w-40 min-w-7 shrink items-center justify-center gap-1.5 rounded-full px-2 text-[0.8125rem] text-fg coarse:h-9 @sm/side:pr-2.5', pinned && 'bg-sel')}
     >
-      <PinIcon className={ic} />
-      {/* a narrow column has room for the pin alone */}
+      <LockIcon className={ic} />
+      {/* a narrow column has room for the lock alone */}
       <span className="truncate @max-sm/side:hidden">{name}</span>
     </button>
   )
@@ -455,8 +448,9 @@ function TaskPage({ task, middle, pane }: { task: Task; middle?: boolean; pane?:
           }
           dot={task.status}
           p={task.report?.progress}
-          name={task.id}
-          kind={g ? `${task.name} · ${g.cli}` : task.name}
+          name={task.name}
+          expandName
+          kind={g ? `${task.id} · ${g.cli}` : task.id}
           right={
             g ? (
               <>
@@ -801,7 +795,7 @@ function PhoneHome({ snap }: { snap: Snapshot }) {
         left={<MenuButton />}
         name={lists ? (view.chips.length ? chipName(snap, view.chips[0]) + (view.chips.length > 1 ? ` +${view.chips.length - 1}` : '') : 'Everything') : place.name}
         icon={<PlaceIcon level={2} className="text-fg2" />}
-        kind={lists ? 'Pinned' : placeKind(snap, place)}
+        kind={lists ? 'Locked' : placeKind(snap, place)}
         mark={tab === 'chat' ? <PlaceMarks place={place} /> : undefined}
         right={
           tab === 'chat' ? (

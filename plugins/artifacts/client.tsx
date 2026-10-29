@@ -473,8 +473,8 @@ function Viewer() {
             </div>
           </div>
           <div className="relative">
-            <IconButton label="Versions" aria-haspopup="menu" aria-expanded={menu === 'versions'} className={barBtn} onClick={() => setMenu(menu === 'versions' ? null : 'versions')}>
-              <ClockIcon className={ic} />
+            <IconButton label="Versions" aria-haspopup="menu" aria-expanded={menu === 'versions'} className={clsx(barBtn, 'w-auto! px-2 gap-1 inline-flex!')} onClick={() => setMenu(menu === 'versions' ? null : 'versions')}>
+              <ClockIcon className={ic} /><span className="phone:hidden">Version </span><span>v{shown}</span>
             </IconButton>
             {menu === 'versions' ? (
               <Popover onClose={() => setMenu(null)} label="Versions">
@@ -505,13 +505,13 @@ function Viewer() {
           <IconButton
             label={markup ? 'Done marking up' : 'Mark up'}
             pressed={markup}
-            className={clsx(barBtn, 'aria-pressed:bg-[color-mix(in_srgb,var(--accent)_16%,var(--bg))]')}
+            className={clsx(barBtn, 'w-auto! px-2 gap-1 inline-flex! aria-pressed:bg-[color-mix(in_srgb,var(--accent)_16%,var(--bg))]')}
             onClick={() => {
               setMarkup(!markup)
               if (markup) setPick(null)
             }}
           >
-            <MarkUpIcon />
+            <MarkUpIcon /><span className="phone:hidden">{markup ? 'Done' : 'Mark up'}</span>
           </IconButton>
           <div className="relative">
             <IconButton label="More" aria-haspopup="menu" aria-expanded={menu === 'more' || menu === 'delete'} className={barBtn} onClick={() => setMenu(menu ? null : 'more')}>
@@ -759,7 +759,7 @@ function ArtifactList(_: { placeId: string }) {
           })}
         </List>
       ) : (
-        <Empty className="pt-3 text-fg3">No artifacts match “{q}”.</Empty>
+        <Empty className="pt-3 text-fg3">No artifacts match “{q}”. Try another search or change the filters.</Empty>
       )}
     </>
   )

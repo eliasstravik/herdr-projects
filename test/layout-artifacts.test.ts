@@ -302,6 +302,8 @@ describe.skipIf(!browser)('artifacts', () => {
     const dialog = page.getByRole('dialog', { name: 'This week across machines' })
     const off = dialog.getByRole('button', { name: 'Mark up', exact: true })
     expect(await off.getAttribute('title')).toBeNull()
+    expect(await off.textContent()).toContain('Mark up')
+    expect(await dialog.getByRole('button', { name: 'Versions', exact: true }).textContent()).toContain(`v${world.artifacts.find((a) => a.id === 'a1')!.v}`)
     const bg = () => dialog.getByRole('button', { name: /^(Mark up|Done marking up)$/ }).evaluate((b) => getComputedStyle(b).backgroundColor)
     const idle = await bg()
     await off.click()
@@ -329,4 +331,27 @@ describe.skipIf(!browser)('artifacts', () => {
     expect(await frame.locator('body').evaluate(() => (window as unknown as { kept?: number }).kept)).toBe(1)
     await page.close()
   }, 30_000)
+})
+
+
+describe.skipIf(!browser)('compact artifact tools', () => {
+  test('phone tools retain a readable version and named touch controls', async () => {
+    const page = await browser!.newPage({ viewport: { width: 320, height: 740 }, hasTouch: true })
+    try {
+      await page.goto(`http://127.0.0.1:${server!.port}/?artifact=a1`)
+      const dialog = page.getByRole('dialog', { name: 'This week across machines' })
+      const versions = dialog.getByRole('button', { name: 'Versions', exact: true })
+      expect(await versions.textContent()).toContain(`v${world.artifacts.find((a) => a.id === 'a1')!.v}`)
+      const mark = dialog.getByRole('button', { name: 'Mark up', exact: true })
+      expect((await mark.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+      await versions.click()
+      await dialog.getByRole('menu', { name: 'Versions' }).waitFor()
+      await page.keyboard.press('Escape')
+      await mark.click()
+      expect(await dialog.getByRole('button', { name: 'Done marking up' }).getAttribute('aria-pressed')).toBe('true')
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    } finally {
+      await page.close()
+    }
+  })
 })
