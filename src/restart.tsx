@@ -12,14 +12,14 @@ import { ic, MenuItem, Primary, RestartIcon } from './ui.tsx'
 
 /* ---------- the sheet ---------- */
 
-type Opening = { chat: string; name: string }
+type Opening = { chat: string; name: string; current?: boolean }
 let opening: Opening | null = null
 const listeners = new Set<() => void>()
 const subscribe = (f: () => void) => (listeners.add(f), () => void listeners.delete(f))
 
 /** open the restart sheet for a coordinator (chat: its place id) or a task's agent (ID/Agent); name: what it is called */
-export function openRestart(chat: string, name: string) {
-  opening = { chat, name }
+export function openRestart(chat: string, name: string, current = false) {
+  opening = { chat, name, current }
   listeners.forEach((f) => f())
 }
 
@@ -31,7 +31,7 @@ const close = () => {
 /** the sheet, while one is open: each anew, its picks fresh */
 export function RestartSheet() {
   const o = useSyncExternalStore(subscribe, () => opening)
-  return o ? <Sheet key={o.chat} chat={o.chat} name={o.name} /> : null
+  return o ? <Sheet key={o.chat} chat={o.chat} name={o.name} current={o.current} /> : null
 }
 
 /** "Restart agent" in a ⋯ menu */
@@ -55,7 +55,7 @@ const DEFAULT = 'default'
 const modelsOf = (c?: RestartCli) => c?.models ?? []
 const levelsOf = (c: RestartCli | undefined, model?: string) => (model ? modelsOf(c).find((m) => m.id === model)?.efforts : undefined) ?? c?.efforts ?? []
 
-function Sheet({ chat, name }: Opening) {
+function Sheet({ chat, name, current }: Opening) {
   const [info, setInfo] = useState<RestartInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -68,14 +68,17 @@ function Sheet({ chat, name }: Opening) {
       .then((r: { ok?: boolean; error?: string; info?: RestartInfo; waiting?: boolean }) => {
         if (!r.info) return setError(r.waiting ? 'Its machine is out of reach: restart it once it is back.' : r.error || 'It could not be restarted.')
         setInfo(r.info)
-        setKind(r.info.want.kind)
-        setModel(r.info.want.model ?? '')
-        setEffort(r.info.want.effort ?? '')
+        const pick = current ? r.info.on : r.info.want
+        setKind(pick.kind)
+        setModel(pick.model ?? '')
+        setEffort(pick.effort ?? '')
       })
       .catch((e: Error) => setError(e.message))
-  }, [chat])
+  }, [chat, current])
   const cli = info?.clis.find((c) => c.kind === kind)
   const levels = levelsOf(cli, model)
+  const unavailable = !!(model && cli?.models?.length && !cli.models.some((m) => m.id === model))
+  const defaultEffort = model ? cli?.models?.find((m) => m.id === model)?.defaultEffort : cli?.defaultEffort
   const pickKind = (k: string) => {
     const c = info?.clis.find((x) => x.kind === k)
     setKind(k)
@@ -103,7 +106,7 @@ function Sheet({ chat, name }: Opening) {
       title={task ? `Restart ${name}’s agent?` : `Restart ${name}’s coordinator?`}
       onCancel={close}
       buttons={
-        <Primary autoFocus disabled={!info || busy} onClick={go}>
+        <Primary autoFocus disabled={!info || busy || unavailable} onClick={go}>
           {busy ? 'Restarting…' : 'Restart'}
         </Primary>
       }
@@ -111,30 +114,35 @@ function Sheet({ chat, name }: Opening) {
       {info ? (
         <div data-restart className="flex flex-col gap-4">
           <p>
-            Runs on {info.onWords} now.{info.working ? ' It is working: it stops cleanly first.' : ''}
+            {info.onKnown === false ? 'No recorded launch. Proposed start' : 'Recorded launch'}: {info.onWords}.{info.working ? ' It is working: it stops cleanly first.' : ''}
           </p>
+          <p className="text-sm text-fg3">Applies to this chat after Restart. Default uses the CLI’s configuration. Terminal changes are not observed.</p>
           <div className="flex flex-col gap-2.5 text-fg">
             <Line label="Agent">
               <Pick label="Agent" value={cli?.name ?? kind} options={info.clis.map((c) => c.name)} onPick={(n) => pickKind(info.clis.find((c) => c.name === n)!.kind)} />
             </Line>
-            {cli?.models ? (
-              <Line label="Model">
-                {cli.models.length ? (
+            <Line label="Model">
+              {cli?.models ? (
+                cli.models.length ? (
                   <Pick label="Model" value={label(model)} options={[DEFAULT, ...cli.models.map((m) => m.label)]} onPick={(l) => pickModel(cli.models!.find((m) => m.label === l)?.id ?? '')} />
                 ) : (
                   <TextValue label="Model" value={model || DEFAULT} onEdit={() => undefined} onSave={(v) => pickModel(v.trim() === DEFAULT ? '' : v.trim())} />
-                )}
-              </Line>
-            ) : null}
+                )
+              ) : <span className="text-fg3">Default · selection unsupported</span>}
+            </Line>
             {cli?.models && levels.length ? (
               <Line label="Effort">
                 <Pick label="Effort" value={effort || DEFAULT} options={[DEFAULT, ...levels]} ordered onPick={(v) => setEffort(v === DEFAULT ? '' : v)} />
               </Line>
-            ) : null}
+            ) : <Line label="Effort"><span className="text-fg3">Default · no supported levels</span></Line>}
+            {unavailable ? <p className="text-need-fg">{model} is unavailable. Choose Default or an available model before restarting.</p> : null}
+            <p className="text-sm text-fg3">Settings for this {info.role}: {info.want.kind} · {info.want.model || 'Default model'} · {info.want.effort || 'Default effort'}. </p>
+            <button type="button" className="self-start text-sm underline" onClick={() => { setKind(info.want.kind); setModel(info.want.model ?? ''); setEffort(info.want.effort ?? '') }}>Use Settings for this restart</button>
             <Line label={saveWords(info)}>
               <Switch label={saveWords(info)} on={save} onChange={setSave} />
             </Line>
           </div>
+          <p className="text-sm text-fg3">{cli?.defaultModel ? `Catalog default model: ${label(cli.defaultModel)}. ` : 'Effective default model is unknown. '}{defaultEffort ? `Catalog default effort: ${defaultEffort}. ` : 'Effective default effort is unknown. '}CLI configuration can override catalog defaults.</p>
           <p className="text-[0.8125rem] text-fg3 phone:text-[0.875rem]">
             {other
               ? `${cli?.name ?? shown(kind)} takes over with the chat so far${task ? ', the brief and the work on its branch' : ''}.`
@@ -151,7 +159,7 @@ function Sheet({ chat, name }: Opening) {
 }
 
 /** "Save as nas's setting", for its role's agents there from now on */
-const saveWords = (i: RestartInfo) => `Save as ${!i.space || i.space === '~' ? 'the home space' : i.space}’s setting`
+const saveWords = (i: RestartInfo) => i.space ? `Save as ${i.space === '~' ? 'the home space' : i.space}’s setting` : 'Save as this machine’s setting'
 
 function Line({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -211,4 +219,21 @@ export function TaskRestartItem({ chatKey }: { chatKey: string }) {
 /** a coordinator chat's top-right menu (placeMenu) */
 export function PlaceRestartItem({ place }: { place: Place }) {
   return <RestartItem chat={place.chat} name={place.name} onPick={() => setUI({ menu: false })} />
+}
+
+/** Persistent, separate from attachment and typing controls, shared by task and coordinator chats. */
+export function AgentControls({ chatKey, cli }: { chatKey: string; cli: string }) {
+  const agent = useStore((s) => s.chats[chatKey]?.agent)
+  const model = agent?.model && agent.model !== 'default' ? (agent.modelLabel ?? agent.model) : 'Default / unknown'
+  const effort = agent?.effort && agent.effort !== 'default' ? agent.effort : 'Default / unknown'
+  const open = () => openRestart(chatKey, chatKey.includes('/') ? chatKey.split('/')[0] : 'this space', true)
+  return <div data-agent-controls className="pb-2 text-fg2">
+    <div className="grid grid-cols-3 gap-1 text-xs">
+      {([['Agent', agent ? cli : `${cli} · unknown`], ['Model', model], ['Effort', effort]] as const).map(([label, value]) =>
+        <button key={label} type="button" aria-label={`${label}: ${value}. Select and restart`} title={`${label}: ${value}. Select and restart`} onClick={open} className="press-dim min-w-0 rounded-lg bg-bubble px-2 py-1.5 text-left hover:bg-hover">
+          <span className="block text-fg3">{label}</span><span className="block truncate">{value}</span>
+        </button>)}
+    </div>
+    <p className="mt-1 text-center text-[0.6875rem] text-fg3">Launch settings · tap to select and restart</p>
+  </div>
 }

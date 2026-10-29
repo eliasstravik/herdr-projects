@@ -585,6 +585,8 @@ export interface Chat {
   cli: string
   /** what this CLI lets the + menu change; only what it supports is listed */
   controls?: ChatControls
+  /** Recorded launch values, never inferred from Settings. Missing values are CLI defaults, not observed telemetry. */
+  agent?: { kind: string; model?: string; modelLabel?: string; effort?: string }
   /** Settings for its role now say something else than what its agent runs on: a calm hint offers a restart */
   restart?: RestartHint
 }
@@ -599,9 +601,11 @@ export interface RestartHint {
 export interface RestartCli {
   kind: string
   name: string
-  models?: { id: string; label: string; efforts: string[] }[]
+  models?: { id: string; label: string; efforts: string[]; defaultEffort?: string }[]
   /** the levels its own default model takes */
   efforts?: string[]
+  defaultModel?: string
+  defaultEffort?: string
 }
 
 /** what the restart sheet shows: what its agent runs on now and what Settings say for its role (what it restarts with
@@ -611,6 +615,8 @@ export interface RestartInfo {
   /** its space, whose Settings a save changes */
   space?: string
   on: { kind: string; model?: string; effort?: string }
+  /** False if no launch record exists; on is then only a proposed starting configuration. */
+  onKnown?: boolean
   onWords: string
   want: { kind: string; model?: string; effort?: string }
   clis: RestartCli[]

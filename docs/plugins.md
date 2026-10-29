@@ -80,6 +80,10 @@ slots below are public: plugins outside the repo rely on them, so they change on
     `chatBody` (replaces a chat's body while its `when` holds)
   - headers and menus: `placeHeader`, `placeMark`, `placeMenu` (a coordinator's), `agentHeader`, `agentMenu` (a task's)
   - the composer: `composerAbove`, `composerLive`, `composerSettings`, `composerIdle`, `composerPlus`, `composerMic`
+    (unchanged). The base chat shows launch controls through `composerAbove`; attachment menu contributions still
+    use `composerSettings`. Model/effort changes use `restart-info` and `restart`; legacy `model`/`effort` actions
+    return a restart-required error rather than claim an unapplied change. `Chat.agent` is optional launch metadata,
+    not telemetry of terminal changes.
   - the screen: `taskPanel` (side panel items), `overlays`, `topBars`, `tasksFooter`, `keys` (keyboard handlers)
   - the lists show what their chips hold, `listView(ui, snap)`: `tasks`, `artifacts` and `tasksMenu` still get the
     place picked (`placeId`, `place`), and `tasksFooter` also gets the `list` shown

@@ -36,7 +36,7 @@ import { boxDir } from './mfs.ts'
 import * as task from './mfs.ts'
 import { asMode, HOME_SPACE, HOST, NAME, placeId, Places } from './places.ts'
 import { coordinatorPrompt, relaunchedLine, restartLine, resumedLine, settingsBlock } from './prompts.ts'
-import { fitHarness, harnessWords, recentChat, restartHint, restartInfo, type Harness } from './restart.ts'
+import { fitHarness, harnessProblem, harnessWords, recentChat, restartHint, restartInfo, type Harness } from './restart.ts'
 import { Revivals, type Wrong } from './revive.ts'
 import { carryOn, Retries, type Retry } from './retry.ts'
 import { CATALOG, CLI_NAME, CLIS, kindOf, refuse, setForTask, Settings, type Level } from './settings.ts'
@@ -946,7 +946,10 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
    *  Settings too */
   private async restart(key: string, to: Partial<Harness>, save = false) {
     const x = this.restartable(key)
-    const h = fitHarness({ ...x.want, ...to, kind: to.kind ?? x.want.kind })
+    const requested = { ...x.want, ...to, kind: to.kind ?? x.want.kind }
+    const problem = harnessProblem(requested)
+    if (problem) throw new Error(problem)
+    const h = fitHarness(requested)
     // refused before anything is saved
     if (x.t && ended(x.t)) throw new Error(`${x.t.id} is Done already: it has no agent to restart.`)
     if (x.t && !x.t.worktree) throw new Error(`${x.t.id} hasn't started yet: it starts on what its brief says.`)
@@ -1425,32 +1428,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         return {}
       }
       case 'model':
-      case 'effort': {
-        const r = this.agents.record(a.chat)
-        if (!r) return { ok: false }
-        // only what its CLI and model take: a model it lacks, or a level its model lacks, is refused
-        const send = (cmd: string) => (r.kind === 'claude' ? this.agents.send(a.chat, cmd, { idle: true }) : undefined)
-        if (a.type === 'model') {
-          const m = findModel(r.kind, a.model)
-          if (!m) return { ok: false, error: `${CLI_NAME[r.kind] ?? r.kind} has no model ${a.model}` }
-          r.model = m.label
-          await send(`/model ${m.id}`)
-          // a level the new model lacks becomes the nearest it has
-          const e = r.effort && nearest(m.efforts, r.effort)
-          if (r.effort && e !== r.effort.toLowerCase()) {
-            r.effort = e ?? ''
-            if (e) await send(`/effort ${e}`)
-          }
-        } else {
-          const e = a.effort.toLowerCase()
-          if (!effortsOf(r.kind, r.model).includes(e)) return { ok: false, error: `${findModel(r.kind, r.model)?.label ?? CLI_NAME[r.kind] ?? r.kind} takes no ${a.effort} effort` }
-          r.effort = e
-          await send(`/effort ${e}`)
-        }
-        this.agents.save()
-        this.emit('chat', a.chat)
-        return {}
-      }
+      case 'effort':
+        return { ok: false, error: 'Use the visible agent controls and Restart to apply model or effort changes. Chat and work are preserved.' }
       case 'keys':
         await this.agents.keys(a.chat, a.keys)
         return {}
@@ -1511,7 +1490,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       case 'restart-info': {
         try {
           const x = this.restartable(a.chat)
-          return { ok: true, info: restartInfo({ role: x.role, space: x.space, on: x.on, want: x.want, kinds: Object.keys(CLI_NAME).filter(this.engine.installed), working: this.agents.status(a.chat) === 'working' }) }
+          return { ok: true, info: restartInfo({ role: x.role, space: x.space, on: x.on, onKnown: !!this.agents.record(a.chat), want: x.want, kinds: Object.keys(CLI_NAME).filter(this.engine.installed), working: this.agents.status(a.chat) === 'working' }) }
         } catch (e) {
           return { ok: false, error: (e as Error).message }
         }

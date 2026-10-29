@@ -1,7 +1,8 @@
 // What a restart says and offers: the hint once Settings say other than what an agent runs on, a harness in words,
 // and what an agent taking over on another CLI is told.
 import { describe, expect, test } from 'bun:test'
-import { fitHarness, harnessWords, recentChat, restartHint, sameHarness } from '../server/live/restart.ts'
+import { fitHarness, harnessProblem, harnessWords, restartInfo, recentChat, restartHint, sameHarness } from '../server/live/restart.ts'
+import { setModels, TABLE } from '../server/live/models.ts'
 import { restartLine, resumedLine } from '../server/live/prompts.ts'
 
 describe('the restart hint', () => {
@@ -62,5 +63,35 @@ describe('what the agent is told', () => {
 
   test('its own CLI resumes: carry on, or say nothing', () => {
     expect(resumedLine('Claude Code (Opus 5.5, high)')).toContain('<no-reply>restarted</no-reply>')
+  })
+})
+
+describe('visible launch settings and supported restart choices', () => {
+  test('both roles keep recorded launch separate from inherited Settings', () => {
+    for (const role of ['task', 'coordinator'] as const) {
+      const info = restartInfo({ role, on: { kind: 'codex' }, want: { kind: 'claude', model: 'sonnet', effort: 'high' }, kinds: ['claude', 'codex'], working: true })
+      expect(info.on).toEqual({ kind: 'codex' })
+      expect(info.want).toEqual({ kind: 'claude', model: 'claude-sonnet-5-5', effort: 'high' })
+      expect(info.clis.find((c) => c.kind === 'claude')).toMatchObject({ defaultModel: 'claude-opus-5-5', defaultEffort: 'medium' })
+    }
+  })
+  test('recognized older launch models remain selectable with their own effort defaults', () => {
+    const old = { id: 'claude-opus-old', label: 'Older Opus', efforts: ['low', 'high'], effort: 'high' }
+    setModels('claude', { ...TABLE.claude!, others: [old] })
+    try {
+      const info = restartInfo({ role: 'task', on: { kind: 'claude', model: old.id }, want: { kind: 'claude' }, kinds: ['claude'], working: false })
+      expect(info.clis[0]!.models).toContainEqual({ id: old.id, label: old.label, efforts: old.efforts, defaultEffort: 'high' })
+      expect(info.clis[0]!.models!.find((m) => m.id === 'claude-fable-5-1')?.defaultEffort).toBe('high')
+      expect(harnessProblem({ kind: 'claude', model: old.id })).toBeUndefined()
+    } finally { setModels('claude', undefined) }
+  })
+  test('unavailable models, cross-CLI models, and unsupported effort are refused instead of rounded', () => {
+    expect(harnessProblem({ kind: 'codex', model: 'retired-model' })).toContain('no available model')
+    expect(harnessProblem({ kind: 'codex', model: 'claude-opus-5-5' })).toContain('no available model')
+    expect(harnessProblem({ kind: 'codex', model: 'gpt-6-luna', effort: 'ultra' })).toContain('does not support')
+    expect(harnessProblem({ kind: 'gemini', effort: 'high' })).toContain('does not support')
+    expect(harnessProblem({ kind: 'gemini', model: 'default', effort: 'default' })).toBeUndefined()
+    expect(harnessProblem({ kind: 'pi', model: 'provider/model', effort: 'high' })).toBeUndefined()
+    expect(harnessProblem({ kind: 'codex', effort: 'high' })).toBeUndefined()
   })
 })

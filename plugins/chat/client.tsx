@@ -5,7 +5,7 @@ import clsx from 'clsx'
 import { createContext, Fragment, memo, useContext, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ComponentType, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import { act, chatName, definePlugin, getDraft, getState, goChat, has, holdReload, openTask, registry, setDraft, setOutbox, setUI, taskOf, useDraft, useSnap, useStore, useUI, type UI } from '@client/kernel.ts'
 import { keyOf, partsOf, priorOf, reasonOf, SEND_TIMEOUT, type Outgoing } from '@client/outbox.ts'
-import { AlertIcon, BackIcon, CameraIcon, CheckIcon, Count, DeleteIcon, dimmed, Dot, DownIcon, DownloadIcon, EffortIcon, Empty, field, FileIcon, ic, IconButton, KeyIcon, LinkButton, LiveWave, MachineIcon, Menu, MenuItem, MenuSeparator, MenuSetting, MicIcon, ModelIcon, ModeIcon, MoreIcon, NextIcon, PageIcon, PlanIcon, PlusIcon, Primary, QuestionIcon, ReplyIcon, RestartIcon, roundBtn, SearchIcon, SecretField, Sent, SmileIcon, Tab, Tabs, TextBox, UpIcon, useElapsed, XIcon } from '@client/ui.tsx'
+import { AlertIcon, BackIcon, CameraIcon, CheckIcon, Count, DeleteIcon, dimmed, Dot, DownIcon, DownloadIcon, Empty, field, FileIcon, ic, IconButton, KeyIcon, LinkButton, LiveWave, MachineIcon, Menu, MenuItem, MenuSeparator, MenuSetting, MicIcon, ModeIcon, MoreIcon, NextIcon, PageIcon, PlanIcon, PlusIcon, Primary, QuestionIcon, ReplyIcon, RestartIcon, roundBtn, SearchIcon, SecretField, Sent, SmileIcon, Tab, Tabs, TextBox, UpIcon, useElapsed, XIcon } from '@client/ui.tsx'
 import { canDictate, dictate, dictSample, type Dictation } from '@client/dictation.ts'
 import { readBrief } from '@shared/brief.ts'
 import { extOf, isImage } from '@shared/files.ts'
@@ -21,7 +21,7 @@ import { Markdown } from './markdown.tsx'
 import { answeredBy, cancelReply, canReply, isArtifact, jumpTo, startReply } from './reply.ts'
 import { typing, working } from './typing.ts'
 import { JobsSheet, JobsTag, LiveLine, TurnLine } from './activity.tsx'
-import { PlaceRestartItem, RestartHint, RestartSheet, TaskRestartItem } from '@client/restart.tsx'
+import { AgentControls, PlaceRestartItem, RestartHint, RestartSheet, TaskRestartItem } from '@client/restart.tsx'
 
 /* ---------- messages ---------- */
 
@@ -1973,16 +1973,11 @@ function PlusMenu({ chatKey }: { chatKey: string }) {
   )
 }
 
-/** an effort level as the menu says it: Low, Extra high */
-const effortLabel = (e: string) => (e === 'xhigh' ? 'Extra high' : e.charAt(0).toUpperCase() + e.slice(1))
-
 /** the + menu while it is open: it springs up out of the + and fades away. Picking File or Screenshot closes it; a
  *  setting (mode, model, effort) keeps it open, to change another */
 function PlusOpen({ chatKey, file, photo }: { chatKey: string; file: RefObject<HTMLInputElement | null>; photo: RefObject<HTMLInputElement | null> }) {
   const phone = useUI((u) => u.device === 'phone')
   const snap = useSnap()
-  const chat = useChat(chatKey)
-  const c = chat?.controls
   const close = () => setUI({ plus: null })
   const screenshot = async () => {
     close()
@@ -2021,24 +2016,10 @@ function PlusOpen({ chatKey, file, photo }: { chatKey: string; file: RefObject<H
       <MenuItem icon={<CameraIcon className={ic} />} onClick={screenshot}>
         {phone ? 'Take a photo' : 'Screenshot'}
       </MenuItem>
-      {settings.length || c?.models.length || c?.efforts.length ? <MenuSeparator /> : null}
+      {settings.length ? <MenuSeparator /> : null}
       {settings.map(({ View }, i) => (
         <View key={i} chatKey={chatKey} />
       ))}
-      {c?.models.length ? (
-        <MenuSetting
-          name="Model"
-          icon={<ModelIcon className={ic} />}
-          choices={c.models.map((x) => ({ label: x, on: c.models[c.model] === x, onClick: () => act({ type: 'model', chat: chatKey, model: x }) }))}
-        />
-      ) : null}
-      {c?.efforts.length ? (
-        <MenuSetting
-          name="Effort"
-          icon={<EffortIcon className={ic} />}
-          choices={c.efforts.map((x) => ({ label: effortLabel(x), on: c.efforts[c.effort] === x, onClick: () => act({ type: 'effort', chat: chatKey, effort: x }) }))}
-        />
-      ) : null}
     </Menu>
   )
 }
@@ -2476,6 +2457,7 @@ export default definePlugin({
     })
     reg.placeMenu.push({ order: 50, View: ({ place }) => <FindItem chatKey={place.chat} /> }, { order: 55, joined: true, View: PlaceRestartItem })
     reg.agentMenu.push({ order: 50, View: FindItem }, { order: 55, View: TaskRestartItem })
+    reg.composerAbove.push({ order: 4, View: AgentControls })
     reg.composerAbove.push({ order: 5, View: RestartHint })
     reg.overlays.push(RestartSheet)
     reg.composerAbove.push({ order: 20, View: Attachments }, { order: 30, View: PlusMenu })

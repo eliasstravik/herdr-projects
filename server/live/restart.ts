@@ -52,16 +52,24 @@ export function restartClis(kinds: string[]): RestartCli[] {
     return {
       kind,
       name: name(kind),
-      ...(c ? { models: c.models.map((m) => ({ id: m.id, label: m.label, efforts: m.efforts })), efforts: effortsOf(kind) } : {}),
+      ...(c ? { models: c.models.map((m) => ({ id: m.id, label: m.label, efforts: m.efforts, defaultEffort: m.effort })), efforts: effortsOf(kind), defaultModel: c.default, defaultEffort: findModel(kind, c.default)?.effort } : {}),
     }
   })
 }
 
 /** what the restart sheet shows: what it runs on now, what Settings say (what it restarts with unless changed), the
  *  CLIs it may restart on */
-export function restartInfo(o: { role: 'task' | 'coordinator'; space?: string; on: Harness; want: Harness; kinds: string[]; working: boolean }): RestartInfo {
+export function restartInfo(o: { role: 'task' | 'coordinator'; space?: string; on: Harness; want: Harness; kinds: string[]; working: boolean; onKnown?: boolean }): RestartInfo {
   const kinds = o.kinds.includes(o.on.kind) ? o.kinds : [o.on.kind, ...o.kinds]
-  return { role: o.role, space: o.space, on: fitHarness(o.on), onWords: harnessWords(o.on), want: fitHarness(o.want), clis: restartClis(kinds), working: o.working }
+  const clis = restartClis(kinds)
+  // Discovery keeps older, still-supported models outside the short picker list. Keep a recognized launch or
+  // inherited choice selectable rather than falsely call it unavailable.
+  for (const h of [o.on, o.want]) {
+    const m = findModel(h.kind, h.model)
+    const cli = clis.find((c) => c.kind === h.kind)
+    if (m && cli?.models && !cli.models.some((x) => x.id === m.id)) cli.models.push({ id: m.id, label: m.label, efforts: m.efforts, defaultEffort: m.effort })
+  }
+  return { role: o.role, space: o.space, onKnown: o.onKnown, on: fitHarness(o.on), onWords: harnessWords(o.on), want: fitHarness(o.want), clis, working: o.working }
 }
 
 /** a chat's last words, latest last, for an agent taking over: yours and its agent's (as `them`), each cut short;
@@ -72,4 +80,13 @@ export function recentChat(messages: Message[], them: string, skip?: string) {
     .slice(-12)
     .map((m) => `${m.who === 'you' ? 'Human' : them}: ${m.text!.length > 400 ? `${m.text!.slice(0, 400)}…` : m.text}`)
     .join('\n\n')
+}
+
+/** Reject unsupported choices before restarting or saving anything; never silently round effort. */
+export function harnessProblem(h: Harness): string | undefined {
+  const c = modelsOf(h.kind)
+  const m = h.model && h.model !== 'default' ? h.model : undefined
+  if (!c && (m || (h.effort && h.effort !== 'default'))) return `${name(h.kind)} does not support model or effort selection.`
+  if (m && c?.models.length && !findModel(h.kind, m)) return `${name(h.kind)} has no available model ${m}. Choose Default or an available model.`
+  if (h.effort && h.effort !== 'default' && !effortsOf(h.kind, m).includes(h.effort)) return `${name(h.kind)} does not support ${h.effort} effort on this model.`
 }

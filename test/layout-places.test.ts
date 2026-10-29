@@ -177,7 +177,7 @@ describe.skipIf(!browser)("a place's Autopilot", () => {
       expect(await pill.count()).toBe(0)
       // no switch in the + menu: that keeps files, model and effort
       await page.locator('[data-composer] button[aria-label="Attach files and more"]').first().click()
-      await page.getByRole('combobox', { name: 'Model' }).waitFor()
+      await page.getByRole('menuitem', { name: 'File or photo' }).waitFor()
       expect(await page.getByRole('menuitemcheckbox', { name: 'Autopilot' }).count()).toBe(0)
       await page.keyboard.press('Escape')
       // the ⋯ menu: the switch first, then search, the terminal, artifacts; no three-way picker
@@ -269,25 +269,15 @@ describe.skipIf(!browser)("a place's Autopilot", () => {
       await ctx.close()
     }, 30_000)
 
-  test("a task's agent has no mode: its + menu keeps Model and Effort only, whole even on a small phone", async () => {
+  test("a task's attachment menu keeps files; agent controls stay outside it on a small phone", async () => {
     const page = await browser!.newPage({ viewport: { width: 320, height: 640 }, hasTouch: true })
     await page.goto(`http://127.0.0.1:${server!.port}/?place=all&task=GTM-14`)
+    await page.locator('[data-agent-controls]').waitFor()
     await page.locator('[data-composer] button[aria-label="Attach files and more"]').first().click()
-    const model = page.getByRole('combobox', { name: 'Model' })
-    await model.waitFor()
+    await page.getByRole('menuitem', { name: 'File or photo' }).waitFor()
+    expect(await page.getByRole('combobox', { name: 'Model' }).count()).toBe(0)
     expect(await page.getByRole('group', { name: 'Mode', exact: true }).count()).toBe(0)
-    // Claude Code's models and the levels its model takes, each a picker showing what it is on
-    expect(await model.locator('option').allTextContents()).toEqual(['Fable 5.1', 'Opus 5.5', 'Sonnet 5.5', 'Haiku 5.5'])
-    const effort = page.getByRole('combobox', { name: 'Effort' })
-    expect(await effort.locator('option').allTextContents()).toEqual(['Low', 'Medium', 'High', 'Extra high', 'Max'])
-    const shown = (name: string) => page.locator(`.popover label:has(select[aria-label="${name}"]) > span:nth-child(3)`).textContent()
-    expect([await shown('Model'), await shown('Effort')]).toEqual(['Opus 5.5', 'High'])
-    await model.selectOption({ label: 'Haiku 5.5' })
-    await page.waitForFunction(() => document.querySelector('.popover label:has(select[aria-label="Model"]) > span:nth-child(3)')?.textContent === 'Haiku 5.5')
-    await model.selectOption({ label: 'Opus 5.5' })
-    // no words are cut short, and the page never scrolls sideways
-    const cut = await page.locator('.popover [aria-pressed] span, .popover label span').evaluateAll((ss) => ss.filter((s) => s.scrollWidth > s.clientWidth).map((s) => s.textContent))
-    expect(cut).toEqual([])
+    expect(await page.locator('[data-agent-controls] button').count()).toBe(3)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.close()
   }, 30_000)

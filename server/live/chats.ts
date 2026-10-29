@@ -15,6 +15,7 @@ import type { LogEvent } from './readers/types.ts'
 import type { Cut } from './retry.ts'
 import { findModel, modelsOf, nearest } from './models.ts'
 import { sameCommand } from './commands.ts'
+import { fitHarness } from './restart.ts'
 import { CLI_NAME } from './settings.ts'
 import { replyOnScreen } from './streaming.ts'
 import { activityOf, codexThreadLog, cutOutput, headlessJob, JobLogs, lastLine, lineOf, outputAt, shown as shownStep, tailOf, type JobRec } from './activity.ts'
@@ -933,6 +934,7 @@ export class Chats {
     return {
       key,
       cli: CLI_NAME[kind] ?? kind,
+      agent: r ? { ...fitHarness({ kind: r.kind, model: r.model, effort: r.effort }), ...(findModel(r.kind, r.model) ? { modelLabel: findModel(r.kind, r.model)!.label } : {}) } : undefined,
       messages: msgs,
       failed: failed.length ? failed : undefined,
       working: st === 'working' || undefined,

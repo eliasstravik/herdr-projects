@@ -1999,3 +1999,39 @@ describe('startup menus before the first message', () => {
     }
   })
 })
+
+describe('visible launch controls', () => {
+  test('coordinator and task metadata comes from the launch record, never new Settings; old actions cannot claim an unapplied change', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shep-controls-'))
+    const p = await src.places.add(dir, 'launch-controls')
+    const place = placeId.space(p.name)
+    const t = src.engine.add({ project: p.name, title: 'Launch controls', by: 'test', later: true })
+    const keys = [place, `${t.id}/Agent`]
+    try {
+      src.settings.set('coordinator.agent', 'Claude Code', { space: p.name })
+      src.settings.set('task.agent', 'Claude Code', { space: p.name })
+      for (const key of keys) {
+        src.agents.records[key] = { key, name: `launch-${key}`, kind: 'codex', model: 'gpt-6-sol', effort: 'high', cwd: dir, workspace: 'launch', logs: [], started: 0 }
+        expect(src.chat(key)?.agent).toEqual({ kind: 'codex', model: 'gpt-6-sol', modelLabel: 'GPT-6-Sol', effort: 'high' })
+        const before = { ...src.agents.records[key] }
+        expect(await src.act({ type: 'model', chat: key, model: 'gpt-6-luna' })).toMatchObject({ ok: false, error: expect.stringContaining('Restart') })
+        expect(await src.act({ type: 'effort', chat: key, effort: 'low' })).toMatchObject({ ok: false })
+        expect(src.agents.records[key]).toEqual(before)
+        // Missing values are kept missing: no guessed model or effort, even when Settings specifies them.
+        delete src.agents.records[key].model
+        delete src.agents.records[key].effort
+        expect(src.chat(key)?.agent).toEqual({ kind: 'codex' })
+        const info = await src.act({ type: 'restart-info', chat: key }) as { info: { on: unknown; want: unknown } }
+        expect(info.info.on).toEqual({ kind: 'codex' })
+        expect(info.info.want).toMatchObject({ kind: 'claude' })
+        const bad = await src.act({ type: 'restart', chat: key, kind: 'codex', model: 'no-longer-available', save: true })
+        expect(bad).toMatchObject({ ok: false, error: expect.stringContaining('no available model') })
+        expect(src.chat(key)?.agent).toEqual({ kind: 'codex' })
+      }
+    } finally {
+      for (const key of keys) delete src.agents.records[key]
+      src.settings.set('coordinator.agent', null, { space: p.name })
+      src.settings.set('task.agent', null, { space: p.name })
+    }
+  })
+})

@@ -10,7 +10,7 @@ import { DEMO_PRS, demoWorktree } from './code.ts'
 import { demoActivity } from './activity.ts'
 import { settingsBlock } from '../live/prompts.ts'
 import { CLI_NAME, defaultOf, kindOf } from '../live/settings.ts'
-import { harnessWords, restartClis } from '../live/restart.ts'
+import { harnessProblem, harnessWords, restartClis } from '../live/restart.ts'
 import { nextWords } from '../live/trigger.ts'
 import { secretPages, Vault } from '../live/secrets.ts'
 
@@ -117,6 +117,7 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
     if (quiet) cards[quiet.place].push(cardMessage({ id: 'card-main-red', red: 'main', text: 'went red: Check failed' }, at++))
     for (const c of Object.values(this.chats)) {
       c.controls = c.cli === 'Claude Code' ? CLAUDE_CONTROLS() : OTHER_CONTROLS()
+      c.agent = c.cli === 'Claude Code' ? { kind: 'claude', model: 'claude-opus-5-5', modelLabel: 'Opus 5.5', effort: 'high' } : { kind: kindOf(c.cli) ?? 'codex' }
       for (const m of c.messages) m.at = at++
       if (cards[c.key]) c.messages.unshift(...cards[c.key])
     }
@@ -522,15 +523,8 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
         return {}
       }
       case 'model':
-      case 'effort': {
-        const c = this.chats[a.chat]?.controls
-        if (c) {
-          if (a.type === 'model') c.model = Math.max(0, c.models.indexOf(a.model))
-          else c.effort = Math.max(0, c.efforts.indexOf(a.effort))
-        }
-        this.emit('chat', a.chat)
-        return {}
-      }
+      case 'effort':
+        return { ok: false, error: 'Use the visible agent controls and Restart to apply model or effort changes. Chat and work are preserved.' }
       case 'text':
         this.termInput[a.chat] = (this.termInput[a.chat] ?? '') + a.text
         this.emit('terminal', a.chat, this.screen(a.chat))
@@ -616,13 +610,16 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
         const t = this.task(a.chat.split('/')[0])
         const on = kindOf(c?.cli ?? '') ?? 'claude'
         const want = c?.restart ? (kindOf(c.restart.want) ?? on) : on
-        return { ok: true, info: { role: a.chat.includes('/') ? 'task' : 'coordinator', space: this.places.find((p) => p.id === (t?.place ?? a.chat))?.name, on: { kind: on }, onWords: c?.cli ?? 'Claude Code', want: { kind: want }, clis: restartClis(['claude', 'codex', 'pi']), working: t?.status === 'work' } }
+        return { ok: true, info: { role: a.chat.includes('/') ? 'task' : 'coordinator', space: this.places.find((p) => p.id === (t?.place ?? a.chat))?.name, on: c?.agent ?? { kind: on }, onWords: harnessWords(c?.agent ?? { kind: on }), want: { kind: want }, clis: restartClis(['claude', 'codex', 'pi']), working: t?.status === 'work' } }
       }
       case 'restart': {
         const c = this.chat(a.chat)
         if (!c) return { ok: false, error: 'No such chat.' }
         const kind = a.kind ?? (c.restart ? kindOf(c.restart.want) : undefined) ?? kindOf(c.cli) ?? 'claude'
+        const problem = harnessProblem({ kind, model: a.model, effort: a.effort })
+        if (problem) return { ok: false, error: problem }
         const words = harnessWords({ kind, model: a.model, effort: a.effort })
+        c.agent = { kind, model: a.model, effort: a.effort }
         c.cli = CLI_NAME[kind] ?? kind
         c.restart = undefined
         c.messages.push(cardMessage({ id: `restart-${id()}`, restart: true, text: `Restarted on ${words}` }, Date.now() + seq))
