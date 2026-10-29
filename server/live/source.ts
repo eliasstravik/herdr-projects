@@ -950,7 +950,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
 
   private pilotSection(section: import('../../shared/types.ts').SettingSection) {
     if (section.name !== 'Autopilot' || !section.level?.startsWith('p:')) return section
-    const place = section.level, r = this.pilots.current(place)
+    const place = section.level, r = this.pilots.current(place) ?? this.pilots.runs.findLast((run) => run.place === place)
     let instructions: string
     try { instructions = this.pilotWords(r?.state === 'on' ? r : { place, config: this.settings.pilot(this.spaceKey(place)) } as PilotRun) }
     catch (e) { instructions = (e as Error).message }
@@ -974,7 +974,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   private pilotWords(r: PilotRun) {
     const h = this.settings.heartbeat(this.levelOf(r.place))
     const space = this.spaceKey(r.place)
-    return `Wake-ups: ${timeWords(h.time, h.zone)}. Events: ${eventWords(h.on)}. Time zone: ${h.zone}.\nAgent: ${harnessWords(r.config.harness)}\nPermission profile: Isolated workspace (Linux namespaces). Coordinator reads the project; workers write only their own worktree. Git metadata is read-only; save commits through shepherdr checkpoint. Host files, sockets and local network are hidden.\nNetwork: HTTPS to ${r.config.hosts.join(', ') || 'no hosts'}.\nAccounts: selected agent provider login; repository account through checked PR/merge commands. Secrets: ${r.config.secrets.join(', ') || 'none'}.\nHuman approval: ${r.config.approvals.join(', ') || 'no merges require approval'}; settings, deleting tasks and unrelated work always need the human.\nShared HTTPS allowance: ${r.config.traffic ? `${r.config.traffic / 1048576} MiB, counted at the gateway across every agent/reviewer` : 'off'}. This measures encrypted traffic, not money or tokens.\nShared reported token allowance: ${r.config.tokens ?? 'off'} (best effort from agent-written delayed logs, can overshoot; not a hard token or money cap).\nShared runtime: ${r.config.runtime ? `${r.config.runtime / 60000} min elapsed since ON` : 'off'}.\nMaximum parallel Shepherdr tasks: ${r.config.parallel}. Native helpers and reviewers remain inside their parent's runtime and share its allowance. No automatic fallback.\n\nTask and reviewer defaults:\n${settingsBlock('<task>', { ways: this.settings.ways(space), reviewer: this.settings.harness('reviewer', space), agent: this.settings.harness('task', space) })}`
+    return `Wake-ups: ${timeWords(h.time, h.zone)}. Events: ${eventWords(h.on)}. Time zone: ${h.zone}.\nAgent: ${harnessWords(r.config.harness)}\nPermission profile: Isolated workspace (Linux namespaces). Coordinator reads the project; workers write only their own worktree. Git metadata is read-only; save commits through shepherdr checkpoint. Host files, sockets and local network are hidden.\nNetwork: HTTPS to ${r.config.hosts.join(', ') || 'no hosts'}.\nAccounts: selected agent and reviewer provider logins; repository account through checked PR/merge commands. Secrets: ${r.config.secrets.join(', ') || 'none'}.\nHuman approval: ${r.config.approvals.join(', ') || 'no merges require approval'}; settings, deleting tasks and unrelated work always need the human.\nShared HTTPS allowance: ${r.config.traffic ? `${r.config.traffic / 1048576} MiB, counted at the gateway across every agent/reviewer` : 'off'}. This measures encrypted traffic, not money or tokens.\nShared reported token allowance: ${r.config.tokens ?? 'off'} (best effort from agent-written delayed logs, can overshoot; not a hard token or money cap).\nShared runtime: ${r.config.runtime ? `${r.config.runtime / 60000} min elapsed since ON` : 'off'}.\nMaximum parallel Shepherdr tasks: ${r.config.parallel}. Native helpers and reviewers remain inside their parent's runtime and share its allowance. No automatic fallback.\n\nTask and reviewer defaults:\n${settingsBlock('<task>', { ways: this.settings.ways(space), reviewer: this.settings.harness('reviewer', space), agent: this.settings.harness('task', space) })}`
   }
 
   private configureAutopilot() {
@@ -1011,7 +1011,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       if (!repo) throw new Error('Isolated Autopilot needs a repository space. Home-space Autopilot is unavailable.')
       G.guardBrokerRepo(repo)
       G.guardBrokerRepo(spec.cwd)
-      const box = await this.pilotRuntime.prepare(spec, r, repo, (args, ctx) => this.pilotCli(r, args, ctx))
+      const box = await this.pilotRuntime.prepare(spec, r, repo, (args, ctx) => this.pilotCli(r, args, ctx), (spec.key.includes('/') ? this.engine.task(spec.key.split('/')[0])?.reviewer?.kind : undefined) ?? r.config.reviewer?.kind)
       this.pilotSandboxes.set(spec.key, box)
       return { ...spec, env: { ...spec.env, ...box.env }, isolation: { run: r.id, home: box.logsHome, control: join(dirname(box.logsHome), 'control'), path: box.wrapper }, fresh: spec.fresh || this.agents.record(spec.key)?.isolation?.run !== r.id }
     }
@@ -1080,7 +1080,10 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   }
 
   private async stopPilotAgents(r: PilotRun, keepWorkers: boolean) {
-    for (const key of [...(this.agents.record(r.place)?.isolation?.run === r.id ? [r.place] : []), ...(!keepWorkers ? this.engine.tasks.filter((t) => t.pilot === r.id && !ended(t)).map((t) => `${t.id}/Agent`) : [])]) {
+    const records = Object.values(this.agents.records).filter((record) => record.isolation?.run === r.id && (!keepWorkers || record.key === r.place)).map((record) => record.key)
+    const runtimes = [...this.pilotSandboxes].filter(([key, box]) => box.run === r.id && (!keepWorkers || key === r.place)).map(([key]) => key)
+    const tasks = keepWorkers ? [] : this.engine.tasks.filter((t) => t.pilot === r.id && !ended(t)).map((t) => `${t.id}/Agent`)
+    for (const key of new Set([...records, ...runtimes, ...tasks])) {
       const isolation = this.agents.record(key)?.isolation
       if (isolation) killSandbox(isolation.control)
       await this.agents.finish(key)
@@ -1122,6 +1125,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         if (next) { this.places.setMode(place, 'autopilot'); next.state = 'failed'; next.error = `Autopilot did not start: ${(e as Error).message}` }
         if (old) old.state = 'failed'
         this.pilots.save()
+        if (next) await this.stopPilotAgents(next, false)
         await this.agents.finish(place)
         throw e
       } finally { this.emit('chat', place); this.emit('snapshot') }

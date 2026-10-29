@@ -2,13 +2,15 @@
 // posts (update cards, choice cards, plans, artifacts, merge cards) kept in its own small log per chat.
 import { createHash } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { apart, cardMessage, type ActivityAnswer, type ActivityAsk, type Chat, type ChatControls, type ArtifactPost, type Job, type Message, type Question, type Reaction, type SecretAsk, type UpdateCard } from '../../shared/types.ts'
 import { HOME, readJson, writeJson } from '../store.ts'
 import { stripHidden, type Agents, type OutItem } from './agents.ts'
 import { agentLines, excerpt, findQuoted, markerSoFar, parseBrowserNotes, parseReply, parseUserLine, userLines, type Parsed } from './chatlines.ts'
 import { shortUrl } from '../../shared/browser.ts'
 import { herdr } from './herdr.ts'
+import { privateRuntimePath } from './autopilot-sandbox.ts'
+import { homedir } from 'node:os'
 import { logKind } from './readers/find.ts'
 import { LogTail, readerFor } from './readers/index.ts'
 import type { LogEvent } from './readers/types.ts'
@@ -413,6 +415,8 @@ export class Chats {
     const where = this.where.get(key) ?? new Map<string, number>()
     for (const f of r.logs) {
       if (!existsSync(f)) continue
+      const privateHome = f.match(/^(.*\/autopilot-runtime\/[^/]+\/[^/]+\/home)\//)?.[1]
+      if (privateHome && !privateRuntimePath(privateHome, f)) continue
       let t = this.tails.get(f)
       if (!t) {
         // each by its own CLI's reader: a backup agent's logs follow the first one's
@@ -425,6 +429,10 @@ export class Chats {
       const ev = t.read(left)
       left -= Math.max(0, t.done - was)
       for (const e of ev) {
+        if (privateHome && e.kind === 'job') {
+          const mapped = (path?: string) => path ? privateRuntimePath(privateHome, path.startsWith(homedir() + '/') ? join(privateHome, relative(homedir(), path)) : path) : undefined
+          e.log = mapped(e.log); e.output = mapped(e.output)
+        }
         // a reply read in two pieces comes again with the same id and the full text: it replaces the first
         const id = e.kind === 'agent' || e.kind === 'usage' ? `${e.kind}:${e.id}` : undefined
         const i = id === undefined ? undefined : where.get(id)
@@ -639,7 +647,7 @@ export class Chats {
     if (heads.length) list = list.filter((j) => j.kind !== 'shell' || !/\b(codex (exec|e)|(claude|pi)\b.* (-p|--print))\b/.test(j.title))
     list.push(...heads)
     for (const j of list) {
-      if (j.kind === 'agent' && !j.log && r?.kind === 'codex') {
+      if (j.kind === 'agent' && !j.log && r?.kind === 'codex' && !r.isolation) {
         const f = this.threadLogs.get(j.id) ?? codexThreadLog(j.id)
         if (f) this.threadLogs.set(j.id, (j.log = f))
       }

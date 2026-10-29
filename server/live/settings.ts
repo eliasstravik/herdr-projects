@@ -497,7 +497,7 @@ export class Settings {
     const effort = get('effort') === 'inherit' ? base.effort : get('effort') === 'default' ? undefined : get('effort')
     if (effort && !effortsOf(kind, model).includes(effort)) throw new Error(`${CLI_NAME[kind]} does not support ${effort} effort with this model.`)
     const num = (key: string) => Number.parseFloat(get(key)) || undefined
-    return { harness: { kind, model, effort }, hosts: hostList(get('hosts')), secrets: get('secrets').split(/[\s,]+/).filter(Boolean), approvals: get('approvals') === 'none' ? [] : ['merge'], traffic: num('traffic') ? num('traffic')! * 1048576 : undefined, tokens: num('tokens'), runtime: num('runtime') ? num('runtime')! * 60000 : undefined, parallel: num('parallel') ?? 3 }
+    return { harness: { kind, model, effort }, reviewer: this.harness('reviewer', space), hosts: hostList(get('hosts')), secrets: get('secrets').split(/[\s,]+/).filter(Boolean), approvals: get('approvals') === 'none' ? [] : ['merge'], traffic: num('traffic') ? num('traffic')! * 1048576 : undefined, tokens: num('tokens'), runtime: num('runtime') ? num('runtime')! * 60000 : undefined, parallel: num('parallel') ?? 3 }
   }
 
   /** the time zone of every time rule */

@@ -1,5 +1,5 @@
 // Isolated fixtures only. No real provider, coordinator, login, settings or Herdr process is used.
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,6 +8,7 @@ process.env.HERDR_SOCKET_PATH = join(process.env.SHEPHERDR_HOME, 'absent.sock')
 const { PilotRuns, AUTOPILOT_KINDS, hostList, pilotCommand, pilotProblem, reserveTraffic } = await import('../server/live/autopilot.ts')
 const { sandboxArgs, publicAddress, providerConfig } = await import('../server/live/autopilot-sandbox.ts')
 const { Settings } = await import('../server/live/settings.ts')
+const { herdr } = await import('../server/live/herdr.ts')
 const { Agents } = await import('../server/live/agents.ts')
 const { LiveSource } = await import('../server/live/source.ts')
 const { Heartbeats } = await import('../server/live/heartbeat.ts')
@@ -84,6 +85,19 @@ describe('capabilities and exact launch settings', () => {
     expect(s.pilot().harness.effort).toBe('low')
     expect(s.set('autopilot.agent', 'Cursor').ok).toBe(false)
   })
+  test.each(['claude', 'codex'])('%s fresh launch resets old explicit model/effort to CLI defaults', async (kind) => {
+    const a = new Agents(), cwd = mkdtempSync(join(tmpdir(), 'pilot-defaults-'))
+    a.records['defaults'] = { key: 'defaults', name: 'defaults', kind, cwd, workspace: 'fixture', model: 'old-model', effort: 'high', logs: [], started: 1 }
+    const start = spyOn(herdr, 'start').mockResolvedValue(undefined as never)
+    const timer = spyOn(globalThis, 'setTimeout').mockImplementation((() => 0) as never)
+    Object.assign(a, { refresh: async () => undefined, bindRoute: async () => undefined, queue: () => {} })
+    try {
+      await a.ensure({ key: 'defaults', name: 'defaults', kind, cwd, workspace: 'fixture', fresh: true, pane: async () => 'fake-pane' })
+      expect(a.record('defaults')?.model).toBe('')
+      expect(a.record('defaults')?.effort).toBe('')
+      expect(start.mock.calls[0][3]).not.toContain('old-model')
+    } finally { start.mockRestore(); timer.mockRestore(); a.stop() }
+  })
   test.each(['claude', 'codex'])('%s startup flags apply model/effort within shared OS isolation', (kind) => {
     const a = new Agents(); cleanup.push(() => a.stop())
     const r = { key: 'p:fixture', name: 'fixture', kind, cwd: '/project', workspace: 'fixture', logs: [], started: 1, model: kind === 'claude' ? 'sonnet' : 'gpt-6-sol', effort: 'high', isolation: { run: 'r', home: mkdtempSync(join(tmpdir(), 'pilot-hooks-')), control: mkdtempSync(join(tmpdir(), 'pilot-control-')), path: '/wrapper' } } as AgentRecord
@@ -127,6 +141,19 @@ describe('fresh replacement, failures and worker ownership', () => {
       expect(w.events.includes('finish:OWN-1/Agent')).toBe(!keep)
       expect(w.events).not.toContain('finish:OTHER-1/Agent')
     }
+  })
+  test('OFF closes owned Reviewer records, including ones whose task already ended', async () => {
+    const w = world(); await w.internals.switchPilot(w.key, 'autopilot')
+    const r = w.pilots.current(w.key)!
+    w.records['OWN-1/Reviewer'] = { key: 'OWN-1/Reviewer', name: 'reviewer', kind: 'codex', cwd: '/fixture', workspace: 'fixture', logs: [], started: 1, isolation: { run: r.id, home: '/fixture', control: '/absent', path: '/wrapper' } }
+    await w.internals.switchPilot(w.key, 'regular')
+    expect(w.events).toContain('finish:OWN-1/Reviewer')
+  })
+  test('secret names outside the profile never reach the vault', async () => {
+    const w = world(); await w.internals.switchPilot(w.key, 'autopilot')
+    const result = await w.internals.pilotCli(w.pilots.current(w.key)!, ['secret', 'run', 'OUTSIDE'], { chat: w.key, cwd: w.path })
+    expect(result.code).toBe(1)
+    expect(result.out).toContain('outside this permission profile')
   })
   test('incoming messages wait during transition and old generations are rejected', async () => {
     const w = world()

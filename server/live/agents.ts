@@ -24,6 +24,7 @@ import { ROOT } from '../root.ts'
 import { leftAtPrompt } from './commands.ts'
 import { paneWrong, type Wrong } from './revive.ts'
 import { readCodexRuntime } from './codex-runtime.ts'
+import { privateRuntimePath } from './autopilot-sandbox.ts'
 import { SecretAccess } from './secret-access.ts'
 import { isAgentProcess } from './agent-process.ts'
 
@@ -45,6 +46,7 @@ export function uniqueLogs(logs: string[]): string[] {
 
 /** adds a log the record doesn't have yet; true when it was new */
 function addLog(r: AgentRecord, f: string): boolean {
+  if (!f) return false
   if (r.logs.some((x) => logName(x) === logName(f))) return false
   r.logs.push(f)
   return true
@@ -342,7 +344,7 @@ export class Agents extends Emitter<Events> {
     try {
       const sessions = new Map<string, { id: string; started: number }>()
       for (const [key, r] of Object.entries(this.records)) {
-        if (r.kind !== 'codex' || !this.info(key)) continue
+        if (r.kind !== 'codex' || r.isolation || !this.info(key)) continue
         const active = this.info(key)?.agent_session
         const id = active?.kind === 'id' ? active.value
           : (active?.kind === 'path' ? active.value : r.logs.at(-1))?.match(/([0-9a-f-]{36})\.jsonl$/)?.[1]
@@ -363,7 +365,7 @@ export class Agents extends Emitter<Events> {
   runtimeHook(key: string) {
     const r = this.records[key]
     if (!r?.hooks || r.kind !== 'claude' || !this.info(key)) return undefined
-    const h = this.hooks.read(mirrored(r.hooks)).runtime
+    const h = this.hooks.read(r.isolation ? privateRuntimePath(r.isolation.home, r.hooks) ?? '' : mirrored(r.hooks)).runtime
     return h && h.at >= r.started && (!h.session || h.session === r.sessionId) ? h : undefined
   }
 
@@ -376,7 +378,7 @@ export class Agents extends Emitter<Events> {
     const now = Date.now()
     const c = this.saidAt.get(key)
     if (c && now - c.at < SAID_MS) return c.said
-    let said = this.hooks.read(mirrored(r.hooks)).said
+    let said = this.hooks.read(r.isolation ? privateRuntimePath(r.isolation.home, r.hooks) ?? '' : mirrored(r.hooks)).said
     if (said && said.state !== 'idle' && this.endedSince?.(key, said.at)) said = { state: 'idle', turnAt: said.turnAt, at: said.at, last: said.last, helper: said.helper, paused: said.paused }
     this.saidAt.set(key, { at: now, said })
     return said
@@ -620,7 +622,7 @@ export class Agents extends Emitter<Events> {
   followSession(key: string) {
     const r = this.records[key]
     if (r?.kind !== 'claude' || !r.hooks) return
-    const s = this.hooks.read(mirrored(r.hooks)).session
+    const s = this.hooks.read(r.isolation ? privateRuntimePath(r.isolation.home, r.hooks) ?? '' : mirrored(r.hooks)).session
     // another machine's copy of its events may still be an earlier run's, until the new run's first event comes
     if (!s || s.id === r.sessionId || s.at < r.started - 5000) return
     const log = r.isolation ? this.isolatedPath(r, s.log ?? join(homedir(), '.claude/projects', r.cwd.replace(/[^a-zA-Z0-9-]/g, '-'), `${s.id}.jsonl`)) : s.log ? mirrored(s.log) : claudeLogPath(r.cwd, s.id)
@@ -648,7 +650,9 @@ export class Agents extends Emitter<Events> {
   }
 
   private isolatedPath(r: AgentRecord, file: string) {
-    return r.isolation && file.startsWith(homedir() + '/') ? join(r.isolation.home, relative(homedir(), file)) : file
+    if (!r.isolation) return file
+    const mapped = file.startsWith(homedir() + '/') ? join(r.isolation.home, relative(homedir(), file)) : file
+    return privateRuntimePath(r.isolation.home, mapped) ?? ''
   }
 
   /** find a log file this CLI started since the agent (re)started, when herdr didn't name one */
@@ -659,7 +663,7 @@ export class Agents extends Emitter<Events> {
     if (r.isolation) {
       const dir = join(r.isolation.home, r.kind === 'claude' ? '.claude/projects' : r.kind === 'codex' ? '.codex/sessions' : '.pi/agent/sessions')
       mkdirSync(dir, { recursive: true })
-      const files = Array.from(new Bun.Glob('**/*.jsonl').scanSync({ cwd: dir, absolute: true, onlyFiles: true, throwErrorOnBrokenSymlink: false })).filter((f) => statSync(f).mtimeMs >= since).sort((a,b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+      const files = Array.from(new Bun.Glob('**/*.jsonl').scanSync({ cwd: dir, absolute: true, onlyFiles: true, throwErrorOnBrokenSymlink: false })).filter((f) => privateRuntimePath(r.isolation!.home, f) && statSync(f).mtimeMs >= since).sort((a,b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
       const f = files.find((f) => !f.includes('/subagents/'))
       if (f && addLog(r, f)) { this.save(); this.emit('logs', key) }
       return
@@ -734,6 +738,7 @@ export class Agents extends Emitter<Events> {
     const changedPrompt = old?.system !== spec.system
     const from = old?.cwd
     r.isolation = spec.isolation
+    if (fresh) { r.model = ''; r.effort = '' }
     Object.assign(r, { name: spec.name, kind: spec.kind, cwd: spec.cwd, workspace: spec.workspace, tab: spec.tab ?? r.tab, env: spec.env ?? r.env, access: spec.access ?? r.access, model: spec.model ?? r.model, effort: spec.effort ?? r.effort, system: spec.system ?? r.system, set: spec.set ?? r.set, finished: false })
     this.codexState.delete(spec.key)
     r.started = Date.now()
@@ -761,7 +766,7 @@ export class Agents extends Emitter<Events> {
         break
       } catch (e) {
         const code = (e as { code?: string }).code
-        if (code === 'agent_not_ready') break
+        if (code === 'agent_not_ready' && !r.isolation) break
         if (i >= 8) {
           console.error(`shepherdr: could not start ${r.name}: ${(e as Error).message}`)
           r.finished = true
@@ -855,7 +860,7 @@ export class Agents extends Emitter<Events> {
   /** whether its hooks last said it was at work, even while it is gone: a turn its log shows over is over */
   wasWorking(key: string) {
     const r = this.records[key]
-    const said = r?.hooks ? this.hooks.read(mirrored(r.hooks)).said : undefined
+    const said = r?.hooks ? this.hooks.read(r.isolation ? privateRuntimePath(r.isolation.home, r.hooks) ?? '' : mirrored(r.hooks)).said : undefined
     return said?.state === 'working' && !this.endedSince?.(key, said.at)
   }
 

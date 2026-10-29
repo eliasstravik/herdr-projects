@@ -4,16 +4,16 @@ import { Transform } from 'node:stream'
 import { createServer, type Server } from 'node:http'
 import { connect, isIP, type Socket } from 'node:net'
 import { lookup } from 'node:dns/promises'
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { HOME } from '../store.ts'
 import { ROOT } from '../root.ts'
 import { BOX, q } from './box.ts'
 import { reserveTraffic, pilotCommand, pilotProblem, type PilotRun } from './autopilot.ts'
 import type { Spec } from './agents.ts'
 
-export interface SandboxLaunch { wrapper: string; env: Record<string, string>; logsHome: string; close: () => Promise<void> }
+export interface SandboxLaunch { run?: string; gateway?: string; wrapper: string; env: Record<string, string>; logsHome: string; close: () => Promise<void> }
 export function publicAddress(ip: string) {
   if (isIP(ip) === 6) return !/^(::|fe[89ab]|f[cd]|2001:db8)/i.test(ip) && !ip.includes('.')
   if (isIP(ip) !== 4) return false
@@ -37,6 +37,11 @@ export function sandboxArgs(o: { cwd: string; repo: string; home: string; state:
   a.push('--chdir', o.cwd, '/run/shepherdr/bun', '/run/shepherdr/bootstrap.ts', o.kind === 'pi' ? o.binary : `/run/shepherdr/${o.kind}`)
   return a
 }
+export function privateRuntimePath(home: string, file: string) {
+  try { const root = realpathSync(home), actual = realpathSync(file); return actual.startsWith(root + '/') ? actual : undefined }
+  catch { return undefined }
+}
+
 export function killSandbox(control: string) {
   try {
     const pid = Number(readFileSync(join(control, 'pid'), 'utf8'))
@@ -82,25 +87,30 @@ export function providerConfig(kind: string, text: string) {
   return JSON.stringify(Object.fromEntries(Object.entries(input).filter(([k]) => ['model', 'provider', 'thinkingLevel'].includes(k))))
 }
 
-export async function prepareSandbox(spec: Spec, run: PilotRun, repo: string, cli: (args: string[], ctx: { chat: string; cwd: string; stdin?: string }) => Promise<{ out: string; code: number; secrets?: Record<string, string> }>): Promise<SandboxLaunch> {
-  const problem = pilotProblem(spec.kind)
+export async function prepareSandbox(spec: Spec, run: PilotRun, repo: string, cli: (args: string[], ctx: { chat: string; cwd: string; stdin?: string }) => Promise<{ out: string; code: number; secrets?: Record<string, string> }>, reviewerKind?: string, fixture?: { providerHome: string; executable: (kind: string) => string | null }): Promise<SandboxLaunch> {
+  const problem = pilotProblem(spec.kind) ?? (reviewerKind ? pilotProblem(reviewerKind) : undefined)
   if (problem) throw new Error(problem)
   const bwrap = await sandboxAvailable()
   if (spec.key.includes('/')) noHardlinks(spec.cwd)
-  const executable = Bun.which(spec.kind)
+  const executable = fixture ? fixture.executable(spec.kind) : Bun.which(spec.kind)
   if (!executable) throw new Error(`${spec.kind} is not installed.`)
   const binary = realpathSync(executable)
   const root = join(HOME, 'autopilot-runtime', run.id, spec.key.replace(/[^\w.-]/g, '_'))
   const state = join(root, 'home'), control = join(root, 'control'), bin = join(root, 'launcher')
+  rmSync(control, { recursive: true, force: true }); rmSync(bin, { recursive: true, force: true })
   for (const p of [state, control, bin, join(control, 'bin')]) mkdirSync(p, { recursive: true, mode: 0o700 })
+  for (const file of ['bun', spec.kind]) writeFileSync(join(control, file), '')
   // Only the chosen providers' own configuration/login files. Never mount the real home or arbitrary accounts.
-  const configs = spec.kind === 'codex' ? ['.codex/auth.json', '.codex/config.toml'] : spec.kind === 'claude' ? ['.claude/.credentials.json', '.claude/settings.json'] : ['.pi/agent/auth.json', '.pi/agent/models.json', '.pi/agent/settings.json']
-  for (const name of configs) {
-    const src = join(homedir(), name), dst = join(state, name)
-    if (!existsSync(src) || existsSync(dst)) continue
-    mkdirSync(dirname(dst), { recursive: true, mode: 0o700 })
-    if (name.endsWith('config.toml') || name.endsWith('settings.json')) writeFileSync(dst, providerConfig(spec.kind, readFileSync(src, 'utf8')), { mode: 0o600 })
-    else copyFileSync(src, dst)
+  const kinds = [...new Set([spec.kind, reviewerKind].filter((k): k is string => !!k))]
+  for (const kind of kinds) {
+    const configs = kind === 'codex' ? ['.codex/auth.json', '.codex/config.toml'] : kind === 'claude' ? ['.claude/.credentials.json', '.claude/settings.json'] : ['.pi/agent/auth.json', '.pi/agent/models.json', '.pi/agent/settings.json']
+    for (const name of configs) {
+      const src = join(fixture?.providerHome ?? homedir(), name), dst = join(state, name)
+      if (!existsSync(src) || existsSync(dst)) continue
+      mkdirSync(dirname(dst), { recursive: true, mode: 0o700 })
+      if (name.endsWith('config.toml') || name.endsWith('settings.json')) writeFileSync(dst, providerConfig(kind, readFileSync(src, 'utf8')), { mode: 0o600 })
+      else copyFileSync(src, dst)
+    }
   }
   // Scripts are copied once to the read-only control mount; worktree edits cannot change trusted broker code.
   copyFileSync(join(ROOT, 'helper/autopilot/bootstrap.ts'), join(control, 'bootstrap.ts'))
@@ -139,9 +149,12 @@ export async function prepareSandbox(spec: Spec, run: PilotRun, repo: string, cl
       upstream.on('error', () => client.destroy()); client.on('error', () => upstream.destroy()); client.on('close', () => upstream.destroy())
     } catch { client.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n') }
   })
-  const socket = join(control, 'gateway.sock')
+  const gatewayDir = mkdtempSync(join(tmpdir(), 'shep-pilot-gateway-'))
+  const socket = join(gatewayDir, 'gateway.sock')
+  writeFileSync(join(control, 'gateway.sock'), '')
   rmSync(socket, { force: true })
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, resolve) })
+  try {
   const git: string[] = []
   for (const cwd of [...new Set([repo, spec.cwd])]) {
     const dot = join(cwd, '.git')
@@ -158,7 +171,21 @@ export async function prepareSandbox(spec: Spec, run: PilotRun, repo: string, cl
   }
   const args = sandboxArgs({ cwd: realpathSync(spec.cwd), repo: realpathSync(repo), home: homedir(), state, control, binary, bun: realpathSync(process.execPath), kind: spec.kind, writable: spec.key.includes('/'), git: [...new Set(git)].sort((a, b) => a.length - b.length) })
   const start = args.indexOf('--chdir')
-  args.splice(start, 0, '--setenv', 'SHEPHERDR_CHAT', spec.key)
+  args.splice(start, 0, '--setenv', 'SHEPHERDR_CHAT', spec.key, '--ro-bind', socket, '/run/shepherdr/gateway.sock')
+  for (const kind of kinds) {
+    const executable = fixture ? fixture.executable(kind) : Bun.which(kind)
+    if (!executable) throw new Error(`${kind} reviewer is not installed.`)
+    const real = realpathSync(executable)
+    const target = join(control, 'bin', kind)
+    if (kind === 'pi') {
+      const modules = real.includes('/node_modules/') ? real.slice(0, real.indexOf('/node_modules/') + 14) : dirname(dirname(real))
+      args.splice(start, 0, '--ro-bind', modules, modules)
+      writeFileSync(target, `#!/bin/sh\nexec ${q(real)} "$@"\n`, { mode: 0o500 })
+    } else {
+      writeFileSync(target, '')
+      args.splice(start, 0, '--ro-bind', real, `/run/shepherdr/bin/${kind}`)
+    }
+  }
   const helper = join(homedir(), '.shepherdr/helper')
   const skills = join(ROOT, 'skill')
   args.splice(start, 0, '--ro-bind', join(control, 'bin/shepherdr'), spec.env?.SHEPHERDR_COMMAND ?? join(ROOT, 'bin/shepherdr'), '--ro-bind', skills, join(helper, 'skill'))
@@ -168,5 +195,6 @@ export async function prepareSandbox(spec: Spec, run: PilotRun, repo: string, cl
   if (deadline !== undefined && deadline <= 0) { server.close(); throw new Error('Autopilot runtime limit reached.') }
   const command = deadline === undefined ? [bwrap, ...args] : ['/usr/bin/timeout', '--foreground', '--signal=KILL', `${Math.max(0.001, deadline / 1000)}s`, bwrap, ...args]
   writeFileSync(wrapper, `#!/bin/sh\nprintf '%s' "$$" > ${q(join(control, 'pid'))}\nexec ${command.map(q).join(' ')} "$@"\n`, { mode: 0o500 })
-  return { wrapper, env: { PATH: `${bin}:/usr/local/bin:/usr/bin:/bin` }, logsHome: state, close: async () => { killSandbox(control); for (const s of sockets) s.destroy(); await new Promise<void>((resolve) => server.close(() => resolve())) } }
+  return { run: run.id, gateway: socket, wrapper, env: { PATH: `${bin}:/usr/local/bin:/usr/bin:/bin` }, logsHome: state, close: async () => { killSandbox(control); for (const s of sockets) s.destroy(); await new Promise<void>((resolve) => server.close(() => { rmSync(gatewayDir, { recursive: true, force: true }); resolve() })) } }
+  } catch (e) { for (const socket of sockets) socket.destroy(); server.close(); rmSync(gatewayDir, { recursive: true, force: true }); throw e }
 }

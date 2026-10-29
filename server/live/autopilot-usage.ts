@@ -2,6 +2,7 @@
 // children. Updates reuse the existing harness readers; duplicate usage ids count once, and totals never decrease.
 import { join } from 'node:path'
 import { existsSync } from 'node:fs'
+import { privateRuntimePath } from './autopilot-sandbox.ts'
 import { HOME } from '../store.ts'
 import { LogTail, readerFor } from './readers/index.ts'
 export class PilotUsage {
@@ -13,6 +14,7 @@ export class PilotUsage {
     const values = this.usage.get(run) ?? new Map<string, number>()
     this.usage.set(run, values)
     for (const file of new Bun.Glob('*/home/{.claude/projects,.codex/sessions,.pi/agent/sessions}/**/*.jsonl').scanSync({ cwd: root, absolute: true, onlyFiles: true })) {
+      if (!privateRuntimePath(root, file)) continue
       const kind = file.includes('/.claude/') ? 'claude' : file.includes('/.codex/') ? 'codex' : 'pi'
       let tail = this.tails.get(file)
       if (!tail) { tail = new LogTail(file, readerFor(kind)!); this.tails.set(file, tail) }

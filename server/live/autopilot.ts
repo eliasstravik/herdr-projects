@@ -7,6 +7,7 @@ import type { Harness } from './restart.ts'
 export const AUTOPILOT_KINDS = CHAT_KINDS.filter((k) => ['claude', 'codex', 'pi'].includes(k))
 export interface PilotConfig {
   harness: Harness
+  reviewer?: Harness
   hosts: string[]
   secrets: string[]
   approvals: string[]
