@@ -111,7 +111,8 @@ API keys, tokens and passwords are the human's secrets: use them by name, never 
 - **Ask with the card.** Not there: `shepherdr secret ask NAME --why "…"`, then end your turn. The human gets a masked
   box; a `<secret from="…" name="NAME" for="…"/>` line says it is kept. Never ask for a secret in words, and if the
   human pastes one in the chat anyway, tell them to give it in the box instead (`--force` asks again).
-- **Run, don't read.** `secret run` runs a command with it in its environment; prefer it to a file. Where a command's
+- **Run, don't read.** `secret run` runs a command with it in its environment, masking it in what the command prints
+  (a safety net, not leave to print it); prefer it to a file. Where a command's
   words need it, let that command's own shell read it, in single quotes:
   `shepherdr secret run API_KEY -- sh -c 'curl -H "Authorization: Bearer $API_KEY" …'`. A tool that needs a
   file gets `secret env` (refused unless git ignores the file). Never print, echo, log, commit or write a secret

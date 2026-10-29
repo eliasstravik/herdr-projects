@@ -37,18 +37,25 @@ export class Vault {
     private seed?: Store,
   ) {}
 
+  /** what the file holds; one that can't be read is never taken for none (a save would lose every secret in it) */
   private read(): Store {
     if (this.seed) return this.seed
     const f = join(this.home, FILE)
+    if (!existsSync(f)) return {}
     try {
-      return existsSync(f) ? (JSON.parse(readFileSync(f, 'utf8')) as Store) : {}
-    } catch {
-      return {}
+      return JSON.parse(readFileSync(f, 'utf8')) as Store
+    } catch (e) {
+      throw new Error(`Secrets can't be read from ${f} (${(e as Error).message}): fix or move that file; nothing was changed.`)
     }
   }
 
-  /** the names set at each level, and when */
+  /** the names set at each level, and when (none while the file can't be read) */
   names(): Record<string, { name: string; at: number }[]> {
+    try {
+      this.read()
+    } catch {
+      return {}
+    }
     return Object.fromEntries(
       Object.entries(this.read()).map(([level, all]) => [level, Object.entries(all).map(([name, k]) => ({ name, at: k.at })).sort((a, b) => a.name.localeCompare(b.name))]),
     )
@@ -92,7 +99,12 @@ export class Vault {
   set(level: string, name: string, value: string | null): { ok: boolean; error?: string } {
     const problem = secretProblem(level, name, value)
     if (problem) return { ok: false, error: problem }
-    const all = this.read()
+    let all: Store
+    try {
+      all = this.read()
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
     if (value === null) {
       if (!all[level]?.[name]) return { ok: false, error: `No secret ${name} there.` }
       delete all[level][name]

@@ -101,10 +101,14 @@ describe('shepherdr secret run and env', () => {
       c.on('close', (status) => done({ stdout, stderr, status }))
     })
 
-  test('run: the command gets each one in its environment, and its exit code goes back', async () => {
+  test('run: the command gets each one in its environment, what it prints is masked, and its exit code goes back', async () => {
     await each(async (cmd, cwd) => {
-      const r = await sh([...cmd, 'secret', 'run', 'TOKEN', '--', 'sh', '-c', 'printf "[%s][%s]" "$TOKEN" "$PLAIN"; exit 3'], cwd)
-      expect(r.stdout).toBe(`[${values.TOKEN}][${values.PLAIN}]`)
+      const check = `[ "$TOKEN" = "${values.TOKEN.replace(/\$/g, '\\$')}" ] && echo ok`
+      // printed whole, split over two writes, and to stderr; one under 4 characters stays
+      const script = `${check}; printf "[%s][%s]" "$TOKEN" "$PLAIN"; printf "a b"; sleep 0.2; printf "%s" "'c\\$d."; echo "$TOKEN" >&2; exit 3`
+      const r = await sh([...cmd, 'secret', 'run', 'TOKEN', '--', 'sh', '-c', script], cwd)
+      expect(r.stdout).toBe('ok\n[********][xyz]********.')
+      expect(r.stderr).toBe('********\n')
       expect(r.status).toBe(3)
       // no command: nothing asked
       expect((await sh([...cmd, 'secret', 'run', 'TOKEN'], cwd)).stderr).toContain('Put the command after --')

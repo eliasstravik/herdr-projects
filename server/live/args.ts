@@ -165,7 +165,8 @@ Secrets (API keys, tokens, passwords: used by name, never seen or printed)
                                                  <secret name="NAME"> line says it is kept. --force: ask again for one
                                                  kept already (wrong or expired)
   shepherdr secret run NAME [NAME …] -- <command> [its words]
-                                                 runs the command with each one in its environment ($NAME)
+                                                 runs the command with each one in its environment ($NAME),
+                                                 masked (********) in what it prints
   shepherdr secret env NAME [NAME …] [--file .env]
                                                  writes NAME=value lines to a file git ignores (readable by you only)
   shepherdr secret set NAME [--machine | --space NAME] < file

@@ -6,7 +6,8 @@ use warnings;
 use Cwd ();
 use File::Basename ();
 use File::Spec ();
-use Fcntl qw(O_WRONLY O_CREAT O_EXCL);
+use Fcntl qw(O_WRONLY O_CREAT O_EXCL O_TRUNC);
+use IO::Select;
 use IO::Socket::UNIX;
 use Encode ();
 use JSON::PP;
@@ -61,10 +62,7 @@ unless ($j) {
   print STDERR "Shepherdr gave no answer.\n";
   exit 2;
 }
-if ($j->{secrets} && $secret eq 'run') {
-  $ENV{$_} = Encode::encode('UTF-8', $j->{secrets}{$_}) for keys %{ $j->{secrets} };
-  exec { $command[0] } @command or do { print STDERR "Couldn't run $command[0]: $!\n"; exit 127; };
-}
+exit(run_masked($j->{secrets})) if $j->{secrets} && $secret eq 'run';
 if ($j->{secrets} && $secret eq 'env') {
   my ($out, $code) = env_file($j->{secrets});
   print $out;
@@ -73,6 +71,48 @@ if ($j->{secrets} && $secret eq 'env') {
 binmode STDOUT, ':utf8';
 print $j->{out} // '';
 exit($j->{code} // 0);
+
+# shepherdr secret run: the command, with the values in its environment; what it prints comes through with each value
+# masked, as 1Password's op run does (values under 4 characters aren't: they would garble the rest), as server/cli.ts
+sub run_masked {
+  my ($secrets) = @_;
+  my @values = sort { length($b) <=> length($a) } grep { length($_) >= 4 } map { Encode::encode('UTF-8', $_) } values %$secrets;
+  pipe(my $or, my $ow) or die "pipe: $!";
+  pipe(my $er, my $ew) or die "pipe: $!";
+  my $pid = fork() // die "fork: $!";
+  unless ($pid) {
+    close $or; close $er;
+    $ENV{$_} = Encode::encode('UTF-8', $secrets->{$_}) for keys %$secrets;
+    open(STDOUT, '>&', $ow); open(STDERR, '>&', $ew);
+    exec { $command[0] } @command or do { print STDERR "Couldn't run $command[0]: $!\n"; exit 127; };
+  }
+  close $ow; close $ew;
+  my $mask = sub { my $s = shift; $s =~ s/\Q$_\E/********/g for @values; $s };
+  # how much of the end could begin a value
+  my $held = sub {
+    my $s = shift;
+    my $top = @values ? length($values[0]) - 1 : 0;
+    $top = length($s) if length($s) < $top;
+    for my $k (reverse 1 .. $top) { for (@values) { return $k if length($_) > $k && substr($s, -$k) eq substr($_, 0, $k) } }
+    return 0;
+  };
+  my %to = (fileno($or) => \*STDOUT, fileno($er) => \*STDERR);
+  my %buf = (fileno($or) => '', fileno($er) => '');
+  my $sel = IO::Select->new($or, $er);
+  while (my @ready = $sel->can_read) {
+    for my $fh (@ready) {
+      my $f = fileno($fh);
+      my $n = sysread($fh, my $chunk, 65536);
+      if (!$n) { syswrite($to{$f}, $mask->($buf{$f})); $sel->remove($fh); close $fh; next; }
+      my $s = $mask->($buf{$f} . $chunk);
+      my $keep = $held->($s);
+      syswrite($to{$f}, substr($s, 0, length($s) - $keep));
+      $buf{$f} = substr($s, length($s) - $keep);
+    }
+  }
+  waitpid($pid, 0);
+  return $? & 127 ? 128 + ($? & 127) : $? >> 8;
+}
 
 # shepherdr secret env: each NAME=value in the file (--file, .env by default), in place of its old line, the file
 # readable by you only; refused where git would keep it
@@ -105,13 +145,14 @@ sub env_file {
     }
     close $in;
   }
-  # a new file, readable by you only from the start, put in place of the old one
-  my $tmp = "$file.$$.tmp";
-  sysopen(my $out, $tmp, O_WRONLY | O_CREAT | O_EXCL, 0600) or return ("Couldn't write $name: $!\n", 1);
+  # readable by you only before a value goes in: a new file from the start, an old one first
+  my $out;
+  if (-e $file) { chmod(0600, $file) or return ("Couldn't write $name: $!\n", 1); sysopen($out, $file, O_WRONLY | O_TRUNC) }
+  else { sysopen($out, $file, O_WRONLY | O_CREAT | O_EXCL, 0600) }
+  $out or return ("Couldn't write $name: $!\n", 1);
   binmode $out, ':utf8';
   print $out join("\n", @old, map { "$_=" . env_value($secrets->{$_}) } @names) . "\n";
   close $out;
-  rename($tmp, $file) or return ("Couldn't write $name: $!\n", 1);
   return ("Wrote " . join(', ', @names) . " to $name (readable by you only; git ignores it). Never print or commit it.\n", 0);
 }
 

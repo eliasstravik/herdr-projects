@@ -14,7 +14,7 @@
 - Secrets (How Shepherdr runs) holds the keys, tokens and passwords agents use, by name: add, replace and remove them
   in masked boxes, Everywhere, for a machine or for a space; the most specific one wins. An agent that needs one asks
   with `shepherdr secret ask NAME --why "…"`: its chat shows a masked box, and the agent is told by name once it is
-  kept. Agents run commands with them (`shepherdr secret run NAME -- <command>`) or write them to a file git ignores
+  kept. Agents run commands with them (`shepherdr secret run NAME -- <command>`, which masks them in what the command prints) or write them to a file git ignores
   (`shepherdr secret env NAME --file .env`), and never see them in a chat, a terminal or a log. All of them are kept
   in one file on the main machine, readable by you only (`~/.shepherdr/vault.json`); a value goes to another machine
   only when an agent there uses one, over its SSH link.
