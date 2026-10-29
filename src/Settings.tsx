@@ -176,6 +176,7 @@ function Choices({
   ordered?: boolean
   left?: boolean
 }) {
+  const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const el = ref.current
@@ -192,8 +193,9 @@ function Choices({
         up ? (left ? 'origin-bottom-left' : 'origin-bottom-right') : left ? 'origin-top-left' : 'origin-top-right',
       )}
     >
-      <div ref={ref} style={{ maxHeight: tall - 12 }} className="overflow-y-auto overscroll-contain">
-        {(ordered ? options : [value, ...options.filter((o) => o !== value)]).map((o) => {
+      {depth && options.length > 10 ? <input aria-label="Find scope or value" placeholder="Find…" value={query} onChange={(e) => setQuery(e.target.value)} className="mx-2 mb-1 w-[calc(100%-1rem)] min-w-0 rounded-row bg-well px-2 py-2 outline-none" /> : null}
+      <div ref={ref} style={{ maxHeight: tall - (depth && options.length > 10 ? 56 : 12) }} className="overflow-y-auto overscroll-contain">
+        {(ordered ? options : [value, ...options.filter((o) => o !== value)]).filter((o) => show(o).toLowerCase().includes(query.toLowerCase())).map((o) => {
           const at = depth?.(o)
           return (
             <MenuItem
@@ -423,6 +425,7 @@ function DocValue({ value, onSave, label, file, phone }: { value: string; onSave
 /** a page of settings: one of the server's sections (set Everywhere), or this device's own (Appearance, or a plugin's
  *  drawn by its View) */
 interface Page extends SettingSection {
+  targets?: Record<string, string>
   device?: boolean
   Icon?: ComponentType<{ className?: string }>
   View?: FC<{ phone: boolean }>
@@ -445,6 +448,8 @@ const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   Machine: MachineIcon,
   Browser: GlobeIcon,
   Notify: ChatIcon,
+  Notifications: BellIcon,
+  Voice: ChatIcon,
   'Alerts and voice': BellIcon,
   Appearance: AppearanceIcon,
   Plugins: PluginIcon,
@@ -496,11 +501,22 @@ export function withPluginErrors(sections: SettingSection[], errors: Record<stri
  *  apart from how Shepherdr runs, with what is one for all), this device's own, and what is only shown */
 function groupsOf(sections: SettingSection[], ui: UI): { name: string; pages: Page[] }[] {
   const level = levelOf(sections, ui)
+  // Present one delivery page without changing stored keys or the server/plugin section contract.
+  const delivery = sections.find((x) => x.global && x.name === 'Alerts and voice')
+  const scoped = sections.filter((x) => x.level === level && !x.global).map((x): Page => x.name === 'Notify' ? {
+    ...x, name: 'Notifications',
+    targets: Object.fromEntries((delivery?.rows.filter((r) => !r.key.startsWith('voice.')) ?? []).map((r) => [r.key, delivery!.level ?? 'all'])),
+    about: 'All: every new coordinator message, question and alert. Needs me: questions and alerts. Off: none, and the space stays quiet. Task alerts reach you either way. Spaces can override the delivery rule here or from their sidebar menu. Device delivery below applies Everywhere.',
+    rows: [...x.rows.map((r) => ({ ...r, group: 'Delivery rules' })), ...(delivery?.rows.filter((r) => !r.key.startsWith('voice.')).map((r) => ({ ...r, group: 'Devices · Everywhere' })) ?? [])],
+  } : x)
+  const globals = sections.filter((x) => x.global).map((x): Page => x === delivery ? {
+    ...x, name: 'Voice', rows: x.rows.filter((r) => r.key.startsWith('voice.')),
+  } : x)
   const own = registry.settingsPages.filter((x) => x.when(ui)).map(({ name, about, Icon, View }): Page => ({ name, about, Icon, View, device: true, rows: [] }))
   return [
-    { name: 'What agents are told', pages: sections.filter((x) => x.level === level && !x.global && x.told) },
+    { name: 'What agents are told', pages: scoped.filter((x) => x.told) },
     // what is one for all (alerts and voice) runs Shepherdr too, whatever level is picked: its page says so
-    { name: 'How Shepherdr runs', pages: [...sections.filter((x) => x.level === level && !x.global && !x.told), ...sections.filter((x) => x.global)] },
+    { name: 'How Shepherdr runs', pages: [...scoped.filter((x) => !x.told), ...globals] },
     { name: 'This device', pages: [APPEARANCE, ...own] },
     { name: 'About', pages: sections.filter((x) => !x.level && !x.global) },
   ].filter((g) => g.pages.length)
@@ -510,7 +526,7 @@ function groupsOf(sections: SettingSection[], ui: UI): { name: string; pages: Pa
 export const sectionOf = (name: string, sections: SettingSection[], ui: UI) =>
   groupsOf(sections, ui)
     .flatMap((g) => g.pages)
-    .findIndex((p) => p.name === name)
+    .findIndex((p) => p.name === ({ Notify: 'Notifications', 'Alerts and voice': 'Voice' }[name] ?? name))
 
 /** a machine's own Machine page (to open Settings on it): its section and level */
 export function settingsPageOf(sections: SettingSection[], machine: string, ui: UI) {
@@ -587,11 +603,14 @@ function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phon
       {row.key in registry.settingActions ? <Small className="text-pretty">{row.value}</Small> : null}
       {row.hint ? <Small className="text-pretty">{row.hint}</Small> : null}
       {/* the exact words it adds to every new brief, as it is set now */}
-      {row.line ? <Small className="text-pretty">Adds: “{row.line}”</Small> : null}
+      {row.line ? <details className="text-[0.8125rem] text-fg2"><summary className="cursor-pointer">Brief wording</summary><p className="text-pretty">Adds: “{row.line}”</p></details> : null}
       {row.from ? <Small className="text-pretty">From {row.from}</Small> : null}
       {row.inherits ? (
         // set here: Reset, back to what it would be (its title says where that comes from)
         <Small className="text-pretty">
+          <span className="font-medium text-accent">Set here</span>
+          <span className="block">Inherits {row.num ? numShown(row.inherits.value, row.num) : row.trigger ? (row.trigger.presets.find((p) => p.value === row.inherits!.value)?.label ?? 'Custom rule') : shown(row.inherits.value)} · {row.inherits.from}</span>
+          {row.trigger && !row.trigger.presets.some((p) => p.value === row.inherits!.value) ? <details><summary className="cursor-pointer">Inherited rule</summary><span className="[overflow-wrap:anywhere]">{row.inherits.value}</span></details> : null}
           <button
             type="button"
             title={`Set here. Back to ${row.inherits.from === 'Default' ? 'the default' : row.inherits.from}'s`}
@@ -626,7 +645,7 @@ function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phon
           <dl className={phone ? card : undefined}>
             {rows.map((row) =>
               row.doc ? (
-                <div key={row.key} className={clsx(rowLook(phone), 'flex-col items-stretch! gap-2.5 pb-3!')}>
+                <div key={row.key} className={clsx(rowLook(phone), 'flex-col items-stretch! gap-2.5 pb-3!', row.inherits && 'border-l-2 border-accent pl-3')}>
                   <dt className="flex min-w-0 flex-col">
                     {row.label}
                     <Small className="text-pretty">Its coordinator goes through it each heartbeat, and may edit it too.</Small>
@@ -638,7 +657,7 @@ function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phon
                 </div>
               ) : row.trigger ? (
                 // a trigger: its words, next runs and picks under its label, as wide as the page
-                <div key={row.key} className={clsx(rowLook(phone), 'flex-col items-stretch! gap-2 pb-3!')}>
+                <div key={row.key} className={clsx(rowLook(phone), 'flex-col items-stretch! gap-2 pb-3!', row.inherits && 'border-l-2 border-accent pl-3')}>
                   <dt className="flex min-w-0 flex-col">
                     {row.label}
                     {under(row)}
@@ -649,7 +668,7 @@ function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phon
                 </div>
               ) : (
                 // on a phone, a row's segments fill a line of their own under its label
-                <div key={row.key || row.label} className={clsx(rowLook(phone), phone && SEGMENTS.has(row.key) && 'flex-col items-stretch! gap-2.5 pb-3!')}>
+                <div key={row.key || row.label} className={clsx(rowLook(phone), row.inherits && 'border-l-2 border-accent pl-3', phone && SEGMENTS.has(row.key) && 'flex-col items-stretch! gap-2.5 pb-3!')}>
                   <dt className="flex min-w-0 flex-1 flex-col">
                     {row.label}
                     {under(row)}
@@ -843,13 +862,12 @@ export default function Settings() {
   const rank = (l: string) => (order.includes(l) ? order.indexOf(l) : Infinity)
   const tree = [...levels].sort((a, b) => rank(a) - rank(b))
   const inTree = (l: string) => {
-    const p = snap.places.find((x) => x.id === l)
-    return { depth: l === 'all' ? 0 : l.startsWith('m:') ? 1 : 2, name: p?.name ?? name(l) }
+    return { depth: l === 'all' ? 0 : l.startsWith('m:') ? 1 : 2, name: name(l) }
   }
   const levelPick = (where: string) =>
     levels.length > 1 ? (
       <Pick
-        label="Defaults for"
+        label="Editing"
         value={level}
         options={tree}
         show={name}
@@ -871,7 +889,7 @@ export default function Settings() {
       return
     }
     // set at the page's level: a machine's or a space's goes to that machine
-    const r = (await act({ type: 'setting', key, value, ...(page.level ? { place: page.level } : {}) })) as { ok?: boolean; error?: string; waiting?: boolean }
+    const r = (await act({ type: 'setting', key, value, ...((page.targets?.[key] ?? page.level) ? { place: page.targets?.[key] ?? page.level } : {}) })) as { ok?: boolean; error?: string; waiting?: boolean }
     setRefused((x) => ({ ...x, [at(key)]: r?.ok === false ? (r.error ?? 'Refused.') : r?.waiting ? `Set once ${machineName(snap.machines, page.machine)} is back.` : '' }))
   }
   const close = () => setUI({ settings: null })
@@ -882,7 +900,12 @@ export default function Settings() {
     requestAnimationFrame(() => scroller.current && (scroller.current.scrollTop = 0))
   }
   const clear = (key: string) => refused[at(key)] && setRefused((r) => ({ ...r, [at(key)]: '' }))
-  const body = <PageBody page={page} phone={phone} set={set} refused={(key) => refused[at(key)]} clear={clear} hint={page.level && !page.global ? levelHint(page.level, snap) : undefined} />
+  const body = <>
+    <div className={clsx('flex min-w-0 flex-wrap items-center gap-2 border-b border-line px-6 py-3', phone && 'px-4')}>
+      <span className="text-fg2">Editing:</span>
+      {page.device ? <span>This device</span> : page.global || !page.level ? <span>Everywhere</span> : levelPick(phone ? 'phone' : 'content') ?? <span>{name(level)}</span>}
+    </div>
+    <PageBody key={`${page.level ?? ''}|${page.name}`} page={page} phone={phone} set={set} refused={(key) => refused[at(key)]} clear={clear} hint={page.level && !page.global ? levelHint(page.level, snap) : undefined} /></>
 
   if (phone) {
     const list = (
@@ -900,7 +923,7 @@ export default function Settings() {
             {/* which level's defaults the two groups below set */}
             {levels.length > 1 ? (
               <div className={clsx(card, 'flex min-h-12 items-center justify-between gap-3 px-4')}>
-                <span>Set for</span>
+                <span>Editing:</span>
                 {levelPick('phone')}
               </div>
             ) : null}
@@ -975,13 +998,6 @@ export default function Settings() {
       </Head>
       <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)]">
         <nav aria-label="Sections" className="flex touch-pan-y flex-col gap-4 overflow-y-auto overscroll-contain border-r border-line px-2 py-3">
-          {/* which level's defaults the two groups below set */}
-          {levels.length > 1 ? (
-            <div className="flex flex-col gap-px">
-              <h3 className="px-2.5 pb-1 text-[0.75rem] font-medium text-fg3">Set for</h3>
-              {levelPick('nav')}
-            </div>
-          ) : null}
           {groups.map((g) => (
             <div key={g.name} className="flex flex-col gap-px">
               <h3 className="px-2.5 pb-1 text-[0.75rem] font-medium text-fg3">{g.name}</h3>

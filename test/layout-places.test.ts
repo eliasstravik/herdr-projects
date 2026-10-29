@@ -517,7 +517,7 @@ describe.skipIf(!browser)('places, calm like Slack', () => {
       await page.goto(`http://127.0.0.1:${server!.port}/?place=${encodeURIComponent('p:vm-str:gtm')}`)
       if (phone) await page.getByRole('button', { name: 'Places' }).first().click()
       await page.getByRole('navigation', { name: 'Places' }).getByRole('button', { name: 'Settings', exact: true }).click()
-      const pick = page.getByRole('button', { name: /^Defaults for: / }).first()
+      const pick = page.getByRole('button', { name: /^Editing: / }).first()
       await pick.waitFor()
       expect(await pick.locator('[data-icon]').getAttribute('data-icon')).toBe('hash')
       await pick.click()
