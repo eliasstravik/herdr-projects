@@ -19,7 +19,10 @@ async function makeSource(): Promise<Source> {
 
 const source = await makeSource()
 const push = kind === 'live' && !process.env.SHEPHERDR_BOX ? new Push() : undefined
-if (push && 'devices' in source) (source as { devices: () => string[] }).devices = () => push.devices.map(deviceName)
+if (push && 'devices' in source && 'pushWarnings' in source) {
+  (source as { devices: () => string[] }).devices = () => push.devices.map(deviceName)
+  ;(source as { pushWarnings: () => string[] }).pushWarnings = () => push.warnings(deviceName)
+}
 // a worker for another machine (machines.ts) serves only its main machine, which pushes alerts itself
 const worker = !!process.env.SHEPHERDR_BOX
 const server = startApp({ source, dist: join(root, 'dist'), push: worker ? undefined : push, port, updates: worker ? undefined : join(HOME, 'update.json') })

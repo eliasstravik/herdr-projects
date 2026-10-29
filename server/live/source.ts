@@ -123,6 +123,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   /** when a busy machine last had its finished tasks' browsers closed */
   private sweptAt = 0
   devices: () => string[] = () => []
+  pushWarnings: () => string[] = () => []
   /** the main machine runs every other machine saved in herdr, each from a worker of its own (machines.ts); a worker
    *  is one of those (box.ts) */
   peers: Machines | null = BOX ? null : new Machines(process.env.NODE_ENV === 'test' ? null : undefined)
@@ -493,6 +494,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         ['~', ...this.places.spaces.map((p) => p.name)],
         NAME,
         (id) => this.heartbeats.read(id, this.roleOf(id)),
+        this.pushWarnings(),
       ).concat(peers.flatMap((l) => (l.snap?.settings ?? []).filter((x) => x.machine === l.rec.machine))),
       user: this.user,
     })
@@ -2192,7 +2194,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       case 'doctor': {
         if (BOX) throw new Error(`shepherdr doctor checks every machine from the main one: run it there (${HOST} is run from it over SSH).`)
         const own = `${NAME} (this machine, the main one): herdr ${this.agents.reachable ? 'answers' : 'does not answer'}${this.browsers ? `; shared browser ${this.browsers.status().ready ? 'ready' : this.browsers.status().hint}` : ''}`
-        return [own, ...((await this.peers?.doctor()) ?? [])].join('\n')
+        return [own, ...this.pushWarnings().map((warning) => `Alerts: ${warning}`), ...((await this.peers?.doctor()) ?? [])].join('\n')
       }
       case 'secret': {
         if (a1 !== 'elevenlabs') return this.secretCommand(a1, rest, p, ctx)

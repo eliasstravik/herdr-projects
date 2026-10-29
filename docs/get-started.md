@@ -35,6 +35,14 @@ device**.
 - **Omarchy** (or any Linux): in Chromium, ⋮ → Cast, save and share → **Install page as app**, or Omarchy's own
   Install → Web App with the link. Alerts show through mako while Chromium runs.
 
+Push alerts use this server's existing VAPID keys and the public project URL as their signing contact.
+Set `SHEPHERDR_PUSH_CONTACT` to a valid public `https://` URL or `mailto:` address to use your own;
+invalid or localhost contacts fall back to the project URL. Changing the contact does not require adding devices again.
+Settings → Alerts on shows failures per device, with more details in `shepherdr doctor`.
+Warnings clear after that device's next accepted alert or renewed subscription; they are forgotten on restart.
+Acceptance by a push service does not prove the device displayed the alert. Expired subscriptions are removed as before.
+
+
 Tasks' alerts always come; what a space's coordinator says follows that space's Notify (All, Needs me or Off: [Spaces](spaces.md)). Each alert says the task and what it needs (`SHE-63 · Plan to approve`), and the question or the card's choices under
 it (`Approve the plan · Send it back`), so you can decide from the lock screen. A tap opens the app on that very card,
 lit up for a moment, its buttons ready (a done task: its card in the space's chat). One alert per task: its newer

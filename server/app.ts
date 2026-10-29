@@ -98,7 +98,7 @@ export function startApp({ source, dist, push, port, host = '127.0.0.1', updates
     if (!notifies(snap, alert)) return
     const onScreen = new Set<string>()
     for (const ws of live) if (ws.data.kind === 'live' && ws.data.visible && ws.data.push) onScreen.add(ws.data.push)
-    push?.send(alert, onScreen, waiting(snap))
+    push?.send(alert, onScreen, waiting(snap)).then(() => source.emit('snapshot'))
   })
 
   const json = (v: unknown, status = 200) => Response.json(v, { status })
@@ -205,6 +205,7 @@ export function startApp({ source, dist, push, port, host = '127.0.0.1', updates
         if (path === '/api/push/subscribe' && req.method === 'POST') {
           const b = await req.json()
           push?.subscribe(b.sub, b.device)
+          source.emit('snapshot')
           return json({ ok: true })
         }
         if (path.startsWith('/api/')) return json({ error: 'Not found' }, 404)
