@@ -67,6 +67,7 @@ sub cli_environment {
 sub session_route {
   my $pid = getppid();
   my (%seen, $ancestor, $executor);
+  my $owning_ancestry = 1;
   for (1 .. 64) {
     last if $seen{$pid}++;
     my ($parent, $stamp) = process_identity($pid);
@@ -74,7 +75,9 @@ sub session_route {
     # Only the long-lived CLI/executor supplies a stale baseline. A caller's shell/env is explicit.
     my $cli = cli_environment($pid);
     $executor //= $cli;
-    $ancestor //= read_route(route_dir() . "/$pid.json", $pid) unless $cli && $cli->{shared};
+    # Nothing above a shared daemon belongs to the calling task, including the CLI that started it.
+    $owning_ancestry = 0 if $cli && $cli->{shared};
+    $ancestor //= read_route(route_dir() . "/$pid.json", $pid) if $owning_ancestry;
     $pid = $parent;
   }
   my (@best, $explicit);

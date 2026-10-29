@@ -242,7 +242,14 @@ describe.if(perl)('session-owned command routing', () => {
       } finally { owner.kill(); await owner.exited; }
     `
     try {
-      const r = await run(['/bin/bash', '-c', 'exec -a codex "$@"', 'executor', process.execPath, '-e', code, 'app-server'], { HOME: home, SHEPHERDR_CHAT: 'ST-1/Reviewer', SHEPHERDR_URL: 'http://127.0.0.1:7787', HERDR_PANE_ID: 'stale-pane' })
+      // A separate ordinary CLI started the shared daemon. Its binding is also above the ownership boundary.
+      const parentCode = `
+        const b = Bun.spawnSync(['perl', ${JSON.stringify(join(root, 'helper', 'route.pl'))}, '--bind', String(process.pid), JSON.stringify({cwd:${JSON.stringify(join(other, 'parent'))}, chat:'original-owner', url:${JSON.stringify(`http://127.0.0.1:${server.port}`)}})]);
+        if (b.exitCode) throw new Error(b.stderr.toString());
+        const p = Bun.spawnSync(['/bin/bash', '-c', 'exec -a codex "$@"', 'daemon', process.execPath, '-e', ${JSON.stringify(code)}, 'app-server']);
+        process.stdout.write(p.stdout); process.stderr.write(p.stderr); process.exit(p.exitCode);
+      `
+      const r = await run(['/bin/bash', '-c', 'exec -a codex "$@"', 'original-cli', process.execPath, '-e', parentCode], { HOME: home, SHEPHERDR_CHAT: 'ST-1/Reviewer', SHEPHERDR_URL: 'http://127.0.0.1:7787', HERDR_PANE_ID: 'stale-pane' })
       expect(r.code).toBe(0)
       expect(r.out).toBe('SHE-9/Agent\nSHE-9/Agent\nSHE-9/Agent\n')
     } finally { server.stop(true) }
