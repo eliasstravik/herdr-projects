@@ -460,6 +460,30 @@ describe.skipIf(!browser)('To do always shows; Automations only once there is on
     await ctx.close()
   }, 30_000)
 
+  test("everything (no chips) shows every space's automations, each under its space's name; one space's keep their plain heading (desktop, phone)", async () => {
+    const page = await browser!.newPage({ viewport: { width: 1440, height: 800 } })
+    await page.goto(`http://127.0.0.1:${server!.port}/?place=vm-str/home`)
+    const tasks = page.locator('section[aria-label="Tasks"]')
+    await tasks.locator('li[aria-expanded]', { hasText: 'Flaky tests' }).waitFor()
+    const heading = tasks.locator('[data-heading="Automations"]')
+    expect(await heading.allInnerTexts()).toEqual([expect.stringMatching(/^Automations · gtm/)])
+    expect(await tasks.locator('li[aria-expanded]').count()).toBe(3)
+    // one space's own list: the heading as it was, no name
+    await page.goto(`http://127.0.0.1:${server!.port}/?place=${encodeURIComponent('p:vm-str:gtm')}`)
+    await tasks.locator('li[aria-expanded]', { hasText: 'Flaky tests' }).waitFor()
+    expect(await heading.innerText()).not.toContain('·')
+    await page.close()
+    const ctx = await browser!.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+    const phone = await ctx.newPage()
+    await phone.goto(`http://127.0.0.1:${server!.port}/?place=vm-str/home&tab=tasks`)
+    await phone.locator('li[aria-expanded]', { hasText: 'Flaky tests' }).waitFor()
+    const label = phone.locator('[data-heading="Automations"]')
+    await expect(label.isVisible()).resolves.toBe(true)
+    expect(await label.innerText()).toMatch(/^Automations · gtm/)
+    expect(await phone.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+    await ctx.close()
+  }, 30_000)
+
   test('an automation reads name, when (in words) and the task it adds; a tap shows it in full with its next and last runs; run now, pause and remove, no adding or editing (phone)', async () => {
     const ctx = await browser!.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, colorScheme: 'dark' })
     const page = await ctx.newPage()

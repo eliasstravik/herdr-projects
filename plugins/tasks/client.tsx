@@ -667,15 +667,16 @@ function ranAt(ms: number) {
 const small = 'text-[0.8125rem] phone:text-[0.9375rem]'
 
 /**
- * A space's automations, at the bottom once it has one: its name, then when it runs and the task it adds, cut short.
+ * A space's automations, at the bottom once it has one (everything, every space's): its name, then when it runs and the task it adds, cut short.
  * A tap opens it in full with its last runs, and runs it now, pauses or removes it. Each run adds a new task with a
  * fresh agent. Only agents add or change them, through the shepherdr command, when asked in the chat: none, no section.
  */
 function Automations({ place, list }: { place: Place; list?: ListView }) {
   const snap = useSnap()!
-  // each space the chips name has its own; a machine's or everything, none
-  const spaces = list ? list.chips.flatMap((c) => snap.places.filter((p) => p.id === c)) : [place]
-  return spaces.map((p) => <SpaceAutomations key={p.id} place={p} note={spaces.length > 1 ? p.name : undefined} />)
+  // each space the chips name has its own; everything (no chips), every space's, each with its name; a machine's, none
+  const all = !!list && !list.chips.length
+  const spaces = !list ? [place] : all ? snap.places : list.chips.flatMap((c) => snap.places.filter((p) => p.id === c))
+  return spaces.map((p) => <SpaceAutomations key={p.id} place={p} note={all || spaces.length > 1 ? p.name : undefined} />)
 }
 
 function SpaceAutomations({ place, note }: { place: Place; note?: string }) {
