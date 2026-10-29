@@ -18,7 +18,7 @@ async function capture() {
   if (capturing) return
   capturing = true
   try {
-    for (const file of new Bun.Glob('{.claude/projects,.codex/sessions,.pi/agent/sessions}/**/*.jsonl').scanSync({ cwd: process.env.HOME!, absolute: true, onlyFiles: true })) {
+    for (const file of new Bun.Glob('{.claude/projects,.codex/sessions,.pi/agent/sessions}/**/*.jsonl').scanSync({ cwd: process.env.HOME!, dot: true, absolute: true, onlyFiles: true })) {
       let fd: number | undefined
       try {
         const size = statSync(file).size
@@ -38,5 +38,6 @@ const captureTimer = setInterval(() => void capture(), 250)
 const child = Bun.spawn([binary, ...args], { env, stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' })
 const code = await child.exited
 clearInterval(captureTimer)
+while (capturing) await Bun.sleep(20)
 await capture()
 process.exit(code)

@@ -13,7 +13,7 @@ export class PilotUsage {
     if (!existsSync(root)) return 0
     const values = this.usage.get(run) ?? new Map<string, number>()
     this.usage.set(run, values)
-    for (const file of new Bun.Glob('*/captures/{.claude/projects,.codex/sessions,.pi/agent/sessions}/**/*.jsonl').scanSync({ cwd: root, absolute: true, onlyFiles: true })) {
+    for (const file of new Bun.Glob('*/captures/**/*.jsonl').scanSync({ cwd: root, dot: true, absolute: true, onlyFiles: true })) {
       if (!privateRuntimePath(root, file)) continue
       const kind = file.includes('/.claude/') ? 'claude' : file.includes('/.codex/') ? 'codex' : 'pi'
       let tail = this.tails.get(file)

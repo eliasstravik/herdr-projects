@@ -40,7 +40,7 @@ describe.skipIf(!bwrap)('Autopilot actual OS boundary', () => {
     const executables: Record<string,string> = {}
     for (const kind of ['claude', 'codex']) {
       const file = join(root, kind); executables[kind] = file
-      writeFileSync(file, kind === 'claude' ? '#!/bin/sh\ntest -f "$HOME/.claude/.credentials.json" && codex --review\n' : `#!/bin/sh\ntest -f "$HOME/.codex/auth.json" && echo same-boundary > '${cwd}/reviewer-result'\n`, { mode: 0o700 })
+      writeFileSync(file, kind === 'claude' ? '#!/bin/sh\ntest -f "$HOME/.claude/.credentials.json" && codex --review\n' : `#!/bin/sh\nmkdir -p "$HOME/.codex/sessions"\nprintf '%s\\n' '{"fixture":"captured inside namespace"}' > "$HOME/.codex/sessions/fixture.jsonl"\ntest -f "$HOME/.codex/auth.json" && echo same-boundary > '${cwd}/reviewer-result'\n`, { mode: 0o700 })
     }
     const p = new PilotRuns(); p.runs = []
     const run = p.begin('fixture', { harness: { kind: 'claude' }, hosts: [], secrets: [], approvals: ['merge'], parallel: 1 }); run.state = 'on'; p.claim(run, 'OWN-1')
@@ -52,6 +52,7 @@ describe.skipIf(!bwrap)('Autopilot actual OS boundary', () => {
       const [code, err] = await Promise.all([child.exited, new Response(child.stderr).text()])
       expect({ code, stderr: code ? err : '' }).toEqual({ code: 0, stderr: '' })
       expect(await Bun.file(join(cwd, 'reviewer-result')).text()).toBe('same-boundary\n')
+      expect(await Bun.file(capturedTranscript(box.captures!, 'codex', '.codex/sessions/fixture.jsonl')).text()).toContain('captured inside namespace')
       const send = (args: string[]) => new Promise<{ code: number }>((resolve, reject) => {
         const req = request({ socketPath: box.gateway!, path: '/api/cli', method: 'POST', headers: { 'content-type': 'application/json' } }, (res) => { let body = ''; res.on('data', (chunk) => body += chunk); res.on('end', () => resolve(JSON.parse(body))) })
         req.on('error', reject); req.end(JSON.stringify({ args, chat: 'OTHER/Agent', cwd: '/host', proof: 'fake' }))
