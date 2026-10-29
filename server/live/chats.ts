@@ -935,9 +935,9 @@ export class Chats {
     const file = active?.kind === 'path' ? r?.logs.find((f) => f.endsWith('/' + active.value.split('/').at(-1)))
       : r?.sessionId ? r.logs.find((f) => f.endsWith(`${r.sessionId}.jsonl`)) : r?.logs.at(-1)
     let runtime = sessionRuntime(ev, file, r?.started ?? 0)
-    runtime = this.agents.runtime(key) ?? runtime
+    if (st !== 'working' || !runtime) runtime = this.agents.runtime(key) ?? runtime
     const hook = this.agents.runtimeHook(key)
-    if (hook) runtime = !runtime || hook.at >= runtime.at ? { ...runtime, ...hook, source: 'hook' } : { ...hook, ...runtime }
+    if (hook) runtime = !runtime || hook.at >= runtime.at ? { ...(hook.model && runtime?.model && hook.model !== runtime.model ? {} : runtime), ...hook, source: 'hook' } : { ...(hook.model && runtime.model && hook.model !== runtime.model ? {} : hook), ...runtime }
     if (runtime?.model) runtime.modelLabel = findModel(kind, runtime.model)?.label
     const jobs = this.jobs(key, act).map(({ log: _l, output: _o, ...j }): Job => j)
     return {

@@ -47,7 +47,7 @@ export class PiReader implements Reader {
       if (l.type === 'session') {
         if (this.sessions.has(file) || typeof l.id !== 'string') continue
         this.sessions.add(file)
-        out.push({ kind: 'session', id: `session-${l.id}`, at: t, sessionId: l.id })
+        out.push({ kind: 'session', file, id: `session-${l.id}`, at: t, sessionId: l.id })
       } else if (l.type === 'model_change' || l.type === 'thinking_level_change') {
         const runtime = { source: 'session' as const, at: t,
           ...(l.type === 'model_change' && typeof l.modelId === 'string' ? { model: l.modelId } : {}),
@@ -65,6 +65,7 @@ export class PiReader implements Reader {
           const words = texts(m.content).map(cleanUser).filter(Boolean).join('\n\n')
           if (words) out.push({ kind: 'user', id, at: t, text: words })
         } else if (m.role === 'assistant') {
+          if (typeof m.model === 'string') out.push({ kind: 'runtime', file, id: `runtime-model-${offset}`, at: t, runtime: { model: m.model, source: 'session', at: t } })
           const words = texts(m.content)
             .map((s) => s.trim())
             .filter(Boolean)

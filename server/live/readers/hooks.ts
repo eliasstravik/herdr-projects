@@ -278,7 +278,7 @@ export class HookLogs {
       for (const e of parseHookLines(cut < 0 ? '' : fresh.slice(0, cut))) {
         if (!e.agent) {
           if (e.event === 'SessionStart' && e.type !== 'compact') f.runtime = undefined
-          if (e.model || e.effort) f.runtime = { ...f.runtime, ...(e.model ? { model: e.model } : {}), ...(e.effort ? { effort: e.effort } : {}), at: e.at, session: e.session ?? f.session?.id }
+          if (e.model || e.effort) f.runtime = { ...(e.model && f.runtime?.model && e.model !== f.runtime.model ? {} : f.runtime), ...(e.model ? { model: e.model } : {}), ...(e.effort ? { effort: e.effort } : {}), at: e.at, session: e.session ?? f.session?.id }
         }
         f.said = foldHook(f.said, e)
         f.seen = true

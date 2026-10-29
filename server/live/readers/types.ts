@@ -29,7 +29,7 @@ export type LogEvent =
   | { kind: 'runtime'; id: string; at: number; file: string; replace?: boolean; runtime: AgentRuntime }
 
   /** a new log file (session) starts */
-  | { kind: 'session'; id: string; at: number; sessionId: string }
+  | { kind: 'session'; id: string; at: number; sessionId: string; file?: string }
   /** something the human (or Shepherdr on their behalf) typed */
   | { kind: 'user'; id: string; at: number; text: string }
   /** a reply the agent wrote (markdown). Can come again with the same id and longer text when the CLI writes the rest

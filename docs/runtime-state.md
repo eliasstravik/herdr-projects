@@ -27,12 +27,19 @@ next turn via the existing daemon. No thread is started or resumed to inspect it
   those fields and never copy credentials or full configuration. Local agents launched before the recorder upgrade
   need a restart to install the new recorder; remote raw hook events already retain these fields. A model change
   is visible on the next response or hook; a terminal picker change with neither observation remains unobserved.
-- **Pi:** `model_change.modelId` and `thinking_level_change.thinkingLevel`, including `off`. Separate events merge
+- **Pi:** the main assistant response’s `message.model`, plus `model_change.modelId` and `thinking_level_change.thinkingLevel`, including `off`. Separate events merge
   within that session. These record CLI configuration rather than guessing from the chosen model.
+  **Resume limitation:** Pi restores saved model/thinking state without appending initial settings events for an
+  existing session (`createAgentSession`, upstream `sdk.ts`, initial-entry block guarded by `!hasExistingSession`).
+  Old pre-launch events cannot prove that CLI/config overrides did not change it. After a resume, the model is
+  observable on the next assistant response; effort remains **Not reported** until a new thinking-level event.
+  A picker change without an event is likewise not observable. Full resumed-Pi effort support is not claimed.
+  [Pi startup source](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/core/sdk.ts).
 - **Other Herdr agent kinds:** Herdr's `AgentInfo` reports kind, status and session identity/path, not model/effort.
   Their transcript formats are not implemented here: **Not reported**. Lack of a reader does not prove that effort
   is unsupported. `effortUnsupported` is reserved for a provider's explicit unsupported report; it renders
-  **Not supported**, never an invented effort level.
+  **Not supported**, never an invented effort level. Codex’s live `model/list` can explicitly report an empty
+  `supportedReasoningEfforts` list for the current model; that is used only as a capability report, never a default.
 
 The existing daemon is only read. Failure, unavailable metadata and unsupported CLI versions leave values unreported.
 No CLI configuration files, secrets or auth files are read. Cached daemon observations expire after ten seconds and

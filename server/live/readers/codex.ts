@@ -121,7 +121,7 @@ export class CodexReader implements Reader {
         const id = p.id ?? p.session_id
         if (s.session || typeof id !== 'string') continue
         s.session = true
-        out.push({ kind: 'session', id: `session-${id}`, at: Date.parse(p.timestamp ?? '') || t, sessionId: id })
+        out.push({ kind: 'session', file, id: `session-${id}`, at: Date.parse(p.timestamp ?? '') || t, sessionId: id })
       } else if (l.type === 'response_item') {
         if (p.type === 'message' && p.role === 'user') {
           const words = userText(p)

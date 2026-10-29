@@ -38,6 +38,16 @@ describe('CLI runtime observations, independent of launch policy', () => {
     expect(sessionRuntime(ev, 'pi', 0)).toMatchObject({ model: 'custom/provider-model', effort: 'off' })
   })
 
+  test('resumed Pi cannot reuse old thinking state; a fresh assistant reports the actual model', () => {
+    const ev = new PiReader().parse(lines(
+      { type: 'model_change', timestamp: new Date(at - 10).toISOString(), modelId: 'old-model' },
+      { type: 'thinking_level_change', timestamp: new Date(at - 10).toISOString(), thinkingLevel: 'high' },
+      { type: 'message', timestamp: new Date(at + 10).toISOString(), message: { role: 'assistant', model: 'resumed-model', content: [] } },
+    ), 'pi')
+    expect(sessionRuntime(ev, 'pi', at)).toMatchObject({ model: 'resumed-model' })
+    expect(sessionRuntime(ev, 'pi', at)?.effort).toBeUndefined()
+  })
+
   test('Claude ignores synthetic error models and sidechains', () => {
     const reader = new ClaudeReader()
     const ev = reader.parse(lines(

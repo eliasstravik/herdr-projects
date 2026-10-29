@@ -11,7 +11,7 @@ describe.skipIf(!browser)('composer + agent controls', () => {
     for (const [width, colorScheme] of [[320, 'light'], [768, 'dark'], [1440, 'light']] as const) {
       for (const task of [false, true]) {
         const chat = task ? key : p.chat
-        world.chats[chat].agent = { kind: 'codex', model: 'gpt-6-sol', effort: 'low', runtime: { model: 'gpt-6-sol', effort: 'high', source: 'session', at: Date.now() } }
+        world.chats[chat].agent = { kind: 'codex', model: 'gpt-6-sol', effort: 'low', runtime: { model: 'gpt-6.1-sol', effort: 'high', source: 'session', at: Date.now() } }
         world.chats[chat].cli = 'Codex'
         const before = JSON.stringify(world.chats[chat].agent)
         const page = await browser!.newPage({ viewport: { width, height: 900 }, colorScheme })
@@ -24,7 +24,7 @@ describe.skipIf(!browser)('composer + agent controls', () => {
         await page.getByRole('menuitem', { name: 'File or photo', exact: true }).waitFor()
         expect(await page.locator('[data-restart-hint]').count()).toBe(0)
         expect(await controls.getByRole('menuitem').count()).toBe(3)
-        expect(await controls.textContent()).toContain('gpt-6-sol')
+        expect(await controls.textContent()).toContain('gpt-6.1-sol')
         await controls.getByRole('menuitem', { name: /^Model:/ }).click()
         const sheet = page.getByRole('alertdialog')
         await sheet.locator('[data-restart]').waitFor()
@@ -63,6 +63,26 @@ describe.skipIf(!browser)('composer + agent controls', () => {
     expect(await controls.count()).toBe(0)
     expect(world.chats[key].agent).toEqual({ kind: 'codex' })
     await page.close()
+  }, 30_000)
+
+  test('default policy shows runtime values in both roles and updates without changing the policy', async () => {
+    const p = world.snapshot().places.find((x) => !x.home)!
+    for (const chat of [p.chat, 'GTM-17/Agent']) {
+      world.chats[chat].agent = { kind: 'codex', runtime: { model: 'config-overridden-model', effort: 'high', source: 'session', at: Date.now() } }
+      world.chats[chat].cli = 'Codex'
+      const page = await browser!.newPage({ viewport: { width: 390, height: 844 } })
+      await page.goto(`http://127.0.0.1:${server!.port}/?place=${encodeURIComponent(p.id)}${chat.includes('/') ? '&task=GTM-17' : ''}`)
+      await page.locator('[data-composer] button[aria-label="Attach files and more"]').last().click()
+      const controls = page.locator('[data-agent-controls]').last()
+      await controls.getByRole('menuitem', { name: 'Model: config-overridden-model. Select and restart', exact: true }).waitFor()
+      world.chats[chat].agent!.runtime = { model: 'changed-live-model', effortUnsupported: true, source: 'session', at: Date.now() }
+      world.emit('chat', chat)
+      await controls.getByRole('menuitem', { name: 'Model: changed-live-model. Select and restart', exact: true }).waitFor()
+      await controls.getByRole('menuitem', { name: 'Effort: Not supported. Select and restart', exact: true }).waitFor()
+      expect(world.chats[chat].agent!.model).toBeUndefined()
+      expect(world.chats[chat].agent!.effort).toBeUndefined()
+      await page.close()
+    }
   }, 30_000)
 
   test('a retired launch model stays visible, blocks Restart, and can be replaced with Default', async () => {

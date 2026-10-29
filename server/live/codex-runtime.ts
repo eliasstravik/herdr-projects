@@ -35,6 +35,7 @@ export async function readCodexRuntime(ids: string[]): Promise<Map<string, Agent
   })
   p.stdout!.on('data', (chunk) => { if (!socket.push(chunk)) p.stdout!.pause() })
   p.stdout!.on('end', () => socket.push(null))
+  const capabilities = new Map<string, boolean>()
   return new Promise((resolve) => {
     let done = false
     const pending = new Map<number, string>()
@@ -46,6 +47,9 @@ export async function readCodexRuntime(ids: string[]): Promise<Map<string, Agent
       ws.terminate()
       socket.destroy()
       p.kill()
+      for (const state of out.values()) {
+        if (state.model && capabilities.get(state.model) === false) state.effortUnsupported = true
+      }
       resolve(out)
     }
     const timer = setTimeout(finish, 3000)
@@ -60,10 +64,18 @@ export async function readCodexRuntime(ids: string[]): Promise<Map<string, Agent
         if (r.id === 0) {
           if (r.error) return finish()
           ws.send(JSON.stringify({ method: 'initialized', params: {} }))
+          pending.set(-1, '')
+          ws.send(JSON.stringify({ id: -1, method: 'model/list', params: { includeHidden: true } }))
           ids.forEach((id, i) => {
             pending.set(i + 1, id)
             ws.send(JSON.stringify({ id: i + 1, method: 'thread/read', params: { threadId: id, includeTurns: false } }))
           })
+        } else if (r.id === -1) {
+          for (const m of r.result?.data ?? []) {
+            if (typeof m.model === 'string' && Array.isArray(m.supportedReasoningEfforts)) capabilities.set(m.model, m.supportedReasoningEfforts.length > 0)
+          }
+          pending.delete(-1)
+          if (!pending.size) finish()
         } else if (pending.has(r.id)) {
           const id = pending.get(r.id)!
           const runtime = r.result?.thread && codexRuntime(r.result.thread, Date.now())

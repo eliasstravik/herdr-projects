@@ -184,7 +184,7 @@ export class ClaudeReader implements Reader {
 
       if (!s.session && typeof l.sessionId === 'string' && t) {
         s.session = true
-        out.push({ kind: 'session', id: `session-${l.sessionId}`, at: t, sessionId: l.sessionId })
+        out.push({ kind: 'session', file, id: `session-${l.sessionId}`, at: t, sessionId: l.sessionId })
       }
 
       if (this.sub) {
