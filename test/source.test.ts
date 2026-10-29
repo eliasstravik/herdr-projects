@@ -453,6 +453,18 @@ describe("a task's CLI, model and effort", () => {
 })
 
 describe('choice cards', () => {
+  test('fast answers require an explicit ordinary question declaration', async () => {
+    const chat = placeId.home()
+    for (const ordinary of [false, true]) {
+      const r = await src.cli(['ask', 'Which colour?', ...(ordinary ? ['--ordinary'] : []), '--choice', 'Blue', '--choice', 'Green'], { chat })
+      expect(r.code).toBe(0)
+      const q = src.chats.log(chat).posted.at(-1)!.question!
+      expect(q.ordinary).toBe(ordinary || undefined)
+      expect(q.choices.map((c) => c.label)).toEqual(['Blue', 'Green'])
+      src.chats.answer(chat, q.id, 0)
+    }
+  })
+
   test('a typed reply closes the open card: the dot stops waiting and the card shows answered', async () => {
     const chat = placeId.home()
     const r = await src.cli(['ask', 'Rerun CI on main?', '--choice', 'Rerun it', '--choice', 'Leave it'], { chat })

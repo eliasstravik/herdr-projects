@@ -2036,7 +2036,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         const id = `ask:${randomUUID().slice(0, 8)}`
         this.chats.post(ctx.chat, {
           id,
-          question: { id, title, kind: Object.keys(desc).length || p.flags.has('other') ? 'Question' : 'Form', choices: labels.map((label) => ({ label, description: desc[label] })), multi: p.flags.has('multi'), other: p.flags.has('other'), to: this.chatName(ctx.chat) },
+          question: { id, title, ordinary: p.flags.has('ordinary') || undefined, kind: Object.keys(desc).length || p.flags.has('other') ? 'Question' : 'Form', choices: labels.map((label) => ({ label, description: desc[label] })), multi: p.flags.has('multi'), other: p.flags.has('other'), to: this.chatName(ctx.chat) },
         })
         this.emit('chat', ctx.chat)
         this.emit('snapshot')

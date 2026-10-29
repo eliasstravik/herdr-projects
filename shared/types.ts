@@ -259,6 +259,8 @@ export interface Question {
   id: string
   title: string
   kind: 'Form' | 'Question' | 'Plan'
+  /** Explicitly an ordinary question, never permission or approval. Missing means confirm. */
+  ordinary?: boolean
   steps?: string[]
   /** CLI prompt context, read from its visible screen. */
   screen?: string

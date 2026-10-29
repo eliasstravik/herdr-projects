@@ -7,7 +7,7 @@ export interface Parsed {
   flags: Set<string>
 }
 
-const FLAGS = new Set(['other', 'multi', 'json', 'project-coordinator', 'off', 'help', 'force', 'archived', 'machine', 'later', 'save'])
+const FLAGS = new Set(['ordinary', 'other', 'multi', 'json', 'project-coordinator', 'off', 'help', 'force', 'archived', 'machine', 'later', 'save'])
 
 export function parseArgs(args: string[]): Parsed {
   const words: string[] = []
@@ -154,7 +154,8 @@ Task agents
                                                  while you work). Run it at the start and at each natural step
 
 Chat
-  shepherdr ask "<question>" --choice "<label>" ... [--desc "<label>=<one line>"] [--other] [--multi]
+  shepherdr ask "<question>" --choice "<label>" ... [--desc "<label>=<one line>"] [--other] [--multi] [--ordinary]
+      --ordinary: ordinary questions only; never permissions, startup approvals or plans
   shepherdr alert "<title>" --body "<why now>" [--task <id>]
                                                  with --task: it says what that task needs and opens on its card
 

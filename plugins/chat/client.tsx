@@ -1174,7 +1174,7 @@ function ReplyOnCard({ ask, reply, task, space, source }: { ask: CardAsk; reply:
         <>
           <TextBox name="reply" data-kept label={`Reply to ${task}`} className={noteBox} placeholder="Type something…" value={text} onChange={setText} />
           <div className="flex items-center justify-end gap-2">
-            {err ? <span className="mr-auto text-[0.75rem] text-need phone:text-[0.8125rem]">{err}</span> : null}
+            {err ? <span role="alert" className="mr-auto text-[0.75rem] text-need phone:text-[0.8125rem]">{err}</span> : null}
             <Primary soft disabled={busy || !text.trim()} onClick={send}>
               Send
             </Primary>
@@ -1328,12 +1328,14 @@ const noteBox = clsx('min-h-10 w-full resize-none rounded-row bg-transparent px-
 
 /** space: a copy of a task's question on its needs-you card in that space's chat, answered there */
 export function QuestionCard({ q, chat, msg, from, space, source }: { q: Question; chat: Chat; msg: string; from: string; space?: string; source?: CardSource }) {
-  // nothing picked to start with: Send waits for a pick, so a stray tap never answers (a permission's Yes least of all)
+  // Unmarked cards always require a deliberate pick and Send, including all approval prompts.
   const [sel, setSel] = useState<number[]>([])
   // half-typed notes survive a reload
   const [note, setNote] = useDraft(`card:${chat.key}:${q.id}`)
   const [other, setOther] = useDraft(`card-other:${chat.key}:${q.id}`)
   const [busy, setBusy] = useState(false)
+  const sending = useRef(false)
+  const [composing, setComposing] = useState(false)
   const [err, setErr] = useState('')
   const noteRef = useRef<HTMLTextAreaElement>(null)
   const sent = q.sent !== undefined
@@ -1341,23 +1343,39 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
   // a plan sent back says what to change in the note
   const needNote = q.noteRequiredFor !== undefined && sel[0] === q.noteRequiredFor
   const picked = sel.length > 0 || !!other.trim()
+  // Positive opt-in, plus structural exclusions: unknown kinds and older/plugin cards remain confirmed.
+  const ordinary = q.ordinary === true && (q.kind === 'Form' || q.kind === 'Question') && !q.multi && !q.terminal && !q.screen && !q.steps && !q.reject && !q.noNote && q.noteRequiredFor === undefined && !q.id.startsWith('menu:')
+  const immediate = ordinary && !sent && !composing && !note && !other
   const choose = (j: number) => setSel(q.multi ? (sel.includes(j) ? sel.filter((x) => x !== j) : [...sel, j]) : [j])
-  const send = async (reject = false) => {
+  const send = async (reject = false, choice = sel[0] ?? -1) => {
+    if (sent || sending.current) return
     // sending a plan back needs a note: the box says so and takes the focus
     if (needNote && !note.trim()) return noteRef.current?.focus()
+    sending.current = true
     setBusy(true)
     setErr('')
+    let accepted = false
     try {
-      const r = await act({ type: 'answer', chat: chat.key, question: q.id, choice: reject ? -1 : sel[0] ?? -1, choices: q.multi ? (reject ? [] : sel) : undefined, note: note.trim() || undefined, other: other.trim() || undefined, space })
+      const r = await act({ type: 'answer', chat: chat.key, question: q.id, choice: reject ? -1 : choice, choices: q.multi ? (reject ? [] : sel) : undefined, note: note.trim() || undefined, other: other.trim() || undefined, space })
       if (r?.ok === false) setErr(r.error ?? "That didn't go through.")
       else {
+        accepted = true
         setNote('')
         setOther('')
       }
+    } catch (e) {
+      setErr(reasonOf(e))
     } finally {
-      setBusy(false)
+      // Keep a successful answer locked until the server's answered snapshot arrives.
+      if (!accepted) {
+        sending.current = false
+        setBusy(false)
+      }
     }
   }
+  useEffect(() => {
+    if (composing) noteRef.current?.focus()
+  }, [composing])
   return (
     <CardShell title={q.title} plan={q.kind === 'Plan'} source={source}>
       {q.screen ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-fg2">{q.screen}</pre> : null}
@@ -1369,30 +1387,37 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
           ))}
         </ol>
       ) : null}
+      {immediate && !sent ? <p className="text-[0.8125rem] text-fg2">Choose an answer to send it now.</p> : null}
       {q.choices.map((c, j) => {
         const on = sent ? q.sent === j : sel.includes(j)
         return (
           <button
             key={j}
             type="button"
-            aria-pressed={on}
-            disabled={sent}
-            onClick={() => choose(j)}
+            aria-pressed={immediate ? undefined : on}
+            disabled={sent || busy}
+            onClick={() => {
+              if (immediate) {
+                setSel([j])
+                void send(false, j)
+              } else choose(j)
+            }}
             className="group press relative flex min-h-10 w-full items-center gap-2.5 rounded-row px-3 py-2 text-left shadow-[inset_0_0_0_1px_var(--line2)] enabled:hover:bg-hover disabled:cursor-default disabled:opacity-40 aria-pressed:shadow-[inset_0_0_0_1.5px_var(--fg)] disabled:aria-pressed:opacity-100 coarse:min-h-11 phone:min-h-12"
           >
-            <span
+            {immediate ? null : <span
+              aria-hidden="true"
               className={clsx(
                 'size-4 shrink-0 shadow-[inset_0_0_0_1.5px_var(--fg3)] group-aria-pressed:shadow-[inset_0_0_0_5px_var(--fg)]',
                 q.multi ? 'rounded-[4px]' : 'rounded-full',
               )}
-            />
+            />}
             {c.description ? (
               <span>
-                <span className="block">{c.label}</span>
+                <span className="block">{immediate ? `Send: ${c.label}` : c.label}</span>
                 <span className="block text-[0.75rem]/[18px] text-fg2 phone:text-[0.8125rem]/5">{c.description}</span>
               </span>
             ) : (
-              c.label
+              (immediate ? `Send: ${c.label}` : c.label)
             )}
           </button>
         )
@@ -1400,6 +1425,7 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
       {q.other && !sent ? (
         <input
           name="other"
+          disabled={busy}
           data-kept
           aria-label="Other answer"
           className={noteBox}
@@ -1426,10 +1452,14 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
       {by ? <Quote q={by} chat={chat.key} from={from} you={false} loose label="Answered by" /> : null}
       {sent || (q.terminal && !q.choices.length) ? null : (
         <>
-          {!q.other && !q.noNote ? (
+          {immediate ? (
+            <button type="button" disabled={busy} className="min-h-11 text-left text-accent" onClick={() => setComposing(true)}>Add a note</button>
+          ) : null}
+          {(!q.other || ordinary) && !q.noNote && !immediate ? (
             <TextBox
               ref={noteRef}
               name="note"
+              disabled={busy}
               data-kept
               label="Note"
               className={noteBox}
@@ -1439,11 +1469,12 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
             />
           ) : null}
           <div className="flex items-center justify-end gap-2">
-            {err ? <span className="mr-auto text-[0.75rem] text-need phone:text-[0.8125rem]">{err}</span> : null}
+            {err ? <span role="alert" className="mr-auto text-[0.75rem] text-need phone:text-[0.8125rem]">{err}</span> : null}
             {q.reject ? <button type="button" disabled={busy} onClick={() => send(true)}>{q.reject}</button> : null}
-            <Primary soft disabled={busy || !picked} onClick={() => send()}>
+            {!immediate ? <Primary soft disabled={busy || !picked} onClick={() => send()}>
               Send
-            </Primary>
+            </Primary> : null}
+            {busy ? <span role="status" className="text-[0.8125rem] text-fg2">Sending…</span> : null}
           </div>
         </>
       )}
