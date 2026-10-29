@@ -4,7 +4,7 @@
 // sidebars.ts.
 import clsx from 'clsx'
 import { useRef, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
-import { focusHere, getState, placesDrawn, setUI, togglePlaces, useStore, useUI } from './kernel.ts'
+import { focusHere, getState, placesDocked, placesDrawn, setUI, togglePlaces, useStore, useUI } from './kernel.ts'
 import { BASE, dragLeft, dragPanel, dragRight, fit, LEFT, PANEL, RIGHT, type Sidebars } from './sidebars.ts'
 import { ic, IconButton, SidebarIcon } from './ui.tsx'
 
@@ -218,17 +218,19 @@ function Resizer({ side, places, panel, frame, now }: { side: 'left' | 'right' |
  * Shows or hides places (desktop). It sits at the top of places while they show, and at the start of the header
  * beside them while they're hidden; focus follows it from one spot to the other.
  */
-export function PlacesToggle({ when }: { when: 'open' | 'closed' }) {
+export function PlacesToggle({ when, drawer = false }: { when: 'open' | 'closed'; drawer?: boolean }) {
   const width = useWindowWidth()
   const open = useStore((s) => placesDrawn(s.ui, s.snap, width))
+  const docked = useStore((s) => placesDocked(s.ui, s.snap, width))
   const desktop = useUI((u) => u.device === 'desktop')
-  if (!desktop || open !== (when === 'open')) return null
-  const label = open ? 'Hide Places' : 'Show Places'
+  const drawerOpen = useUI((u) => u.drawer)
+  if ((!docked && (!drawer || !desktop || when === 'open')) || (docked && open !== (when === 'open'))) return null
+  const label = !docked ? 'Places' : open ? 'Hide Places' : 'Show Places'
   return (
     <IconButton
       label={label}
-      aria-expanded={open}
-      aria-controls="places"
+      aria-expanded={docked ? open : drawerOpen}
+      aria-controls={docked ? "places" : undefined}
       data-places-toggle
       onClick={(e) => {
         const focused = document.activeElement === e.currentTarget

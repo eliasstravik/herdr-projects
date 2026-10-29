@@ -988,7 +988,7 @@ export default function Settings() {
             <BackIcon className={ic} />
           </IconButton>
         ) : null}
-        <PlacesToggle when="closed" />
+        <PlacesToggle when="closed" drawer />
         <Who name="Settings" />
         {tablet ? null : (
           <IconButton label="Close" onClick={close}>

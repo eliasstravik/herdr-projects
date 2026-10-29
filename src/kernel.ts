@@ -5,7 +5,7 @@ import { expire, loadOutbox, prune, saveOutbox, settle, type Outgoing } from './
 import { keptOf, mayReload, type Kept } from './reload.ts'
 import { OPEN_WITHIN, PONG_WITHIN, retryIn, SAY_LOST_AFTER } from './link.ts'
 import { groupFor, groupTasks, loadAllDone, loadGroups, loadShut, namesFor, saveAllDone, saveGroups, saveShut, shownGroup, type GroupBy, type Groups, type TaskGroup } from './groups.ts'
-import { CHAT_MIN, fit as fitSidebars, focused, LEFT, loadSidebars, PANEL, RIGHT, saveSidebars, showPanel, toggleFocus as focusTo, type Sidebars } from './sidebars.ts'
+import { canDock, CHAT_READ, fit as fitSidebars, focused, loadSidebars, PANEL, RIGHT, saveSidebars, showPanel, toggleFocus as focusTo, type Sidebars } from './sidebars.ts'
 import { hush } from './motion.ts'
 import { closed, loadPanes, MAX_PANES, normal, only, opened, PANE_MIN, replaced, samePane, savePanes, type Pane, type Panes } from './panes.ts'
 import { setupGuarded } from './guard.tsx'
@@ -282,7 +282,7 @@ function tabOf(t: string | null): UI['tab'] {
 }
 
 function deviceFor(w: number): Device {
-  return w < 640 ? 'phone' : w < 1024 ? 'tablet' : 'desktop'
+  return w < CHAT_READ + RIGHT.min ? 'phone' : w < 1024 ? 'tablet' : 'desktop'
 }
 
 const LISTS = 'shepherdr.lists'
@@ -657,7 +657,12 @@ addEventListener('popstate', (e) => {
 
 addEventListener('resize', () => {
   const d = deviceFor(innerWidth)
-  if (d !== state.ui.device) setUI({ device: d, drawer: false })
+  if (d !== state.ui.device || (state.ui.drawer && placesDocked(state.ui, state.snap))) setUI({ device: d, drawer: false })
+  else {
+    // Docking and compact task focus also change within a device class. Rewatch chats brought back by widening.
+    watchVisible()
+    emit()
+  }
 })
 
 /* ---------- server link ---------- */
@@ -1261,15 +1266,23 @@ function panelTerm(ui: UI, snap: Snapshot) {
 /** an open task in focus: it has the whole window, its coordinator chat and places hidden (desktop and tablet) */
 export function focusHere(ui: UI, snap: Snapshot | null) {
   if (ui.device === 'phone' || !snap || !taskOf(snap, ui.task) || (ui.settings && ui.device === 'desktop')) return false
-  return focused(ui.sidebars, panelHere(ui, snap))
+  const panel = panelHere(ui, snap)
+  return focused(ui.sidebars, panel) || compactPanel(ui, snap)
 }
 
-/** a window too narrow for places, the chat, tasks and the side panel at once draws places shut while the panel shows;
- *  focus draws it shut too */
+/** A tool left open while resizing must still leave its task chat readable. */
+function compactPanel(ui: UI, snap: Snapshot) {
+  return panelHere(ui, snap) && ui.sidebars.panelOpen && innerWidth < CHAT_READ + RIGHT.min + PANEL.min
+}
+
+/** Places can dock independently of the device label, using the actual requested column widths. */
+export function placesDocked(ui: UI, snap: Snapshot | null, width = innerWidth) {
+  return ui.device === 'desktop' && canDock(ui.sidebars, width, !!snap && panelHere(ui, snap))
+}
+
+/** Focus and the user's toggle hide docked places; insufficient room makes them a drawer instead. */
 export function placesDrawn(ui: UI, snap: Snapshot | null, width = innerWidth) {
-  if (!ui.sidebars.open || focusHere(ui, snap)) return false
-  const panel = !!snap && panelHere(ui, snap) && ui.sidebars.panelOpen
-  return !panel || width >= LEFT.min + CHAT_MIN + RIGHT.min + PANEL.min
+  return ui.sidebars.open && !focusHere(ui, snap) && placesDocked(ui, snap, width)
 }
 
 /** open an item: the panel's tab on a desktop, a full-screen sheet on a phone or tablet */
@@ -1289,7 +1302,11 @@ export function togglePanel() {
 
 /** focus on an open task, or back out of it: its coordinator chat shows again (desktop and tablet) */
 export function toggleFocus() {
-  setUI((ui) => ({ sidebars: focusTo(ui.sidebars, !!state.snap && panelHere(ui, state.snap)) }))
+  setUI((ui) => {
+    // Showing the coordinator on a narrow window needs the tool's room. Closing it also ends automatic focus.
+    if (state.snap && compactPanel(ui, state.snap)) return { sidebars: showPanel({ ...ui.sidebars, focus: false, focusAuto: false, wide: false }, false, innerWidth) }
+    return { sidebars: focusTo(ui.sidebars, !!state.snap && panelHere(ui, state.snap)) }
+  })
 }
 
 /** the side panel widened to most of the window, or back to its width; widening a hidden panel opens it (desktop) */
@@ -1301,6 +1318,7 @@ export function toggleWide() {
  *  In focus, it shows them and the coordinator chat again. */
 export function togglePlaces() {
   setUI((ui) => {
+    if (!placesDocked(ui, state.snap)) return { drawer: !ui.drawer }
     if (focusHere(ui, state.snap)) {
       const out = { ...ui, sidebars: { ...focusTo(ui.sidebars, true), open: true } }
       return { sidebars: placesDrawn(out, state.snap) ? out.sidebars : { ...out.sidebars, panelOpen: false } }

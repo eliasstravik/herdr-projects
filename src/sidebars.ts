@@ -35,6 +35,13 @@ export const PANEL: Span = { min: 360, max: Infinity, base: 560 }
 export const SNAP = 150
 /** the chat in the middle keeps at least this much */
 export const CHAT_MIN = 360
+/** ordinary conversations keep this much room beside lists; compact task + tool views use CHAT_MIN */
+export const CHAT_READ = 480
+
+/** Dock places only when the requested columns leave a readable conversation. Stored widths survive a drawer. */
+export function canDock(sb: Sidebars, width: number, panel = false) {
+  return width >= clamp(sb.left, LEFT) + CHAT_READ + rightOf(sb, width) + (panel && sb.panelOpen ? clamp(sb.panel, PANEL) : 0)
+}
 /** opening the panel on a window narrower than this turns focus on, until it closes again */
 export const FOCUS_BELOW = 1600
 
@@ -56,14 +63,13 @@ export const focused = (sb: Sidebars, panel: boolean) => sb.focus || (panel && s
  */
 export function fit(sb: Sidebars, width: number, places: boolean, panel = false, task = false) {
   const p = panel && sb.panelOpen
-  if (task && focused(sb, panel)) {
+  if (task && (focused(sb, panel) || (p && width < CHAT_READ + RIGHT.min + PANEL.min))) {
     const pw = !p ? 0 : sb.wide ? Math.max(PANEL.min, width - CHAT_MIN) : clamp(sb.panel, PANEL, width - RIGHT.min)
     return { left: 0, right: Math.max(RIGHT.min, width - pw), panel: pw }
   }
-  const room = LEFT.min + CHAT_MIN + RIGHT.min + PANEL.min
-  const left = places && sb.open && (!p || width >= room) ? clamp(sb.left, LEFT, width - RIGHT.min - CHAT_MIN - (p ? PANEL.min : 0)) : 0
-  const pw = p ? clamp(sb.panel, PANEL, width - left - RIGHT.min - CHAT_MIN) : 0
-  const right = clamp(rightOf(sb, width), RIGHT, width - left - pw - CHAT_MIN)
+  const left = places && sb.open && canDock(sb, width, panel) ? clamp(sb.left, LEFT) : 0
+  const pw = p ? clamp(sb.panel, PANEL, width - left - RIGHT.min - CHAT_READ) : 0
+  const right = clamp(rightOf(sb, width), RIGHT, width - left - pw - CHAT_READ)
   return { left, right, panel: pw }
 }
 
@@ -77,12 +83,12 @@ function rightOf(sb: Sidebars, width: number) {
 export function dragLeft(sb: Sidebars, w: number, width: number, panel = false): Sidebars {
   if (w < SNAP) return { ...sb, open: false }
   const f = fit(sb, width, true, panel)
-  return { ...sb, open: true, left: clamp(w, LEFT, width - f.right - f.panel - CHAT_MIN) }
+  return { ...sb, open: true, left: clamp(w, LEFT, width - f.right - f.panel - CHAT_READ) }
 }
 
 export function dragRight(sb: Sidebars, w: number, width: number, places: boolean, panel = false): Sidebars {
   const f = fit(sb, width, places, panel)
-  return { ...sb, right: clamp(w, RIGHT, width - f.left - f.panel - CHAT_MIN) }
+  return { ...sb, right: clamp(w, RIGHT, width - f.left - f.panel - CHAT_READ) }
 }
 
 /** The side panel dragged to a width: narrower than PANEL_SNAP it closes, keeping the width it had to open again at.
@@ -95,7 +101,7 @@ export function dragPanel(sb: Sidebars, w: number, width: number, places: boolea
   const at = { ...sb, panelOpen: true, wide: false, focus: sb.focus || (task && focused(sb, true)) }
   if (task && at.focus) return { ...at, panel: clamp(w, PANEL, width - RIGHT.min) }
   const f = fit(at, width, places, true)
-  return { ...at, panel: clamp(w, PANEL, width - f.left - RIGHT.min - CHAT_MIN) }
+  return { ...at, panel: clamp(w, PANEL, width - f.left - RIGHT.min - CHAT_READ) }
 }
 
 /** The panel shown or hidden. Shown on a window narrower than FOCUS_BELOW, focus comes on with it; hidden, focus that

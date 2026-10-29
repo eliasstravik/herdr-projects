@@ -13,6 +13,7 @@ import {
   openArtifact,
   openSplit,
   panesHere,
+  placesDocked,
   sizePanes,
   focusHere,
   getState,
@@ -231,7 +232,8 @@ function Drawer() {
 
 function MenuButton() {
   const device = useUI((u) => u.device)
-  if (device === 'desktop') return null
+  const docked = useStore((s) => placesDocked(s.ui, s.snap))
+  if (docked) return null
   return device === 'phone' ? (
     <RoundButton label="Places" onClick={() => setUI({ drawer: true })}>
       <MenuIcon className={ic} />
@@ -294,7 +296,7 @@ function PlaceColumn({ place, pane }: { place: Place; pane?: number }) {
   const Chat = registry.views.chat
   return (
     <section data-drawer-from className="@container/place flex min-h-0 min-w-0 flex-1 flex-col">
-      <Head>
+      <Head conversation>
         <MenuButton />
         {pane ? null : <PlacesToggle when="closed" />}
         <Who
@@ -472,8 +474,8 @@ function TaskPage({ task, middle, pane }: { task: Task; middle?: boolean; pane?:
   if (pane !== undefined)
     return (
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <Head>
-          {pane ? null : <PlacesToggle when="closed" />}
+        <Head conversation>
+          {pane ? null : <><MenuButton /><PlacesToggle when="closed" /></>}
           <Dot s={task.status} p={task.report?.progress} halo />
           <Who name={task.name} kind={task.report ? <span className="flex min-w-0 gap-1">{task.id} ·<ReportLine w={task.report} head /></span> : `${task.id} · ${coordinator}`} />
           <div className="flex shrink-0 items-center gap-1">
@@ -492,7 +494,7 @@ function TaskPage({ task, middle, pane }: { task: Task; middle?: boolean; pane?:
       onFocusCapture={split && !middle ? () => focusPane(-1) : undefined}
       className={clsx('flex min-h-0 min-w-0 flex-1 flex-col border-line', !focus && !middle && 'border-l')}
     >
-      <Head>
+      <Head conversation>
         {middle ? (
           <>
             <MenuButton />
@@ -722,6 +724,7 @@ function Divider({ at, box }: { at: number; box: RefObject<HTMLDivElement | null
 function WideLayout({ snap }: { snap: Snapshot }) {
   const settings = useUI((u) => !!u.settings)
   const desktop = useUI((u) => u.device === 'desktop')
+  const docked = useStore((s) => placesDocked(s.ui, s.snap))
   // the open task whose side panel has a column here
   const panel = useUI((u) => (panelHere(u, snap) ? u.task : null))
   const Settings = registry.views.settings
@@ -730,6 +733,7 @@ function WideLayout({ snap }: { snap: Snapshot }) {
       <Frame places>
         <Sidebar />
         <Settings />
+        {!docked ? <Drawer /> : null}
       </Frame>
     )
   if (desktop) {
@@ -739,6 +743,7 @@ function WideLayout({ snap }: { snap: Snapshot }) {
         <Sidebar />
         <Middle snap={snap} />
         <TaskColumn snap={snap} />
+        {!docked ? <Drawer /> : null}
         {task ? (
           <PanelColumn>
             <TaskPanel task={task} />

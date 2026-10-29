@@ -1,6 +1,6 @@
 // The wide screen's sidebar widths: within their spans, the chat keeping its room, places snapping shut.
 import { describe, expect, test } from 'bun:test'
-import { BASE, CHAT_MIN, dragLeft, dragPanel, dragRight, fit, FOCUS_BELOW, LEFT, PANEL, PANEL_SNAP, RIGHT, showPanel, SNAP, toggleFocus } from '../src/sidebars.ts'
+import { BASE, canDock, CHAT_MIN, CHAT_READ, dragLeft, dragPanel, dragRight, fit, FOCUS_BELOW, LEFT, PANEL, PANEL_SNAP, RIGHT, showPanel, SNAP, toggleFocus } from '../src/sidebars.ts'
 
 describe('sidebar widths', () => {
   test('a wide window draws them as set; hidden places takes no room', () => {
@@ -19,9 +19,30 @@ describe('sidebar widths', () => {
 
   test('a narrow window shrinks tasks before the chat goes under its room, never under their minimum', () => {
     const { left, right } = fit({ ...BASE, right: 700 }, 1100, true)
-    expect(left).toBe(LEFT.base)
-    expect(1100 - left - right).toBe(CHAT_MIN)
+    expect(left).toBe(0)
+    expect(1100 - left - right).toBe(CHAT_READ)
     expect(fit({ ...BASE, right: 700 }, 640, false).right).toBe(RIGHT.min)
+  })
+
+  test('tablet and small desktop docking follows requested widths, without changing saved choices', () => {
+    for (const width of [820, 1024, 1100]) {
+      expect(canDock(BASE, width)).toBe(false)
+      const drawn = fit(BASE, width, true)
+      expect(drawn.left).toBe(0)
+      expect(width - drawn.right).toBeGreaterThanOrEqual(CHAT_READ)
+    }
+    for (const width of [1180, 1440, 1920]) expect(canDock(BASE, width)).toBe(true)
+    // Widened lists or tools need more room, even on a desktop. Narrowing the window keeps saved widths intact.
+    const saved = { ...BASE, right: 700 }
+    expect(canDock(saved, 1440)).toBe(true)
+    expect(canDock(saved, 1180)).toBe(false)
+    expect(fit(saved, 1180, true).left).toBe(0)
+    expect(fit(saved, 1440, true).right).toBe(700)
+    expect(saved).toEqual({ ...BASE, right: 700 })
+    expect(canDock({ ...BASE, panelOpen: true }, 1600, true)).toBe(false)
+    expect(canDock({ ...BASE, panelOpen: true }, 1920, true)).toBe(true)
+    expect(fit({ ...BASE, open: false }, 2560, true).left).toBe(0)
+    expect(fit(BASE, 2560, true, true).panel).toBe(0)
   })
 
   test('dragging stays within the spans; places snaps shut below SNAP and keeps its width to open at', () => {
@@ -32,16 +53,16 @@ describe('sidebar widths', () => {
     // dragged back out in the same drag, it opens again
     expect(dragLeft({ ...wide, open: false }, 280, 2000)).toEqual({ ...wide, left: 280, open: true })
     expect(dragRight(BASE, 10, 2000, true).right).toBe(RIGHT.min)
-    expect(dragRight(BASE, 900, 1200, true).right).toBe(1200 - LEFT.base - CHAT_MIN)
+    expect(dragRight(BASE, 900, 1200, true).right).toBe(1200 - LEFT.base - CHAT_READ)
   })
 
   test('tasks drag as wide as the window leaves the chat its room, and keep that width through a resize', () => {
     // a big screen: no fixed most, only the chat's room (and places' width, or none while hidden)
-    expect(dragRight(BASE, 5000, 5120, true).right).toBe(5120 - LEFT.base - CHAT_MIN)
-    expect(dragRight({ ...BASE, open: false }, 5000, 5120, true).right).toBe(5120 - CHAT_MIN)
+    expect(dragRight(BASE, 5000, 5120, true).right).toBe(5120 - LEFT.base - CHAT_READ)
+    expect(dragRight({ ...BASE, open: false }, 5000, 5120, true).right).toBe(5120 - CHAT_READ)
     // a narrower window draws them narrower; wide again, they come back to the width they were dragged to
     const wide = { ...BASE, right: 4000 }
-    expect(fit(wide, 1440, true).right).toBe(1440 - LEFT.base - CHAT_MIN)
+    expect(fit(wide, 1440, true).right).toBe(1440 - CHAT_READ)
     expect(fit(wide, 5120, true).right).toBe(4000)
   })
 
@@ -53,7 +74,7 @@ describe('sidebar widths', () => {
     expect(fit(open, 1920, true, true)).toEqual({ left: LEFT.base, right: 400, panel: PANEL.base })
     // the chat keeps its room: the panel shrinks to fit, never under its minimum
     const mid = fit({ ...open, panel: 900 }, 1600, true, true)
-    expect(1600 - mid.left - mid.right - mid.panel).toBe(CHAT_MIN)
+    expect(1600 - mid.left - mid.right - mid.panel).toBe(CHAT_READ)
     const tight = fit(open, 1200, true, true)
     expect(tight.left).toBe(0)
     expect(tight.panel).toBeGreaterThanOrEqual(PANEL.min)
@@ -62,12 +83,12 @@ describe('sidebar widths', () => {
   test('dragging the panel stays within its span and snaps it shut below PANEL_SNAP, keeping its width', () => {
     const open = { ...BASE, panelOpen: true, panel: 600 }
     // no fixed most: as wide as tasks at their least and the chat's room leave it
-    expect(dragPanel(open, 5000, 4000, true).panel).toBe(4000 - LEFT.base - RIGHT.min - CHAT_MIN)
+    expect(dragPanel(open, 5000, 4000, true).panel).toBe(4000 - LEFT.base - RIGHT.min - CHAT_READ)
     expect(dragPanel(open, PANEL_SNAP + 1, 2000, true)).toEqual({ ...open, panel: PANEL.min })
     expect(dragPanel(open, PANEL_SNAP - 1, 2000, true)).toEqual({ ...open, panelOpen: false })
     // dragged wide, tasks give way down to their minimum
     const wide = dragPanel(open, 1200, 1700, true)
-    expect(wide.panel).toBe(1700 - LEFT.base - RIGHT.min - CHAT_MIN)
+    expect(wide.panel).toBe(1700 - RIGHT.min - CHAT_READ)
     expect(fit(wide, 1700, true, true).right).toBe(RIGHT.min)
   })
 

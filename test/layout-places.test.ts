@@ -141,6 +141,56 @@ describe.skipIf(!browser)('sidebars', () => {
     await page.close()
   }, 30_000)
 
+  test('available room chooses a drawer at 820/1024/1100 and docking at 1180; resized lists keep chat readable', async () => {
+    const page = await browser!.newPage({ viewport: { width: 1024, height: 850 } })
+    await page.goto(url())
+    await page.getByRole('textbox', { name: 'Message home…' }).waitFor()
+    for (const w of [820, 1024, 1100, 1180, 1440]) {
+      await page.setViewportSize({ width: w, height: 850 })
+      await settled(page)
+      const docked = w >= 1180
+      expect(await page.getByRole('button', { name: 'Hide Places', exact: true }).count()).toBe(docked ? 1 : 0)
+      expect(await page.getByRole('button', { name: 'Places', exact: true }).count()).toBe(docked ? 0 : 1)
+      expect(await page.locator('[data-messages]').first().evaluate((e) => e.getBoundingClientRect().width)).toBeGreaterThanOrEqual(480)
+      if (!docked) {
+        await page.getByRole('button', { name: 'Places', exact: true }).click()
+        await page.getByRole('navigation', { name: 'Places' }).waitFor()
+        await page.getByRole('button', { name: 'Close', exact: true }).click()
+      }
+    }
+    await drag(page, 'Resize tasks', -300)
+    await page.setViewportSize({ width: 1180, height: 850 })
+    await settled(page)
+    expect(await page.getByRole('button', { name: 'Places', exact: true }).count()).toBe(1)
+    expect(await page.locator('[data-messages]').first().evaluate((e) => e.getBoundingClientRect().width)).toBeGreaterThanOrEqual(480)
+    await page.reload()
+    await page.getByRole('button', { name: 'Places', exact: true }).waitFor()
+    await page.setViewportSize({ width: 1920, height: 850 })
+    await page.getByRole('button', { name: 'Hide Places', exact: true }).waitFor()
+    expect(await width(page, tasks)).toBe(700)
+    // Explicitly hidden places and task tools stay hidden on wider windows.
+    await page.getByRole('button', { name: 'Hide Places', exact: true }).click()
+    await page.setViewportSize({ width: 2560, height: 850 })
+    await page.getByRole('button', { name: 'Show Places', exact: true }).waitFor()
+    expect(await page.locator('#task-panel').count()).toBe(0)
+    await page.close()
+  }, 30_000)
+
+  test('a drawer open while widening does not reopen when the window narrows again', async () => {
+    const page = await browser!.newPage({ viewport: { width: 1100, height: 850 } })
+    await page.goto(url())
+    await page.getByRole('button', { name: 'Places', exact: true }).click()
+    await page.getByRole('button', { name: 'Close', exact: true }).waitFor()
+    await page.setViewportSize({ width: 1180, height: 850 })
+    await page.getByRole('button', { name: 'Hide Places', exact: true }).waitFor()
+    await page.setViewportSize({ width: 1100, height: 850 })
+    await settled(page)
+    expect(await page.getByRole('button', { name: 'Close', exact: true }).count()).toBe(0)
+    await page.getByRole('button', { name: 'Places', exact: true }).click()
+    await page.getByRole('button', { name: 'Close', exact: true }).waitFor()
+    await page.close()
+  })
+
   test('a tablet resizes tasks only; a phone keeps its drawer', async () => {
     const tablet = await browser!.newPage({ viewport: { width: 900, height: 800 } })
     await tablet.goto(url())
@@ -149,7 +199,7 @@ describe.skipIf(!browser)('sidebars', () => {
     expect(await tablet.getByRole('button', { name: /^(Hide|Show) Places$/ }).count()).toBe(0)
     const before = await width(tablet, tasks)
     await drag(tablet, 'Resize tasks', -40)
-    expect(await width(tablet, tasks)).toBe(before + 40)
+    expect(await width(tablet, tasks)).toBe(Math.min(before + 40, 900 - 480))
     await tablet.close()
     const phone = await browser!.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true })
     await phone.goto(url())

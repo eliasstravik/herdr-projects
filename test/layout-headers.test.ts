@@ -440,3 +440,27 @@ describe.skipIf(!browser)('clear phone task titles', () => {
     }
   })
 })
+
+describe.skipIf(!browser)('conversation header alignment', () => {
+  test('space and task headers follow their reading column on very wide screens', async () => {
+    const page = await browser!.newPage({ viewport: { width: 2560, height: 1000 } })
+    await page.goto(`http://127.0.0.1:${server!.port}/?place=vm-str/gtm`)
+    await page.getByRole('textbox', { name: 'Message gtm…' }).waitFor()
+    const aligned = async () => page.locator('[data-conversation-head]').first().evaluate((head) => {
+      const messages = head.closest('section')!.querySelector('[data-messages]')!
+      const h = head.getBoundingClientRect(), m = messages.getBoundingClientRect()
+      return Math.abs(h.left - m.left) < 1 && Math.abs(h.width - m.width) < 1
+    })
+    expect(await aligned()).toBe(true)
+    await page.goto(`http://127.0.0.1:${server!.port}/?place=vm-str/gtm&task=GTM-14`)
+    await page.getByRole('textbox', { name: 'Message GTM-14…' }).waitFor()
+    await page.getByRole('button', { name: 'Hide gtm', exact: true }).click()
+    await page.getByRole('button', { name: 'Show gtm', exact: true }).waitFor()
+    const taskHead = page.locator('section:has(textarea[aria-label="Message GTM-14…"]) > [data-chrome] [data-conversation-head]').last()
+    expect(await taskHead.evaluate((head) => {
+      const messages = head.closest('section')!.querySelector('[data-messages]')!
+      return Math.abs(head.getBoundingClientRect().left - messages.getBoundingClientRect().left) < 1
+    })).toBe(true)
+    await page.close()
+  })
+})

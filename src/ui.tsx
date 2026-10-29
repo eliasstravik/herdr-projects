@@ -996,10 +996,10 @@ export function Small({ children, className, ...p }: HTMLAttributes<HTMLDivEleme
 }
 
 /** Column header: 52px with a hairline under it; its icon buttons are round, like its ⋯ */
-export function Head({ children, className }: { children: ReactNode; className?: string }) {
+export function Head({ children, className, conversation }: { children: ReactNode; className?: string; conversation?: boolean }) {
   return (
-    <div data-chrome className={clsx('relative flex min-h-[52px] shrink-0 items-center gap-2.5 border-b border-line pr-3 pl-4 [&_.hit]:rounded-full', className)}>
-      {children}
+    <div data-chrome className={clsx('relative flex min-h-[52px] shrink-0 items-center gap-2.5 border-b border-line pr-3 pl-4 [&_.hit]:rounded-full', conversation && 'px-0!', className)}>
+      {conversation ? <div data-conversation-head className="mx-auto flex min-h-[51px] w-full max-w-read min-w-0 items-center gap-2.5 pr-3 pl-5 [&_.hit]:rounded-full">{children}</div> : children}
     </div>
   )
 }

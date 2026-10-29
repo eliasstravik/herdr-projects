@@ -11,6 +11,49 @@ describe.skipIf(!browser)("a task's side panel", () => {
   const task = (id: string) => `http://127.0.0.1:${server!.port}/?place=p:vm-str:gtm&task=${id}`
   const width = (page: Page, sel: string) => page.$eval(sel, (el) => Math.round(el.getBoundingClientRect().width))
 
+  test('widening a compact task/tool view subscribes to its split chats again', async () => {
+    const page = await browser!.newPage({ viewport: { width: 1024, height: 850 } })
+    await page.addInitScript(() => {
+      localStorage.setItem('shepherdr.sidebars', JSON.stringify({ panelOpen: true, focus: false }))
+      localStorage.setItem('shepherdr.panes', JSON.stringify({ panes: [{ kind: 'place', id: 'p:vm-str:~' }, { kind: 'place', id: 'p:vm-str:gtm' }], pane: -1, sizes: [1, 1] }))
+    })
+    const watches: string[][] = []
+    page.on('websocket', (socket) => socket.on('framesent', ({ payload }) => {
+      try {
+        const message = JSON.parse(String(payload))
+        if (message.type === 'watch') watches.push(message.chats)
+      } catch { /* other socket traffic */ }
+    }))
+    await page.goto(task('GTM-14'))
+    await page.getByRole('button', { name: 'Show gtm', exact: true }).waitFor()
+    expect(await until(() => Promise.resolve(watches.at(-1)?.length), (n) => n === 1)).toBe(1)
+    await page.setViewportSize({ width: 1920, height: 1000 })
+    expect(await until(() => Promise.resolve(watches.at(-1)?.length), (n) => n === 3)).toBe(3)
+    await page.close()
+  })
+
+  test('a panel kept open while resizing preserves readable task chat and can give the coordinator its room back', async () => {
+    const page = await browser!.newPage({ viewport: { width: 1920, height: 900 } })
+    await page.goto(task('GTM-14'))
+    await page.getByRole('button', { name: 'Show task panel', exact: true }).click()
+    await page.getByRole('button', { name: 'Hide gtm', exact: true }).waitFor()
+    // Open on a wide screen (no saved focus), then shrink below the room for chat + task + tool.
+    await page.setViewportSize({ width: 1024, height: 850 })
+    await settled(page)
+    await page.getByRole('button', { name: 'Show gtm', exact: true }).waitFor()
+    const chat = page.locator('section:has(textarea[aria-label="Message GTM-14…"])').last()
+    expect((await chat.boundingBox())!.width).toBeGreaterThanOrEqual(360)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1024)
+    await page.getByRole('button', { name: 'Show gtm', exact: true }).click()
+    await page.getByRole('button', { name: 'Show task panel', exact: true }).waitFor()
+    await page.getByRole('textbox', { name: 'Message gtm…' }).waitFor()
+    await page.setViewportSize({ width: 2560, height: 1000 })
+    await settled(page)
+    // Width alone never opens a tool.
+    expect(await page.getByRole('button', { name: 'Show task panel', exact: true }).count()).toBe(1)
+    await page.close()
+  })
+
   test('a toggle in the task header opens it beside the chat; its width and item stay after a reload (desktop)', async () => {
     const page = await browser!.newPage({ viewport: { width: 1600, height: 900 } })
     await page.goto(task('GTM-15'))
