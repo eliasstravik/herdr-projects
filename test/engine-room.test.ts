@@ -1,7 +1,7 @@
 // Room on the machine: new tasks, and tasks told to go, wait as Queued while the machine has its max tasks working or
 // is too loaded, and start by themselves once there's room, oldest first (engine-world.ts).
 import { describe, expect, test } from 'bun:test'
-import { repo, started, until, world } from './engine-world.ts'
+import { writeJson, placeId, repo, sh, started, until, world } from './engine-world.ts'
 
 /** a fresh world with nothing from earlier tests, its machine's limits set */
 function fresh(limits: Record<string, string>) {
@@ -13,6 +13,45 @@ function fresh(limits: Record<string, string>) {
 }
 
 describe('room on the machine', () => {
+  test('older waiting tasks keep their target across a settings change and two restarts', async () => {
+    const w = fresh({ 'machine.maxTasks': '1' })
+    const dir = repo()
+    sh('git branch develop', dir)
+    const p = await w.places.add(dir, 'legacy-base')
+    writeJson('tasks.json', { next: { [p.key]: 1 }, tasks: [{ id: `${p.key}-1`, n: 1, project: placeId.space(p.name), title: 'Old queued task', desc: '', by: 'test', created: Date.now(), updated: Date.now(), told: 'queued', held: { why: 'slots', since: Date.now() } }] })
+    const first = world()
+    expect(first.engine.task(`${p.key}-1`)!.base).toBe('main')
+    await first.places.setBase(p.name, 'develop')
+    const second = world()
+    expect(second.engine.task(`${p.key}-1`)!.base).toBe('main')
+    expect(second.places.byName(p.name)!.base).toBe('develop')
+  })
+
+  test('space changes affect new tasks only, including tasks waiting for room; bad settings leave the old target', async () => {
+    const w = fresh({ 'machine.maxTasks': '1' })
+    const dir = repo()
+    sh('git branch develop && git branch feature/topic', dir)
+    const a = await started(w, dir, 'base-snapshot')
+    w.brief(a.key)
+    const b = w.engine.add({ project: a.p.name, title: 'Waiting', by: 'test' })
+    expect(b.base).toBe('main')
+    await w.places.setBase(a.p.name, 'develop')
+    expect(a.t.base).toBe('main')
+    expect(b.base).toBe('main')
+    const c = w.engine.add({ project: a.p.name, title: 'New default', by: 'test' })
+    const d = w.engine.add({ project: a.p.name, title: 'Override', base: 'feature/topic', by: 'test' })
+    expect(c.base).toBe('develop')
+    expect(d.base).toBe('feature/topic')
+    await expect(w.places.setBase(a.p.name, 'missing')).rejects.toThrow('No local branch missing')
+    await expect(w.places.setBase(a.p.name, '--all')).rejects.toThrow('Choose a branch name')
+    expect(a.p.base).toBe('develop')
+    expect(sh('git branch --show-current', dir)).toBe('main')
+    w.agentIs(a.key, 'idle')
+    await until(() => w.started.some((s) => s.key === `${b.id}/Agent`))
+    expect(b.base).toBe('main')
+    expect(w.started.find((s) => s.key === `${b.id}/Agent`)!.system).toContain('(from main)')
+  })
+
   test('past the max working, a new task waits as Queued with no agent yet, and starts by itself once one stops working', async () => {
     const w = fresh({ 'machine.maxTasks': '1' })
     const a = await started(w, repo(), 'room-a', 'First', 'Add a.txt.')

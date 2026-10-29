@@ -11,7 +11,7 @@ import { nameProblem, slugify, type Mode } from '../../shared/types.ts'
 import { readJson, writeJson } from '../store.ts'
 import { Agents } from './agents.ts'
 import { boxHome } from './box.ts'
-import { defaultBranch, github, githubRemote, isRepo, topLevel, type GitHub } from './engine/git.ts'
+import { validateBase, defaultBranch, github, githubRemote, isRepo, topLevel, type GitHub } from './engine/git.ts'
 import { migrateToSpaces } from './migrate.ts'
 
 export interface Space {
@@ -231,6 +231,15 @@ export class Places {
     const p: Space = { name: key, path: top, key: keyFor(nm, [...this.spaces.map((x) => x.key), ...(this.takenTaskKeys?.() ?? [])]), github: await githubRemote(top), base: await defaultBranch(top), added: Date.now() }
     this.spaces.push(p)
     if (key !== nm) this.rename(placeId.space(key), nm)
+    this.save()
+    return p
+  }
+
+  async setBase(name: string, base: string) {
+    const p = this.byName(name) ?? this.space(name)
+    if (!p) throw new Error('Choose a repository space first.')
+    await validateBase(p.path, base)
+    p.base = base
     this.save()
     return p
   }

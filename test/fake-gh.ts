@@ -21,6 +21,7 @@ export interface FakeGitHub {
   origin: string
   /** owner/name the URLs say */
   repo: string
+  permission?: string
   authed?: boolean
   /** logged in, but GitHub doesn't answer (a proxy away): auth status fails as gh's does then */
   down?: boolean
@@ -96,6 +97,10 @@ if (import.meta.main) {
     if (st.authed === false) fail(`You are not logged into any accounts on ${opt('hostname')}`)
     if (st.down) fail(`${opt('hostname')}\n  X Failed to log in to ${opt('hostname')} account t (hosts.yml)\n  - The token in hosts.yml is invalid.`)
     out('Logged in')
+  }
+  if (a0 === 'repo' && a1 === 'view') {
+    if (st.authed === false || st.down) fail('Cannot read repository permissions')
+    out(st.permission ?? 'WRITE')
   }
   if (a0 === 'api') {
     const path = args.at(-1)!.split('?')[0]

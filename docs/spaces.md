@@ -80,3 +80,10 @@ also has a side panel: its live herdr terminal, its files, its diff against main
   machine's home space, which takes over its jobs; modes, settings, pins, unread marks, heartbeats and artifacts
   follow. A pinned machine becomes its pinned home space. `shepherdr project …` and `--project` still work, as
   `space`.
+
+- A repository space starts with the base detected when it was added (usually `origin/HEAD`, then main or master).
+  Change it under **Settings → Repository → Base branch**, or with
+  `shepherdr set space.base develop --space NAME` (`shepherdr space set base develop --space NAME` also works).
+  `shepherdr show --space NAME` shows it. The branch and write access are checked before saving.
+  This changes only new tasks; existing and waiting tasks keep their own target. It never changes the repository's
+  default branch, space key or task IDs. Home spaces have no repository base.

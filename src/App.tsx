@@ -438,6 +438,7 @@ function TaskPage({ task, middle, pane }: { task: Task; middle?: boolean; pane?:
   const desktop = useUI((u) => u.device === 'desktop')
   const keyboard = useUI((u) => u.keyboard)
   const coordinator = placeOf(snap, task.place).name
+  const target = task.base ? <div className="shrink-0 truncate border-b border-line px-4 py-1 text-xs text-fg3" title={`Merges into ${task.base}`}>Merges into <span className="font-medium text-fg2">{task.base}</span></div> : null
   // in focus it sits at the window's edge: no line there
   const focus = useStore((s) => focusHere(s.ui, s.snap))
   // split, a click on the open task on the right gives it the focus (the keys work on its chat)
@@ -475,6 +476,7 @@ function TaskPage({ task, middle, pane }: { task: Task; middle?: boolean; pane?:
           }
           report={task.report}
         />
+        {target}
         {/* no bar under a task's chat: the message box keeps clear of the home indicator itself */}
         <div className={clsx('flex min-h-0 flex-1 flex-col', !keyboard && 'pb-[env(safe-area-inset-bottom)]')}>
           <Scroll chat={!!g}>{body}</Scroll>
@@ -494,6 +496,7 @@ function TaskPage({ task, middle, pane }: { task: Task; middle?: boolean; pane?:
             <PaneButtons i={pane} />
           </div>
         </Head>
+        {target}
         <Scroll chat={!!g}>{body}</Scroll>
       </section>
     )
@@ -526,6 +529,7 @@ function TaskPage({ task, middle, pane }: { task: Task; middle?: boolean; pane?:
           {g ? <TaskMenu task={task} chatKey={g.chat} /> : null}
         </div>
       </Head>
+      {target}
       <Scroll chat={!!g}>{body}</Scroll>
     </section>
   )

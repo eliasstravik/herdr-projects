@@ -202,6 +202,8 @@ export interface Task {
   /** when a Done task finished (ms): the Done group shows newest first */
   doneAt?: number
   branch?: string
+  /** destination captured when this task was added */
+  base?: string
   /** the agent's plan, when it posted one */
   plan?: string[]
   /** none until the task's agent starts */

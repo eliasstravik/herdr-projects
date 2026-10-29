@@ -765,3 +765,9 @@ export function numValue(n: Num, value: string): string | undefined {
   const unit = x === 1 && n.one ? n.one : n.unit
   return unit ? `${x}${unit.startsWith('×') || unit === '%' ? '' : ' '}${unit}` : String(x)
 }
+
+/** A repository's own destination; it has no machine or Everywhere fallback. */
+export const repositorySection = (level: string, machine: string, base: string): SettingSection => ({
+  name: 'Repository', machine, level,
+  rows: [{ key: 'space.base', label: 'Base branch', value: base, text: true, hint: 'New tasks start from and merge into this branch. Existing tasks keep their target.' }],
+})

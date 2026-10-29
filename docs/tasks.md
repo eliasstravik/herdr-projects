@@ -1,6 +1,6 @@
 # Tasks
 
-- A task is one agent, started at once in its own git worktree and branch from main (`work/<n>-<slug>`). herdr makes
+- A task is one agent, started at once in its own git worktree and branch from its chosen base (`work/<n>-<slug>`). herdr makes
   the worktree (`herdr worktree create`) from the space's own herdr space (its coordinator's), so the task's herdr
   space nests under it in herdr's sidebar. With no herdr space of the repo open, herdr opens one for it, and Shepherdr closes
   it again with the last task if you never used it. Your own checkout is never touched. A fresh worktree gets a copy
@@ -143,3 +143,12 @@
   are at most 32 characters, so each fits one line on a phone. A line longer than 40 characters is cut at a word,
   and the agent is told so. An agent that waits on you keeps its last line, frozen at its % (its minutes stop too);
   once it reports ready, or waits for a go or for other tasks, it has none.
+
+- New tasks capture their space's base branch when added. Use `shepherdr task add "Title" --brief "…"
+  --base feature/topic --space NAME` to choose another target for just that task. Its list, chat and
+  `shepherdr task show ID` show the target before merging. With an origin remote the branch must exist there and is
+  fetched before work starts; without origin a local branch is required. GitHub write access (or a non-GitHub
+  remote's push access) and local repository write access are checked before starting. A failed check starts no
+  agent. A branch available only on origin gets a local counterpart when the worktree starts.
+  Rebase, pull requests and merge use this captured target. A pull request retargeted on GitHub must be corrected
+  before Shepherdr will merge it. Branch protection and merge rules still apply at merge time.

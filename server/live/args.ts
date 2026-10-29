@@ -48,6 +48,7 @@ Spaces (a folder on a machine with a name and its own coordinator; each machine 
   shepherdr space add <path> [--name NAME]       add a git repo folder as a space (its own herdr space); the name
                                                  follows the space rules: lowercase letters, numbers, - and _,
                                                  at most 80 characters, its own on its machine
+  shepherdr space set base <branch> --space NAME  new tasks start from and merge into this branch; existing tasks keep theirs
   shepherdr space list
   shepherdr space rename <name> <new-name>       only the name that shows changes (its folder, herdr space and task
                                                  ids stay)
@@ -62,7 +63,7 @@ Spaces (a folder on a machine with a name and its own coordinator; each machine 
                                                  the heartbeat); the human edits it in Settings → Autopilot too
 
 Tasks (coordinators add them; only when the human asks, or on Autopilot)
-  shepherdr task add "<title>" --brief "<the brief>" [--space NAME] [--after SHE-12,SHE-13] [--later]
+  shepherdr task add "<title>" --brief "<the brief>" [--space NAME] [--base BRANCH] [--after SHE-12,SHE-13] [--later]
                                                  [--set KEY=VALUE ...] [--agent CLI] [--model ID] [--effort LEVEL]
                                                  [--reviewer CLI] [--reviewer-model ID] [--reviewer-effort LEVEL]
                                                  the title at most ${TITLE_MAX} characters (it fits one line on a phone);

@@ -9,7 +9,7 @@ import { ARTIFACT_DATA, ARTIFACT_HTML, thumb } from './artifacts.ts'
 import { DEMO_PRS, demoWorktree } from './code.ts'
 import { demoActivity } from './activity.ts'
 import { settingsBlock } from '../live/prompts.ts'
-import { CLI_NAME, defaultOf, kindOf } from '../live/settings.ts'
+import { CLI_NAME, repositorySection, defaultOf, kindOf } from '../live/settings.ts'
 import { harnessProblem, harnessWords, restartClis } from '../live/restart.ts'
 import { nextWords } from '../live/trigger.ts'
 import { secretPages, Vault } from '../live/secrets.ts'
@@ -59,7 +59,7 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
   read: Record<string, number> = { '*': Date.now() + 1000 }
   // every brief ends with its Settings block, as a live one does: HP-204's with two lines changed, one by its
   // coordinator and one by its space
-  tasks: Task[] = D.tasks().map((t) => ({ ...(DEMO_PRS[t.id] ? { ...t, pr: DEMO_PRS[t.id] } : t), desc: `${t.desc}\n\n${settingsBlock(t.id, t.id === 'HP-204' ? { ways: { ...DEFAULT_WAYS, rounds: 1, merge: 'ask me first' }, reviewer: DEFAULT_REVIEWER, by: { rounds: 'task', merge: 'space' } } : { ways: DEFAULT_WAYS, reviewer: DEFAULT_REVIEWER })}` }))
+  tasks: Task[] = D.tasks().map((t) => ({ base: 'main', ...(DEMO_PRS[t.id] ? { ...t, pr: DEMO_PRS[t.id] } : t), desc: `${t.desc}\n\n${settingsBlock(t.id, t.id === 'HP-204' ? { ways: { ...DEFAULT_WAYS, rounds: 1, merge: 'ask me first' }, reviewer: DEFAULT_REVIEWER, by: { rounds: 'task', merge: 'space' } } : { ways: DEFAULT_WAYS, reviewer: DEFAULT_REVIEWER })}` }))
   chats: Record<string, Chat> = D.chats()
   asks: Record<string, string> = { ...D.ASKS }
   /** each machine's defaults at their levels, as live */
@@ -67,6 +67,7 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
   /** each place's HEARTBEAT.md as edited here */
   checklists: Record<string, string> = {}
   pluginsOff: string[] = []
+  bases: Record<string, string> = Object.fromEntries(this.places.filter((p) => p.level === 2 && !p.id.endsWith(':~')).map((p) => [p.id, 'main']))
   sections = D.settings(this.stores)
   /** agents' secrets, in memory only */
   vault = new Vault('', D.secrets())
@@ -224,7 +225,7 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
       ]),
       last: this.last(),
       read: this.read,
-      settings: secretPages(this.sections, this.vault.names()),
+      settings: secretPages([...this.sections, ...Object.entries(this.bases).map(([id, base]) => repositorySection(id, id.split(':')[1], base))], this.vault.names()),
       demo: true,
       user: 'Elias',
     }
@@ -567,6 +568,12 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
         return { ok: true }
       }
       case 'setting': {
+        if (a.key === 'space.base') {
+          if (!a.place || !(a.place in this.bases) || !a.value?.trim() || /[\s~^:?*\[\\]/.test(a.value)) return { ok: false, error: 'Choose a branch name.' }
+          this.bases[a.place] = a.value
+          this.emit('snapshot')
+          return { ok: true }
+        }
         // a plugin's switch: on at once here (a real install restarts with it)
         if (a.key.startsWith('plugin.')) {
           const name = a.key.slice('plugin.'.length)

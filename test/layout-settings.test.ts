@@ -186,3 +186,31 @@ describe.skipIf(!browser)('private instruction settings', () => {
     }
   })
 })
+
+describe.skipIf(!browser)('repository base', () => {
+  test('editing the space default keeps existing task targets', async () => {
+    const page = await browser!.newPage({ viewport: { width: 1280, height: 900 } })
+    const before = world.bases['p:vm-str:gtm']
+    try {
+      await page.goto(url().replace('vm-str/home', 'vm-str/gtm'))
+      await page.getByRole('button', { name: 'Settings', exact: true }).click()
+      const settings = page.getByRole('region', { name: 'Settings' })
+      await settings.getByRole('button', { name: 'Repository', exact: true }).click()
+      const input = settings.getByRole('textbox', { name: 'Base branch', exact: true })
+      await input.fill('develop')
+      await input.press('Tab')
+      await settled(page)
+      expect(world.bases['p:vm-str:gtm']).toBe('develop')
+      expect(world.tasks.find((t) => t.id === 'GTM-15')!.base).toBe('main')
+      await settings.getByRole('button', { name: 'Close', exact: true }).click()
+      await page.getByRole('button', { name: /Ready GTM-15 Fix webhook/ }).click()
+      await page.getByText('Merges into main', { exact: true }).waitFor()
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.getByText('Merges into main', { exact: true }).waitFor()
+    } finally {
+      world.bases['p:vm-str:gtm'] = before
+      world.emit('snapshot')
+      await page.close()
+    }
+  })
+})

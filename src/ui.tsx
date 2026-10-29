@@ -469,7 +469,7 @@ export function taskLine(t: Task, where?: string[]): ReactNode {
   const w = rowReport(t)
   const line = w ? <ReportLine w={w} /> : t.sub
   // where it is leads, or else its pull request's number, small: the link itself is in its chat's header
-  const parts = where?.length ? where : t.pr ? [`PR #${t.pr.number}`] : []
+  const parts = [...(where?.length ? where : t.pr ? [`PR #${t.pr.number}`] : []), ...(t.base ? [`→ ${t.base}`] : [])]
   const lead = parts.length ? (
     // alone (no line after it), it has the whole width: half of it cut the machine's short name ("vm-…")
     <span className={clsx('inline-flex min-w-0 shrink-0 align-bottom text-fg3', line ? 'max-w-1/2' : 'max-w-full')}>

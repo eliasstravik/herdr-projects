@@ -254,6 +254,34 @@ describe('deleting a task from the command', () => {
   })
 })
 
+describe('base branch choices', () => {
+  test('CLI and Settings keep task snapshots, validate before adding, and show the target', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shep-base-cli-'))
+    execSync('git init -q -b main && git config user.email t@t && git config user.name T && touch README && git add . && git commit -qm init && git branch develop && git branch feature/topic', { cwd: dir })
+    const p = await src.places.add(dir, 'base-cli')
+    const place = placeId.space(p.name)
+    expect((await src.cli(['set', 'space.base', 'develop', '--space', p.name], {})).code).toBe(0)
+    expect((await src.cli(['show', '--space', p.name], {})).out).toContain('Base branch: develop')
+    const add = await src.cli(['task', 'add', 'Use feature', '--base', 'feature/topic', '--space', p.name], {})
+    expect(add.code).toBe(0)
+    const t = src.engine.tasks.at(-1)!
+    expect(t.base).toBe('feature/topic')
+    expect((await src.cli(['task', 'show', t.id], {})).out).toContain('Merges into: feature/topic')
+    const count = src.engine.tasks.length
+    expect((await src.cli(['task', 'add', 'Bad base', '--base', 'missing', '--space', p.name], {})).code).toBe(1)
+    expect(src.engine.tasks.length).toBe(count)
+    expect((await src.cli(['space', 'set', 'base', 'main', '--space', p.name], {})).code).toBe(0)
+    expect(t.base).toBe('feature/topic')
+    expect(await src.act({ type: 'setting', place, key: 'space.base', value: 'develop' })).toMatchObject({ ok: true })
+    expect(await src.act({ type: 'setting', place, key: 'space.base', value: 'missing' })).toMatchObject({ ok: false })
+    expect(p.base).toBe('develop')
+    expect(src.snapshot().settings.find((s) => s.level === place && s.name === 'Repository')!.rows[0].value).toBe('develop')
+    expect((await src.cli(['set', 'space.base', 'main'], {})).code).toBe(1)
+    expect((await src.cli(['set', 'space.base', 'main', '--space', 'home'], {})).code).toBe(1)
+    await until(() => !!t.trouble)
+  })
+})
+
 describe('To do from the command', () => {
   test('task add starts its agent; shepherdr todo shows it as To do, and a message to its agent is the go', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'shep-src-repo-'))
