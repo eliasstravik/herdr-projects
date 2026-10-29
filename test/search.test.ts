@@ -5,6 +5,7 @@ import { findIn } from '../plugins/chat/days.ts'
 import type { Chat, Message } from '../shared/types.ts'
 
 const all = { kind: 'all' } as const
+const pName = (snap: ReturnType<DemoWorld['snapshot']>, id: string) => snap.places.find(p => p.id === id)!.name
 
 describe('unified search identities, scope and privacy', () => {
   test('all machine homes with duplicate names stay separate and have machine context', () => {
@@ -24,6 +25,8 @@ describe('unified search identities, scope and privacy', () => {
     const space = searchChats(snap, { kind: 'space', id: t.place })
     expect(space.every(c => c.place === t.place)).toBe(true)
     expect(space.map(c => c.key)).toContain(chat)
+    const results = searchResults(snap, all, `${pName(snap, t.place)} ${t.name}`, {})
+    expect(results.some(h => h.task === t.id)).toBe(true)
     const p = snap.places.find(p => p.id === t.place)!
     const machine = searchChats(snap, { kind: 'machine', id: p.machine })
     expect(machine.length).toBeGreaterThanOrEqual(space.length)
@@ -58,6 +61,7 @@ describe('unified search identities, scope and privacy', () => {
       { id: 'secret', who: 'agent', secret: { id: 'secret', name: 'PRIVATE_TOKEN', why: 'hidden-needle', levels: [] } },
       { id: 'empty', who: 'agent' },
     ] } }
+    Object.defineProperty(snap, 'settings', { get() { throw new Error('Search must never inspect secret settings') } })
     const results = searchResults(snap, all, '', chats)
     expect(results.some(h => h.kind === 'Messages')).toBe(false)
     expect(searchResults(snap, all, 'hidden-needle', chats)).toEqual([])
