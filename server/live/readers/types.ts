@@ -32,6 +32,10 @@ export type LogEvent =
   | { kind: 'session'; id: string; at: number; sessionId: string; file?: string }
   /** something the human (or Shepherdr on their behalf) typed */
   | { kind: 'user'; id: string; at: number; text: string }
+  /** what the human typed while the agent worked, held in the CLI's own queue (Claude Code) until it takes it in */
+  | { kind: 'queued'; id: string; at: number; text: string }
+  /** the queued one with this id left the CLI's queue: taken in, or taken out */
+  | { kind: 'unqueued'; id: string; at: number }
   /** a reply the agent wrote (markdown). Can come again with the same id and longer text when the CLI writes the rest
    * of that reply after a read: keep the latest per id. */
   | { kind: 'agent'; id: string; at: number; text: string }

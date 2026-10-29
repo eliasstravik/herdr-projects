@@ -33,6 +33,9 @@ interface FileState {
   seen: Set<string>
   /** the folder its background shells write their output to, learned from one */
   tasks?: string
+  /** Claude Code's own queue of input, in order: each one's event id and its words (a background notice's too: a
+   *  dequeue names none, it takes the first) */
+  queue: { id: string; content: string }[]
 }
 
 /** steps remembered as not over: one cut off (Esc) never gets its result */
@@ -146,7 +149,7 @@ export class ClaudeReader implements Reader {
   private state(file: string): FileState {
     let s = this.files.get(file)
     if (!s) {
-      s = { session: false, replies: new Map(), asked: new Set(), open: new Set(), ended: true, steps: new Map(), seen: new Set() }
+      s = { session: false, replies: new Map(), asked: new Set(), open: new Set(), ended: true, steps: new Map(), seen: new Set(), queue: [] }
       this.files.set(file, s)
     }
     return s
@@ -177,7 +180,7 @@ export class ClaudeReader implements Reader {
 
     for (const { text, offset } of lines) {
       // skip the big bookkeeping lines without parsing them
-      if (s.session && !/"type":\s*"(user|assistant|system|queued_command)"/.test(text)) continue
+      if (s.session && !/"type":\s*"(user|assistant|system|queued_command|queue-operation)"/.test(text)) continue
       const l = parseLine(text)
       if (!l || typeof l !== 'object') continue
       const t = timeOf(l)
@@ -228,6 +231,20 @@ export class ClaudeReader implements Reader {
           if (!once(words, t)) continue
         } else turnStart(`start-${l.uuid ?? offset}`, t)
         out.push({ kind: 'user', id: String(l.uuid ?? `u${offset}`), at: t, text: words })
+      } else if (l.type === 'queue-operation') {
+        // typed while it works, Claude Code holds it in its own queue: enqueue, then dequeue (the first) or remove (by
+        // its words) once it takes it in or it is taken out
+        const content = typeof l.content === 'string' ? l.content : ''
+        if (l.operation === 'enqueue') {
+          const id = `queued-${offset}`
+          s.queue.push({ id, content })
+          const words = cleanText(content)
+          if (words) out.push({ kind: 'queued', id, at: t, text: words })
+        } else if (l.operation === 'dequeue' || l.operation === 'remove') {
+          const i = l.operation === 'remove' ? s.queue.findIndex((q) => q.content === content) : 0
+          const [q] = i < 0 ? [] : s.queue.splice(i, 1)
+          if (q) out.push({ kind: 'unqueued', id: q.id, at: t })
+        }
       } else if (l.type === 'attachment' && l.attachment?.type === 'queued_command') {
         // a prompt typed while the agent was busy and taken in mid-turn: it never shows up as a user line
         const a = l.attachment

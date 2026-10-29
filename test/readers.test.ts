@@ -152,6 +152,21 @@ describe('claude reader', () => {
     expect(brief(ev).slice(1)).toEqual(['user:/review the login page', 'user:and the signup page', 'user:line one\nline two'])
   })
 
+  test("Claude Code's own queue: what the human typed while it works waits there until it is taken in or out", () => {
+    const op = (operation: string, content?: string, extra: object = {}) => ({ type: 'queue-operation', operation, timestamp: ts(), sessionId: S, ...(content === undefined ? {} : { content }), ...extra })
+    const ev = parse('claude', [
+      cuser('u1', 'Write the long report', typed),
+      op('enqueue', '<task-notification>\n<task-id>b1</task-id>\n</task-notification>'),
+      op('enqueue', 'also check the README'),
+      op('enqueue', 'and the docs'),
+      // a dequeue names none: it takes the first, the notice
+      op('dequeue'),
+      op('remove', 'and the docs', { reason: 'absorbed_mid_turn' }),
+    ])
+    const q = ev.filter((e) => e.kind === 'queued' || e.kind === 'unqueued').map((e) => (e.kind === 'queued' ? `queued:${e.id}:${e.text}` : `unqueued:${e.id}`))
+    expect(q).toEqual(['queued:queued-2000:also check the README', 'queued:queued-3000:and the docs', 'unqueued:queued-1000', 'unqueued:queued-3000'])
+  })
+
   test('AskUserQuestion becomes a question, its tool result marks it answered', () => {
     const ev = parse('claude', [
       cuser('u1', 'Pick a colour scheme', typed),

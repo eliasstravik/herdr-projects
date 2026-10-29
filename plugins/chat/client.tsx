@@ -167,6 +167,10 @@ function Bubble({ msg, chat, from, out, last }: { msg: Message; chat: Chat; from
                     const blocker = chat.messages.findLast((m) => m.question?.sent === undefined && !!m.question && !m.waiting)
                     return blocker ? <LinkButton onClick={() => jumpTo(chat.key, blocker.id, { card: true })}>Go to question</LinkButton> : null
                   })()}
+                </> : msg.waitsFor === 'queued' ? <>
+                  {waitLine(msg.waitsFor)}.{' '}
+                  {/* Claude Code sends what it queued at once on Ctrl+Enter, stopping its turn; with nothing queued it does nothing */}
+                  <LinkButton onClick={() => act({ type: 'keys', chat: chat.key, keys: ['ctrl+enter'] })}>Send now</LinkButton>
                 </> : waitLine(msg.waitsFor)}</div> : null}
                 {msg.text ? <div ref={text} data-text>{you ? <YourText text={msg.text} /> : <Fold id={msg.id}><Markdown text={msg.text} /></Fold>}</div> : null}
               </div>,
@@ -202,11 +206,12 @@ function Bubble({ msg, chat, from, out, last }: { msg: Message; chat: Chat; from
 }
 
 /** why one you sent waits: a busy agent takes it at once, so only a menu (typing could pick an option), an agent still
- *  starting, a CLI command mid-turn or a machine out of reach hold it */
+ *  starting, a CLI command mid-turn or a machine out of reach hold it; a busy Claude Code keeps it in its own queue */
 function waitLine(why: Message['waitsFor']) {
   if (why === 'menu') return 'Waiting for your answer above.'
   if (why === 'start') return 'Goes in once the agent has started'
   if (why === 'turn') return 'Goes in once the agent finishes this step'
+  if (why === 'queued') return 'Queued: the agent reads it after this step'
   return 'Goes in once it can be reached'
 }
 
