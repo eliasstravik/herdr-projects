@@ -443,6 +443,7 @@ const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   'How tasks work': PlanIcon,
   Agents: ModelIcon,
   Tasks: TasksIcon,
+  'Task IDs': TasksIcon,
   Autopilot: AutopilotIcon,
   'Time zone': ClockIcon,
   Machine: MachineIcon,
@@ -905,7 +906,7 @@ export default function Settings() {
       <span className="text-fg2">Editing:</span>
       {page.device ? <span>This device</span> : page.global || !page.level ? <span>Everywhere</span> : levelPick(phone ? 'phone' : 'content') ?? <span>{name(level)}</span>}
     </div>
-    <PageBody key={`${page.level ?? ''}|${page.name}`} page={page} phone={phone} set={set} refused={(key) => refused[at(key)]} clear={clear} hint={page.level && !page.global ? levelHint(page.level, snap) : undefined} /></>
+    <PageBody key={`${page.level ?? ''}|${page.name}`} page={page} phone={phone} set={set} refused={(key) => refused[at(key)]} clear={clear} hint={page.level && !page.global && page.name !== 'Task IDs' ? levelHint(page.level, snap) : undefined} /></>
 
   if (phone) {
     const list = (

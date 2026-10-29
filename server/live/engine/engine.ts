@@ -1,3 +1,4 @@
+import { TaskIds } from '../task-ids.ts'
 import { trustWorktree } from '../trust.ts'
 // The tasks engine. A task is added by a coordinator and at once gets one agent, in its own git worktree and branch
 // from main. The coordinator's brief is the agent's first message and decides everything else (wait for a go, plan
@@ -332,6 +333,7 @@ const LATER = "Don't start yet: wait for a go."
 export class Engine extends Emitter<Events> {
   /** main: by project path, the failing commit on GitHub's main its coordinator was told of, until main is green */
   private data = readJson<{ next: Record<string, number>; tasks: TaskRec[]; red?: Record<string, string> }>('tasks.json', { next: {}, tasks: [] })
+  readonly taskIds: TaskIds
   private starting = new Set<string>()
   /** started, its brief not yet taken up: To do until its agent works on it */
   private briefing = new Set<string>()
@@ -380,6 +382,8 @@ export class Engine extends Emitter<Events> {
     h?: HerdrSpaces,
   ) {
     super()
+    this.taskIds = new TaskIds(this.places.spaces, this.data, (name) => placeId.space(name))
+    this.places.takenTaskKeys = () => this.taskIds.keys()
     this.wt = new Worktrees(h)
     // tasks from before statuses came from the agent: a finished one is merged, and was cleaned up then
     for (const t of this.data.tasks as (Omit<TaskRec, 'after'> & { stage?: string; after?: string | string[] })[]) {
@@ -450,6 +454,7 @@ export class Engine extends Emitter<Events> {
   }
 
   stop() {
+    this.taskIds.close()
     for (const x of this.later.values()) clearTimeout(x)
     for (const x of this.sweeps) clearTimeout(x)
   }
@@ -994,9 +999,11 @@ export class Engine extends Emitter<Events> {
     // a new task is in no circle; those already done are not waited for
     const after = this.checkAfter(undefined, o.after ?? []).filter((ref) => this.depState(ref) !== 'done')
     const title = short(o.title)
-    const n = (this.data.next[p.key] ?? 0) + 1
-    this.data.next[p.key] = n
-    const id = `${p.key}-${n}`
+    const space = placeId.space(p.name)
+    this.taskIds.ensure(space, p.key)
+    const { id, n, prefix } = this.taskIds.allocate(space)
+    p.key = prefix
+    this.data.next[prefix] = n
     // its project's defaults: its own, else its machine's, else All machines'
     const reviewer = this.harness(o.reviewer, 'reviewer', p.name)
     const agent = this.harness(o.agent, 'task', p.name)

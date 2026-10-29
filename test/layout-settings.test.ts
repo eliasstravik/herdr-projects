@@ -99,3 +99,44 @@ describe.skipIf(!browser)('chat agent choices', () => {
     } finally { await page.close() }
   })
 })
+
+describe.skipIf(!browser)('Task IDs space settings', () => {
+  test('shows only for its space, with two fields and a useful refusal', async () => {
+    const { taskIdsSection } = await import('../server/live/task-ids.ts')
+    const before = world.sections
+    const level = 'p:vm-str:gtm'
+    world.sections = [...before, taskIdsSection(level, 'vm-str', 'GAME', 100)]
+    world.emit('snapshot')
+    const page = await browser!.newPage({ viewport: { width: 1280, height: 900 } })
+    try {
+      await page.goto(url())
+      await page.getByRole('button', { name: 'Settings', exact: true }).click()
+      const settings = page.getByRole('region', { name: 'Settings' })
+      expect(await settings.getByRole('button', { name: 'Task IDs', exact: true }).count()).toBe(0)
+      await settings.getByRole('button', { name: /^Editing:/ }).click()
+      await page.getByRole('menuitemradio', { name: /gtm/ }).click()
+      await settings.getByRole('button', { name: 'Task IDs', exact: true }).click()
+      expect(await settings.getByRole('textbox').count()).toBe(2)
+      expect(await settings.getByRole('textbox', { name: 'Prefix', exact: true }).inputValue()).toBe('GAME')
+      expect(await settings.textContent()).toContain('Next task: GAME-100')
+      expect(await settings.getByRole('button', { name: /^Reset to/ }).count()).toBe(0)
+      expect(await settings.textContent()).not.toContain('The rest follows')
+      // Exercise the screen's actual save and refusal handling without teaching the demo world live ID allocation.
+      const sent: unknown[] = []
+      await page.route('**/api/action', async (route) => {
+        const action = route.request().postDataJSON()
+        if (action.type !== 'setting' || !action.key.startsWith('taskIds.')) return route.continue()
+        sent.push(action)
+        await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'Use 100 or higher. Earlier numbers are reserved.' }) })
+      })
+      await settings.getByRole('textbox', { name: 'Next number' }).fill('7')
+      await settings.getByRole('textbox', { name: 'Next number' }).press('Tab')
+      await settings.getByRole('status').filter({ hasText: 'Use 100 or higher' }).waitFor()
+      expect(sent).toEqual([{ type: 'setting', key: 'taskIds.next', value: '7', place: level }])
+    } finally {
+      world.sections = before
+      world.emit('snapshot')
+      await page.close()
+    }
+  })
+})

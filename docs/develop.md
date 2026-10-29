@@ -32,3 +32,14 @@ helper/            what Shepherdr puts on another machine: its shepherdr command
 bin/shepherdr      the command agents use
 bin/agent-browser  agent-browser at the pinned version, for each task's shared browser
 ```
+
+Task IDs are configured only in Settings → a repository space → Task IDs. The automatic prefix remains the default;
+changing it affects new tasks only. Prefixes (1–16 uppercase letters/digits, starting with a letter) are reserved on
+the owning machine, including historical prefixes. Other machines may use the same prefix: remote references remain
+machine-qualified. Space display renames already preserve the key.
+
+The next number can stay put or move forward, never back. Skipped numbers remain reserved, including after changing
+prefix, so a space's worktree/branch numbers also never repeat. `task-ids.sqlite` in the owning machine's Shepherdr
+home is the durable reservation ledger; retain it when backing up or moving that home (with its WAL if running).
+It imports existing `tasks.json` counters and task history automatically. Reservations commit before task creation;
+a failed creation can leave a gap. `spaces.json` mirrors the current prefix; the ledger is authoritative after migration.

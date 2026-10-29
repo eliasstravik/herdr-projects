@@ -84,6 +84,8 @@ export function keyFor(name: string, taken: string[]) {
 }
 
 export class Places {
+  /** Historical task prefixes, including deleted tasks; supplied by the owning engine. */
+  takenTaskKeys?: () => string[]
   /** what was kept under the coordinators that are gone moves to the home spaces first, once */
   retired = migrateToSpaces((m) => placeId.home(m), HOME_AGENT).retire
   spaces: Space[] = readJson('spaces.json', [])
@@ -226,7 +228,7 @@ export class Places {
     // that one's key, so the new one gets a key of its own and shows the name asked for
     let key = nm
     for (let i = 2; this.spaces.some((x) => x.name === key); i++) key = `${nm}-${i}`
-    const p: Space = { name: key, path: top, key: keyFor(nm, this.spaces.map((x) => x.key)), github: await githubRemote(top), base: await defaultBranch(top), added: Date.now() }
+    const p: Space = { name: key, path: top, key: keyFor(nm, [...this.spaces.map((x) => x.key), ...(this.takenTaskKeys?.() ?? [])]), github: await githubRemote(top), base: await defaultBranch(top), added: Date.now() }
     this.spaces.push(p)
     if (key !== nm) this.rename(placeId.space(key), nm)
     this.save()

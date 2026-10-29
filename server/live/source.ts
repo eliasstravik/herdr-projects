@@ -1,3 +1,4 @@
+import { taskIdsSection } from './task-ids.ts'
 import { coordinatorRequestIds } from '../../shared/attention.ts'
 // The live source: herdr is the truth for agents and their states; the CLIs' own logs are the chats; Shepherdr keeps
 // only what herdr can't tell it (spaces, tasks, modes, cards, settings). Assembled from the base plugins' parts.
@@ -495,7 +496,12 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         NAME,
         (id) => this.heartbeats.read(id, this.roleOf(id)),
         this.pushWarnings(),
-      ).concat(peers.flatMap((l) => (l.snap?.settings ?? []).filter((x) => x.machine === l.rec.machine))),
+      ).concat(this.places.spaces.map((p) => {
+        const id = placeId.space(p.name)
+        this.engine.taskIds.ensure(id, p.key)
+        const seq = this.engine.taskIds.get(id)
+        return taskIdsSection(id, HOST, seq.prefix, seq.last + 1)
+      })).concat(peers.flatMap((l) => (l.snap?.settings ?? []).filter((x) => x.machine === l.rec.machine))),
       user: this.user,
     })
   }
@@ -1465,6 +1471,17 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       case 'call':
         return {}
       case 'setting': {
+        if (a.key.startsWith('taskIds.')) {
+          const p = a.place && this.places.space(a.place)
+          if (!p) return { ok: false, error: 'Select a repository space in Settings.' }
+          try {
+            this.engine.taskIds.ensure(a.place!, p.key)
+            p.key = this.engine.taskIds.set(a.place!, a.key, a.value).prefix
+            this.places.save()
+            this.emit('snapshot')
+            return { ok: true }
+          } catch (e) { return { ok: false, error: (e as Error).message } }
+        }
         // a plugin's switch: the human's own list, on the main machine
         if (a.key.startsWith(PLUGIN_KEY)) {
           const r = setPluginOn(a.key.slice(PLUGIN_KEY.length), a.value !== 'off')
