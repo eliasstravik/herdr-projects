@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { layout, until } from './layout.ts'
 
-const { browser, world, url } = await layout()
+const { browser, world, url } = await layout({ everything: true })
 
 describe.skipIf(!browser)('unified search', () => {
   for (const width of [390, 1440]) test(`scopes, paging and exact destination message (${width}px)`, async () => {

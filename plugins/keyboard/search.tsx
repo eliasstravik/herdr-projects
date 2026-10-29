@@ -44,7 +44,7 @@ export function Search({ onClose }: { onClose: () => void }) {
   const [kind, setKind] = useState<SearchKind | null>(null)
   const [q, setQ] = useState('')
   const [settled, setSettled] = useState('')
-  const [cur, setCur] = useState(0)
+  const [selected, setSelected] = useState<string | null>(null)
   const [limit, setLimit] = useState(8)
   const [retry, setRetry] = useState(0)
   const [chats, setChats] = useState<Record<string, Chat>>({})
@@ -64,10 +64,10 @@ export function Search({ onClose }: { onClose: () => void }) {
   const results = useMemo(() => searchResults(ordered, scope, settled, chats), [ordered, scope, settled, chats])
   const groups = kinds.filter(k => !kind || kind === k).map(k => ({ kind: k, all: results.filter(h => h.kind === k) }))
   const list = groups.flatMap(g => g.all.slice(0, limit))
-  const current = list[Math.min(cur, Math.max(0, list.length - 1))]
+  const current = list.find(hit => hit.key === selected) ?? list[0]
   useEffect(() => { document.getElementById(`search-hit-${current?.key}`)?.scrollIntoView({ block: 'nearest' }) }, [current?.key])
   const pick = (hit?: SearchHit, query = settled) => { if (hit) { onClose(); openHit(hit, query) } }
-  const changeScope = (s: SearchScope) => { setScope(s); setCur(0); setLimit(8) }
+  const changeScope = (s: SearchScope) => { setScope(s); setSelected(null); setLimit(8) }
   const chip = 'min-h-9 shrink-0 rounded-full border border-line2 px-3 text-sm focus-visible:outline-accent aria-pressed:border-accent aria-pressed:text-accent phone:min-h-12 phone:text-base'
   const scopeOptions: { label: string; scope: SearchScope }[] = [
     { label: 'Everywhere', scope: { kind: 'all' } },
@@ -79,9 +79,9 @@ export function Search({ onClose }: { onClose: () => void }) {
     <div className="flex shrink-0 items-center gap-2 border-b border-line pr-2 pl-4">
       <SearchIcon className={`${ic} text-fg3`} />
       <input autoFocus name="search" role="combobox" aria-expanded="true" aria-controls="search-list" aria-activedescendant={current ? `search-hit-${current.key}` : undefined} aria-label="Search or jump to" placeholder="Search spaces, tasks, messages, artifacts" value={q}
-        onChange={e => { setQ(e.target.value); setCur(0); setLimit(8) }}
+        onChange={e => { setQ(e.target.value); setSelected(null); setLimit(8) }}
         onKeyDown={e => {
-          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setCur(Math.max(0, Math.min(list.length - 1, cur + (e.key === 'ArrowDown' ? 1 : -1)))) }
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setSelected(list[Math.max(0, Math.min(list.length - 1, list.findIndex(h => h.key === current?.key) + (e.key === 'ArrowDown' ? 1 : -1)))]?.key ?? null) }
           else if (e.key === 'Enter') {
             const freshResults = q === settled ? [] : searchResults(ordered, scope, q, chats)
             const firstKind = kind ?? kinds.find(k => freshResults.some(h => h.kind === k))
@@ -94,7 +94,7 @@ export function Search({ onClose }: { onClose: () => void }) {
     </div>
     <div className="shrink-0 space-y-2 border-b border-line p-3">
       <div role="group" aria-label="Search scope" className="flex gap-2 overflow-x-auto pb-1">{scopeOptions.map(o => <button type="button" key={o.scope.kind} className={chip} aria-pressed={JSON.stringify(o.scope) === JSON.stringify(scope)} onClick={() => changeScope(o.scope)}>{o.label}</button>)}</div>
-      <div role="group" aria-label="Result types" className="flex gap-2 overflow-x-auto pb-1">{[null, ...kinds].map(k => <button type="button" key={k ?? 'all'} className={chip} aria-pressed={kind === k} onClick={() => { setKind(k); setCur(0); setLimit(8) }}>{k ?? 'All types'}</button>)}</div>
+      <div role="group" aria-label="Result types" className="flex gap-2 overflow-x-auto pb-1">{[null, ...kinds].map(k => <button type="button" key={k ?? 'all'} className={chip} aria-pressed={kind === k} onClick={() => { setKind(k); setSelected(null); setLimit(8) }}>{k ?? 'All types'}</button>)}</div>
       <p role="status" className="text-xs text-fg2 phone:text-sm">{scopeOptions.find(o => JSON.stringify(o.scope) === JSON.stringify(scope))?.label} · {!q.trim() ? 'Recent items · ' : ''}{q !== settled ? 'Filtering… · ' : ''}{coverage.finished ? `Read ${coverage.done} of ${sources.length} chats` : `Loading messages… ${coverage.done} of ${sources.length} chats`}</p>
       {coverage.missing.length > 0 ? <div className="text-xs text-fg2 phone:text-sm">{coverage.missing.length} chats could not be refreshed. Results may be incomplete or out of date. <button type="button" className="min-h-11 underline" onClick={() => setRetry(n => n + 1)}>Retry</button></div> : null}
       {snap.machines.some(m => m.status === 'off' && sources.some(c => snap.places.some(p => p.id === c.place && p.machine === m.machine))) ? <p className="text-xs text-fg2 phone:text-sm">Unavailable machines: {snap.machines.filter(m => m.status === 'off' && sources.some(c => snap.places.some(p => p.id === c.place && p.machine === m.machine))).map(m => m.name).join(', ')}. Saved items may be out of date.</p> : null}
