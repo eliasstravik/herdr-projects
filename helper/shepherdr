@@ -126,16 +126,18 @@ sub env_file {
   return ("shepherdr secret env NAME [NAME …] [--file .env]\n", 1) unless length $name;
   my $file = File::Spec->rel2abs($name);
   my $dir = File::Basename::dirname($file);
-  # git, quietly: did it say yes
+  # git, quietly: its exit code (127: no git here)
   my $git = sub {
-    my $pid = fork() // return 0;
+    my $pid = fork() // return 127;
     unless ($pid) { open(STDOUT, '>', '/dev/null'); open(STDERR, '>', '/dev/null'); exec('git', '-C', $dir, @_) or exit 127; }
     waitpid($pid, 0);
-    return $? == 0;
+    return $? >> 8;
   };
-  my $tracked = $git->('rev-parse', '--is-inside-work-tree') && !$git->('check-ignore', '-q', $file);
-  return ("$name is not ignored by git: add it to .gitignore first, so the secret never lands in git.\n", 1) if $tracked;
-  return ("$name is a link: name a plain file, so the secret lands nowhere else.\n", 1) if -l $file;
+  my $repo = $git->('rev-parse', '--is-inside-work-tree');
+  return ("git isn't here to check that it ignores $name: nothing written.\n", 1) if $repo == 127;
+  return ("$name is not ignored by git: add it to .gitignore first, so the secret never lands in git.\n", 1) if $repo == 0 && $git->('check-ignore', '-q', $file) != 0;
+  # a link (or a second name of another file) would carry it into that file
+  return ("$name is a link: name a plain file, so the secret lands nowhere else.\n", 1) if -l $file || (-e $file && (lstat $file)[3] > 1);
   my @names = sort keys %$secrets;
   my @old;
   if (open(my $in, '<', $file)) {

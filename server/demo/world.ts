@@ -456,7 +456,7 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
       case 'answer':
         return this.answer(a)
       case 'secret': {
-        const r = this.vault.set(a.level, a.name, a.value === null ? null : a.value.trim())
+        const r = this.vault.set(a.level, a.name, a.value === null ? null : a.value.replace(/[\r\n]+$/, ''))
         if (!r.ok) return r
         // the card that asked for it says where it is kept, and the chat shows what you gave: its name
         const m = a.card && this.chats[a.card.chat]?.messages.find((x) => x.secret?.id === a.card!.id)

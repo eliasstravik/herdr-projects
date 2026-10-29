@@ -1356,7 +1356,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       case 'secret': {
         // kept on the main machine, whichever machine it is for: a worker never gets one from the screen
         if (BOX) return { ok: false, error: 'Secrets are kept on the main machine.' }
-        const value = a.value === null ? null : String(a.value ?? '').trim()
+        const value = a.value === null ? null : String(a.value ?? '').replace(/[\r\n]+$/, '')
         const r = this.vault.set(a.level, a.name, value)
         if (!r.ok) return r
         this.emit('snapshot')
@@ -2258,9 +2258,9 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     if ((sub === 'set' || sub === 'rm' || sub === 'remove') && BOX) throw new Error(`Secrets are kept on the main machine: set or remove them there, or in Settings → Secrets.`)
     if (sub === 'set') {
       if (!name || !SECRET_NAME.test(name)) throw new Error('shepherdr secret set NAME [--machine | --space NAME] < file (the value on stdin; none: Everywhere)')
-      if (!ctx.stdin?.trim()) throw new Error(`Give the value on stdin, never as a word: shepherdr secret set ${name} < file, or pipe it in.`)
+      if (!ctx.stdin?.replace(/[\r\n]+$/, '')) throw new Error(`Give the value on stdin, never as a word: shepherdr secret set ${name} < file, or pipe it in.`)
       const level = this.secretLevel(p)
-      const r = this.vault.set(level, name, ctx.stdin.trim())
+      const r = this.vault.set(level, name, ctx.stdin.replace(/[\r\n]+$/, ''))
       if (!r.ok) throw new Error(r.error)
       this.emit('snapshot')
       return `Saved ${name} for ${this.secretLevelName(level)}.`

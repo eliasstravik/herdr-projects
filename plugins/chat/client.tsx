@@ -1456,7 +1456,7 @@ function SecretCard({ ask, chat }: { ask: SecretAsk; chat: Chat }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const save = async () => {
-    if (!value.trim() || busy) return
+    if (!value || busy) return
     setBusy(true)
     setErr('')
     try {
@@ -1496,7 +1496,7 @@ function SecretCard({ ask, chat }: { ask: SecretAsk; chat: Chat }) {
             <span role="status" className={clsx('mr-auto text-[0.75rem] text-pretty phone:text-[0.8125rem]', err ? 'text-need' : 'text-fg3')}>
               {err || 'Agents use it by name, never seeing it.'}
             </span>
-            <Primary soft disabled={busy || !value.trim()} onClick={save}>
+            <Primary soft disabled={busy || !value} onClick={save}>
               Save
             </Primary>
           </div>

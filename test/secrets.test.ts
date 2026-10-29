@@ -68,7 +68,10 @@ describe('the shepherdr secret command', () => {
     // not from a terminal: there is no chat to show the card in
     expect((await src.cli(['secret', 'ask', 'API_KEY'], {})).code).toBe(1)
 
-    expect(await src.act({ type: 'secret', level: placeId.machine(), name: 'API_KEY', value: '  k-123456  ' })).toEqual({ ok: true })
+    // a paste's line end goes; anything else is the secret's own
+    expect(await src.act({ type: 'secret', level: placeId.machine(), name: 'API_KEY', value: 'k-123456\n' })).toEqual({ ok: true })
+    await src.act({ type: 'secret', level: placeId.machine(), name: 'SPACED', value: ' pass word ' })
+    expect((await src.cli(['secret', 'run', 'SPACED'], { chat: home })).secrets).toEqual({ SPACED: ' pass word ' })
     expect((await src.cli(['secret', 'ask', 'API_KEY'], { chat: home })).out).toContain('kept already')
     expect((await src.cli(['secret', 'ask', 'API_KEY', '--force'], { chat: home })).code).toBe(0)
   })

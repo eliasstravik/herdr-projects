@@ -104,10 +104,13 @@ function envFile(args: string[], secrets: Record<string, string>) {
   const name = i < 0 ? '.env' : args[i].startsWith('--file=') ? args[i].slice(7) : args[i + 1]
   if (!name) return { out: 'shepherdr secret env NAME [NAME …] [--file .env]\n', code: 1 }
   const file = resolve(name)
-  const git = (...a: string[]) => spawnSync('git', ['-C', dirname(file), ...a], { stdio: 'ignore' }).status
-  if (git('rev-parse', '--is-inside-work-tree') === 0 && git('check-ignore', '-q', file) !== 0)
+  const git = (...a: string[]) => spawnSync('git', ['-C', dirname(file), ...a], { stdio: 'ignore' })
+  const repo = git('rev-parse', '--is-inside-work-tree')
+  if (repo.error) return { out: `git isn't here to check that it ignores ${name}: nothing written.\n`, code: 1 }
+  if (repo.status === 0 && git('check-ignore', '-q', file).status !== 0)
     return { out: `${name} is not ignored by git: add it to .gitignore first, so the secret never lands in git.\n`, code: 1 }
-  if (existsSync(file) && lstatSync(file).isSymbolicLink()) return { out: `${name} is a link: name a plain file, so the secret lands nowhere else.\n`, code: 1 }
+  // a link (or a second name of another file) would carry it into that file
+  if (existsSync(file) && (lstatSync(file).isSymbolicLink() || lstatSync(file).nlink > 1)) return { out: `${name} is a link: name a plain file, so the secret lands nowhere else.\n`, code: 1 }
   const names = Object.keys(secrets)
   const old = existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter((l, n, a) => !(n === a.length - 1 && !l) && !names.some((k) => new RegExp(`^\\s*(export\\s+)?${k}\\s*=`).test(l))) : []
   // readable by you only before a value goes in: a new file from the start, an old one first
