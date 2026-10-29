@@ -232,6 +232,10 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
     await words('All news').waitFor()
     const doc = pilot.getByRole('textbox', { name: 'Checklist' })
     expect(await doc.inputValue()).toContain('Tasks stuck or stalled')
+    const typography = await doc.evaluate((el) => ({ font: getComputedStyle(el).fontFamily, size: getComputedStyle(el).fontSize }))
+    expect(typography.font).not.toContain('mono')
+    expect(parseFloat(typography.size)).toBeGreaterThanOrEqual(16)
+    expect(await doc.evaluate((el) => el.closest('.font-mono, .shadow-box-focus') !== null)).toBe(false)
     // Save shows only once it changed
     expect(await pilot.getByRole('button', { name: 'Save' }).count()).toBe(0)
     await doc.fill('- Keep the live link working\n- Ship the onboarding flow')

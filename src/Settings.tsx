@@ -391,9 +391,9 @@ function DocValue({ value, onSave, label, file, phone, privateRules = false }: {
   useEffect(() => setV(value), [value])
   const changed = v !== value
   return (
-    <div className={clsx('flex w-full flex-col overflow-hidden rounded-row shadow-[inset_0_0_0_1px_var(--line2)] has-focus:shadow-box-focus', phone ? 'bg-well' : 'bg-bg')}>
-      <div className="flex min-h-9 items-center gap-3 border-b border-line py-1 pr-1.5 pl-3 text-[0.8125rem] phone:min-h-11">
-        <span className="min-w-0 flex-1 truncate font-mono text-[0.75rem] text-fg2">{file}</span>
+    <div className={clsx('flex w-full flex-col', privateRules && clsx('overflow-hidden rounded-row shadow-[inset_0_0_0_1px_var(--line2)] has-focus:shadow-box-focus', phone ? 'bg-well' : 'bg-bg'))}>
+      <div className={clsx('flex min-h-9 items-center gap-3 text-[0.8125rem] phone:min-h-11', privateRules && 'border-b border-line py-1 pr-1.5 pl-3')}>
+        <span className={clsx('min-w-0 flex-1 text-fg2', privateRules && 'truncate font-mono text-[0.75rem]')}>{file}</span>
         {changed ? (
           <>
             <span className="text-fg3 phone:hidden">Not saved</span>
@@ -416,7 +416,7 @@ function DocValue({ value, onSave, label, file, phone, privateRules = false }: {
             if (changed) onSave(v)
           }
         }}
-        className={clsx(privateRules ? 'min-h-24' : 'min-h-40', 'w-full bg-transparent px-3 py-2.5 font-mono text-[0.8125rem]/5 outline-none phone:text-[0.875rem]/[1.375rem]')}
+        className={clsx('w-full bg-transparent outline-none', privateRules ? 'min-h-24 px-3 py-2.5 font-mono text-[0.8125rem]/5 phone:text-[0.875rem]/[1.375rem]' : 'min-h-40 whitespace-pre-wrap wrap-anywhere text-base/6 focus-visible:rounded-row focus-visible:outline-2 focus-visible:outline-box-focus')}
       />
     </div>
   )

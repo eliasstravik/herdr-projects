@@ -1,5 +1,5 @@
 // The Settings block Shepherdr ends every new task's brief with: its heading, the words that say who changed a line,
-// and how the screen reads it back out of the brief to show it with its changed lines picked out.
+// and a reader for inspecting its settings. The chat displays the full original text verbatim.
 
 /** the block's first line */
 export const SETTINGS_HEAD = 'Settings: (from shepherdr show; where the brief above says otherwise, it wins)'

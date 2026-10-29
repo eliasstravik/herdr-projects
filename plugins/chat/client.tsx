@@ -7,7 +7,6 @@ import { act, chatName, definePlugin, getDraft, getState, goChat, has, holdReloa
 import { keyOf, partsOf, priorOf, reasonOf, SEND_TIMEOUT, type Outgoing } from '@client/outbox.ts'
 import { AlertIcon, BackIcon, CameraIcon, CheckIcon, Count, DeleteIcon, dimmed, Dot, DownIcon, DownloadIcon, Empty, field, FileIcon, ic, IconButton, KeyIcon, LinkButton, LiveWave, MachineIcon, Menu, MenuItem, MenuSeparator, MenuSetting, MicIcon, ModeIcon, MoreIcon, NextIcon, PageIcon, PlanIcon, PlusIcon, Primary, QuestionIcon, ReplyIcon, RestartIcon, roundBtn, SearchIcon, SecretField, Sent, SmileIcon, Tab, Tabs, TextBox, UpIcon, useElapsed, XIcon } from '@client/ui.tsx'
 import { canDictate, dictate, dictSample, type Dictation } from '@client/dictation.ts'
-import { readBrief } from '@shared/brief.ts'
 import { extOf, isImage } from '@shared/files.ts'
 import { modeName, type CardAsk, type Chat, type Message, type Place, type Question, type ReplyQuote, type SecretAsk, type UpdateCard } from '@shared/types.ts'
 import { buzz, mine, openBar, openPicker, quick, react } from '@plugins/reactions/client.tsx'
@@ -25,32 +24,9 @@ import { AgentControls, PlaceRestartItem, RestartSheet, TaskRestartItem } from '
 
 /* ---------- messages ---------- */
 
-/**
- * What you (or a coordinator for you) wrote, as written. A task's brief ends with its Settings block: that shows as a
- * list under a line, each setting's name first, and a line that differs from Shepherdr's default picked out with who
- * changed it, so you see at a glance what this task got that others don't.
- */
+/** Human messages, including full task briefs and generated settings, exactly as written. */
 function YourText({ text }: { text: string }) {
-  const b = readBrief(text)
-  if (!b?.lines.length) return <div className="whitespace-pre-wrap">{text}</div>
-  return (
-    <>
-      {b.before ? <div className="whitespace-pre-wrap">{b.before}</div> : null}
-      <div data-settings className={clsx('flex flex-col gap-1 border-line2 text-[0.8125rem]/5 phone:text-[0.9375rem]/[1.375rem]', b.before && 'mt-2.5 border-t pt-2.5')}>
-        <div className="font-medium text-fg">Settings</div>
-        <ul className="flex flex-col gap-1">
-          {b.lines.map((l, i) => (
-            <li key={i} data-changed={l.by ? '' : undefined} className={clsx('text-pretty', l.by ? '-mx-2 rounded-row bg-accent/10 px-2 py-0.5 text-fg' : 'text-fg2')}>
-              {l.label ? <span className="font-medium text-fg">{l.label}: </span> : null}
-              {l.text}
-              {l.by ? <span className="block text-[0.75rem]/4 font-medium text-accent phone:text-[0.8125rem]/[1.125rem]">Changed: {l.by}</span> : null}
-            </li>
-          ))}
-        </ul>
-      </div>
-      {b.after ? <div className="mt-2.5 whitespace-pre-wrap">{b.after}</div> : null}
-    </>
-  )
+  return <div className="whitespace-pre-wrap wrap-anywhere">{text}</div>
 }
 
 export { Markdown }

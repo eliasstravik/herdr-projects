@@ -2,6 +2,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Page } from 'playwright-core'
 import { layout, type Box } from './layout.ts'
+import { SETTINGS_HEAD, OLD_HEADS } from '../shared/brief.ts'
 
 const { browser, sending, world, server, url } = await layout()
 
@@ -13,6 +14,35 @@ describe.skipIf(!browser)('what you send shows at once', () => {
       const els = [...document.querySelectorAll('[data-you] [data-anchor]')].filter((e) => e.textContent === t)
       return els.length === 1 && !els[0].closest('[data-msg]')!.getAttribute('data-msg')!.startsWith('out:')
     }, text)
+  test('full briefs remain one selectable plain-text block, including settings and provenance', async () => {
+    const task = world.tasks.find((t) => t.id === 'HP-204')!
+    const original = `# Literal **brief** with \`commands\` and <tags>\n\n${task.desc}\n\nKeep instructions after settings.\n${'long-unbroken-text'.repeat(30)}`
+    const variants = [original, ...OLD_HEADS.map((head) => original.replace(SETTINGS_HEAD, head)), '# Brief without settings\n\n**Keep this literal too.**']
+    for (const [i, text] of variants.entries()) world.chats['p:vm-str:~'].messages.push({ id: `full-brief-${i}`, who: 'you', text, at: Date.now() + i })
+    for (const width of [390, 1440]) {
+      const page = await browser!.newPage({ viewport: { width, height: 900 } })
+      await page.goto(url())
+      for (const [i, text] of variants.entries()) {
+        const body = page.locator(`[data-msg="full-brief-${i}"] [data-text]`)
+        await body.waitFor()
+        expect(await body.textContent()).toBe(text)
+        expect(await body.locator('strong, b, pre, code, ul, table, hr, [data-settings], [data-changed]').count()).toBe(0)
+        expect(await body.locator(':scope > div').count()).toBe(1)
+        const selected = await body.evaluate((el) => {
+          const selection = window.getSelection()!
+          selection.selectAllChildren(el)
+          const value = selection.toString()
+          selection.removeAllRanges()
+          return value
+        })
+        expect(selected).toBe(text)
+        expect(await body.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
+      }
+      // Ordinary agent replies still render Markdown.
+      expect(await page.locator('[data-msg="code-agent"] code').count()).toBeGreaterThan(0)
+      await page.close()
+    }
+  })
   test('it shows the moment you tap Send, faded, then the real one takes its place without being drawn again', async () => {
     const page = await browser!.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true })
     await page.goto(url())
