@@ -44,6 +44,9 @@ export function summaryOpts(p: Parsed, rest: string[] = []): { said?: string; fa
 
 export const HELP = `shepherdr: talk to Shepherdr from a terminal (agents use it; so can you)
 
+Web search (regular agents; Settings → Plugins → websearch)
+  shepherdr search "<what to find>"            free Parallel search with source URLs and excerpts; no key needed
+
 Spaces (a folder on a machine with a name and its own coordinator; each machine has its home space, ~)
   shepherdr space add <path> [--name NAME]       add a git repo folder as a space (its own herdr space); the name
                                                  follows the space rules: lowercase letters, numbers, - and _,

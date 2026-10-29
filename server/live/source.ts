@@ -47,6 +47,7 @@ import { Revivals, type Wrong } from './revive.ts'
 import { carryOn, Retries, type Retry } from './retry.ts'
 import { CATALOG, CLI_NAME, CLIS, kindOf, refuse, setForTask, repositorySection, Settings, type Level } from './settings.ts'
 import { startVoice } from './voice.ts'
+import { searchWeb } from './websearch.ts'
 import { SECRET_NAME, secretPages, Vault } from './secrets.ts'
 import { diffFiles, diffPatch, listFiles, pullRequest, readFile } from './worktree.ts'
 import { RequestedNewsMailbox } from './requested-news.ts'
@@ -2243,7 +2244,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         if (JSON.stringify(this.agents.secretScope(owner.chat)) !== JSON.stringify(owner.chain)) throw new Error('Secret credential scope is no longer valid.')
         return { out: '', code: 0, secrets: this.secretValues(parseArgs(args).words.slice(2), owner.chain) }
       }
-      const out = await this.command(parseArgs(args), ctx)
+      const p = args[0] === 'search' ? { words: args, opts: {}, flags: new Set<string>() } : parseArgs(args)
+      const out = await this.command(p, ctx)
       return { out: out.endsWith('\n') ? out : `${out}\n`, code: 0 }
     } catch (e) {
       return { out: `${(e as Error).message}\n`, code: 1 }
@@ -2295,6 +2297,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     const [a0, a1, ...rest] = p.words
     if (!a0 || a0 === 'help' || p.flags.has('help')) return HELP
     switch (a0) {
+      case 'search':
+        return searchWeb([a1, ...rest].filter(Boolean).join(' '), has('websearch'))
       case 'status': {
         if (a1) return this.reportCommand(a1, rest, p, ctx)
         const kept = this.engine.keptLeftovers()
