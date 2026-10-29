@@ -327,30 +327,45 @@ describe.skipIf(!browser)('grouped tasks and the keyboard', () => {
       const ctx = await browser!.newContext({ viewport: { width: 1440, height: 900 } })
       const page = await ctx.newPage()
       await page.goto(`http://127.0.0.1:${server!.port}/?place=vm-str/home`)
-      await page.waitForSelector('section[aria-label="Tasks"] li')
+      const taskRows = 'section[aria-label="Tasks"] li[data-flip]'
+      await page.waitForSelector(taskRows)
       await page.getByRole('button', { name: 'Group tasks' }).click()
       await page.getByRole('menuitemradio', { name: /^Space/ }).click()
       await page.locator('body').click({ position: { x: 600, y: 500 } })
-      const rows = await page.$$eval('section[aria-label="Tasks"] li', (li) => li.map((l) => l.textContent?.match(/^[A-Z]+-[A-Z0-9]+/)?.[0]))
+      // The footer has automation list items too; only task rows belong to the arrow-key order.
+      const automations = page.locator('section[aria-label="Tasks"] li[aria-expanded]')
+      expect(await automations.count()).toBe(3)
+      const rows = await page.$$eval(taskRows, (li) => li.map((l) => (l as HTMLElement).dataset.flip!))
+      const focused = () => page.$$eval(taskRows, (li) => (li.find((l) => l.className.includes('var(--focus)')) as HTMLElement | undefined)?.dataset.flip)
       const seen: (string | undefined)[] = []
       for (let i = 0; i < rows.length; i++) {
         if (i) await page.keyboard.press('ArrowDown')
         else await page.keyboard.press('ArrowUp')
-        seen.push(await page.evaluate(() => [...document.querySelectorAll('section[aria-label="Tasks"] li')].find((li) => li.className.includes('var(--focus)'))?.textContent?.match(/^[A-Z]+-[A-Z0-9]+/)?.[0]))
+        seen.push(await focused())
       }
       // every press lands on the next row you can see, lilla-varlden's, then gtm's five Done ones and straight on to herdr-projects
       expect(seen).toEqual(rows)
+      // The footer stays visible, but extra presses stop at the last task, then walk back up.
+      await page.keyboard.press('ArrowDown')
+      expect(await focused()).toBe(rows.at(-1))
+      const back = [await focused()]
+      for (let i = 1; i < rows.length; i++) {
+        await page.keyboard.press('ArrowUp')
+        back.push(await focused())
+      }
+      expect(back).toEqual([...rows].reverse())
+      expect(await automations.count()).toBe(3)
       expect(rows.filter((r) => r?.startsWith('GTM-')).length).toBe(5 + 5)
       await page.getByRole('button', { name: 'Show all 8' }).click()
-      expect(await page.locator('section[aria-label="Tasks"] li').count()).toBe(rows.length + 3)
+      expect(await page.locator(taskRows).count()).toBe(rows.length + 3)
       // remembered on this device: a reload still shows them all, and Show less cuts them short again
       await page.reload()
-      await page.waitForSelector('section[aria-label="Tasks"] li')
-      expect(await page.locator('section[aria-label="Tasks"] li').count()).toBe(rows.length + 3)
+      await page.waitForSelector(taskRows)
+      expect(await page.locator(taskRows).count()).toBe(rows.length + 3)
       await page.getByRole('button', { name: 'Show less' }).click()
-      expect(await page.locator('section[aria-label="Tasks"] li').count()).toBe(rows.length)
+      expect(await page.locator(taskRows).count()).toBe(rows.length)
       await page.reload()
-      await page.waitForSelector('section[aria-label="Tasks"] li')
+      await page.waitForSelector(taskRows)
       await page.getByRole('button', { name: 'Show all 8' }).waitFor()
       await ctx.close()
     } finally {
