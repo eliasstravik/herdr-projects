@@ -1,3 +1,5 @@
+import { coordinatorRequestIds } from '../shared/attention.ts'
+import type { Message } from '../shared/types.ts'
 import { expect, test } from 'bun:test'
 import { attentionCounts } from '../src/attention.ts'
 import { DemoWorld } from '../server/demo/world.ts'
@@ -28,4 +30,14 @@ test('multiple questions count separately, copies once, answered requests disapp
   expect(attentionCounts(snap, [p.id])).toEqual({ need: 4, ready: 1 })
   snap.attentionRequests[key] = ['question-2']
   expect(attentionCounts(snap, [p.id])).toEqual({ need: 3, ready: 1 })
+})
+
+test('coordinator questions survive later news, count separately and stop counting when answered', () => {
+  const q = (id: string): Message => ({ id, who: 'agent', question: { id, kind: 'Question', title: id, choices: [], to: 'you' } })
+  const posted: Message[] = [q('ask:1'), { id: 'news', who: 'agent', card: { id: 'news', task: 'T-1', status: 'ready', text: 'Ready' } }, q('ask:2'), { id: 'health', who: 'agent', text: 'Disk recovered.' }]
+  expect(coordinatorRequestIds(posted, {}, [], false)).toEqual(['ask:1', 'ask:2'])
+  expect(coordinatorRequestIds(posted, { 'ask:1': 0 }, [], false)).toEqual(['ask:2'])
+  expect(coordinatorRequestIds(posted, { 'ask:1': 0, 'ask:2': 0 }, [], false)).toEqual([])
+  expect(coordinatorRequestIds([], {}, [], true)).toEqual(['blocked'])
+  expect(coordinatorRequestIds(posted, {}, ['ask:1', 'menu'], true)).toEqual(['ask:1', 'ask:2', 'menu'])
 })

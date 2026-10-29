@@ -1,3 +1,4 @@
+import { coordinatorRequestIds } from '../../shared/attention.ts'
 // The live source: herdr is the truth for agents and their states; the CLIs' own logs are the chats; Shepherdr keeps
 // only what herdr can't tell it (spaces, tasks, modes, cards, settings). Assembled from the base plugins' parts.
 import { execSync } from 'node:child_process'
@@ -429,8 +430,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   private attentionRequests(): Record<string, string[]> {
     const out: Record<string, string[]> = {}
     for (const p of [placeId.home(), ...this.places.spaces.map((x) => placeId.space(x.name))]) {
-      const ids = openCards(this.chats.chat(p)).map((m) => m.question.id)
-      out[p] = ids.length ? ids : this.agents.status(p) === 'blocked' ? ['blocked'] : []
+      const log = this.chats.log(p)
+      out[p] = coordinatorRequestIds(log.posted, log.answers, openCards(this.chats.chat(p)).map((m) => m.question.id), this.agents.status(p) === 'blocked')
     }
     for (const t of this.engine.tasks.filter((t) => !t.archived && this.engine.statusOf(t) === 'need')) {
       const key = `${t.id}/Agent`
