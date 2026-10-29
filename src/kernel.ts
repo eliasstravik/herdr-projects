@@ -203,6 +203,8 @@ export interface UI {
   /** an attached picture opened full screen: a sent one by its message, one still in the message box by its file */
   photo: { chat: string; msg?: string; file?: { name: string; path: string } } | null
   search: boolean
+  /** initial scope for unified search; global entrances leave it empty */
+  searchScope?: { kind: 'all' } | { kind: 'chat' | 'space' | 'machine'; id: string }
   /** the Add a project dialog is open: true, or the name of the machine whose + opened it */
   adding: boolean | string
   /** chat key flipped to its terminal (a coordinator's; a task's terminal is an item of its side panel) */

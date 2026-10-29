@@ -590,7 +590,7 @@ describe.skipIf(!browser)('archiving a task', () => {
     await row.waitFor({ state: 'detached' })
     await page.keyboard.press('Control+k')
     await page.getByRole('combobox', { name: 'Search or jump to' }).or(page.getByLabel('Search or jump to').locator('input')).first().fill('HP-202')
-    const hit = page.getByRole('option').filter({ hasText: 'Voice call drops on mute' })
+    const hit = page.getByRole('group', { name: 'Tasks', exact: true }).getByRole('option').filter({ hasText: 'Voice call drops on mute' })
     await hit.waitFor()
     expect(await hit.textContent()).toContain('Archived')
     await hit.click()

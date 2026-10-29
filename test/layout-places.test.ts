@@ -544,7 +544,7 @@ describe.skipIf(!browser)('places, calm like Slack', () => {
         expect(await page.locator('main [data-icon], [data-chrome] [data-icon]').first().getAttribute('data-icon')).toBe('hash')
         // ⌘K: a place's icon where a task has its dot
         await page.keyboard.press('Control+k')
-        const list = page.getByRole('listbox', { name: 'Places and tasks' })
+        const list = page.getByRole('listbox', { name: 'Search results' })
         await list.waitFor()
         const first = list.getByRole('option').first().locator('[data-icon]')
         expect(await first.getAttribute('data-icon')).toBe('hash')

@@ -1,35 +1,26 @@
 import { Search } from './search.tsx'
 // Keyboard: on a desktop everything works without a mouse. ? opens the list of keys in Settings; ⌘K (Ctrl+K off a Mac) searches and jumps.
-import { useMemo, useState } from 'react'
 import {
-  agentChat,
   closeArtifact,
   definePlugin,
   getState,
-  goPlace,
   panelHere,
   has,
   keysChat,
   listView,
-  matches,
-  openTask,
   orderedTasks,
-  placeOf,
   shownPlaces,
   setUI,
   taskOf,
   toggleFocus,
   togglePlaces,
   toggleWide,
-  useSnap,
   type UI,
 } from '@client/kernel.ts'
 import { toggleDictation } from '@plugins/chat/client.tsx'
-import clsx from 'clsx'
-import { ALT, CTRL, Dot, ic, Kbd, KeyboardIcon, MOD, PlaceIcon, rowClass, SearchIcon, SHIFT, TaskDot } from '@client/ui.tsx'
+import { ALT, CTRL, Kbd, KeyboardIcon, MOD, SHIFT } from '@client/ui.tsx'
 import { rowLook, sectionOf } from '@client/Settings.tsx'
-import { machineName, type Snapshot, type Report } from '@shared/types.ts'
-import { Sheet, SheetClose } from '@client/Stack.tsx'
+import type { Snapshot } from '@shared/types.ts'
 
 export const KEYS: [string[], string][] = [
   [['↑', '↓'], 'Move in tasks (or J, K)'],
@@ -75,8 +66,6 @@ function Shortcuts({ phone }: { phone: boolean }) {
   )
 }
 
-/* ---------- ⌘K ---------- */
-
 /* ---------- keys ---------- */
 
 const typing = (e: KeyboardEvent) => {
@@ -110,7 +99,7 @@ export default definePlugin({
       handle: ({ e, ui, snap }) => {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
           e.preventDefault()
-          setUI({ search: !ui.search, focus: null })
+          setUI({ search: !ui.search, searchScope: undefined, focus: null })
           return true
         }
         // a key pressed is a keyboard's: a tablet's (an iPad with one) gets the keys a desktop has

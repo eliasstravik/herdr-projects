@@ -16,7 +16,8 @@ export function dayLabel(at: number, now = new Date()) {
 const plain = (s: string) => s.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`#>~]/g, '')
 
 /** what a message can be found by: its words, a file's name, a card's title */
-const hay = (m: Message) => [m.text && plain(m.text), m.file?.name, m.question?.title].filter(Boolean).join('\n').toLowerCase()
+export const messageText = (m: Message) => [m.text && plain(m.text), m.file?.name, m.question?.title].filter(Boolean).join('\n')
+const hay = (m: Message) => messageText(m).toLowerCase()
 
 /** the messages with these words (search in a chat), oldest first; not one still waiting to go in */
 export function findIn(msgs: Message[], q: string) {

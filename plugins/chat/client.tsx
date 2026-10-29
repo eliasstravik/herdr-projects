@@ -2412,9 +2412,14 @@ function ChatView({ chatKey, placeholder, unreachable }: { chatKey: string; plac
 /** Search in this chat, first in a chat's ⋯ menu (a coordinator's or a task's) */
 function FindItem({ chatKey }: { chatKey: string }) {
   return (
-    <MenuItem icon={<SearchIcon className={ic} />} onClick={() => openFind(chatKey)}>
-      Search in this chat
-    </MenuItem>
+    <>
+      <MenuItem icon={<SearchIcon className={ic} />} onClick={() => openFind(chatKey)}>
+        Search in this chat
+      </MenuItem>
+      {registry.views.search ? <MenuItem icon={<SearchIcon className={ic} />} onClick={() => setUI({ search: true, searchScope: { kind: 'chat', id: chatKey }, menu: false, taskMenu: false })}>
+        Search this chat and beyond
+      </MenuItem> : null}
+    </>
   )
 }
 

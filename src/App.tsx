@@ -162,7 +162,7 @@ export function SearchBox() {
     <div className="flex items-center gap-1.5 px-2.5 pt-2.5 pb-1.5">
       <button
         type="button"
-        onClick={() => setUI({ search: true, drawer: false })}
+        onClick={() => setUI({ search: true, searchScope: undefined, drawer: false })}
         className="press-dim flex h-8 flex-1 items-center gap-2 rounded-full bg-bg px-3 text-left text-[0.8125rem] text-fg3 shadow-[inset_0_0_0_1px_var(--line2)] coarse:h-11 phone:h-11 phone:text-[1rem]"
       >
         <SearchIcon className={ic} />
@@ -869,7 +869,7 @@ function PhoneBar() {
           </button>
         ))}
       </div>
-      <RoundButton label="Search" className="size-14" onClick={() => setUI({ search: true })}>
+      <RoundButton label="Search" className="size-14" onClick={() => setUI({ search: true, searchScope: undefined })}>
         <SearchIcon className={ic} />
       </RoundButton>
     </div>
