@@ -1,6 +1,6 @@
 // Runs INSIDE the network and PID namespace. Its only connection out is the trusted Unix gateway.
-import { openSync, readSync, closeSync, statSync } from 'node:fs'
-import { relative } from 'node:path'
+import { existsSync, openSync, readSync, closeSync, statSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { connect, createServer } from 'node:net'
 const relay = createServer((socket) => {
   const upstream = connect('/run/shepherdr/gateway.sock')
@@ -18,7 +18,11 @@ async function capture() {
   if (capturing) return
   capturing = true
   try {
-    for (const file of new Bun.Glob('{.claude/projects,.codex/sessions,.pi/agent/sessions}/**/*.jsonl').scanSync({ cwd: process.env.HOME!, dot: true, absolute: true, onlyFiles: true })) {
+    const files = ['.claude/projects', '.codex/sessions', '.pi/agent/sessions'].flatMap((dir) => {
+      const cwd = join(process.env.HOME!, dir)
+      return existsSync(cwd) ? Array.from(new Bun.Glob('**/*.jsonl').scanSync({ cwd, dot: true, absolute: true, onlyFiles: true })) : []
+    })
+    for (const file of files) {
       let fd: number | undefined
       try {
         const size = statSync(file).size
