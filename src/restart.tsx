@@ -1,7 +1,6 @@
 // Restarting an agent from the screen: a space's coordinator, or a task's agent. The sheet (from a ⋯ menu) shows what
 // it runs on now and what it restarts with, Settings' CLI, model and effort for its role, changed for this restart only
-// or saved as its space's. The hint above a chat's box says once Settings for its role say other than what its agent
-// runs on, and restarts it on them in one tap.
+// or saved as its space's. Persistent launch controls open the same sheet without a separate Settings mismatch banner.
 import clsx from 'clsx'
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { Place, RestartCli, RestartInfo } from '@shared/types.ts'
@@ -170,39 +169,9 @@ function Line({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-/* ---------- the hint above a chat's box ---------- */
-
-/** "Runs on Claude Code · Settings now say Codex · Restart": Restart starts it again on Settings at once */
-export function RestartHint({ chatKey }: { chatKey: string; cli: string }) {
-  const hint = useStore((s) => s.chats[chatKey]?.restart)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  useEffect(() => setError(null), [hint?.want])
-  if (!hint) return null
-  const go = async () => {
-    setBusy(true)
-    const r = await act({ type: 'restart', chat: chatKey }).catch((e: Error) => ({ ok: false, error: e.message }))
-    setBusy(false)
-    setError(r.ok === false ? r.error || 'It could not be restarted.' : null)
-  }
-  return (
-    <div data-restart-hint className="flex justify-center pb-1.5">
-      <div className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-full bg-bubble py-1 pr-1 pl-2.5 text-[0.8125rem]/5 text-fg2 phone:text-[0.875rem]/5">
-        {/* narrow, what it runs on gives way first: what Settings now say stays whole */}
-        {error ? (
-          <span className="truncate">{error}</span>
-        ) : (
-          <>
-            <span className="min-w-8 truncate">Runs on {hint.on} </span>
-            <span className="max-w-[60%] shrink-0 truncate">· Settings now say {hint.want}</span>
-          </>
-        )}
-        <button type="button" disabled={busy} onClick={go} className="press-dim shrink-0 rounded-full px-1.5 font-medium text-fg enabled:hover:bg-hover disabled:opacity-40">
-          {busy ? 'Restarting…' : error ? 'Try again' : 'Restart'}
-        </button>
-      </div>
-    </div>
-  )
+/** Kept for plugin imports. Launch controls replace the old Settings mismatch banner. */
+export function RestartHint(_props: { chatKey: string; cli: string }) {
+  return null
 }
 
 /* ---------- in the ⋯ menus ---------- */

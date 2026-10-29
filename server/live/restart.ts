@@ -3,7 +3,7 @@
 // What the restart sheet offers (restartInfo) and the calm hint a chat shows once Settings say something else than
 // what its agent runs on (restartHint) come from here.
 import type { Message, RestartCli, RestartHint, RestartInfo } from '../../shared/types.ts'
-import { effortFor, effortsOf, findModel, modelsOf } from './models.ts'
+import { effortFor, effortsOf, findModel, modelArg, modelsOf } from './models.ts'
 import { CLI_NAME } from './settings.ts'
 import type { Harness } from './engine/engine.ts'
 
@@ -22,6 +22,14 @@ export const sameHarness = (a: Harness, b: Harness) => a.kind === b.kind && mode
 export function fitHarness(h: Harness): Harness {
   const model = modelOf(h) || undefined
   const effort = effortOf(h) || undefined
+  return { kind: h.kind, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
+}
+
+/** Values actually passed by Agents.args, without inventing a model or effort for a CLI that takes none. */
+export function launchHarness(h: Harness): Harness {
+  if (!modelsOf(h.kind)) return { kind: h.kind }
+  const model = modelArg(h.kind, h.model)
+  const effort = effortFor(h.kind, h.effort, h.model)
   return { kind: h.kind, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
 }
 
@@ -69,7 +77,8 @@ export function restartInfo(o: { role: 'task' | 'coordinator'; space?: string; o
     const cli = clis.find((c) => c.kind === h.kind)
     if (m && cli?.models && !cli.models.some((x) => x.id === m.id)) cli.models.push({ id: m.id, label: m.label, efforts: m.efforts, defaultEffort: m.effort })
   }
-  return { role: o.role, space: o.space, onKnown: o.onKnown, on: fitHarness(o.on), onWords: harnessWords(o.on), want: fitHarness(o.want), clis, working: o.working }
+  const on = launchHarness(o.on)
+  return { role: o.role, space: o.space, onKnown: o.onKnown, on, onWords: harnessWords(on), want: fitHarness(o.want), clis, working: o.working }
 }
 
 /** a chat's last words, latest last, for an agent taking over: yours and its agent's (as `them`), each cut short;

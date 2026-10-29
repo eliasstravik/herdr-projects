@@ -1,7 +1,7 @@
 // What a restart says and offers: the hint once Settings say other than what an agent runs on, a harness in words,
 // and what an agent taking over on another CLI is told.
 import { describe, expect, test } from 'bun:test'
-import { fitHarness, harnessProblem, harnessWords, restartInfo, recentChat, restartHint, sameHarness } from '../server/live/restart.ts'
+import { fitHarness, harnessProblem, harnessWords, launchHarness, restartInfo, recentChat, restartHint, sameHarness } from '../server/live/restart.ts'
 import { setModels, TABLE } from '../server/live/models.ts'
 import { restartLine, resumedLine } from '../server/live/prompts.ts'
 
@@ -74,6 +74,11 @@ describe('visible launch settings and supported restart choices', () => {
       expect(info.want).toEqual({ kind: 'claude', model: 'claude-sonnet-5-5', effort: 'high' })
       expect(info.clis.find((c) => c.kind === 'claude')).toMatchObject({ defaultModel: 'claude-opus-5-5', defaultEffort: 'medium' })
     }
+  })
+  test('launch metadata matches CLI flags, including unsupported and rounded effort', () => {
+    expect(launchHarness({ kind: 'gemini', model: 'saved-only', effort: 'high' })).toEqual({ kind: 'gemini' })
+    expect(launchHarness({ kind: 'codex', model: 'gpt-6-luna', effort: 'ultra' })).toEqual({ kind: 'codex', model: 'gpt-6-luna', effort: 'max' })
+    expect(launchHarness({ kind: 'claude', model: 'default', effort: 'default' })).toEqual({ kind: 'claude' })
   })
   test('recognized older launch models remain selectable with their own effort defaults', () => {
     const old = { id: 'claude-opus-old', label: 'Older Opus', efforts: ['low', 'high'], effort: 'high' }

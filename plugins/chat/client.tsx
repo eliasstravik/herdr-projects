@@ -21,7 +21,7 @@ import { Markdown } from './markdown.tsx'
 import { answeredBy, cancelReply, canReply, isArtifact, jumpTo, startReply } from './reply.ts'
 import { typing, working } from './typing.ts'
 import { JobsSheet, JobsTag, LiveLine, TurnLine } from './activity.tsx'
-import { AgentControls, PlaceRestartItem, RestartHint, RestartSheet, TaskRestartItem } from '@client/restart.tsx'
+import { AgentControls, PlaceRestartItem, RestartSheet, TaskRestartItem } from '@client/restart.tsx'
 
 /* ---------- messages ---------- */
 
@@ -2458,7 +2458,6 @@ export default definePlugin({
     reg.placeMenu.push({ order: 50, View: ({ place }) => <FindItem chatKey={place.chat} /> }, { order: 55, joined: true, View: PlaceRestartItem })
     reg.agentMenu.push({ order: 50, View: FindItem }, { order: 55, View: TaskRestartItem })
     reg.composerAbove.push({ order: 4, View: AgentControls })
-    reg.composerAbove.push({ order: 5, View: RestartHint })
     reg.overlays.push(RestartSheet)
     reg.composerAbove.push({ order: 20, View: Attachments }, { order: 30, View: PlusMenu })
     reg.overlays.push(Photo)
