@@ -195,8 +195,8 @@ describe.skipIf(!browser)('the Tasks header', () => {
           await page.waitForSelector('section[aria-label="Tasks"] [role="group"][aria-label="Show"]')
           await page.getByText('Needs you', { exact: true }).first().waitFor()
           const t = await head(page)
-          // the tabs, the count on Tasks, nothing else: no "· place" to mistake for a third tab
-          expect(t.text).toMatch(/^Tasks\d*Artifacts$/)
+          // the tabs, the count on Tasks and the filter lock: no "· place" to mistake for a third tab
+          expect(t.text).toMatch(/^Tasks\d*ArtifactsLock$/)
           expect(t.text).not.toContain('·')
           expect(await page.getByText('everything under it').count()).toBe(0)
           // the shown tab is plainly picked: filled and edged; the other is bare
