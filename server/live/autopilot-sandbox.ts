@@ -1,10 +1,11 @@
 // Shared containment for every adapter. Agents cannot see the host home, network, PID space, Herdr socket,
 // Shepherdr store, or gateway policy. Descendant processes remain in the same namespaces.
 import { Transform } from 'node:stream'
+import { createHash } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
 import { connect, isIP, type Socket } from 'node:net'
 import { lookup } from 'node:dns/promises'
-import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { HOME } from '../store.ts'
@@ -13,7 +14,7 @@ import { BOX, q } from './box.ts'
 import { reserveTraffic, pilotCommand, pilotProblem, type PilotRun } from './autopilot.ts'
 import type { Spec } from './agents.ts'
 
-export interface SandboxLaunch { run?: string; gateway?: string; wrapper: string; env: Record<string, string>; logsHome: string; close: () => Promise<void> }
+export interface SandboxLaunch { run?: string; gateway?: string; wrapper: string; env: Record<string, string>; logsHome: string; captures?: string; close: () => Promise<void> }
 export function publicAddress(ip: string) {
   if (isIP(ip) === 6) return !/^(::|fe[89ab]|f[cd]|2001:db8)/i.test(ip) && !ip.includes('.')
   if (isIP(ip) !== 4) return false
@@ -22,7 +23,9 @@ export function publicAddress(ip: string) {
 }
 export function sandboxArgs(o: { cwd: string; repo: string; home: string; state: string; control: string; binary: string; kind: string; bun: string; writable: boolean; git?: string[] }) {
   const a = ['--die-with-parent', '--new-session', '--unshare-all', '--cap-drop', 'ALL', '--clearenv']
-  for (const p of ['/usr', '/bin', '/lib', '/lib64', '/etc']) if (existsSync(p)) a.push('--ro-bind', p, p)
+  for (const p of ['/usr', '/bin', '/lib', '/lib64']) if (existsSync(p)) a.push('--ro-bind', p, p)
+  a.push('--dir', '/etc')
+  for (const p of ['/etc/ssl', '/etc/pki', '/etc/ca-certificates', '/etc/nsswitch.conf', '/etc/passwd', '/etc/group', '/etc/hosts', '/etc/resolv.conf']) if (existsSync(p)) a.push('--ro-bind', p, p)
   a.push('--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--dir', '/run', '--dir', '/run/shepherdr')
   a.push('--bind', o.state, o.home, '--bind', o.state, o.state, '--ro-bind', o.control, o.control)
   if (o.repo !== o.cwd) a.push('--ro-bind', o.repo, o.repo)
@@ -37,6 +40,22 @@ export function sandboxArgs(o: { cwd: string; repo: string; home: string; state:
   a.push('--chdir', o.cwd, '/run/shepherdr/bun', '/run/shepherdr/bootstrap.ts', o.kind === 'pi' ? o.binary : `/run/shepherdr/${o.kind}`)
   return a
 }
+export function capturedTranscript(root: string, kind: string, file: string) {
+  const uuid = file.match(/([0-9a-f]{8}-[0-9a-f-]{27})\.jsonl$/i)?.[1]
+  const name = createHash('sha256').update(file).digest('hex').slice(0, 24) + (uuid ? `-${uuid}` : '') + '.jsonl'
+  return join(root, kind === 'claude' ? '.claude/projects' : kind === 'codex' ? '.codex/sessions' : '.pi/agent/sessions', name)
+}
+function privateDestination(root: string, file: string) {
+  const parts = file.slice(root.length + 1).split('/')
+  if (!file.startsWith(root + '/') || parts.includes('..')) throw new Error('Invalid private runtime path.')
+  let current = root
+  for (const part of parts) {
+    current = join(current, part)
+    try { if (lstatSync(current).isSymbolicLink()) throw new Error('Private runtime settings contain a symlink. Start a fresh Autopilot run.') }
+    catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e }
+  }
+}
+
 export function privateRuntimePath(home: string, file: string) {
   try { const root = realpathSync(home), actual = realpathSync(file); return actual.startsWith(root + '/') ? actual : undefined }
   catch { return undefined }
@@ -96,9 +115,10 @@ export async function prepareSandbox(spec: Spec, run: PilotRun, repo: string, cl
   if (!executable) throw new Error(`${spec.kind} is not installed.`)
   const binary = realpathSync(executable)
   const root = join(HOME, 'autopilot-runtime', run.id, spec.key.replace(/[^\w.-]/g, '_'))
+  const captures = join(root, 'captures')
   const state = join(root, 'home'), control = join(root, 'control'), bin = join(root, 'launcher')
   rmSync(control, { recursive: true, force: true }); rmSync(bin, { recursive: true, force: true })
-  for (const p of [state, control, bin, join(control, 'bin')]) mkdirSync(p, { recursive: true, mode: 0o700 })
+  for (const p of [state, captures, control, bin, join(control, 'bin')]) mkdirSync(p, { recursive: true, mode: 0o700 })
   for (const file of ['bun', spec.kind]) writeFileSync(join(control, file), '')
   // Only the chosen providers' own configuration/login files. Never mount the real home or arbitrary accounts.
   const kinds = [...new Set([spec.kind, reviewerKind].filter((k): k is string => !!k))]
@@ -106,6 +126,7 @@ export async function prepareSandbox(spec: Spec, run: PilotRun, repo: string, cl
     const configs = kind === 'codex' ? ['.codex/auth.json', '.codex/config.toml'] : kind === 'claude' ? ['.claude/.credentials.json', '.claude/settings.json'] : ['.pi/agent/auth.json', '.pi/agent/models.json', '.pi/agent/settings.json']
     for (const name of configs) {
       const src = join(fixture?.providerHome ?? homedir(), name), dst = join(state, name)
+      privateDestination(state, dst)
       if (!existsSync(src) || existsSync(dst)) continue
       mkdirSync(dirname(dst), { recursive: true, mode: 0o700 })
       if (name.endsWith('config.toml') || name.endsWith('settings.json')) writeFileSync(dst, providerConfig(kind, readFileSync(src, 'utf8')), { mode: 0o600 })
@@ -119,18 +140,33 @@ export async function prepareSandbox(spec: Spec, run: PilotRun, repo: string, cl
   writeFileSync(join(control, 'cli.js'), await result.outputs[0].text(), { mode: 0o400 })
   writeFileSync(join(control, 'bin/shepherdr'), '#!/bin/sh\nexec /run/shepherdr/bun /run/shepherdr/cli.js "$@"\n', { mode: 0o500 })
   const sockets = new Set<Socket>()
+  const received = new Map<string, number>()
   const server: Server = createServer(async (req, res) => {
     try {
-      if (req.method !== 'POST' || req.url !== '/api/cli') throw new Error('Only the authenticated Shepherdr command is available.')
+      if (req.method !== 'POST' || !['/api/cli', '/api/transcript'].includes(req.url ?? '')) throw new Error('Only the authenticated Shepherdr command is available.')
       let body = ''
       for await (const chunk of req) { body += chunk; if (body.length > 1_000_000) throw new Error('Command is too large.') }
+      if (req.url === '/api/transcript') {
+        if (!['starting', 'on', 'workers'].includes(run.state)) throw new Error('Autopilot stopped.')
+        const capture = JSON.parse(body) as { kind: string; file: string; data: string; offset: number }
+        if (!['claude', 'codex', 'pi'].includes(capture.kind) || typeof capture.file !== 'string' || capture.file.length > 2048 || typeof capture.data !== 'string' || !Number.isSafeInteger(capture.offset) || capture.offset < 0) throw new Error('Invalid transcript.')
+        const data = Buffer.from(capture.data, 'base64')
+        if (data.length > 256 * 1024) throw new Error('Transcript chunk is too large.')
+        const file = capturedTranscript(captures, capture.kind, capture.file)
+        const offset = received.get(file) ?? (existsSync(file) ? statSync(file).size : 0)
+        if (capture.offset > offset) throw new Error('Transcript has a gap; retry its earlier chunk.')
+        const fresh = data.subarray(Math.max(0, offset - capture.offset))
+        if (fresh.length) { mkdirSync(dirname(file), { recursive: true, mode: 0o700 }); appendFileSync(file, fresh, { mode: 0o600 }) }
+        received.set(file, offset + fresh.length)
+        res.end('{}'); return
+      }
       const input = JSON.parse(body) as { args: string[]; stdin?: string }
       if (!Array.isArray(input.args) || input.args.some((x) => typeof x !== 'string')) throw new Error('Invalid command.')
       pilotCommand(run, spec.key, input.args)
       // The runtime, never a caller-supplied chat/cwd/token, selects the authenticated remote command identity.
       const answer = await cli(input.args, { chat: spec.key, cwd: spec.cwd, stdin: input.stdin })
       res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(answer))
-    } catch (e) { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ code: 1, out: `${(e as Error).message}\n` })) }
+    } catch (e) { res.statusCode = 400; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ code: 1, out: `${(e as Error).message}\n` })) }
   })
   server.on('connection', (s) => { sockets.add(s); s.on('close', () => sockets.delete(s)) })
   server.on('connect', async (req, client, head) => {
@@ -194,7 +230,10 @@ export async function prepareSandbox(spec: Spec, run: PilotRun, repo: string, cl
   const deadline = run.config.runtime ? run.started + run.config.runtime - Date.now() : undefined
   if (deadline !== undefined && deadline <= 0) { server.close(); throw new Error('Autopilot runtime limit reached.') }
   const command = deadline === undefined ? [bwrap, ...args] : ['/usr/bin/timeout', '--foreground', '--signal=KILL', `${Math.max(0.001, deadline / 1000)}s`, bwrap, ...args]
-  writeFileSync(wrapper, `#!/bin/sh\nprintf '%s' "$$" > ${q(join(control, 'pid'))}\nexec ${command.map(q).join(' ')} "$@"\n`, { mode: 0o500 })
-  return { run: run.id, gateway: socket, wrapper, env: { PATH: `${bin}:/usr/local/bin:/usr/bin:/bin` }, logsHome: state, close: async () => { killSandbox(control); for (const s of sockets) s.destroy(); await new Promise<void>((resolve) => server.close(() => { rmSync(gatewayDir, { recursive: true, force: true }); resolve() })) } }
+  // Keep the named adapter in the terminal's foreground process group: Herdr identifies
+  // sh /…/claude (or codex/pi). The CLI itself stays in the new session for TIOCSTI safety.
+  // Explicit stdin inheritance matters: a background shell command otherwise gets /dev/null.
+  writeFileSync(wrapper, `#!/bin/sh\n${command.map(q).join(' ')} "$@" <&0 &\nchild=$!\nprintf '%s' "$child" > ${q(join(control, 'pid'))}\ntrap 'kill -KILL "$child" 2>/dev/null' HUP INT TERM\nwait "$child"\nexit $?\n`, { mode: 0o500 })
+  return { run: run.id, gateway: socket, wrapper, env: { PATH: `${bin}:/usr/local/bin:/usr/bin:/bin` }, logsHome: state, captures, close: async () => { killSandbox(control); for (const s of sockets) s.destroy(); await new Promise<void>((resolve) => server.close(() => { rmSync(gatewayDir, { recursive: true, force: true }); resolve() })) } }
   } catch (e) { for (const socket of sockets) socket.destroy(); server.close(); rmSync(gatewayDir, { recursive: true, force: true }); throw e }
 }

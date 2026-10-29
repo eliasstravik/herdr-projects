@@ -3,7 +3,8 @@
 // The switch is at the top of the coordinator chat's ⋯ menu, over search and the terminal. While Autopilot is on, a small
 // red pill at the header's right, beside that menu (on a phone after the subtitle, under the name), says so, and a tap
 // on it opens the menu; with it off the header says nothing of it.
-import { act, definePlugin, has, setUI, useUI } from '@client/kernel.ts'
+import { useState } from 'react'
+import { act, definePlugin, has, setUI, useSnap, useUI } from '@client/kernel.ts'
 import { ic, MenuItem, MenuSwitch, ModeIcon } from '@client/ui.tsx'
 import type { Place } from '@shared/types.ts'
 
@@ -29,6 +30,16 @@ function AutopilotPill({ place }: { place: Place }) {
 /** Autopilot on or off at the top of the ⋯ menu */
 function AutopilotSwitch({ place }: { place: Place }) {
   const on = place.mode === 'autopilot'
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const state = useSnap().settings.find((section) => section.name === 'Autopilot' && section.level === place.id)?.rows.find((row) => row.label === 'State')?.value
+  const change = async (keepWorkers = false) => {
+    if (busy) return
+    setBusy(true); setError('')
+    try { const result = await act({ type: 'mode', place: place.id, mode: on ? 'regular' : 'autopilot', keepWorkers }); setError(result.error ?? '') }
+    catch (e) { setError((e as Error).message) }
+    finally { setBusy(false) }
+  }
   if (!on && !has('autopilot')) return null
   return (
     <>
@@ -36,10 +47,11 @@ function AutopilotSwitch({ place }: { place: Place }) {
       name="Autopilot"
       icon={<ModeIcon className={ic} />}
       on={on}
-      note={on ? 'Works on its own' : 'Off: does what you ask'}
-      onClick={() => act({ type: 'mode', place: place.id, mode: on ? 'regular' : 'autopilot' })}
+      note={busy ? 'Changing coordinator…' : state && state !== 'On' && state !== 'Off' ? state : on ? 'Works on its own' : 'Off: does what you ask'}
+      onClick={() => void change()}
     />
-    {on ? <MenuItem onClick={() => act({ type: 'mode', place: place.id, mode: 'regular', keepWorkers: true })}>Turn off; let workers finish</MenuItem> : null}
+    {on ? <MenuItem onClick={() => void change(true)}>Turn off; let workers finish</MenuItem> : null}
+    {error ? <p role="alert" className="max-w-72 px-3 py-2 text-sm text-pretty text-need [overflow-wrap:anywhere]">{error}</p> : null}
     </>
   )
 }

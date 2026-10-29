@@ -37,8 +37,8 @@ or effort is refused rather than silently substituted. Automatic fallback is dis
 
 The **Isolated workspace** profile uses bubblewrap PID, mount, user and network namespaces, drops capabilities,
 clears inherited environment and starts with a private provider home. It applies to the whole process tree,
-including shell commands, native helpers and headless reviewers, regardless of their own sandbox flags. The host
-home, Herdr/Shepherdr sockets and local/private network are absent. The coordinator sees its project read-only;
+including shell commands, native helpers and headless reviewers, regardless of their own sandbox flags. System executables, libraries and certificate configuration are read-only. Other host
+home files, Herdr/Shepherdr control sockets and local/private network are absent. The coordinator sees its project read-only;
 workers can write only their own worktree and private runtime home. Host Git metadata is read-only. A worktree
 containing hardlinks to shared files is refused rather than exposing those shared inodes for writing.
 
@@ -46,7 +46,7 @@ Exact public HTTPS host names are allowed through a trusted CONNECT gateway. Wil
 network access and private/loopback/Tailscale destinations are blocked. Provider clients must honor the HTTP(S)
 proxy. Custom providers may need their public host added; a local provider is unsupported. Failure never enables
 host networking. Provider configuration is copied selectively: host MCP executors, hooks and installed plugins
-are not imported. Provider login files are copied into the private home; the host login files are not overwritten.
+are not imported. The selected agent and reviewer login files are copied into the private home; the host login files are not overwritten.
 A login that cannot work in the isolated runtime needs the human; it never falls back to another account.
 
 The gateway fixes command chat/cwd identity itself. A caller cannot choose another task, secret scope or permission
@@ -70,7 +70,8 @@ Access and limits are behind an expansion:
   coordinator, workers and reviewers. It measures network traffic, not tokens or money. A chunk that exceeds the
   remaining allowance is refused. Exhaustion closes the run.
 - **Shared reported tokens:** an optional best-effort stop threshold using every transcript in the runtime homes,
-  including helpers and reviewers. Reports are delayed and agent-written, so they can overshoot or be missing; this
+  including helpers and reviewers. Log bytes are captured from inside the namespace into host-owned storage, never
+  opened from an agent-supplied host path. Reports are delayed and agent-written, so they can overshoot or be missing; this
   is not a hard token or money cap. No exact financial spending cap is offered.
 - **Shared runtime:** elapsed wall time since ON, including idle time. Every runtime gets the same absolute deadline
   through an external timeout; the manager also checks it. This ends all descendants, not just a turn.

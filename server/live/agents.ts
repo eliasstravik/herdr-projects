@@ -24,12 +24,21 @@ import { ROOT } from '../root.ts'
 import { leftAtPrompt } from './commands.ts'
 import { paneWrong, type Wrong } from './revive.ts'
 import { readCodexRuntime } from './codex-runtime.ts'
-import { privateRuntimePath } from './autopilot-sandbox.ts'
+import { capturedTranscript, privateRuntimePath } from './autopilot-sandbox.ts'
 import { SecretAccess } from './secret-access.ts'
 import { isAgentProcess } from './agent-process.ts'
 
 /** a log's name (its session id), wherever it lies: one named both by its mirrored path and by its own is one log */
 const logName = (f: string) => f.slice(f.lastIndexOf('/') + 1)
+
+export async function isolatedReady(kind: string, inspect: () => Promise<Pick<AgentInfo, 'agent' | 'interactive_ready'> | undefined>, pause = () => new Promise<void>((resolve) => setTimeout(resolve, 500)), attempts = 120) {
+  for (let i = 0; i < attempts; i++) {
+    const info = await inspect()
+    if (info?.agent === kind && info.interactive_ready === true) return
+    await pause()
+  }
+  throw new Error(`${kind} did not become ready inside its isolation. Autopilot was not started.`)
+}
 
 /** the logs with each one once, where it first came, by the path it was named by last (a session carried to another
  *  folder goes on there): the same log twice is read twice, and a big one holds up the server */
@@ -61,8 +70,10 @@ export function carryClaudeSession(id: string, cwd: string): string | undefined 
 }
 
 export interface AgentRecord {
+  /** Identity for startup instructions; every replacement invalidates the old ones. */
+  launch?: string
   /** Trusted isolation metadata; never set by a prompt. */
-  isolation?: { run: string; home: string; control: string; path: string }
+  isolation?: { run: string; home: string; captures?: string; control: string; path: string }
   /** chat key */
   key: string
   /** herdr agent name */
@@ -97,6 +108,7 @@ export interface AgentRecord {
 
 export interface OutItem {
   generation?: string
+  launch?: string
   id: string
   key: string
   text: string
@@ -518,7 +530,7 @@ export class Agents extends Emitter<Events> {
   private ranOn(key: string): Background | undefined {
     const r = this.records[key]
     const st = this.status(key)
-    if (r?.kind !== 'claude' || st === 'working' || st === 'blocked' || st === 'gone') return undefined
+    if (r?.kind !== 'claude' || r.isolation || st === 'working' || st === 'blocked' || st === 'gone') return undefined
     const file = this.sessions.status(r.sessionId, r.cwd)
     // its hooks said what still ran as its turn ended; its session file is newer once that work is gone, or once a
     // subagent runs again (one that paused on shells of its own woke)
@@ -535,7 +547,7 @@ export class Agents extends Emitter<Events> {
       const r = this.records[key]
       const st = this.status(key)
       const pane = this.info(key)?.pane_id
-      if (r?.kind === 'claude' && pane && (st === 'idle' || st === 'done') && !this.said(key) && this.sessions.status(r.sessionId, r.cwd) === undefined) {
+      if (r?.kind === 'claude' && !r.isolation && pane && (st === 'idle' || st === 'done') && !this.said(key) && this.sessions.status(r.sessionId, r.cwd) === undefined) {
         const seen = screenBackground(await herdr.visible(pane).catch(() => ''))
         if (seen) this.screens.set(key, seen)
         else this.screens.delete(key)
@@ -651,8 +663,9 @@ export class Agents extends Emitter<Events> {
 
   private isolatedPath(r: AgentRecord, file: string) {
     if (!r.isolation) return file
-    const mapped = file.startsWith(homedir() + '/') ? join(r.isolation.home, relative(homedir(), file)) : file
-    return privateRuntimePath(r.isolation.home, mapped) ?? ''
+    if (!r.isolation.captures) return ''
+    const mapped = capturedTranscript(r.isolation.captures, r.kind, relative(homedir(), file))
+    return privateRuntimePath(r.isolation.captures, mapped) ?? ''
   }
 
   /** find a log file this CLI started since the agent (re)started, when herdr didn't name one */
@@ -661,9 +674,9 @@ export class Agents extends Emitter<Events> {
     if (!r) return
     const since = r.started - 5000
     if (r.isolation) {
-      const dir = join(r.isolation.home, r.kind === 'claude' ? '.claude/projects' : r.kind === 'codex' ? '.codex/sessions' : '.pi/agent/sessions')
-      mkdirSync(dir, { recursive: true })
-      const files = Array.from(new Bun.Glob('**/*.jsonl').scanSync({ cwd: dir, absolute: true, onlyFiles: true, throwErrorOnBrokenSymlink: false })).filter((f) => privateRuntimePath(r.isolation!.home, f) && statSync(f).mtimeMs >= since).sort((a,b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+      const dir = join(r.isolation.captures ?? r.isolation.home, r.kind === 'claude' ? '.claude/projects' : r.kind === 'codex' ? '.codex/sessions' : '.pi/agent/sessions')
+      if (!r.isolation.captures || !privateRuntimePath(r.isolation.captures, dir)) return
+      const files = Array.from(new Bun.Glob('**/*.jsonl').scanSync({ cwd: dir, absolute: true, onlyFiles: true, throwErrorOnBrokenSymlink: false })).filter((f) => privateRuntimePath(r.isolation!.captures!, f) && statSync(f).mtimeMs >= since).sort((a,b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
       const f = files.find((f) => !f.includes('/subagents/'))
       if (f && addLog(r, f)) { this.save(); this.emit('logs', key) }
       return
@@ -701,7 +714,7 @@ export class Agents extends Emitter<Events> {
       this.stopping.add(spec.key)
       try {
         const first = await before?.()
-        await this.finish(spec.key)
+        await this.finish(spec.key, true)
         return await this.launch({ ...spec, ...(first ? { first } : {}) })
       } finally {
         this.stopping.delete(spec.key)
@@ -741,6 +754,8 @@ export class Agents extends Emitter<Events> {
     if (fresh) { r.model = ''; r.effort = '' }
     Object.assign(r, { name: spec.name, kind: spec.kind, cwd: spec.cwd, workspace: spec.workspace, tab: spec.tab ?? r.tab, env: spec.env ?? r.env, access: spec.access ?? r.access, model: spec.model ?? r.model, effort: spec.effort ?? r.effort, system: spec.system ?? r.system, set: spec.set ?? r.set, finished: false })
     this.codexState.delete(spec.key)
+    r.launch = randomUUID()
+    if (fresh) this.outbox = this.outbox.filter((item) => item.key !== spec.key || item.cid || !item.text.startsWith('<shepherdr>'))
     r.started = Date.now()
     if (!resume) r.sessionId = r.kind === 'codex' ? undefined : randomUUID()
     // a run of its own: what its hooks record starts over
@@ -778,6 +793,18 @@ export class Agents extends Emitter<Events> {
       }
     }
     await this.refresh()
+    if (r.isolation) {
+      // agent.start only enqueues a terminal command. Never report a successful mode
+      // change until the selected adapter is really accepting chat input.
+      try {
+        await isolatedReady(r.kind, async () => { await this.refresh(); return this.live.get(r.name) })
+      } catch (e) {
+        r.finished = true
+        this.save()
+        await herdr.closePane(pane).catch(() => undefined)
+        throw e
+      }
+    }
     await this.bindRoute(r, pane)
     // CLIs without an option for extra instructions get them first, hidden from the chat. Both wait until the CLI is
     // ready, ahead of what you sent meanwhile (a restart)
@@ -798,9 +825,11 @@ export class Agents extends Emitter<Events> {
       if (resume && r.sessionId) a.push('--resume', r.sessionId)
       else if (r.sessionId) a.push('--session-id', r.sessionId)
       // its hooks tell Shepherdr what it does (readers/hooks.ts), from a settings file of its own: yours stay untouched
-      const h = hookSettings(r.isolation ? join(r.isolation.home, 'hooks') : HOOKS_DIR, r.name, r.isolation ? '/run/shepherdr/bun' : process.execPath)
-      r.hooks = h.events
-      a.push('--settings', h.settings)
+      if (!r.isolation) {
+        const h = hookSettings(HOOKS_DIR, r.name)
+        r.hooks = h.events
+        a.push('--settings', h.settings)
+      }
       if (r.isolation) a.push('--dangerously-skip-permissions')
       if (r.system) a.push('--append-system-prompt-file', this.promptFile(r))
       if (model) a.push('--model', model)
@@ -917,7 +946,7 @@ export class Agents extends Emitter<Events> {
   private heldBy(key: string, item?: Pick<OutItem, 'idle'>): Hold | undefined {
     const st = this.status(key)
     // stopping for a restart: what you send goes to the agent it starts on
-    if (st === 'gone' || this.deliveryPaused.has(key) || this.stopping.has(key) || this.info(key)?.interactive_ready === false) return 'start'
+    if (st === 'gone' || this.records[key]?.finished || this.deliveryPaused.has(key) || this.stopping.has(key) || this.info(key)?.interactive_ready === false) return 'start'
     if (st === 'blocked' || this.menuUp?.(key)) return 'menu'
     if (item?.idle && st === 'working') return 'turn'
     return undefined
@@ -946,7 +975,7 @@ export class Agents extends Emitter<Events> {
     // sent again after it failed: it is on its way once more
     if (cid) this.failures = this.failures.filter((f) => f.cid !== cid)
     const item: OutItem = { generation, id: randomUUID(), key, text, reaction, at: Date.now(), ...(cid ? { cid } : {}), ...(idle ? { idle } : {}), ...(command ? { command } : {}) }
-    if (this.acceptInput && !this.acceptInput(item)) return { waiting: false, item }
+    if (item.launch && item.launch !== this.records[key]?.launch || this.acceptInput && !this.acceptInput(item)) return { waiting: false, item }
     if (this.status(key) === 'gone' && ensure && cid && !this.deliveryPaused.has(key)) {
       try {
         await ensure()
@@ -1018,7 +1047,7 @@ export class Agents extends Emitter<Events> {
       for (;;) {
         const next = this.outbox.find((o) => o.key === key)
         if (!next) return void this.unready.delete(key)
-        if (this.acceptInput && !this.acceptInput(next)) { this.outbox = this.outbox.filter((o) => o !== next); this.save(); continue }
+        if (next.launch && next.launch !== this.records[key]?.launch || this.acceptInput && !this.acceptInput(next)) { this.outbox = this.outbox.filter((o) => o !== next); this.save(); continue }
         if (next.cid?.startsWith('requested-news:') && this.newsReceipts.includes(next.cid)) {
           this.outbox = this.outbox.filter((o) => o !== next)
           this.save()
@@ -1064,7 +1093,7 @@ export class Agents extends Emitter<Events> {
   /** ahead: before what waits for this agent already */
   private queue(key: string, texts: string[], ahead = false) {
     if (!texts.length) return
-    const items = texts.map((text) => ({ id: randomUUID(), key, text, at: Date.now() }))
+    const items = texts.map((text) => ({ launch: this.records[key]?.launch, id: randomUUID(), key, text, at: Date.now() }))
     const i = ahead ? this.outbox.findIndex((o) => o.key === key) : -1
     if (i < 0) this.outbox.push(...items)
     else this.outbox.splice(i, 0, ...items)
@@ -1135,7 +1164,7 @@ export class Agents extends Emitter<Events> {
   }
 
   /** end a task agent's run: its pane closes; its chat stays and writing to it resumes it */
-  async finish(key: string) {
+  async finish(key: string, strict = false) {
     this.secretAccess.revoke(key)
     this.routes.delete(key)
     const r = this.records[key]
@@ -1143,7 +1172,8 @@ export class Agents extends Emitter<Events> {
     if (r) r.finished = true
     this.save()
     if (!a) return
-    await herdr.closePane(a.pane_id).catch(() => undefined)
+    if (strict) await herdr.closePane(a.pane_id)
+    else await herdr.closePane(a.pane_id).catch(() => undefined)
     // gone from what herdr runs at once: starting it again (a backup agent taking over) starts a new one
     await this.refresh()
   }

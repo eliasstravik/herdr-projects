@@ -9,7 +9,7 @@ const { PilotRuns, AUTOPILOT_KINDS, hostList, pilotCommand, pilotProblem, reserv
 const { sandboxArgs, publicAddress, providerConfig } = await import('../server/live/autopilot-sandbox.ts')
 const { Settings } = await import('../server/live/settings.ts')
 const { herdr } = await import('../server/live/herdr.ts')
-const { Agents } = await import('../server/live/agents.ts')
+const { Agents, isolatedReady } = await import('../server/live/agents.ts')
 const { LiveSource } = await import('../server/live/source.ts')
 const { Heartbeats } = await import('../server/live/heartbeat.ts')
 const { placeId } = await import('../server/live/places.ts')
@@ -72,6 +72,14 @@ function world(kind = 'codex') {
 }
 
 describe('capabilities and exact launch settings', () => {
+  test.each(['claude', 'codex', 'pi'])('%s only reports startup once that exact adapter accepts input', async (kind) => {
+    const seen = [undefined, { agent: kind, interactive_ready: false }, { agent: kind, interactive_ready: true }]
+    let polls = 0
+    await isolatedReady(kind, async () => { polls++; return seen.shift() }, async () => {}, 3)
+    expect(polls).toBe(3)
+    await expect(isolatedReady(kind, async () => ({ agent: 'unrelated', interactive_ready: true }), async () => {}, 2)).rejects.toThrow('not started')
+    await expect(isolatedReady(kind, async () => undefined, async () => {}, 2)).rejects.toThrow('not started')
+  })
   test.each(['claude', 'codex', 'pi'])('%s has a chat adapter; other Herdr CLIs fail closed', (kind) => {
     expect(AUTOPILOT_KINDS).toContain(kind)
     expect(pilotProblem(kind)).toBeUndefined()
@@ -104,12 +112,30 @@ describe('capabilities and exact launch settings', () => {
     const flags = a.args(r, false)
     expect(flags).toContain(kind === 'claude' ? '--model' : '-m')
     expect(flags.join(' ')).toContain('high')
-    if (kind === 'claude') expect(flags).toContain('--dangerously-skip-permissions')
+    if (kind === 'claude') { expect(flags).toContain('--dangerously-skip-permissions'); expect(flags).not.toContain('--settings') }
     else expect(flags.join(' ')).toContain('http://127.0.0.1:18765')
   })
 })
 
 describe('fresh replacement, failures and worker ownership', () => {
+  test('old startup instructions are discarded on handover while a queued human message survives', async () => {
+    const a = new Agents(), key = 'handover'
+    const state = a as unknown as { outbox: { key: string; id: string; text: string; at: number; launch?: string; cid?: string }[]; live: Map<string, unknown> }
+    a.records[key] = { key, name: key, kind: 'codex', cwd: '/fixture', workspace: 'fixture', launch: 'new', logs: [], started: 1 }
+    state.outbox = [
+      { key, id: 'old', text: '<shepherdr>act on old Heartbeat</shepherdr>', at: 1, launch: 'old' },
+      { key, id: 'new', text: 'regular startup', at: 2, launch: 'new' },
+      { key, id: 'human', cid: 'human', text: 'my next message', at: 3 },
+    ]
+    Object.assign(a, { refresh: async () => {}, heldBy: () => undefined })
+    const prompt = spyOn(herdr, 'prompt').mockResolvedValue(undefined as never)
+    const timer = spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void) => { queueMicrotask(fn); return 0 }) as never)
+    try {
+      await a.deliver(key)
+      expect(prompt.mock.calls.map((call) => call[1])).toEqual(['regular startup', 'my next message'])
+      expect(a.waiting(key)).toHaveLength(0)
+    } finally { prompt.mockRestore(); timer.mockRestore(); a.stop() }
+  })
   test.each(['claude', 'codex'])('%s ON/OFF replace one owner in the same chat', async (kind) => {
     const w = world(kind)
     await w.internals.switchPilot(w.key, 'autopilot')
@@ -224,7 +250,7 @@ describe('trusted broker, limits and actual namespace configuration', () => {
   test('all coordinator/worker/reviewer transcripts contribute without offset-id collisions', () => {
     const run = 'usage-fixture', root = join(HOME, 'autopilot-runtime', run)
     for (const who of ['coordinator', 'worker', 'reviewer']) {
-      const dir = join(root, who, 'home/.codex/sessions/2026/10/29'); mkdirSync(dir, { recursive: true })
+      const dir = join(root, who, 'captures/.codex/sessions/2026/10/29'); mkdirSync(dir, { recursive: true })
       writeFileSync(join(dir, `${who}.jsonl`), JSON.stringify({ timestamp: '2026-10-29T00:00:00Z', type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { total_tokens: 7 }, last_token_usage: { total_tokens: 7 } } } }) + '\n')
     }
     const usage = new PilotUsage()

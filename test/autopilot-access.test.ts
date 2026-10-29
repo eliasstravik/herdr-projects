@@ -1,13 +1,13 @@
 // Real OS enforcement, with fake executables and fake data. CI installs bubblewrap; never real agents/accounts.
 import { describe, expect, test } from 'bun:test'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, symlinkSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { request } from 'node:http'
 process.env.SHEPHERDR_HOME = mkdtempSync(join(tmpdir(), 'pilot-access-store-'))
 process.env.HERDR_SOCKET_PATH = join(process.env.SHEPHERDR_HOME, 'absent.sock')
 const { PilotRuns } = await import('../server/live/autopilot.ts')
-const { prepareSandbox, sandboxArgs } = await import('../server/live/autopilot-sandbox.ts')
+const { prepareSandbox, sandboxArgs, capturedTranscript } = await import('../server/live/autopilot-sandbox.ts')
 
 const bwrap = Bun.which('bwrap')
 describe.skipIf(!bwrap)('Autopilot actual OS boundary', () => {
@@ -40,7 +40,22 @@ describe.skipIf(!bwrap)('Autopilot actual OS boundary', () => {
       expect(calls).toHaveLength(1); expect(calls[0]).toMatchObject({ chat: 'OWN-1/Agent', cwd })
       expect((await send(['task', 'tell', 'OTHER-1', 'go'])).code).toBe(1)
       expect(calls).toHaveLength(1)
+      // Paths are opaque names, never host paths to open; replayed chunks are idempotent.
+      const target = join(root, 'sentinel'); writeFileSync(target, 'unchanged')
+      const capture = { kind: 'codex', file: target, offset: 0, data: Buffer.from('fixture log\n').toString('base64') }
+      const upload = () => new Promise<number>((resolve, reject) => {
+        const req = request({ socketPath: box.gateway!, path: '/api/transcript', method: 'POST' }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode!)) })
+        req.on('error', reject); req.end(JSON.stringify(capture))
+      })
+      expect(await upload()).toBe(200); expect(await upload()).toBe(200)
+      expect(await Bun.file(target).text()).toBe('unchanged')
+      expect(await Bun.file(capturedTranscript(box.captures!, 'codex', target)).text()).toBe('fixture log\n')
     } finally { await box.close() }
+    // A worker-planted provider-directory link must not turn a restart into a host write.
+    rmSync(join(box.logsHome, '.codex'), { recursive: true, force: true })
+    symlinkSync(providerHome, join(box.logsHome, '.codex'))
+    await expect(prepareSandbox({ key: 'OWN-1/Agent', name: 'fixture', kind: 'claude', cwd, workspace: 'fixture' }, run, cwd, async () => ({ out: '', code: 0 }), 'codex', { providerHome, executable: (kind) => executables[kind] })).rejects.toThrow('symlink')
+    expect(existsSync(join(providerHome, 'auth.json'))).toBe(false)
   })
   for (const kind of ['claude', 'codex']) test(`${kind} and its child shell cannot access host files, control files, Git metadata or host network`, async () => {
     const root = mkdtempSync(join(tmpdir(), 'shep-pilot-os-'))
