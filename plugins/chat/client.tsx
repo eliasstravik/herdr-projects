@@ -202,11 +202,12 @@ function Bubble({ msg, chat, from, out, last }: { msg: Message; chat: Chat; from
 }
 
 /** why one you sent waits: a busy agent takes it at once, so only a menu (typing could pick an option), an agent still
- *  starting, a CLI command mid-turn or a machine out of reach hold it */
+ *  starting, a CLI command mid-turn or a machine out of reach hold it; a busy Claude Code keeps it in its own queue */
 function waitLine(why: Message['waitsFor']) {
   if (why === 'menu') return 'Waiting for your answer above.'
   if (why === 'start') return 'Goes in once the agent has started'
   if (why === 'turn') return 'Goes in once the agent finishes this step'
+  if (why === 'queued') return 'Queued: the agent reads it after this step'
   return 'Goes in once it can be reached'
 }
 

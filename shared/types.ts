@@ -366,9 +366,9 @@ export interface Message {
   reactions?: Reaction[]
   /** waits to go in: the agent shows a menu or permission prompt, or is still starting (a busy one takes it at once) */
   waiting?: boolean
-  /** why it waits: a menu is up (typed text could pick an option), the agent is starting, or a CLI command waits for the
-   *  turn to end */
-  waitsFor?: 'menu' | 'start' | 'turn'
+  /** why it waits: a menu is up (typed text could pick an option), the agent is starting, a CLI command waits for the
+   *  turn to end, or it went in and waits in the CLI's own queue for the agent's next step */
+  waitsFor?: 'menu' | 'start' | 'turn' | 'queued'
   /** an attached file: each one is a message of its own, right after the text it came with */
   file?: { name: string; path: string }
   /** the id the screen gave what you sent: it showed it at once, and this message takes its place */

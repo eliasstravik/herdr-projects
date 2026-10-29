@@ -266,6 +266,22 @@ export function parseMenu(screen: string): ScreenMenu | null {
 /** words as typed, whatever the spacing a CLI's log keeps */
 const words = (s: string) => s.replace(/\s+/g, ' ').trim()
 
+/** what is still in the CLI's own queue: put in and not taken out since. A user line with its words, a turn's end or a
+ *  new session takes it out too, so one whose way out the log never names doesn't wait for good */
+export function inQueue(ev: LogEvent[]): Extract<LogEvent, { kind: 'queued' }>[] {
+  const open = new Map<string, Extract<LogEvent, { kind: 'queued' }>>()
+  for (const e of ev) {
+    if (e.kind === 'queued') open.set(e.id, e)
+    else if (e.kind === 'unqueued') open.delete(e.id)
+    else if (e.kind === 'turn-end' || e.kind === 'session') open.clear()
+    else if (e.kind === 'user') {
+      const q = [...open.values()].find((q) => words(q.text) === words(e.text))
+      if (q) open.delete(q.id)
+    }
+  }
+  return [...open.values()]
+}
+
 /** the message each reply sent from a screen answers, by the words of its line: a quote alone may fit a newer message
     that starts the same way ("Done."). Kept until a restart; after one the quote finds it. */
 const replied = new Map<string, string>()
@@ -892,8 +908,16 @@ export class Chats {
     msgs.sort((a, b) => (a.at ?? 0) - (b.at ?? 0))
     // what waits to go in, and why: the first in line holds the rest
     const queue = this.agents.waiting(key)
-    const waitsFor = queue.length ? this.agents.holdOf(key, queue[0]) : undefined
-    for (const o of queue) {
+    const hold = queue.length ? this.agents.holdOf(key, queue[0]) : undefined
+    // and what you sent that waits in the CLI's own queue (Claude Code, while it works): it goes in at its next step.
+    // shortcut: only one sent from a screen in the last ten minutes (sentLately) gets its id and shows so; an older one
+    // stays the screen's plain pending bubble
+    const cliQueue = inQueue(ev).flatMap((q) => {
+      const cid = cidFor(stripHidden(q.text), q.at)
+      return cid ? [{ id: q.id, at: q.at, text: q.text, cid, reaction: undefined }] : []
+    })
+    for (const [i, o] of [...queue, ...cliQueue].entries()) {
+      const waitsFor = i < queue.length ? hold : ('queued' as const)
       if (o.reaction) {
         const m = msgs.find((x) => x.id === o.reaction!.message)
         addRx(m, o.reaction.emoji, 'me', parseUserLine(o.text)?.kind !== 'unreact', true)
