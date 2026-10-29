@@ -373,19 +373,25 @@ describe("a task's CLI, model and effort", () => {
     const codex = src.engine.task(id((await src.cli(['task', 'add', 'Codex review', '--desc', 'x', '--reviewer-effort', 'low'], { chat: place })).out))!
     expect(codex.desc).toContain('- Reviewer: a headless Codex or a Codex subagent (model gpt-6-sol, low effort). (set by coordinator for this task)')
     src.settings.set('reviewer.model', null)
-    // Antigravity reviews with its own model and effort: none may be picked for it
+    // Antigravity reviews on its default, or on the model and effort picked for it, which its headless line passes
     const agy = src.engine.task(id((await src.cli(['task', 'add', 'Antigravity review', '--desc', 'x', '--reviewer', 'agy'], { chat: place })).out))!
     expect(agy.reviewer).toEqual({ kind: 'agy' })
-    expect(agy.desc).toContain('- Reviewer: a headless Antigravity or an Antigravity subagent (its default model and effort). Run it headless as agy ')
-    const picked = await src.cli(['task', 'add', 'Odd', '--desc', 'x', '--reviewer', 'agy', '--reviewer-effort', 'high'], { chat: place })
-    expect(picked.code).toBe(1)
-    expect(picked.out).toContain('Antigravity runs on its own')
-    // nor does Settings' effort for Codex reach it
-    src.settings.set('reviewer.effort', 'high')
-    const plainAgy = src.engine.task(id((await src.cli(['task', 'add', 'Antigravity, Settings high', '--desc', 'x', '--reviewer', 'agy'], { chat: place })).out))!
-    expect(plainAgy.reviewer).toEqual({ kind: 'agy' })
-    expect(plainAgy.desc).toContain('(its default model and effort). Run it headless as agy ')
+    expect(agy.desc).toContain('- Reviewer: a headless Antigravity or an Antigravity subagent (its default model and effort). Run it headless as agy --dangerously-skip-permissions -p ')
+    const picked = src.engine.task(id((await src.cli(['task', 'add', 'Antigravity high', '--desc', 'x', '--reviewer', 'agy', '--reviewer-model', 'gemini-4-argon-high', '--reviewer-effort', 'High'], { chat: place })).out))!
+    expect(picked.reviewer).toEqual({ kind: 'agy', model: 'gemini-4-argon-high', effort: 'high' })
+    expect(picked.desc).toContain('(model gemini-4-argon-high, high effort). Run it headless as agy --dangerously-skip-permissions --model gemini-4-argon-high --effort high -p ')
+    const odd = await src.cli(['task', 'add', 'Odd', '--desc', 'x', '--reviewer', 'agy', '--reviewer-effort', 'ultra'], { chat: place })
+    expect(odd.code).toBe(1)
+    expect(odd.out).toContain('--reviewer-effort takes default, low, medium, high, xhigh, max on Antigravity')
+    // Settings' effort for Codex goes in as the nearest Antigravity takes
+    src.settings.set('reviewer.effort', 'ultra')
+    const plainAgy = src.engine.task(id((await src.cli(['task', 'add', 'Antigravity, Settings ultra', '--desc', 'x', '--reviewer', 'agy'], { chat: place })).out))!
+    expect(plainAgy.reviewer).toEqual({ kind: 'agy', effort: 'max' })
     src.settings.set('reviewer.effort', null)
+    // an agy task agent still runs on its own: Shepherdr starts it with no model
+    const onAgy = await src.cli(['task', 'add', 'On agy', '--desc', 'x', '--agent', 'agy', '--model', 'gemini-4-argon-high'], { chat: place })
+    expect(onAgy.code).toBe(1)
+    expect(onAgy.out).toContain('Antigravity runs on its own')
   })
   test('task add --set changes a line of its Settings block for that task alone, marked as set by its coordinator', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'shep-src-repo-'))

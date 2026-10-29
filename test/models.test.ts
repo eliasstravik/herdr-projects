@@ -1,6 +1,6 @@
 // Each CLI's models and effort levels, as read from the CLI itself (models.ts): what its output looks like here
 import { describe, expect, test } from 'bun:test'
-import { effortFor, findModel, helpLevels, nearest, parseClaude, parseCodex, parsePi, setModels } from '../server/live/models.ts'
+import { effortFor, findModel, helpLevels, nearest, parseClaude, parseCodex, parseAgy, parsePi, setModels } from '../server/live/models.ts'
 
 describe('reading what each CLI takes', () => {
   test("Claude Code's catalog: the newest of each family, its levels by capability, older ones by id", () => {
@@ -66,6 +66,17 @@ describe('reading what each CLI takes', () => {
     } finally {
       setModels('pi', undefined)
     }
+  })
+  test("agy's list: an id and its name a line, the levels from its --help", () => {
+    const list = ['Fetching available models...', 'gemini-4-argon-high\tGemini 4 Argon (High)', 'claude-opus-5-5-low\tClaude Opus 5.5 (Low)', ''].join('\n')
+    const help = '  --effort                        Reasoning effort for the current CLI session (low|medium|high|xhigh|max)\n'
+    const c = parseAgy(list, help)!
+    expect(c.models.map((m) => [m.id, m.label])).toEqual([
+      ['gemini-4-argon-high', 'Gemini 4 Argon (High)'],
+      ['claude-opus-5-5-low', 'Claude Opus 5.5 (Low)'],
+    ])
+    expect(c.efforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
+    expect(parseAgy('Fetching available models...\n', help)).toBeUndefined()
   })
   test('a level a model lacks becomes the nearest it has, a tie going lower', () => {
     expect(nearest(['low', 'medium', 'high'], 'max')).toBe('high')

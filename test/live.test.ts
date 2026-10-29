@@ -533,11 +533,19 @@ describe('settings', () => {
     expect(s.set('watcher.agent', 'Claude Code').error).toBe('No setting watcher.agent')
     // a reviewer needs a headless run review.sh knows
     expect(s.set('reviewer.agent', 'Qwen').error).toBe('Pick one of: Codex · Claude Code · pi · Antigravity.')
-    // Antigravity, by its name or its kind; Shepherdr passes it no model or effort: its own
+    // Antigravity, by its name or its kind, reviews on any model id it is given and the levels its --help lists
     expect(s.set('reviewer.agent', 'agy').ok).toBe(true)
     expect(s.get('reviewer.agent')).toBe('Antigravity')
     expect(s.harness('reviewer')).toEqual({ kind: 'agy', model: undefined, effort: undefined })
-    s.set('reviewer.agent', null)
+    expect(s.set('reviewer.model', 'gemini-4-argon-high').ok).toBe(true)
+    expect(s.set('reviewer.effort', 'ultra').error).toBe('Antigravity takes default · low · medium · high · xhigh · max.')
+    expect(s.set('reviewer.effort', 'high').ok).toBe(true)
+    expect(s.harness('reviewer')).toEqual({ kind: 'agy', model: 'gemini-4-argon-high', effort: 'high' })
+    for (const k of ['reviewer.agent', 'reviewer.model', 'reviewer.effort']) s.set(k, null)
+    // an agy task agent runs on its own model: Shepherdr starts it with none
+    expect(s.set('task.agent', 'agy').ok).toBe(true)
+    expect(s.harness('task')).toEqual({ kind: 'agy' })
+    s.set('task.agent', null)
     // a model or effort level the CLI (and its model) doesn't take, with what it does
     expect(s.set('coordinator.model', 'opus 9').error).toBe('Claude Code has no model opus 9. Pick one of: default · Fable 5.1 · Opus 5.5 · Sonnet 5.5 · Haiku 5.5.')
     expect(s.set('coordinator.model', 'Opus 5.5').ok).toBe(true)
@@ -773,7 +781,10 @@ describe('the brief\'s default way of working', () => {
 - Review rounds: 3. Stop when a round finds none to fix, at most 3 rounds.
 - Merge: on its own. Merge it yourself once it works (shepherdr merge X-1). Don't wait for GitHub's checks.`)
   })
-  test('an Antigravity reviewer is named, and its line says how to run agy headless', () => {
+  test('an Antigravity reviewer is named, and its line says how to run agy headless, on its model and effort', () => {
+    expect(settingsBlock('X-1', { ways, reviewer: { kind: 'agy', model: 'gemini-4-argon-high', effort: 'high' } })).toContain(
+      '(model gemini-4-argon-high, high effort). Run it headless as agy --dangerously-skip-permissions --model gemini-4-argon-high --effort high -p "<prompt>" < /dev/null',
+    )
     expect(settingsBlock('X-1', { ways, reviewer: { kind: 'agy' } })).toContain(
       '- Reviewer: a headless Antigravity or an Antigravity subagent (its default model and effort). Run it headless as agy --dangerously-skip-permissions -p "<prompt>" < /dev/null: the prompt right after -p, and without that flag it can\'t run commands such as git diff; ask it not to edit.\n',
     )

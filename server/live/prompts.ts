@@ -39,16 +39,17 @@ export interface Reviewer {
 
 const REVIEWER_NAME: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', pi: 'pi', agy: 'Antigravity' }
 
-/** how to run a reviewer headless, for a CLI the agent's skill doesn't show */
-const HEADLESS: Record<string, string> = {
-  agy: `Run it headless as agy --dangerously-skip-permissions -p "<prompt>" < /dev/null: the prompt right after -p, and without that flag it can't run commands such as git diff; ask it not to edit`,
+/** how to run a reviewer headless, with its model and effort, for a CLI the agent's skill doesn't show */
+const HEADLESS: Record<string, (r: Reviewer) => string> = {
+  agy: (r) =>
+    `Run it headless as agy --dangerously-skip-permissions${r.model ? ` --model ${r.model}` : ''}${r.effort ? ` --effort ${r.effort}` : ''} -p "<prompt>" < /dev/null: the prompt right after -p, and without that flag it can't run commands such as git diff; ask it not to edit`,
 }
 
 /** "a headless Codex or a Codex subagent (its default model and effort)", "… Claude Code … (model opus, high effort)" */
 export function reviewerWords(r: Reviewer) {
   const name = REVIEWER_NAME[r.kind] ?? r.kind
   const who = `a headless ${name} or a${/^[aeiou]/i.test(name) ? 'n' : ''} ${name} subagent`
-  const how = HEADLESS[r.kind] ? `. ${HEADLESS[r.kind]}` : ''
+  const how = HEADLESS[r.kind] ? `. ${HEADLESS[r.kind](r)}` : ''
   if (!r.model && !r.effort) return `${who} (its default model and effort)${how}`
   return `${who} (${[r.model ? `model ${r.model}` : 'its default model', r.effort ? `${r.effort} effort` : 'its default effort'].join(', ')})${how}`
 }

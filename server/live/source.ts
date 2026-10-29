@@ -15,7 +15,7 @@ import { wrapPage } from '../frame.ts'
 import { Agents, hidden, type Spec } from './agents.ts'
 import { herdr } from './herdr.ts'
 import { followCommand, isCommand } from './commands.ts'
-import { effortsOf, findModel, knowsModels, modelsOf, nearest } from './models.ts'
+import { effortsOf, findModel, knowsModels, modelsFor, nearest } from './models.ts'
 import { HELP, one, parseArgs, summaryOpts, type Parsed } from './args.ts'
 import { Automations, type Automation, type Template } from './automations.ts'
 import { Heartbeats, heartbeatFile } from './heartbeat.ts'
@@ -1401,6 +1401,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         if (!r) return { ok: false }
         // only what its CLI and model take: a model it lacks, or a level its model lacks, is refused
         const send = (cmd: string) => (r.kind === 'claude' ? this.agents.send(a.chat, cmd, { idle: true }) : undefined)
+        if (!modelsFor(r.kind)) return { ok: false, error: `${CLI_NAME[r.kind] ?? r.kind} runs on its own model and effort` }
         if (a.type === 'model') {
           const m = findModel(r.kind, a.model)
           if (!m) return { ok: false, error: `${CLI_NAME[r.kind] ?? r.kind} has no model ${a.model}` }
@@ -2046,7 +2047,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         if (!kinds[0]) throw new Error(`No CLI called ${a1}; herdr starts ${CLIS.join(', ')}`)
         return kinds
           .map((k) => {
-            const c = modelsOf(k!)
+            const c = modelsFor(k!)
             if (!c) return `${CLI_NAME[k!]}: Shepherdr passes it no model or effort; it picks its own.`
             const rows = c.models.map((m) => `  ${m.id.padEnd(28)} ${m.label === m.id ? '' : `${m.label}: `}${m.efforts.length ? m.efforts.join(', ') : 'no effort levels'}`)
             return `${CLI_NAME[k!]} (--agent ${k}), effort levels ${c.efforts.join(', ')}:\n${rows.length ? rows.join('\n') : '  any model id it knows'}${c.others?.length ? `\n  it also takes older ones by id: ${c.others.map((m) => m.id).join(', ')}` : ''}`
@@ -2505,8 +2506,8 @@ function fit(p: Parsed, flag: '' | 'reviewer-', kind: string, model?: string): {
   const m = one(p, `${flag}model`)?.trim()
   const e = one(p, `${flag}effort`)?.trim().toLowerCase()
   const name = CLI_NAME[kind] ?? kind
-  const c = modelsOf(kind)
-  if (((m && m !== 'default') || (e && e !== 'default')) && !c) throw new Error(`Shepherdr passes a model and effort to Claude Code, Codex and pi only; ${name} runs on its own`)
+  const c = modelsFor(kind, flag ? 'reviewer' : 'task')
+  if (((m && m !== 'default') || (e && e !== 'default')) && !c) throw new Error(`Shepherdr passes a model and effort to Claude Code, Codex and pi only${flag ? ', and Antigravity reviews with one' : ''}; ${name} runs on its own`)
   if (m !== undefined && refuse(`task.model`, m)) throw new Error(`--${flag}model ${m}: ${refuse('task.model', m)}`)
   const found = m && m !== 'default' ? findModel(kind, m) : undefined
   if (m && m !== 'default' && knowsModels(kind) && !found) throw new Error(`--${flag}model ${m}: ${name} has no such model. It takes ${c!.models.map((x) => x.id).join(', ')}, or default`)

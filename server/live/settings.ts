@@ -12,7 +12,7 @@ import type { SettingSection, TriggerRow } from '../../shared/types.ts'
 import { readJson, writeJson } from '../store.ts'
 import type { SetBy } from '../../shared/brief.ts'
 import { settingsBlock, settingsLines, SEVERITIES, type Said, type Ways } from './prompts.ts'
-import { effortFor, effortsOf, findModel, knowsModels, LEVELS, modelsOf } from './models.ts'
+import { effortFor, effortsOf, findModel, knowsModels, LEVELS, modelsFor } from './models.ts'
 import { eventRules, eventsText, eventWords, nextWords, OWN_ZONE, timeRule, timeWords, validZone, type EventRule } from './trigger.ts'
 
 /** every agent kind herdr can start (any of them works; chats are read for the ones with a log reader) */
@@ -257,7 +257,7 @@ export function agentRow(r: Row, get: (key: string) => string): Row {
   const [role, what] = r.key.split('.') as [Role, string]
   if (!ROLES.includes(role) || (what !== 'model' && what !== 'effort')) return r
   const kind = roleKind(role, get)
-  const c = kind ? modelsOf(kind) : undefined
+  const c = kind ? modelsFor(kind, role) : undefined
   if (!kind || !c) return { ...r, value: kind ? `${CLI_NAME[kind] ?? kind}'s own` : 'off', fixed: true, text: false }
   const stored = get(`${role}.model`)
   const model = findModel(kind, stored)
@@ -401,8 +401,8 @@ export class Settings {
     const [role, what] = key.split('.') as [Role, string]
     if (!ROLES.includes(role) || (what !== 'model' && what !== 'effort') || value.trim().toLowerCase() === 'default') return undefined
     const kind = this.kindOf(role, l)
-    if (!kind || !modelsOf(kind)) return undefined
-    if (what === 'model') return knowsModels(kind) && !findModel(kind, value) ? `${CLI_NAME[kind]} has no model ${value}. Pick one of: default · ${modelsOf(kind)!.models.map((m) => m.label).join(' · ')}.` : undefined
+    if (!kind || !modelsFor(kind, role)) return undefined
+    if (what === 'model') return knowsModels(kind) && !findModel(kind, value) ? `${CLI_NAME[kind]} has no model ${value}. Pick one of: default · ${modelsFor(kind, role)!.models.map((m) => m.label).join(' · ')}.` : undefined
     const model = this.pick(`${role}.model`, l).value
     const levels = effortsOf(kind, model)
     if (levels.includes(value.trim().toLowerCase())) return undefined
@@ -505,8 +505,8 @@ export class Settings {
 
   private modelAt(role: Role, kind: string | undefined, l: Level): { model?: string; effort?: string } {
     const stored = this.pick(`${role}.model`, l).value
-    if (!kind) return {}
-    const model = stored === 'default' ? undefined : knowsModels(kind) ? findModel(kind, stored)?.id : modelsOf(kind) ? stored : undefined
+    if (!kind || !modelsFor(kind, role)) return {}
+    const model = stored === 'default' ? undefined : knowsModels(kind) ? findModel(kind, stored)?.id : stored
     return { model, effort: effortFor(kind, this.pick(`${role}.effort`, l).value, model) }
   }
 
