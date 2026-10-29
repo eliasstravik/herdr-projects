@@ -1,3 +1,4 @@
+import { WorkerHealth } from './recovery.ts'
 // Every machine: Shepherdr is installed once, on the main machine, and runs every other machine saved in herdr's Remote
 // (herdr machine list) from there. Each gets a worker of its own: the same Shepherdr, in a process of its own, whose
 // herdr, files and commands are that machine's, reached over SSH (box.ts), with its records under
@@ -52,11 +53,13 @@ interface Link {
   chrome?: string
   /** not reached yet since this server started: shown as connecting, not as out of reach, for a while */
   connecting: boolean
+  health: WorkerHealth
+  polling?: boolean
 }
 
 interface Worker {
   pid: number
-  kill(): void
+  kill(signal?: 'SIGTERM' | 'SIGKILL'): void
   exited: Promise<unknown>
 }
 
@@ -110,7 +113,7 @@ function running(pid: number | undefined): Worker | undefined {
       }
     }, 2000)
   })
-  return { pid, kill: () => process.kill(pid, 'SIGTERM'), exited }
+  return { pid, kill: (signal = 'SIGTERM') => process.kill(pid, signal), exited }
 }
 
 /** a machine's own folder of records on this machine */
@@ -120,15 +123,25 @@ export class Machines extends Emitter<Events> {
   private links = new Map<string, Link>()
   private timers: ReturnType<typeof setInterval>[] = []
   private stopped = false
+  private pendingResume = new Map<string, Kept>()
 
   /** saved: herdr's list of machines; none (tests) runs only the workers adopt() names */
-  constructor(private saved: (() => Promise<Saved[]>) | null = savedMachines) {
+  constructor(
+    private saved: (() => Promise<Saved[]>) | null = savedMachines,
+    private status: typeof machineStatus = machineStatus,
+  ) {
     super()
     // from the time Shepherdr was installed on every machine: the machines that announced themselves
     rmSync(join(HOME, 'peers.json'), { force: true })
     if (saved) {
       // what each machine showed before a restart, at once; its worker is taken back or started again
-      for (const k of kept()) this.resume(k)
+      for (const k of kept()) {
+        const l = this.links.get(k.saved.label) ?? this.link(k.saved)
+        l.probe = k.probe
+        l.snap = k.snap
+        for (const c of k.chats ?? []) l.chats.set(c.key, c)
+        this.pendingResume.set(k.saved.label, k)
+      }
       void this.sync()
       this.timers.push(setInterval(() => void this.sync(), 15_000))
     }
@@ -147,7 +160,8 @@ export class Machines extends Emitter<Events> {
 
   /** a machine as it was before a restart: shown as connecting, its worker taken back when its code is the same */
   private resume(k: Kept) {
-    const l = this.link(k.saved)
+    if (k.saved.enabled === false) return
+    const l = this.links.get(k.saved.label) ?? this.link(k.saved)
     l.probe = k.probe
     l.snap = k.snap
     for (const c of k.chats ?? []) l.chats.set(c.key, c)
@@ -162,21 +176,21 @@ export class Machines extends Emitter<Events> {
       void this.refresh(l)
       return
     }
-    if (!w) return void this.start(l)
+    if (!w) return
     // its old worker finishes a merge on its way first (main.ts): the new one starts once it is gone, never beside it
     l.busy = true
     w.kill()
     void Promise.race([w.exited, Bun.sleep(MERGE_DEADLINE + 30_000)]).then(() => {
       l.busy = false
-      void this.start(l)
+      if (this.active(l)) void this.start(l)
     })
   }
 
   private link(m: Saved): Link {
-    const l: Link = { rec: { machine: m.label, url: '', lastSeen: 0 }, saved: m, chats: new Map(), watching: { chats: [], term: null }, reachable: false, waiting: [], state: 'Connecting…', lacks: [], connecting: true }
+    const l: Link = { rec: { machine: m.label, url: '', lastSeen: 0 }, saved: m, chats: new Map(), watching: { chats: [], term: null }, reachable: false, waiting: [], state: 'Connecting…', lacks: [], connecting: true, health: new WorkerHealth() }
     this.links.set(m.label, l)
     setTimeout(() => {
-      if (!l.connecting) return
+      if (!this.active(l) || !l.connecting) return
       l.connecting = false
       this.emit('snapshot')
     }, CONNECTING_FOR)
@@ -186,9 +200,10 @@ export class Machines extends Emitter<Events> {
   /** what a machine shows is kept on disk, a few seconds after it changes (at once as this server stops) */
   private keepTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private keep(l: Link, now = false) {
-    if (!this.saved) return
+    if (!this.saved || (!now && !this.active(l))) return
     const write = () => {
       this.keepTimers.delete(l.rec.machine)
+      if (this.links.get(l.saved.label) !== l || l.saved.enabled === false) return
       const chats = l.watching.chats.map((k) => l.chats.get(k)).filter((c): c is Chat => !!c)
       try {
         writeJson(join('machines', dirOf(l.rec.machine), 'last.json'), { saved: l.saved, probe: l.probe, snap: l.snap, chats } satisfies Kept)
@@ -209,6 +224,9 @@ export class Machines extends Emitter<Events> {
     w.exited.then(() => {
       if (l.worker !== w) return
       l.worker = undefined
+      l.ws?.close()
+      l.ws = undefined
+      l.reachable = false
       l.rec.url = ''
       l.state = 'Its worker stopped; starting it again'
       this.emit('snapshot')
@@ -219,35 +237,51 @@ export class Machines extends Emitter<Events> {
     return [...this.links.values()]
   }
 
+  private syncing = false
+
   /** the machines herdr has saved: a new one is set up and started, a removed one stopped */
   async sync() {
-    if (this.stopped || !this.saved) return
-    const saved = await this.saved()
-    const status = await machineStatus()
-    for (const m of saved) {
-      let l = this.links.get(m.label)
-      if (!l) {
-        l = this.link(m)
-        this.emit('snapshot')
+    if (this.stopped || !this.saved || this.syncing) return
+    this.syncing = true
+    try {
+      const saved = await this.saved()
+      const status = await this.status()
+      if (this.stopped) return
+      for (const m of saved.filter((m) => m.enabled !== false)) {
+        let l = this.links.get(m.label)
+        if (!l) {
+          l = this.link(m)
+          this.emit('snapshot')
+        }
+        l.saved = m
+        const pending = this.pendingResume.get(m.label)
+        if (pending) {
+          this.pendingResume.delete(m.label)
+          this.resume({ ...pending, saved: m })
+        }
+        const st = status[m.label]
+        if (st && st.status !== 'reachable' && !l.worker) {
+          l.state = `herdr can't reach it: ${st.error ?? st.status}`
+          l.connecting = false
+          this.emit('snapshot')
+          continue
+        }
+        if (!l.worker && !l.busy) void this.start(l)
       }
-      l.saved = m
-      const st = status[m.label]
-      if (st && st.status !== 'reachable' && !l.worker) {
-        l.state = `herdr can't reach it: ${st.error ?? st.status}`
-        l.connecting = false
-        this.emit('snapshot')
-        continue
-      }
-      if (!l.worker && !l.busy) void this.start(l)
-    }
-    for (const [label, l] of this.links)
-      if (!saved.some((m) => m.label === label)) {
-        l.ws?.close()
-        l.worker?.kill()
-        this.links.delete(label)
-        rmSync(join(machineHome(label), 'last.json'), { force: true })
-        this.emit('snapshot')
-      }
+      for (const [label, l] of this.links)
+        if (!saved.some((m) => m.label === label && m.enabled !== false)) {
+          this.pendingResume.delete(label)
+          const pending = this.keepTimers.get(label)
+          if (pending) clearTimeout(pending)
+          this.keepTimers.delete(label)
+          l.ws?.close()
+          const worker = l.worker ?? running(readJson<{ pid?: number }>(join('machines', dirOf(label), 'server.json'), {}).pid)
+          worker?.kill()
+          this.links.delete(label)
+          rmSync(join(machineHome(label), 'last.json'), { force: true })
+          this.emit('snapshot')
+        }
+    } finally { this.syncing = false }
   }
 
   /** a worker that already runs, at this address (tests) */
@@ -261,22 +295,27 @@ export class Machines extends Emitter<Events> {
   /** check the machine, put the helper there when it lacks it or it is older, then start its worker; when nothing
    *  changed there since the last look, the worker starts at once and the look follows */
   async start(l: Link, force = false) {
-    if (l.busy) return
+    if (!this.active(l) || l.busy || l.worker) return
     l.busy = true
     const home = machineHome(l.saved.label)
     mkdirSync(home, { recursive: true })
     const last = !force && l.probe && fits(l.probe) ? l.probe : undefined
-    if (last) {
-      this.spawn(l, last, home)
-      l.state = 'Starting…'
-    }
     try {
+      if (last) {
+        await this.spawn(l, last, home)
+        l.state = 'Starting…'
+      }
       const p = await this.look(l, force)
-      if (!p) return
+      if (!p || !this.active(l)) return
       if (p.oldInstall) await this.takeOver(l, home)
       if (last && l.worker && sameBox(l.saved, last, p)) return
-      l.worker?.kill()
-      this.spawn(l, p, home)
+      if (l.worker) {
+        const old = l.worker as Worker
+        old.kill()
+        await old.exited
+        if (!this.active(l)) return
+      }
+      await this.spawn(l, p, home)
       l.state = 'Starting…'
     } catch (e) {
       l.state = `Can't reach it: ${(e as Error).message}`
@@ -304,6 +343,7 @@ export class Machines extends Emitter<Events> {
   /** look at the machine, and put the helper there when it lacks it or it is older: null when it lacks a tool */
   private async look(l: Link, force = false): Promise<Probe | null> {
     const p = await probe(l.saved.target)
+    if (!this.active(l)) return null
     l.probe = p
     l.lacks = lacks(p)
     if (l.lacks.length) {
@@ -315,6 +355,7 @@ export class Machines extends Emitter<Events> {
       if (!l.worker) l.state = 'Putting the helper there…'
       this.emit('snapshot')
       p.helper = await installHelper(l.saved.target, p)
+      if (!this.active(l)) return null
       p.browser = browserVersion(p.os, p.arch)
       // Chrome for the shared browser, by the helper's agent-browser (nothing to do when it is there)
       void onMachine(l.saved.target, `${q(join(p.home, '.shepherdr', 'helper', 'bin', 'agent-browser'))} install`, { timeoutMs: 600_000 }).then((r) => {
@@ -340,10 +381,17 @@ export class Machines extends Emitter<Events> {
     await onMachine(l.saved.target, `PATH=${q(l.probe?.path ?? '/usr/bin:/bin')}; herdr --session ${q(l.saved.session)} plugin disable shepherdr >/dev/null 2>&1; mv "$HOME/.shepherdr/config.json" "$HOME/.shepherdr/config.json.before-one-install" 2>/dev/null; true`)
   }
 
-  private spawn(l: Link, p: Probe, home: string) {
+  private active(l: Link) {
+    return !this.stopped && !this.pendingResume.has(l.saved.label) && l.saved.enabled !== false && this.links.get(l.saved.label) === l
+  }
+
+  private async spawn(l: Link, p: Probe, home: string) {
+    if (!this.active(l)) return
     const box = boxInfo(l.saved, p)
     // a worker left from before (another version of the code): one worker per machine
-    running(readJson<{ pid?: number }>(join('machines', dirOf(l.saved.label), 'server.json'), {}).pid)?.kill()
+    const prior = running(readJson<{ pid?: number }>(join('machines', dirOf(l.saved.label), 'server.json'), {}).pid)
+    if (prior) { prior.kill(); await prior.exited }
+    if (!this.active(l)) return
     rmSync(join(home, 'server.json'), { force: true })
     l.rec.url = ''
     const log = openSync(join(home, 'worker.log'), 'a')
@@ -374,20 +422,35 @@ export class Machines extends Emitter<Events> {
   }
 
   private async pollAll() {
-    for (const l of this.links.values()) await this.poll(l)
+    await Promise.all([...this.links.values()].map((l) => this.poll(l)))
   }
 
   private async poll(l: Link): Promise<void> {
-    if (!l.rec.url && !this.moved(l)) return
+    if (!this.active(l) || l.polling) return
+    if (!l.rec.url && !this.moved(l)) {
+      l.health.observe(false)
+      if (l.worker && !l.busy && l.health.restartDue()) void this.restartUnhealthy(l)
+      return
+    }
+    l.polling = true
     try {
       const r = await fetch(`${l.rec.url}/api/snapshot`, { signal: AbortSignal.timeout(4000) })
       if (!r.ok) throw new Error(String(r.status))
-      l.snap = (await r.json()) as Snapshot
+      const snap = (await r.json()) as Snapshot
+      if (!this.active(l)) return
+      l.snap = snap
       l.rec.lastSeen = Date.now()
-      const herdrUp = !l.snap.machines?.some((m) => m.status === 'off')
+      const herdrUp = !!l.snap.machines?.length && !l.snap.machines.some((m) => m.status === 'off')
+      l.health.observe(herdrUp)
       l.state = herdrUp ? 'Ready' : "Its herdr isn't answering"
       l.connecting = false
       this.keep(l)
+      if (!herdrUp) {
+        l.reachable = false
+        l.down ??= Date.now()
+        this.emit('snapshot')
+        return
+      }
       // a worker started again: the live link is made again
       if (!l.reachable || !l.ws) {
         l.reachable = true
@@ -399,13 +462,38 @@ export class Machines extends Emitter<Events> {
       }
       this.emit('snapshot')
     } catch {
-      if (this.moved(l)) return this.poll(l)
+      if (!this.active(l)) return
+      l.health.observe(false)
+      if (this.moved(l)) return
       if (l.reachable || l.down === undefined) {
         l.reachable = false
         l.down = l.down ?? Date.now()
         this.emit('snapshot')
       }
+    } finally {
+      l.polling = false
+      if (this.active(l) && l.worker && !l.busy && l.health.restartDue()) void this.restartUnhealthy(l)
     }
+  }
+
+  /** Replace only our local worker; never stop remote herdr, panes or agents. */
+  private async restartUnhealthy(l: Link) {
+    if (!this.active(l) || l.busy || !l.worker) return
+    l.busy = true
+    l.health.restarting()
+    console.info(`shepherdr: ${l.rec.machine}: link unhealthy for 3 minutes; replacing worker`)
+    const w = l.worker
+    l.ws?.close()
+    l.ws = undefined
+    l.reachable = false
+    try {
+      w.kill()
+      // Do not spawn beside a draining worker, even if it takes longer than expected.
+      const force = setTimeout(() => { if (l.worker === w) w.kill('SIGKILL') }, MERGE_DEADLINE + 30_000)
+      try { await w.exited } finally { clearTimeout(force) }
+      if (l.worker === w) l.worker = undefined
+    } finally { l.busy = false }
+    if (this.active(l)) await this.start(l)
   }
 
   /** Its worker was started again out of this server's hands (shepherdr doctor while another server ran, by hand)
@@ -430,8 +518,9 @@ export class Machines extends Emitter<Events> {
     url.protocol = url.protocol.replace('http', 'ws')
     const ws = new WebSocket(url)
     l.ws = ws
-    ws.onopen = () => ws.send(JSON.stringify({ type: 'watch', ...l.watching, link: true }))
+    ws.onopen = () => { if (this.active(l) && l.ws === ws) ws.send(JSON.stringify({ type: 'watch', ...l.watching, link: true })) }
     ws.onmessage = (e) => {
+      if (!this.active(l) || l.ws !== ws) return
       const m = JSON.parse(String(e.data))
       if (m.type === 'chat') {
         l.chats.set(m.chat.key, m.chat)

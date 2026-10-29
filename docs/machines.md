@@ -45,3 +45,24 @@ when the load stays over 1.5× the cores for 2 minutes, memory or a disk is over
 - **herdr gone**: its socket refusing is said plainly ("herdr isn't answering"), never `connect ECONNREFUSED …`; the
   machine's heading says `herdr down` (as it says a limit it is over), its chats say messages wait until it is
   back, and its home space's coordinator hears what happened once herdr answers again.
+
+## Recovering a dropped link
+
+Workers retry failed herdr reads, event subscriptions, log mirrors and the helper's return tunnel without restarting
+remote herdr or its agents. Retries start after 3 seconds and double to a 30-second cap; the herdr polling clock can
+add up to 2 seconds. A minute of successful reads or an established subscription/tunnel resets the delay.
+Log mirrors count success from received file data; a quiet mirror can retain its previous retry delay.
+SSH's keepalive detects silent transport
+loss after roughly a minute (15-second probes, four missed replies); connection setup has a 10-second timeout.
+Herdr bridges use fresh SSH connections instead of reusing a potentially stuck ControlMaster. Commands and file
+reads still share SSH, whose keepalive expires a dead master; failed DNS lookups are retried by new SSH processes.
+
+The main server checks each worker every 5 seconds. A worker is healthy only when its snapshot also says herdr is
+reachable; an idle machine is healthy. After 3 continuous minutes of failed HTTP or herdr health, the main server
+replaces its local worker. It lets that worker finish any merge and exit before starting another, forcing only that
+local process off after the merge drain deadline plus 30 seconds. Remote herdr, agents, tasks and sessions stay put.
+Repeated replacements have a 3-minute cooldown, doubling to at most 15 minutes, reset after a minute of health.
+An outage can outlast these limits: retries continue until SSH, DNS and herdr work again. Removal/disable cancels
+pending starts; shutdown cancels the worker's retry loops. Main-server updates intentionally leave workers running
+so the next main server can take them back. Logs record link loss, recovery and worker replacement, without repeated
+retry alerts. No automatic recovery turns on a machine disabled in herdr.

@@ -1,3 +1,4 @@
+import { LinkBackoff } from './recovery.ts'
 // The main machine's copy of another machine's agent logs, kept as they grow: the helper's mirror.pl there sends what
 // each followed file gains, over one SSH connection, and it is written here under the worker's store (mfs.mirrored).
 // The readers then read these copies as they read this machine's own logs: Claude Code's, Codex's and pi's
@@ -16,6 +17,7 @@ export class Mirror {
   private files = new Set<string>()
   /** how much of each file is here: after the link drops, it goes on from there */
   private have = new Map<string, number>()
+  private recovery = new LinkBackoff()
   private stopped = false
   private timer: ReturnType<typeof setTimeout> | null = null
   /** a piece arrived: the readers may look again */
@@ -64,14 +66,18 @@ export class Mirror {
 
   start() {
     if (this.stopped || this.proc) return
-    const p = this.run()
+    let p: Proc
+    try { p = this.run() } catch {
+      this.timer = setTimeout(() => this.start(), this.recovery.fail())
+      return
+    }
     this.proc = p
     this.write([`S ${Date.now() - SINCE_MS}`, ...[...this.have].map(([f, n]) => `K ${n} ${f}`), ...[...this.dirs].map((d) => `D ${d}`), ...[...this.files].map((f) => `F ${f}`)])
-    void this.read(p)
+    void this.read(p).catch(() => p.kill())
     p.exited.then(() => {
       if (this.proc !== p) return
       this.proc = null
-      if (!this.stopped) this.timer = setTimeout(() => this.start(), 3000)
+      if (!this.stopped) this.timer = setTimeout(() => this.start(), this.recovery.fail())
     })
   }
 
@@ -122,7 +128,7 @@ export class Mirror {
         want = null
         wrote = true
       }
-      if (wrote) this.onData()
+      if (wrote) { this.recovery.success(); this.onData() }
     }
   }
 

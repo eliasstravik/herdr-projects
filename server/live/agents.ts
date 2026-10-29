@@ -1,3 +1,4 @@
+import { LinkBackoff } from './recovery.ts'
 // Every agent Shepherdr talks to is an ordinary herdr agent. This keeps which herdr agent and which log files belong
 // to each chat, starts and resumes agents, and sends what you write: at once, even while the agent works (Claude Code,
 // Codex and pi take it mid-turn, as steering). It waits only while the CLI shows a menu or permission prompt, where typed
@@ -186,6 +187,11 @@ export class Agents extends Emitter<Events> {
   private sub: Subscription
   readonly secretAccess = new SecretAccess()
   secretScope: (chat: string) => string[] | undefined = () => undefined
+  private readingBackground = false
+  private refreshing = false
+  private stopped = false
+  private retryAt = 0
+  private recovery = new LinkBackoff()
   private routesAt = 0
   private routing = false
   private routes = new Map<string, string>()
@@ -273,6 +279,7 @@ export class Agents extends Emitter<Events> {
   }
 
   stop() {
+    this.stopped = true
     if (this.timer) clearInterval(this.timer)
     if (this.soon) clearTimeout(this.soon)
     this.hookWatch?.close()
@@ -367,9 +374,15 @@ export class Agents extends Emitter<Events> {
   /* ---------- herdr state ---------- */
 
   async refresh() {
+    if (this.stopped || this.refreshing || (BOX && Date.now() < this.retryAt)) return
+    this.refreshing = true
     this.saidAt.clear()
     try {
       const list = await herdr.agents()
+      if (this.stopped) return
+      if (!this.reachable && BOX) console.info('shepherdr: herdr link recovered')
+      this.recovery.success()
+      this.retryAt = 0
       this.reachable = true
       this.lastReach = Date.now()
       this.live = new Map(list.filter((a) => a.name).map((a) => [a.name!, a]))
@@ -391,7 +404,11 @@ export class Agents extends Emitter<Events> {
         void this.repairRoutes()
       }
       void this.readRuntime()
-      await this.readBackground()
+      // Slow pane reads must not hold up transport health checks.
+      if (!this.readingBackground) {
+        this.readingBackground = true
+        void this.readBackground().catch(() => undefined).finally(() => { this.readingBackground = false })
+      }
       // learn log files herdr names (its agent integrations report them)
       for (const [name, key] of this.byName) this.learnSession(key, this.live.get(name))
       // and the session its hooks say it is in now, which herdr doesn't name: a /clear starts another
@@ -406,11 +423,15 @@ export class Agents extends Emitter<Events> {
         ...[...this.watchedPanes].map((pane_id) => ({ type: 'pane.output_changed', pane_id })),
       ])
     } catch {
+      if (BOX) this.retryAt = Date.now() + this.recovery.fail()
       if (this.reachable) {
+        if (BOX) console.info('shepherdr: herdr link lost; retrying (3–30s backoff)')
         this.reachable = false
         this.emit('status', '*', 'gone')
       }
       this.checkStranded()
+    } finally {
+      this.refreshing = false
     }
   }
 
@@ -480,6 +501,7 @@ export class Agents extends Emitter<Events> {
    *  as a status change, since the agent may have woken, said a word and stopped again in between herdr's looks. */
   private async readBackground() {
     for (const key of this.byName.values()) {
+      if (this.stopped) return
       const r = this.records[key]
       const st = this.status(key)
       const pane = this.info(key)?.pane_id

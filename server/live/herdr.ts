@@ -1,3 +1,4 @@
+import { LinkBackoff } from './recovery.ts'
 // herdr's socket API: newline-delimited JSON over a Unix socket. One request per connection (herdr closes it after
 // the reply); a subscription keeps its connection open and streams events. On another machine (box.ts) the same JSON
 // goes through herdr's own remote bridge (herdr --session <s> remote-api-bridge over SSH), one bridge per connection.
@@ -33,7 +34,7 @@ interface Conn {
 
 function open(path: string): Conn {
   if (!BOX || path !== socketPath()) return connect(path)
-  const p = Bun.spawn(sshArgs(BOX.target, script(BOX, [BOX.herdr, '--session', BOX.session, 'remote-api-bridge'])), { stdin: 'pipe', stdout: 'pipe', stderr: 'ignore' })
+  const p = Bun.spawn(sshArgs(BOX.target, script(BOX, [BOX.herdr, '--session', BOX.session, 'remote-api-bridge']), { extra: ['-o', 'ControlPath=none'] }), { stdin: 'pipe', stdout: 'pipe', stderr: 'ignore' })
   const fns: Record<string, ((x?: unknown) => void)[]> = { connect: [], data: [], error: [], close: [] }
   const fire = (e: string, x?: unknown) => fns[e].forEach((f) => f(x))
   let closed = false
@@ -237,10 +238,14 @@ export type HerdrEvent = { event: string; data: Record<string, unknown> }
 export class Subscription {
   private sock: Conn | null = null
   private stopped = false
+  private retry?: ReturnType<typeof setTimeout>
+  private handshake?: ReturnType<typeof setTimeout>
+  private recovery = new LinkBackoff()
   private wanted: Record<string, unknown>[] = []
   constructor(
     private onEvent: (e: HerdrEvent) => void,
     private onOpen: () => void = () => undefined,
+    private connect: () => Conn = () => open(socketPath()),
   ) {}
 
   set(subs: Record<string, unknown>[]) {
@@ -250,17 +255,26 @@ export class Subscription {
   }
 
   private reopen() {
-    this.sock?.destroy()
+    if (this.retry) clearTimeout(this.retry)
+    if (this.handshake) clearTimeout(this.handshake)
+    const previous = this.sock
     this.sock = null
+    previous?.destroy()
     if (this.stopped || !this.wanted.length) return
-    const sock = open(socketPath())
+    let sock: Conn
+    try { sock = this.connect() } catch {
+      this.retry = setTimeout(() => this.reopen(), this.recovery.fail())
+      return
+    }
     this.sock = sock
     let buf = ''
+    let opened = false
     sock.on('connect', () => {
       sock.write(`${JSON.stringify({ id: `sub-${++n}`, method: 'events.subscribe', params: { subscriptions: this.wanted } })}\n`)
-      this.onOpen()
+      // SSH spawn is not a successful bridge connection; wait for an actual frame.
     })
     sock.on('data', (d) => {
+      if (this.sock !== sock || this.stopped) return
       buf += d.toString('utf8')
       let i: number
       while ((i = buf.indexOf('\n')) >= 0) {
@@ -269,6 +283,13 @@ export class Subscription {
         if (!line) continue
         try {
           const f = JSON.parse(line)
+          if (f.error) { again(); return }
+          if (!opened && ('result' in f || f.event)) {
+            opened = true
+            if (this.handshake) clearTimeout(this.handshake)
+            this.recovery.success()
+            this.onOpen()
+          }
           if (f.event) this.onEvent(f as HerdrEvent)
         } catch {
           /* a frame we can't read */
@@ -278,14 +299,20 @@ export class Subscription {
     const again = () => {
       if (this.sock !== sock || this.stopped) return
       this.sock = null
-      setTimeout(() => this.sock === null && this.reopen(), 1000)
+      if (this.handshake) clearTimeout(this.handshake)
+      sock.destroy()
+      this.retry = setTimeout(() => this.sock === null && this.reopen(), this.recovery.fail())
     }
+    this.handshake = setTimeout(again, 15_000)
     sock.on('error', again)
     sock.on('close', again)
   }
 
   stop() {
     this.stopped = true
+    if (this.handshake) clearTimeout(this.handshake)
+    if (this.retry) clearTimeout(this.retry)
     this.sock?.destroy()
+    this.sock = null
   }
 }
