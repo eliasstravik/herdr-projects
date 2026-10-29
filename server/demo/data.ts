@@ -356,6 +356,20 @@ export function chats(): Record<string, Chat> {
         m({ who: 'you', text: 'How is HP-202 going?', reactions: [{ emoji: '👀', by: 'them' }] }),
         m({ who: 'agent', activity: demoTurn('gtm-t1') }),
         m({ who: 'agent', text: 'Halfway. Mute stops the mic track and the helper reads that as a hang-up. HP-201 needs a call from you.' }),
+        m({ who: 'you', text: 'Post the release notes to Slack when it ships.' }),
+        m({
+          who: 'agent',
+          secret: {
+            id: 'secret:demo1',
+            name: 'SLACK_BOT_TOKEN',
+            why: 'To post the release notes in #releases. A bot token (xoxb-…) from the Slack app is enough.',
+            levels: [
+              { id: HP, label: 'herdr-projects' },
+              { id: 'm:vm-str', label: 'vm-str' },
+              { id: 'all', label: 'Everywhere' },
+            ],
+          },
+        }),
       ]),
       c(MAC, 'Claude Code', [m({ who: 'you', text: 'Anything going on here?' }), m({ who: 'agent', text: 'One space here besides home. LV-3 is writing the upload route.' })]),
       c(NAS, 'Claude Code', [m({ who: 'you', text: 'Did the backups run?' }), m({ who: 'agent', text: 'Backups finished at 03:00. Nothing else running.' })]),
@@ -546,6 +560,16 @@ export function settings(stores = settingStores(), checklists: Record<string, st
 }
 
 export const ASKS: Record<string, string> = { [GTM]: 'f1' }
+
+/** the secrets the demo keeps: names and when, with values no one sees */
+export function secrets() {
+  const day = 86_400_000
+  return {
+    all: { OPENAI_API_KEY: { value: 'demo', at: Date.now() - 12 * day } },
+    'm:vm-str': { GITHUB_TOKEN: { value: 'demo', at: Date.now() - 3 * day } },
+    [GTM]: { STRIPE_SECRET_KEY: { value: 'demo', at: Date.now() - 2 * 3_600_000 }, HUBSPOT_TOKEN: { value: 'demo', at: Date.now() - 30 * day } },
+  }
+}
 
 /** each machine's folders under home, for adding a project: a trailing * marks a repo */
 export const FOLDERS: Record<string, string[]> = {

@@ -103,6 +103,14 @@ export function MicOffIcon({ className }: { className?: string }) {
 }
 
 /** A keyboard: keys cut out of a rounded box. No Heroicon exists for it */
+export function KeyIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className={clsx('size-4 shrink-0 fill-current', className)}>
+      <path fillRule="evenodd" d="M14 6a4 4 0 0 1-4.899 3.899l-1.955 1.955a.5.5 0 0 1-.353.146H5v1.5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5v-2.293a.5.5 0 0 1 .146-.353l3.955-3.955A4 4 0 1 1 14 6Zm-4-2a.75.75 0 0 0 0 1.5.5.5 0 0 1 .5.5.75.75 0 0 0 1.5 0 2 2 0 0 0-2-2Z" clipRule="evenodd" />
+    </svg>
+  )
+}
+
 export function KeyboardIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true" className={clsx('size-4 shrink-0 fill-current', className)}>
@@ -1109,6 +1117,29 @@ export function TextBox({
       onChange={(e) => onChange(e.target.value)}
       className={clsx('resize-none overflow-hidden', className)}
       {...p}
+    />
+  )
+}
+
+/** A secret's box: masked, never kept as a draft or offered for saving, and Enter saves. Its value lives only in the
+ *  page's memory until it is sent */
+export function SecretField({ label, value, onChange, onEnter, className, autoFocus }: { label: string; value: string; onChange: (v: string) => void; onEnter?: () => void; className?: string; autoFocus?: boolean }) {
+  return (
+    <input
+      type="password"
+      aria-label={label}
+      placeholder="Paste or type it"
+      autoComplete="off"
+      autoCapitalize="off"
+      autoCorrect="off"
+      spellCheck={false}
+      data-1p-ignore
+      data-lpignore="true"
+      autoFocus={autoFocus}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && onEnter?.()}
+      className={clsx('min-h-10 w-full min-w-0 rounded-row bg-transparent px-3 py-[9px] font-mono placeholder:font-sans placeholder:text-fg3 coarse:min-h-11 phone:min-h-11 phone:text-[1rem]', field, className)}
     />
   )
 }

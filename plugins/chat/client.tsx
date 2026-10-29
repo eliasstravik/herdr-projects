@@ -2,14 +2,14 @@
 // a CLI's own menus; what you send shows at once and goes in at once, even mid-turn; only while the CLI shows a menu
 // or is starting does it wait, and the bubble says why.
 import clsx from 'clsx'
-import { createContext, Fragment, memo, useContext, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
+import { createContext, Fragment, memo, useContext, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ComponentType, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import { act, chatName, definePlugin, getDraft, getState, goChat, has, holdReload, openTask, registry, setDraft, setOutbox, setUI, taskOf, useDraft, useSnap, useStore, useUI, type UI } from '@client/kernel.ts'
 import { keyOf, partsOf, priorOf, reasonOf, SEND_TIMEOUT, type Outgoing } from '@client/outbox.ts'
-import { AlertIcon, BackIcon, CameraIcon, CheckIcon, Count, DeleteIcon, dimmed, Dot, DownIcon, DownloadIcon, EffortIcon, Empty, field, FileIcon, ic, IconButton, LinkButton, LiveWave, MachineIcon, Menu, MenuItem, MenuSeparator, MenuSetting, MicIcon, ModelIcon, ModeIcon, MoreIcon, NextIcon, PageIcon, PlanIcon, PlusIcon, Primary, QuestionIcon, ReplyIcon, RestartIcon, roundBtn, SearchIcon, Sent, SmileIcon, TextBox, UpIcon, useElapsed, XIcon } from '@client/ui.tsx'
+import { AlertIcon, BackIcon, CameraIcon, CheckIcon, Count, DeleteIcon, dimmed, Dot, DownIcon, DownloadIcon, EffortIcon, Empty, field, FileIcon, ic, IconButton, KeyIcon, LinkButton, LiveWave, MachineIcon, Menu, MenuItem, MenuSeparator, MenuSetting, MicIcon, ModelIcon, ModeIcon, MoreIcon, NextIcon, PageIcon, PlanIcon, PlusIcon, Primary, QuestionIcon, ReplyIcon, RestartIcon, roundBtn, SearchIcon, SecretField, Sent, SmileIcon, Tab, Tabs, TextBox, UpIcon, useElapsed, XIcon } from '@client/ui.tsx'
 import { canDictate, dictate, dictSample, type Dictation } from '@client/dictation.ts'
 import { readBrief } from '@shared/brief.ts'
 import { extOf, isImage } from '@shared/files.ts'
-import { modeName, type CardAsk, type Chat, type Message, type Place, type Question, type ReplyQuote, type UpdateCard } from '@shared/types.ts'
+import { modeName, type CardAsk, type Chat, type Message, type Place, type Question, type ReplyQuote, type SecretAsk, type UpdateCard } from '@shared/types.ts'
 import { buzz, mine, openBar, openPicker, quick, react } from '@plugins/reactions/client.tsx'
 import { EDGE } from '@client/gestures.ts'
 import { still, useArrive } from '@client/motion.ts'
@@ -1292,8 +1292,8 @@ function Typing({ chat, from }: { chat: Chat; from: string }) {
  *  question mark, or a list for a plan. The title wraps onto as many lines as it needs, the mark on its first line */
 type CardSource = { id: string; title?: string }
 
-export function CardShell({ title, plan, action, source, children }: { title: string; plan?: boolean; action?: ReactNode; source?: CardSource; children: ReactNode }) {
-  const Icon = plan ? PlanIcon : QuestionIcon
+export function CardShell({ title, plan, icon, action, source, children }: { title: string; plan?: boolean; icon?: ComponentType<{ className?: string }>; action?: ReactNode; source?: CardSource; children: ReactNode }) {
+  const Icon = icon ?? (plan ? PlanIcon : QuestionIcon)
   return (
     <div data-card className="mt-2 w-[440px] max-w-full cursor-default overflow-hidden rounded-box bg-bg shadow-[inset_0_0_0_1px_var(--line2)]">
       {source ? (
@@ -1437,6 +1437,67 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
             {q.reject ? <button type="button" disabled={busy} onClick={() => send(true)}>{q.reject}</button> : null}
             <Primary soft disabled={busy || !picked} onClick={() => send()}>
               Send
+            </Primary>
+          </div>
+        </>
+      )}
+    </CardShell>
+  )
+}
+
+/* ---------- a secret an agent asked for ---------- */
+
+/** a masked box for a secret an agent asked for by name, and where it is kept (its space, its machine, Everywhere).
+ *  The value goes once to the main machine and is never kept here, as a draft or otherwise; the agent is told it is
+ *  there, by name only */
+function SecretCard({ ask, chat }: { ask: SecretAsk; chat: Chat }) {
+  const [value, setValue] = useState('')
+  const [level, setLevel] = useState(ask.levels[0]?.id ?? 'all')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const save = async () => {
+    if (!value.trim() || busy) return
+    setBusy(true)
+    setErr('')
+    try {
+      const r = (await act({ type: 'secret', level, name: ask.name, value, card: { chat: chat.key, id: ask.id } })) as { ok?: boolean; error?: string }
+      if (r?.ok === false) setErr(r.error ?? "That didn't go through.")
+      else setValue('')
+    } catch {
+      setErr("That didn't go through: Shepherdr can't be reached.")
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <CardShell title={`Secret: ${ask.name}`} icon={KeyIcon}>
+      {ask.why ? <p className="text-pretty break-words">{ask.why}</p> : null}
+      {ask.saved ? (
+        <Sent>
+          <CheckIcon className={ic} />
+          <span className="min-w-0 truncate">Saved for {ask.saved}</span>
+        </Sent>
+      ) : (
+        <>
+          <SecretField label={ask.name} value={value} onChange={setValue} onEnter={save} />
+          {ask.levels.length > 1 ? (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+              <span className="text-[0.75rem] text-fg2 phone:text-[0.8125rem]">For</span>
+              <Tabs label="Where it is kept">
+                {ask.levels.map((l) => (
+                  <Tab key={l.id} on={l.id === level} onClick={() => setLevel(l.id)}>
+                    {l.label}
+                  </Tab>
+                ))}
+              </Tabs>
+            </div>
+          ) : null}
+          <div className="flex items-center justify-end gap-2">
+            <span role="status" className={clsx('mr-auto text-[0.75rem] text-pretty phone:text-[0.8125rem]', err ? 'text-need' : 'text-fg3')}>
+              {err || 'Agents use it by name, never seeing it.'}
+            </span>
+            <Primary soft disabled={busy || !value.trim()} onClick={save}>
+              Save
             </Primary>
           </div>
         </>
@@ -2361,6 +2422,7 @@ export default definePlugin({
     reg.composerAbove.push({ order: 10, View: JobsTag })
     reg.overlays.push(JobsSheet)
     reg.messageParts.push({ order: 60, View: ({ msg, chat, from }) => (msg.question ? <QuestionCard q={msg.question} chat={chat} msg={msg.id} from={from} /> : null) })
+    reg.messageParts.push({ order: 61, View: ({ msg, chat }) => (msg.secret ? <SecretCard ask={msg.secret} chat={chat} /> : null) })
     reg.composerPlus = PlusMenu
     reg.composerMic = Mic
     reg.composerLive.push({ when: (ui, chatKey) => ui.dict === chatKey, View: DictationBox })

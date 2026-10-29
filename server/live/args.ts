@@ -158,6 +158,21 @@ Chat
   shepherdr alert "<title>" --body "<why now>" [--task <id>]
                                                  with --task: it says what that task needs and opens on its card
 
+Secrets (API keys, tokens, passwords: used by name, never seen or printed)
+  shepherdr secret list                          the names you can use here, and where each is kept
+  shepherdr secret ask NAME --why "<what for>" [--force]
+                                                 a masked box in your chat for the human; end your turn, and a
+                                                 <secret name="NAME"> line says it is kept. --force: ask again for one
+                                                 kept already (wrong or expired)
+  shepherdr secret run NAME [NAME …] -- <command> [its words]
+                                                 runs the command with each one in its environment ($NAME)
+  shepherdr secret env NAME [NAME …] [--file .env]
+                                                 writes NAME=value lines to a file git ignores (readable by you only)
+  shepherdr secret set NAME [--machine | --space NAME] < file
+  shepherdr secret rm NAME [--machine | --space NAME]
+                                                 for the human: keep one (its value on stdin) or remove it, Everywhere
+                                                 (none), for this machine or one space; the most specific one wins
+
 Artifacts (one self-contained HTML file, optional JSON data; checked at phone width, then shown in your chat)
   shepherdr artifact new <file.html> --title "<title>" [--data <file.json>] [--space NAME]
   shepherdr artifact update <id> [<file.html>] [--data <file.json>] [--title "<title>"] [--note "<what changed>"]

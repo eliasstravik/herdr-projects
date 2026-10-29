@@ -378,7 +378,22 @@ export interface Message {
   card?: UpdateCard
   /** a turn's tool steps, as a few rows in plain words, just before its last reply */
   activity?: TurnActivity
+  /** a secret the agent asked for (shepherdr secret ask): a masked box to give it in */
+  secret?: SecretAsk
   at?: number
+}
+
+/** a secret an agent asked for by name: the human types or pastes it in a masked box, for one of the levels offered;
+ *  only its name ever shows, never its value */
+export interface SecretAsk {
+  id: string
+  name: string
+  /** why the agent needs it, in its words */
+  why?: string
+  /** where it may be kept, the agent's space first: a level's id (p:<machine>:<space>, m:<machine>, all) and its name */
+  levels: { id: string; label: string }[]
+  /** saved: where, by its level's name */
+  saved?: string
 }
 
 /** what kind of step a tool call is, for its icon and its row */
@@ -666,6 +681,8 @@ export interface SettingSection {
   global?: boolean
   /** only words in agents' prompts (What agents are told), not how Shepherdr runs */
   told?: boolean
+  /** the secrets kept at its level, by name (Secrets): added, replaced and removed in masked boxes */
+  secrets?: { name: string; at: number }[]
 }
 
 export interface Alert {
@@ -819,6 +836,11 @@ export type Action =
   /** space: sent from a needs-you card in that space's chat (CardAsk) */
   | { type: 'send'; chat: string; text: string; attachments?: string[]; cid?: string; reply?: string; space?: string }
   | { type: 'react'; chat: string; message: string; emoji: string }
+  /** a secret kept at a level (all, m:<machine>, p:<machine>:<space>), or removed (null); kept on the main machine, so
+      it names no chat or place to be passed on by. card: the agent's ask it answers, told once it is kept */
+  | { type: 'secret'; level: string; name: string; value: string | null; card?: { chat: string; id: string } }
+  /** the main machine kept a secret an agent asked for: its card says so, and its agent is told (no value) */
+  | { type: 'secret-saved'; chat: string; card: string; name: string; level: string }
   /** fromAlert: a notification's button, which answers only the card the chat still waits on (an old alert's can't
       answer what came after, or a card already settled in words) */
   | { type: 'answer'; chat: string; question: string; choice: number; choices?: number[]; note?: string; other?: string; fromAlert?: boolean; space?: string }

@@ -41,6 +41,7 @@ import { Revivals, type Wrong } from './revive.ts'
 import { carryOn, Retries, type Retry } from './retry.ts'
 import { CATALOG, CLI_NAME, CLIS, kindOf, refuse, setForTask, Settings, type Level } from './settings.ts'
 import { startVoice } from './voice.ts'
+import { SECRET_NAME, secretPages, Vault } from './secrets.ts'
 import { diffFiles, diffPatch, listFiles, pullRequest, readFile } from './worktree.ts'
 import { Unread } from './unread.ts'
 import { Monitor, meters, procLines, summary, topProcs, type HealthEvent, type Kind } from './health.ts'
@@ -72,6 +73,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   automations = new Automations()
   heartbeats = new Heartbeats()
   artifacts = new Artifacts()
+  /** agents' secrets: one file on the main machine, which a worker for another machine reads there */
+  vault = new Vault(process.env.SHEPHERDR_MAIN_HOME || HOME)
   /** opens an artifact at phone width before anyone sees it (a test puts its own here) */
   checker: Checker = browserChecker(
     // on this machine, whichever machine the artifact came from
@@ -438,7 +441,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       Object.assign(automations, l.snap?.automations ?? {})
       Object.assign(asks, l.snap?.asks ?? {})
     }
-    return {
+    return this.withSecrets({
       name: 'Shepherdr',
       host: HOST,
       places,
@@ -468,7 +471,13 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         (id) => this.heartbeats.read(id, this.roleOf(id)),
       ).concat(peers.flatMap((l) => (l.snap?.settings ?? []).filter((x) => x.machine === l.rec.machine))),
       user: this.user,
-    }
+    })
+  }
+
+  /** each level's Secrets page, after its other pages: the names kept there, never a value. The main machine's
+   *  snapshot has them for every machine (the vault is its own); a worker's has none */
+  private withSecrets(s: Snapshot): Snapshot {
+    return BOX ? s : { ...s, settings: secretPages(s.settings, this.vault.names()) }
   }
 
   chat(key: string): Chat | undefined {
@@ -1344,6 +1353,26 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         return this.react(a.chat, a.message, a.emoji)
       case 'answer':
         return this.answer(a)
+      case 'secret': {
+        // kept on the main machine, whichever machine it is for: a worker never gets one from the screen
+        if (BOX) return { ok: false, error: 'Secrets are kept on the main machine.' }
+        const value = a.value === null ? null : String(a.value ?? '').trim()
+        const r = this.vault.set(a.level, a.name, value)
+        if (!r.ok) return r
+        this.emit('snapshot')
+        // the agent that asked for it is told, by name, wherever it runs
+        if (a.card && value !== null) await this.act({ type: 'secret-saved', chat: a.card.chat, card: a.card.id, name: a.name, level: a.level })
+        return { ok: true }
+      }
+      case 'secret-saved': {
+        const posted = this.chats.log(a.chat).posted.find((x) => x.id === a.card && x.secret?.name === a.name)
+        if (!posted?.secret || !this.vault.has(a.level, a.name)) return { ok: false, error: 'That secret is not kept there.' }
+        const where = posted.secret.levels.find((l) => l.id === a.level)?.label ?? this.secretLevelName(a.level)
+        this.chats.post(a.chat, { id: a.card, secret: { ...posted.secret, saved: where } })
+        await this.send(a.chat, line.secret(this.user, a.name, where), [], true)
+        this.emit('chat', a.chat)
+        return { ok: true }
+      }
       case 'artifact-send':
       case 'artifact-note':
       case 'artifact-say': {
@@ -1857,8 +1886,10 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
 
   /* ---------- the shepherdr command ---------- */
 
-  async cli(args: string[], ctx: { chat?: string; cwd?: string; stdin?: string }): Promise<{ out: string; code: number }> {
+  async cli(args: string[], ctx: { chat?: string; cwd?: string; stdin?: string }): Promise<{ out: string; code: number; secrets?: Record<string, string> }> {
     try {
+      // the values themselves, for the shepherdr command to put in a command's environment or a file: never printed
+      if (args[0] === 'secret' && (args[1] === 'run' || args[1] === 'env')) return { out: '', code: 0, secrets: this.secretValues(parseArgs(args).words.slice(2), ctx) }
       const out = await this.command(parseArgs(args), ctx)
       return { out: out.endsWith('\n') ? out : `${out}\n`, code: 0 }
     } catch (e) {
@@ -2155,7 +2186,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         return [own, ...((await this.peers?.doctor()) ?? [])].join('\n')
       }
       case 'secret': {
-        if (a1 !== 'elevenlabs' || !ctx.stdin?.trim()) throw new Error('echo "<key>" | shepherdr secret elevenlabs')
+        if (a1 !== 'elevenlabs') return this.secretCommand(a1, rest, p, ctx)
+        if (!ctx.stdin?.trim()) throw new Error('echo "<key>" | shepherdr secret elevenlabs')
         const s = readJson<Record<string, string>>('secrets.json', {})
         s.elevenlabs = ctx.stdin.trim()
         writeJson('secrets.json', s)
@@ -2163,6 +2195,79 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       }
     }
     throw new Error(`No command ${a0}; shepherdr help lists them`)
+  }
+
+  /* ---------- secrets ---------- */
+
+  /** the levels a command's secrets come from, most specific first: its space (the asking agent's, or the folder's),
+   *  this machine, Everywhere */
+  private secretChain(ctx: { chat?: string; cwd?: string }) {
+    const space = ctx.chat?.includes('/') ? this.engine.task(ctx.chat.split('/')[0])?.project : ctx.chat?.startsWith('p:') ? ctx.chat : ctx.cwd ? this.places.forPath(ctx.cwd) && placeId.space(this.places.forPath(ctx.cwd)!.name) : undefined
+    return [...(space ? [space] : []), placeId.machine(), 'all']
+  }
+
+  /** a level's name, as Settings shows it: Everywhere, this machine's, a space's */
+  private secretLevelName(level: string) {
+    if (level === 'all') return 'Everywhere'
+    if (level === placeId.machine()) return NAME
+    return level.startsWith('p:') ? (this.places.nameOf(level) ?? level.split(':').slice(2).join(':')) : level.slice(2)
+  }
+
+  /** the level a human's shepherdr secret set or rm is for: Everywhere (none), this machine, or one space */
+  private secretLevel(p: Parsed) {
+    if (one(p, 'space')) return placeId.space(this.projectFor(p, {}).name)
+    return p.flags.has('machine') ? placeId.machine() : 'all'
+  }
+
+  /** each name's value, for shepherdr secret run and env (names may come comma-separated) */
+  private secretValues(words: string[], ctx: { chat?: string; cwd?: string }) {
+    const names = words.flatMap((w) => w.split(',')).map((w) => w.trim()).filter(Boolean)
+    if (!names.length) throw new Error('shepherdr secret run NAME [NAME …] -- <command>, or shepherdr secret env NAME [NAME …] [--file .env]')
+    const bad = names.filter((n) => !SECRET_NAME.test(n))
+    if (bad.length) throw new Error(`Not a secret's name: ${bad.join(', ')} (letters, digits and _, like GITHUB_TOKEN)`)
+    const { found, missing } = this.vault.pick(names, this.secretChain(ctx))
+    if (missing.length) throw new Error(`No secret ${missing.join(', ')} here. Ask the human for it: shepherdr secret ask ${missing[0]} --why "<what it is for>", then end your turn.`)
+    return Object.fromEntries(Object.entries(found).map(([n, f]) => [n, f.value]))
+  }
+
+  private secretCommand(sub: string | undefined, rest: string[], p: Parsed, ctx: { chat?: string; cwd?: string; stdin?: string }): string {
+    const chain = this.secretChain(ctx)
+    const name = rest[0]
+    if (sub === 'list' || !sub) {
+      const all = this.vault.visible(chain)
+      if (!all.length) return 'No secrets here yet. Ask the human for one: shepherdr secret ask NAME --why "<what it is for>".'
+      return `${all.map((x) => `${x.name}  (${this.secretLevelName(x.level)}, saved ${age(x.at)} ago)`).join('\n')}\nUse one by name: shepherdr secret run NAME -- <command>, or shepherdr secret env NAME --file .env.`
+    }
+    if (sub === 'ask') {
+      if (!ctx.chat) throw new Error('shepherdr secret ask works from an agent Shepherdr started; add one yourself in Settings → Secrets, or with shepherdr secret set')
+      if (!name || !SECRET_NAME.test(name)) throw new Error('shepherdr secret ask NAME --why "<what it is for>" (NAME: letters, digits and _, like GITHUB_TOKEN)')
+      const had = this.vault.visible(chain).find((x) => x.name === name)
+      if (had && !p.flags.has('force')) throw new Error(`${name} is kept already (${this.secretLevelName(had.level)}): use it. If it is wrong or expired, ask for a new one with --force.`)
+      const id = `secret:${randomUUID().slice(0, 8)}`
+      const levels = chain.map((l) => ({ id: l, label: this.secretLevelName(l) }))
+      this.chats.post(ctx.chat, { id, secret: { id, name, why: one(p, 'why'), levels } })
+      this.emit('chat', ctx.chat)
+      this.emit('snapshot')
+      return `Asked: your chat shows the human a masked box for ${name}. End your turn now; a <secret name="${name}"> line tells you once it is kept. Never ask for it in plain words.`
+    }
+    if (sub === 'set') {
+      if (!name || !SECRET_NAME.test(name)) throw new Error('shepherdr secret set NAME [--machine | --space NAME] < file (the value on stdin; none: Everywhere)')
+      if (!ctx.stdin?.trim()) throw new Error(`Give the value on stdin, never as a word: shepherdr secret set ${name} < file, or pipe it in.`)
+      const level = this.secretLevel(p)
+      const r = this.vault.set(level, name, ctx.stdin.trim())
+      if (!r.ok) throw new Error(r.error)
+      this.emit('snapshot')
+      return `Saved ${name} for ${this.secretLevelName(level)}.`
+    }
+    if (sub === 'rm' || sub === 'remove') {
+      if (!name) throw new Error('shepherdr secret rm NAME [--machine | --space NAME]')
+      const level = this.secretLevel(p)
+      const r = this.vault.set(level, name, null)
+      if (!r.ok) throw new Error(`${r.error} (${this.secretLevelName(level)})`)
+      this.emit('snapshot')
+      return `Removed ${name} from ${this.secretLevelName(level)}.`
+    }
+    throw new Error('shepherdr secret list | ask NAME --why "…" | run NAME … -- <command> | env NAME … [--file .env] | set NAME [--machine | --space NAME] | rm NAME [--machine | --space NAME]')
   }
 
   /** where an artifact made here lives: the task's space, the coordinator's own space, the space you are in, else the

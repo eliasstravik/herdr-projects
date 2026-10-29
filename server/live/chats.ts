@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { apart, cardMessage, type ActivityAnswer, type ActivityAsk, type Chat, type ChatControls, type ArtifactPost, type Job, type Message, type Question, type Reaction, type UpdateCard } from '../../shared/types.ts'
+import { apart, cardMessage, type ActivityAnswer, type ActivityAsk, type Chat, type ChatControls, type ArtifactPost, type Job, type Message, type Question, type Reaction, type SecretAsk, type UpdateCard } from '../../shared/types.ts'
 import { HOME, readJson, writeJson } from '../store.ts'
 import { stripHidden, type Agents, type OutItem } from './agents.ts'
 import { agentLines, excerpt, findQuoted, markerSoFar, parseBrowserNotes, parseReply, parseUserLine, userLines, type Parsed } from './chatlines.ts'
@@ -23,6 +23,7 @@ import { activityOf, codexThreadLog, cutOutput, headlessJob, JobLogs, lastLine, 
  *  answer, a note with what it is on */
 function shownAs(p: Parsed): { title?: string; text: string } | undefined {
   if (p.kind === 'answer') return { title: `Answered “${p.title}”`, text: p.answer }
+  if (p.kind === 'secret') return { title: 'Gave a secret', text: `${p.name}${p.where ? `, for ${p.where}` : ''}` }
   if (p.kind === 'artifact-send') return { title: `Sent from "${p.title}"`, text: p.text }
   if (p.kind === 'artifact-say') return { title: `About "${p.title}"`, text: p.text }
   if (p.kind === 'note') return { text: `[note on ${p.target}] ${p.note}` }
@@ -80,6 +81,8 @@ export interface Posted {
   card?: UpdateCard
   question?: Question
   artifact?: ArtifactPost
+  /** a secret the agent asked for: its masked box */
+  secret?: SecretAsk
   /** text shown with it, when it stands alone */
   text?: string
   /** a line of yours Shepherdr shows for you (an answer typed as keys, or a command, which the log doesn't keep) */
@@ -842,6 +845,10 @@ export class Chats {
           continue
         }
         msgs.push({ id: p.id, who: 'you', at: p.at, text: p.text, answered: p.answered, elsewhere: p.elsewhere, cid: p.cid })
+        continue
+      }
+      if (p.secret) {
+        msgs.push({ id: p.id, who: 'agent', at: p.at, secret: p.secret })
         continue
       }
       const q = p.question ? withAnswer(p.question, l, this.answeredIn) : undefined

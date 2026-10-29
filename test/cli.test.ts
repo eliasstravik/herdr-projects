@@ -3,7 +3,7 @@
 // halfway or the tunnel dropped and left its end open (SHE-212's agent sat on one for 40 minutes).
 import { describe, expect, test } from 'bun:test'
 import { spawn, spawnSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -57,5 +57,73 @@ describe('shepherdr merge with no answer coming', () => {
     } finally {
       server.stop(true)
     }
+  })
+})
+
+describe('shepherdr secret run and env', () => {
+  // Shepherdr's answer to secret run and env: the values, for the command to use here; it never prints them
+  const values = { TOKEN: "a b'c$d", PLAIN: 'xyz' }
+  const answer = async (req: Request) => {
+    const b = (await req.json()) as { args: string[]; stdin?: string }
+    return Response.json({ out: '', code: 0, ...(b.args[1] === 'run' || b.args[1] === 'env' ? { secrets: values } : {}), args: b.args, stdin: b.stdin ?? null })
+  }
+
+  /** each shepherdr, here and on another machine, against the answer above */
+  async function each(check: (cmd: string[], cwd: string) => Promise<void>) {
+    const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: answer })
+    const dir = mkdtempSync(join(tmpdir(), 'shep-sec-'))
+    mkdirSync(join(dir, 'bin'))
+    copyFileSync(join(root, 'helper', 'shepherdr'), join(dir, 'bin', 'shepherdr'))
+    const sock = perl ? Bun.serve({ unix: join(dir, 'main.sock'), fetch: answer }) : undefined
+    process.env.SHEPHERDR_URL = `http://127.0.0.1:${server.port}`
+    try {
+      const repo = join(dir, 'repo')
+      mkdirSync(repo)
+      spawnSync('git', ['init', '-q'], { cwd: repo })
+      writeFileSync(join(repo, '.gitignore'), '.env\n')
+      await check([process.execPath, join(root, 'server', 'cli.ts')], repo)
+      if (perl) await check(['perl', join(dir, 'bin', 'shepherdr')], repo)
+    } finally {
+      delete process.env.SHEPHERDR_URL
+      server.stop(true)
+      sock?.stop(true)
+    }
+  }
+
+  /** run to its end, never blocking: Shepherdr's answer comes from this same process */
+  const sh = (argv: string[], cwd: string) =>
+    new Promise<{ stdout: string; stderr: string; status: number | null }>((done) => {
+      const c = spawn(argv[0], argv.slice(1), { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: process.env })
+      let stdout = ''
+      let stderr = ''
+      c.stdout!.on('data', (d) => (stdout += d))
+      c.stderr!.on('data', (d) => (stderr += d))
+      c.on('close', (status) => done({ stdout, stderr, status }))
+    })
+
+  test('run: the command gets each one in its environment, and its exit code goes back', async () => {
+    await each(async (cmd, cwd) => {
+      const r = await sh([...cmd, 'secret', 'run', 'TOKEN', '--', 'sh', '-c', 'printf "[%s][%s]" "$TOKEN" "$PLAIN"; exit 3'], cwd)
+      expect(r.stdout).toBe(`[${values.TOKEN}][${values.PLAIN}]`)
+      expect(r.status).toBe(3)
+      // no command: nothing asked
+      expect((await sh([...cmd, 'secret', 'run', 'TOKEN'], cwd)).stderr).toContain('Put the command after --')
+    })
+  })
+
+  test('env: NAME=value lines in a file git ignores, readable by you only; refused where git would keep it', async () => {
+    await each(async (cmd, cwd) => {
+      writeFileSync(join(cwd, '.env'), 'OTHER=1\nexport TOKEN=old\n')
+      const r = await sh([...cmd, 'secret', 'env', 'TOKEN', 'PLAIN'], cwd)
+      expect(r.status).toBe(0)
+      expect(r.stdout).not.toContain(values.TOKEN)
+      const lines = readFileSync(join(cwd, '.env'), 'utf8').trim().split('\n').sort()
+      expect(lines).toEqual(['OTHER=1', 'PLAIN=xyz', 'TOKEN="a b\'c\\$d"'])
+      expect(statSync(join(cwd, '.env')).mode & 0o777).toBe(0o600)
+      const kept = await sh([...cmd, 'secret', 'env', 'TOKEN', '--file', 'kept.env'], cwd)
+      expect(kept.status).toBe(1)
+      expect(kept.stdout).toContain('not ignored by git')
+      expect(existsSync(join(cwd, 'kept.env'))).toBe(false)
+    })
   })
 })

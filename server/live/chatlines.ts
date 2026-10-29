@@ -57,6 +57,8 @@ export const line = {
   unreactArtifact: (user: string, emoji: string, art: Art) => tag('reaction-removed', { from: user, emoji, ...art }),
   attach: (user: string, name: string, path: string) => tag('attachment', { from: user, name, path }),
   answer: (user: string, title: string, answer: string) => tag('answer', { from: user, question: title }, answer),
+  /** a secret you gave, by its name and where it is kept: never its value */
+  secret: (user: string, name: string, where: string) => tag('secret', { from: user, name, for: where }),
   artifact: (title: string, id: string, v: number): Art => ({ title, artifact: id, version: v }),
   artifactSend: (user: string, art: Art, text: string) => tag('artifact-sent', { from: user, ...art }, text),
   artifactSay: (user: string, art: Art, text: string) => tag('artifact-comment', { from: user, ...art }, text),
@@ -98,6 +100,7 @@ export type Parsed =
   | { kind: 'unreact'; emoji: string; to: string; path?: string; artifact?: ArtifactPost }
   | { kind: 'attach'; name: string; path: string }
   | { kind: 'answer'; title: string; answer: string }
+  | { kind: 'secret'; name: string; where: string }
   | { kind: 'artifact-send'; title: string; text: string }
   | { kind: 'artifact-say'; title: string; text: string }
   | { kind: 'note'; target: string; note: string }
@@ -144,6 +147,7 @@ export function parseUserLine(l: string): Parsed | null {
     if ((t.name === 'reaction' || t.name === 'reaction-removed') && a.emoji) return { kind: t.name === 'reaction' ? 'react' : 'unreact', emoji: a.emoji, ...quoteOf(a) }
     if (t.name === 'attachment' && a.path) return { kind: 'attach', name: a.name ?? a.path.split('/').pop()!, path: a.path }
     if (t.name === 'answer') return { kind: 'answer', title: a.question ?? '', answer: body }
+    if (t.name === 'secret' && a.name) return { kind: 'secret', name: a.name, where: a.for ?? '' }
     if (t.name === 'artifact-sent') return { kind: 'artifact-send', title: a.title ?? '', text: body }
     if (t.name === 'artifact-comment') return { kind: 'artifact-say', title: a.title ?? '', text: body }
     if (t.name === 'artifact-note') return { kind: 'note', target: a.on ? `${a.on} in "${a.title ?? ''}"` : `"${a.title ?? ''}"`, note: body }

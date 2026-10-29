@@ -12,6 +12,7 @@ import { settingsBlock } from '../live/prompts.ts'
 import { CLI_NAME, defaultOf, kindOf } from '../live/settings.ts'
 import { harnessWords, restartClis } from '../live/restart.ts'
 import { nextWords } from '../live/trigger.ts'
+import { secretPages, Vault } from '../live/secrets.ts'
 
 const DEFAULT_WAYS = { review: defaultOf('brief.review') !== 'off', mustFix: defaultOf('review.mustFix')!, rounds: Number.parseInt(defaultOf('review.rounds')!, 10), merge: defaultOf('brief.merge')!, waitChecks: defaultOf('brief.merge') === 'after GitHub checks' }
 const DEFAULT_REVIEWER = { kind: kindOf(defaultOf('reviewer.agent')!)! }
@@ -67,6 +68,8 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
   checklists: Record<string, string> = {}
   pluginsOff: string[] = []
   sections = D.settings(this.stores)
+  /** agents' secrets, in memory only */
+  vault = new Vault('', D.secrets())
   automations = structuredClone(D.AUTOMATIONS)
   artifacts: Artifact[] = D.artifacts()
   /** what each artifact's page sent, by the HTML version it was sent from */
@@ -212,7 +215,7 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
       asks: this.asks,
       last: this.last(),
       read: this.read,
-      settings: this.sections,
+      settings: secretPages(this.sections, this.vault.names()),
       demo: true,
       user: 'Elias',
     }
@@ -452,6 +455,20 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
       }
       case 'answer':
         return this.answer(a)
+      case 'secret': {
+        const r = this.vault.set(a.level, a.name, a.value === null ? null : a.value.trim())
+        if (!r.ok) return r
+        // the card that asked for it says where it is kept, and the chat shows what you gave: its name
+        const m = a.card && this.chats[a.card.chat]?.messages.find((x) => x.secret?.id === a.card!.id)
+        if (a.card && m?.secret && a.value !== null) {
+          const where = m.secret.levels.find((l) => l.id === a.level)?.label ?? a.level
+          m.secret = { ...m.secret, saved: where }
+          this.push(a.card.chat, { who: 'you', answered: 'Gave a secret', text: `${a.name}, for ${where}` })
+          setTimeout(() => this.push(a.card!.chat, { who: 'agent', text: `Thanks: ${a.name} is in. Posting the release notes now.` }), 900)
+        }
+        this.emit('snapshot')
+        return { ok: true }
+      }
       case 'artifact-send':
       case 'artifact-say':
       case 'artifact-note': {

@@ -28,6 +28,7 @@ import {
   Head,
   ic,
   IconButton,
+  KeyIcon,
   MachineIcon,
   Menu,
   MenuItem,
@@ -40,7 +41,9 @@ import {
   PluginIcon,
   PlusIcon,
   RoundButton,
+  SecretField,
   Small,
+  field,
   Tab,
   Tabs,
   TasksIcon,
@@ -446,6 +449,7 @@ const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   Appearance: AppearanceIcon,
   Plugins: PluginIcon,
   Machines: MachineIcon,
+  Secrets: KeyIcon,
 }
 
 /** every level defaults are set at: Everywhere, then each machine and its spaces */
@@ -614,6 +618,7 @@ function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phon
         {hint ? <p className={clsx('text-pretty text-fg3', phone ? 'text-[0.9375rem]' : 'text-[0.8125rem]')}>{hint}</p> : null}
       </div>
       {page === APPEARANCE ? <AppearancePick phone={phone} /> : null}
+      {page.secrets && page.level ? <SecretsList level={page.level} secrets={page.secrets} phone={phone} /> : null}
       {page.View ? <page.View phone={phone} /> : null}
       {groups.map(({ name, rows }, g) => (
         <div key={name ?? g} className="w-full">
@@ -664,6 +669,140 @@ function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phon
           <blockquote className={clsx('text-pretty whitespace-pre-wrap text-fg2', phone ? clsx(card, 'px-4 py-3 text-[0.9375rem]') : 'rounded-box bg-hover px-3 py-2.5 text-[0.8125rem]')}>{page.note}</blockquote>
         </figure>
       ) : null}
+    </div>
+  )
+}
+
+/** how long ago, in a word or two */
+function ago(at: number) {
+  const m = Math.max(0, Math.round((Date.now() - at) / 60_000))
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m} min ago`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h} h ago`
+  const d = Math.round(h / 24)
+  return d === 1 ? 'yesterday' : `${d} days ago`
+}
+
+/** a level's secrets, by name: each replaced or removed, and new ones added, in masked boxes. Values never come here:
+ *  they only go, once, to be kept on the main machine */
+function SecretsList({ level, secrets, phone }: { level: string; secrets: { name: string; at: number }[]; phone: boolean }) {
+  // the name being replaced, or '' for a new one; none: no box open
+  const [open, setOpen] = useState<string | null>(null)
+  const [name, setName] = useState('')
+  const [value, setValue] = useState('')
+  const [sure, setSure] = useState<string | null>(null)
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  // another level's page: nothing half-typed comes along
+  useEffect(() => {
+    setOpen(null)
+    setValue('')
+    setSure(null)
+  }, [level])
+  const close = () => {
+    setOpen(null)
+    setName('')
+    setValue('')
+    setErr('')
+  }
+  const save = async (n: string, v: string | null) => {
+    setBusy(true)
+    setErr('')
+    try {
+      const r = (await act({ type: 'secret', level, name: n, value: v })) as { ok?: boolean; error?: string }
+      if (r?.ok === false) setErr(r.error ?? "That didn't go through.")
+      else if (v !== null) close()
+      else setSure(null)
+    } catch {
+      setErr("That didn't go through: Shepherdr can't be reached.")
+    } finally {
+      setBusy(false)
+    }
+  }
+  const box = (n: string) => (
+    <div className="flex w-full flex-col gap-2">
+      <SecretField label={n ? `New value for ${n}` : 'Value'} value={value} onChange={setValue} onEnter={() => (n || name) && value && save(n || name.trim(), value)} autoFocus={!!n} />
+      <div className="flex items-center justify-end gap-2">
+        {err ? <span role="status" className="mr-auto text-[0.75rem] text-need-fg phone:text-[0.8125rem]">{err}</span> : null}
+        <Ghost onClick={close}>Cancel</Ghost>
+        <Ghost disabled={busy || !value || (!n && !name.trim())} onClick={() => save(n || name.trim(), value)} className="bg-fg text-bg! shadow-none! enabled:hover:bg-fg">
+          Save
+        </Ghost>
+      </div>
+    </div>
+  )
+  return (
+    <div className="flex w-full flex-col gap-1.5">
+      <dl className={phone ? card : undefined}>
+        {secrets.map((x) => (
+          <div key={x.name} className={clsx(rowLook(phone), open === x.name && 'flex-col items-stretch! gap-2.5 pb-3!')}>
+            <dt className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate font-mono text-[0.8125rem] phone:text-[0.9375rem]">{x.name}</span>
+              <Small>Saved {ago(x.at)}</Small>
+            </dt>
+            <dd className={clsx('flex shrink-0 items-center gap-1.5', open === x.name && 'w-full')}>
+              {open === x.name ? (
+                box(x.name)
+              ) : sure === x.name ? (
+                <>
+                  <Ghost onClick={() => setSure(null)}>Keep</Ghost>
+                  <Ghost disabled={busy} onClick={() => save(x.name, null)} className="text-need-fg!">
+                    Remove it
+                  </Ghost>
+                </>
+              ) : (
+                <>
+                  <Ghost
+                    onClick={() => {
+                      close()
+                      setOpen(x.name)
+                    }}
+                  >
+                    Replace
+                  </Ghost>
+                  <Ghost onClick={() => setSure(x.name)}>Remove</Ghost>
+                </>
+              )}
+            </dd>
+          </div>
+        ))}
+        {open === '' ? (
+          <div className={clsx(rowLook(phone), 'flex-col items-stretch! gap-2 py-3!')}>
+            <input
+              aria-label="Name"
+              placeholder="NAME, like GITHUB_TOKEN"
+              autoComplete="off"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'))}
+              className={clsx('min-h-10 w-full min-w-0 rounded-row bg-transparent px-3 py-[9px] font-mono placeholder:font-sans placeholder:text-fg3 coarse:min-h-11 phone:min-h-11 phone:text-[1rem]', field)}
+            />
+            {box('')}
+          </div>
+        ) : (
+          <div className={rowLook(phone)}>
+            <dt className="min-w-0 flex-1 text-fg2">{secrets.length ? null : 'None here yet.'}</dt>
+            <dd>
+              <Ghost
+                onClick={() => {
+                  close()
+                  setOpen('')
+                }}
+              >
+                Add a secret
+              </Ghost>
+            </dd>
+          </div>
+        )}
+      </dl>
+      {err && open === null ? <Small role="status" className="text-need-fg!">{err}</Small> : null}
+      <p className={clsx('text-pretty text-fg3', phone ? 'px-4 text-[0.8125rem]' : 'text-[0.75rem]')}>
+        Agents run commands with them by name (shepherdr secret run), and ask for one in their chat when they need it.
+      </p>
     </div>
   )
 }
