@@ -51,7 +51,7 @@ describe.skipIf(!bwrap)('Autopilot actual OS boundary', () => {
       expect(existsSync(join(box.logsHome, '.codex/auth.json'))).toBe(true)
       // The real launch handover must fix even a profile-altered PATH before the canonical name is run.
       const child = Bun.spawn(['/bin/sh', '-c', isolatedShellCommand(box.wrapper)], { env: { ...process.env, PATH: '/unusable-profile-path' }, stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' })
-      child.stdin.end('claude\nexit\n')
+      child.stdin.write('claude\nexit\n'); child.stdin.end()
       const [code, err] = await Promise.all([child.exited, new Response(child.stderr).text()])
       expect({ code, stderr: code ? err : '' }).toEqual({ code: 0, stderr: '' })
       expect(await Bun.file(join(cwd, 'reviewer-result')).text()).toBe('same-boundary\n')
