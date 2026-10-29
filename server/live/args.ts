@@ -80,7 +80,7 @@ Tasks (coordinators add them; only when the human asks, or on Autopilot)
                                                  model and effort for this task instead of Settings': only what
                                                  that CLI and model take (shepherdr models), or default.
                                                  --reviewer, --reviewer-model and --reviewer-effort pick who reviews
-                                                 its change (codex, claude, pi), named in its brief's Review line.
+                                                 its change (codex, claude, pi, agy), named in its brief's Review line.
                                                  --after queues it: its agent reads the brief and waits, and Shepherdr
                                                  tells it to go once those tasks are all done (merged, or nothing to
                                                  merge); vm-str:SHE-12 is another machine's.

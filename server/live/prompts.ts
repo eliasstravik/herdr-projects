@@ -42,7 +42,7 @@ const REVIEWER_NAME: Record<string, string> = { claude: 'Claude Code', codex: 'C
 /** how to run a reviewer headless, with its model and effort, for a CLI the agent's skill doesn't show */
 const HEADLESS: Record<string, (r: Reviewer) => string> = {
   agy: (r) =>
-    `Run it headless as agy --dangerously-skip-permissions${r.model ? ` --model ${r.model}` : ''}${r.effort ? ` --effort ${r.effort}` : ''} -p "<prompt>" < /dev/null: the prompt right after -p, and without that flag it can't run commands such as git diff; ask it not to edit`,
+    `Run it headless as agy --dangerously-skip-permissions${r.model ? ` --model ${/^[\w.:/@-]+$/.test(r.model) ? r.model : `'${r.model}'`}` : ''}${r.effort ? ` --effort ${r.effort}` : ''} -p "<prompt>" < /dev/null: the prompt right after -p, and without that flag it can't run commands such as git diff; ask it not to edit`,
 }
 
 /** "a headless Codex or a Codex subagent (its default model and effort)", "… Claude Code … (model opus, high effort)" */

@@ -795,6 +795,8 @@ describe('the brief\'s default way of working', () => {
     expect(settingsBlock('X-1', { ways, reviewer: { kind: 'agy', model: 'gemini-4-argon-high', effort: 'high' } })).toContain(
       '(model gemini-4-argon-high, high effort). Run it headless as agy --dangerously-skip-permissions --model gemini-4-argon-high --effort high -p "<prompt>" < /dev/null',
     )
+    // a model kept by its name, before agy listed its ids, is quoted for the shell
+    expect(settingsBlock('X-1', { ways, reviewer: { kind: 'agy', model: 'Gemini 4 Argon (High)' } })).toContain("agy --dangerously-skip-permissions --model 'Gemini 4 Argon (High)' -p ")
     expect(settingsBlock('X-1', { ways, reviewer: { kind: 'agy' } })).toContain(
       '- Reviewer: a headless Antigravity or an Antigravity subagent (its default model and effort). Run it headless as agy --dangerously-skip-permissions -p "<prompt>" < /dev/null: the prompt right after -p, and without that flag it can\'t run commands such as git diff; ask it not to edit.\n',
     )

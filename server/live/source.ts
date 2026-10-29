@@ -2047,10 +2047,11 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         if (!kinds[0]) throw new Error(`No CLI called ${a1}; herdr starts ${CLIS.join(', ')}`)
         return kinds
           .map((k) => {
-            const c = modelsFor(k!)
+            // agy takes one only as a reviewer (--reviewer-model, --reviewer-effort)
+            const c = modelsFor(k!, k === 'agy' ? 'reviewer' : undefined)
             if (!c) return `${CLI_NAME[k!]}: Shepherdr passes it no model or effort; it picks its own.`
             const rows = c.models.map((m) => `  ${m.id.padEnd(28)} ${m.label === m.id ? '' : `${m.label}: `}${m.efforts.length ? m.efforts.join(', ') : 'no effort levels'}`)
-            return `${CLI_NAME[k!]} (--agent ${k}), effort levels ${c.efforts.join(', ')}:\n${rows.length ? rows.join('\n') : '  any model id it knows'}${c.others?.length ? `\n  it also takes older ones by id: ${c.others.map((m) => m.id).join(', ')}` : ''}`
+            return `${CLI_NAME[k!]} (${k === 'agy' ? '--reviewer' : '--agent'} ${k}), effort levels ${c.efforts.join(', ')}:\n${rows.length ? rows.join('\n') : '  any model id it knows'}${c.others?.length ? `\n  it also takes older ones by id: ${c.others.map((m) => m.id).join(', ')}` : ''}`
           })
           .join('\n\n')
       }
