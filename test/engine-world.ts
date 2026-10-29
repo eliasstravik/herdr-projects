@@ -35,7 +35,9 @@ export function world(herdr = fakeHerdr(), o: { boot?: string } = {}) {
   const bg: Record<string, string | undefined> = {}
   /** what an agent reports of itself through its hooks */
   const said: Record<string, Said | undefined> = {}
+  const routed: Record<string, boolean> = {}
   const agents = {
+    routed: (key: string) => routed[key] ?? false,
     ensure: async (s: { key: string; first?: string; cwd: string; kind: string; pane?: () => Promise<string> }) => {
       const pane = await s.pane?.()
       if (pane) {
@@ -111,7 +113,7 @@ export function world(herdr = fakeHerdr(), o: { boot?: string } = {}) {
     outbox.splice(0, outbox.length, ...outbox.filter((k) => k !== key))
     engine.sent(key)
   }
-  return { engine, places, settings, started, sent, posted, status, records, news, newsTo, cards, agentIs, brief, herdr, chat, bg, forgot, said, stopped }
+  return { routed, agents, engine, places, settings, started, sent, posted, status, records, news, newsTo, cards, agentIs, brief, herdr, chat, bg, forgot, said, stopped }
 }
 
 export const until = async (f: () => boolean, ms = 8000) => {

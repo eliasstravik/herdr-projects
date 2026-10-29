@@ -177,6 +177,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       this.emit('chat', key)
       this.fresh(key)
     }
+    this.agents.on('routed', (key) => this.engine.routeRecovered(key))
     this.agents.on('status', (key, st) => {
       if (key === '*') return this.emit('snapshot')
       this.revivals.status(key, st)

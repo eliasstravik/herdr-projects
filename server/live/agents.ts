@@ -133,7 +133,10 @@ export interface Sent {
   item: OutItem
 }
 
+export const ROUTING_FAILURE = 'Could not provision private agent command routing'
+
 type Events = {
+  routed: [key: string]
   status: [key: string, status: AgentStatus | 'gone']
   logs: [key: string]
   sent: [item: OutItem]
@@ -301,6 +304,11 @@ export class Agents extends Emitter<Events> {
     return r ? this.live.get(r.name) : undefined
   }
 
+  /** Private routing was bound to this session's actual CLI process. */
+  routed(key: string) {
+    return this.reachable && !!this.info(key)?.agent && !this.record(key)?.finished && this.routes.has(key)
+  }
+
   status(key: string): AgentStatus | 'gone' {
     return statusFrom(this.said(key), this.info(key)?.agent_status ?? 'gone')
   }
@@ -440,22 +448,24 @@ export class Agents extends Emitter<Events> {
   private async bindRoute(r: AgentRecord, pane: string) {
     const p = await herdr.processInfo(pane)
     const proc = p.foreground_processes?.find((x) => x.pid && isAgentProcess(r.kind, x.argv))
-    if (!proc?.pid || r.finished || this.records[r.key]?.finished || this.stopping.has(r.key)) { this.secretAccess.revoke(r.key); return }
+    if (!proc?.pid || r.finished || this.records[r.key]?.finished || this.stopping.has(r.key)) { this.routes.delete(r.key); this.secretAccess.revoke(r.key); return }
     const env = agentEnv(r.key, ROOT)
     const chain = this.secretScope(r.key)
     const capability = chain ? this.secretAccess.issue(r.key, `${proc.pid}:${r.started}`, chain) : undefined
     const route = { chat: r.key, cwd: r.cwd, capability, credentialFile: this.records[r.key]?.env?.SHEPHERDR_SECRET_FILE ?? r.env?.SHEPHERDR_SECRET_FILE ?? env.SHEPHERDR_SECRET_FILE, ...(BOX ? { helper: env.SHEPHERDR_COMMAND } : { url: env.SHEPHERDR_URL }) }
     const signature = JSON.stringify([proc.pid, route])
-    if (this.routes.get(r.key) === signature) return
+    if (this.routes.get(r.key) === signature) { this.emit('routed', r.key); return }
     const router = BOX ? join(helperDir(BOX.home), 'route.pl') : join(ROOT, 'helper', 'route.pl')
     const result = await run(['perl', router, '--bind', String(proc.pid)], { stdin: JSON.stringify(route), timeoutMs: 5000 })
     if (result.code) {
+      this.routes.delete(r.key)
       this.secretAccess.revoke(r.key)
-      throw new Error('Could not provision private agent command routing')
+      throw new Error(ROUTING_FAILURE)
     }
     // A stop may have raced the asynchronous provisioning write. Never restore its authority.
     if (this.records[r.key]?.finished || this.stopping.has(r.key)) { this.secretAccess.revoke(r.key); return }
     this.routes.set(r.key, signature)
+    this.emit('routed', r.key)
   }
 
   private async repairRoutes() {

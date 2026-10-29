@@ -17,7 +17,7 @@ import { readJson, writeJson } from '../../store.ts'
 import { ROOT } from '../../root.ts'
 import { has } from '../../plugins.ts'
 import { browserEnv } from '../browser.ts'
-import { hidden, type Agents, type Spec } from '../agents.ts'
+import { hidden, ROUTING_FAILURE, type Agents, type Spec } from '../agents.ts'
 import type { Chats } from '../chats.ts'
 import { HOST, placeId, type Places, type Space } from '../places.ts'
 import { goLine, handOverLine, restartLine, resumedLine, settingsBlock, prNewsLine, queuedLine, splitBrief, taskFirst, taskPrompt } from '../prompts.ts'
@@ -462,7 +462,7 @@ export class Engine extends Emitter<Events> {
     if (t.trouble) return 'need'
     const key = this.key(t)
     const st = this.agents.status(key)
-    if (st === 'blocked') return 'need'
+    if (st === 'blocked' || this.asks(key)) return 'need'
     // queued: until they are all done, or one ends without being done (then it waits for you to decide)
     if (this.queued(t)) return this.halts(t).length ? 'need' : 'queued'
     // held until the machine has room
@@ -508,6 +508,7 @@ export class Engine extends Emitter<Events> {
     const s = (() => {
       // a few words, never the summary: that is in its chat's card
       if (status === 'done') return t.closed ? 'Nothing to merge' : 'Merged'
+      if (status === 'need' && (this.agents.status(key) === 'blocked' || this.asks(key))) return this.reasonOf(key) ?? NEED.question
       if (t.trouble) return fitStatus(`Went wrong: ${t.trouble}`)
       // a To do row is its title alone
       if (status === 'todo') return ''
@@ -542,6 +543,8 @@ export class Engine extends Emitter<Events> {
     }
     const card = this.chats.openCard(key)
     if (card) return card === 'plan' ? NEED.plan : fitStatus(this.chats.openCardTitle(key) ?? '') || NEED.question
+    const question = this.chats.openQuestion(key)
+    if (question) return fitStatus(question.items[0]?.question ?? '') || NEED.question
     const last = this.chats.lastReply(key)
     if (said?.kind === 'auth' || loginGone(last)) return NEED.login
     return askOf(last)
@@ -2145,6 +2148,19 @@ export class Engine extends Emitter<Events> {
     this.wrote.set(t.id, Date.now())
     this.settle(t)
     this.settleSoon(t, ANSWER_GRACE + 500)
+  }
+
+  /** A launch error is superseded only by verified private routing and a live owning agent.
+   * Progress reports, queued messages and old hooks alone are not evidence of recovery. */
+  routeRecovered(key: string) {
+    const t = this.task(key.split('/')[0])
+    if (!t || key !== this.key(t)) return
+
+    const st = this.agents.status(key)
+    if (t.trouble !== ROUTING_FAILURE || t.stopped || ended(t) || !this.agents.routed(key) || (st !== 'working' && st !== 'blocked')) return false
+    t.trouble = undefined
+    this.settle(t)
+    this.save()
   }
 
   /** an agent's state changed in herdr */
