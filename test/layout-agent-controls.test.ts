@@ -11,7 +11,7 @@ describe.skipIf(!browser)('composer + agent controls', () => {
     for (const [width, colorScheme] of [[320, 'light'], [768, 'dark'], [1440, 'light']] as const) {
       for (const task of [false, true]) {
         const chat = task ? key : p.chat
-        world.chats[chat].agent = { kind: 'codex', model: 'gpt-6-sol', effort: 'high' }
+        world.chats[chat].agent = { kind: 'codex', model: 'gpt-6-sol', effort: 'low', runtime: { model: 'gpt-6-sol', effort: 'high', source: 'session', at: Date.now() } }
         world.chats[chat].cli = 'Codex'
         const before = JSON.stringify(world.chats[chat].agent)
         const page = await browser!.newPage({ viewport: { width, height: 900 }, colorScheme })
@@ -56,8 +56,8 @@ describe.skipIf(!browser)('composer + agent controls', () => {
     await page.goto(`http://127.0.0.1:${server!.port}/?place=all&task=GTM-17`)
     await page.locator('[data-composer] button[aria-label="Attach files and more"]').last().click()
     const controls = page.locator('[data-agent-controls]')
-    await controls.getByRole('menuitem', { name: 'Model: Default / unknown. Select and restart', exact: true }).waitFor()
-    expect(await controls.getByRole('menuitem', { name: 'Effort: Default / unknown. Select and restart', exact: true }).count()).toBe(1)
+    await controls.getByRole('menuitem', { name: 'Model: Not reported. Select and restart', exact: true }).waitFor()
+    expect(await controls.getByRole('menuitem', { name: 'Effort: Not reported. Select and restart', exact: true }).count()).toBe(1)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
     await page.getByRole('button', { name: 'Attach files and more', exact: true }).last().click()
     expect(await controls.count()).toBe(0)

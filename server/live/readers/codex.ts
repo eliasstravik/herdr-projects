@@ -103,14 +103,21 @@ export class CodexReader implements Reader {
     const out: LogEvent[] = []
     for (const { text, offset } of lines) {
       // skip token counts, reasoning and tool runs without parsing them
-      if (!/"type":\s*"(session_meta|message|function_call|custom_tool_call|function_call_output|custom_tool_call_output|task_started|task_complete|turn_aborted|token_count|item_completed)"/.test(text))
+      if (!/"type":\s*"(turn_context|session_meta|message|function_call|custom_tool_call|function_call_output|custom_tool_call_output|task_started|task_complete|turn_aborted|token_count|item_completed)"/.test(text))
         continue
       const l = parseLine(text)
       const p = l?.payload
       if (!p || typeof p !== 'object') continue
       const t = Date.parse(l.timestamp ?? '') || 0
 
-      if (l.type === 'session_meta') {
+      if (l.type === 'turn_context') {
+        const effort = p.effort ?? p.reasoning_effort ?? p.collaboration_mode?.settings?.reasoning_effort
+        out.push({ kind: 'runtime', file, replace: true, id: `runtime-${offset}`, at: t, runtime: {
+          source: 'session', at: t,
+          ...(typeof p.model === 'string' && p.model !== 'default' ? { model: p.model } : {}),
+          ...(typeof effort === 'string' && effort !== 'default' ? { effort } : {}),
+        } })
+      } else if (l.type === 'session_meta') {
         const id = p.id ?? p.session_id
         if (s.session || typeof id !== 'string') continue
         s.session = true

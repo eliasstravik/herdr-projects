@@ -192,6 +192,9 @@ export class ClaudeReader implements Reader {
         continue
       }
 
+      if (l.type === 'assistant' && !l.isSidechain && !l.isApiErrorMessage && typeof l.message?.model === 'string' && !l.message.model.startsWith('<')) {
+        out.push({ kind: 'runtime', file, id: `runtime-${offset}`, at: t, runtime: { model: l.message.model, source: 'session', at: t } })
+      }
       if (l.type === 'user') {
         const c = l.message?.content
         // answers to our questions come back as tool results

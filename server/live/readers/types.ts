@@ -2,7 +2,7 @@
 // Readers keep only what the chat shows: what the human typed, the agent's replies, the CLI's own questions, where a
 // session starts, and its tool steps and background work cut down to a few words each (the chat folds them into one
 // line per turn; their output stays in the log, read again from where it is only when the human opens one).
-import type { Job, StepKind, StepWords } from '../../../shared/types.ts'
+import type { AgentRuntime, Job, StepKind, StepWords } from '../../../shared/types.ts'
 
 /** where a step's raw output is: a line of a log file */
 export interface OutputAt {
@@ -26,6 +26,8 @@ export interface CliQuestionItem {
 }
 
 export type LogEvent =
+  | { kind: 'runtime'; id: string; at: number; file: string; replace?: boolean; runtime: AgentRuntime }
+
   /** a new log file (session) starts */
   | { kind: 'session'; id: string; at: number; sessionId: string }
   /** something the human (or Shepherdr on their behalf) typed */

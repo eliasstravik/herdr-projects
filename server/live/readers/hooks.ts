@@ -18,6 +18,8 @@ import type { Background } from './background.ts'
 /** one hook event, as the recorder writes it */
 export interface HookEvent {
   at: number
+  model?: string
+  effort?: string
   event: string
   tool?: string
   /** set when a subagent did it, not the agent itself */
@@ -74,6 +76,8 @@ export function pickHook(input: any, at: number): HookEvent | undefined {
   const set = (k: keyof HookEvent, v: unknown) => {
     if (v !== undefined && v !== null && v !== '') (e as any)[k] = v
   }
+  set('model', cut(input.model, 160))
+  set('effort', cut(input.effort?.level, 40))
   set('tool', cut(input.tool_name, 80))
   set('agent', cut(input.agent_id, 80))
   set('type', cut(input.notification_type ?? input.source, 80))
@@ -240,11 +244,11 @@ export interface HookSession {
 
 /** every agent's events file, read on from where it was last read, and what each says now */
 export class HookLogs {
-  private files = new Map<string, { size: number; carry: string; said?: Said; seen: boolean; session?: HookSession }>()
+  private files = new Map<string, { size: number; carry: string; said?: Said; seen: boolean; session?: HookSession; runtime?: { model?: string; effort?: string; at: number; session?: string } }>()
 
   /** what the agent recording to this file says now, or nothing: no event yet (an agent started before hooks, or
    *  still starting), or its session ended; and the session it is in */
-  read(file: string): { said?: Said; seen: boolean; session?: HookSession } {
+  read(file: string): { said?: Said; seen: boolean; session?: HookSession; runtime?: { model?: string; effort?: string; at: number; session?: string } } {
     let f = this.files.get(file)
     let size = 0
     try {
@@ -267,18 +271,22 @@ export class HookLogs {
           closeSync(fd)
         }
       } catch {
-        return { said: f.said, seen: f.seen, session: f.session }
+        return { said: f.said, seen: f.seen, session: f.session, runtime: f.runtime }
       }
       const cut = fresh.lastIndexOf('\n')
       f.carry = cut < 0 ? fresh : fresh.slice(cut + 1)
       for (const e of parseHookLines(cut < 0 ? '' : fresh.slice(0, cut))) {
+        if (!e.agent) {
+          if (e.event === 'SessionStart' && e.type !== 'compact') f.runtime = undefined
+          if (e.model || e.effort) f.runtime = { ...f.runtime, ...(e.model ? { model: e.model } : {}), ...(e.effort ? { effort: e.effort } : {}), at: e.at, session: e.session ?? f.session?.id }
+        }
         f.said = foldHook(f.said, e)
         f.seen = true
         if (e.session && !e.agent) f.session = { id: e.session, log: e.log ?? (f.session?.id === e.session ? f.session.log : undefined), at: e.at }
       }
       f.size = size
     }
-    return { said: f.said, seen: f.seen, session: f.session }
+    return { said: f.said, seen: f.seen, session: f.session, runtime: f.runtime }
   }
 
   forget(file: string) {

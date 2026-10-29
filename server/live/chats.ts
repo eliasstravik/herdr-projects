@@ -15,6 +15,7 @@ import type { LogEvent } from './readers/types.ts'
 import type { Cut } from './retry.ts'
 import { findModel, modelsOf, nearest } from './models.ts'
 import { sameCommand } from './commands.ts'
+import { sessionRuntime } from './runtime.ts'
 import { launchHarness } from './restart.ts'
 import { CLI_NAME } from './settings.ts'
 import { replyOnScreen } from './streaming.ts'
@@ -930,11 +931,19 @@ export class Chats {
     }
     const st = this.agents.status(key)
     const failed = this.agents.failedLately(key)
+    const active = this.agents.info(key)?.agent_session
+    const file = active?.kind === 'path' ? r?.logs.find((f) => f.endsWith('/' + active.value.split('/').at(-1)))
+      : r?.sessionId ? r.logs.find((f) => f.endsWith(`${r.sessionId}.jsonl`)) : r?.logs.at(-1)
+    let runtime = sessionRuntime(ev, file, r?.started ?? 0)
+    runtime = this.agents.runtime(key) ?? runtime
+    const hook = this.agents.runtimeHook(key)
+    if (hook) runtime = !runtime || hook.at >= runtime.at ? { ...runtime, ...hook, source: 'hook' } : { ...hook, ...runtime }
+    if (runtime?.model) runtime.modelLabel = findModel(kind, runtime.model)?.label
     const jobs = this.jobs(key, act).map(({ log: _l, output: _o, ...j }): Job => j)
     return {
       key,
       cli: CLI_NAME[kind] ?? kind,
-      agent: r ? { ...launchHarness({ kind: r.kind, model: r.model, effort: r.effort }), ...(findModel(r.kind, r.model) ? { modelLabel: findModel(r.kind, r.model)!.label } : {}) } : undefined,
+      agent: r ? { runtime, ...launchHarness({ kind: r.kind, model: r.model, effort: r.effort }), ...(findModel(r.kind, r.model) ? { modelLabel: findModel(r.kind, r.model)!.label } : {}) } : undefined,
       messages: msgs,
       failed: failed.length ? failed : undefined,
       working: st === 'working' || undefined,

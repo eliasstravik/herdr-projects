@@ -28,7 +28,8 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "rrule": "2.8.1",
-    "web-push": "3.6.7"
+    "web-push": "3.6.7",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@jridgewell/trace-mapping": "0.3.31",
@@ -37,6 +38,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/web-push": "3.6.4",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "6.1.2",
     "emojibase-data": "17.0.0",
     "playwright-core": "1.63.0",

@@ -16,7 +16,7 @@ const parse = (cli: string, objs: object[]) =>
 // token usage, turn starts and steps are checked on their own below; the other tests read the conversation
 const STEPS = new Set(['step', 'step-end', 'job', 'job-end'])
 const brief = (ev: LogEvent[]) =>
-  ev.filter((e) => e.kind !== 'usage' && e.kind !== 'turn-start' && !STEPS.has(e.kind)).map((e) =>
+  ev.filter((e) => e.kind !== 'runtime' && e.kind !== 'usage' && e.kind !== 'turn-start' && !STEPS.has(e.kind)).map((e) =>
     e.kind === 'user' || e.kind === 'agent' ? `${e.kind}:${e.text}` : e.kind === 'question' ? `question:${e.id}` : `${e.kind}:${e.id}`,
   )
 

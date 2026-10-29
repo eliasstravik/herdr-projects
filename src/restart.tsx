@@ -182,8 +182,9 @@ export function PlaceRestartItem({ place }: { place: Place }) {
 /** Compact launch controls inside the composer + menu, shared by both chat roles. */
 export function AgentControls({ chatKey, cli }: { chatKey: string; cli: string }) {
   const agent = useStore((s) => s.chats[chatKey]?.agent)
-  const model = agent?.model && agent.model !== 'default' ? (agent.modelLabel ?? agent.model) : 'Default / unknown'
-  const effort = agent?.effort && agent.effort !== 'default' ? (agent.effort === 'xhigh' ? 'Extra high' : agent.effort.charAt(0).toUpperCase() + agent.effort.slice(1)) : 'Default / unknown'
+  const model = agent?.runtime?.modelLabel ?? agent?.runtime?.model ?? 'Not reported'
+  const level = agent?.runtime?.effort
+  const effort = agent?.runtime?.effortUnsupported ? 'Not supported' : level ? (level === 'xhigh' ? 'Extra high' : level.charAt(0).toUpperCase() + level.slice(1)) : 'Not reported'
   const open = () => {
     setUI({ plus: null })
     openRestart(chatKey, chatKey.includes('/') ? chatKey.split('/')[0] : 'this space', true)

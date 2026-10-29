@@ -7,7 +7,7 @@ import { mkdirSync, watch, type FSWatcher } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { Emitter } from '../source.ts'
 import { readJson, writeJson } from '../store.ts'
-import type { TermScreen } from '../../shared/types.ts'
+import type { AgentRuntime, TermScreen } from '../../shared/types.ts'
 import { herdr, Subscription, type AgentInfo, type AgentStatus, type HerdrError, type HerdrEvent } from './herdr.ts'
 import { ClaudeSessions, Reviewers, screenBackground, sessionBackground, type Background } from './readers/background.ts'
 import { claudeHome, claudeLogPath, findClaudeLog, findCodexLog, findLog, findPiLog, logKind } from './readers/find.ts'
@@ -20,6 +20,7 @@ import { agentEnv, BOX, helperDir, run, runSync } from './box.ts'
 import { ROOT } from '../root.ts'
 import { leftAtPrompt } from './commands.ts'
 import { paneWrong, type Wrong } from './revive.ts'
+import { readCodexRuntime } from './codex-runtime.ts'
 import { isAgentProcess } from './agent-process.ts'
 
 /** a log's name (its session id), wherever it lies: one named both by its mirrored path and by its own is one log */
@@ -293,6 +294,47 @@ export class Agents extends Emitter<Events> {
     return statusFrom(this.said(key), this.info(key)?.agent_status ?? 'gone')
   }
 
+  private codexState = new Map<string, AgentRuntime>()
+  private runtimeAt = 0
+  private runtimeReading = false
+
+  runtime(key: string): AgentRuntime | undefined {
+    const state = this.codexState.get(key)
+    return this.info(key) && state && Date.now() - state.at < 10_000 ? state : undefined
+  }
+
+  private async readRuntime() {
+    if (this.runtimeReading || Date.now() - this.runtimeAt < 5000) return
+    this.runtimeReading = true
+    this.runtimeAt = Date.now()
+    try {
+      const sessions = new Map<string, { id: string; started: number }>()
+      for (const [key, r] of Object.entries(this.records)) {
+        if (r.kind !== 'codex' || !this.info(key)) continue
+        const active = this.info(key)?.agent_session
+        const id = active?.kind === 'id' ? active.value
+          : (active?.kind === 'path' ? active.value : r.logs.at(-1))?.match(/([0-9a-f-]{36})\.jsonl$/)?.[1]
+        if (id) sessions.set(key, { id, started: r.started })
+      }
+      const states = await readCodexRuntime([...new Set([...sessions.values()].map((s) => s.id))])
+      this.codexState.clear()
+      for (const [key, session] of sessions) {
+        if (this.records[key]?.started !== session.started) continue
+        const state = states.get(session.id)
+        if (state) this.codexState.set(key, state)
+        this.emit('logs', key)
+      }
+    } catch { this.codexState.clear() } finally { this.runtimeReading = false }
+  }
+
+  /** Runtime fields reported by this launch's main Claude process, never its subagents. */
+  runtimeHook(key: string) {
+    const r = this.records[key]
+    if (!r?.hooks || r.kind !== 'claude' || !this.info(key)) return undefined
+    const h = this.hooks.read(mirrored(r.hooks)).runtime
+    return h && h.at >= r.started && (!h.session || h.session === r.sessionId) ? h : undefined
+  }
+
   /** what the agent reports of itself, from its hooks; nothing when it reports nothing (see statusFrom). A turn its log
    *  shows ended after its last event was cut short with no hook: it is over. */
   said(key: string): Said | undefined {
@@ -339,6 +381,7 @@ export class Agents extends Emitter<Events> {
         this.routesAt = Date.now()
         void this.repairRoutes()
       }
+      void this.readRuntime()
       await this.readBackground()
       // learn log files herdr names (its agent integrations report them)
       for (const [name, key] of this.byName) this.learnSession(key, this.live.get(name))
@@ -602,6 +645,7 @@ export class Agents extends Emitter<Events> {
     const r: AgentRecord = old ?? { ...spec, logs: [], started: Date.now() }
     const from = old?.cwd
     Object.assign(r, { name: spec.name, kind: spec.kind, cwd: spec.cwd, workspace: spec.workspace, tab: spec.tab ?? r.tab, env: spec.env ?? r.env, access: spec.access ?? r.access, model: spec.model ?? r.model, effort: spec.effort ?? r.effort, system: spec.system ?? r.system, set: spec.set ?? r.set, finished: false })
+    this.codexState.delete(spec.key)
     r.started = Date.now()
     if (!resume) r.sessionId = r.kind === 'codex' ? undefined : randomUUID()
     // a run of its own: what its hooks record starts over

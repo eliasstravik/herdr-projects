@@ -586,7 +586,7 @@ export interface Chat {
   /** what this CLI lets the + menu change; only what it supports is listed */
   controls?: ChatControls
   /** Recorded launch values, never inferred from Settings. Missing values are CLI defaults, not observed telemetry. */
-  agent?: { kind: string; model?: string; modelLabel?: string; effort?: string }
+  agent?: { kind: string; model?: string; modelLabel?: string; effort?: string; runtime?: AgentRuntime }
   /** Settings for its role now say something else than what its agent runs on: a calm hint offers a restart */
   restart?: RestartHint
 }
@@ -610,6 +610,16 @@ export interface RestartCli {
 
 /** what the restart sheet shows: what its agent runs on now and what Settings say for its role (what it restarts with
  *  unless changed), each a CLI kind with a model id and level (none: the CLI's own) */
+/** CLI-reported state, kept separate from the selected next-launch policy. */
+export interface AgentRuntime {
+  model?: string
+  modelLabel?: string
+  effort?: string
+  effortUnsupported?: boolean
+  source: 'session' | 'hook'
+  at: number
+}
+
 export interface RestartInfo {
   role: 'task' | 'coordinator'
   /** its space, whose Settings a save changes */

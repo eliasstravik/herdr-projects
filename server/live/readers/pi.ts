@@ -48,6 +48,12 @@ export class PiReader implements Reader {
         if (this.sessions.has(file) || typeof l.id !== 'string') continue
         this.sessions.add(file)
         out.push({ kind: 'session', id: `session-${l.id}`, at: t, sessionId: l.id })
+      } else if (l.type === 'model_change' || l.type === 'thinking_level_change') {
+        const runtime = { source: 'session' as const, at: t,
+          ...(l.type === 'model_change' && typeof l.modelId === 'string' ? { model: l.modelId } : {}),
+          ...(l.type === 'thinking_level_change' && typeof l.thinkingLevel === 'string' ? { effort: l.thinkingLevel } : {}),
+        }
+        out.push({ kind: 'runtime', file, id: `runtime-${offset}`, at: t, runtime })
       } else if (l.type === 'message') {
         const m = l.message ?? {}
         const id = String(l.id ?? `m${offset}`)
