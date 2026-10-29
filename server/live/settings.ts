@@ -54,7 +54,7 @@ export const EFFORTS = ['default', ...LEVELS]
 export { effortFor }
 
 /** the CLIs a brief's Review line may suggest for a task's review */
-export const REVIEWERS = ['Codex', 'Claude Code', 'pi']
+export const REVIEWERS = ['Codex', 'Claude Code', 'pi', 'Antigravity']
 
 /** Autopilot's heartbeat (Settings → Autopilot): its trigger, a time rule as kept ('off': none) and the news that
  *  wakes it at once, and the time zone of every time rule */

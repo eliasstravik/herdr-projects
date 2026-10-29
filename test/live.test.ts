@@ -532,7 +532,12 @@ describe('settings', () => {
     expect(s.set('task.effort', 'extreme').ok).toBe(false)
     expect(s.set('watcher.agent', 'Claude Code').error).toBe('No setting watcher.agent')
     // a reviewer needs a headless run review.sh knows
-    expect(s.set('reviewer.agent', 'Qwen').error).toBe('Pick one of: Codex · Claude Code · pi.')
+    expect(s.set('reviewer.agent', 'Qwen').error).toBe('Pick one of: Codex · Claude Code · pi · Antigravity.')
+    // Antigravity, by its name or its kind; Shepherdr passes it no model or effort: its own
+    expect(s.set('reviewer.agent', 'agy').ok).toBe(true)
+    expect(s.get('reviewer.agent')).toBe('Antigravity')
+    expect(s.harness('reviewer')).toEqual({ kind: 'agy', model: undefined, effort: undefined })
+    s.set('reviewer.agent', null)
     // a model or effort level the CLI (and its model) doesn't take, with what it does
     expect(s.set('coordinator.model', 'opus 9').error).toBe('Claude Code has no model opus 9. Pick one of: default · Fable 5.1 · Opus 5.5 · Sonnet 5.5 · Haiku 5.5.')
     expect(s.set('coordinator.model', 'Opus 5.5').ok).toBe(true)
@@ -767,6 +772,11 @@ describe('the brief\'s default way of working', () => {
 - Must fix: major. Findings are tagged critical/major/minor/trivial; fix critical and major, then review again.
 - Review rounds: 3. Stop when a round finds none to fix, at most 3 rounds.
 - Merge: on its own. Merge it yourself once it works (shepherdr merge X-1). Don't wait for GitHub's checks.`)
+  })
+  test('an Antigravity reviewer is named, and its line says how to run agy headless', () => {
+    expect(settingsBlock('X-1', { ways, reviewer: { kind: 'agy' } })).toContain(
+      '- Reviewer: a headless Antigravity or an Antigravity subagent (its default model and effort). Run it headless as agy --dangerously-skip-permissions -p "<prompt>" < /dev/null: the prompt right after -p, and without that flag it can\'t run commands such as git diff; ask it not to edit.\n',
+    )
   })
   test("a brief splits into the coordinator's words and the Settings block, written today or before", () => {
     const how = settingsBlock('X-1', { ways })

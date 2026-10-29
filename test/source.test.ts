@@ -353,7 +353,7 @@ describe("a task's CLI, model and effort", () => {
     execSync('git init -q -b main && git config user.email t@t && git config user.name T && echo hi > README.md && git add -A && git commit -qm init', { cwd: dir, shell: '/bin/sh' })
     const place = placeId.space((await src.places.add(dir, 'reviewer-source')).name)
     for (const [args, says] of <[string[], string][]>[
-      [['--reviewer', 'gemini'], '--reviewer gemini: Pick one of: Codex · Claude Code · pi.'],
+      [['--reviewer', 'gemini'], '--reviewer gemini: Pick one of: Codex · Claude Code · pi · Antigravity.'],
       [['--reviewer-effort', 'extreme'], '--reviewer-effort takes default, low, medium, high, xhigh, max, ultra on Codex'],
       [['--reviewer-model', 'opus'], 'Codex has no such model'],
     ]) {
@@ -373,6 +373,13 @@ describe("a task's CLI, model and effort", () => {
     const codex = src.engine.task(id((await src.cli(['task', 'add', 'Codex review', '--desc', 'x', '--reviewer-effort', 'low'], { chat: place })).out))!
     expect(codex.desc).toContain('- Reviewer: a headless Codex or a Codex subagent (model gpt-6-sol, low effort). (set by coordinator for this task)')
     src.settings.set('reviewer.model', null)
+    // Antigravity reviews with its own model and effort: none may be picked for it
+    const agy = src.engine.task(id((await src.cli(['task', 'add', 'Antigravity review', '--desc', 'x', '--reviewer', 'agy'], { chat: place })).out))!
+    expect(agy.reviewer).toEqual({ kind: 'agy' })
+    expect(agy.desc).toContain('- Reviewer: a headless Antigravity or an Antigravity subagent (its default model and effort). Run it headless as agy ')
+    const picked = await src.cli(['task', 'add', 'Odd', '--desc', 'x', '--reviewer', 'agy', '--reviewer-effort', 'high'], { chat: place })
+    expect(picked.code).toBe(1)
+    expect(picked.out).toContain('Antigravity runs on its own')
   })
   test('task add --set changes a line of its Settings block for that task alone, marked as set by its coordinator', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'shep-src-repo-'))
