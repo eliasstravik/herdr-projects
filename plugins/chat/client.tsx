@@ -1120,22 +1120,23 @@ function Card({ card: c, chat, at, press, keys, className }: { card: UpdateCard;
   return (
     <>
       {line}
-      <AskOnCard ask={c.ask} task={task} space={chat} />
+      <AskOnCard ask={c.ask} task={task} taskTitle={t?.name} space={chat} />
     </>
   )
 }
 
 /** what a needs-you card's task asks, answered here as in the task's own chat: its question cards as they stand there,
     or the agent's plain question with a reply box */
-function AskOnCard({ ask, task, space }: { ask: CardAsk; task: string; space: string }) {
+function AskOnCard({ ask, task, taskTitle, space }: { ask: CardAsk; task: string; taskTitle?: string; space: string }) {
   // the cards answer into the task's chat; the words that answered one show on it
   const chat: Chat = { key: ask.chat, cli: '', messages: [] }
-  if (ask.questions) return ask.questions.map((q) => <QuestionCard key={q.id} q={q} chat={chat} msg={q.id} from={task} space={space} />)
-  return ask.reply ? <ReplyOnCard ask={ask} reply={ask.reply} task={task} space={space} /> : null
+  const source = { id: task, title: taskTitle }
+  if (ask.questions) return ask.questions.map((q) => <QuestionCard key={q.id} q={q} chat={chat} msg={q.id} from={task} space={space} source={source} />)
+  return ask.reply ? <ReplyOnCard ask={ask} reply={ask.reply} task={task} space={space} source={source} /> : null
 }
 
 /** a plain question, with no choices: its words, and a reply to it that goes to the task's agent */
-function ReplyOnCard({ ask, reply, task, space }: { ask: CardAsk; reply: NonNullable<CardAsk['reply']>; task: string; space: string }) {
+function ReplyOnCard({ ask, reply, task, space, source }: { ask: CardAsk; reply: NonNullable<CardAsk['reply']>; task: string; space: string; source: CardSource }) {
   const [text, setText] = useDraft(`card-reply:${ask.chat}:${reply.id}`)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -1154,7 +1155,7 @@ function ReplyOnCard({ ask, reply, task, space }: { ask: CardAsk; reply: NonNull
   }
   const a = ask.answered
   return (
-    <CardShell title={`${task} asks`}>
+    <CardShell title={`${task} asks`} source={source}>
       <div data-ask-text className="line-clamp-6 break-words whitespace-pre-wrap">{reply.text}</div>
       {a ? (
         <Sent>
@@ -1289,10 +1290,17 @@ function Typing({ chat, from }: { chat: Chat; from: string }) {
 
 /** a question's card: one width whatever its choices (the chat's width on a phone), its title in a header under a
  *  question mark, or a list for a plan. The title wraps onto as many lines as it needs, the mark on its first line */
-export function CardShell({ title, plan, action, children }: { title: string; plan?: boolean; action?: ReactNode; children: ReactNode }) {
+type CardSource = { id: string; title?: string }
+
+export function CardShell({ title, plan, action, source, children }: { title: string; plan?: boolean; action?: ReactNode; source?: CardSource; children: ReactNode }) {
   const Icon = plan ? PlanIcon : QuestionIcon
   return (
     <div data-card className="mt-2 w-[440px] max-w-full cursor-default overflow-hidden rounded-box bg-bg shadow-[inset_0_0_0_1px_var(--line2)]">
+      {source ? (
+        <div data-card-source className="px-3 pt-2 text-[0.8125rem] break-words text-fg2">
+          <span className="font-semibold">{source.id}</span>{source.title ? ` · ${source.title}` : ''}
+        </div>
+      ) : null}
       <div className="flex items-start gap-2 border-b border-line py-2 pr-2 pl-3 text-[0.9375rem]">
         <Icon className={clsx(ic, 'mt-[3px] text-fg2')} />
         <b data-card-title className="min-w-0 flex-1 font-semibold text-pretty break-words">{title}</b>
@@ -1313,7 +1321,7 @@ function answeredHow(q: Question) {
 const noteBox = clsx('min-h-10 w-full resize-none rounded-row bg-transparent px-3 py-[9px] placeholder:text-fg3 coarse:min-h-11 phone:min-h-11 phone:text-[1rem]', field)
 
 /** space: a copy of a task's question on its needs-you card in that space's chat, answered there */
-export function QuestionCard({ q, chat, msg, from, space }: { q: Question; chat: Chat; msg: string; from: string; space?: string }) {
+export function QuestionCard({ q, chat, msg, from, space, source }: { q: Question; chat: Chat; msg: string; from: string; space?: string; source?: CardSource }) {
   // nothing picked to start with: Send waits for a pick, so a stray tap never answers (a permission's Yes least of all)
   const [sel, setSel] = useState<number[]>([])
   // half-typed notes survive a reload
@@ -1345,7 +1353,7 @@ export function QuestionCard({ q, chat, msg, from, space }: { q: Question; chat:
     }
   }
   return (
-    <CardShell title={q.title} plan={q.kind === 'Plan'}>
+    <CardShell title={q.title} plan={q.kind === 'Plan'} source={source}>
       {q.screen ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-fg2">{q.screen}</pre> : null}
       {q.terminal && has('terminal') ? <button type="button" className="text-left text-accent" onClick={() => setUI({ term: chat.key, arts: null, kb: true })}>Open terminal</button> : null}
       {q.steps ? (

@@ -48,6 +48,7 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
       await page.goto(url())
       const card = page.locator('[data-whole="ask-open"] [data-card]')
       await card.waitFor()
+      expect(await card.locator('[data-card-source]').textContent()).toBe('LV-3 · Upload page for files')
       await card.getByRole('button', { name: 'Green' }).click()
       await card.getByRole('textbox', { name: 'Note' }).fill('the darker one')
       await card.getByRole('button', { name: 'Send', exact: true }).click()
@@ -64,8 +65,11 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
       const done = page.locator('[data-whole="ask-done"] [data-card]')
       expect(await done.textContent()).toContain('Answered here ·LV-3 chat')
       expect(await done.getByRole('button', { name: 'Send', exact: true }).count()).toBe(0)
-      // compact: it keeps the chat's width on a phone
-      for (const c of [card, reply, done]) expect((await c.boundingBox())!.width).toBeLessThanOrEqual(390)
+      // Every copy keeps its source inside the card, including plain replies and answered cards.
+      for (const c of [card, reply, done]) {
+        expect(await c.locator('[data-card-source]').textContent()).toBe('LV-3 · Upload page for files')
+        expect((await c.boundingBox())!.width).toBeLessThanOrEqual(390)
+      }
     } finally {
       world.act = act
       chat.messages = chat.messages.filter((m) => !m.id.startsWith('ask-'))
@@ -73,11 +77,61 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
     }
   }, 30_000)
 
+  for (const width of [390, 1440])
+    test(`forwarded permission cards keep their source and answer routing (${width}px)`, async () => {
+      const task = world.tasks.find((t) => t.id === 'LV-3')!
+      const oldName = task.name
+      task.name = 'Upload page for files with resumable transfers and a readable progress indicator on every device'
+      const chat = world.chats['p:vm-str:~']
+      const q = { id: 'source:permission', title: 'Allow writing the upload route?', kind: 'Question' as const, choices: [{ label: 'Allow once' }, { label: 'Deny' }], to: 'LV-3 agent' }
+      chat.messages.push(
+        { id: 'source-permission', who: 'agent', at: Date.now(), card: { id: 'source-permission', task: 'LV-3', status: 'need', text: 'needs you: Asks permission', ask: { chat: 'LV-3/Agent', open: true, questions: [q] } } },
+        { id: 'source-missing', who: 'agent', at: Date.now() + 1, card: { id: 'source-missing', task: 'MISSING-1', status: 'need', text: 'needs you', ask: { chat: 'MISSING-1/Agent', questions: [{ ...q, id: 'source:missing' }] } } },
+      )
+      const sent: Action[] = []
+      const act = world.act
+      world.act = async (a: Action) => a.type === 'answer' ? (sent.push(a), { ok: true }) : act(a)
+      const page = await browser!.newPage({ viewport: { width, height: 900 } })
+      try {
+        await page.goto(url())
+        const card = page.locator('[data-whole="source-permission"] [data-card]')
+        await card.waitFor()
+        const source = card.locator('[data-card-source]')
+        expect(await source.textContent()).toBe(`LV-3 · ${task.name}`)
+        expect(await card.locator('[data-card-title]').textContent()).toBe(q.title)
+        const size = await source.evaluate((el) => ({ width: el.clientWidth, content: el.scrollWidth, height: el.clientHeight, contentHeight: el.scrollHeight }))
+        expect(size.content).toBeLessThanOrEqual(size.width)
+        expect(size.contentHeight).toBeLessThanOrEqual(size.height)
+        expect((await card.boundingBox())!.width).toBeLessThanOrEqual(Math.min(width, 440))
+        expect(await card.getByRole('button', { name: 'Send', exact: true }).isDisabled()).toBe(true)
+        await card.getByRole('button', { name: 'Allow once', exact: true }).click()
+        await card.getByRole('button', { name: 'Send', exact: true }).click()
+        await until(() => sent.length > 0)
+        expect(sent[0]).toMatchObject({ type: 'answer', chat: 'LV-3/Agent', question: q.id, choice: 0, space: 'p:vm-str:~' })
+        // A later snapshot (answered in the task chat) preserves the source on the forwarded copy.
+        const copy = chat.messages.find((m) => m.id === 'source-permission')!.card!.ask!
+        copy.open = false
+        copy.questions = [{ ...q, sent: 0, elsewhere: { label: 'Answered in', chat: 'LV-3/Agent', name: 'LV-3 chat' } }]
+        await page.reload()
+        await card.waitFor()
+        expect(await source.textContent()).toBe(`LV-3 · ${task.name}`)
+        expect(await card.textContent()).toContain('Answered inLV-3 chat')
+        expect(await card.getByRole('button', { name: 'Send', exact: true }).count()).toBe(0)
+        expect(await page.locator('[data-whole="source-missing"] [data-card-source]').textContent()).toBe('MISSING-1')
+      } finally {
+        task.name = oldName
+        world.act = act
+        chat.messages = chat.messages.filter((m) => !m.id.startsWith('source-'))
+        await page.close()
+      }
+    }, 30_000)
+
   test('a choice card starts with nothing picked: Send waits for a pick or a typed answer', async () => {
     const page = await browser!.newPage({ viewport: { width: 1440, height: 900 } })
     await page.goto(at('place=p:mac:lilla-varlden&task=LV-3'))
     const card = page.locator('[data-card]').filter({ hasText: 'Which upload limit?' })
     await card.waitFor()
+    expect(await card.locator('[data-card-source]').count()).toBe(0)
     expect(await card.locator('button[aria-pressed=true]').count()).toBe(0)
     const send = card.getByRole('button', { name: 'Send', exact: true })
     expect(await send.isDisabled()).toBe(true)
