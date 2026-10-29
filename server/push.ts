@@ -10,8 +10,9 @@ export type PushFailure = { at: number; device: string; reason: string; endpoint
 
 /** The VAPID subject: who runs this sender, for the push services. Apple's turns down every alert signed for a
  *  localhost one (403 BadJwtToken), so it is a real https address unless SHEPHERDR_PUSH_CONTACT names another
- *  (https://… or mailto:…). */
-export const PUSH_CONTACT = process.env.SHEPHERDR_PUSH_CONTACT || 'https://github.com/eliasstravik/shepherdr'
+ *  (https://… or mailto:…; anything else is passed over). */
+const OWN_CONTACT = process.env.SHEPHERDR_PUSH_CONTACT?.trim()
+export const PUSH_CONTACT = OWN_CONTACT && /^(https:\/\/|mailto:)/.test(OWN_CONTACT) ? OWN_CONTACT : 'https://github.com/eliasstravik/shepherdr'
 
 export class Push {
   readonly publicKey: string
@@ -50,7 +51,10 @@ export class Push {
           },
           (e: { statusCode?: number; body?: string; message?: string }) => {
             // unsubscribed or gone: forgotten; anything else is said, never swallowed
-            if (e.statusCode === 404 || e.statusCode === 410) return gone.push(s.sub.endpoint)
+            if (e.statusCode === 404 || e.statusCode === 410) {
+              if (this.failure?.endpoint === s.sub.endpoint) this.failure = null
+              return gone.push(s.sub.endpoint)
+            }
             this.failure = { at: Date.now(), device: s.device, reason: failureWords(e), endpoint: s.sub.endpoint }
             console.warn(`push to ${URL.parse(s.sub.endpoint)?.host ?? 'a push service'} (${s.device}) failed: ${this.failure.reason}`)
           },

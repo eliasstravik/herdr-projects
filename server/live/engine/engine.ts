@@ -299,7 +299,7 @@ export function age(t: number) {
   return `${Math.floor(s / 86400)}d`
 }
 
-const ago = (t: number) => (age(t) === 'now' ? 'just now' : `${age(t)} ago`)
+export const ago = (t: number) => (age(t) === 'now' ? 'just now' : `${age(t)} ago`)
 
 function clock(t: number) {
   const d = new Date(t)

@@ -23,7 +23,7 @@ import { eventRules, eventsText, eventWords, matches, nextWords, runWords, timeR
 import { Browsers, type BrowserBridge, type BrowserClient } from './browser.ts'
 import { excerpt, line, tag } from './chatlines.ts'
 import { Chats, menuId, menuKeys, rememberReply } from './chats.ts'
-import { age, checkTitle, ended, Engine, fitStatus, type TaskRec } from './engine/engine.ts'
+import { age, ago, checkTitle, ended, Engine, fitStatus, type TaskRec } from './engine/engine.ts'
 import { listFolders, makeRepo, resolveInHome } from './folders.ts'
 import { sh } from './engine/git.ts'
 import { Artifacts, browserChecker, type ArtifactRec, type Checker } from './artifacts.ts'
@@ -477,7 +477,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   /** "Last alert to a phone failed 5m ago: 403 BadJwtToken", or nothing while alerts go through */
   private pushFailed() {
     const f = this.pushFailure()
-    return f ? `Last alert to ${f.device} failed ${age(f.at) === 'now' ? 'just now' : `${age(f.at)} ago`}: ${f.reason}` : undefined
+    return f ? `Last alert to ${f.device} failed ${ago(f.at)}: ${f.reason}` : undefined
   }
 
   chat(key: string): Chat | undefined {
@@ -2161,7 +2161,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       case 'doctor': {
         if (BOX) throw new Error(`shepherdr doctor checks every machine from the main one: run it there (${HOST} is run from it over SSH).`)
         const failed = this.pushFailed()
-        const own = `${NAME} (this machine, the main one): herdr ${this.agents.reachable ? 'answers' : 'does not answer'}${this.browsers ? `; shared browser ${this.browsers.status().ready ? 'ready' : this.browsers.status().hint}` : ''}${failed ? `; ${failed.toLowerCase()}` : ''}`
+        const own = `${NAME} (this machine, the main one): herdr ${this.agents.reachable ? 'answers' : 'does not answer'}${this.browsers ? `; shared browser ${this.browsers.status().ready ? 'ready' : this.browsers.status().hint}` : ''}${failed ? `; ${failed[0]!.toLowerCase()}${failed.slice(1)}` : ''}`
         return [own, ...((await this.peers?.doctor()) ?? [])].join('\n')
       }
       case 'secret': {

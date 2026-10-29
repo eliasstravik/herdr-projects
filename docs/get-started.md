@@ -35,6 +35,10 @@ device**.
 - **Omarchy** (or any Linux): in Chromium, ⋮ → Cast, save and share → **Install page as app**, or Omarchy's own
   Install → Web App with the link. Alerts show through mako while Chromium runs.
 
+An alert a push service turns down (Apple's or Google's) is said under Settings → Alerts on and in `shepherdr doctor`,
+until one to that device goes through. Alerts are signed for `https://github.com/eliasstravik/shepherdr`; set
+`SHEPHERDR_PUSH_CONTACT` (an `https://` or `mailto:` address) for one of your own.
+
 Tasks' alerts always come; what a space's coordinator says follows that space's Notify (All, Needs me or Off: [Spaces](spaces.md)). Each alert says the task and what it needs (`SHE-63 · Plan to approve`), and the question or the card's choices under
 it (`Approve the plan · Send it back`), so you can decide from the lock screen. A tap opens the app on that very card,
 lit up for a moment, its buttons ready (a done task: its card in the space's chat). One alert per task: its newer
