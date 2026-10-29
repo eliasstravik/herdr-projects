@@ -7,6 +7,7 @@
 import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { readJson } from '../store.ts'
 
 export interface BoxInfo {
   /** herdr's label for it: the machine's name in Shepherdr */
@@ -108,8 +109,9 @@ export function spawnOn(b: BoxInfo, argv: string[], o: { extra?: string[]; stdin
 /** who an agent is to the shepherdr command, and where that command is: here Shepherdr's own bin and server; on
  *  another machine the helper's bin first on its own PATH (its command finds the way back by itself) */
 export function agentEnv(chat: string, root: string): Record<string, string> {
-  if (BOX) return { SHEPHERDR_CHAT: chat, SHEPHERDR_MACHINE: BOX.label, PATH: BOX.path }
-  return { SHEPHERDR_CHAT: chat, SHEPHERDR_URL: process.env.SHEPHERDR_URL ?? `http://127.0.0.1:${process.env.SHEPHERDR_PORT ?? 7787}`, PATH: `${join(root, 'bin')}:${process.env.PATH ?? ''}` }
+  if (BOX) return { SHEPHERDR_CHAT: chat, SHEPHERDR_URL: '', SHEPHERDR_COMMAND: join(helperDir(BOX.home), 'bin', 'shepherdr'), SHEPHERDR_MACHINE: BOX.label, PATH: BOX.path }
+  // The listening live server owns these agents, never an inherited CLI target (which may be a demo).
+  return { SHEPHERDR_CHAT: chat, SHEPHERDR_COMMAND: join(root, 'bin', 'shepherdr'), SHEPHERDR_URL: `http://127.0.0.1:${readJson<{ port?: number }>('server.json', {}).port ?? process.env.SHEPHERDR_PORT ?? 7787}`, PATH: `${join(root, 'bin')}:${process.env.PATH ?? ''}` }
 }
 
 /** a port on the box, reached here: a local port forwarded over SSH to its 127.0.0.1 (a browser's stream, its

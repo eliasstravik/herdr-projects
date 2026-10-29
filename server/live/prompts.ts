@@ -15,6 +15,8 @@ const OWN = BOX ? helperDir(BOX.home) : ROOT
 export const SKILLS = join(OWN, 'skill')
 const skill = (name: string) => join(SKILLS, name, 'SKILL.md')
 
+export const commandLine = (chat: string) => `Your authoritative command is SHEPHERDR_CHAT=${JSON.stringify(chat)} ${join(OWN, 'bin', 'shepherdr')}. Use it if a shell finds another shepherdr. Never start a server to repair command routing. For a deliberately targeted dev/demo server, use the repo command with --url <URL>.`
+
 const base = (who: string, own: string) =>
   `You are ${who}, running inside Shepherdr (a herdr plugin the human uses from a phone, tablet or desktop). Read ${skill('shepherdr')} first (chat lines, cards, artifacts, the shepherdr command), then ${skill(own)} (your role's work). The human reads your replies in a calm chat: keep them short, plain and to the point.`
 
@@ -111,7 +113,7 @@ export function settingsBlock(id: string, t: Told) {
 /** a space's coordinator: its space's work; a home space's also its machine's (health, load and disk news, its
  *  processes, adding spaces); the main machine's home space's also every machine's overview (what needs the human,
  *  which alerts reach the phone, machine-wide alerts), as it can see every machine */
-export function coordinatorPrompt(place: { role: 'space' | 'home' | 'main'; name: string; path?: string; machine: string }, mode: Mode) {
+export function coordinatorPrompt(place: { role: 'space' | 'home' | 'main'; name: string; path?: string; machine: string; chat?: string }, mode: Mode) {
   const who = `the coordinator of the space ${place.name} on ${place.machine} (${place.path})`
   const duties =
     place.role === 'space'
@@ -119,7 +121,7 @@ export function coordinatorPrompt(place: { role: 'space' | 'home' | 'main'; name
       : place.role === 'home'
         ? `\n\nThis is ${place.machine}'s home space: you also look after the machine (its health, load and disk news, its processes) and add spaces on it when asked (shepherdr space add).`
         : `\n\nThis is the home space of the main machine, ${place.machine}: you also look after this machine (its health, load and disk news, its processes, adding spaces with shepherdr space add), and you keep the overview of every machine: what needs the human across them all (shepherdr task list shows every machine's tasks), which alerts reach the phone, and machine-wide alerts.`
-  return `${base(who, 'shepherdr-coordinator')}${duties}
+  return `${base(who, 'shepherdr-coordinator')}\n\n${commandLine(place.chat ?? place.name)}${duties}
 
 Autopilot is ${mode === 'autopilot' ? 'on' : 'off'} now. On Autopilot you get a heartbeat while idle, on its trigger: shepherdr heartbeat shows your HEARTBEAT.md and when, shepherdr heartbeat set changes it.`
 }
@@ -127,6 +129,7 @@ Autopilot is ${mode === 'autopilot' ? 'on' : 'off'} now. On Autopilot you get a 
 export function taskPrompt(t: { id: string; branch: string; base: string }, times = '') {
   return [
     base(`the agent of task ${t.id}`, 'shepherdr-agent'),
+    commandLine(`${t.id}/Agent`),
     `You work in your own git worktree on branch ${t.branch} (from ${t.base}): commit there, and don't switch branches.`,
     times,
     has('browser') ? browserLine(t.id) : '',

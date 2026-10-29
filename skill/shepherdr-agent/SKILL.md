@@ -46,7 +46,7 @@ build, check and review the work is your own judgment.
    a headless `codex exec`, `claude -p` or `pi -p` as the Reviewer setting suggests). Run a headless one in the
    foreground, its stdin closed (or it waits on stdin forever) and under a timeout, with your shell's timeout at its
    most: `timeout 540 codex exec -s read-only -o <out> "<prompt>" < /dev/null`. Never in the background, and never end
-   your turn while a review runs. Timed out or failed: one subagent review instead. Give it the brief, the diff and the
+   your turn while a review runs. Timed out or failed: one subagent review instead. Give it the authoritative command from your launch prompt and `SHEPHERDR_CHAT=<task-id>/Reviewer` (never an inherited other task), the brief, the diff and the
    repo's rules, never your own reasoning; ask for what this change
    broke, left undone or added beyond the brief, each with proof and tagged critical (breaks or loses users' work),
    major (a user would hit it, or it proves a claim false), minor (rarely hit) or trivial (style). Fix every finding at

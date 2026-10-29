@@ -12,6 +12,7 @@ const { LiveSource } = await import('../server/live/source.ts')
 const { HOST, NAME, placeId, Places } = await import('../server/live/places.ts')
 const { herdr } = await import('../server/live/herdr.ts')
 const { hidden } = await import('../server/live/agents.ts')
+const { isAgentProcess } = await import('../server/live/agent-process.ts')
 const { heartbeatFile } = await import('../server/live/heartbeat.ts')
 const { carryOn } = await import('../server/live/retry.ts')
 const { Worktrees } = await import('../server/live/engine/worktrees.ts')
@@ -446,7 +447,16 @@ describe("a task's CLI, model and effort", () => {
     expect(src.agents.args(rec('claude', 'default', 'default'), false)).toEqual(hooks)
     // a level its model lacks goes in as the nearest it has
     expect(src.agents.args(rec('claude', 'Haiku 5.5', 'ultra'), false)).toEqual([...hooks, '--model', 'claude-haiku-5-5', '--effort', 'max'])
-    expect(src.agents.args(rec('codex', 'gpt-6-luna', 'ultra'), false)).toEqual(['--dangerously-bypass-approvals-and-sandbox', '-m', 'gpt-6-luna', '-c', 'model_reasoning_effort="max"'])
+    expect(src.agents.args(rec('codex', 'gpt-6-luna', 'ultra'), false).slice(2)).toEqual(['--dangerously-bypass-approvals-and-sandbox', '-m', 'gpt-6-luna', '-c', 'model_reasoning_effort="max"'])
+    for (const key of ['space-key', 'SHE-9/Agent', 'SHE-9/Reviewer']) {
+      for (const resume of [false, true]) {
+        const args = src.agents.args({ ...rec('codex', '', ''), key, env: { SHEPHERDR_CHAT: 'ST-1/Reviewer', SHEPHERDR_URL: 'http://127.0.0.1:7787' } }, resume)
+        const policy = args.find((a) => a.startsWith('shell_environment_policy.set='))!
+        expect(policy).toContain(`"SHEPHERDR_CHAT"="${key}"`)
+        expect(policy).toContain('"SHEPHERDR_COMMAND"=')
+        expect(policy).toContain('"PATH"=')
+      }
+    }
     expect(src.agents.args(rec('pi', 'openai/gpt-5.5', 'lowest'), false)).toEqual(['--model', 'openai/gpt-5.5', '--thinking', 'minimal'])
     expect(src.agents.args(rec('gemini', 'x', 'high'), false)).toEqual([])
   })
@@ -2034,4 +2044,11 @@ describe('visible launch controls', () => {
       src.settings.set('task.agent', null, { space: p.name })
     }
   })
+})
+
+test('native and npm agent CLI process identities', () => {
+  expect(isAgentProcess('codex', ['/opt/bin/codex', '--resume'])).toBe(true)
+  expect(isAgentProcess('pi', ['/usr/bin/node', '/opt/node_modules/@mariozechner/pi-coding-agent/dist/cli.js'])).toBe(true)
+  expect(isAgentProcess('claude', ['/usr/bin/node', '/opt/node_modules/@anthropic-ai/claude-code/cli.js'])).toBe(true)
+  expect(isAgentProcess('pi', ['/usr/bin/node', '/some/app.js', 'pi'])).toBe(false)
 })

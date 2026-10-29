@@ -122,6 +122,7 @@ function browserBinary(os: string, arch: string) {
 export function helperFiles(os: string, arch: string): [string, string][] {
   const files: [string, string][] = [
     ['bin/shepherdr', join(ROOT, 'helper', 'shepherdr')],
+    ['route.pl', join(ROOT, 'helper', 'route.pl')],
     ['hook.pl', join(ROOT, 'helper', 'hook.pl')],
     ['mirror.pl', join(ROOT, 'helper', 'mirror.pl')],
     ['health.pl', join(ROOT, 'helper', 'health.pl')],

@@ -889,7 +889,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       workspace: c.workspace,
       was: (c as { was?: string }).was,
       tab: c.tab,
-      system: coordinatorPrompt({ role: this.roleOf(id), name: c.label, path: c.path, machine: NAME }, this.places.mode(id)),
+      system: coordinatorPrompt({ role: this.roleOf(id), name: c.label, path: c.path, machine: NAME, chat: id }, this.places.mode(id)),
       env: agentEnv(id, ROOT),
     }
     return o.restart ? this.agents.restart(spec, o.restart) : this.agents.ensure(spec)

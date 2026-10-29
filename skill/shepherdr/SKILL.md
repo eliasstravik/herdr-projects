@@ -14,6 +14,17 @@ Shepherdr started you, as a space's coordinator or as one task's agent.
 How you talk to the human and use the `shepherdr` command, whatever your role; `shepherdr help` lists every command
 and flag. Your role's own work is in its own skill (References).
 
+## Command routing
+
+The launch prompt names your authoritative command and chat identity. `SHEPHERDR_COMMAND` also names that command.
+On a remote machine it is `~/.shepherdr/helper/bin/shepherdr`, which uses `helper/main.sock`, not a local web port.
+Use the launch identity: a coordinator's space key, `<task-id>/Agent`, or `<task-id>/Reviewer` for a reviewer.
+Do not trust another inherited `SHEPHERDR_CHAT`, `SHEPHERDR_URL`, or a repo command ahead of the helper on PATH.
+The repo command and helper recover the owning live session from a live process binding and its owning folder, even after a shell resets PATH or a shared tool executor inherits another session’s environment.
+A deliberately different `SHEPHERDR_URL` is preserved by the repo command; `shepherdr --url <URL> ...` explicitly
+selects even the same URL the session inherited. The installed helper always uses its main.sock.
+Never start a live server to repair CLI routing. A demo preview belongs on its own non-default loopback port.
+
 ## Inputs
 
 - Lines in your terminal: the human's words, chat lines (below), and Shepherdr's own lines in `<shepherdr>` tags, each

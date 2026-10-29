@@ -14,6 +14,14 @@ use JSON::PP;
 
 my $dir = File::Basename::dirname(Cwd::abs_path($0));
 my $sock = "$dir/../main.sock";
+# Older helper copies still work alone; an updated installation repairs running sessions too.
+my $routing = "$dir/../route.pl";
+if (-f $routing) {
+  require $routing;
+  my $route = session_route();
+  $ENV{SHEPHERDR_CHAT} = routed_chat($route) if $route;
+}
+
 my $stdin;
 # shepherdr secret run NAME … -- <command>: only the names go to Shepherdr; the command runs here, with the values in
 # its environment. shepherdr secret env writes them to a file here. Neither prints a value (as server/cli.ts)

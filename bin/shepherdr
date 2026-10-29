@@ -1,4 +1,4 @@
 #!/bin/sh
 # The shepherdr command: agents (and you) talk to the Shepherdr server on this machine.
 here=$(cd "$(dirname "$0")/.." && pwd)
-exec bun "$here/server/cli.ts" "$@"
+exec perl "$here/helper/route.pl" "$here/server/cli.ts" "$@"

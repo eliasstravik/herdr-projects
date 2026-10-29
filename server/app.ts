@@ -193,7 +193,7 @@ export function startApp({ source, dist, push, port, host = '127.0.0.1', updates
         }
         if (path === '/api/cli' && req.method === 'POST') {
           const cli = (source as Source & { cli?(a: string[], c: { chat?: string; cwd?: string; stdin?: string; local?: boolean }): Promise<{ out: string; code: number }> }).cli
-          if (!cli) return json({ out: 'The demo has no shepherdr command.\n', code: 1 })
+          if (!cli) return json({ out: source.kind === 'demo' ? 'This demo server does not accept shepherdr commands. Target your owning live server or installed helper.\n' : 'This server does not provide the shepherdr command. Check the target URL or installed helper.\n', code: 1 })
           const b = (await req.json()) as { args: string[]; chat?: string; cwd?: string; stdin?: string }
           // some commands wait long (shepherdr checks waits for GitHub's): no idle cut-off for these
           srv.timeout(req, 0)

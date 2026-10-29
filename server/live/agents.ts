@@ -16,9 +16,11 @@ import { tag } from './chatlines.ts'
 import { hookSettings, HookLogs, type Said } from './readers/hooks.ts'
 import * as task from './mfs.ts'
 import { boxDir, mirrored } from './mfs.ts'
-import { runSync } from './box.ts'
+import { agentEnv, BOX, helperDir, run, runSync } from './box.ts'
+import { ROOT } from '../root.ts'
 import { leftAtPrompt } from './commands.ts'
 import { paneWrong, type Wrong } from './revive.ts'
+import { isAgentProcess } from './agent-process.ts'
 
 /** a log's name (its session id), wherever it lies: one named both by its mirrored path and by its own is one log */
 const logName = (f: string) => f.slice(f.lastIndexOf('/') + 1)
@@ -180,6 +182,9 @@ export class Agents extends Emitter<Events> {
   private byName = new Map<string, string>()
   private timer: ReturnType<typeof setInterval> | null = null
   private sub: Subscription
+  private routesAt = 0
+  private routing = false
+  private routes = new Map<string, string>()
   private starting = new Map<string, Promise<AgentInfo | null>>()
   /** agents being stopped for a restart: what you send waits for the one it starts */
   private stopping = new Set<string>()
@@ -329,6 +334,11 @@ export class Agents extends Emitter<Events> {
         this.told.set(key, now)
         if (was !== now) this.changed(key, now)
       }
+      // Repair running sessions without interrupting them, including ones restored by herdr.
+      if (Date.now() - this.routesAt > 30_000 && !this.routing) {
+        this.routesAt = Date.now()
+        void this.repairRoutes()
+      }
       await this.readBackground()
       // learn log files herdr names (its agent integrations report them)
       for (const [name, key] of this.byName) this.learnSession(key, this.live.get(name))
@@ -350,6 +360,31 @@ export class Agents extends Emitter<Events> {
       }
       this.checkStranded()
     }
+  }
+
+  /** Bind the actual CLI process, not HERDR_PANE_ID (old shells can inherit another pane's id). */
+  private async bindRoute(r: AgentRecord, pane: string) {
+    const p = await herdr.processInfo(pane)
+    const proc = p.foreground_processes?.find((x) => x.pid && isAgentProcess(r.kind, x.argv))
+    if (!proc?.pid) return
+    const env = agentEnv(r.key, ROOT)
+    const route = { chat: r.key, cwd: r.cwd, ...(BOX ? { helper: env.SHEPHERDR_COMMAND } : { url: env.SHEPHERDR_URL }) }
+    const signature = JSON.stringify([proc.pid, route])
+    if (this.routes.get(r.key) === signature) return
+    const router = BOX ? join(helperDir(BOX.home), 'route.pl') : join(ROOT, 'helper', 'route.pl')
+    const result = await run(['perl', router, '--bind', String(proc.pid), JSON.stringify(route)], { timeoutMs: 5000 })
+    if (result.code) throw new Error(result.err || 'Could not bind agent command routing')
+    this.routes.set(r.key, signature)
+  }
+
+  private async repairRoutes() {
+    this.routing = true
+    try {
+      for (const r of Object.values(this.records)) {
+        const a = this.live.get(r.name)
+        if (a) await this.bindRoute(r, a.pane_id).catch((e) => console.error(`shepherdr: routing ${r.key}: ${e.message}`))
+      }
+    } finally { this.routing = false }
   }
 
   /**
@@ -553,7 +588,7 @@ export class Agents extends Emitter<Events> {
   /** start (or resume) this chat's agent; resolves once herdr says it is ready for input */
   ensure(spec: Spec): Promise<AgentInfo | null> {
     const running = this.live.get(spec.name)
-    if (running) return Promise.resolve(running)
+    if (running) return this.bindRoute({ ...this.records[spec.key], ...spec } as AgentRecord, running.pane_id).then(() => running)
     const p0 = this.starting.get(spec.key)
     if (p0) return p0
     const p = this.launch(spec).finally(() => this.starting.delete(spec.key))
@@ -601,6 +636,7 @@ export class Agents extends Emitter<Events> {
       }
     }
     await this.refresh()
+    await this.bindRoute(r, pane)
     // CLIs without an option for extra instructions get them first, hidden from the chat. Both wait until the CLI is
     // ready, ahead of what you sent meanwhile (a restart)
     this.queue(r.key, [r.kind !== 'claude' && r.kind !== 'pi' && !resume && r.system ? hidden(r.system) : '', first ?? ''].filter(Boolean), true)
@@ -632,6 +668,10 @@ export class Agents extends Emitter<Events> {
       if (model) a.push('--model', model)
       if (effort) a.push('--thinking', effort)
     } else if (r.kind === 'codex') {
+      // Codex tools have their own environment policy. Set the owner explicitly even on resume;
+      // do not depend on the pane's login shell or its stale inherited environment.
+      const env = { ...r.env, ...agentEnv(r.key, ROOT) }
+      a.push('-c', `shell_environment_policy.set={${Object.entries(env).map(([k, v]) => `${JSON.stringify(k)}=${JSON.stringify(v)}`).join(',')}}`)
       // its own last log: a task it took over keeps the logs of the agent before it too
       const id = resume ? r.logs.findLast((f) => (logKind(f) ?? 'codex') === 'codex')?.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/)?.[1] : undefined
       if (id) a.unshift('resume', id)

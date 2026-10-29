@@ -10,7 +10,7 @@ const MASKED_MIN = 4
 const MASK = '********'
 
 const all = process.argv.slice(2)
-const url = process.env.SHEPHERDR_URL ?? `http://127.0.0.1:${readJson<{ port?: number }>('server.json', {}).port ?? process.env.SHEPHERDR_PORT ?? 7787}`
+const url = process.env.SHEPHERDR_URL || `http://127.0.0.1:${process.env.SHEPHERDR_PORT || readJson<{ port?: number }>('server.json', {}).port || 7787}`
 // shepherdr secret run NAME … -- <command>: only the names go to Shepherdr; the command runs here, with the values in
 // its environment. shepherdr secret env writes them to a file here. Neither prints a value
 const secret = all[0] === 'secret' ? all[1] : undefined
@@ -43,7 +43,7 @@ try {
     process.stderr.write(noAnswer(wait, args[0] === 'merge' ? args[1] : args[2]))
     process.exit(1)
   }
-  process.stderr.write(`Shepherdr is not running here (${url}). Start it from herdr's plugin actions, or: bun ${import.meta.dir}/main.ts\n`)
+  process.stderr.write(`Cannot reach the shepherdr command at ${url}. Check the target URL or use this session's installed helper. Do not start another server to repair routing.\n`)
   process.exit(2)
 }
 if (j.secrets && secret === 'run') process.exit(await run(command, j.secrets))
