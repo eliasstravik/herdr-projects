@@ -596,8 +596,10 @@ const GROUP_WORDS: Record<GroupBy, string> = { status: 'Status', machine: 'Machi
  *  and then space (place, the place picked, is for plugins of old) */
 function TasksMenu(_: { place: Place }) {
   const snap = useSnap()!
-  const level = useStore((s) => listView(s.ui, snap).level)
-  const by = groupFor(useUI((u) => u.groups), level)
+  const view = useStore((s) => listView(s.ui, snap))
+  const level = view.level
+  const chosen = useUI((u) => u.groups)
+  const by = view.attention ? 'project' : groupFor(chosen, level)
   const phone = useUI((u) => u.device === 'phone')
   const [open, setOpen] = useState(false)
   const choices = groupChoices(level)

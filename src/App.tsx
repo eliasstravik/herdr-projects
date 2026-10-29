@@ -368,7 +368,7 @@ function PinButton() {
   )
 }
 
-/** These badges count tasks in the panel’s scope; coordinator requests live in chat’s summary. */
+/** These badges count task requests in the panel’s scope; coordinator requests live in chat’s summary. */
 function TaskAttention() {
   const snap = useSnap()!
   const view = useStore((s) => listView(s.ui, snap))

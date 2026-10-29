@@ -1,5 +1,5 @@
 // Machine health: a machine's home space carries a small meter at the top right of its chat, one thin bar each for CPU,
-// memory, disk (and a GPU), with the numbers in words where the header has room. Calm: grey while all is well, amber
+// memory, disk (and a GPU), with a short status where the header has room. Calm: grey while all is well, amber
 // while new tasks wait for room, red past an alert limit. A tap opens what is behind it (the numbers, the tasks at
 // work against the limit, herdr) and the machine's settings. Shepherdr samples it every 30 seconds (health.ts).
 import clsx from 'clsx'
