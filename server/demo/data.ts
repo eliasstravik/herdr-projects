@@ -448,6 +448,7 @@ export function chats(): Record<string, Chat> {
       c('HP-204/Agent', 'Claude Code', [
         m({ who: 'you', text: 'Dark mode for rendered pages\n\n' + (tasks().find((t) => t.id === 'HP-204')?.desc ?? '') }),
         m({ who: 'agent', text: 'Got it: dark pages, plan first. I’ll wait for your go.' }),
+        m({ who: 'you', text: 'Keep code blocks light in dark mode too.', waiting: true, waitsFor: 'queued' }),
       ]),
       c('HP-203/Agent', 'Claude Code', [
         m({ who: 'you', text: 'Release 1.2.27\n\n' + (tasks().find((t) => t.id === 'HP-203')?.desc ?? '') + '\n\nQueued: this task waits for HP-202 to be done. Don’t start the work yet: reply in one line that you have the brief, and end your turn.' }),

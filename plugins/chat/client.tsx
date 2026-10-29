@@ -167,6 +167,10 @@ function Bubble({ msg, chat, from, out, last }: { msg: Message; chat: Chat; from
                     const blocker = chat.messages.findLast((m) => m.question?.sent === undefined && !!m.question && !m.waiting)
                     return blocker ? <LinkButton onClick={() => jumpTo(chat.key, blocker.id, { card: true })}>Go to question</LinkButton> : null
                   })()}
+                </> : msg.waitsFor === 'queued' ? <>
+                  {waitLine(msg.waitsFor)}.{' '}
+                  {/* Claude Code sends what it queued at once on Ctrl+Enter, stopping its turn; with nothing queued it does nothing */}
+                  <LinkButton onClick={() => act({ type: 'keys', chat: chat.key, keys: ['ctrl+enter'] })}>Send now</LinkButton>
                 </> : waitLine(msg.waitsFor)}</div> : null}
                 {msg.text ? <div ref={text} data-text>{you ? <YourText text={msg.text} /> : <Fold id={msg.id}><Markdown text={msg.text} /></Fold>}</div> : null}
               </div>,
