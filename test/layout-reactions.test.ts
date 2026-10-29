@@ -373,8 +373,9 @@ describe.skipIf(!browser)('a news card', () => {
       const page = await browser!.newPage({ viewport: { width, height: 844 } })
       await page.goto(url())
       await page.waitForSelector('[data-msg="pr-health"] [data-anchor]')
-      // Status-only updates are folded together; the original cards remain inspectable.
-      await page.locator('details').filter({ has: page.locator('[data-msg="pr-ready"]') }).locator('summary').click()
+      // Every update starts visible in the normal chat stream.
+      expect(await page.getByText(/^Task updates ·/).count()).toBe(0)
+      for (const c of cards) expect(await page.locator(`[data-msg="${c.id}"]`).isVisible()).toBe(true)
       for (const c of cards) {
         const got = await page.$eval(`[data-msg="${c.id}"]`, (m) => {
           const card = m.querySelector('[data-anchor]') as HTMLElement

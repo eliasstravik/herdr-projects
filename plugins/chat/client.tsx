@@ -1213,14 +1213,8 @@ function PrOnCard({ pr, className }: { pr: { number: number; url: string }; clas
 const Messages = memo(function Messages({ chat, from }: { chat: Chat; from: string }) {
   const outbox = useStore((s) => s.outbox)
   const coordinator = useSnap()?.places.some((p) => p.chat === chat.key)
-  const finding = useUI((u) => !!u.find || !!u.jump)
-  const target = useUI((u) => u.jump ?? u.find?.id)
-  const linked = useRef(new Set<string>())
-  if (target) linked.current.add(target)
-  const updates = coordinator && !finding ? chat.messages.filter((m) => !linked.current.has(m.id) && !linked.current.has(m.card?.id ?? '') && m.card?.task && m.card.status && m.card.status !== 'work' && !m.card.ask && !m.card.health && !m.card.restart && !m.card.red && !m.reactions?.length) : []
-  const hidden = new Set(updates)
   type Item = { at: number; msg: Message; out?: Outgoing; last?: boolean } | { at: number; album: Message[]; out?: Outgoing; last?: boolean }
-  const items: Item[] = chat.messages.filter((m) => !hidden.has(m)).map((msg) => ({ at: msg.at ?? 0, msg }))
+  const items: Item[] = chat.messages.map((msg) => ({ at: msg.at ?? 0, msg }))
   items.sort((a, b) => a.at - b.at)
   // what you just sent comes last, in one list with the rest: when it comes back it keeps its place in the list, so
   // nothing is drawn again (a picture doesn't load twice)
@@ -1275,10 +1269,6 @@ const Messages = memo(function Messages({ chat, from }: { chat: Chat; from: stri
         )
       })}
       {coordinator ? <AttentionSummary chat={chat} /> : null}
-      {updates.length ? <details className="text-[0.8125rem] text-fg3 phone:text-[0.9375rem]">
-        <summary className="cursor-pointer py-2">Task updates · {updates.length}</summary>
-        <div className="flex flex-col gap-3 py-2">{updates.map((msg) => <Bubble key={msg.id} msg={msg} chat={chat} from={from} />)}</div>
-      </details> : null}
       {registry.chatTail.map(({ View }, i) => (
         <View key={i} chat={chat} from={from} />
       ))}
