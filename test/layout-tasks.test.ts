@@ -499,20 +499,28 @@ describe.skipIf(!browser)('To do always shows; Automations only once there is on
     await ctx.close()
   }, 30_000)
 
-  test('an automation reads name, when (in words) and the task it adds; a tap shows it in full with its next and last runs; run now, pause and remove, no adding or editing (phone)', async () => {
+  test('an automation summarizes its trigger and shows its task only when expanded; a tap shows it in full with its next and last runs; run now, pause and remove, no adding or editing (phone)', async () => {
     const ctx = await browser!.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, colorScheme: 'dark' })
     const page = await ctx.newPage()
     await page.goto(`http://127.0.0.1:${server!.port}/?place=${encodeURIComponent('p:vm-str:gtm')}&tab=tasks`)
     const row = page.locator('li[aria-expanded]', { hasText: 'Flaky tests' })
     await row.waitFor()
     // its trigger in words, in the time zone of Settings
-    expect(await row.innerText()).toBe('Flaky tests\nEvery day at 7:00 (Stockholm) · adds: Rerun the flaky test suite')
-    expect(await page.locator('li[aria-expanded]', { hasText: 'Dependency bump' }).innerText()).toBe('Dependency bump\nPaused · The last Friday of the month at 8:00 (Stockholm) · adds: Bump dependencies')
+    expect(await row.innerText()).toBe('Flaky tests\nEvery day at 7:00 (Stockholm)')
+    expect(await page.locator('li[aria-expanded]', { hasText: 'Dependency bump' }).innerText()).toBe('Dependency bump\nPaused · The last Friday of the month at 8:00 (Stockholm)')
+    const event = page.locator('li[aria-expanded]', { hasText: 'Changelog' })
+    expect(await event.innerText()).toBe('Changelog\nWhen a task is merged')
+    await event.tap()
+    const eventDetail = page.locator(`#${await event.getAttribute('aria-controls')}`)
+    expect(await eventDetail.locator('dt').allInnerTexts()).toEqual(['When', 'Task', 'Last runs'])
+    expect(await eventDetail.locator('dd').nth(1).innerText()).toBe('Update the changelog')
+    expect(await event.innerText()).toBe('Changelog\nWhen a task is merged')
+    await event.tap()
     expect(await row.getAttribute('aria-expanded')).toBe('false')
     await row.tap()
     expect(await row.getAttribute('aria-expanded')).toBe('true')
     const detail = page.locator(`#${await row.getAttribute('aria-controls')}`)
-    expect(await detail.locator('dt').allInnerTexts()).toEqual(['When', 'Next', 'Adds', 'Brief', 'Last runs'])
+    expect(await detail.locator('dt').allInnerTexts()).toEqual(['When', 'Next', 'Task', 'Brief', 'Last runs'])
     // its next three runs
     expect((await detail.locator('dd').nth(1).innerText()).split(' · ')).toHaveLength(3)
     expect(await detail.locator('dd').nth(1).innerText()).toMatch(/7:00$/)

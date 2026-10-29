@@ -707,7 +707,7 @@ function SpaceAutomations({ place, note }: { place: Place; note?: string }) {
                 <Row two aria-expanded={on} aria-controls={id} onActivate={() => setOpen(on ? null : a.name)}>
                   {/* a clock, not a box: an automation runs on its own, there is nothing to tick; as wide as a status dot */}
                   <ClockIcon className={clsx(ic, '-mx-px h-lh text-fg3 phone:mx-0', !a.on && 'opacity-50')} />
-                  <RowText sub={`${a.on ? '' : 'Paused · '}${a.when} · adds: ${a.what}`}>{a.name}</RowText>
+                  <RowText sub={`${a.on ? '' : 'Paused · '}${a.when}`}>{a.name}</RowText>
                   <DownIcon aria-hidden className={clsx(ic, 'h-lh text-fg3', on && 'rotate-180')} />
                 </Row>
                 {on ? <AutomationDetail id={id} place={place} a={a} /> : null}
@@ -742,7 +742,7 @@ function AutomationDetail({ id, place, a }: { id: string; place: Place; a: Autom
             <dd className="text-fg2 tabular-nums">{a.next.join(' · ')}</dd>
           </>
         ) : null}
-        <dt className="font-medium text-fg">Adds</dt>
+        <dt className="font-medium text-fg">Task</dt>
         <dd className="text-pretty break-words text-fg2">{a.what}</dd>
         {a.brief ? (
           <>
