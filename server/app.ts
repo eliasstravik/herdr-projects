@@ -125,6 +125,10 @@ export function startApp({ source, dist, push, port, host = '127.0.0.1', updates
       }
 
       try {
+        if (path === '/api/chat') {
+          const key = q.get('chat') ?? ''
+          return json({ chat: source.chat(key) ?? null, status: source.chatStatus?.(key) })
+        }
         if (path === '/api/snapshot') return json(source.snapshot())
         // which Shepherdr answers: a start from another plugin folder or version stops it (scripts/plugin.ts)
         if (path === '/api/version') return json(running())
@@ -315,7 +319,7 @@ export function sameSite(req: Request, path: string): boolean {
   if (writes && origin !== null && req.headers.get('x-shepherdr') !== '1') return false
   // fetch metadata: a cross-site request is never let through, Origin or not
   const site = req.headers.get('sec-fetch-site')
-  if (site === 'cross-site' && (writes || path === '/api/ws' || path === '/api/voice' || path === '/api/browser' || path === '/api/file' || path === '/api/folders' || path === '/api/worktree' || path === '/api/activity')) return false
+  if (site === 'cross-site' && (writes || path === '/api/ws' || path === '/api/voice' || path === '/api/browser' || path === '/api/file' || path === '/api/folders' || path === '/api/worktree' || path === '/api/activity' || path === '/api/chat')) return false
   return true
 }
 

@@ -86,6 +86,7 @@ export function startVoice(tools: VoiceTools, out: { send(d: ArrayBuffer | strin
     if (ended) return
     ws = new WebSocket(signed_url)
     ws.onopen = () => {
+      if (ended) { ws?.close(); return }
       ws!.send(
         JSON.stringify({
           type: 'conversation_initiation_client_data',
@@ -93,9 +94,12 @@ export function startVoice(tools: VoiceTools, out: { send(d: ArrayBuffer | strin
           conversation_config_override: { agent: { prompt: { prompt: PROMPT.replace('{{agent}}', tools.name) }, first_message: `You're through to ${tools.name}. Go ahead.` } },
         }),
       )
-      offReply = tools.onReply((text) => ws?.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: 'user_message', text: `(${tools.name} replied in the chat: "${text}") Read this reply out, briefly.` })))
+      try {
+        offReply = tools.onReply((text) => !ended && ws?.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: 'user_message', text: `(${tools.name} replied in the chat: "${text}") Read this reply out, briefly.` })))
+      } catch (e) { fail((e as Error).message); ws?.close() }
     }
     ws.onmessage = async (e) => {
+      if (ended) return
       const m = JSON.parse(String(e.data))
       if (m.type === 'ping') ws!.send(JSON.stringify({ type: 'pong', event_id: m.ping_event?.event_id }))
       // the screen shows what the call is doing: through, then thinking once you've said something
@@ -117,10 +121,15 @@ export function startVoice(tools: VoiceTools, out: { send(d: ArrayBuffer | strin
           is_error = true
           result = (err as Error).message
         }
-        ws!.send(JSON.stringify({ type: 'client_tool_result', tool_call_id: c.tool_call_id, result, is_error }))
+        if (ended || ws?.readyState !== WebSocket.OPEN) return
+        ws.send(JSON.stringify({ type: 'client_tool_result', tool_call_id: c.tool_call_id, result, is_error }))
       }
     }
-    ws.onclose = () => !ended && out.close()
+    ws.onclose = () => {
+      offReply?.()
+      offReply = null
+      if (!ended) { ended = true; out.close() }
+    }
   })().catch((e) => fail((e as Error).message))
   return {
     audio(d: ArrayBuffer) {
@@ -129,6 +138,7 @@ export function startVoice(tools: VoiceTools, out: { send(d: ArrayBuffer | strin
     end() {
       ended = true
       offReply?.()
+      offReply = null
       ws?.close()
     },
   }

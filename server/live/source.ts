@@ -517,6 +517,10 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     return BOX ? s : { ...s, settings: secretPages(s.settings, this.vault.names()) }
   }
 
+  chatStatus(key: string): string {
+    return this.agents.status(key)
+  }
+
   chat(key: string): Chat | undefined {
     if (this.peers?.owner(key)) return this.peers.chat(key)
     const c = { ...this.chats.chat(key), restart: this.restartHintOf(key) }
@@ -1408,6 +1412,10 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   async act(a: Action): Promise<unknown> {
     const peer = this.peers?.ownerOfAction(a)
     if (peer) return this.peers!.act(peer, a)
+    return this.actLocal(a)
+  }
+
+  private async actLocal(a: Action): Promise<unknown> {
     switch (a.type) {
       case 'send':
         // a slash command goes into the CLI as you typed it, for the CLI to run
@@ -1903,48 +1911,92 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       out.send(JSON.stringify({ type: 'error', message: 'Voice is not in the plugin list.' }))
       return { audio() {}, end() {} }
     }
-    const resolve = (to?: string) => {
-      if (!to) return chat
-      const n = to.toLowerCase()
-      const place = this.placeList().find((p) => p.name.toLowerCase() === n)
-      if (place) return place.chat
-      const m = n.match(/([a-z]+-\d+)/)
-      if (m) return `${m[1].toUpperCase()}/Agent`
-      return chat
+    try {
+      return startVoice(this.voiceTools(chat), out)
+    } catch (e) {
+      out.send(JSON.stringify({ type: 'error', message: (e as Error).message }))
+      out.close()
+      return { audio() {}, end() {} }
     }
-    return startVoice(
-      {
-        name: this.chatName(chat),
-        send: async (text, to) => {
-          if (this.chats.closeAsks(resolve(to), text)) this.emit('snapshot')
-          const r = (await this.send(resolve(to), text, [])) as { waiting?: boolean; waitsFor?: string }
-          if (!r.waiting) return 'Sent.'
-          if (r.waitsFor === 'menu') return 'It waits until the question on its screen is answered; it goes in then.'
-          return r.waitsFor === 'turn' ? 'It goes in once the agent finishes this step.' : 'It goes in once the agent has started.'
-        },
-        read: async (to) => {
-          const k = resolve(to)
-          const c = this.chats.chat(k)
-          const st = this.agents.status(k)
-          return `${this.chatName(k)} is ${st === 'gone' ? 'not running' : st}.\n${c.messages
-            .slice(-8)
-            .map((m) => `${m.who === 'you' ? this.user : this.chatName(k)}: ${excerpt(m.text ?? m.question?.title ?? (m.artifact ? tag('artifact', { id: m.artifact.id, title: this.artifacts.get(m.artifact.id)?.title ?? 'deleted' }) : ''), 300)}`)
-            .join('\n')}`
-        },
-        overview: async () => {
-          const s = this.snapshot()
-          return s.tasks.filter((t) => !t.archived).map((t) => `${t.id} ${t.name}: ${t.state}${statusLine(t) ? ` (${statusLine(t)})` : ''}`).join('\n') || 'No tasks.'
-        },
-        onReply: (fn) => {
-          const set = this.replyFns.get(chat) ?? new Set()
-          set.add(fn)
-          this.replyFns.set(chat, set)
-          this.lastAgentMsg.set(chat, this.chats.lastReply(chat) ?? '')
-          return () => set.delete(fn)
-        },
+  }
+
+  /** Voice uses the same actions and chat views as the screen; the owner stays attached to a target. */
+  voiceTools(chat: string): import('./voice.ts').VoiceTools {
+    const targets = () => {
+      const local = this.placeList().filter((p) => !this.peers?.owner(p.chat)).map((p) => ({ key: p.chat, name: p.name, machine: HOST, peer: undefined as ReturnType<Machines['owner']> }))
+      local.push(...this.engine.tasks.flatMap((t) => ['Agent', 'Reviewer'].map((role) => ({ key: `${t.id}/${role}`, name: role === 'Agent' ? t.id : `${t.id} reviewer`, machine: HOST, peer: undefined }))))
+      for (const peer of this.peers?.list() ?? []) {
+        local.push(...(peer.snap?.places ?? []).map((p) => ({ key: p.chat, name: this.chatName(p.chat), machine: peer.rec.machine, peer })))
+        local.push(...(peer.snap?.tasks ?? []).flatMap((t) => ['Agent', 'Reviewer'].map((role) => ({ key: role === 'Agent' ? t.agent?.chat ?? `${t.id}/Agent` : `${t.id}/Reviewer`, name: role === 'Agent' ? t.id : `${t.id} reviewer`, machine: peer.rec.machine, peer }))))
+      }
+      return local
+    }
+    const resolve = (to?: string) => {
+      const all = targets()
+      const n = (to || chat).trim().toLowerCase()
+      const found = all.filter((t) => [t.key, t.name, `${t.machine}:${t.name}`, `${t.machine}:${t.key}`].some((v) => v.toLowerCase() === n))
+      if (found.length !== 1) throw new Error(found.length ? 'Several chats match; use machine:name or the full space key.' : 'No such chat. Use overview to find its full name.')
+      return found[0]
+    }
+    const load = async (t: ReturnType<typeof resolve>) => {
+      if (!t.peer) return { chat: this.chats.chat(t.key), status: this.chatStatus(t.key) }
+      if (!t.peer.reachable) throw new Error(`${t.machine} is unavailable; its chat may be stale.`)
+      const r = await this.peers!.fetch(t.peer, `/api/chat?chat=${encodeURIComponent(t.key)}`, { signal: AbortSignal.timeout(4000) })
+      if (!r.ok) throw new Error(`${t.machine} could not read the chat.`)
+      const view = await r.json() as { chat: Chat | null; status?: string }
+      if (!view.chat || view.chat.key !== t.key || !view.status) throw new Error('The owning machine did not return this chat.')
+      return { chat: view.chat, status: view.status }
+    }
+    return {
+      name: `${resolve().machine}:${resolve().name}`,
+      send: async (text, to) => {
+        const t = resolve(to)
+        const action: Action = { type: 'send', chat: t.key, text }
+        const queuedHere = t.peer && !t.peer.reachable
+        const r = (await (t.peer ? this.peers!.act(t.peer, action) : this.actLocal(action))) as { ok?: boolean; error?: string; waiting?: boolean; waitsFor?: string }
+        if (r.error || r.ok === false) throw new Error(r.error ?? 'The message was refused.')
+        if (!r.waiting) return 'Sent.'
+        if (queuedHere) return 'Queued here while the owning machine is unavailable. It has not reached the agent yet.'
+        if (r.waitsFor === 'menu') return 'It waits until the question on its screen is answered; it goes in then.'
+        return r.waitsFor === 'turn' ? 'It goes in once the agent finishes this step.' : 'It goes in once the agent has started.'
       },
-      out,
-    )
+      read: async (to) => {
+        const t = resolve(to)
+        const { chat: c, status: state } = await load(t)
+        return `${t.machine}:${t.name} is ${state === 'gone' ? 'not running' : state}.\n${c.messages.slice(-8).map((m) => `${m.who === 'you' ? this.user : t.name}: ${excerpt(m.text ?? m.question?.title ?? (m.artifact ? tag('artifact', { id: m.artifact.id, title: this.snapshot().artifacts.find((a) => a.id === m.artifact!.id)?.title ?? 'deleted' }) : ''), 300)}`).join('\n')}`
+      },
+      overview: async () => {
+        const s = this.snapshot()
+        const places = s.places.map((p) => `${p.id} (${p.machine}:${p.name}): ${p.unreachableSince || p.connecting ? 'unavailable; last known ' : ''}${p.status}`)
+        const tasks = s.tasks.filter((t) => !t.archived).map((t) => {
+          const p = s.places.find((p) => p.id === t.place)
+          return `${p?.machine ?? t.place}:${t.id} ${t.name}: ${p?.unreachableSince || p?.connecting ? 'unavailable; last known ' : ''}${t.state}${statusLine(t) ? ` (${statusLine(t)})` : ''}`
+        })
+        return [...places, ...tasks].join('\n') || 'No tasks.'
+      },
+      onReply: (fn) => {
+        const t = resolve()
+        if (!t.peer) {
+          const set = this.replyFns.get(t.key) ?? new Set()
+          set.add(fn)
+          this.replyFns.set(t.key, set)
+          this.lastAgentMsg.set(t.key, this.chats.lastReply(t.key) ?? '')
+          return () => { set.delete(fn); if (!set.size) { this.replyFns.delete(t.key); this.lastAgentMsg.delete(t.key) } }
+        }
+        let active = true
+        let ready = false
+        const seen = new Map<string, string>()
+        const accept = (c: Chat) => {
+          const replies = c.messages.filter((m) => m.who === 'agent' && m.text && !m.card)
+          if (ready) for (const m of replies) if (seen.get(m.id) !== m.text) fn(excerpt(m.text!, 600))
+          for (const m of replies) seen.set(m.id, m.text!)
+          ready = true
+        }
+        const off = this.peers!.subscribeChat(t.peer, t.key, (c) => { if (active) accept(c) })
+        void load(t).then((view) => { if (active && !ready) accept(view.chat) }).catch(() => {})
+        return () => { active = false; off() }
+      },
+    }
   }
 
   /* ---------- the shepherdr command ---------- */

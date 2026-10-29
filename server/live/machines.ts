@@ -28,7 +28,7 @@ export interface MachineRec {
   lastSeen: number
 }
 
-type Events = { snapshot: []; chat: [key: string, chat: Chat]; terminal: [key: string, screen: TermScreen]; alert: [alert: Alert]; news: [machine: string, news: Overview] }
+type Events = { peerChat: [machine: string, key: string, chat: Chat]; snapshot: []; chat: [key: string, chat: Chat]; terminal: [key: string, screen: TermScreen]; alert: [alert: Alert]; news: [machine: string, news: Overview] }
 
 interface Link {
   rec: MachineRec
@@ -526,6 +526,7 @@ export class Machines extends Emitter<Events> {
         l.chats.set(m.chat.key, m.chat)
         this.keep(l)
         this.emit('chat', m.chat.key, m.chat)
+        this.emit('peerChat', l.rec.machine, m.chat.key, m.chat)
       } else if (m.type === 'terminal') this.emit('terminal', m.chat, { ansi: m.ansi, cols: m.cols, rows: m.rows })
       else if (m.type === 'snapshot') {
         l.snap = m.snapshot
@@ -572,9 +573,32 @@ export class Machines extends Emitter<Events> {
     return r.json()
   }
 
+  private voiceWatches = new Map<Link, Map<string, number>>()
+  private screenWatch: { chats: string[]; term: string | null } = { chats: [], term: null }
+
+  subscribeChat(l: Link, key: string, fn: (chat: Chat) => void) {
+    const keys = this.voiceWatches.get(l) ?? new Map<string, number>()
+    keys.set(key, (keys.get(key) ?? 0) + 1)
+    this.voiceWatches.set(l, keys)
+    const off = this.on('peerChat', (machine, k, chat) => { if (machine === l.rec.machine && k === key) fn(chat) })
+    this.watch(this.screenWatch.chats, this.screenWatch.term)
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      off()
+      const count = keys.get(key) ?? 0
+      if (count <= 1) keys.delete(key)
+      else keys.set(key, count - 1)
+      if (!keys.size) this.voiceWatches.delete(l)
+      this.watch(this.screenWatch.chats, this.screenWatch.term)
+    }
+  }
+
   watch(chats: string[], term: string | null) {
+    this.screenWatch = { chats, term }
     for (const l of this.links.values()) {
-      const mine = chats.filter((k) => this.owner(k) === l)
+      const mine = [...new Set([...chats.filter((k) => this.owner(k) === l), ...(this.voiceWatches.get(l)?.keys() ?? [])])]
       const t = term && this.owner(term) === l ? term : null
       const next = { chats: mine, term: t }
       if (JSON.stringify(next) === JSON.stringify(l.watching)) continue

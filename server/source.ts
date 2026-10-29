@@ -35,6 +35,8 @@ export class Emitter<E extends Record<string, unknown[]>> {
 export interface Source extends Emitter<SourceEvents> {
   readonly kind: 'live' | 'demo'
   snapshot(): Snapshot
+  /** Owning agent status, for chat readers such as voice. */
+  chatStatus?(key: string): string
   chat(key: string): Chat | undefined
   act(a: Action): Promise<unknown>
   /** an artifact's page, data and what it sent, at a version (its latest when none) */
