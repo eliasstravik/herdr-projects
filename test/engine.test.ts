@@ -107,6 +107,38 @@ describe('a task is its brief and one agent', () => {
     expect(w.news.some((n) => n.includes('was added'))).toBe(true)
   })
 
+  test('private rules reach launches, stay out of briefs/git, and refresh only on restart', async () => {
+    const w = world()
+    w.engine.installed = () => true
+    const dir = repo()
+    writeFileSync(join(dir, 'AGENTS.md'), 'Team rules stay here.\n')
+    sh('git add AGENTS.md && git commit -qm team', dir)
+    w.settings.set('task.instructions', 'PRIVATE task marker', { space: 'private' })
+    w.settings.set('reviewer.instructions', 'PRIVATE reviewer marker', { space: 'private' })
+    w.settings.set('coordinator.instructions', 'PRIVATE coordinator marker', { space: 'private' })
+    try {
+      const { t } = await started(w, dir, 'private')
+      const prompt = w.started.at(-1)!.system!
+      expect(prompt).toContain('PRIVATE task marker')
+      expect(prompt).toContain('PRIVATE reviewer marker')
+      expect(prompt).not.toContain('PRIVATE coordinator marker')
+      expect(t.desc).not.toContain('PRIVATE')
+      expect(w.started.at(-1)!.first).not.toContain('PRIVATE')
+      expect(sh('cat AGENTS.md', t.worktree!)).toBe('Team rules stay here.')
+      expect(sh('git status --porcelain', t.worktree!)).toBe('')
+      const count = w.started.length
+      w.settings.set('task.instructions', '', { space: 'private' })
+      expect(w.started.length).toBe(count)
+      expect(w.started.at(-1)!.system).toBe(prompt)
+      await w.engine.restart(t.id, { kind: 'codex' })
+      expect(w.started.at(-1)!.system).toContain('Private instructions for task (from space private):\n(none)')
+      expect(w.started.at(-1)!.system).not.toContain('PRIVATE task marker')
+      expect(w.started.at(-1)!.system).toContain('PRIVATE reviewer marker')
+    } finally {
+      for (const role of ['task', 'reviewer', 'coordinator']) w.settings.set(`${role}.instructions`, null, { space: 'private' })
+    }
+  })
+
   test('starting, it shows To do with no second line until its agent is at work on the brief; no news or card meanwhile', async () => {
     const w = world(fakeHerdr(), { boot: 'idle' })
     const p = await w.places.add(repo(), 'boots')

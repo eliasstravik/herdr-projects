@@ -200,3 +200,15 @@ export function goLine(ids: string[], notes: string[], cleared = false) {
 export function prNewsLine(id: string, pr: { number: number; url: string }, news: string[]) {
   return [`GitHub news on PR #${pr.number} (${pr.url}), since you reported ${id} ready:`, ...news, 'The shepherdr-agent skill says how to handle news like this.'].join('\n')
 }
+
+/** Personal settings are supplemental, never a replacement for repository rules or a human's explicit request. */
+export function privatePrompt(own: string, reviewer?: string): string {
+  return [
+    'Private instruction snapshot for this start. This replaces earlier private instruction snapshots, including when empty. Read and follow the repository/team AGENTS.md, CLAUDE.md and REVIEW.md alongside these supplemental rules. Never edit, replace or create repository instruction files to install these rules. Explicit human instructions and the task brief win over private rules; if private and team rules conflict, explain and ask rather than silently overriding either. Never copy private instructions into git, briefs, reports or GitHub. These fields are not a secret store.',
+    own,
+    ...(reviewer === undefined ? [] : [
+      'Reviewer handoff only: the next block applies to reviewers, not to you as the task agent. Include this reviewer block and the precedence/privacy rules above in every fresh reviewer prompt (headless or subagent), alongside the brief and repository rules. This is the snapshot from your latest start; restart this task agent to refresh it after Settings changes. Do not pass your task-only private rules to reviewers.',
+      reviewer,
+    ]),
+  ].join('\n\n')
+}

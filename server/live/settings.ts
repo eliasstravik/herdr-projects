@@ -100,10 +100,10 @@ export interface Num {
   zero?: boolean
 }
 
-type Row = { label: string; key: string; value: string; options?: string[]; text?: boolean; fixed?: boolean; group?: string; num?: Num }
+type Row = { label: string; key: string; value: string; options?: string[]; text?: boolean; multiline?: boolean; fixed?: boolean; group?: string; num?: Num }
 /** the levels a section's defaults may be set at (all three when none): a machine's capacity has no space level;
  *  alerts and voice are one for all */
-type Section = { name: string; about?: string; rows: Row[]; levels?: LevelKind[]; told?: boolean }
+type Section = { name: string; about?: string; rows: Row[]; levels?: LevelKind[]; told?: boolean; prompt?: boolean }
 
 /** when this machine's tasks may start, and when its coordinator hears that the machine struggles (health.ts) */
 export interface MachineLimits {
@@ -153,6 +153,16 @@ function upgrade(v: Values): Values {
 const OLD_VALUES: Record<string, Record<string, string>> = { 'brief.merge': { 'by itself': 'on its own', 'after your yes': 'ask me first' } }
 
 export const CATALOG: Section[] = [
+  {
+    name: 'Private instructions',
+    prompt: true,
+    about: 'Personal rules kept outside your repos. Each role follows space → machine → Everywhere; an empty value means no private rules. Adds to team rules; explicit human instructions win. New starts or restarts only. No secrets here.',
+    rows: [
+      { label: 'Coordinators', key: 'coordinator.instructions', value: '', multiline: true },
+      { label: 'Task agents', key: 'task.instructions', value: '', multiline: true },
+      { label: 'Reviewers', key: 'reviewer.instructions', value: '', multiline: true },
+    ],
+  },
   {
     // what Shepherdr adds to the end of every new task's brief
     name: 'How tasks work',
@@ -454,6 +464,13 @@ export class Settings {
     return Object.fromEntries(Object.entries(all).filter(([, v]) => v)) as Partial<Record<Said, SetBy>>
   }
 
+  /** A launch snapshot, with the same per-role inheritance as other settings. Never part of a task's saved brief. */
+  instructions(role: 'coordinator' | 'task' | 'reviewer', space?: string): string {
+    const p = this.pick(`${role}.instructions`, space ? { space } : 'machine')
+    const scope = { all: 'Everywhere', machine: 'this machine', space: `space ${space}`, default: 'default' }[p.from]
+    return `Private instructions for ${role} (from ${scope}):\n${p.value.trim() || '(none)'}`
+  }
+
   /** Autopilot's heartbeat at a level */
   heartbeat(l: Level = 'machine'): Heartbeat {
     return { time: this.pick('heartbeat.when', l).value, on: eventRules(this.pick('heartbeat.on', l).value), zone: this.zone() }
@@ -519,13 +536,13 @@ export class Settings {
     const l: Level = space ? { space } : 'machine'
     const name = { space: 'this space', machine: host, all: 'Everywhere', default: 'default' }
     const keys = (told: boolean) =>
-      CATALOG.filter((s) => !!s.told === told).flatMap((s) => s.rows.filter((r) => r.key !== 'alerts').map((r) => {
+      CATALOG.filter((s) => !!(s.told || s.prompt) === told).flatMap((s) => s.rows.filter((r) => r.key !== 'alerts').map((r) => {
         const p = this.pick(r.key, l)
         // a trigger in words, as the human hears it; the rule as kept under it, for an agent to change
         const words = this.words(r.key, p.value)
         return words ? `${r.key.padEnd(22)} ${words.trim()}  (${name[p.from]})\n${''.padEnd(23)}as written: ${p.value}` : `${r.key.padEnd(22)} ${p.value}  (${name[p.from]})`
       }))
-    return `What agents are told (words in each new brief's Settings block):\n${keys(true).join('\n')}\n\nHow Shepherdr runs:\n${keys(false).join('\n')}`
+    return `What agents are told (private launch instructions and new briefs):\n${keys(true).join('\n')}\n\nHow Shepherdr runs:\n${keys(false).join('\n')}`
   }
 
   /** a trigger setting in plain words, on a line after its value; nothing for the others */
@@ -578,8 +595,10 @@ export class Settings {
       })
     }
     const note = (s: Section, l: Level) =>
-      s.name === 'How tasks work'
-        ? { note: settingsBlock('<id>', { ways: this.waysAt(l), reviewer: this.harnessAt('reviewer', l), by: this.setByAt(l) }) }
+      s.name === 'Private instructions'
+        ? { noteTitle: 'When rules take effect', note: 'Used at the next start or restart. Saving leaves running agents alone. A resumed session may remember old rules: the new snapshot replaces those private rules. Task agents pass the reviewer snapshot from their own latest start to each review; restart the task agent to refresh it.' }
+        : s.name === 'How tasks work'
+          ? { note: settingsBlock('<id>', { ways: this.waysAt(l), reviewer: this.harnessAt('reviewer', l), by: this.setByAt(l) }) }
         : s.name === AUTOPILOT
           ? autopilotNote()
           : s.name === 'Machine'
@@ -597,7 +616,7 @@ export class Settings {
           ...note(s, l),
           level: id,
           ...(s.levels?.length === 1 ? { global: true } : {}),
-          ...(s.told ? { told: true } : {}),
+          ...(s.told || s.prompt ? { told: true } : {}),
           ...(l === 'all' ? {} : { machine: host }),
         })),
       ),
@@ -687,6 +706,7 @@ export function machineNote(l: MachineLimits, cores = cpus().length, memGb = Mat
 
 /** why a value can't be set, or nothing */
 export function refuse(key: string, value: string): string | undefined {
+  if (key.endsWith('.instructions') && (value.length > 16000 || value.includes('\0'))) return 'Use at most 16,000 characters, without null characters. Keep secrets in Secrets.'
   const cli = key === 'task.agent' || key === 'coordinator.agent' || (key === 'task.fallback' && value.trim().toLowerCase() !== 'off')
   if (cli && !kindOf(value)) return `${value} is not an agent herdr can start.`
   if (key === 'reviewer.agent' && !REVIEWERS.includes(CLI_NAME[kindOf(value) ?? ''] ?? '')) return `Pick one of: ${REVIEWERS.join(' · ')}.`

@@ -37,7 +37,7 @@ import { claudeProjectDir, piSessionDir } from './readers/find.ts'
 import { boxDir } from './mfs.ts'
 import * as task from './mfs.ts'
 import { asMode, HOME_SPACE, HOST, NAME, placeId, Places } from './places.ts'
-import { coordinatorPrompt, relaunchedLine, restartLine, resumedLine, settingsBlock } from './prompts.ts'
+import { privatePrompt, coordinatorPrompt, relaunchedLine, restartLine, resumedLine, settingsBlock } from './prompts.ts'
 import { fitHarness, harnessProblem, harnessWords, recentChat, restartHint, restartInfo, type Harness } from './restart.ts'
 import { Revivals, type Wrong } from './revive.ts'
 import { carryOn, Retries, type Retry } from './retry.ts'
@@ -926,7 +926,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       workspace: c.workspace,
       was: (c as { was?: string }).was,
       tab: c.tab,
-      system: coordinatorPrompt({ role: this.roleOf(id), name: c.label, path: c.path, machine: NAME, chat: id }, this.places.mode(id)),
+      system: coordinatorPrompt({ role: this.roleOf(id), name: c.label, path: c.path, machine: NAME, chat: id }, this.places.mode(id)) + '\n\n' + privatePrompt(this.settings.instructions('coordinator', this.spaceKey(id))),
       env: agentEnv(id, ROOT),
     }
     return o.restart ? this.agents.restart(spec, o.restart) : this.agents.ensure(spec)
@@ -2148,7 +2148,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       case 'set':
       case 'unset': {
         const value = a0 === 'unset' ? null : rest.join(' ')
-        if (!a1 || (a0 === 'set' && !value)) throw new Error(`shepherdr ${a0} <key>${a0 === 'set' ? ' <value>' : ''}`)
+        if (!a1 || (a0 === 'set' && !value && !(a1.endsWith('.instructions') && rest.length))) throw new Error(`shepherdr ${a0} <key>${a0 === 'set' ? ' <value>' : ''}`)
         if (!CATALOG.some((s) => s.rows.some((r) => r.key === a1))) throw new Error(`No setting ${a1}; shepherdr show lists them`)
         // Everywhere unless it says --machine (this machine's own) or --space NAME (that space's own)
         const named = one(p, 'space')
@@ -2167,7 +2167,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         const where = pr ? `${named}'s` : level === 'machine' ? `${NAME}'s` : "Everywhere's"
         const now = this.settings.get(a1, pr)
         // a trigger in words too, to tell the human
-        return `${a0 === 'unset' ? `${a1}: ${where} own is unset; it is ${now} now.` : `${a1} = ${now} (${where})`}${this.settings.words(a1, now).replace(/^\n\s*/, '\nIn words: ')}`
+        return `${a0 === 'unset' ? `${a1}: ${where} own is unset; it is ${now} now.` : `${a1} = ${now} (${where})`}${this.settings.words(a1, now).replace(/^\n\s*/, '\nIn words: ')}${a1.endsWith('.instructions') ? '\nUsed at the next start or restart; running agents are unchanged. Reviewer changes need a new or restarted task agent.' : ''}`
       }
       case 'automation': {
         const op = a1 ?? 'list'

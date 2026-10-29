@@ -700,6 +700,7 @@ export class Agents extends Emitter<Events> {
     const old = this.records[spec.key]
     const resume = old && old.kind === spec.kind && (old.sessionId || old.logs.length)
     const r: AgentRecord = old ?? { ...spec, logs: [], started: Date.now() }
+    const changedPrompt = old?.system !== spec.system
     const from = old?.cwd
     Object.assign(r, { name: spec.name, kind: spec.kind, cwd: spec.cwd, workspace: spec.workspace, tab: spec.tab ?? r.tab, env: spec.env ?? r.env, access: spec.access ?? r.access, model: spec.model ?? r.model, effort: spec.effort ?? r.effort, system: spec.system ?? r.system, set: spec.set ?? r.set, finished: false })
     this.codexState.delete(spec.key)
@@ -740,7 +741,7 @@ export class Agents extends Emitter<Events> {
     await this.bindRoute(r, pane)
     // CLIs without an option for extra instructions get them first, hidden from the chat. Both wait until the CLI is
     // ready, ahead of what you sent meanwhile (a restart)
-    this.queue(r.key, [r.kind !== 'claude' && r.kind !== 'pi' && !resume && r.system ? hidden(r.system) : '', first ?? ''].filter(Boolean), true)
+    this.queue(r.key, [r.kind !== 'claude' && r.kind !== 'pi' && (!resume || changedPrompt) && r.system ? hidden(r.system) : '', first ?? ''].filter(Boolean), true)
     setTimeout(() => this.deliver(r.key), 1000)
     setTimeout(() => this.discoverLog(r.key), 3000)
     setTimeout(() => this.discoverLog(r.key), 15000)

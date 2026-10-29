@@ -21,7 +21,7 @@ import { browserEnv } from '../browser.ts'
 import { hidden, ROUTING_FAILURE, type Agents, type Spec } from '../agents.ts'
 import type { Chats } from '../chats.ts'
 import { HOST, placeId, type Places, type Space } from '../places.ts'
-import { goLine, handOverLine, restartLine, resumedLine, settingsBlock, prNewsLine, queuedLine, splitBrief, taskFirst, taskPrompt } from '../prompts.ts'
+import { privatePrompt, goLine, handOverLine, restartLine, resumedLine, settingsBlock, prNewsLine, queuedLine, splitBrief, taskFirst, taskPrompt } from '../prompts.ts'
 import { inMins, type Retry } from '../retry.ts'
 import { pastTimes } from '../estimates.ts'
 import { CLI_NAME, kindOf, type Settings } from '../settings.ts'
@@ -1135,7 +1135,7 @@ export class Engine extends Emitter<Events> {
       cwd: t.worktree!,
       workspace: labelOf(t),
       tab: 'Agent',
-      system: taskPrompt({ id: t.id, branch: t.branch!, base: t.base! }, pastTimes(this.data.tasks, t)),
+      system: taskPrompt({ id: t.id, branch: t.branch!, base: t.base! }, pastTimes(this.data.tasks, t)) + '\n\n' + privatePrompt(this.settings.instructions('task', this.nameOf(t)), this.settings.instructions('reviewer', this.nameOf(t))),
       env,
       first,
       pane: () => this.wt.agentPane({ home, wt: t.worktree!, label: labelOf(t), tab: 'Agent', env, made }),

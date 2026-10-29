@@ -140,3 +140,49 @@ describe.skipIf(!browser)('Task IDs space settings', () => {
     }
   })
 })
+
+describe.skipIf(!browser)('private instruction settings', () => {
+  test('phone editing saves only its role and scope; undo, blank and reset preserve inheritance', async () => {
+    const store = world.stores['vm-str']
+    const key = 'task.instructions'
+    store.set(key, 'Everywhere task rule.')
+    world.sections = (await import('../server/demo/data.ts')).settings(world.stores)
+    world.emit('snapshot')
+    const page = await browser!.newPage({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true })
+    try {
+      await page.goto(url())
+      await page.getByRole('button', { name: 'Places', exact: true }).click()
+      await page.getByRole('button', { name: 'Settings', exact: true }).click()
+      await page.getByRole('button', { name: 'Private instructions', exact: true }).click()
+      const panel = page.getByRole('region', { name: 'Private instructions', exact: true })
+      await panel.getByRole('button', { name: 'Editing: home · vm-str', exact: true }).waitFor()
+      const task = panel.getByRole('textbox', { name: 'Task agents', exact: true })
+      expect(await task.inputValue()).toBe('Everywhere task rule.')
+      await task.fill('Unsaved rule.')
+      await panel.getByRole('button', { name: 'Undo', exact: true }).click()
+      expect(await task.inputValue()).toBe('Everywhere task rule.')
+      await task.fill('Task-only home rule.\nSecond line.')
+      await panel.getByRole('button', { name: 'Save', exact: true }).click()
+      await panel.getByRole('button', { name: 'Reset to private rules', exact: true }).waitFor()
+      expect(store.get(key, '~')).toBe('Task-only home rule.\nSecond line.')
+      expect(store.get(key)).toBe('Everywhere task rule.')
+      expect(store.get('coordinator.instructions', '~')).toBe('')
+      expect(store.get('reviewer.instructions', '~')).toBe('')
+      await task.fill('')
+      await panel.getByRole('button', { name: 'Save', exact: true }).click()
+      await panel.getByRole('button', { name: 'Save', exact: true }).waitFor({ state: 'detached' })
+      expect(store.get(key, '~')).toBe('')
+      await panel.getByRole('button', { name: 'Reset to private rules', exact: true }).click()
+      await panel.getByRole('button', { name: 'Reset to private rules', exact: true }).waitFor({ state: 'detached' })
+      expect(await task.inputValue()).toBe('Everywhere task rule.')
+      expect(await panel.textContent()).toContain('When rules take effect')
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
+    } finally {
+      store.set(key, null, { space: '~' })
+      store.set(key, null)
+      world.sections = (await import('../server/demo/data.ts')).settings(world.stores)
+      world.emit('snapshot')
+      await page.close()
+    }
+  })
+})

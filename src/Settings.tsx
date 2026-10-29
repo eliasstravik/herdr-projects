@@ -386,7 +386,7 @@ function TriggerValue({ row, phone, onPick }: { row: SettingRow & { trigger: Non
 
 /** a whole file's words (a coordinator's HEARTBEAT.md): an editor as wide as the page that grows with them, its
  *  name on top; Save (⌘S, Ctrl+S) and Undo show once it changed, Undo putting back what is saved */
-function DocValue({ value, onSave, label, file, phone }: { value: string; onSave: (v: string) => void; label: string; file: string; phone: boolean }) {
+function DocValue({ value, onSave, label, file, phone, privateRules = false }: { value: string; onSave: (v: string) => void; label: string; file: string; phone: boolean; privateRules?: boolean }) {
   const [v, setV] = useState(value)
   useEffect(() => setV(value), [value])
   const changed = v !== value
@@ -409,14 +409,14 @@ function DocValue({ value, onSave, label, file, phone }: { value: string; onSave
         value={v}
         onChange={setV}
         spellCheck={false}
-        placeholder="Empty: nothing to go through"
+        placeholder={privateRules ? 'Empty: no private rules for this role' : 'Empty: nothing to go through'}
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key === 's') {
             e.preventDefault()
             if (changed) onSave(v)
           }
         }}
-        className="min-h-40 w-full bg-transparent px-3 py-2.5 font-mono text-[0.8125rem]/5 outline-none phone:text-[0.875rem]/[1.375rem]"
+        className={clsx(privateRules ? 'min-h-24' : 'min-h-40', 'w-full bg-transparent px-3 py-2.5 font-mono text-[0.8125rem]/5 outline-none phone:text-[0.875rem]/[1.375rem]')}
       />
     </div>
   )
@@ -441,6 +441,7 @@ const LOOKS: Record<Appearance, { label: string; hint?: string }> = {
 
 const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   'How tasks work': PlanIcon,
+  'Private instructions': PlanIcon,
   Agents: ModelIcon,
   Tasks: TasksIcon,
   'Task IDs': TasksIcon,
@@ -610,7 +611,7 @@ function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phon
         // set here: Reset, back to what it would be (its title says where that comes from)
         <Small className="text-pretty">
           <span className="font-medium text-accent">Set here</span>
-          <span className="block">Inherits {row.num ? numShown(row.inherits.value, row.num) : row.trigger ? (row.trigger.presets.find((p) => p.value === row.inherits!.value)?.label ?? 'Custom rule') : shown(row.inherits.value)} · {row.inherits.from}</span>
+          <span className="block">Inherits {row.multiline ? (row.inherits.value ? 'private rules' : 'no private rules') : row.num ? numShown(row.inherits.value, row.num) : row.trigger ? (row.trigger.presets.find((p) => p.value === row.inherits!.value)?.label ?? 'Custom rule') : shown(row.inherits.value)} · {row.inherits.from}</span>
           {row.trigger && !row.trigger.presets.some((p) => p.value === row.inherits!.value) ? <details><summary className="cursor-pointer">Inherited rule</summary><span className="[overflow-wrap:anywhere]">{row.inherits.value}</span></details> : null}
           <button
             type="button"
@@ -618,7 +619,7 @@ function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phon
             onClick={() => set(row.key, null)}
             className="press-dim relative font-medium text-accent after:absolute after:-inset-x-1 after:-inset-y-1.5 coarse:after:-inset-y-3"
           >
-            Reset to {row.num ? numShown(row.inherits.value, row.num) : row.trigger ? (row.inherits.from === 'Default' ? 'the default' : `${row.inherits.from}'s`) : shown(row.inherits.value)}
+            Reset to {row.multiline ? (row.inherits.value ? 'private rules' : 'no private rules') : row.num ? numShown(row.inherits.value, row.num) : row.trigger ? (row.inherits.from === 'Default' ? 'the default' : `${row.inherits.from}'s`) : shown(row.inherits.value)}
           </button>
         </Small>
       ) : null}
@@ -645,15 +646,15 @@ function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phon
           {name ? <h3 className={heading(phone)}>{name}</h3> : null}
           <dl className={phone ? card : undefined}>
             {rows.map((row) =>
-              row.doc ? (
+              row.doc || row.multiline ? (
                 <div key={row.key} className={clsx(rowLook(phone), 'flex-col items-stretch! gap-2.5 pb-3!', row.inherits && 'border-l-2 border-accent pl-3')}>
                   <dt className="flex min-w-0 flex-col">
                     {row.label}
-                    <Small className="text-pretty">Its coordinator goes through it each heartbeat, and may edit it too.</Small>
+                    {row.doc ? <Small className="text-pretty">Its coordinator goes through it each heartbeat, and may edit it too.</Small> : null}
                     {under(row)}
                   </dt>
                   <dd>
-                    <DocValue label={row.label} file="HEARTBEAT.md" phone={phone} value={row.value} onSave={(x) => set(row.key, x)} />
+                    <DocValue label={row.label} file={row.multiline ? 'Private · this role only' : 'HEARTBEAT.md'} privateRules={row.multiline} phone={phone} value={row.value} onSave={(x) => set(row.key, row.multiline ? follows(row, x) : x)} />
                   </dd>
                 </div>
               ) : row.trigger ? (

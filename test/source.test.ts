@@ -45,6 +45,24 @@ async function workedTask(name: string) {
   return { t, dir, place: placeId.space(p.name) }
 }
 
+describe('private instruction CLI', () => {
+  test('an explicit empty value suppresses inherited instructions without restarting agents', async () => {
+    try {
+      expect((await src.cli(['set', 'task.instructions', 'Everywhere rule.'], {})).code).toBe(0)
+      const blank = await src.cli(['set', 'task.instructions', '', '--machine'], {})
+      expect(blank.code).toBe(0)
+      expect(blank.out).toContain('running agents are unchanged')
+      expect(src.settings.get('task.instructions')).toBe('')
+      expect(src.settings.pick('task.instructions').from).toBe('machine')
+      expect((await src.cli(['unset', 'task.instructions', '--machine'], {})).code).toBe(0)
+      expect(src.settings.get('task.instructions')).toBe('Everywhere rule.')
+    } finally {
+      src.settings.set('task.instructions', null, 'machine')
+      src.settings.set('task.instructions', null)
+    }
+  })
+})
+
 describe('merging from the command', () => {
   test("a task's agent merges its own task, and only its own", async () => {
     const { t, dir } = await workedTask('own')

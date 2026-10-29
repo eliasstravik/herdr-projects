@@ -649,6 +649,8 @@ export interface SettingRow {
   value: string
   /** free text instead of a pick list */
   text?: boolean
+  /** private instruction text, saved explicitly without a repository file */
+  multiline?: boolean
   /** a trigger's time rule or event rules (Autopilot's heartbeat): shown in words, never as written */
   trigger?: TriggerRow
   /** a whole file's words (a coordinator's HEARTBEAT.md), in a box as wide as the page */
