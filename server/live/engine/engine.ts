@@ -23,7 +23,7 @@ import { HOST, placeId, type Places, type Space } from '../places.ts'
 import { goLine, handOverLine, restartLine, resumedLine, settingsBlock, prNewsLine, queuedLine, splitBrief, taskFirst, taskPrompt } from '../prompts.ts'
 import { inMins, type Retry } from '../retry.ts'
 import { pastTimes } from '../estimates.ts'
-import { CLI_NAME, kindOf, type Settings } from '../settings.ts'
+import { CLI_NAME, effortFor, kindOf, type Settings } from '../settings.ts'
 import { fitHarness, harnessWords, recentChat } from '../restart.ts'
 import * as G from './git.ts'
 import { Worktrees, type HerdrSpaces, type Made } from './worktrees.ts'
@@ -1038,7 +1038,7 @@ export class Engine extends Emitter<Events> {
    *  nearest level the other CLI takes (models.ts). */
   private harness(chosen: Partial<Harness> = {}, role: 'task' | 'reviewer' = 'task', project?: string): Harness {
     const h = this.settings.harness(role, project)
-    return { ...h, ...(chosen.kind && chosen.kind !== h.kind ? { model: undefined } : {}), ...chosen }
+    return { ...h, ...(chosen.kind && chosen.kind !== h.kind ? { model: undefined, effort: effortFor(chosen.kind, h.effort) } : {}), ...chosen }
   }
 
   /** its agent waits for a go: To do until something is written to it (the go, or a change to the brief) */

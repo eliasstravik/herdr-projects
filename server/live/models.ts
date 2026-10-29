@@ -2,7 +2,8 @@
 // Each CLI is asked itself where it can tell: Claude Code's own model catalog in its install (which models it knows
 // and which take xhigh and max) and its --help, `codex debug models`, `pi --list-models` and pi's --help. What they
 // said is kept in cli-models.json and asked again by version (claude) or every few hours; until then, or where a CLI
-// can't tell, the table below holds. A level a model lacks becomes the nearest it has (nearest), never an error at start.
+// can't tell, the table below holds. Antigravity's (`agy models`, agy's --help) only ever go in a reviewer's words: Shepherdr
+// starts no agy agent with a model (modelsFor). A level a model lacks becomes the nearest it has (nearest), never an error at start.
 import { realpathSync, statSync } from 'node:fs'
 import { readJson, writeJson } from '../store.ts'
 
@@ -53,7 +54,15 @@ export const TABLE: Record<string, CliModels> = {
   },
   // pi reaches many providers' models: only pi itself can list them
   pi: { models: [], efforts: PI_LEVELS },
+  agy: { models: [], efforts: CLAUDE_LEVELS },
 }
+
+/** the CLIs Shepherdr starts with a model and effort (agents.ts); a reviewer is only words in a brief, so it may take
+ *  any CLI's that can tell */
+const STARTED = ['claude', 'codex', 'pi']
+
+/** what this CLI takes as an agent Shepherdr starts, or as a task's reviewer; nothing where it passes neither */
+export const modelsFor = (kind: string, role?: string) => (role === 'reviewer' || STARTED.includes(kind) ? modelsOf(kind) : undefined)
 
 /** Claude Code's families as its /model menu offers them, newest of each; its aliases (opus, haiku) name these too */
 const FAMILIES = ['fable', 'opus', 'sonnet', 'haiku']
@@ -166,6 +175,10 @@ async function read(kind: string, from?: string): Promise<CliModels | undefined>
     const [list, help] = await Promise.all([run(['pi', '--list-models']), run(['pi', '--help'])])
     return parsePi(list, help)
   }
+  if (kind === 'agy') {
+    const [list, help] = await Promise.all([run(['agy', 'models']), run(['agy', '--help'])])
+    return parseAgy(list, help)
+  }
   return undefined
 }
 
@@ -243,6 +256,18 @@ export function parsePi(list: string, help: string): CliModels | undefined {
     label: names.indexOf(r[1]) === names.lastIndexOf(r[1]) ? r[1] : `${r[0]}/${r[1]}`,
     efforts: think < 0 || r[think] === 'yes' ? efforts : [],
   }))
+  return models.length ? { models, efforts } : undefined
+}
+
+/** `agy models`: an id and its name on each line, a tab between; the levels from its --help, "--effort … (low|medium|…)" */
+export function parseAgy(list: string, help: string): CliModels | undefined {
+  const levels = help.match(/--effort\b[^\n]*\(([a-z|]+)\)/)?.[1].split('|').filter((l) => l in RANK) ?? []
+  const efforts = levels.length ? levels : CLAUDE_LEVELS
+  const models = list
+    .split('\n')
+    .map((l) => l.split('\t').map((x) => x.trim()))
+    .filter((r) => r.length >= 2 && /^[\w.:/@-]+$/.test(r[0]))
+    .map(([id, label]) => ({ id, label: label || id, efforts }))
   return models.length ? { models, efforts } : undefined
 }
 

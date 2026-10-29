@@ -12,7 +12,7 @@ import type { SettingSection, TriggerRow } from '../../shared/types.ts'
 import { readJson, writeJson } from '../store.ts'
 import type { SetBy } from '../../shared/brief.ts'
 import { settingsBlock, settingsLines, SEVERITIES, type Said, type Ways } from './prompts.ts'
-import { effortFor, effortsOf, findModel, knowsModels, LEVELS, modelsOf } from './models.ts'
+import { effortFor, effortsOf, findModel, knowsModels, LEVELS, modelsFor } from './models.ts'
 import { eventRules, eventsText, eventWords, nextWords, OWN_ZONE, timeRule, timeWords, validZone, type EventRule } from './trigger.ts'
 
 /** every agent kind herdr can start (any of them works; chats are read for the ones with a log reader) */
@@ -54,7 +54,7 @@ export const EFFORTS = ['default', ...LEVELS]
 export { effortFor }
 
 /** the CLIs a brief's Review line may suggest for a task's review */
-export const REVIEWERS = ['Codex', 'Claude Code', 'pi']
+export const REVIEWERS = ['Codex', 'Claude Code', 'pi', 'Antigravity']
 
 /** Autopilot's heartbeat (Settings → Autopilot): its trigger, a time rule as kept ('off': none) and the news that
  *  wakes it at once, and the time zone of every time rule */
@@ -257,7 +257,7 @@ export function agentRow(r: Row, get: (key: string) => string): Row {
   const [role, what] = r.key.split('.') as [Role, string]
   if (!ROLES.includes(role) || (what !== 'model' && what !== 'effort')) return r
   const kind = roleKind(role, get)
-  const c = kind ? modelsOf(kind) : undefined
+  const c = kind ? modelsFor(kind, role) : undefined
   if (!kind || !c) return { ...r, value: kind ? `${CLI_NAME[kind] ?? kind}'s own` : 'off', fixed: true, text: false }
   const stored = get(`${role}.model`)
   const model = findModel(kind, stored)
@@ -401,8 +401,8 @@ export class Settings {
     const [role, what] = key.split('.') as [Role, string]
     if (!ROLES.includes(role) || (what !== 'model' && what !== 'effort') || value.trim().toLowerCase() === 'default') return undefined
     const kind = this.kindOf(role, l)
-    if (!kind || !modelsOf(kind)) return undefined
-    if (what === 'model') return knowsModels(kind) && !findModel(kind, value) ? `${CLI_NAME[kind]} has no model ${value}. Pick one of: default · ${modelsOf(kind)!.models.map((m) => m.label).join(' · ')}.` : undefined
+    if (!kind || !modelsFor(kind, role)) return undefined
+    if (what === 'model') return knowsModels(kind) && !findModel(kind, value) ? `${CLI_NAME[kind]} has no model ${value}. Pick one of: default · ${modelsFor(kind, role)!.models.map((m) => m.label).join(' · ')}.` : undefined
     const model = this.pick(`${role}.model`, l).value
     const levels = effortsOf(kind, model)
     if (levels.includes(value.trim().toLowerCase())) return undefined
@@ -505,8 +505,8 @@ export class Settings {
 
   private modelAt(role: Role, kind: string | undefined, l: Level): { model?: string; effort?: string } {
     const stored = this.pick(`${role}.model`, l).value
-    if (!kind) return {}
-    const model = stored === 'default' ? undefined : knowsModels(kind) ? findModel(kind, stored)?.id : modelsOf(kind) ? stored : undefined
+    if (!kind || !modelsFor(kind, role)) return {}
+    const model = stored === 'default' ? undefined : knowsModels(kind) ? findModel(kind, stored)?.id : stored
     return { model, effort: effortFor(kind, this.pick(`${role}.effort`, l).value, model) }
   }
 
@@ -687,7 +687,8 @@ export function refuse(key: string, value: string): string | undefined {
   const cli = key === 'task.agent' || key === 'coordinator.agent' || (key === 'task.fallback' && value.trim().toLowerCase() !== 'off')
   if (cli && !kindOf(value)) return `${value} is not an agent herdr can start.`
   if (key === 'reviewer.agent' && !REVIEWERS.includes(CLI_NAME[kindOf(value) ?? ''] ?? '')) return `Pick one of: ${REVIEWERS.join(' · ')}.`
-  if (key.endsWith('.model') && !/^[\w.:/@[\] -]+$/.test(value.trim())) return 'Write a model id like claude-opus-5-5, or default.'
+  // a name from a picker too: Antigravity's say their level, Gemini 4 Argon (High)
+  if (key.endsWith('.model') && !/^[\w.:/@[\]() -]+$/.test(value.trim())) return 'Write a model id like claude-opus-5-5, or default.'
   const num = numOf(key)
   if (key === 'heartbeat.when' || key === 'heartbeat.on') {
     try {

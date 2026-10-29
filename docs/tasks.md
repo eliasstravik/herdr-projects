@@ -38,7 +38,7 @@
   the same. Once started, only the agent puts a task in To do; one that stops for any other reason needs you, except
   while work it started in the background (a reviewer subagent, a shell, a monitor) still runs and will wake it: that
   is still Working (shells alone for up to 10 minutes, since a server it started for you never wakes it; a shell
-  running a headless reviewer of another CLI, `codex exec` or `claude -p`, counts as a subagent), unless its last
+  running a headless reviewer of another CLI, `codex exec`, `claude -p`, `pi -p` or `agy -p`, counts as a subagent), unless its last
   words ask you something. A task that needs you says why in at most 40
   characters, never by pasting the agent's message and never in a model's words: a standard reason (Plan to approve,
   Asks permission, Signed out, Question for you, Waits for your reply), or the agent's own question cut to fit
