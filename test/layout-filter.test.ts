@@ -108,16 +108,39 @@ describe.skipIf(!browser)('Home attention defaults', () => {
   })
 })
 
-describe.skipIf(!browser)('attention summaries and quiet health', () => {
-  test('summary hides for a matching panel, stays for a filtered panel, and preserves questions and health readings', async () => {
+describe.skipIf(!browser)('no chat attention summary and quiet health', () => {
+  test('phone and desktop, light and dark: Home and space chats have cards without aggregate disclosures', async () => {
+    for (const width of [390, 1440]) for (const colorScheme of ['light', 'dark'] as const) {
+      const page = await browser!.newPage({ viewport: { width, height: 900 }, colorScheme })
+      try {
+        for (const place of ['vm-str/home', 'p:mac:~', 'p:vm-str:gtm']) {
+          await page.goto(`http://127.0.0.1:${server!.port}/?place=${encodeURIComponent(place)}`)
+          const messages = page.locator('[data-messages]')
+          await messages.waitFor()
+          expect(await messages.locator('[data-attention]').count()).toBe(0)
+          expect(await messages.getByText(/\d+ need you · \d+ ready/).count()).toBe(0)
+          expect(await messages.getByText(/^Task updates ·/).count()).toBe(0)
+          if (place === 'p:vm-str:gtm') {
+            await messages.getByText('Rerun CI on main?', { exact: true }).waitFor()
+            await messages.getByRole('button', { name: /Needs you GTM-14 needs you/ }).waitFor()
+            await messages.getByRole('button', { name: /Ready GTM-15 is ready/ }).waitFor()
+          }
+        }
+      } finally {
+        await page.close()
+      }
+    }
+  })
+
+  test('chat stays free of aggregate summaries with matching or filtered Tasks, preserving questions and health', async () => {
     const page = await browser!.newPage({ viewport: { width: 820, height: 1180 } })
     await page.goto(`http://127.0.0.1:${server!.port}/?place=p:mac:~`)
     const panel = page.locator('section[aria-label="Tasks"]')
     await panel.getByText('LV-3', { exact: true }).waitFor()
     expect(await page.locator('[data-attention]').count()).toBe(0)
     await panel.getByRole('searchbox', { name: 'Filter tasks' }).fill('LV-3')
-    await page.locator('[data-attention] summary').click()
-    expect(await page.locator('[data-attention]').textContent()).toContain('LV-4')
+    expect(await page.locator('[data-attention]').count()).toBe(0)
+    expect(await page.getByText(/^Task updates ·/).count()).toBe(0)
     await page.getByRole('button', { name: /^Machine health/ }).click()
     const health = page.getByRole('dialog', { name: 'mac health' })
     await health.waitFor()
@@ -126,8 +149,9 @@ describe.skipIf(!browser)('attention summaries and quiet health', () => {
     await page.keyboard.press('Escape')
     await page.goto(`http://127.0.0.1:${server!.port}/?place=p:vm-str:gtm`)
     await page.getByText('Rerun CI on main?', { exact: true }).waitFor()
-    expect(await page.locator('[data-attention] summary').textContent()).toContain('3 need you · 1 ready')
-    // The summary includes one coordinator request plus two tasks, not Ready or forwarded copies again.
+    expect(await page.locator('[data-attention]').count()).toBe(0)
+    expect(await page.getByText(/3 need you · 1 ready/).count()).toBe(0)
+    // Tasks still counts its own requests, excluding the coordinator question.
     expect(await panel.getByLabel('2 requests need you in the panel scope', { exact: true }).count()).toBe(1)
     await page.close()
   })

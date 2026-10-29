@@ -29,6 +29,8 @@ describe.skipIf(!browser)('coordinator update history', () => {
           await page.goto(url())
           await page.locator('[data-msg="history-39"]').waitFor()
           expect(await page.getByText(/^Task updates ·/).count()).toBe(0)
+          expect(await page.locator('[data-attention]').count()).toBe(0)
+          expect(await page.locator('[data-messages]').getByText(/\d+ need you · \d+ ready/).count()).toBe(0)
           expect(await page.locator('[data-messages] [data-whole]').evaluateAll((els) => els.map((el) => el.getAttribute('data-whole')))).toEqual(expected)
           for (const id of expected) expect(await page.locator(`[data-whole="${id}"]`).isVisible()).toBe(true)
           expect(await page.locator(pills('history-4')).getAttribute('aria-pressed')).toBe('true')
