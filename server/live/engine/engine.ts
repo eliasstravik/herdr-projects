@@ -100,6 +100,8 @@ export interface TaskRec {
   paused?: 'sent' | 'idle'
   /** when it was pinned: it shows in the Pinned group at the top of its lists; archiving or deleting it drops the pin */
   pinned?: number
+  /** Trusted owner of an Autopilot task and every restart/backup. */
+  pilot?: string
   /** the CLI, model and effort its agent first starts with: from Settings, or task add's flags */
   agent?: Harness
   /** the CLI, model and effort its brief says reviews its change: from Settings, or task add's --reviewer flags */
@@ -333,6 +335,10 @@ const BRIEF_WAIT = 120_000
 const LATER = "Don't start yet: wait for a go."
 
 export class Engine extends Emitter<Events> {
+  pilotOwner?: (requester?: string) => string | undefined
+  pilotGate?: (task: TaskRec) => void
+  pilotClaim?: (task: TaskRec) => void
+
   /** main: by project path, the failing commit on GitHub's main its coordinator was told of, until main is green */
   private data = readJson<{ next: Record<string, number>; tasks: TaskRec[]; red?: Record<string, string> }>('tasks.json', { next: {}, tasks: [] })
   readonly taskIds: TaskIds
@@ -1027,6 +1033,7 @@ export class Engine extends Emitter<Events> {
     const how = settingsBlock(id, { ways, reviewer, agent, by })
     const desc = [o.desc ?? (title !== o.title ? o.title : ''), o.later ? LATER : '', how].filter(Boolean).join('\n\n')
     const t: TaskRec = {
+      pilot: this.pilotOwner?.(o.requester),
       id,
       n,
       project: placeId.space(p.name),
@@ -1046,6 +1053,7 @@ export class Engine extends Emitter<Events> {
     // one that starts work now waits for room; one for later only reads its brief, so it starts at once
     const room = after.length || o.later ? {} : this.room()
     this.data.tasks.push(t)
+    if (t.pilot) this.pilotClaim?.(t)
     if (room.why) {
       t.told = 'queued'
       this.hold(t, room.why)
@@ -1083,6 +1091,7 @@ export class Engine extends Emitter<Events> {
   }
 
   private async startTask(t: TaskRec) {
+    this.pilotGate?.(t)
     this.starting.add(t.id)
     t.trouble = undefined
     this.emit('changed')
@@ -1135,7 +1144,7 @@ export class Engine extends Emitter<Events> {
     const env = this.env(key)
     // a task from before tasks kept their own CLI starts on Settings'
     const h = t.agent ?? this.settings.harness('task', this.nameOf(t))
-    trustWorktree(t.worktree!, as?.kind ?? rec?.kind ?? h.kind, env)
+    if (!t.pilot) trustWorktree(t.worktree!, as?.kind ?? rec?.kind ?? h.kind, env)
     const spec: Spec = {
       access: 'full',
       key,
@@ -1227,7 +1236,7 @@ export class Engine extends Emitter<Events> {
    */
   async cantGoOn(id: string, why: string) {
     const t = this.task(id)
-    if (!t || !this.mayRetry(this.key(t)) || this.handing.has(t.id)) return
+    if (!t || t.pilot || !this.mayRetry(this.key(t)) || this.handing.has(t.id)) return
     const key = this.key(t)
     const from = this.agents.record(key)?.kind ?? t.agent?.kind ?? ''
     const to = kindOf(this.settings.get('task.fallback', this.nameOf(t)))

@@ -576,7 +576,7 @@ function Control({ row, phone, set, edit }: { row: SettingRow; phone: boolean; s
   const options = row.options ?? []
   const action = row.key in registry.settingActions
   const only = !row.num && !row.text && !action && options.length <= 1 && (options[0] ?? row.value) === row.value
-  if (row.fixed || !row.key || only) return <span className="truncate text-fg2">{shown(row.value)}</span>
+  if (row.fixed || !row.key || only) return <span className="text-right text-pretty text-fg2 [overflow-wrap:anywhere]">{shown(row.value)}</span>
   if (row.num) return <NumberValue label={row.label} value={row.value} num={row.num} onEdit={edit} onSave={set} />
   if (row.text) return <TextValue label={row.label} value={row.value} onEdit={edit} onSave={set} />
   // an action (alerts: turn them on for this device) is a button, its row's value the words under its label
@@ -594,6 +594,8 @@ const SEGMENTS = new Set(['notify', 'review.mustFix'])
 
 /** a page's settings: its rows under their group's heading (Tasks, Coordinators, Reviewer), and what it notes under them */
 function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phone: boolean; set: (key: string, value: string | null) => void; refused: (key: string) => string | undefined; clear: (key: string) => void; hint?: string }) {
+  const [pilotError, setPilotError] = useState('')
+  const [running, setRunning] = useState(false)
   const groups: { name?: string; rows: Page['rows'] }[] = []
   for (const row of page.rows) {
     if (groups.length && groups.at(-1)!.name === row.group) groups.at(-1)!.rows.push(row)
@@ -638,23 +640,27 @@ function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phon
         {page.about ? <p className={clsx('text-pretty text-fg2', phone ? 'text-[0.9375rem]' : 'text-[0.8125rem]')}>{page.about}</p> : null}
         {hint ? <p className={clsx('text-pretty text-fg3', phone ? 'text-[0.9375rem]' : 'text-[0.8125rem]')}>{hint}</p> : null}
       </div>
+      {page.name === 'Autopilot' && page.level?.startsWith('p:') ? <div className="flex flex-col items-start gap-2"><Ghost disabled={running} onClick={async () => { setRunning(true); try { const result = await act({ type: 'autopilot-run', place: page.level! }); setPilotError(result.error ?? '') } finally { setRunning(false) } }}>{running ? 'Queuing…' : 'Run now'}</Ghost>{pilotError ? <p role="alert" className="text-need">{pilotError}</p> : null}</div> : null}
       {page === APPEARANCE ? <AppearancePick phone={phone} /> : null}
       {page.secrets && page.level ? <SecretsList level={page.level} secrets={page.secrets} phone={phone} /> : null}
       {page.View ? <page.View phone={phone} /> : null}
-      {groups.map(({ name, rows }, g) => (
-        <div key={name ?? g} className="w-full">
-          {name ? <h3 className={heading(phone)}>{name}</h3> : null}
+      {groups.map(({ name, rows }, g) => {
+        const Group = name === 'Access and limits' ? 'details' : 'div'
+        return <Group key={name ?? g} className="w-full">
+          {name === 'Access and limits' ? <summary className={clsx(heading(phone), 'cursor-pointer')}>Access and limits</summary> : null}
+          {name && name !== 'Access and limits' ? <h3 className={heading(phone)}>{name}</h3> : null}
           <dl className={phone ? card : undefined}>
             {rows.map((row) =>
               row.doc || row.multiline ? (
                 <div key={row.key} className={clsx(rowLook(phone), 'flex-col items-stretch! gap-2.5 pb-3!', row.inherits && 'border-l-2 border-accent pl-3')}>
                   <dt className="flex min-w-0 flex-col">
                     {row.label}
-                    {row.doc ? <Small className="text-pretty">Its coordinator goes through it each heartbeat, and may edit it too.</Small> : null}
+                    {row.doc ? <Small className="text-pretty">What to do, how to judge progress, when to report or ask you, and when to stop.</Small> : null}
                     {under(row)}
                   </dt>
                   <dd>
                     <DocValue label={row.label} file={row.multiline ? 'Private · this role only' : 'HEARTBEAT.md'} privateRules={row.multiline} phone={phone} value={row.value} onSave={(x) => set(row.key, row.multiline ? follows(row, x) : x)} />
+                    {row.instructions ? <p className="mt-3 whitespace-pre-wrap text-base leading-relaxed [overflow-wrap:anywhere]">{row.instructions}</p> : null}
                   </dd>
                 </div>
               ) : row.trigger ? (
@@ -682,8 +688,8 @@ function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phon
               ),
             )}
           </dl>
-        </div>
-      ))}
+        </Group>
+      })}
       {page.note ? (
         <figure className="w-full">
           <figcaption className={heading(phone)}>{page.noteTitle ?? 'Every new brief ends with'}</figcaption>

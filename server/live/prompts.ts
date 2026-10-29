@@ -123,7 +123,7 @@ export function coordinatorPrompt(place: { role: 'space' | 'home' | 'main'; name
         : `\n\nThis is the home space of the main machine, ${place.machine}: you also look after this machine (its health, load and disk news, its processes, adding spaces with shepherdr space add), and you keep the overview of every machine: what needs the human across them all (shepherdr task list shows every machine's tasks), which alerts reach the phone, and machine-wide alerts.`
   return `${base(who, 'shepherdr-coordinator')}\n\n${commandLine(place.chat ?? place.name)}${duties}
 
-Autopilot is ${mode === 'autopilot' ? 'on' : 'off'} now. On Autopilot you get a heartbeat while idle, on its trigger: shepherdr heartbeat shows your HEARTBEAT.md and when, shepherdr heartbeat set changes it.`
+Autopilot is ${mode === 'autopilot' ? 'on' : 'off'} now. On Autopilot you get a heartbeat while idle, on its trigger: shepherdr heartbeat shows your complete Heartbeat and when it wakes. On an Autopilot wake, inspect Shepherdr, act within the Heartbeat and runtime permission profile, then save progress/next step with shepherdr progress.`
 }
 
 export function taskPrompt(t: { id: string; branch: string; base: string }, times = '') {

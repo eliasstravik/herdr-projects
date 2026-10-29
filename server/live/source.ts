@@ -14,6 +14,9 @@ import { Emitter, type Overview, type Source, type SourceEvents } from '../sourc
 import { HOME, readJson, writeJson } from '../store.ts'
 import { ROOT } from '../root.ts'
 import { wrapPage } from '../frame.ts'
+import { PilotRuns, pilotCommand, type PilotRun } from './autopilot.ts'
+import { PilotUsage } from './autopilot-usage.ts'
+import { prepareSandbox, sandboxAvailable, type SandboxLaunch } from './autopilot-sandbox.ts'
 import { Agents, hidden, type Spec } from './agents.ts'
 import { herdr } from './herdr.ts'
 import { followCommand, isCommand } from './commands.ts'
@@ -30,7 +33,7 @@ import { listFolders, makeRepo, resolveInHome } from './folders.ts'
 import { sh, validateBase } from './engine/git.ts'
 import { Artifacts, browserChecker, type ArtifactRec, type Checker } from './artifacts.ts'
 import { Machines } from './machines.ts'
-import { agentEnv, BOX, boxHome } from './box.ts'
+import { run, agentEnv, BOX, boxHome } from './box.ts'
 import { fileType } from '../../shared/files.ts'
 import { Mirror } from './mirror.ts'
 import { claudeProjectDir, piSessionDir } from './readers/find.ts'
@@ -75,6 +78,9 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   engine = new Engine(this.agents, this.chats, this.places, this.settings)
   automations = new Automations()
   heartbeats = new Heartbeats()
+  pilots = new PilotRuns()
+  private pilotUsage = new PilotUsage()
+  private pilotSandboxes = new Map<string, SandboxLaunch>()
   artifacts = new Artifacts()
   /** agents' secrets: one file on the main machine, which a worker for another machine reads there */
   vault = new Vault(process.env.SHEPHERDR_MAIN_HOME || HOME)
@@ -150,6 +156,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   constructor() {
     super()
     this.timers.push(setInterval(() => void this.drainRequestedNews(), 1000))
+    this.configureAutopilot()
     this.agents.secretScope = (chat) => {
       const space = /^[^/]+\/(Agent|Reviewer)$/.test(chat) ? this.engine.task(chat.split('/')[0])?.project : this.places.find(chat)?.id === chat ? chat : undefined
       return space ? [space, placeId.machine(), 'all'] : undefined
@@ -325,6 +332,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   }
 
   stop() {
+    for (const box of this.pilotSandboxes.values()) void box.close()
     this.peers?.stop()
     this.mirror?.stop()
     this.timers.forEach(clearInterval)
@@ -501,7 +509,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         NAME,
         (id) => this.heartbeats.read(id, this.roleOf(id)),
         this.pushWarnings(),
-      ).concat(this.places.spaces.map((p) => {
+      ).map((section) => this.pilotSection(section)).concat(this.places.spaces.map((p) => {
         const id = placeId.space(p.name)
         this.engine.taskIds.ensure(id, p.key)
         const seq = this.engine.taskIds.get(id)
@@ -917,9 +925,11 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   private coordinator(id: string, o: { as?: Harness; restart?: () => Promise<string | undefined> } = {}) {
     const c = this.places.coordinator(id)
     if (!c) throw new Error(`No place ${id}`)
-    const set = this.settings.harness('coordinator', this.spaceKey(id))
+    const pilot = this.pilots.current(id)
+    if (this.places.mode(id) === 'autopilot' && (!pilot || !['on', 'starting'].includes(pilot.state))) throw new Error(pilot?.error || 'Autopilot is stopped. Turn it off or retry its settings.')
+    const set = this.places.mode(id) === 'autopilot' ? pilot!.config.harness : this.settings.harness('coordinator', this.spaceKey(id))
     const rec = this.agents.record(id)
-    const h = o.as ?? (rec ? undefined : set)
+    const h = o.as ?? (this.places.mode(id) === 'autopilot' ? set : rec ? undefined : set)
     const spec: Spec = {
       key: id,
       name: c.name,
@@ -930,16 +940,210 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       workspace: c.workspace,
       was: (c as { was?: string }).was,
       tab: c.tab,
-      system: coordinatorPrompt({ role: this.roleOf(id), name: c.label, path: c.path, machine: NAME, chat: id }, this.places.mode(id)) + '\n\n' + privatePrompt(this.settings.instructions('coordinator', this.spaceKey(id))),
+      system: coordinatorPrompt({ role: this.roleOf(id), name: c.label, path: c.path, machine: NAME, chat: id }, this.places.mode(id)) + (pilot && this.places.mode(id) === 'autopilot' ? `\n\nHeartbeat instructions:\n${this.heartbeats.read(id, this.roleOf(id), true)}\n\nRuntime settings:\n${this.pilotWords(pilot)}\n\nSaved progress:\n${readJson<Record<string,string>>('autopilot-progress.json', {})[id] ?? '(none yet)'}` : '') + '\n\n' + privatePrompt(this.settings.instructions('coordinator', this.spaceKey(id))),
       env: agentEnv(id, ROOT),
     }
-    return o.restart ? this.agents.restart(spec, o.restart) : this.agents.ensure(spec)
+    return o.restart ? this.agents.restart({ ...spec, fresh: this.pilots.busy(id) }, o.restart) : this.agents.ensure(spec)
+  }
+
+  private pilotSection(section: import('../../shared/types.ts').SettingSection) {
+    if (section.name !== 'Autopilot' || !section.level?.startsWith('p:')) return section
+    const place = section.level, r = this.pilots.current(place)
+    let instructions: string
+    try { instructions = this.pilotWords({ config: this.settings.pilot(this.spaceKey(place)) } as PilotRun) }
+    catch (e) { instructions = (e as Error).message }
+    const h = this.settings.heartbeat(this.levelOf(place))
+    const next = this.places.mode(place) === 'autopilot' && r?.state === 'on' ? this.heartbeats.next(place, h.time, h.zone) : undefined
+    return { ...section, rows: section.rows.map((row) => row.doc ? { ...row, instructions } : row).concat([
+      { label: 'State', key: '', value: this.pilots.busy(place) ? 'Changing coordinator; messages wait' : r?.error ?? (this.places.mode(place) === 'autopilot' ? 'On' : 'Off'), fixed: true, group: 'Wake-up' },
+      { label: 'Time zone', key: '', value: h.zone, fixed: true, group: 'Wake-up' },
+      { label: 'Next', key: '', value: next ? new Date(next).toLocaleString('en-GB', { timeZone: h.zone }) : 'No scheduled wake', fixed: true, group: 'Wake-up' },
+      { label: 'Last run', key: '', value: r?.last ? `${new Date(r.last.at).toLocaleString('en-GB', { timeZone: h.zone })} · ${r.last.reason} · ${r.last.outcome}${r.last.ended ? ` · ${Math.round((r.last.ended - r.last.at) / 1000)} s` : ''}` : 'No runs yet', fixed: true, group: 'Wake-up' },
+      { label: 'Shared usage', key: '', value: `${r?.used ?? 0} reported tokens`, fixed: true, group: 'Access and limits' },
+    ]) }
+  }
+
+  private pilotOf(key?: string) {
+    if (!key) return undefined
+    const owned = key.includes('/') ? this.engine.task(key.split('/')[0])?.pilot : undefined
+    return owned ? this.pilots.runs.find((r) => r.id === owned) : this.places.mode(key) === 'autopilot' ? this.pilots.current(key) : undefined
+  }
+
+  private pilotWords(r: PilotRun) {
+    return `Agent: ${harnessWords(r.config.harness)}\nPermission profile: Isolated workspace (Linux namespaces). Coordinator reads the project; workers write only their own worktree. Git metadata is read-only; save commits through shepherdr checkpoint. Host files, sockets and local network are hidden.\nNetwork: HTTPS to ${r.config.hosts.join(', ') || 'no hosts'}.\nAccounts: selected agent provider login only. Secrets: ${r.config.secrets.join(', ') || 'none'}.\nHuman approval: ${r.config.approvals.join(', ') || 'no merges require approval'}; settings, deleting tasks and unrelated work always need the human.\nShared reported token allowance: ${r.config.tokens ?? 'off'} (delayed log reports, can overshoot; not a money cap).\nShared runtime: ${r.config.runtime ? `${r.config.runtime / 60000} min elapsed since ON` : 'off'}.\nMaximum parallel Shepherdr tasks: ${r.config.parallel}. Native helpers and reviewers remain inside their parent's runtime and share its allowance. No automatic fallback.`
+  }
+
+  private configureAutopilot() {
+    this.engine.pilotOwner = (key) => {
+      const r = this.pilotOf(key)
+      if (!r) return undefined
+      this.pilots.check(r, this.activePilotTasks(r))
+      return r.id
+    }
+    this.engine.pilotClaim = (t) => this.pilots.claim(this.pilots.runs.find((r) => r.id === t.pilot)!, t.id)
+    this.engine.pilotGate = (t) => {
+      if (!t.pilot) return
+      const r = this.pilots.runs.find((r) => r.id === t.pilot)
+      if (!r) throw new Error('Autopilot run no longer exists.')
+      this.pilots.check(r, this.activePilotTasks(r, t.id))
+      this.pilots.claim(r, t.id)
+    }
+    this.agents.launchAllowed = (spec) => {
+      const r = this.pilotOf(spec.key)
+      if (r && spec.key.includes('/')) this.pilots.check(r, this.activePilotTasks(r, spec.key.split('/')[0]))
+      if (r && !['starting', 'on', 'workers'].includes(r.state)) throw new Error(r.error || 'This Autopilot run has stopped.')
+      if (!spec.key.includes('/') && this.pilots.busy(spec.key) && !spec.fresh) throw new Error('The coordinator is changing; messages are queued.')
+      // A saved isolated session must never be resumed without its trusted owner.
+      if (this.agents.record(spec.key)?.isolation && !r && this.places.mode(spec.key) !== 'regular') throw new Error('The isolated run has no active owner.')
+    }
+    this.agents.prepare = async (spec) => {
+      const r = this.pilotOf(spec.key)
+      if (!r) return { ...spec, isolation: undefined }
+      const old = this.pilotSandboxes.get(spec.key)
+      if (old) { await old.close(); this.pilotSandboxes.delete(spec.key) }
+      const project = spec.key.includes('/') ? this.engine.task(spec.key.split('/')[0])?.project : r.place
+      const repo = project && this.places.space(project)?.path
+      if (!repo) throw new Error('Isolated Autopilot needs a repository space. Home-space Autopilot is unavailable.')
+      const box = await prepareSandbox(spec, r, repo, (args, ctx) => this.pilotCli(r, args, ctx))
+      this.pilotSandboxes.set(spec.key, box)
+      return { ...spec, env: { ...spec.env, ...box.env }, isolation: { run: r.id, home: box.logsHome, control: join(dirname(box.logsHome), 'control'), path: box.wrapper }, fresh: spec.fresh || this.agents.record(spec.key)?.isolation?.run !== r.id }
+    }
+    this.agents.on('status', (key, state) => {
+      if (key.includes('/')) return
+      const r = this.pilotOf(key)
+      if (r?.state === 'on' && r.last && state === 'working') this.pilots.outcome(r, 'Running')
+      if (r?.state === 'on' && r.last?.outcome === 'Running' && ['idle', 'done'].includes(state)) this.pilots.outcome(r, 'Turn ended; inspect chat for the result', true)
+    })
+    // A server restart loses gateway sockets. Fail closed, including all owned workers, instead of reviving them unrestricted.
+    for (const r of this.pilots.runs) if (['starting', 'on', 'stopping', 'workers'].includes(r.state)) {
+      r.state = 'failed'; r.error = 'Server restarted. Retry Autopilot or turn it off to start a fresh coordinator.'
+      void this.stopPilotAgents(r, false)
+    }
+    this.pilots.save()
+    this.timers.push(setInterval(() => void this.monitorPilots(), 1000))
+  }
+
+  private activePilotTasks(r: PilotRun, except?: string) {
+    return this.engine.tasks.filter((t) => t.pilot === r.id && t.id !== except && !ended(t) && !t.stopped && !t.todo && !t.held && !t.paused).length
+  }
+
+  private async pilotCli(r: PilotRun, args: string[], ctx: { chat: string; cwd: string; stdin?: string }) {
+    try {
+      this.pilots.check(r, -1)
+      pilotCommand(r, ctx.chat, args)
+      const p = parseArgs(args)
+      if (args[0] === 'task' && args[1] === 'add') {
+        const project = this.placeOfCommand(p, ctx)
+        if (placeId.space(project?.name ?? '') !== r.place) throw new Error('New tasks must stay in this Autopilot space.')
+        this.pilots.check(r, this.activePilotTasks(r))
+      }
+      if (args[0] === 'secret' && ['run', 'env'].includes(args[1])) {
+        const names = p.words.slice(2)
+        if (names.some((n) => !r.config.secrets.includes(n))) throw new Error('That secret is outside this permission profile.')
+        const chain = [r.place, placeId.machine(), 'all']
+        return { out: '', code: 0, secrets: this.secretValues(names, chain) }
+      }
+      if (args[0] === 'checkpoint') {
+        const t = this.engine.task(ctx.chat.split('/')[0])
+        if (!t?.worktree || t.pilot !== r.id || args.length !== 2 || !args[1].trim()) throw new Error('Use shepherdr checkpoint "commit message" from your owned task.')
+        const safe = ['git', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-C', t.worktree]
+        for (const op of [['add', '--all'], ['commit', '-m', args[1]]]) {
+          const result = await run([...safe, ...op], { timeoutMs: 30000, env: { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' } })
+          if (result.code) throw new Error(result.err || result.out)
+        }
+        return { out: 'Saved commit.\n', code: 0 }
+      }
+      if (args[0] === 'progress') {
+        if (args.length !== 1 && args.length !== 2) throw new Error('Use shepherdr progress ["progress and next step"].')
+        const saved = readJson<Record<string,string>>('autopilot-progress.json', {})
+        if (args[1] !== undefined) { saved[r.place] = args[1].slice(0, 20000); writeJson('autopilot-progress.json', saved) }
+        return { out: `${saved[r.place] ?? '(none yet)'}\n`, code: 0 }
+      }
+      return await this.cli(args, ctx)
+    } catch (e) { return { out: `${(e as Error).message}\n`, code: 1 } }
+  }
+
+  private async stopPilotAgents(r: PilotRun, keepWorkers: boolean) {
+    for (const key of [...(this.agents.record(r.place)?.isolation?.run === r.id ? [r.place] : []), ...(!keepWorkers ? this.engine.tasks.filter((t) => t.pilot === r.id && !ended(t)).map((t) => `${t.id}/Agent`) : [])]) {
+      await this.agents.finish(key)
+      const box = this.pilotSandboxes.get(key)
+      if (box) { await box.close(); this.pilotSandboxes.delete(key) }
+    }
+  }
+
+  private async switchPilot(place: string, mode: 'autopilot' | 'regular', keepWorkers = false, replace = false, harness?: Harness) {
+    if (!this.places.coordinator(place)) throw new Error('No such place.')
+    if (!replace && this.places.mode(place) === mode) return
+    await this.pilots.transition(place, async () => {
+      let next: PilotRun | undefined
+      if (mode === 'autopilot') {
+        const config = this.settings.pilot(this.spaceKey(place))
+        if (harness) config.harness = harness
+        if (!this.places.space(place)) throw new Error('Autopilot needs a repository space; home spaces are not isolated projects.')
+        await sandboxAvailable()
+        if (!this.engine.installed(config.harness.kind)) throw new Error(`${config.harness.kind} is not installed.`)
+        next = this.pilots.begin(place, config)
+      }
+      const old = this.pilots.runs.findLast((r) => r.place === place && r !== next && ['starting', 'on', 'failed'].includes(r.state))
+      if (old) old.state = 'stopping'
+      this.heartbeats.switched(place, false)
+      try {
+        await this.agents.stopTurn(place)
+        const history = recentChat(this.chats.chat(place).messages, 'Coordinator')
+        if (old) { await this.stopPilotAgents(old, keepWorkers && mode === 'regular'); old.state = keepWorkers && mode === 'regular' ? 'workers' : 'stopped' }
+        this.places.setMode(place, mode)
+        const to = mode === 'autopilot' ? next!.config.harness : this.settings.harness('coordinator', this.spaceKey(place))
+        await this.coordinator(place, { as: to, restart: async () => hidden(`Fresh ${mode === 'autopilot' ? 'Autopilot' : 'regular'} coordinator. Same chat and saved progress.\n\nRecent chat:\n${history}\n\nRead Heartbeat, inspect Shepherdr using its tools, act within the permission profile, and save progress/next step with shepherdr progress.`, 'mode') })
+        if (next) { next.state = 'on'; this.heartbeats.switched(place, true) }
+        this.pilots.save()
+        const id = `mode:${mode}:${Date.now()}`
+        this.chats.post(place, { id, card: modeCard(id, mode) })
+      } catch (e) {
+        if (next) { this.places.setMode(place, 'autopilot'); next.state = 'failed'; next.error = `Autopilot did not start: ${(e as Error).message}` }
+        if (old) old.state = 'failed'
+        this.pilots.save()
+        await this.agents.finish(place)
+        throw e
+      } finally { this.emit('chat', place); this.emit('snapshot') }
+    })
+  }
+
+  private async replacePilots(level?: string) {
+    for (const p of this.placeList()) if (p.mode === 'autopilot' && (!level || level === 'all' || level.startsWith('m:') || level === p.id)) await this.switchPilot(p.id, 'autopilot', false, true)
+  }
+
+  private async wakePilot(place: string, reason: string) {
+    if (this.pilots.busy(place)) throw new Error('The coordinator is changing.')
+    const r = this.pilotOf(place)
+    if (!r) throw new Error('Turn Autopilot on first.')
+    this.pilots.wake(r, reason)
+    const text = this.heartbeats.beat(place, this.roleOf(place))
+    if (!text) { this.pilots.outcome(r, 'Heartbeat is empty', true); return }
+    try {
+      const sent = await this.agents.send(place, hidden(text, 'heartbeat'), { ensure: () => this.coordinator(place), idle: true })
+      this.pilots.outcome(r, sent.waiting ? 'Queued until idle' : 'Delivered')
+    } catch (e) { this.pilots.outcome(r, `Failed: ${(e as Error).message}`, true); throw e }
+    this.emit('snapshot')
+  }
+
+  private async monitorPilots() {
+    for (const r of this.pilots.runs.filter((r) => r.state === 'on' || r.state === 'workers')) {
+      // Chat usage is provider-reported and delayed. It is a stop threshold, never an exact billing cap.
+      r.used = Math.max(r.used, this.pilotUsage.tokens(r.id))
+      this.pilots.save()
+      try { this.pilots.check(r, -1) }
+      catch (e) { r.state = 'failed'; r.error = (e as Error).message; this.pilots.save(); await this.stopPilotAgents(r, false); this.emit('snapshot') }
+    }
   }
 
   /** a coordinator started again on this CLI, model and effort: the same CLI resumes its session, another takes over
    *  with its role's prompt and the chat's last words. Its tasks go on as they are; a card in its chat marks it */
   private async restartCoordinator(id: string, to: Harness) {
     if (!this.places.coordinator(id)) throw new Error(`No place ${id}`)
+    if (this.places.mode(id) === 'autopilot') {
+      await this.switchPilot(id, 'autopilot', false, true, to)
+      return harnessWords(to)
+    }
     if (!this.engine.installed(to.kind)) throw new Error(`${CLI_NAME[to.kind] ?? to.kind} isn't installed on this machine.`)
     const h = fitHarness(to)
     const words = harnessWords(h)
@@ -1224,18 +1428,21 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     if (!has('autopilot') || !this.agents.reachable) return
     for (const p of this.placeList()) {
       if (p.mode !== 'autopilot' || this.peers?.owner(p.id)) continue
+      if (this.pilots.busy(p.id) || this.pilotOf(p.id)?.state !== 'on') continue
       const h = this.settings.heartbeat(this.levelOf(p.id))
       if (!this.heartbeats.due(p.id, h.time, h.zone, now) || !this.idle(p.id)) continue
-      const text = this.heartbeats.beat(p.id, this.roleOf(p.id), now)
-      if (text) this.agents.send(p.id, hidden(text, 'heartbeat'), { ensure: () => this.coordinator(p.id), idle: true }).catch(() => undefined)
+      void this.wakePilot(p.id, 'Schedule').catch(() => undefined)
     }
   }
 
   /** does news wake this coordinator at once: always off Autopilot; on it, when its heartbeat's event rules name it.
    *  News they don't name waits for its next heartbeat */
   private wakes(id: string, h: Happened, line: string) {
+    if (this.pilots.busy(id)) { this.heartbeats.hold(id, line); return false }
     if (this.places.mode(id) !== 'autopilot') return true
-    if (matches(this.settings.heartbeat(this.levelOf(id)).on, h)) return true
+    const r = this.pilotOf(id)
+    if (!r || r.state !== 'on') { this.heartbeats.hold(id, line); return false }
+    if (matches(this.settings.heartbeat(this.levelOf(id)).on, h)) { this.pilots.wake(r, `Event: ${h.event}`); return true }
     this.heartbeats.hold(id, line)
     return false
   }
@@ -1489,16 +1696,12 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         const mode = asMode(a.mode)
         if (!mode) return { ok: false, error: 'No such mode.' }
         if (mode === 'autopilot' && !has('autopilot')) return { ok: false, error: 'Autopilot is not in the plugin list.' }
-        if (this.places.mode(a.place) === mode) return {}
-        this.places.setMode(a.place, mode)
-        this.heartbeats.switched(a.place, mode === 'autopilot')
-        // a small card in the place's chat marks when the mode began; the coordinator is told quietly
-        const id = `mode:${mode}:${Date.now()}`
-        this.chats.post(a.place, { id, card: modeCard(id, mode) })
-        if (this.watched.includes(a.place)) this.emit('chat', a.place)
-        if (this.agents.status(a.place) !== 'gone') await this.agents.send(a.place, hidden(`Autopilot is now ${mode === 'autopilot' ? 'on: you also work on your own, by your Autopilot rules, and get a heartbeat while idle' : 'off: do what the human asks, nothing on your own, and no more heartbeats'}. A card in this chat already tells the human: don't announce it, reply with only <no-reply>reason</no-reply>.`, 'mode', { mode }))
-        this.emit('snapshot')
-        return {}
+        try { await this.switchPilot(a.place, mode, a.keepWorkers); return { ok: true } }
+        catch (e) { return { ok: false, error: (e as Error).message } }
+      }
+      case 'autopilot-run': {
+        try { await this.wakePilot(a.place, 'Run now'); return { ok: true } }
+        catch (e) { return { ok: false, error: (e as Error).message } }
       }
       case 'model':
       case 'effort':
@@ -1542,6 +1745,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
           const at = this.placeList().find((p) => p.id === a.place)
           if (!at) return { ok: false, error: 'No such place.' }
           this.heartbeats.write(at.id, a.value ?? '')
+          if (this.places.mode(at.id) === 'autopilot') await this.switchPilot(at.id, 'autopilot', false, true)
           this.emit('snapshot')
           return { ok: true }
         }
@@ -1549,7 +1753,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         const pr = a.place?.startsWith('p:') ? this.spaceKey(a.place) : undefined
         if (a.place?.startsWith('p:') && !pr) return { ok: false, error: 'No such space.' }
         const r = this.settings.set(a.key, a.value, pr ? { space: pr } : a.place?.startsWith('m:') ? 'machine' : 'all')
-        if (r.ok) this.settingChanged(a.key)
+        if (r.ok) { this.settingChanged(a.key); if (a.key.startsWith('autopilot.') || /^coordinator\.(agent|model|effort)$/.test(a.key)) await this.replacePilots(a.place) }
         return r
       }
       case 'archive': {
@@ -2239,6 +2443,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
           if (!r.ok) throw new Error(r.error)
         }
         this.settingChanged(a1)
+        if (a1.startsWith('autopilot.') || /^coordinator\.(agent|model|effort)$/.test(a1)) await this.replacePilots()
         const where = pr ? `${named}'s` : level === 'machine' ? `${NAME}'s` : "Everywhere's"
         const now = this.settings.get(a1, pr)
         // a trigger in words too, to tell the human
@@ -2567,7 +2772,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       const after = p.opts.after ?? []
       const agent = harnessOf(p, this.settings)
       const reviewer = reviewerOf(p, this.settings)
-      const t = this.engine.add({ project: pr.name, base: one(p, 'base'), title, desc: one(p, 'brief') ?? one(p, 'desc'), by: this.byWho(ctx), requester: this.requestedNews.known(ctx.chat), after, later: p.flags.has('later'), agent, reviewer, set })
+      const t = this.engine.add({ project: pr.name, base: one(p, 'base'), title, desc: one(p, 'brief') ?? one(p, 'desc'), by: this.byWho(ctx), requester: this.pilotOf(ctx.chat) ? ctx.chat : this.requestedNews.known(ctx.chat), after, later: p.flags.has('later'), agent, reviewer, set })
       const on = [CLI_NAME[t.agent!.kind] ?? t.agent!.kind, t.agent!.model, t.agent!.effort && `${t.agent!.effort} effort`].filter(Boolean).join(', ')
       if (t.after?.length) return `Added ${t.id}: ${t.title}, queued after ${t.after.join(', ')}. Its agent (${on}) reads the brief now and waits; Shepherdr tells it to go once ${t.after.length === 1 ? 'that task is' : 'they are all'} done.`
       if (p.flags.has('later')) return `Added ${t.id}: ${t.title}, for later. Its agent (${on}) reads the brief now and waits for a go (shepherdr task tell ${t.id} "go").`

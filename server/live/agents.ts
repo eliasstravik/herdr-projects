@@ -5,8 +5,9 @@ import { LinkBackoff } from './recovery.ts'
 // Codex and pi take it mid-turn, as steering). It waits only while the CLI shows a menu or permission prompt, where typed
 // text could pick an option, or is still starting; then it goes in as soon as it can.
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, watch, type FSWatcher } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { homedir } from 'node:os'
+import { mkdirSync, statSync, watch, type FSWatcher } from 'node:fs'
+import { dirname, join, relative } from 'node:path'
 import { Emitter } from '../source.ts'
 import { readJson, writeJson } from '../store.ts'
 import type { AgentRuntime, TermScreen } from '../../shared/types.ts'
@@ -58,6 +59,8 @@ export function carryClaudeSession(id: string, cwd: string): string | undefined 
 }
 
 export interface AgentRecord {
+  /** Trusted isolation metadata; never set by a prompt. */
+  isolation?: { run: string; home: string; control: string; path: string }
   /** chat key */
   key: string
   /** herdr agent name */
@@ -108,7 +111,7 @@ export interface OutItem {
 /** what starts an agent: its record, the first thing it is told, and where its pane comes from when it isn't its
  *  workspace by label (a task's herdr worktree space) */
 /** was: the label its workspace had before, renamed in place when that one is still open */
-export type Spec = Omit<AgentRecord, 'logs' | 'started'> & { first?: string; pane?: () => Promise<string>; was?: string }
+export type Spec = Omit<AgentRecord, 'logs' | 'started'> & { first?: string; pane?: () => Promise<string>; was?: string; fresh?: boolean }
 
 /** why what you send waits: a menu or permission prompt is up, the agent is starting, or (a CLI command) mid-turn */
 export type Hold = 'menu' | 'start' | 'turn'
@@ -253,6 +256,9 @@ export class Agents extends Emitter<Events> {
   beforeInput?: (key: string) => Promise<void>
   /** whether its log shows its turn ended after this time: a turn cut short (Esc, a prompt turned down) runs no hook */
   endedSince?: (key: string, at: number) => boolean
+
+  prepare?: (spec: Spec) => Promise<Spec>
+  launchAllowed?: (spec: Spec) => void
 
   constructor() {
     super()
@@ -423,7 +429,7 @@ export class Agents extends Emitter<Events> {
       // learn log files herdr names (its agent integrations report them)
       for (const [name, key] of this.byName) this.learnSession(key, this.live.get(name))
       // and the session its hooks say it is in now, which herdr doesn't name: a /clear starts another
-      for (const key of this.byName.values()) this.followSession(key)
+      for (const key of this.byName.values()) { this.followSession(key); if (this.records[key]?.isolation) this.discoverLog(key) }
       // what waits goes in as soon as its agent can take it
       for (const key of new Set(this.outbox.map((o) => o.key))) if (!this.heldBy(key)) this.deliver(key)
       this.checkStranded()
@@ -448,6 +454,10 @@ export class Agents extends Emitter<Events> {
 
   /** Bind the actual CLI process, not HERDR_PANE_ID (old shells can inherit another pane's id). */
   private async bindRoute(r: AgentRecord, pane: string) {
+    if (r.isolation) {
+      if (!r.finished) { this.routes.set(r.key, `isolated:${r.isolation.run}`); this.emit('routed', r.key) }
+      return
+    }
     const p = await herdr.processInfo(pane)
     const proc = p.foreground_processes?.find((x) => x.pid && isAgentProcess(r.kind, x.argv))
     if (!proc?.pid || r.finished || this.records[r.key]?.finished || this.stopping.has(r.key)) { this.routes.delete(r.key); this.secretAccess.revoke(r.key); return }
@@ -587,11 +597,11 @@ export class Agents extends Emitter<Events> {
     const r = this.records[key]
     const s = a?.agent_session
     if (!r || !s) return
-    if (s.kind === 'path' && addLog(r, mirrored(s.value))) {
+    if (s.kind === 'path' && addLog(r, r.isolation ? this.isolatedPath(r, s.value) : mirrored(s.value))) {
       this.save()
       this.emit('logs', key)
     } else if (s.kind === 'id' && r.kind === 'claude') {
-      const p = claudeLogPath(r.cwd, s.value)
+      const p = r.isolation ? this.isolatedPath(r, join(homedir(), '.claude/projects', r.cwd.replace(/[^a-zA-Z0-9-]/g, '-'), `${s.value}.jsonl`)) : claudeLogPath(r.cwd, s.value)
       if (addLog(r, p)) {
         r.sessionId = s.value
         this.save()
@@ -608,7 +618,7 @@ export class Agents extends Emitter<Events> {
     const s = this.hooks.read(mirrored(r.hooks)).session
     // another machine's copy of its events may still be an earlier run's, until the new run's first event comes
     if (!s || s.id === r.sessionId || s.at < r.started - 5000) return
-    const log = s.log ? mirrored(s.log) : claudeLogPath(r.cwd, s.id)
+    const log = r.isolation ? this.isolatedPath(r, s.log ?? join(homedir(), '.claude/projects', r.cwd.replace(/[^a-zA-Z0-9-]/g, '-'), `${s.id}.jsonl`)) : s.log ? mirrored(s.log) : claudeLogPath(r.cwd, s.id)
     r.sessionId = s.id
     addLog(r, log)
     this.save()
@@ -632,11 +642,23 @@ export class Agents extends Emitter<Events> {
     for (const ms of [1500, 5000, 15000, 60000, 180000]) setTimeout(look, ms)
   }
 
+  private isolatedPath(r: AgentRecord, file: string) {
+    return r.isolation && file.startsWith(homedir() + '/') ? join(r.isolation.home, relative(homedir(), file)) : file
+  }
+
   /** find a log file this CLI started since the agent (re)started, when herdr didn't name one */
   discoverLog(key: string) {
     const r = this.records[key]
     if (!r) return
     const since = r.started - 5000
+    if (r.isolation) {
+      const dir = join(r.isolation.home, r.kind === 'claude' ? '.claude/projects' : r.kind === 'codex' ? '.codex/sessions' : '.pi/agent/sessions')
+      mkdirSync(dir, { recursive: true })
+      const files = Array.from(new Bun.Glob('**/*.jsonl').scanSync({ cwd: dir, absolute: true, onlyFiles: true, throwErrorOnBrokenSymlink: false })).filter((f) => statSync(f).mtimeMs >= since).sort((a,b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+      const f = files.find((f) => !f.includes('/subagents/'))
+      if (f && addLog(r, f)) { this.save(); this.emit('logs', key) }
+      return
+    }
     const f = r.kind === 'claude' ? (r.sessionId ? claudeLogPath(r.cwd, r.sessionId) : findClaudeLog(r.cwd, since)) : r.kind === 'codex' ? findCodexLog(r.cwd, since) : r.kind === 'pi' ? findPiLog(r.cwd, since) : undefined
     if (f && addLog(r, f)) {
       this.save()
@@ -685,6 +707,8 @@ export class Agents extends Emitter<Events> {
   ensure(spec: Spec): Promise<AgentInfo | null> {
     const problem = chatProblem(spec.kind)
     if (problem) return Promise.reject(new Error(problem))
+    if (this.stopping.has(spec.key)) return this.starting.get(spec.key) ?? Promise.reject(new Error('Coordinator transition in progress.'))
+    this.launchAllowed?.(spec)
     const running = this.live.get(spec.name)
     if (running) return this.bindRoute({ ...this.records[spec.key], ...spec } as AgentRecord, running.pane_id).then(() => running)
     const p0 = this.starting.get(spec.key)
@@ -694,14 +718,17 @@ export class Agents extends Emitter<Events> {
     return p
   }
 
-  private async launch({ first, pane: place, was, ...spec }: Spec) {
+  private async launch(input: Spec) {
+    this.launchAllowed?.(input)
+    const { first, pane: place, was, fresh, ...spec } = await (this.prepare?.(input) ?? input)
     this.secretAccess.revoke(spec.key)
     this.routes.delete(spec.key)
     const old = this.records[spec.key]
-    const resume = old && old.kind === spec.kind && (old.sessionId || old.logs.length)
+    const resume = !fresh && old && old.kind === spec.kind && (old.sessionId || old.logs.length)
     const r: AgentRecord = old ?? { ...spec, logs: [], started: Date.now() }
     const changedPrompt = old?.system !== spec.system
     const from = old?.cwd
+    r.isolation = spec.isolation
     Object.assign(r, { name: spec.name, kind: spec.kind, cwd: spec.cwd, workspace: spec.workspace, tab: spec.tab ?? r.tab, env: spec.env ?? r.env, access: spec.access ?? r.access, model: spec.model ?? r.model, effort: spec.effort ?? r.effort, system: spec.system ?? r.system, set: spec.set ?? r.set, finished: false })
     this.codexState.delete(spec.key)
     r.started = Date.now()
@@ -714,12 +741,12 @@ export class Agents extends Emitter<Events> {
     this.save()
     task.mkdirSync(r.cwd, { recursive: true })
     // it starts in another folder now: its session goes with it, where --resume looks for it
-    if (resume && r.kind === 'claude' && r.sessionId && from !== r.cwd) {
+    if (resume && !r.isolation && r.kind === 'claude' && r.sessionId && from !== r.cwd) {
       const id = r.sessionId
       const log = carryClaudeSession(id, r.cwd)
       if (log) r.logs = [...r.logs.filter((f) => !f.endsWith(`/${id}.jsonl`)), log]
     }
-    const pane = place ? await place() : await this.paneFor(r, was)
+    const pane = place && !r.isolation ? await place() : await this.paneFor(r, was)
     const args = this.args(r, !!resume)
     this.save()
     // a new pane needs a moment before its shell is at the prompt
@@ -732,6 +759,9 @@ export class Agents extends Emitter<Events> {
         if (code === 'agent_not_ready') break
         if (i >= 8) {
           console.error(`shepherdr: could not start ${r.name}: ${(e as Error).message}`)
+          r.finished = true
+          this.save()
+          await herdr.closePane(pane).catch(() => undefined)
           throw e
         }
         await new Promise((res) => setTimeout(res, 750))
@@ -758,7 +788,7 @@ export class Agents extends Emitter<Events> {
       if (resume && r.sessionId) a.push('--resume', r.sessionId)
       else if (r.sessionId) a.push('--session-id', r.sessionId)
       // its hooks tell Shepherdr what it does (readers/hooks.ts), from a settings file of its own: yours stay untouched
-      const h = hookSettings(HOOKS_DIR, r.name)
+      const h = hookSettings(r.isolation ? join(r.isolation.home, 'hooks') : HOOKS_DIR, r.name, r.isolation ? '/run/shepherdr/bun' : process.execPath)
       r.hooks = h.events
       a.push('--settings', h.settings)
       if (r.system) a.push('--append-system-prompt-file', this.promptFile(r))
@@ -772,7 +802,7 @@ export class Agents extends Emitter<Events> {
     } else if (r.kind === 'codex') {
       // Codex tools have their own environment policy. Set the owner explicitly even on resume;
       // do not depend on the pane's login shell or its stale inherited environment.
-      const env = { ...r.env, ...agentEnv(r.key, ROOT) }
+      const env = r.isolation ? { SHEPHERDR_CHAT: r.key, SHEPHERDR_COMMAND: '/run/shepherdr/bin/shepherdr', SHEPHERDR_URL: 'http://127.0.0.1:18765', PATH: '/run/shepherdr/bin:/usr/local/bin:/usr/bin:/bin' } : { ...r.env, ...agentEnv(r.key, ROOT) }
       a.push('-c', `shell_environment_policy.set={${Object.entries(env).map(([k, v]) => `${JSON.stringify(k)}=${JSON.stringify(v)}`).join(',')}}`)
       // its own last log: a task it took over keeps the logs of the agent before it too
       const id = resume ? r.logs.findLast((f) => (logKind(f) ?? 'codex') === 'codex')?.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/)?.[1] : undefined
@@ -786,7 +816,7 @@ export class Agents extends Emitter<Events> {
 
   /** instructions go in a file: long text with quotes and newlines can't travel as a shell argument */
   private promptFile(r: AgentRecord) {
-    const f = promptPath(r.name)
+    const f = r.isolation ? join(r.isolation.control, `${r.name}.prompt.md`) : promptPath(r.name)
     task.mkdirSync(dirname(f), { recursive: true })
     task.writeFileSync(f, r.system ?? '')
     return f
@@ -795,6 +825,7 @@ export class Agents extends Emitter<Events> {
   /** the files Shepherdr starts its CLI with now, by flag: its hooks' settings and its instructions. One started with
    *  others (herdr restored an older command after it restarted) runs without them */
   filesOf(r: AgentRecord): Record<string, string> {
+    if (r.isolation) return {} // host paths differ from the namespace; the wrapper is verified before every launch
     if (r.kind === 'claude') return { '--settings': join(HOOKS_DIR, `${r.name}.settings.json`), ...(r.system ? { '--append-system-prompt-file': promptPath(r.name) } : {}) }
     if (r.kind === 'pi' && r.system) return { '--append-system-prompt': promptPath(r.name) }
     return {}

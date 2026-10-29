@@ -164,6 +164,11 @@ export function findLog(cli: string, cwd: string, sinceMs?: number): string | un
 
 /** which CLI wrote this log, by where it lies: an agent a backup took over from has logs of two CLIs */
 export function logKind(file: string): string | undefined {
+  if (file.includes('/autopilot-runtime/')) {
+    if (file.includes('/.claude/')) return 'claude'
+    if (file.includes('/.codex/')) return 'codex'
+    if (file.includes('/.pi/')) return 'pi'
+  }
   const under = (dir: string) => file.startsWith(`${trimSlash(dir)}/`)
   if (under(join(claudeHome(), 'projects'))) return 'claude'
   if (under(join(codexHome(), 'sessions'))) return 'codex'

@@ -6,6 +6,8 @@
 // Settings come in two groups: what agents are told (only words in their prompts) and how Shepherdr runs (the rest).
 // The main machine keeps the Everywhere level; a worker for another machine (machines.ts) reads it from the main
 // machine's file as it changes, and its shepherdr set for Everywhere is run there.
+import { AUTOPILOT_KINDS, hostList, pilotProblem, type PilotConfig } from './autopilot.ts'
+import { modelArg } from './models.ts'
 import { CHAT_KINDS, chatProblem } from './readers/index.ts'
 import { cpus, totalmem } from 'node:os'
 import { NOTIFY, NOTIFY_DEFAULT, NOTIFY_KEY } from '../../shared/alerts.ts'
@@ -202,14 +204,21 @@ export const CATALOG: Section[] = [
     rows: [{ label: 'Archive Done after', key: 'tasks.archiveAfter', value: '7 days', num: { min: 1, max: 3650, unit: 'days', one: 'day', off: true } }],
   },
   {
-    // Autopilot's heartbeat, a trigger (trigger.ts): when its coordinator goes through its HEARTBEAT.md (a time rule),
-    // and the news that wakes it at once (event rules; the rest waits for the heartbeat), then the checklist itself (a
-    // row of its own at each level, sections). Any limit the human wants is words in the checklist
     name: AUTOPILOT,
-    about: 'On Autopilot, a coordinator works on its own within what you asked for, and asks you when unsure. Each heartbeat, it goes through its checklist; the news you pick wakes it at once. Want a limit, such as 5 new tasks a day? Write it in the checklist.',
+    about: 'One brief, a wake-up schedule and an isolated agent. Turning it on replaces the coordinator and keeps this chat. Access and limits apply to its workers too.',
     rows: [
-      { label: 'Heartbeat', key: 'heartbeat.when', value: HEARTBEAT_RULE },
-      { label: 'Wakes at once on', key: 'heartbeat.on', value: 'all news' },
+      { group: 'Wake-up', label: 'When', key: 'heartbeat.when', value: HEARTBEAT_RULE },
+      { group: 'Wake-up', label: 'Events', key: 'heartbeat.on', value: 'all news' },
+      { group: 'Agent', label: 'Agent', key: 'autopilot.agent', value: 'inherit', options: ['inherit', ...AUTOPILOT_KINDS.map(nameOf)] },
+      { group: 'Agent', label: 'Model', key: 'autopilot.model', value: 'inherit', text: true },
+      { group: 'Agent', label: 'Effort', key: 'autopilot.effort', value: 'inherit', options: ['inherit', ...EFFORTS] },
+      { group: 'Access and limits', label: 'Permission profile', key: 'autopilot.access', value: 'Isolated workspace', options: ['Isolated workspace'] },
+      { group: 'Access and limits', label: 'Network hosts (HTTPS)', key: 'autopilot.hosts', value: 'api.openai.com, chatgpt.com, api.anthropic.com', text: true },
+      { group: 'Access and limits', label: 'Available secrets (names)', key: 'autopilot.secrets', value: '', text: true },
+      { group: 'Access and limits', label: 'Human approval required', key: 'autopilot.approvals', value: 'merge', options: ['merge', 'none'] },
+      { group: 'Access and limits', label: 'Shared reported tokens', key: 'autopilot.tokens', value: 'off', num: { min: 1, max: 1000000000, off: true } },
+      { group: 'Access and limits', label: 'Shared runtime', key: 'autopilot.runtime', value: 'off', num: { min: 1, max: 10080, off: true, unit: 'min' } },
+      { group: 'Access and limits', label: 'Maximum parallel tasks', key: 'autopilot.parallel', value: '3', num: { min: 1, max: 200 } },
     ],
   },
   {
@@ -369,7 +378,7 @@ export class Settings {
     if (!KEYS.includes(key)) return { ok: false, error: `No setting ${key}` }
     if (!levelsOf(key).includes(kindOfLevel(l))) return { ok: false, error: levelsOf(key).includes('machine') ? `${key} is set Everywhere or for one machine, not a space.` : `${key} is set Everywhere only.` }
     if (value !== null) {
-      const chat = key === 'task.agent' || key === 'coordinator.agent' || (key === 'task.fallback' && value.trim().toLowerCase() !== 'off')
+      const chat = key === 'task.agent' || key === 'coordinator.agent' || key === 'autopilot.agent' && value !== 'inherit' || (key === 'task.fallback' && value.trim().toLowerCase() !== 'off')
       const err = refuse(key, value) ?? (chat ? chatProblem(kindOf(value) ?? value) : undefined) ?? this.unfit(key, value, l)
       if (err) return { ok: false, error: err }
       const num = numOf(key)
@@ -380,7 +389,7 @@ export class Settings {
       else if (key === 'time.zone') value = value.trim()
       // a CLI is kept by its name, however it was written
       else if (key === 'task.fallback' && value.trim().toLowerCase() === 'off') value = 'off'
-      else if (key.endsWith('.agent') || key === 'task.fallback') value = CLI_NAME[kindOf(value)!]
+      else if ((key.endsWith('.agent') || key === 'task.fallback') && value !== 'inherit') value = CLI_NAME[kindOf(value)!]
     }
     const at = typeof l === 'object' ? (this.d.spaces[l.space] ??= {}) : this.at(l)
     if (value === null) delete at[key]
@@ -474,6 +483,19 @@ export class Settings {
   /** Autopilot's heartbeat at a level */
   heartbeat(l: Level = 'machine'): Heartbeat {
     return { time: this.pick('heartbeat.when', l).value, on: eventRules(this.pick('heartbeat.on', l).value), zone: this.zone() }
+  }
+
+  pilot(space?: string): PilotConfig {
+    const get = (key: string) => this.get(`autopilot.${key}`, space)
+    const base = this.harness('coordinator', space)
+    const kind = get('agent') === 'inherit' ? base.kind : kindOf(get('agent'))!
+    const problem = pilotProblem(kind)
+    if (problem) throw new Error(problem)
+    const model = get('model') === 'inherit' ? base.model : modelArg(kind, get('model'))
+    const effort = get('effort') === 'inherit' ? base.effort : get('effort') === 'default' ? undefined : get('effort')
+    if (effort && !effortsOf(kind, model).includes(effort)) throw new Error(`${CLI_NAME[kind]} does not support ${effort} effort with this model.`)
+    const num = (key: string) => Number.parseFloat(get(key)) || undefined
+    return { harness: { kind, model, effort }, hosts: hostList(get('hosts')), secrets: get('secrets').split(/[\s,]+/).filter(Boolean), approvals: get('approvals') === 'none' ? [] : ['merge'], tokens: num('tokens'), runtime: num('runtime') ? num('runtime')! * 60000 : undefined, parallel: num('parallel') ?? 3 }
   }
 
   /** the time zone of every time rule */
@@ -600,13 +622,13 @@ export class Settings {
         : s.name === 'How tasks work'
           ? { note: settingsBlock('<id>', { ways: this.waysAt(l), reviewer: this.harnessAt('reviewer', l), by: this.setByAt(l) }) }
         : s.name === AUTOPILOT
-          ? autopilotNote()
+          ? {}
           : s.name === 'Machine'
             ? machineNote(this.machine(l === 'all' ? 'all' : 'machine'))
             : {}
     // each space's own HEARTBEAT.md, after the heartbeat's rows: a file, not a default its levels pass down
     const withChecklist = (s: Section, list: SettingSection['rows'], id: string): SettingSection['rows'] =>
-      s.name === AUTOPILOT && checklist && id.startsWith('p:') ? [...list, { label: 'Checklist', key: 'heartbeat.md', value: checklist(id), doc: true }] : list
+      s.name === AUTOPILOT && checklist && id.startsWith('p:') ? [{ label: 'Heartbeat', key: 'heartbeat.md', value: checklist(id), doc: true }, ...list] : list
     return [
       ...levels.flatMap(({ l, id }) =>
         CATALOG.filter((s) => (s.levels ?? ['all', 'machine', 'space']).includes(kindOfLevel(l))).map((s) => ({
@@ -706,8 +728,11 @@ export function machineNote(l: MachineLimits, cores = cpus().length, memGb = Mat
 
 /** why a value can't be set, or nothing */
 export function refuse(key: string, value: string): string | undefined {
+  if (key === 'autopilot.agent' && value === 'inherit') return undefined
+  if (key === 'autopilot.hosts') { try { hostList(value); return undefined } catch (e) { return (e as Error).message } }
+  if (key === 'autopilot.secrets' && value.split(/[\s,]+/).filter(Boolean).some((n) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(n))) return 'Use secret names separated by commas.'
   if (key.endsWith('.instructions') && (value.length > 16000 || value.includes('\0'))) return 'Use at most 16,000 characters, without null characters. Keep secrets in Secrets.'
-  const cli = key === 'task.agent' || key === 'coordinator.agent' || (key === 'task.fallback' && value.trim().toLowerCase() !== 'off')
+  const cli = key === 'task.agent' || key === 'coordinator.agent' || key === 'autopilot.agent' && value !== 'inherit' || (key === 'task.fallback' && value.trim().toLowerCase() !== 'off')
   if (cli && !kindOf(value)) return `${value} is not an agent herdr can start.`
   if (key === 'reviewer.agent' && !REVIEWERS.includes(CLI_NAME[kindOf(value) ?? ''] ?? '')) return `Pick one of: ${REVIEWERS.join(' · ')}.`
   if (key.endsWith('.model') && !/^[\w.:/@[\] -]+$/.test(value.trim())) return 'Write a model id like claude-opus-5-5, or default.'

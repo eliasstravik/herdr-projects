@@ -4,7 +4,7 @@
 // red pill at the header's right, beside that menu (on a phone after the subtitle, under the name), says so, and a tap
 // on it opens the menu; with it off the header says nothing of it.
 import { act, definePlugin, has, setUI, useUI } from '@client/kernel.ts'
-import { ic, MenuSwitch, ModeIcon } from '@client/ui.tsx'
+import { ic, MenuItem, MenuSwitch, ModeIcon } from '@client/ui.tsx'
 import type { Place } from '@shared/types.ts'
 
 /** Autopilot on, as a red pill with a dot: at the header's right, or after the subtitle on a phone; a tap opens the ⋯
@@ -31,6 +31,7 @@ function AutopilotSwitch({ place }: { place: Place }) {
   const on = place.mode === 'autopilot'
   if (!on && !has('autopilot')) return null
   return (
+    <>
     <MenuSwitch
       name="Autopilot"
       icon={<ModeIcon className={ic} />}
@@ -38,6 +39,8 @@ function AutopilotSwitch({ place }: { place: Place }) {
       note={on ? 'Works on its own' : 'Off: does what you ask'}
       onClick={() => act({ type: 'mode', place: place.id, mode: on ? 'regular' : 'autopilot' })}
     />
+    {on ? <MenuItem onClick={() => act({ type: 'mode', place: place.id, mode: 'regular', keepWorkers: true })}>Turn off; let workers finish</MenuItem> : null}
+    </>
   )
 }
 
