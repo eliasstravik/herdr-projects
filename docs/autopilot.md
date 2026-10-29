@@ -44,7 +44,8 @@ containing hardlinks to shared files is refused rather than exposing those share
 
 Exact public HTTPS host names are allowed through a trusted CONNECT gateway. Wildcards, arbitrary ports, direct
 network access and private/loopback/Tailscale destinations are blocked. Provider clients must honor the HTTP(S)
-proxy. Custom providers may need their public host added; a local provider is unsupported. Failure never enables
+proxy. This limits CONNECT destinations and their resolved public IPs; encrypted application traffic is not inspected,
+so another service hosted on the same IP may be reachable. Custom providers may need their public host added; a local provider is unsupported. Failure never enables
 host networking. Provider configuration is copied selectively: host MCP executors, hooks and installed plugins
 are not imported. The selected agent and reviewer login files are copied into the private home; the host login files are not overwritten.
 A login that cannot work in the isolated runtime needs the human; it never falls back to another account.

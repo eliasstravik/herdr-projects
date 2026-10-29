@@ -11,6 +11,26 @@ const { prepareSandbox, sandboxArgs, capturedTranscript } = await import('../ser
 
 const bwrap = Bun.which('bwrap')
 describe.skipIf(!bwrap)('Autopilot actual OS boundary', () => {
+  test('shared absolute runtime deadline kills a fake agent and its sleeping descendant', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'pilot-deadline-'))
+    const cwd = join(root, 'project'), providerHome = join(root, 'fake-login')
+    mkdirSync(cwd); mkdirSync(providerHome)
+    const executable = join(root, 'claude')
+    writeFileSync(executable, `#!/bin/sh\n(while true; do echo alive >> '${cwd}/child-progress'; sleep 0.05; done) &\nwait\n`, { mode: 0o700 })
+    const p = new PilotRuns(); p.runs = []
+    const run = p.begin('deadline', { harness: { kind: 'claude' }, hosts: [], secrets: [], approvals: ['merge'], parallel: 1, runtime: 3000 }); run.state = 'on'
+    const box = await prepareSandbox({ key: 'OWN-2/Agent', name: 'deadline', kind: 'claude', cwd, workspace: 'fixture' }, run, cwd, async () => ({ out: '', code: 0 }), undefined, { providerHome, executable: () => executable })
+    const start = Date.now()
+    try {
+      const child = Bun.spawn([box.wrapper], { stdout: 'ignore', stderr: 'ignore' })
+      expect(await child.exited).not.toBe(0)
+      expect(Date.now() - start).toBeLessThan(5000)
+      const progress = await Bun.file(join(cwd, 'child-progress')).text()
+      expect(progress).toContain('alive')
+      await Bun.sleep(200)
+      expect(await Bun.file(join(cwd, 'child-progress')).text()).toBe(progress)
+    } finally { await box.close() }
+  })
   test('cross-harness reviewer executable/login and fixed broker identity share the same boundary', async () => {
     const root = mkdtempSync(join(tmpdir(), 'pilot-reviewer-os-'))
     const providerHome = join(root, 'fake-login'), cwd = join(root, 'project')

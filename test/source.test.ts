@@ -1856,15 +1856,21 @@ describe("a task row's menu, and pin from the command", () => {
 })
 
 describe('Autopilot from the command', () => {
-  test('three settings and no limits: the heartbeat, the news that wakes it and its checklist; no budget anywhere', async () => {
+  test('one Heartbeat with schedule, agent and shared access/limits; old budget forms stay absent', async () => {
     const { place } = await workedTask('piloting')
     src.places.setMode(place, 'autopilot')
     try {
       // the coordinator, on its own: Shepherdr adds what it asks; the machine's max tasks at once bounds the rest
       expect((await src.cli(['task', 'add', 'Fix the typo', '--desc', 'Fix it.'], { chat: place })).out).toContain('Added')
       expect((await src.cli(['task', 'add', 'Fix the link', '--desc', 'Fix it.'], { chat: place })).out).toContain('Added')
-      // a checklist is a space's own (the home space's too), not a default Everywhere or the machine passes down
-      for (const s of src.snapshot().settings.filter((x) => x.name === 'Autopilot')) expect(s.rows.map((r) => r.label)).toEqual(['Heartbeat', 'Wakes at once on', ...(s.level?.startsWith('p:') ? ['Checklist'] : [])])
+      for (const s of src.snapshot().settings.filter((x) => x.name === 'Autopilot')) {
+        const keys = s.rows.map((r) => r.key)
+        expect(keys).toContain('heartbeat.when'); expect(keys).toContain('heartbeat.on')
+        expect(keys).toContain('autopilot.agent'); expect(keys).toContain('autopilot.parallel')
+        expect(keys).toContain('autopilot.traffic'); expect(keys).toContain('autopilot.tokens')
+        expect(s.rows.filter((r) => r.doc)).toHaveLength(s.level?.startsWith('p:') ? 1 : 0)
+        expect(s.rows.some((r) => r.label === 'Checklist')).toBe(false)
+      }
       const show = (await src.cli(['show'], {})).out
       expect(show).toContain('heartbeat.when')
       expect(show).toContain('heartbeat.on')
