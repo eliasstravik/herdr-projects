@@ -1886,10 +1886,14 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
 
   /* ---------- the shepherdr command ---------- */
 
-  async cli(args: string[], ctx: { chat?: string; cwd?: string; stdin?: string }): Promise<{ out: string; code: number; secrets?: Record<string, string> }> {
+  async cli(args: string[], ctx: { chat?: string; cwd?: string; stdin?: string; local?: boolean }): Promise<{ out: string; code: number; secrets?: Record<string, string> }> {
     try {
-      // the values themselves, for the shepherdr command to put in a command's environment or a file: never printed
-      if (args[0] === 'secret' && (args[1] === 'run' || args[1] === 'env')) return { out: '', code: 0, secrets: this.secretValues(parseArgs(args).words.slice(2), ctx) }
+      // the values themselves, for the shepherdr command to put in a command's environment or a file: never printed,
+      // and only to a program on a machine Shepherdr runs (never through the tailnet's web address)
+      if (args[0] === 'secret' && (args[1] === 'run' || args[1] === 'env')) {
+        if (ctx.local === false) throw new Error("Secrets go only to the shepherdr command on a machine Shepherdr runs, not over the web.")
+        return { out: '', code: 0, secrets: this.secretValues(parseArgs(args).words.slice(2), ctx) }
+      }
       const out = await this.command(parseArgs(args), ctx)
       return { out: out.endsWith('\n') ? out : `${out}\n`, code: 0 }
     } catch (e) {
@@ -2250,6 +2254,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       this.emit('snapshot')
       return `Asked: your chat shows the human a masked box for ${name}. End your turn now; a <secret name="${name}"> line tells you once it is kept. Never ask for it in plain words.`
     }
+    // only the main machine writes the vault: one writer, so no save is lost to another's at the same moment
+    if ((sub === 'set' || sub === 'rm' || sub === 'remove') && BOX) throw new Error(`Secrets are kept on the main machine: set or remove them there, or in Settings → Secrets.`)
     if (sub === 'set') {
       if (!name || !SECRET_NAME.test(name)) throw new Error('shepherdr secret set NAME [--machine | --space NAME] < file (the value on stdin; none: Everywhere)')
       if (!ctx.stdin?.trim()) throw new Error(`Give the value on stdin, never as a word: shepherdr secret set ${name} < file, or pipe it in.`)

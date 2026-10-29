@@ -92,6 +92,16 @@ describe('the shepherdr secret command', () => {
     expect(readFileSync(join(process.env.SHEPHERDR_HOME!, 'vault.json'), 'utf8')).toContain('k-123456')
   })
 
+  test('values go only to a program on this machine, never through the web address', async () => {
+    const { direct } = await import('../server/app.ts')
+    expect(direct(new Request('http://127.0.0.1/api/cli', { method: 'POST' }))).toBe(true)
+    for (const h of ['x-forwarded-for', 'tailscale-user-login', 'origin'])
+      expect(direct(new Request('http://127.0.0.1/api/cli', { method: 'POST', headers: { [h]: 'x' } }))).toBe(false)
+    const r = await src.cli(['secret', 'run', 'API_KEY'], { chat: home, local: false })
+    expect(r.code).toBe(1)
+    expect(r.secrets).toBeUndefined()
+  })
+
   test('the human sets and removes one from a terminal, its value on stdin', async () => {
     expect((await src.cli(['secret', 'set', 'TYPED'], {})).code).toBe(1)
     expect((await src.cli(['secret', 'set', 'TYPED', '--machine'], { stdin: 'v-1\n' })).out).toContain('Saved TYPED')

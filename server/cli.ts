@@ -1,7 +1,7 @@
 // The shepherdr command: sends its words to the Shepherdr server on this machine and prints the answer.
 // Inside an agent's terminal, SHEPHERDR_CHAT says which agent is asking.
 import { spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { readJson } from './store.ts'
 
@@ -69,10 +69,13 @@ function envFile(args: string[], secrets: Record<string, string>) {
   const git = (...a: string[]) => spawnSync('git', ['-C', dirname(file), ...a], { stdio: 'ignore' }).status
   if (git('rev-parse', '--is-inside-work-tree') === 0 && git('check-ignore', '-q', file) !== 0)
     return { out: `${name} is not ignored by git: add it to .gitignore first, so the secret never lands in git.\n`, code: 1 }
+  if (existsSync(file) && lstatSync(file).isSymbolicLink()) return { out: `${name} is a link: name a plain file, so the secret lands nowhere else.\n`, code: 1 }
   const names = Object.keys(secrets)
   const old = existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter((l, n, a) => !(n === a.length - 1 && !l) && !names.some((k) => new RegExp(`^\\s*(export\\s+)?${k}\\s*=`).test(l))) : []
-  writeFileSync(file, [...old, ...names.map((k) => `${k}=${envValue(secrets[k])}`)].join('\n') + '\n', { mode: 0o600 })
-  chmodSync(file, 0o600)
+  // a new file, readable by you only from the start, put in place of the old one
+  const tmp = `${file}.${process.pid}.tmp`
+  writeFileSync(tmp, [...old, ...names.map((k) => `${k}=${envValue(secrets[k])}`)].join('\n') + '\n', { mode: 0o600, flag: 'wx' })
+  renameSync(tmp, file)
   return { out: `Wrote ${names.join(', ')} to ${name} (readable by you only; git ignores it). Never print or commit it.\n`, code: 0 }
 }
 

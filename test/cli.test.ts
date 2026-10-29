@@ -3,7 +3,7 @@
 // halfway or the tunnel dropped and left its end open (SHE-212's agent sat on one for 40 minutes).
 import { describe, expect, test } from 'bun:test'
 import { spawn, spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -124,6 +124,12 @@ describe('shepherdr secret run and env', () => {
       expect(kept.status).toBe(1)
       expect(kept.stdout).toContain('not ignored by git')
       expect(existsSync(join(cwd, 'kept.env'))).toBe(false)
+      // a link, ignored or not, would carry it into the file it leads to
+      writeFileSync(join(cwd, 'tracked.txt'), 'tracked\n')
+      writeFileSync(join(cwd, '.gitignore'), '.env\nlink.env\n')
+      if (!existsSync(join(cwd, 'link.env'))) symlinkSync('tracked.txt', join(cwd, 'link.env'))
+      expect((await sh([...cmd, 'secret', 'env', 'TOKEN', '--file', 'link.env'], cwd)).stdout).toContain('is a link')
+      expect(readFileSync(join(cwd, 'tracked.txt'), 'utf8')).toBe('tracked\n')
     })
   })
 })

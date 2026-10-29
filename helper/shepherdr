@@ -6,6 +6,7 @@ use warnings;
 use Cwd ();
 use File::Basename ();
 use File::Spec ();
+use Fcntl qw(O_WRONLY O_CREAT O_EXCL);
 use IO::Socket::UNIX;
 use Encode ();
 use JSON::PP;
@@ -94,6 +95,7 @@ sub env_file {
   };
   my $tracked = $git->('rev-parse', '--is-inside-work-tree') && !$git->('check-ignore', '-q', $file);
   return ("$name is not ignored by git: add it to .gitignore first, so the secret never lands in git.\n", 1) if $tracked;
+  return ("$name is a link: name a plain file, so the secret lands nowhere else.\n", 1) if -l $file;
   my @names = sort keys %$secrets;
   my @old;
   if (open(my $in, '<', $file)) {
@@ -103,13 +105,13 @@ sub env_file {
     }
     close $in;
   }
-  my $old = umask(077);
-  open(my $out, '>', $file) or do { umask($old); return ("Couldn't write $name: $!\n", 1) };
-  umask($old);
+  # a new file, readable by you only from the start, put in place of the old one
+  my $tmp = "$file.$$.tmp";
+  sysopen(my $out, $tmp, O_WRONLY | O_CREAT | O_EXCL, 0600) or return ("Couldn't write $name: $!\n", 1);
   binmode $out, ':utf8';
   print $out join("\n", @old, map { "$_=" . env_value($secrets->{$_}) } @names) . "\n";
   close $out;
-  chmod 0600, $file;
+  rename($tmp, $file) or return ("Couldn't write $name: $!\n", 1);
   return ("Wrote " . join(', ', @names) . " to $name (readable by you only; git ignores it). Never print or commit it.\n", 0);
 }
 
