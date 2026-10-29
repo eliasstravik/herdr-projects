@@ -260,6 +260,8 @@ describe('trusted broker, limits and actual namespace configuration', () => {
     expect(() => pilotCommand(r, 'OWN-1/Agent', ['checkpoint', 'save'])).not.toThrow()
     expect(() => pilotCommand(r, 'fixture', ['artifact', 'new', '/host/secret'])).toThrow('human')
     expect(() => pilotCommand(r, 'fixture', ['set', 'autopilot.access', 'full'])).toThrow('human')
+    expect(() => pilotCommand(r, 'fixture', ['search', 'current documentation'])).toThrow('human')
+    expect(() => pilotCommand(r, 'OWN-1/Agent', ['search', 'current documentation'])).toThrow('human')
   })
   test('network excludes private/loopback/Tailscale addresses and wildcard hosts', () => {
     for (const ip of ['127.0.0.1', '10.0.0.1', '192.168.1.1', '100.64.0.1', '169.254.169.254', '::1', 'fc00::1', '::ffff:127.0.0.1']) expect(publicAddress(ip)).toBe(false)

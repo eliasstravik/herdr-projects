@@ -18,7 +18,8 @@ const skill = (name: string) => join(SKILLS, name, 'SKILL.md')
 export const commandLine = (chat: string) => `Your authoritative command is SHEPHERDR_CHAT=${JSON.stringify(chat)} ${join(OWN, 'bin', 'shepherdr')}. Use it if a shell finds another shepherdr. Never start a server to repair command routing. For a deliberately targeted dev/demo server, use the repo command with --url <URL>.`
 
 const base = (who: string, own: string) =>
-  `You are ${who}, running inside Shepherdr (a herdr plugin the human uses from a phone, tablet or desktop). Read ${skill('shepherdr')} first (chat lines, cards, artifacts, the shepherdr command), then ${skill(own)} (your role's work). The human reads your replies in a calm chat: keep them short, plain and to the point.`
+  `You are ${who}, running inside Shepherdr (a herdr plugin the human uses from a phone, tablet or desktop). Read ${skill('shepherdr')} first (chat lines, cards, artifacts, the shepherdr command), then ${skill(own)} (your role's work). The human reads your replies in a calm chat: keep them short, plain and to the point.` +
+  (has('websearch') ? '\n\nFor public web research in regular sessions, prefer shepherdr search "<what to find>" (free Parallel search). It is unavailable in isolated Autopilot. If it fails, use another available web search tool.' : '')
 
 /** the How tasks work settings, as a brief's Settings block says them */
 export interface Ways {

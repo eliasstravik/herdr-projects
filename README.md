@@ -99,9 +99,17 @@ It checks every machine saved in herdr, puts Shepherdr's helper there again, sta
 
 **Codex starts with full access** (`--dangerously-bypass-approvals-and-sandbox`), so a task never waits on a prompt nobody sees. Claude Code and pi start with your own permission settings; Shepherdr adds only its hooks, from a settings file of its own, and yours are never touched. A permission prompt shows the task under `Needs you` (`Asks permission`), and startup trust and MCP prompts come as cards. The brief's rules and the review are guidance, not a sandbox. [Tasks](docs/tasks.md) has the details.
 
+### Web search
+
+Regular agents can use `shepherdr search "<what to find>"` for free [Parallel web search](https://docs.parallel.ai/integrations/mcp/quickstart).
+It is on by default, needs no account or key, and works through the existing helper on other machines. Turn it off
+in Settings → Plugins → websearch. Search terms go to Parallel; files and credentials are not attached. Requests
+stop after 20 seconds, and results are limited to 25,000 characters. If the service fails or reaches its free limit,
+agents can use another available search tool. Isolated Autopilot cannot use this command.
+
 ### Does the plugin send my work to a hosted service?
 
-No. Shepherdr runs on your own machine, keeps its files there, talks to your local herdr, and reaches your other machines over herdr's remote and your own SSH. The app is shared only on your tailnet. Your agent CLI still uses its own service as usual, alerts go through your browser's push service, and voice calls go through ElevenLabs if you set them up.
+Shepherdr runs on your own machine, keeps its files there, talks to your local herdr, and reaches your other machines over herdr's remote and your own SSH. The app is shared only on your tailnet. With websearch on, search terms go to Parallel's free MCP service. Your agent CLI still uses its own service as usual, alerts go through your browser's push service, and voice calls go through ElevenLabs if you set them up.
 
 ### Will it touch my branches or worktrees on its own?
 
