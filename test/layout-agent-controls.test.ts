@@ -1,11 +1,11 @@
-// Persistent launch controls for both chat roles; only GitHub runs these browser tests.
+// Composer + launch controls for both chat roles; only GitHub runs these browser tests.
 import { describe, expect, test } from 'bun:test'
 import { layout } from './layout.ts'
 
 const { browser, world, server } = await layout({ everything: true })
 
-describe.skipIf(!browser)('persistent agent controls', () => {
-  test('both chats expose all three controls at phone, tablet and desktop widths; picks wait for Restart and cancel changes nothing', async () => {
+describe.skipIf(!browser)('composer + agent controls', () => {
+  test('both chats hide controls until + opens at phone, tablet and desktop widths; picks wait for Restart and cancel changes nothing', async () => {
     const p = world.snapshot().places.find((x) => !x.home)!
     const key = 'GTM-17/Agent'
     for (const width of [320, 768, 1440]) {
@@ -17,10 +17,15 @@ describe.skipIf(!browser)('persistent agent controls', () => {
         const page = await browser!.newPage({ viewport: { width, height: 900 } })
         await page.goto(`http://127.0.0.1:${server!.port}/?place=${encodeURIComponent(p.id)}${task ? '&task=GTM-17' : ''}`)
         const controls = page.locator('[data-agent-controls]').last()
+        await page.locator('[data-composer]').last().waitFor()
+        expect(await controls.count()).toBe(0)
+        await page.locator('[data-composer] button[aria-label="Attach files and more"]').last().click()
         await controls.waitFor()
-        expect(await controls.getByRole('button').count()).toBe(3)
+        await page.getByRole('menuitem', { name: 'File or photo', exact: true }).waitFor()
+        expect(await page.locator('[data-restart-hint]').count()).toBe(0)
+        expect(await controls.getByRole('menuitem').count()).toBe(3)
         expect(await controls.textContent()).toContain('gpt-6-sol')
-        await controls.getByRole('button', { name: /^Model:/ }).click()
+        await controls.getByRole('menuitem', { name: /^Model:/ }).click()
         const sheet = page.getByRole('alertdialog')
         await sheet.locator('[data-restart]').waitFor()
         expect(await sheet.textContent()).toContain('Applies to this chat after Restart')
@@ -38,13 +43,31 @@ describe.skipIf(!browser)('persistent agent controls', () => {
     }
   }, 30_000)
 
+  test('missing launch values stay unknown in the popup instead of borrowing Settings defaults', async () => {
+    const key = 'GTM-17/Agent'
+    world.chats[key].agent = { kind: 'codex' }
+    world.chats[key].cli = 'Codex'
+    const page = await browser!.newPage({ viewport: { width: 320, height: 844 } })
+    await page.goto(`http://127.0.0.1:${server!.port}/?place=all&task=GTM-17`)
+    await page.locator('[data-composer] button[aria-label="Attach files and more"]').last().click()
+    const controls = page.locator('[data-agent-controls]')
+    await controls.getByRole('menuitem', { name: 'Model: Default / unknown. Select and restart', exact: true }).waitFor()
+    expect(await controls.getByRole('menuitem', { name: 'Effort: Default / unknown. Select and restart', exact: true }).count()).toBe(1)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+    await page.getByRole('button', { name: 'Attach files and more', exact: true }).last().click()
+    expect(await controls.count()).toBe(0)
+    expect(world.chats[key].agent).toEqual({ kind: 'codex' })
+    await page.close()
+  }, 30_000)
+
   test('a retired launch model stays visible, blocks Restart, and can be replaced with Default', async () => {
     const key = 'GTM-17/Agent'
     world.chats[key].agent = { kind: 'codex', model: 'retired-model' }
     world.chats[key].cli = 'Codex'
     const page = await browser!.newPage({ viewport: { width: 390, height: 844 } })
     await page.goto(`http://127.0.0.1:${server!.port}/?place=all&task=GTM-17`)
-    await page.locator('[data-agent-controls]').last().getByRole('button', { name: /^Model:/ }).click()
+    await page.locator('[data-composer] button[aria-label="Attach files and more"]').last().click()
+    await page.locator('[data-agent-controls]').last().getByRole('menuitem', { name: /^Model:/ }).click()
     const sheet = page.getByRole('alertdialog')
     await sheet.getByText('retired-model is unavailable.', { exact: false }).waitFor()
     expect(await sheet.getByRole('button', { name: 'Restart', exact: true }).isDisabled()).toBe(true)

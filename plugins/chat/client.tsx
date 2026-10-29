@@ -2011,8 +2011,7 @@ function PlusMenu({ chatKey }: { chatKey: string }) {
   )
 }
 
-/** the + menu while it is open: it springs up out of the + and fades away. Picking File or Screenshot closes it; a
- *  setting (mode, model, effort) keeps it open, to change another */
+/** The + menu: attachments close it; plugin settings can stay open. Launch controls open the restart sheet. */
 function PlusOpen({ chatKey, file, photo }: { chatKey: string; file: RefObject<HTMLInputElement | null>; photo: RefObject<HTMLInputElement | null> }) {
   const phone = useUI((u) => u.device === 'phone')
   const snap = useSnap()
@@ -2038,8 +2037,8 @@ function PlusOpen({ chatKey, file, photo }: { chatKey: string; file: RefObject<H
       /* cancelled */
     }
   }
+  const cli = useChat(chatKey)?.cli ?? 'Agent'
   const settings = snap ? registry.composerSettings.filter((x) => x.when(snap, chatKey)) : []
-  // the agent's own settings are only what its CLI supports; one that supports none adds files and nothing else
   return (
     <Menu label="Attach files and more" tabs onClose={close} className="mb-2 w-fit max-w-full origin-bottom-left">
       <MenuItem
@@ -2054,7 +2053,8 @@ function PlusOpen({ chatKey, file, photo }: { chatKey: string; file: RefObject<H
       <MenuItem icon={<CameraIcon className={ic} />} onClick={screenshot}>
         {phone ? 'Take a photo' : 'Screenshot'}
       </MenuItem>
-      {settings.length ? <MenuSeparator /> : null}
+      <MenuSeparator />
+      <AgentControls chatKey={chatKey} cli={cli} />
       {settings.map(({ View }, i) => (
         <View key={i} chatKey={chatKey} />
       ))}
@@ -2500,7 +2500,6 @@ export default definePlugin({
     })
     reg.placeMenu.push({ order: 50, View: ({ place }) => <FindItem chatKey={place.chat} /> }, { order: 55, joined: true, View: PlaceRestartItem })
     reg.agentMenu.push({ order: 50, View: FindItem }, { order: 55, View: TaskRestartItem })
-    reg.composerAbove.push({ order: 4, View: AgentControls })
     reg.overlays.push(RestartSheet)
     reg.composerAbove.push({ order: 20, View: Attachments }, { order: 30, View: PlusMenu })
     reg.overlays.push(Photo)

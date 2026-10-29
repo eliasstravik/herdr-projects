@@ -1449,7 +1449,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       }
       case 'model':
       case 'effort':
-        return { ok: false, error: 'Use the visible agent controls and Restart to apply model or effort changes. Chat and work are preserved.' }
+        return { ok: false, error: 'Use the + menu agent controls and Restart to apply model or effort changes. Chat and work are preserved.' }
       case 'keys':
         await this.agents.keys(a.chat, a.keys)
         return {}

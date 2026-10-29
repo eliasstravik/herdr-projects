@@ -532,7 +532,7 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
       }
       case 'model':
       case 'effort':
-        return { ok: false, error: 'Use the visible agent controls and Restart to apply model or effort changes. Chat and work are preserved.' }
+        return { ok: false, error: 'Use the + menu agent controls and Restart to apply model or effort changes. Chat and work are preserved.' }
       case 'text':
         this.termInput[a.chat] = (this.termInput[a.chat] ?? '') + a.text
         this.emit('terminal', a.chat, this.screen(a.chat))

@@ -1,13 +1,14 @@
 // Restarting an agent from the screen: a space's coordinator, or a task's agent. The sheet (from a ⋯ menu) shows what
 // it runs on now and what it restarts with, Settings' CLI, model and effort for its role, changed for this restart only
-// or saved as its space's. Persistent launch controls open the same sheet without a separate Settings mismatch banner.
+// or saved as its space's. The composer + menu opens the same sheet without a separate Settings mismatch banner.
 import clsx from 'clsx'
+import { ChevronUpDownIcon } from '@heroicons/react/20/solid'
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { Place, RestartCli, RestartInfo } from '@shared/types.ts'
 import { act, setUI, taskOf, useSnap, useStore } from './kernel.ts'
 import { Dialog } from './rowmenu.tsx'
 import { Pick, shown, Switch, TextValue } from './Settings.tsx'
-import { ic, MenuItem, Primary, RestartIcon } from './ui.tsx'
+import { EffortIcon, ic, MenuItem, ModelIcon, ModeIcon, Primary, RestartIcon } from './ui.tsx'
 
 /* ---------- the sheet ---------- */
 
@@ -169,7 +170,7 @@ function Line({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-/** Kept for plugin imports. Launch controls replace the old Settings mismatch banner. */
+/** Kept for plugin imports. The + menu replaces the old Settings mismatch banner. */
 export function RestartHint(_props: { chatKey: string; cli: string }) {
   return null
 }
@@ -190,19 +191,22 @@ export function PlaceRestartItem({ place }: { place: Place }) {
   return <RestartItem chat={place.chat} name={place.name} onPick={() => setUI({ menu: false })} />
 }
 
-/** Persistent, separate from attachment and typing controls, shared by task and coordinator chats. */
+/** Compact launch controls inside the composer + menu, shared by both chat roles. */
 export function AgentControls({ chatKey, cli }: { chatKey: string; cli: string }) {
   const agent = useStore((s) => s.chats[chatKey]?.agent)
   const model = agent?.model && agent.model !== 'default' ? (agent.modelLabel ?? agent.model) : 'Default / unknown'
-  const effort = agent?.effort && agent.effort !== 'default' ? agent.effort : 'Default / unknown'
-  const open = () => openRestart(chatKey, chatKey.includes('/') ? chatKey.split('/')[0] : 'this space', true)
-  return <div data-agent-controls className="pb-2 text-fg2">
-    <div className="grid grid-cols-3 gap-1 text-xs">
-      {([['Agent', agent ? cli : `${cli} · unknown`], ['Model', model], ['Effort', effort]] as const).map(([label, value]) =>
-        <button key={label} type="button" aria-label={`${label}: ${value}. Select and restart`} title={`${label}: ${value}. Select and restart`} onClick={open} className="press-dim min-w-0 rounded-lg bg-bubble px-2 py-1.5 text-left hover:bg-hover">
-          <span className="block text-fg3">{label}</span><span className="block truncate">{value}</span>
-        </button>)}
-    </div>
-    <p className="mt-1 text-center text-[0.6875rem] text-fg3">Launch settings · tap to select and restart</p>
+  const effort = agent?.effort && agent.effort !== 'default' ? (agent.effort === 'xhigh' ? 'Extra high' : agent.effort.charAt(0).toUpperCase() + agent.effort.slice(1)) : 'Default / unknown'
+  const open = () => {
+    setUI({ plus: null })
+    openRestart(chatKey, chatKey.includes('/') ? chatKey.split('/')[0] : 'this space', true)
+  }
+  return <div data-agent-controls>
+    {([['Agent', agent ? cli : `${cli} · unknown`, ModeIcon], ['Model', model, ModelIcon], ['Effort', effort, EffortIcon]] as const).map(([label, value, Icon]) =>
+      <MenuItem key={label} icon={<Icon className={ic} />} aria-label={`${label}: ${value}. Select and restart`} title={`${label}: ${value}. Select and restart`} onClick={open}>
+        <span className="flex min-w-0 items-center justify-between gap-4">
+          <span>{label}</span>
+          <span className="flex min-w-0 items-center gap-1 text-fg2"><span className="truncate">{value}</span><ChevronUpDownIcon className={`${ic} shrink-0`} /></span>
+        </span>
+      </MenuItem>)}
   </div>
 }

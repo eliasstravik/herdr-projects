@@ -319,15 +319,16 @@ describe.skipIf(!browser)("a place's Autopilot", () => {
       await ctx.close()
     }, 30_000)
 
-  test("a task's attachment menu keeps files; agent controls stay outside it on a small phone", async () => {
+  test("a task's attachment menu keeps files; agent controls live inside it on a small phone", async () => {
     const page = await browser!.newPage({ viewport: { width: 320, height: 640 }, hasTouch: true })
     await page.goto(`http://127.0.0.1:${server!.port}/?place=all&task=GTM-14`)
-    await page.locator('[data-agent-controls]').waitFor()
+    await page.locator('[data-composer]').first().waitFor()
+    expect(await page.locator('[data-agent-controls]').count()).toBe(0)
     await page.locator('[data-composer] button[aria-label="Attach files and more"]').first().click()
     await page.getByRole('menuitem', { name: 'File or photo' }).waitFor()
     expect(await page.getByRole('combobox', { name: 'Model' }).count()).toBe(0)
     expect(await page.getByRole('group', { name: 'Mode', exact: true }).count()).toBe(0)
-    expect(await page.locator('[data-agent-controls] button').count()).toBe(3)
+    expect(await page.locator('[data-agent-controls] [role=menuitem]').count()).toBe(3)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.close()
   }, 30_000)
