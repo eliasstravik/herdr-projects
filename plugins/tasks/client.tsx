@@ -675,8 +675,8 @@ function ranAt(ms: number) {
 const small = 'text-[0.8125rem] phone:text-[0.9375rem]'
 
 /**
- * A space's automations, at the bottom once it has one (everything, every space's): its name, then when it runs and the task it adds, cut short.
- * A tap opens it in full with its last runs, and runs it now, pauses or removes it. Each run adds a new task with a
+ * A space's automations, at the bottom once it has one (everything, every space's): its name, then when it runs.
+ * A tap shows the task it adds and its last runs, and lets you run it now, pause or remove it. Each run adds a new task with a
  * fresh agent. Only agents add or change them, through the shepherdr command, when asked in the chat: none, no section.
  */
 function Automations({ place, list }: { place: Place; list?: ListView }) {
