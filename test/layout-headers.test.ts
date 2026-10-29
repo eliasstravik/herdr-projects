@@ -123,17 +123,17 @@ describe.skipIf(!browser)('the place header', () => {
       const bar = title.closest('.border-b')!
       // the place's icon (SHE-207) before its name: on a phone the two are centred together
       const icon = title.querySelector('svg')?.getBoundingClientRect()
-      return { dots: bar.querySelectorAll('.dot').length, icon: icon?.toJSON() as Box | undefined, bar: bar.getBoundingClientRect().toJSON() as Box, title: title.getBoundingClientRect().toJSON() as Box, name: (title.querySelector('span') ?? title).getBoundingClientRect().toJSON() as Box }
+      return { reading: (bar.querySelector("[data-conversation-head]") ?? bar).getBoundingClientRect().toJSON() as Box, dots: bar.querySelectorAll('.dot').length, icon: icon?.toJSON() as Box | undefined, bar: bar.getBoundingClientRect().toJSON() as Box, title: title.getBoundingClientRect().toJSON() as Box, name: (title.querySelector('span') ?? title).getBoundingClientRect().toJSON() as Box }
     })
 
   test('no status dot before the place name, the title still sits right', async () => {
-    // desktop with its sidebar open: the title starts at the header's own padding
+    // desktop with its sidebar open: the title follows the conversation reading column
     const desk = await browser!.newPage({ viewport: { width: 1440, height: 800 } })
     await desk.goto(url())
     await desk.waitForSelector('#places li')
     const d = await head(desk)
     expect(d.dots).toBe(0)
-    expect(Math.abs(d.title.left - d.bar.left - 16)).toBeLessThan(0.5)
+    expect(Math.abs(d.title.left - d.reading.left - 20)).toBeLessThan(0.5)
     await desk.close()
     // a tablet: the title right after the Places button
     const tablet = await browser!.newPage({ viewport: { width: 900, height: 800 } })
