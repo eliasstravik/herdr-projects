@@ -927,6 +927,33 @@ describe('what you send shows at once', () => {
     agents.reachable = reachable
     agents.outbox = agents.outbox.filter((o) => o.key !== chat)
   })
+  test('requester news survives offline timeouts and keeps a receipt across Agents restart', async () => {
+    const agents = src.agents
+    const cid = `requested-news:restart-${Date.now()}`
+    await as('blocked', () => agents.send(chat, hidden('Task is ready', 'news'), { cid }))
+    const reachable = agents.reachable
+    agents.reachable = false
+    try {
+      agents.checkStranded(Date.now())
+      agents.checkStranded(Date.now() + agents.strandAfter + 1)
+      expect(agents.waiting(chat).some((o) => o.cid === cid)).toBe(true)
+      const item = agents.outbox.find((o) => o.cid === cid)!
+      ;(agents as unknown as { fail(key: string, error: string): void }).fail(chat, 'offline')
+      expect(agents.outbox).toContain(item)
+      // This is the actual delivery bookkeeping, which must outlive a process restart.
+      ;(agents as unknown as { went(o: typeof item): void }).went(item)
+      agents.save() // simulate a crash after receipt, before removing the queued copy
+      const { Agents } = await import('../server/live/agents.ts')
+      const restarted = new Agents()
+      try {
+        await restarted.deliver(chat)
+        expect((await restarted.send(chat, item.text, { cid })).waiting).toBe(false)
+        expect(restarted.waiting(chat).some((o) => o.cid === cid)).toBe(false)
+      } finally { restarted.stop() }
+      agents.outbox = agents.outbox.filter((o) => o !== item)
+      agents.save()
+    } finally { agents.reachable = reachable }
+  })
   test('sent again while the first is still on its way, it goes in once', async () => {
     const agents = src.agents
     agents.outbox = agents.outbox.filter((o) => o.key !== chat)
@@ -1094,6 +1121,77 @@ describe('modes: regular and Autopilot', () => {
 })
 
 describe('news for coordinators', () => {
+  test('helper task add forwards the full remote identity, options and known requesting coordinator', async () => {
+    const peers = src.peers!
+    const list = peers.list
+    const fetch = peers.fetch
+    const chat = placeId.home()
+    const record = src.agents.records[chat]
+    src.agents.records[chat] = { key: chat, name: 'home', kind: 'codex', cwd: '/', workspace: 'home', logs: [], started: 1 }
+    src.agents.save()
+    const calls: { args: string[]; chat?: string }[] = []
+    peers.list = (() => [{ rec: { machine: 'desktop' }, snap: { places: [{ id: 'p:desktop:remote', name: 'Remote', home: false }] } }]) as never
+    peers.fetch = (async (_l, path, init) => {
+      expect(path).toBe('/api/cli')
+      calls.push(JSON.parse(String(init!.body)))
+      return Response.json({ code: 0, out: 'Added REM-1: Remote task.' })
+    }) as typeof fetch
+    try {
+      const result = await src.cli(['task', 'add', 'Remote task', '--space', 'p:desktop:remote', '--desc', 'Whole brief', '--later'], { chat })
+      expect(result.code).toBe(0)
+      expect(calls[0]).toEqual({ args: ['task', 'add', 'Remote task', '--space', 'remote', '--desc', 'Whole brief', '--later'], chat })
+      await src.cli(['task', 'add', 'Terminal task', '--space', 'p:desktop:remote'], { chat: 'invented' })
+      expect(calls[1].chat).toBeUndefined()
+    } finally {
+      peers.list = list
+      peers.fetch = fetch
+      if (record) src.agents.records[chat] = record
+      else delete src.agents.records[chat]
+      src.agents.save()
+    }
+  })
+  test('requester news preserves owner/home routes, carries no extra card, and drops removed origins', async () => {
+    const { t, place } = await workedTask('requestnews')
+    const originDir = mkdtempSync(join(tmpdir(), 'request-origin-'))
+    execSync('git init -q -b main', { cwd: originDir })
+    const origin = await src.places.add(originDir, 'requestorigin')
+    const requester = placeId.space(origin.name)
+    const sent: { chat: string; text: string }[] = []
+    const send = src.agents.send
+    const old = src.agents.records[requester]
+    src.agents.records[requester] = { key: requester, name: 'coordinator', kind: 'codex', logs: [], cwd: originDir, workspace: 'origin', started: 1 }
+    src.agents.send = (async (chat: string, text: string) => { sent.push({ chat, text }); return { waiting: false } }) as never
+    const drain = () => (src as unknown as { drainRequestedNews(): Promise<void> }).drainRequestedNews()
+    try {
+      t.requester = requester
+      const before = src.chats.chat(requester).messages.length
+      src.engine.emit('news', place, `${t.id} is ready`, 'ready', { task: t.id, event: 'ready' })
+      await until(() => sent.some((n) => n.chat === requester))
+      expect(sent.map((n) => n.chat).sort()).toEqual([place, placeId.home(), requester].sort())
+      expect(sent.find((n) => n.chat === requester)!.text).toContain('You requested this task')
+      expect(src.chats.chat(requester).messages).toHaveLength(before)
+      await drain()
+      expect(sent.filter((n) => n.chat === requester)).toHaveLength(1)
+      // Ordinary same-space tasks keep their original single delivery.
+      t.requester = place
+      sent.length = 0
+      src.engine.emit('news', place, `${t.id} is ready`, 'ready', { task: t.id, event: 'ready' })
+      await drain()
+      expect(sent.map((n) => n.chat).sort()).toEqual([place, placeId.home()].sort())
+      // A saved return address cannot resurrect a removed space.
+      t.requester = requester
+      src.places.spaces = src.places.spaces.filter((p) => p !== origin)
+      sent.length = 0
+      src.engine.emit('news', place, `${t.id} merged`, 'done', { task: t.id, event: 'merged' })
+      await until(() => !(src as unknown as { drainingNews: boolean }).drainingNews)
+      expect(sent.some((n) => n.chat === requester)).toBe(false)
+    } finally {
+      src.agents.send = send
+      if (old) src.agents.records[requester] = old
+      else delete src.agents.records[requester]
+      if (!src.places.spaces.includes(origin)) src.places.spaces.push(origin)
+    }
+  })
   test("every space starts regular; the main machine's home space hears every space's news, a task added only on Autopilot", async () => {
     const project = placeId.space('newsco')
     const home = placeId.home()

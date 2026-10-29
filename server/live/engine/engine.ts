@@ -35,6 +35,8 @@ export interface TaskRec {
   title: string
   desc: string
   by: string
+  /** Exact coordinator chat that requested this task, when known. */
+  requester?: string
   created: number
   updated: number
   branch?: string
@@ -988,7 +990,7 @@ export class Engine extends Emitter<Events> {
    * A new task: its agent starts on the brief at once. The brief ends with the default way of working from Settings;
    * its CLI, model and effort are Settings' too, unless the coordinator chose others for it.
    */
-  add(o: { project: string; title: string; desc?: string; by: string; after?: string[]; later?: boolean; agent?: Partial<Harness>; reviewer?: Partial<Harness>; set?: Record<string, string> }) {
+  add(o: { project: string; title: string; desc?: string; by: string; requester?: string; after?: string[]; later?: boolean; agent?: Partial<Harness>; reviewer?: Partial<Harness>; set?: Record<string, string> }) {
     const p = this.places.byName(o.project) ?? this.places.byKey(o.project) ?? this.places.space(o.project)
     if (!p) throw new Error(`No project called ${o.project}`)
     // a new task is in no circle; those already done are not waited for
@@ -1013,6 +1015,7 @@ export class Engine extends Emitter<Events> {
       title,
       desc,
       by: o.by,
+      requester: o.requester,
       created: Date.now(),
       updated: Date.now(),
       told: after.length ? 'queued' : 'work',

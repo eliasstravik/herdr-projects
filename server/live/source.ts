@@ -44,6 +44,7 @@ import { CATALOG, CLI_NAME, CLIS, kindOf, refuse, setForTask, Settings, type Lev
 import { startVoice } from './voice.ts'
 import { SECRET_NAME, secretPages, Vault } from './secrets.ts'
 import { diffFiles, diffPatch, listFiles, pullRequest, readFile } from './worktree.ts'
+import { RequestedNewsMailbox } from './requested-news.ts'
 import { Unread } from './unread.ts'
 import { Monitor, meters, procLines, summary, topProcs, type HealthEvent, type Kind } from './health.ts'
 import { has, PLUGIN_KEY, pluginSection, setPluginOn } from '../plugins.ts'
@@ -108,6 +109,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   unread = new Unread()
   /** when this server started: only what comes after it buzzes as a new message */
   private born = Date.now()
+  private requestedNews = new RequestedNewsMailbox(process.env.SHEPHERDR_MAIN_HOME ?? HOME)
+  private drainingNews = false
   private watched: string[] = []
   /** the task whose card went up last, for its news that follows at once */
   private carded?: string
@@ -145,6 +148,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
 
   constructor() {
     super()
+    this.timers.push(setInterval(() => void this.drainRequestedNews(), 1000))
     this.agents.secretScope = (chat) => {
       const space = /^[^/]+\/(Agent|Reviewer)$/.test(chat) ? this.engine.task(chat.split('/')[0])?.project : this.places.find(chat)?.id === chat ? chat : undefined
       return space ? [space, placeId.machine(), 'all'] : undefined
@@ -1125,11 +1129,39 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
               : ' Act on it by your Autopilot rules. Nothing worth saying: reply with only <no-reply>reason</no-reply>.'
       this.agents.send(id, hidden(`${prefix}${text}.${tail}`, 'news', about), { ensure: () => this.coordinator(id) }).catch(() => undefined)
     }
+    const requester = about?.task ? this.engine.task(about.task)?.requester : undefined
+    // Owner and home already heard above. The main home already receives the overview over the worker link.
+    const mainHome = requester && !BOX ? placeId.home() : undefined
+    if (requester && requester !== project && requester !== mainHome && !(requester === home && this.places.mode(home) === 'autopilot')) {
+      this.requestedNews.post({ to: requester, from: project, text, task: about!.task, event: about!.event })
+      void this.drainRequestedNews()
+    }
     // for the main machine's home space, when this is another machine's worker: its link carries it there (app.ts; the
     // main machine has no link, and hears its own above)
     this.emit('news', { place: project, line: text, kind, about })
     // one event each: a task that went wrong is failed, not needs-you too
     this.fireTaskAutomations(this.happened(kind, project, text, about?.task), project, about?.task)
+  }
+
+  private async drainRequestedNews() {
+    if (this.drainingNews) return
+    this.drainingNews = true
+    try {
+      await this.requestedNews.drain(
+        (chat) => chat.startsWith(`p:${HOST}:`),
+        async (n) => {
+          // Removed spaces and invented identities must not start a coordinator or receive task details.
+          if (!this.places.find(n.to) || !this.agents.record(n.to) || this.agents.record(n.to)?.finished) return
+          // Main home receives this event through the existing overview route.
+          if (n.to === placeId.home() && !BOX) return
+          const kind = ({ added: 'added', ready: 'ready', 'needs-you': 'need', merged: 'done', closed: 'done', stalled: 'stalled' } as const)[n.event as 'ready'] ?? 'need'
+          if (!this.wakes(n.to, this.happened(kind, n.from, n.text, n.task), `${n.from}: ${n.text}`)) return
+          const words = `${n.from}: ${n.text}. You requested this task. Its owning coordinator still handles it. Act only within the human's request; otherwise reply with only <no-reply>reason</no-reply>.`
+          await this.agents.send(n.to, hidden(words, 'news', { task: n.task, event: n.event }), { cid: `requested-news:${n.id}`, ensure: () => this.coordinator(n.to) })
+        },
+      )
+    } catch { /* keep it on disk until herdr/the coordinator can receive it */ }
+    finally { this.drainingNews = false }
   }
 
   /** news for the main machine's home space from another space, on any machine: its first line only, since that
@@ -2410,11 +2442,38 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       const bare = [...p.flags].filter((f) => f !== 'later')[0]
       if (bare) throw new Error(`--${bare} needs a value`)
       const title = checkTitle(rest[0])
-      const pr = this.projectFor(p, ctx)
+      const named = one(p, 'space')
+      if (named && !this.places.byName(named) && !this.places.byKey(named) && !this.places.space(named)) {
+        // Helpers reach their own worker. Delegate a foreign target through the owning main installation.
+        if (BOX && process.env.SHEPHERDR_MAIN_HOME) {
+          const server = JSON.parse(readFileSync(join(process.env.SHEPHERDR_MAIN_HOME, 'server.json'), 'utf8')) as { port: number }
+          const r = await fetch(`http://127.0.0.1:${server.port}/api/cli`, {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ args: taskAddArgs(rest, p), chat: this.requestedNews.known(ctx.chat) }),
+            signal: AbortSignal.timeout(20_000),
+          })
+          const result = await r.json() as { out: string; code: number }
+          if (result.code) throw new Error(result.out.trim())
+          return result.out.trim()
+        }
+        const targets = (this.peers?.list() ?? []).flatMap((l) => (l.snap?.places ?? []).filter((x) => !x.home && (x.id === named || x.name === named)).map((x) => ({ l, x })))
+        if (targets.length > 1) throw new Error('Several spaces have that name; use its full p:machine:space identity.')
+        if (targets.length === 1) {
+          const { l, x } = targets[0]
+          const args = taskAddArgs(rest, p, x.id.split(':').slice(2).join(':'))
+          const result = await this.onPeer<{ out: string; code: number }>(l, '/api/cli', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ args, chat: this.requestedNews.known(ctx.chat) }),
+          })
+          if (result.code) throw new Error(result.out.trim())
+          return result.out.trim()
+        }
+      }
+      const pr = named && this.places.space(named) ? this.places.space(named)! : this.projectFor(p, ctx)
       const after = p.opts.after ?? []
       const agent = harnessOf(p, this.settings)
       const reviewer = reviewerOf(p, this.settings)
-      const t = this.engine.add({ project: pr.name, title, desc: one(p, 'brief') ?? one(p, 'desc'), by: this.byWho(ctx), after, later: p.flags.has('later'), agent, reviewer, set })
+      const t = this.engine.add({ project: pr.name, title, desc: one(p, 'brief') ?? one(p, 'desc'), by: this.byWho(ctx), requester: this.requestedNews.known(ctx.chat), after, later: p.flags.has('later'), agent, reviewer, set })
       const on = [CLI_NAME[t.agent!.kind] ?? t.agent!.kind, t.agent!.model, t.agent!.effort && `${t.agent!.effort} effort`].filter(Boolean).join(', ')
       if (t.after?.length) return `Added ${t.id}: ${t.title}, queued after ${t.after.join(', ')}. Its agent (${on}) reads the brief now and waits; Shepherdr tells it to go once ${t.after.length === 1 ? 'that task is' : 'they are all'} done.`
       if (p.flags.has('later')) return `Added ${t.id}: ${t.title}, for later. Its agent (${on}) reads the brief now and waits for a go (shepherdr task tell ${t.id} "go").`
@@ -2661,4 +2720,9 @@ function sharedEverywhere(): Record<string, string> | null {
   } catch {
     return null
   }
+}
+
+/** Preserve all task options when a helper asks for a task on another machine. */
+function taskAddArgs(rest: string[], p: Parsed, space?: string): string[] {
+  return ['task', 'add', ...rest, ...Object.entries(p.opts).flatMap(([key, values]) => (key === 'space' && space ? [space] : values).flatMap((value) => [`--${key}`, value])), ...[...p.flags].map((key) => `--${key}`)]
 }

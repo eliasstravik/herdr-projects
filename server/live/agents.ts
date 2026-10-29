@@ -202,6 +202,8 @@ export class Agents extends Emitter<Events> {
   private delivering = new Set<string>()
   /** what went in lately with a screen's id: the chat gives the id back once it reads the message from the log */
   private delivered: OutItem[] = []
+  /** Durable internal news receipts, unlike the screen's short-lived send history. */
+  private newsReceipts: string[] = readJson('requested-news-receipts.json', [])
   /** everything that went in lately, with when: what a merge checks the agent has read, so kept across a restart */
   private typed: OutItem[] = readJson('typed.json', [])
   /** what a screen sent that waited and then couldn't go in: the screen says so and offers Retry */
@@ -528,7 +530,7 @@ export class Agents extends Emitter<Events> {
   /** what a screen sent waits only on a menu or a starting agent: one whose agent is gone (or herdr out of reach) for a
    *  while fails */
   checkStranded(now = Date.now()) {
-    const keys = new Set(this.outbox.filter((o) => o.cid).map((o) => o.key))
+    const keys = new Set(this.outbox.filter((o) => o.cid && !o.cid.startsWith('requested-news:')).map((o) => o.key))
     for (const key of this.stranded.keys()) if (!keys.has(key)) this.stranded.delete(key)
     for (const key of keys) {
       if (this.reachable && this.status(key) !== 'gone') {
@@ -545,7 +547,7 @@ export class Agents extends Emitter<Events> {
 
   /** what a screen sent that waits for this agent fails: the screen says why and offers Retry */
   private fail(key: string, error: string) {
-    const mine = this.outbox.filter((o) => o.key === key && o.cid)
+    const mine = this.outbox.filter((o) => o.key === key && o.cid && !o.cid.startsWith('requested-news:'))
     if (!mine.length) return
     const now = Date.now()
     this.outbox = this.outbox.filter((o) => !mine.includes(o))
@@ -883,6 +885,7 @@ export class Agents extends Emitter<Events> {
   }
 
   private async sendNow(key: string, text: string, { reaction, ensure, cid, idle, command }: SendOpts): Promise<Sent> {
+    if (cid?.startsWith('requested-news:') && this.newsReceipts.includes(cid)) return { waiting: false, item: { id: cid, cid, key, text, at: Date.now() } }
     const again = cid && this.outbox.find((o) => o.cid === cid)
     if (again) return { waiting: true, waitsFor: this.whyWaits(key), item: again }
     const done = cid && this.delivered.find((o) => o.cid === cid)
@@ -961,13 +964,18 @@ export class Agents extends Emitter<Events> {
       for (;;) {
         const next = this.outbox.find((o) => o.key === key)
         if (!next) return void this.unready.delete(key)
+        if (next.cid?.startsWith('requested-news:') && this.newsReceipts.includes(next.cid)) {
+          this.outbox = this.outbox.filter((o) => o !== next)
+          this.save()
+          continue
+        }
         await this.beforeInput?.(key)
         if (this.heldBy(key, next)) return
         await this.put(key, next)
         this.unready.delete(key)
+        this.went(next)
         this.outbox = this.outbox.filter((o) => o !== next)
         this.save()
-        this.went(next)
         this.emit('sent', next)
         // give the CLI a moment to take it before the next item
         await new Promise((r) => setTimeout(r, 1500))
@@ -1028,6 +1036,10 @@ export class Agents extends Emitter<Events> {
     this.typed = [...this.typed.filter((o) => now - o.at < 600_000), { ...item, at: now }].slice(-200)
     writeJson('typed.json', this.typed)
     if (!item.cid) return
+    if (item.cid.startsWith('requested-news:') && !this.newsReceipts.includes(item.cid)) {
+      this.newsReceipts.push(item.cid)
+      writeJson('requested-news-receipts.json', this.newsReceipts)
+    }
     this.delivered = [...this.delivered.filter((o) => now - o.at < 600_000), { ...item, at: now }].slice(-200)
   }
 
