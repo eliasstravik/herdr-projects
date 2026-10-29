@@ -250,7 +250,18 @@ pub fn take_approve(socket: &str, me: &str) -> String {
 /// Everything about one task, for `details`.
 pub fn details(id: &str) -> Res<Value> {
     let t = find(id)?;
-    let plan = if t.at("plan").is_object() { let mut p = t.o("plan").cloned().unwrap_or_default(); p.del("home"); p.put("text", crate::plan::read_plan(&t)); Value::Object(p) } else { Value::Null };
+    let plan = if t.at("plan").is_object() {
+        let mut p = t.o("plan").cloned().unwrap_or_default(); p.del("home");
+        if p.b("at") { let link = crate::plan::plan_link(&t, || crate::review_page::artifact_base(t.s("id"))); p.put("link", link); }
+        p.put("text", crate::plan::read_plan(&t)); Value::Object(p)
+    } else { Value::Null };
+    let page = t.at("report");
+    let current = page.is_object() && page.t("link").starts_with("http") && !page.s("file").ends_with(".md") && !page.t("link").ends_with(".md");
+    let old_base = page.t("link").rsplit_once("/report/").map(|(b, _)| b.to_string()).unwrap_or_default();
+    let live_base = crate::review_page::artifact_base(t.s("id"));
+    let base = if live_base.is_empty() { old_base } else { live_base };
+    let report = if current { page.clone() } else { crate::research::report_view_with(&t, || base.clone()).unwrap_or_else(|| page.clone()) };
+    let closing = crate::flow::task::closing_view(&t, || crate::review_page::artifact_base(t.s("id"))).unwrap_or(Value::Null);
     let mut out = obj(json!({
         "task": { "id": t.at("id"), "title": t.at("title"), "stage": t.at("stage"), "msg": t.at("msg"), "description": t.at("description") },
         "failure": failure_of(&t),
@@ -260,8 +271,9 @@ pub fn details(id: &str) -> Res<Value> {
         "handovers": handovers(&t).iter().map(|h| { let mut x = h.as_object().cloned().unwrap_or_default(); x.put("words", handover_line(h)); Value::Object(x) }).collect::<Vec<_>>(),
         "research": is_research(&t),
         "chat": crate::chat_only::is_chat(&t),
-        "report": t.at("report"),
+        "report": report,
         "plan": plan,
+        "closing": closing,
         "pr": if t.b("pr") { t.at("pr").clone() } else { Value::Null },
         "worktree": if t.b("worktree") { t.at("worktree").clone() } else { Value::Null },
         "branch": if t.b("branch") { t.at("branch").clone() } else { Value::Null },

@@ -38,7 +38,7 @@ pub fn end(g: &mut Guard, said: &str) -> Res<()> {
     let dir = if t.b("worktree") && Path::new(t.s("worktree")).exists() { t.t("worktree") } else if is_repo(&cwd) { cwd.display().to_string() } else { String::new() };
     let list = if dir.is_empty() { vec![] } else { changes_of(&t, Path::new(&dir)).unwrap_or_default() };
     let first = first_line(said);
-    let mut msg = if t.at("report").b("link") { format!("Chat ended. Report: {}", t.at("report").s("link")) } else if first.is_empty() { "Chat ended".into() } else { first };
+    let mut msg = if t.at("report").b("link") { format!("Chat ended. {}", crate::research::report_words(&t)) } else if first.is_empty() { "Chat ended".into() } else { first };
     if !list.is_empty() { msg = format!("{msg}{} Chat only, but its agent changed the repo ({}): nothing was pushed, opened or merged.", if msg.ends_with('.') { "" } else { "." }, changed_words(&list)); }
     done(g, &t, &msg, None)
 }

@@ -25,7 +25,7 @@ fn any_task_may_write_a_report_and_the_first_page_of_its_folder_gets_the_link() 
     assert_eq!(keep_report(&t, String::new), None, "none written");
     write_report(t.s("id"), "notes.md", "n"); write_report(t.s("id"), "report.md", "# Why");
     let kept = keep_report(&t, || "https://box.ts.net:8750/proj/1".into()).unwrap();
-    assert_eq!((kept.s("file"), kept.s("link")), ("report.md", "https://box.ts.net:8750/proj/1/report/report.md"));
+    assert_eq!(kept.s("file"), "index.html"); assert_eq!(kept.s("link"), "https://box.ts.net:8750/proj/1/report/index.html");
     assert_eq!(read(&sw::store::files::artifacts_dir(t.s("id")).join("report").join("report.md")), "# Why");
     write_report(t.s("id"), "index.html", "<!doctype html><title>Report</title><h1>What I found</h1>");
     assert_eq!(keep_report(&t, String::new).unwrap().s("file"), "index.html");

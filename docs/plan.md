@@ -40,8 +40,10 @@ says `Plan ready · <the plan's first words>`, the State line and Herdr's sideba
 fires as for anything that needs you.
 
 The task panel shows the plan under **Plan**: where it stands, who wrote it, the plan's own words (its first lines beside
-the list, all of it full screen), and **`Open plan`**, a private link served the way a report's is. The web Board shows
-the same part. You do one of two things:
+the list, all of it full screen), and **`Open plan`**, a private link to a readable `index.html` served the way a
+report's is, with the plan's Markdown as its source and any sanitised evidence beside it. The web Board shows the same
+part. Publishing the page does not approve the plan: the yes is recorded separately and nothing is implemented before
+it. You do one of two things:
 
 - **Yes**: the approve key (`ctrl+l`), or `herdr-projects approve <id>`. The plan is approved as it stands and the build
   starts.

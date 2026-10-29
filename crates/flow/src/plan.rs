@@ -13,6 +13,7 @@ pub mod sandbox;
 pub mod untouched;
 pub mod written;
 use crate::json::*;
+use crate::page::{self, Kind};
 use crate::store::files::artifacts_dir;
 use crate::store::settings::lookup::setting_text;
 use crate::store::tasks::{get, Task};
@@ -25,11 +26,32 @@ pub const PLAN: &str = "plan";
 pub fn plan_folder(t: &Obj) -> PathBuf { artifacts_dir(t.s("id")).join(PLAN) }
 pub fn plan_file(t: &Obj) -> PathBuf { plan_folder(t).join("plan.md") }
 pub fn read_plan(t: &Obj) -> String { std::fs::read_to_string(plan_file(t)).map(|s| s.trim().to_string()).unwrap_or_default() }
-pub fn write_plan(t: &Obj, text: &str) -> crate::err::Res<()> { std::fs::create_dir_all(plan_folder(t))?; std::fs::write(plan_file(t), format!("{}\n", text.trim()))?; Ok(()) }
+pub fn write_plan(t: &Obj, text: &str) -> crate::err::Res<()> {
+    std::fs::create_dir_all(plan_folder(t))?;
+    std::fs::write(plan_file(t), format!("{}\n", text.trim()))?;
+    let _ = page::ensure_page(&plan_folder(t), "plan.md", &title(t), Kind::Plan);
+    Ok(())
+}
+/// The readable page the board publishes for the plan, beside its Markdown source.
+pub fn plan_page(t: &Obj) -> PathBuf { plan_folder(t).join("index.html") }
+/// The plan as the board says it to a human: Markdown and the complete URL, or the honest local state when nothing serves it.
+pub fn plan_words(t: &Obj) -> String {
+    let l = t.at("plan").t("link");
+    if l.starts_with("http://") || l.starts_with("https://") { format!("Plan: [Open plan]({l}) — direct link: {l}") }
+    else if !l.is_empty() { format!("Plan written but not published (no page server link): {l}") }
+    else { String::new() }
+}
+fn title(t: &Obj) -> String { if t.b("title") { t.t("title") } else { t.t("id") } }
 /// The plan as it is on file now, in a few letters: the same file coming back is known for the old plan.
 pub fn plan_mark(t: &Obj) -> String { let text = read_plan(t); if text.is_empty() { String::new() } else { sha1_smol::Sha1::from(text).digest().to_string()[..16].to_string() } }
 /// Its link: `base` answers where the task's pages are served from ("" when nothing serves them: then it is the file).
-pub fn plan_link(t: &Obj, base: impl FnOnce() -> String) -> String { let root = base(); if root.is_empty() { plan_file(t).display().to_string() } else { format!("{root}/{PLAN}/plan.md") } }
+/// The board makes the readable page first; an agent's own plan/index.html is kept as it is.
+pub fn plan_link(t: &Obj, base: impl FnOnce() -> String) -> String {
+    let _ = page::ensure_page(&plan_folder(t), "plan.md", &title(t), Kind::Plan);
+    let file = if plan_page(t).is_file() { "index.html" } else { "plan.md" };
+    let root = base();
+    if root.is_empty() { plan_folder(t).join(file).display().to_string() } else { format!("{root}/{PLAN}/{file}") }
+}
 /// Does this task start with a plan? The setting, read now: "" for none.
 pub fn wanted(t: &Task) -> String { let by = setting_text("plan.approve", Some(t)); if by == "none" { String::new() } else { by } }
 /// The step is open: a plan was asked for and nobody has said yes to it. Every turn that ends meanwhile is the plan's.
@@ -48,9 +70,9 @@ const AFTER: &str = "The board looks at this folder when you stop, and puts back
 /// The last line of the first prompt, while the step is open: the rules say the rest.
 pub const FIRST: &str = "This task starts with a plan (your rules say how): write the plan and stop. Change nothing yet.";
 /// The working agent that writes its own plan. The rule holds for the whole conversation, so it says when it ends.
-pub fn plan_rule(t: &Obj) -> String { format!("This task starts with a plan, and nothing is changed before the plan is approved. Until a message from the board says that your plan is approved: {NOTHING} {WHAT} {} Stopping with the plan written is right in this step: it is not taken for finished work, and nothing is checked or reviewed. {AFTER} Once a message says the plan is approved, build exactly that plan under the rules below; where you have to leave it, say where and why in your closing summary.", how(t)) }
+pub fn plan_rule(t: &Obj) -> String { format!("This task starts with a plan, and nothing is changed before the plan is approved. Until a message from the board says that your plan is approved: {NOTHING} {WHAT} {} The board publishes the plan as a navigable page with this Markdown as its source: do not present a local path as the delivery link, and label any UI sketch as static design, not as the built implementation. Stopping with the plan written is right in this step: it is not taken for finished work, and nothing is checked or reviewed. {AFTER} Once a message says the plan is approved, build exactly that plan under the rules below; where you have to leave it, say where and why in your closing summary.", how(t)) }
 /// A planner of its own: it never builds.
-pub fn planner_rule(t: &Obj) -> String { format!("You are the planner of this task: you write the plan, and another agent builds from it after the plan is approved. You build nothing: {NOTHING} {WHAT} Write it for an agent that has not seen what you read: name the files and the steps. {} {AFTER}", how(t)) }
+pub fn planner_rule(t: &Obj) -> String { format!("You are the planner of this task: you write the plan, and another agent builds from it after the plan is approved. You build nothing: {NOTHING} {WHAT} Write it for an agent that has not seen what you read: name the files and the steps. The board publishes the plan as a navigable page with this Markdown as its source: do not present a local path as the delivery link, and label any UI sketch as static design, not as the built implementation. {} {AFTER}", how(t)) }
 /// The yes, as the plan's own writer hears it.
 pub fn go_words(t: &Obj) -> String {
     if t.at("plan").s("approvedBy") == "nobody" && read_plan(t).is_empty() { return "The plan step is over: it was taken off for this task before a plan was written. Do the task now: from here on the task's rules for the work hold. Do the work, check it, and stop only when it is finished.".into(); }

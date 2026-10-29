@@ -6,8 +6,8 @@ mod far;
 mod move_home;
 mod review_kit;
 mod takeover_kit;
-
 mod after;
+mod publish_pages;
 mod after_far;
 mod after_more;
 mod after_queued;
