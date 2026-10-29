@@ -49,8 +49,8 @@ describe.skipIf(!browser)('pinned spaces', () => {
       expect(await page.getByRole('menuitem', { name: 'Pin', exact: true }).count()).toBe(0)
       await page.keyboard.press('Escape')
       // its count and bold, once
-      expect(await page.locator('#places').getByLabel('1 waiting on you', { exact: true }).count()).toBe(1)
-      expect(await proj.getByLabel('1 waiting on you', { exact: true }).count()).toBe(1)
+      expect(await page.locator('#places').getByLabel('1 need you here', { exact: true }).count()).toBe(1)
+      expect(await proj.getByLabel('1 need you here', { exact: true }).count()).toBe(1)
       expect(Number(await proj.locator('button > span').evaluate((s) => getComputedStyle(s).fontWeight))).toBeGreaterThanOrEqual(600)
 
       // Unpin puts it back in its place in the tree
@@ -62,7 +62,7 @@ describe.skipIf(!browser)('pinned spaces', () => {
       expect(await pinned(page)).toEqual(['home · mac', 'herdr-projects · vm-str'])
 
       // its one row shows open
-      await proj.getByRole('button', { name: 'herdr-projects on vm-str, 1 waiting on you' }).click()
+      await proj.getByRole('button', { name: 'herdr-projects on vm-str, 1 need you, 0 ready here' }).click()
       await at(page, 'vm-str/herdr-projects')
       expect(await open(page)).toEqual(['herdr-projects · vm-str'])
 

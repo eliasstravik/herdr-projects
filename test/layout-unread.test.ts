@@ -35,7 +35,7 @@ const weight = (page: Page, list: string, name: string) => page.locator(`${go(li
 const plainHeading = async (page: Page, list: string, id: string) => {
   const h = page.locator(`${list} li[data-heading="${id}"]`)
   expect(await h.locator('h2 span').evaluate((n) => getComputedStyle(n).fontWeight)).not.toBe('600')
-  expect(await h.locator('[aria-label$="waiting on you"], [data-autopilot]').count()).toBe(0)
+  expect(await h.locator('[aria-label$="need you here"], [data-autopilot]').count()).toBe(0)
 }
 
 describe.skipIf(!browser)('unread and notify', () => {
@@ -110,7 +110,7 @@ describe.skipIf(!browser)('unread and notify', () => {
     // the demo's gtm has tasks waiting on you: its own count, nobody else's
     expect(world.snapshot().tasks.some((t) => t.place === place && (t.status === 'need' || t.status === 'ready'))).toBe(true)
     const plain = async (page: Page, list: string) => {
-      await until(async () => /, \d+ waiting on you, unread$/.test((await said(page, list, 'gtm')) ?? ''), 'gtm bold with its count')
+      await until(async () => /, \d+ need you, \d+ ready here, unread$/.test((await said(page, list, 'gtm')) ?? ''), 'gtm bold with its count')
       expect(await weight(page, list, 'gtm')).toBe('600')
       await plainHeading(page, list, 'm:vm-str')
     }

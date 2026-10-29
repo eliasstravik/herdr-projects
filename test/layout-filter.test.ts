@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'bun:test'
 import { layout } from './layout.ts'
 
-const { browser, server } = await layout({ everything: true })
+const { browser, server, world } = await layout({ everything: true })
 
 const ids = (rows: import('playwright-core').Locator) => rows.evaluateAll((li) => li.map((l) => l.textContent?.match(/[A-Z]+-\d+/)?.[0]))
 
@@ -81,4 +81,76 @@ describe.skipIf(!browser)('filtering the artifacts', () => {
     await page.locator('section[aria-label="Tasks"]').waitFor()
     await page.close()
   }, 30_000)
+})
+
+describe.skipIf(!browser)('Home attention defaults', () => {
+  test('fresh global Home separates actionable work by space, search overrides it, explicit scope and lock win', async () => {
+    const page = await browser!.newPage({ viewport: { width: 1440, height: 900 } })
+    // This file’s other cases explicitly select Everything. Here exercise a fresh device.
+    await page.addInitScript(() => localStorage.removeItem('shepherdr.lists'))
+    await page.goto(`http://127.0.0.1:${server!.port}/?place=vm-str/home`)
+    const panel = page.locator('section[aria-label="Tasks"]')
+    await panel.getByText('Actionable · all machines', { exact: true }).waitFor()
+    await panel.getByRole('button', { name: 'gtm · Ready · vm-str 1', exact: true }).waitFor()
+    expect(await ids(panel.locator('li'))).toContain('LV-3')
+    expect(await ids(panel.locator('li'))).not.toContain('HP-202')
+    const search = panel.getByRole('searchbox', { name: 'Filter tasks' })
+    await search.fill('HP-202')
+    await panel.getByText('HP-202', { exact: true }).waitFor()
+    await search.fill('')
+    await panel.getByRole('button', { name: 'Show all tasks', exact: true }).click()
+    await panel.getByText('HP-202', { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Pin these filters', exact: true }).click()
+    await page.getByRole('button', { name: /^lilla-varlden,/ }).click()
+    await panel.getByText('HP-202', { exact: true }).waitFor()
+    expect(await panel.getByText('Everything', { exact: true }).count()).toBe(1)
+    await page.close()
+  })
+})
+
+describe.skipIf(!browser)('attention summaries and quiet health', () => {
+  test('summary hides for a matching panel, stays for a filtered panel, and preserves questions and health readings', async () => {
+    const page = await browser!.newPage({ viewport: { width: 820, height: 1180 } })
+    await page.goto(`http://127.0.0.1:${server!.port}/?place=p:mac:~`)
+    const panel = page.locator('section[aria-label="Tasks"]')
+    await panel.getByText('LV-3', { exact: true }).waitFor()
+    expect(await page.locator('[data-attention]').count()).toBe(0)
+    await panel.getByRole('searchbox', { name: 'Filter tasks' }).fill('LV-3')
+    await page.locator('[data-attention] summary').click()
+    expect(await page.locator('[data-attention]').textContent()).toContain('LV-4')
+    await page.getByRole('button', { name: /^Machine health/ }).click()
+    const health = page.getByRole('dialog', { name: 'mac health' })
+    await health.waitFor()
+    expect(await health.textContent()).toContain('Alert limit crossed')
+    expect(await health.textContent()).toContain('18%') // Healthy CPU still available beside the disk warning.
+    await page.keyboard.press('Escape')
+    await page.goto(`http://127.0.0.1:${server!.port}/?place=p:vm-str:gtm`)
+    await page.getByText('Rerun CI on main?', { exact: true }).waitFor()
+    expect(await page.locator('[data-attention] summary').textContent()).toContain('3 need you · 1 ready')
+    // The summary includes one coordinator request plus two tasks, not Ready or forwarded copies again.
+    expect(await panel.getByLabel('2 requests need you in the panel scope', { exact: true }).count()).toBe(1)
+    await page.close()
+  })
+})
+
+describe.skipIf(!browser)('Home on a single machine', () => {
+  test('host Home remains actionable when there are no peers', async () => {
+    const places = world.places
+    const machines = world.machines
+    const page = await browser!.newPage({ viewport: { width: 1440, height: 900 } })
+    try {
+      world.places = places.filter((p) => p.machine === world.snapshot().host).map((p) => p.home ? { ...p, level: 1 } : p)
+      world.machines = machines.filter((m) => m.machine === world.snapshot().host)
+      await page.addInitScript(() => localStorage.removeItem('shepherdr.lists'))
+      await page.goto(`http://127.0.0.1:${server!.port}/?place=vm-str/home`)
+      const panel = page.locator('section[aria-label="Tasks"]')
+      await panel.getByText('Actionable · all machines', { exact: true }).waitFor()
+      expect(await ids(panel.locator('li'))).toContain('GTM-15')
+      expect(await ids(panel.locator('li'))).not.toContain('HP-202')
+    } finally {
+      world.places = places
+      world.machines = machines
+      await page.close()
+    }
+  })
 })

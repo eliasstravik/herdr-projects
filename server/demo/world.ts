@@ -214,6 +214,14 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
       automations: this.automations,
       artifacts: this.artifacts,
       asks: this.asks,
+      attentionRequests: Object.fromEntries([
+        ...this.places.map((p) => [p.chat, [...new Set((this.chats[p.chat]?.messages ?? []).flatMap((m) => m.question && m.question.sent === undefined ? [m.question.id] : []))]] as [string, string[]]),
+        ...this.tasks.filter((t) => t.status === 'need' && !t.archived).map((t) => {
+          const key = t.agent?.chat ?? `${t.id}/Agent`
+          const ids = (this.chats[key]?.messages ?? []).flatMap((m) => m.question && m.question.sent === undefined ? [m.question.id] : [])
+          return [key, ids.length ? [...new Set(ids)] : ['attention']] as const
+        }),
+      ]),
       last: this.last(),
       read: this.read,
       settings: secretPages(this.sections, this.vault.names()),

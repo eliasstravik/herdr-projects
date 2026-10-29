@@ -1,3 +1,4 @@
+import { actionable, attentionCounts } from './attention.ts'
 // The screen's small kernel: plugin slots, the store (server data + what's on screen), and the link to the server.
 import { useSyncExternalStore, type FC, type ReactNode } from 'react'
 import { buildId } from '@shared/build.ts'
@@ -1021,12 +1022,10 @@ export function removeSpace(placeId: string): Promise<{ ok?: boolean; error?: st
 /** What waits on you at a place: red counts its whole subtree, own only the place itself (its own coordinator's chat: the sidebar's count). */
 export function counts(snap: Snapshot, placeId: string) {
   const sub = subtree(snap, placeId)
-  const waits = (t: Task) => t.status === 'need' || t.status === 'ready'
-  const ts = snap.tasks.filter((t) => sub.includes(t.place) && !t.archived)
-  const asks = sub.filter((p) => snap.asks[p]).length
-  const waiting = ts.filter(waits).length
-  const own = ts.filter((t) => t.place === placeId && waits(t)).length + (snap.asks[placeId] ? 1 : 0)
-  return { red: waiting + asks, tasks: waiting, own }
+  const c = attentionCounts(snap, sub)
+  const own = attentionCounts(snap, [placeId])
+  // Legacy totals remain available for plugins; named categories are separate.
+  return { red: c.need + c.ready, tasks: snap.tasks.filter((t) => sub.includes(t.place) && !t.archived && actionable(t)).length, own: own.need + own.ready, need: c.need, ready: c.ready, ownNeed: own.need, ownReady: own.ready }
 }
 
 /* ---------- a place's tasks, grouped (groups.ts) ---------- */
@@ -1034,8 +1033,13 @@ export function counts(snap: Snapshot, placeId: string) {
 export { GROUPS, groupChoices, groupFor, namesFor, type GroupBy, type Groups, type TaskGroup } from './groups.ts'
 
 /** a list's tasks in their groups, in the order they show: more machines' under each machine's name */
-export function taskGroups(snap: Snapshot, list: ListView, by: GroupBy) {
-  return groupTasks(snap.places, snap.machines ?? [], tasksIn(snap, list), by, list.level)
+export function taskGroups(snap: Snapshot, list: ListView, by: GroupBy): TaskGroup[] {
+  const tasks = tasksIn(snap, list)
+  if (list.attention) return snap.places.flatMap((p) => (['need', 'ready'] as const).flatMap((status) => {
+    const rows = tasks.filter((t) => t.place === p.id && t.status === status)
+    return rows.length ? [{ key: `${p.id}|${status}`, label: `${p.name} · ${status === 'need' ? 'Needs you' : 'Ready'}`, note: machineName(snap.machines, p.machine), tasks: rows, names: { machine: false, project: false } }] : []
+  }))
+  return groupTasks(snap.places, snap.machines ?? [], tasks, by, list.level)
 }
 
 /** a list's task groups as this screen shows them: grouped as this device chose, Done cut short until Show all, a
@@ -1063,7 +1067,7 @@ export function toggleAllDone(listKey: string, key: string) {
 
 /** how lists of this level group their tasks (a place's level: 0 more machines', 1 one machine's) */
 export function setGroup(level: number, by: GroupBy) {
-  setUI((ui) => ({ groups: { ...ui.groups, [level === 0 ? 'all' : 'machine']: by }, cur: 0 }))
+  setUI((ui) => ({ groups: { ...ui.groups, [level === 0 ? 'all' : 'machine']: by }, lists: { ...ui.lists, chips: state.snap ? listChips(ui, state.snap) : [], at: ui.place }, cur: 0 }))
 }
 
 /** whether every word typed is in one of these, any case: ⌘K's search and the lists' filters */
@@ -1085,7 +1089,7 @@ export function setFilter(listKey: string, list: 'tasks' | 'artifacts', q: strin
 
 /** A list's tasks filtered: in their groups, every Done one, and then its archived ones; groups with none left out */
 export function filteredGroups(snap: Snapshot, list: ListView, q: string, ui: Pick<UI, 'groups'> = state.ui) {
-  const groups: TaskGroup[] = taskGroups(snap, list, groupFor(ui.groups, list.level))
+  const groups: TaskGroup[] = taskGroups(snap, { ...list, attention: false }, groupFor(ui.groups, list.level))
   const archived = archivedIn(snap, list)
   if (archived.length) groups.push({ key: 'archived', label: 'Archived', tasks: archived, names: namesFor(list.level) })
   return groups.map((g) => ({ ...g, tasks: g.tasks.filter((t) => taskMatches(t, q)) })).filter((g) => g.tasks.length)
@@ -1152,6 +1156,8 @@ export interface ListView {
   chips: string[]
   /** what its rows needn't say, as a place's level: 2 one space's, 1 one machine's, 0 more machines' */
   level: 0 | 1 | 2
+  /** Global Home’s default, before an explicit scope or search. */
+  attention?: boolean
 }
 
 const machineChip = (c: string) => c.startsWith('m:')
@@ -1176,7 +1182,8 @@ export function listChips(ui: UI, snap: Snapshot): string[] {
     const chips = l.chips.filter((c) => known(snap, c))
     if (chips.length || !l.chips.length) return chips
   }
-  return [placeOf(snap, ui.place).id]
+  const p = placeOf(snap, ui.place)
+  return p.home && p.machine === snap.host ? [] : p.home ? [`m:${p.machine}`] : [p.id]
 }
 
 export function listOf(snap: Snapshot, chips: string[]): Omit<ListView, 'search'> {
@@ -1190,7 +1197,7 @@ let lastList: { snap: Snapshot; lists: Lists; place: string; view: ListView } | 
 /** the lists as they show now: the same object while nothing they hang on changes, so a part can pick it */
 export function listView(ui: UI, snap: Snapshot): ListView {
   if (lastList && lastList.snap === snap && lastList.lists === ui.lists && lastList.place === ui.place) return lastList.view
-  const view = { ...listOf(snap, listChips(ui, snap)), search: listsPinned(ui, snap) ? '*pinned' : ui.place }
+  const view = { ...listOf(snap, listChips(ui, snap)), search: listsPinned(ui, snap) ? '*pinned' : ui.place, attention: !!placeOf(snap, ui.place).home && placeOf(snap, ui.place).machine === snap.host && !listsPinned(ui, snap) && ui.lists.at !== ui.place }
   lastList = { snap, lists: ui.lists, place: ui.place, view }
   return view
 }

@@ -407,7 +407,7 @@ describe.skipIf(!browser)('places, calm like Slack', () => {
     page.$$eval(`${sel} li`, (ls) =>
       ls.map((l) => {
         const name = l.querySelector('button > span')!
-        const badge = l.querySelector('span[aria-label$="waiting on you"]')
+        const badge = l.querySelector('span[aria-label$="need you here"]')
         return { name: name.textContent, count: badge ? Number(badge.textContent) : 0, bold: Number(getComputedStyle(name).fontWeight) >= 600, dots: l.querySelectorAll('.dot').length, text: l.textContent }
       }),
     )
@@ -548,7 +548,7 @@ describe.skipIf(!browser)('the places tree', () => {
     expect(at()).toBe('vm-str/home')
     expect(await row(page, 'mac').getAttribute('aria-current')).toBeNull()
     expect(await row(page, 'mac').locator('[aria-current]').count()).toBe(0)
-    expect(await page.locator('#places li[data-heading="m:mac"] [data-autopilot], #places li[data-heading="m:mac"] [aria-label$="waiting on you"]').count()).toBe(0)
+    expect(await page.locator('#places li[data-heading="m:mac"] [data-autopilot], #places li[data-heading="m:mac"] [aria-label$="need you here"]').count()).toBe(0)
     await row(page, 'mac').getByRole('button', { name: 'mac', exact: true }).click()
     await page.getByRole('button', { name: "Hide mac's spaces" }).waitFor()
     expect(at()).toBe('vm-str/home')
@@ -565,7 +565,7 @@ describe.skipIf(!browser)('the places tree', () => {
     await page.locator('#places li', { hasText: 'quiet' }).waitFor({ state: 'detached' })
     expect(await page.locator('#places li[data-project][data-machine="m:vm-str"]').count()).toBe(0)
     expect(await page.locator('#places li[aria-current], #places li:has([aria-current])').count()).toBe(0)
-    expect(await row(page, 'vm-str').locator('span[aria-label$="waiting on you"]').count()).toBe(0)
+    expect(await row(page, 'vm-str').locator('span[aria-label$="need you here"]').count()).toBe(0)
     expect(await row(page, 'vm-str').getByRole('img', { name: 'Something in it waits on you' }).count()).toBe(1)
     expect(at()).toBe('vm-str/home')
     // the screen remembers it, and the chevron brings them back
@@ -595,7 +595,7 @@ describe.skipIf(!browser)('the places tree', () => {
     // quiet stays open, out of sight; gtm and herdr-projects wait on you, so the heading has a red dot, not a count
     expect(await names()).toEqual(['mac', 'home', 'lilla-varlden', 'nas', 'home', 'vm-str'])
     expect(at()).toBe('vm-str/quiet')
-    expect(await row(page, 'vm-str').locator('span[aria-label$="waiting on you"]').count()).toBe(0)
+    expect(await row(page, 'vm-str').locator('span[aria-label$="need you here"]').count()).toBe(0)
     expect(await row(page, 'vm-str').getByRole('img', { name: 'Something in it waits on you' }).count()).toBe(1)
     // remembered; Alt+↑ from the hidden one goes to the space shown above where it sits, and leaves the fold as it is
     await page.reload()
@@ -639,7 +639,7 @@ describe.skipIf(!browser)('the places tree', () => {
     await page.waitForSelector('#places li')
     await row(page, 'vm-str').hover()
     const side = await box(page, '#places')
-    for (const sel of ['#places button[aria-label="New space on vm-str"]', '#places [aria-label$="waiting on you"]', '#places li:has-text("herdr-projects")']) {
+    for (const sel of ['#places button[aria-label="New space on vm-str"]', '#places [aria-label$="need you here"]', '#places li:has-text("herdr-projects")']) {
       expect((await box(page, sel)).right).toBeLessThanOrEqual(side.right)
     }
     await page.close()

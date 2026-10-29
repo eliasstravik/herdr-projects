@@ -1,3 +1,4 @@
+import { attentionCounts } from './attention.ts'
 // The layout: places | coordinator chat | tasks or artifacts on a desktop (sidebars resize, places hides), and an open
 // task's side panel after them (focus hides places and the chat, for the task); chat | tasks or artifacts with places in a drawer on a tablet; one column with a
 // Chat | Tasks | Artifacts switch on a phone, where a task's panel items open as sheets. Every part inside comes from a
@@ -7,7 +8,6 @@ import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeybo
 import {
   agentChat,
   closePane,
-  counts,
   focusPane,
   onlyPane,
   openArtifact,
@@ -21,7 +21,6 @@ import {
   chipName,
   listsPinned,
   listView,
-  listWaiting,
   panelHere,
   placeOf,
   registry,
@@ -369,6 +368,18 @@ function PinButton() {
   )
 }
 
+/** These badges count tasks in the panel’s scope; coordinator requests live in chat’s summary. */
+function TaskAttention() {
+  const snap = useSnap()!
+  const view = useStore((s) => listView(s.ui, snap))
+  const ids = snap.places.filter((p) => !view.chips.length || view.chips.includes(p.id) || view.chips.includes(`m:${p.machine}`)).map((p) => p.id)
+  const c = attentionCounts({ ...snap, asks: {}, attentionRequests: { ...snap.attentionRequests, ...Object.fromEntries(snap.places.map((p) => [p.chat, []])) } }, ids)
+  return <span className="inline-flex items-center gap-1 text-[0.75rem] tabular-nums" title={`${c.need} requests need you · ${c.ready} ready · panel scope`}>
+    <Count n={c.need} label={`${c.need} requests need you in the panel scope`} />
+    {c.ready ? <span aria-label={`${c.ready} ready tasks in the panel scope`} className="text-ready-fg">{c.ready} ready</span> : null}
+  </span>
+}
+
 /** The lists' tasks, or their artifacts: what their chips hold */
 function SideList({ snap }: { snap: Snapshot }) {
   const place = placeOf(snap, useUI((u) => u.place))
@@ -377,7 +388,6 @@ function SideList({ snap }: { snap: Snapshot }) {
   const Tasks = registry.views.tasks
   const TasksMenu = registry.views.tasksMenu
   const Artifacts = registry.views.artifacts
-  const c = { tasks: listWaiting(snap, view) }
   const side = Artifacts ? shown : 'tasks'
   return (
     <section className="@container/side flex min-h-0 min-w-0 flex-1 flex-col border-l border-line" aria-label={side === 'tasks' ? 'Tasks' : 'Artifacts'}>
@@ -395,7 +405,7 @@ function SideList({ snap }: { snap: Snapshot }) {
               ).map(([k, l]) => (
                 <Tab key={k} on={side === k} onClick={() => setUI({ side: k })}>
                   {l}
-                  {k === 'tasks' ? <Count n={c.tasks} label={`${c.tasks} waiting on you`} /> : null}
+                  {k === 'tasks' ? <TaskAttention /> : null}
                 </Tab>
               ))}
             </Tabs>
@@ -403,7 +413,7 @@ function SideList({ snap }: { snap: Snapshot }) {
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             <h2 className="min-w-0 truncate font-semibold">Tasks</h2>
-            <Count n={c.tasks} label={`${c.tasks} waiting on you`} />
+            <TaskAttention />
           </div>
         )}
         <PinButton />
@@ -601,13 +611,12 @@ function TasksPane({ place, i }: { place: Place; i: number }) {
   const snap = useSnap()!
   const Tasks = registry.views.tasks
   const TasksMenu = registry.views.tasksMenu
-  const c = counts(snap, place.id)
   return (
     <section aria-label={`Tasks of ${place.name}`} className="flex min-h-0 min-w-0 flex-1 flex-col">
       <Head>
         {i ? null : <PlacesToggle when="closed" />}
         <TasksIcon className={clsx(ic, 'text-fg2')} />
-        <Who name={<span className="flex items-center gap-1.5">Tasks<Count n={c.tasks} label={`${c.tasks} waiting on you`} /></span>} kind={placeKind(snap, place) ? `${place.name} · ${placeKind(snap, place)}` : place.name} />
+        <Who name={<span className="flex items-center gap-1.5">Tasks<TaskAttention /></span>} kind={placeKind(snap, place) ? `${place.name} · ${placeKind(snap, place)}` : place.name} />
         {TasksMenu ? <TasksMenu key={place.id} place={place} /> : null}
         <PaneButtons i={i} />
       </Head>
@@ -787,7 +796,6 @@ function PhoneHome({ snap }: { snap: Snapshot }) {
   const Tasks = registry.views.tasks
   const TasksMenu = registry.views.tasksMenu
   const Artifacts = registry.views.artifacts
-  const c = { tasks: listWaiting(snap, view) }
   const lists = tab !== 'chat' && pinned
   return (
     <div data-drawer-from className="relative flex min-h-0 flex-1 flex-col">
@@ -821,14 +829,14 @@ function PhoneHome({ snap }: { snap: Snapshot }) {
         <div className="min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain">{tab === 'artifacts' && Artifacts ? <Artifacts placeId={place.id} /> : Tasks ? <Tasks placeId={place.id} /> : null}</div>
       )}
       {/* the keyboard is up: the message box sits right on it, so more of the chat shows */}
-      {keyboard ? null : <PhoneBar tasks={c.tasks} />}
+      {keyboard ? null : <PhoneBar />}
       <Drawer />
     </div>
   )
 }
 
 /** Chat | Tasks | Artifacts and Search at the bottom of the phone */
-function PhoneBar({ tasks }: { tasks: number }) {
+function PhoneBar() {
   const tab = useUI((u) => u.tab)
   return (
     <div className="flex shrink-0 gap-2 px-4 pt-1 pb-[max(env(safe-area-inset-bottom),--spacing(4))]">
@@ -852,7 +860,7 @@ function PhoneBar({ tasks }: { tasks: number }) {
             {/* a phone in Display Zoom (320px) has room for the words only */}
             <Icon className={clsx(ic, 'max-[359px]:hidden')} />
             {l}
-            {k === 'tasks' ? <Count n={tasks} label={`${tasks} waiting on you`} /> : null}
+            {k === 'tasks' ? <TaskAttention /> : null}
           </button>
         ))}
       </div>

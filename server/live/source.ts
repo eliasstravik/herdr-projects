@@ -425,6 +425,22 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     return out
   }
 
+  /** Read original chats only: forwarded cards must never multiply requests. */
+  private attentionRequests(): Record<string, string[]> {
+    const out: Record<string, string[]> = {}
+    for (const p of [placeId.home(), ...this.places.spaces.map((x) => placeId.space(x.name))]) {
+      const ids = openCards(this.chats.chat(p)).map((m) => m.question.id)
+      out[p] = ids.length ? ids : this.agents.status(p) === 'blocked' ? ['blocked'] : []
+    }
+    for (const t of this.engine.tasks.filter((t) => !t.archived && this.engine.statusOf(t) === 'need')) {
+      const key = `${t.id}/Agent`
+      const ids = openCards(this.chats.chat(key)).map((m) => m.question.id)
+      // Plain questions and permission menus without a card still require one response.
+      out[key] = ids.length ? ids : ['attention']
+    }
+    return out
+  }
+
   /** the Everywhere defaults, for the other machines (they keep a copy) */
   everywhere() {
     return this.settings.everywhere()
@@ -437,9 +453,11 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     const peers = this.peers?.list() ?? []
     const automations: Snapshot['automations'] = Object.fromEntries(places.map((p) => [p.id, this.automations.view(p.id, this.settings.zone())]))
     const asks = this.asks()
+    const attentionRequests = this.attentionRequests()
     for (const l of peers) {
       Object.assign(automations, l.snap?.automations ?? {})
       Object.assign(asks, l.snap?.asks ?? {})
+      Object.assign(attentionRequests, l.snap?.attentionRequests ?? {})
     }
     return this.withSecrets({
       name: 'Shepherdr',
@@ -455,6 +473,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       automations,
       artifacts: [...Object.values(this.artifacts.list).map((a) => this.artifactView(a)), ...peers.flatMap((l) => l.snap?.artifacts ?? [])].sort((a, b) => b.at - a.at),
       asks,
+      attentionRequests,
       last: Object.assign({}, ...peers.map((l) => l.snap?.last ?? {}), this.unread.last),
       read: this.unread.read,
       sections,

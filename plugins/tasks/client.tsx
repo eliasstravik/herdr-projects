@@ -31,6 +31,7 @@ import {
   placeOf,
   registry,
   setFilter,
+  setChips,
   setGroup,
   setUI,
   toggleAllDone,
@@ -367,7 +368,8 @@ function TaskList(_: { placeId: string }) {
     return (
       <>
         <ListChips alone />
-        <Empty>{noTasks(snap, view)}</Empty>
+        <Empty>{view.attention ? 'No tasks need you or are ready.' : noTasks(snap, view)}</Empty>
+        {view.attention ? <LinkButton onClick={() => setChips(view.chips)}>Show all tasks</LinkButton> : null}
         {footer}
       </>
     )
@@ -376,6 +378,10 @@ function TaskList(_: { placeId: string }) {
   return (
     <>
       <TaskFilter listKey={view.search} order={order} />
+      {view.attention && !q ? <div className="flex items-center justify-between gap-2 px-3 pt-2 text-[0.8125rem] text-fg2 phone:px-4 phone:text-[0.9375rem]">
+        <span>Actionable · all machines</span>
+        <LinkButton onClick={() => setChips(view.chips)}>Show all tasks</LinkButton>
+      </div> : null}
       {/* one flat run of keyed parts: a group showing or going never makes the ones after it start over; only the
           rows and what sits between them glide (data-flip), never what holds them, so no move adds to another */}
       <div ref={list} className="relative">

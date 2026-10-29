@@ -2,8 +2,9 @@
 // a CLI's own menus; what you send shows at once and goes in at once, even mid-turn; only while the CLI shows a menu
 // or is starting does it wait, and the bubble says why.
 import clsx from 'clsx'
+import { attentionCounts, actionable } from '@client/attention.ts'
 import { createContext, Fragment, memo, useContext, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ComponentType, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
-import { act, chatName, definePlugin, getDraft, getState, goChat, has, holdReload, openTask, registry, setDraft, setOutbox, setUI, taskOf, useDraft, useSnap, useStore, useUI, type UI } from '@client/kernel.ts'
+import { act, subtree, listView, tasksIn, filterOf, panesHere, chatName, definePlugin, getDraft, getState, goChat, has, holdReload, openTask, registry, setDraft, setOutbox, setUI, taskOf, useDraft, useSnap, useStore, useUI, type UI } from '@client/kernel.ts'
 import { keyOf, partsOf, priorOf, reasonOf, SEND_TIMEOUT, type Outgoing } from '@client/outbox.ts'
 import { AlertIcon, BackIcon, CameraIcon, CheckIcon, Count, DeleteIcon, dimmed, Dot, DownIcon, DownloadIcon, Empty, field, FileIcon, ic, IconButton, KeyIcon, LinkButton, LiveWave, MachineIcon, Menu, MenuItem, MenuSeparator, MenuSetting, MicIcon, ModeIcon, MoreIcon, NextIcon, PageIcon, PlanIcon, PlusIcon, Primary, QuestionIcon, ReplyIcon, RestartIcon, roundBtn, SearchIcon, SecretField, Sent, SmileIcon, Tab, Tabs, TextBox, UpIcon, useElapsed, XIcon } from '@client/ui.tsx'
 import { canDictate, dictate, dictSample, type Dictation } from '@client/dictation.ts'
@@ -1211,8 +1212,15 @@ function PrOnCard({ pr, className }: { pr: { number: number; url: string }; clas
 /** drawn again only when its chat, what you sent or the New line changes: never as you type */
 const Messages = memo(function Messages({ chat, from }: { chat: Chat; from: string }) {
   const outbox = useStore((s) => s.outbox)
+  const coordinator = useSnap()?.places.some((p) => p.chat === chat.key)
+  const finding = useUI((u) => !!u.find || !!u.jump)
+  const target = useUI((u) => u.jump ?? u.find?.id)
+  const linked = useRef(new Set<string>())
+  if (target) linked.current.add(target)
+  const updates = coordinator && !finding ? chat.messages.filter((m) => !linked.current.has(m.id) && !linked.current.has(m.card?.id ?? '') && m.card?.task && m.card.status && m.card.status !== 'work' && !m.card.ask && !m.card.health && !m.card.restart && !m.card.red && !m.reactions?.length) : []
+  const hidden = new Set(updates)
   type Item = { at: number; msg: Message; out?: Outgoing; last?: boolean } | { at: number; album: Message[]; out?: Outgoing; last?: boolean }
-  const items: Item[] = chat.messages.map((msg) => ({ at: msg.at ?? 0, msg }))
+  const items: Item[] = chat.messages.filter((m) => !hidden.has(m)).map((msg) => ({ at: msg.at ?? 0, msg }))
   items.sort((a, b) => a.at - b.at)
   // what you just sent comes last, in one list with the rest: when it comes back it keeps its place in the list, so
   // nothing is drawn again (a picture doesn't load twice)
@@ -1266,12 +1274,42 @@ const Messages = memo(function Messages({ chat, from }: { chat: Chat; from: stri
           </Fragment>
         )
       })}
+      {coordinator ? <AttentionSummary chat={chat} /> : null}
+      {updates.length ? <details className="text-[0.8125rem] text-fg3 phone:text-[0.9375rem]">
+        <summary className="cursor-pointer py-2">Task updates · {updates.length}</summary>
+        <div className="flex flex-col gap-3 py-2">{updates.map((msg) => <Bubble key={msg.id} msg={msg} chat={chat} from={from} />)}</div>
+      </details> : null}
       {registry.chatTail.map(({ View }, i) => (
         <View key={i} chat={chat} from={from} />
       ))}
     </div>
   )
 })
+
+/** Navigation independent of the list’s filters: opening it never changes a locked scope. */
+function AttentionSummary({ chat }: { chat: Chat }) {
+  const snap = useSnap()!
+  const ui = useUI()
+  const place = snap.places.find((p) => p.chat === chat.key)
+  if (!place) return null
+  const scope = subtree(snap, place.id)
+  const c = attentionCounts(snap, scope)
+  if (!c.need && !c.ready) return null
+  const view = listView(ui, snap)
+  const panelScope = snap.places.filter((p) => tasksIn(snap, view).some((t) => t.place === p.id) || (!view.chips.length || view.chips.includes(p.id) || view.chips.includes(`m:${p.machine}`))).map((p) => p.id)
+  const same = scope.length === panelScope.length && scope.every((p) => panelScope.includes(p))
+  const panelVisible = ui.device !== 'phone' && ui.side === 'tasks' && !ui.task && !ui.settings && !panesHere(ui).length
+  const questions = scope.some((id) => { const p = snap.places.find((p) => p.id === id); return snap.asks[id] || (p && snap.attentionRequests?.[p.chat]?.length) })
+  if (same && panelVisible && !questions && !filterOf(ui, view.search, 'tasks') && ui.archived !== view.key && !ui.shut.some((k) => k.startsWith(`${view.key}|`))) return null
+  const tasks = snap.tasks.filter((t) => scope.includes(t.place) && !t.archived && actionable(t))
+  return <details data-attention className="text-[0.8125rem] text-fg2 phone:text-[0.9375rem]">
+    <summary className="cursor-pointer py-2">{c.need} need you · {c.ready} ready <span className="text-fg3">· {place.name}{place.level === 0 ? ' · all machines' : ''}</span></summary>
+    <div className="flex flex-col items-start gap-1">
+      {tasks.map((t) => <LinkButton key={t.id} onClick={() => openTask(t.id)}>{t.status === 'ready' ? 'Ready' : 'Needs you'} · {t.id} · {t.name}</LinkButton>)}
+      {scope.filter((p) => snap.asks[p]).map((id) => { const p = snap.places.find((x) => x.id === id)!; return <LinkButton key={id} onClick={() => { goChat(p.chat); const id = snap.attentionRequests?.[p.chat]?.[0] ?? snap.asks[p.id]; if (id && id !== 'blocked') setUI({ jump: id }) }}>Question · {p.name}</LinkButton> })}
+    </div>
+  </details>
+}
 
 /** while the agent works, the step it is on in one quiet line; three soft dots in the agent's bubble (like iMessage) where
  *  its log says nothing of its turn */

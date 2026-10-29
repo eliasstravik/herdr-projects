@@ -249,7 +249,8 @@ function mayGo(snap: Snapshot, p: Place, group: string) {
  *  reached; dimmed when muted, as Slack's muted channels, its count still red */
 function usePlaceRow({ p, snap, where }: { p: Place; snap: Snapshot; where?: string }) {
   const sel = useUI((u) => u.place === p.id)
-  const n = counts(snap, p.id).own
+  const c = counts(snap, p.id)
+  const n = c.own
   const fresh = placeUnread(snap, p)
   const quiet = muted(snap, p.id)
   const off = p.status === 'off' && !p.connecting
@@ -257,7 +258,7 @@ function usePlaceRow({ p, snap, where }: { p: Place; snap: Snapshot; where?: str
   return {
     sel,
     // what the row says aloud, its count and offline too
-    said: `${p.name}${where ? ` on ${where}` : ''}${p.home ? ', home space' : ''}${p.connecting ? ', connecting' : off ? ", can't reach" : n ? `, ${n} waiting on you` : ''}${fresh && !off ? ', unread' : ''}${pilot ? ', on Autopilot' : ''}${quiet ? ', muted' : ''}`,
+    said: `${p.name}${where ? ` on ${where}` : ''}${p.home ? ', home space' : ''}${p.connecting ? ', connecting' : off ? ", can't reach" : n ? `, ${c.ownNeed} need you, ${c.ownReady} ready here` : ''}${fresh && !off ? ', unread' : ''}${pilot ? ', on Autopilot' : ''}${quiet ? ', muted' : ''}`,
     fresh,
     // the Autopilot mark, then the space's # before the name, as Slack's channels have: grey, lit with the name where
     // it is open or something is new
@@ -276,7 +277,7 @@ function usePlaceRow({ p, snap, where }: { p: Place; snap: Snapshot; where?: str
     end: (
       <>
         {quiet ? <BellSlashIcon aria-hidden className={clsx(ic, 'text-fg3')} /> : null}
-        {p.connecting || off ? null : <Count n={n} label={`${n} waiting on you`} />}
+        {p.connecting || off ? null : <span className="inline-flex items-center gap-1"><Count n={c.ownNeed} label={`${c.ownNeed} need you here`} />{c.ownReady ? <span className="text-[0.75rem] text-ready-fg tabular-nums" aria-label={`${c.ownReady} ready here`}>{c.ownReady} ready</span> : null}</span>}
       </>
     ),
   }

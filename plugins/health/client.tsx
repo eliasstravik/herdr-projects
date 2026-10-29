@@ -54,23 +54,9 @@ function HealthButton({ place }: { place: Place }) {
         className={phone ? 'aria-expanded:bg-line2' : 'inline-flex! w-auto! gap-2 rounded-full! px-2.5 aria-expanded:bg-hover'}
       >
         <Bars meters={h.meters} />
-        {/* the numbers in words where the header has room, each in its meter's colour */}
-        {phone ? null : (
-          <span className="text-[0.75rem] whitespace-nowrap tabular-nums @max-[34rem]/place:hidden">
-            {h.herdr ? (
-              h.meters.map((m, i) => (
-                <span key={m.name}>
-                  {i ? <span className="text-fg3"> · </span> : null}
-                  <span className={WORD[m.level]}>
-                    {SHORT[m.name] ?? m.name} {m.pct}%
-                  </span>
-                </span>
-              ))
-            ) : (
-              <span className="text-need-fg">herdr isn't answering</span>
-            )}
-          </span>
-        )}
+        <span className={clsx('text-[0.75rem] whitespace-nowrap', worst(h) === 'over' ? 'text-need-fg' : worst(h) === 'busy' ? 'text-work-fg' : 'text-fg3', phone && worst(h) === 'ok' && 'sr-only')}>
+          {phone ? (worst(h) === 'ok' ? 'Health' : '!') : !h.herdr ? "herdr isn't answering" : worst(h) === 'over' ? 'Limit crossed' : worst(h) === 'busy' ? 'Busy' : 'Health'}
+        </span>
       </B>
       {open ? <Details m={m} h={h} onClose={() => setOpen(false)} /> : null}
     </div>
@@ -116,7 +102,7 @@ function Details({ m, h, onClose }: { m: Machine; h: MachineHealth; onClose: () 
               <div className={clsx('h-full w-(--fill) rounded-full', FILL[m.level])} style={{ '--fill': `${Math.max(2, Math.min(100, m.pct))}%` } as CSSProperties} />
             </dd>
             <dd className={clsx('text-right tabular-nums', m.level === 'ok' ? 'text-fg2' : WORD[m.level])}>{m.pct}%</dd>
-            <dd className="col-start-2 col-end-4 truncate text-[0.75rem] text-fg3 tabular-nums phone:text-[0.8125rem]">{m.detail}</dd>
+            <dd className="col-start-2 col-end-4 text-[0.75rem] text-fg3 tabular-nums phone:text-[0.8125rem]">{m.detail}{m.level === 'over' ? ' · Alert limit crossed' : m.level === 'busy' ? ' · New tasks wait for room' : ''}</dd>
           </div>
         ))}
       </dl>

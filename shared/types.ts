@@ -823,6 +823,8 @@ export interface Snapshot {
   artifacts: Artifact[]
   /** open coordinator questions, by place id (a choice card's id, or "blocked" on the CLI's own menu): counted as waiting on you */
   asks: Record<string, string>
+  /** Unanswered request IDs by original chat, never forwarded copies. Optional for older machines/plugins. */
+  attentionRequests?: Record<string, string[]>
   settings: SettingSection[]
   /** a source like demo marks its data as fictional */
   demo?: boolean
