@@ -1,47 +1,81 @@
 # Autopilot
 
-- Every coordinator is an agent that does what you ask, standing requests too ("merge tasks as soon as they pass"):
-  it wakes on news and acts on it when you asked it to handle such things, or tells you what matters. **Autopilot**
-  is a switch at the top of its chat's ⋯ menu: on top of that it also works on its own, within what you asked for.
-  What you switch stays, per space. A space's news goes to its
-  coordinator, and to its machine's home space while that one is on Autopilot. Every space's news on every machine
-  (needs you, ready, stalled, merged, main red, machine health) also reaches the main machine's home space, in one line
-  each: it keeps the overview and picks what buzzes your phone; the space's own coordinator acts on it. While Autopilot is on, a small red pill
-  at the chat's top right says so (on a phone after the subtitle, under the name), a tap on it opens the ⋯ menu, and
-  the space's row in the sidebar has a small red tag (with a mouse, its dot alone); with it off neither shows. Alerts buzz only while the app is closed or in the
-  background; with it on screen they show nothing.
-- Autopilot answers task agents' questions it can answer from the brief or the space, has conflicts rebased and
-  failed checks fixed, starts queued tasks and closes tasks whose work is over, adds small follow-up fix tasks for
-  what reviews, proofs or a red main found, and switches itself off and tells you why when things keep breaking. It
-  never deletes tasks, changes Settings, starts work nobody asked for, force-pushes, or merges past a brief's "ask me
-  first". It has no limits of its own: the machine's max tasks at once already bounds it. New tasks a day, retries,
-  how long a task may take and when to hand back are its own judgment: Shepherdr gives it the facts (news, the
-  agents' own progress) and trusts the model with the rest. A limit you want goes in its HEARTBEAT.md in plain words
-  ("at most 5 new tasks a day"), and the coordinator keeps it.
-- Triggers: Autopilot's heartbeat and automations run on the same kind of trigger, a time rule, event rules, or both
-  (`server/live/trigger.ts`). The time rule is an iCalendar recurrence rule (RFC 5545: FREQ, INTERVAL, BYDAY, BYHOUR,
-  BYMINUTE, BYSETPOS, UNTIL or COUNT, EXDATE, DTSTART; read by the `rrule` package), or `once 2026-11-02 9:00`: every
-  90 minutes, every other week, the last Friday of the month, start and end dates and skip dates. Event rules are news:
-  a task added, ready, gone wrong, needing you, merged or stalled, main red, a machine struggling (heartbeat only), each
-  with optional `space=`, `branch=` (a glob) and `title=` filters. Every time rule's times are in Settings → Time zone
-  (`time.zone`, Everywhere; this machine's own zone by default). You never write a rule: ask a coordinator in your words
-  ("every 30 minutes, 8 to 22 on weekdays") and it writes one (`--when '<rrule>'`, `--on '<events>'`); everywhere it
-  shows in words, with its next three runs ("Every 30 minutes, 8:00-22:00, Monday to Friday (Stockholm)").
-- Autopilot is a heartbeat, as OpenClaw's. Settings → Autopilot holds just three things, per space (or a machine, or
-  Everywhere): the Heartbeat, a time rule (every 30 minutes, all day), shown in words with its next runs and a few
-  presets (every 15, 30 or 60 minutes; workdays 8-18; anything else, ask the coordinator); Wakes at once on, its event
-  rules (all news, or none); and the Checklist, its HEARTBEAT.md, which starts with a checklist for its role (a space,
-  a home space, the main machine's home space). On each run of the time rule, while its coordinator is idle,
-  Shepherdr sends it one fixed prompt in its own session: go through its HEARTBEAT.md (its standing checklist in plain
-  words, in the prompt itself, so a coordinator on another machine has it too; edited in Settings → Autopilot or by
-  the agent with `shepherdr heartbeat set`; kept in `~/.shepherdr/heartbeat` on the main machine) and act on what needs
-  it, or reply only `<no-reply>`, which the chat never shows. A busy coordinator gets it once its turn is over; none
-  while its HEARTBEAT.md is empty and no news waits. News its event rules name wakes the coordinator at once, so a news
-  card gets its reply right after it; other news waits and comes with the next heartbeat (quiet nights: a time rule
-  within the day's hours, and only what can't wait as its events).
-- Automations are cron jobs for tasks: a space's task template (title, brief, agent) and its trigger: a time rule,
-  events of its own space (or the space a rule names), or both. Each run adds a new task with a fresh agent; none runs
-  in the coordinator's chat. Only agents add or change them (`shepherdr automation`), when you ask a coordinator in the
-  chat. They list at the bottom of the space's tasks, paused ones too, each with its trigger in words, its next runs
-  and its last runs: run it now, pause or remove it there. Automations from before triggers (`daily 9:00`, cron,
-  `--when merged`) became time and event rules once.
+Autopilot is a brief, a wake-up schedule and a constrained coordinator. Settings → Autopilot has one editable
+plain-text **Heartbeat**: direction, priorities, constraints, evaluation, reporting, escalation and an optional
+stopping goal all belong there. Generated launch settings follow it as ordinary text. There are no mission,
+evaluation or reporting forms and no mission dashboard. Task briefs and Heartbeat use the plain-text treatment
+introduced in SHE-294.
+
+An ongoing instruction such as “keep improving the game” has no invented stopping target. A finite goal such as
+“halve startup time” ends when the coordinator proves it, saves evidence and calls `shepherdr complete "evidence"`.
+Each wake reads Heartbeat and saved progress, inspects Shepherdr with its tools, chooses permitted useful work,
+acts, evaluates evidence and saves progress/next step with `shepherdr progress "…"`.
+
+When, Events and time zone reuse the existing trigger machinery. Selected events wake immediately; other news
+waits for the next heartbeat. Run now queues a wake until the coordinator is idle. Next and Last show schedule,
+time, wake reason and delivery/turn outcome; a turn ending is not a claim that the goal succeeded. The coordinator's
+actual messages and saved progress carry its results; Shepherdr generates no separate status report.
+
+Turning ON closes/replaces the regular coordinator with a fresh selected Autopilot session. OFF starts a fresh
+regular coordinator using normal defaults. The chat key, old transcripts, queued human messages and saved progress
+stay. During replacement, messages wait and new launches are blocked. Old-run events are discarded. Failed starts
+leave Autopilot stopped with the error; they never launch an unrestricted fallback. Retry by applying settings or
+turning OFF/ON. Changing launch/access settings while ON replaces the coordinator and stops its owned workers.
+
+Task/reviewer defaults are reused. Agent, Model and Effort accept optional Autopilot overrides; `inherit` follows
+the regular coordinator default and `default` uses the selected CLI's own default. An incompatible inherited model
+or effort is refused rather than silently substituted. Automatic fallback is disabled for owned tasks.
+
+## Capabilities and limits
+
+| Runtime | Claude Code | Codex | pi | Other Herdr agents |
+| --- | --- | --- | --- | --- |
+| Shepherdr chat reader, model/effort adapter | Yes | Yes | Yes | Not currently viable for coordinator chat; refused |
+| Shared Linux isolation, schedule, fresh mode replacement | Yes | Yes | Yes | Refused |
+| Local Linux repository space with usable bubblewrap namespaces | Required | Required | Required | — |
+| Remote workers, macOS, home-space Autopilot | Currently refused | Currently refused | Currently refused | — |
+
+The **Isolated workspace** profile uses bubblewrap PID, mount, user and network namespaces, drops capabilities,
+clears inherited environment and starts with a private provider home. It applies to the whole process tree,
+including shell commands, native helpers and headless reviewers, regardless of their own sandbox flags. The host
+home, Herdr/Shepherdr sockets and local/private network are absent. The coordinator sees its project read-only;
+workers can write only their own worktree and private runtime home. Host Git metadata is read-only. A worktree
+containing hardlinks to shared files is refused rather than exposing those shared inodes for writing.
+
+Exact public HTTPS host names are allowed through a trusted CONNECT gateway. Wildcards, arbitrary ports, direct
+network access and private/loopback/Tailscale destinations are blocked. Provider clients must honor the HTTP(S)
+proxy. Custom providers may need their public host added; a local provider is unsupported. Failure never enables
+host networking. Provider configuration is copied selectively: host MCP executors, hooks and installed plugins
+are not imported. Provider login files are copied into the private home; the host login files are not overwritten.
+A login that cannot work in the isolated runtime needs the human; it never falls back to another account.
+
+The gateway fixes command chat/cwd identity itself. A caller cannot choose another task, secret scope or permission
+profile. Secret values use the existing masked CLI flow, only for names explicitly in this profile. Settings,
+deleting tasks, unrelated work and host-file artifacts require the human. Merges require human approval by default;
+choosing `none` permits managed-task merges while each task brief's merge policy still applies. Workers save a
+commit using `shepherdr checkpoint "message"`; this broker operation stages their worktree and commits with hooks, filters, custom Git credential helpers
+and filesystem monitors disabled. Broker Git uses normal SSH configuration or the authenticated GitHub account;
+workspace-controlled scripts are not run on the host. Custom clean/smudge filters and custom SSH command wrappers
+are unavailable through this broker. Direct Git metadata writes are refused.
+
+Each task stores its trusted run owner before startup. Cross-harness managed workers inherit the same profile.
+Turning OFF stops owned workers by default; “Turn off; let workers finish” keeps their existing boundaries and shared
+allowance/deadline. Unrelated earlier tasks are neither stopped nor relabelled. Native descendants stay inside their
+parent's namespace, and stopping that runtime kills the namespace. Server restart fails closed: old runs stop and
+need explicit retry, rather than being revived without their gateway.
+
+Access and limits are behind an expansion:
+
+- **Shared HTTPS allowance (MiB):** a hard cap on encrypted traffic through the gateway, both directions, including
+  coordinator, workers and reviewers. It measures network traffic, not tokens or money. A chunk that exceeds the
+  remaining allowance is refused. Exhaustion closes the run.
+- **Shared reported tokens:** an optional best-effort stop threshold using every transcript in the runtime homes,
+  including helpers and reviewers. Reports are delayed and agent-written, so they can overshoot or be missing; this
+  is not a hard token or money cap. No exact financial spending cap is offered.
+- **Shared runtime:** elapsed wall time since ON, including idle time. Every runtime gets the same absolute deadline
+  through an external timeout; the manager also checks it. This ends all descendants, not just a turn.
+- **Maximum parallel tasks:** the number of active managed Shepherdr tasks belonging to this run. It does not count
+  native helper processes as separate tasks; they share their parent's namespace, network allowance and deadline.
+
+The new `autopilot.*` settings, `autopilot-run` action, optional mode `keepWorkers` and optional
+`SettingRow.instructions` are additive. Existing plugin names, `definePlugin` and registry slots remain unchanged.

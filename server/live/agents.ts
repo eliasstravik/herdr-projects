@@ -94,6 +94,7 @@ export interface AgentRecord {
 }
 
 export interface OutItem {
+  generation?: string
   id: string
   key: string
   text: string
@@ -117,6 +118,7 @@ export type Spec = Omit<AgentRecord, 'logs' | 'started'> & { first?: string; pan
 export type Hold = 'menu' | 'start' | 'turn'
 
 export interface SendOpts {
+  generation?: string
   /** a reaction line: shown as a faded pill until it goes in */
   reaction?: OutItem['reaction']
   /** starts (or resumes) the agent when it isn't running */
@@ -257,6 +259,9 @@ export class Agents extends Emitter<Events> {
   /** whether its log shows its turn ended after this time: a turn cut short (Esc, a prompt turned down) runs no hook */
   endedSince?: (key: string, at: number) => boolean
 
+  private deliveryPaused = new Set<string>()
+  pauseDelivery(key: string, on: boolean) { if (on) this.deliveryPaused.add(key); else { this.deliveryPaused.delete(key); void this.deliver(key) } }
+  acceptInput?: (item: OutItem) => boolean
   prepare?: (spec: Spec) => Promise<Spec>
   launchAllowed?: (spec: Spec) => void
 
@@ -791,6 +796,7 @@ export class Agents extends Emitter<Events> {
       const h = hookSettings(r.isolation ? join(r.isolation.home, 'hooks') : HOOKS_DIR, r.name, r.isolation ? '/run/shepherdr/bun' : process.execPath)
       r.hooks = h.events
       a.push('--settings', h.settings)
+      if (r.isolation) a.push('--dangerously-skip-permissions')
       if (r.system) a.push('--append-system-prompt-file', this.promptFile(r))
       if (model) a.push('--model', model)
       if (effort) a.push('--effort', effort)
@@ -906,7 +912,7 @@ export class Agents extends Emitter<Events> {
   private heldBy(key: string, item?: Pick<OutItem, 'idle'>): Hold | undefined {
     const st = this.status(key)
     // stopping for a restart: what you send goes to the agent it starts on
-    if (st === 'gone' || this.stopping.has(key) || this.info(key)?.interactive_ready === false) return 'start'
+    if (st === 'gone' || this.deliveryPaused.has(key) || this.stopping.has(key) || this.info(key)?.interactive_ready === false) return 'start'
     if (st === 'blocked' || this.menuUp?.(key)) return 'menu'
     if (item?.idle && st === 'working') return 'turn'
     return undefined
@@ -926,7 +932,7 @@ export class Agents extends Emitter<Events> {
     return p
   }
 
-  private async sendNow(key: string, text: string, { reaction, ensure, cid, idle, command }: SendOpts): Promise<Sent> {
+  private async sendNow(key: string, text: string, { reaction, ensure, cid, idle, command, generation }: SendOpts): Promise<Sent> {
     if (cid?.startsWith('requested-news:') && this.newsReceipts.includes(cid)) return { waiting: false, item: { id: cid, cid, key, text, at: Date.now() } }
     const again = cid && this.outbox.find((o) => o.cid === cid)
     if (again) return { waiting: true, waitsFor: this.whyWaits(key), item: again }
@@ -934,8 +940,9 @@ export class Agents extends Emitter<Events> {
     if (done) return { waiting: false, item: done }
     // sent again after it failed: it is on its way once more
     if (cid) this.failures = this.failures.filter((f) => f.cid !== cid)
-    const item: OutItem = { id: randomUUID(), key, text, reaction, at: Date.now(), ...(cid ? { cid } : {}), ...(idle ? { idle } : {}), ...(command ? { command } : {}) }
-    if (this.status(key) === 'gone' && ensure && cid) {
+    const item: OutItem = { generation, id: randomUUID(), key, text, reaction, at: Date.now(), ...(cid ? { cid } : {}), ...(idle ? { idle } : {}), ...(command ? { command } : {}) }
+    if (this.acceptInput && !this.acceptInput(item)) return { waiting: false, item }
+    if (this.status(key) === 'gone' && ensure && cid && !this.deliveryPaused.has(key)) {
       try {
         await ensure()
       } catch (e) {
@@ -1006,6 +1013,7 @@ export class Agents extends Emitter<Events> {
       for (;;) {
         const next = this.outbox.find((o) => o.key === key)
         if (!next) return void this.unready.delete(key)
+        if (this.acceptInput && !this.acceptInput(next)) { this.outbox = this.outbox.filter((o) => o !== next); this.save(); continue }
         if (next.cid?.startsWith('requested-news:') && this.newsReceipts.includes(next.cid)) {
           this.outbox = this.outbox.filter((o) => o !== next)
           this.save()

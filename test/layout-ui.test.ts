@@ -198,7 +198,7 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
     }
   }, 30_000)
 
-  test("Settings → Autopilot: its three settings, the heartbeat and its news in words with presets, and the place's own HEARTBEAT.md, edited and saved (phone)", async () => {
+  test("Settings → Autopilot: one Heartbeat, schedule/events, agent and collapsed access (phone)", async () => {
     const page = await browser!.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
     await page.goto(at(`place=${encodeURIComponent('p:vm-str:gtm')}`))
     await page.getByRole('button', { name: 'Places' }).click()
@@ -211,10 +211,10 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
     await pilot.waitFor()
     const text = (await pilot.textContent())!
     // the rule in words with its next runs, never as written; the news that wakes it at once
-    for (const words of ['Heartbeat', 'Every 30 minutes (Stockholm)', 'Next: ', 'Wakes at once on', 'All news', 'Ask the coordinator for anything else', 'Checklist', 'HEARTBEAT.md', 'Write it in the checklist']) expect(text).toContain(words)
+    for (const words of ['Heartbeat', 'Every 30 minutes (Stockholm)', 'Next: ', 'Events', 'All news', 'Ask the coordinator for anything else', 'Agent', 'HEARTBEAT.md', 'Access and limits']) expect(text).toContain(words)
     for (const words of ['FREQ=', 'RRULE', 'Quiet hours', 'Heartbeat every', 'Max new tasks']) expect(text).not.toContain(words)
     // a preset: picked, it is the rule in words at once, set here with a Reset back to the default
-    const presets = pilot.getByRole('group', { name: 'Heartbeat' })
+    const presets = pilot.getByRole('group', { name: 'When' })
     expect(await presets.getByRole('button').allInnerTexts()).toEqual(['15 min', '30 min', '1 hour', 'Workdays'])
     expect(await presets.getByRole('button', { name: '30 min' }).getAttribute('aria-pressed')).toBe('true')
     await presets.getByRole('button', { name: 'Workdays' }).click()
@@ -223,19 +223,20 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
     await pilot.getByRole('button', { name: "Reset to Everywhere's" }).click()
     await pilot.getByText('Every 30 minutes (Stockholm)').waitFor()
     // the news: all, or none that waits for the heartbeat
-    const news = pilot.getByRole('group', { name: 'Wakes at once on' })
+    const news = pilot.getByRole('group', { name: 'Events' })
     // in words, not the button of the same name
     const words = (w: string) => pilot.getByRole('paragraph').filter({ hasText: new RegExp(`^${w}$`) })
     await news.getByRole('button', { name: 'None: it waits' }).click()
     await words('No news').waitFor()
     await news.getByRole('button', { name: 'All news' }).click()
     await words('All news').waitFor()
-    const doc = pilot.getByRole('textbox', { name: 'Checklist' })
+    const doc = pilot.getByRole('textbox', { name: 'Heartbeat' })
     expect(await doc.inputValue()).toContain('Tasks stuck or stalled')
     const typography = await doc.evaluate((el) => ({ font: getComputedStyle(el).fontFamily, size: getComputedStyle(el).fontSize }))
     expect(typography.font).not.toContain('mono')
     expect(parseFloat(typography.size)).toBeGreaterThanOrEqual(16)
     expect(await doc.evaluate((el) => el.closest('.font-mono, .shadow-box-focus') !== null)).toBe(false)
+    expect(await pilot.locator('details').filter({ has: page.locator('summary', { hasText: 'Access and limits' }) }).getAttribute('open')).toBeNull()
     // Save shows only once it changed
     expect(await pilot.getByRole('button', { name: 'Save' }).count()).toBe(0)
     await doc.fill('- Keep the live link working\n- Ship the onboarding flow')

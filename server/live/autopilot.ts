@@ -10,6 +10,7 @@ export interface PilotConfig {
   hosts: string[]
   secrets: string[]
   approvals: string[]
+  traffic?: number
   tokens?: number
   runtime?: number
   parallel: number
@@ -22,6 +23,7 @@ export interface PilotRun {
   state: 'starting' | 'on' | 'stopping' | 'stopped' | 'failed' | 'workers'
   error?: string
   tasks: string[]
+  traffic?: number
   used: number
   last?: { at: number; reason: string; outcome: string; ended?: number }
 }
@@ -60,6 +62,7 @@ export class PilotRuns {
   check(run: PilotRun, active: number, now = Date.now()) {
     if (!['on', 'workers'].includes(run.state)) throw new Error(run.error || 'Autopilot is stopped.')
     if (run.config.runtime && now - run.started >= run.config.runtime) throw new Error('Autopilot reached its shared runtime limit.')
+    if (run.config.traffic && (run.traffic ?? 0) >= run.config.traffic) throw new Error('Autopilot reached its shared network allowance.')
     if (run.config.tokens && run.used >= run.config.tokens) throw new Error('Autopilot reached its reported token allowance.')
     if (active >= run.config.parallel) throw new Error('Autopilot is at its maximum parallel tasks. Wait for one to finish.')
   }
@@ -81,7 +84,7 @@ export function pilotCommand(run: PilotRun, chat: string, args: string[]) {
   const [cmd, op, id] = args
   const task = chat.includes('/') ? chat.split('/')[0] : undefined
   const own = (target?: string) => !!target && run.tasks.includes(target.split('/')[0])
-  if (cmd === 'progress' || cmd === 'checkpoint' && task && own(task)) return
+  if (cmd === 'complete' && !task || cmd === 'progress' || cmd === 'checkpoint' && task && own(task)) return
   if (['help', 'show', 'models'].includes(cmd)) return
   if (cmd === 'status' && (!op || own(op))) return
   if (cmd === 'heartbeat' && !op) return
@@ -97,4 +100,14 @@ export function pilotCommand(run: PilotRun, chat: string, args: string[]) {
   if (cmd === 'ask' || cmd === 'alert') return
   if (cmd === 'artifact' && ['list', 'show'].includes(op)) return
   throw new Error('This action needs the human. Ask in the chat; the permission profile does not allow it.')
+}
+
+/** Trusted gateway traffic, including every helper/reviewer, is measured before bytes leave the runtime. */
+export function reserveTraffic(run: PilotRun, bytes: number) {
+  if (!['starting', 'on', 'workers'].includes(run.state)) throw new Error('Autopilot has stopped.')
+  if (run.config.traffic && (run.traffic ?? 0) + bytes > run.config.traffic) {
+    run.traffic = run.config.traffic
+    throw new Error('Autopilot reached its shared network allowance.')
+  }
+  run.traffic = (run.traffic ?? 0) + bytes
 }

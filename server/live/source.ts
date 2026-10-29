@@ -16,7 +16,7 @@ import { ROOT } from '../root.ts'
 import { wrapPage } from '../frame.ts'
 import { PilotRuns, pilotCommand, type PilotRun } from './autopilot.ts'
 import { PilotUsage } from './autopilot-usage.ts'
-import { prepareSandbox, sandboxAvailable, type SandboxLaunch } from './autopilot-sandbox.ts'
+import { killSandbox, prepareSandbox, sandboxAvailable, type SandboxLaunch } from './autopilot-sandbox.ts'
 import { Agents, hidden, type Spec } from './agents.ts'
 import { herdr } from './herdr.ts'
 import { followCommand, isCommand } from './commands.ts'
@@ -31,9 +31,10 @@ import { Chats, menuId, menuKeys, rememberReply } from './chats.ts'
 import { age, checkTitle, ended, Engine, fitStatus, type TaskRec } from './engine/engine.ts'
 import { listFolders, makeRepo, resolveInHome } from './folders.ts'
 import { sh, validateBase } from './engine/git.ts'
+import * as G from './engine/git.ts'
 import { Artifacts, browserChecker, type ArtifactRec, type Checker } from './artifacts.ts'
 import { Machines } from './machines.ts'
-import { run, agentEnv, BOX, boxHome } from './box.ts'
+import { agentEnv, BOX, boxHome } from './box.ts'
 import { fileType } from '../../shared/files.ts'
 import { Mirror } from './mirror.ts'
 import { claudeProjectDir, piSessionDir } from './readers/find.ts'
@@ -80,6 +81,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   heartbeats = new Heartbeats()
   pilots = new PilotRuns()
   private pilotUsage = new PilotUsage()
+  pilotRuntime = { available: sandboxAvailable, prepare: prepareSandbox }
   private pilotSandboxes = new Map<string, SandboxLaunch>()
   artifacts = new Artifacts()
   /** agents' secrets: one file on the main machine, which a worker for another machine reads there */
@@ -950,7 +952,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     if (section.name !== 'Autopilot' || !section.level?.startsWith('p:')) return section
     const place = section.level, r = this.pilots.current(place)
     let instructions: string
-    try { instructions = this.pilotWords({ config: this.settings.pilot(this.spaceKey(place)) } as PilotRun) }
+    try { instructions = this.pilotWords(r?.state === 'on' ? r : { place, config: this.settings.pilot(this.spaceKey(place)) } as PilotRun) }
     catch (e) { instructions = (e as Error).message }
     const h = this.settings.heartbeat(this.levelOf(place))
     const next = this.places.mode(place) === 'autopilot' && r?.state === 'on' ? this.heartbeats.next(place, h.time, h.zone) : undefined
@@ -970,10 +972,13 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   }
 
   private pilotWords(r: PilotRun) {
-    return `Agent: ${harnessWords(r.config.harness)}\nPermission profile: Isolated workspace (Linux namespaces). Coordinator reads the project; workers write only their own worktree. Git metadata is read-only; save commits through shepherdr checkpoint. Host files, sockets and local network are hidden.\nNetwork: HTTPS to ${r.config.hosts.join(', ') || 'no hosts'}.\nAccounts: selected agent provider login only. Secrets: ${r.config.secrets.join(', ') || 'none'}.\nHuman approval: ${r.config.approvals.join(', ') || 'no merges require approval'}; settings, deleting tasks and unrelated work always need the human.\nShared reported token allowance: ${r.config.tokens ?? 'off'} (delayed log reports, can overshoot; not a money cap).\nShared runtime: ${r.config.runtime ? `${r.config.runtime / 60000} min elapsed since ON` : 'off'}.\nMaximum parallel Shepherdr tasks: ${r.config.parallel}. Native helpers and reviewers remain inside their parent's runtime and share its allowance. No automatic fallback.`
+    const h = this.settings.heartbeat(this.levelOf(r.place))
+    const space = this.spaceKey(r.place)
+    return `Wake-ups: ${timeWords(h.time, h.zone)}. Events: ${eventWords(h.on)}. Time zone: ${h.zone}.\nAgent: ${harnessWords(r.config.harness)}\nPermission profile: Isolated workspace (Linux namespaces). Coordinator reads the project; workers write only their own worktree. Git metadata is read-only; save commits through shepherdr checkpoint. Host files, sockets and local network are hidden.\nNetwork: HTTPS to ${r.config.hosts.join(', ') || 'no hosts'}.\nAccounts: selected agent provider login; repository account through checked PR/merge commands. Secrets: ${r.config.secrets.join(', ') || 'none'}.\nHuman approval: ${r.config.approvals.join(', ') || 'no merges require approval'}; settings, deleting tasks and unrelated work always need the human.\nShared HTTPS allowance: ${r.config.traffic ? `${r.config.traffic / 1048576} MiB, counted at the gateway across every agent/reviewer` : 'off'}. This measures encrypted traffic, not money or tokens.\nShared reported token allowance: ${r.config.tokens ?? 'off'} (best effort from agent-written delayed logs, can overshoot; not a hard token or money cap).\nShared runtime: ${r.config.runtime ? `${r.config.runtime / 60000} min elapsed since ON` : 'off'}.\nMaximum parallel Shepherdr tasks: ${r.config.parallel}. Native helpers and reviewers remain inside their parent's runtime and share its allowance. No automatic fallback.\n\nTask and reviewer defaults:\n${settingsBlock('<task>', { ways: this.settings.ways(space), reviewer: this.settings.harness('reviewer', space), agent: this.settings.harness('task', space) })}`
   }
 
   private configureAutopilot() {
+    this.agents.acceptInput = (item) => !item.generation || this.pilotOf(item.key)?.id === item.generation && this.pilotOf(item.key)?.state === 'on'
     this.engine.pilotOwner = (key) => {
       const r = this.pilotOf(key)
       if (!r) return undefined
@@ -1004,11 +1009,14 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       const project = spec.key.includes('/') ? this.engine.task(spec.key.split('/')[0])?.project : r.place
       const repo = project && this.places.space(project)?.path
       if (!repo) throw new Error('Isolated Autopilot needs a repository space. Home-space Autopilot is unavailable.')
-      const box = await prepareSandbox(spec, r, repo, (args, ctx) => this.pilotCli(r, args, ctx))
+      G.guardBrokerRepo(repo)
+      G.guardBrokerRepo(spec.cwd)
+      const box = await this.pilotRuntime.prepare(spec, r, repo, (args, ctx) => this.pilotCli(r, args, ctx))
       this.pilotSandboxes.set(spec.key, box)
       return { ...spec, env: { ...spec.env, ...box.env }, isolation: { run: r.id, home: box.logsHome, control: join(dirname(box.logsHome), 'control'), path: box.wrapper }, fresh: spec.fresh || this.agents.record(spec.key)?.isolation?.run !== r.id }
     }
     this.agents.on('status', (key, state) => {
+      if (state === 'gone' && this.agents.record(key)?.finished) { const box = this.pilotSandboxes.get(key); if (box) { void box.close(); this.pilotSandboxes.delete(key) } }
       if (key.includes('/')) return
       const r = this.pilotOf(key)
       if (r?.state === 'on' && r.last && state === 'working') this.pilots.outcome(r, 'Running')
@@ -1048,10 +1056,18 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         if (!t?.worktree || t.pilot !== r.id || args.length !== 2 || !args[1].trim()) throw new Error('Use shepherdr checkpoint "commit message" from your owned task.')
         const safe = ['git', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-C', t.worktree]
         for (const op of [['add', '--all'], ['commit', '-m', args[1]]]) {
-          const result = await run([...safe, ...op], { timeoutMs: 30000, env: { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' } })
+          const result = await G.sh([...safe, ...op], t.worktree, { timeoutMs: 30000, env: { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' } })
           if (result.code) throw new Error(result.err || result.out)
         }
         return { out: 'Saved commit.\n', code: 0 }
+      }
+      if (args[0] === 'complete') {
+        if (ctx.chat !== r.place || args.length !== 2 || !args[1].trim()) throw new Error('Use shepherdr complete "goal evidence" from the coordinator.')
+        const saved = readJson<Record<string,string>>('autopilot-progress.json', {})
+        saved[r.place] = args[1].slice(0, 20000); writeJson('autopilot-progress.json', saved)
+        this.pilots.outcome(r, `Finished: ${args[1].slice(0, 160)}`, true)
+        await this.switchPilot(r.place, 'regular')
+        return { out: 'Autopilot finished.\n', code: 0 }
       }
       if (args[0] === 'progress') {
         if (args.length !== 1 && args.length !== 2) throw new Error('Use shepherdr progress ["progress and next step"].')
@@ -1065,6 +1081,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
 
   private async stopPilotAgents(r: PilotRun, keepWorkers: boolean) {
     for (const key of [...(this.agents.record(r.place)?.isolation?.run === r.id ? [r.place] : []), ...(!keepWorkers ? this.engine.tasks.filter((t) => t.pilot === r.id && !ended(t)).map((t) => `${t.id}/Agent`) : [])]) {
+      const isolation = this.agents.record(key)?.isolation
+      if (isolation) killSandbox(isolation.control)
       await this.agents.finish(key)
       const box = this.pilotSandboxes.get(key)
       if (box) { await box.close(); this.pilotSandboxes.delete(key) }
@@ -1075,12 +1093,14 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     if (!this.places.coordinator(place)) throw new Error('No such place.')
     if (!replace && this.places.mode(place) === mode) return
     await this.pilots.transition(place, async () => {
+      this.agents.pauseDelivery(place, true)
+      try {
       let next: PilotRun | undefined
       if (mode === 'autopilot') {
         const config = this.settings.pilot(this.spaceKey(place))
         if (harness) config.harness = harness
         if (!this.places.space(place)) throw new Error('Autopilot needs a repository space; home spaces are not isolated projects.')
-        await sandboxAvailable()
+        await this.pilotRuntime.available()
         if (!this.engine.installed(config.harness.kind)) throw new Error(`${config.harness.kind} is not installed.`)
         next = this.pilots.begin(place, config)
       }
@@ -1093,7 +1113,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         if (old) { await this.stopPilotAgents(old, keepWorkers && mode === 'regular'); old.state = keepWorkers && mode === 'regular' ? 'workers' : 'stopped' }
         this.places.setMode(place, mode)
         const to = mode === 'autopilot' ? next!.config.harness : this.settings.harness('coordinator', this.spaceKey(place))
-        await this.coordinator(place, { as: to, restart: async () => hidden(`Fresh ${mode === 'autopilot' ? 'Autopilot' : 'regular'} coordinator. Same chat and saved progress.\n\nRecent chat:\n${history}\n\nRead Heartbeat, inspect Shepherdr using its tools, act within the permission profile, and save progress/next step with shepherdr progress.`, 'mode') })
+        await this.coordinator(place, { as: to, restart: async () => hidden(`Fresh ${mode === 'autopilot' ? 'Autopilot' : 'regular'} coordinator. Same chat and saved progress.\n\nRecent chat:\n${history}\n\n${mode === 'autopilot' ? 'Read Heartbeat, inspect Shepherdr using its tools, act within the permission profile, and save progress/next step with shepherdr progress.' : `Autopilot is off. Do only what the human asks; do not act on Heartbeat or earlier wakes. Saved progress: ${readJson<Record<string,string>>('autopilot-progress.json', {})[place] ?? '(none)'}. Nothing needs a reply: respond only <no-reply>regular coordinator ready</no-reply>.`}`, 'mode') })
         if (next) { next.state = 'on'; this.heartbeats.switched(place, true) }
         this.pilots.save()
         const id = `mode:${mode}:${Date.now()}`
@@ -1105,6 +1125,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         await this.agents.finish(place)
         throw e
       } finally { this.emit('chat', place); this.emit('snapshot') }
+      } finally { this.agents.pauseDelivery(place, false) }
     })
   }
 
@@ -1112,15 +1133,15 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
     for (const p of this.placeList()) if (p.mode === 'autopilot' && (!level || level === 'all' || level.startsWith('m:') || level === p.id)) await this.switchPilot(p.id, 'autopilot', false, true)
   }
 
-  private async wakePilot(place: string, reason: string) {
+  private async wakePilot(place: string, reason: string, now = Date.now()) {
     if (this.pilots.busy(place)) throw new Error('The coordinator is changing.')
     const r = this.pilotOf(place)
     if (!r) throw new Error('Turn Autopilot on first.')
-    this.pilots.wake(r, reason)
-    const text = this.heartbeats.beat(place, this.roleOf(place))
+    this.pilots.wake(r, reason, now)
+    const text = this.heartbeats.beat(place, this.roleOf(place), now)
     if (!text) { this.pilots.outcome(r, 'Heartbeat is empty', true); return }
     try {
-      const sent = await this.agents.send(place, hidden(text, 'heartbeat'), { ensure: () => this.coordinator(place), idle: true })
+      const sent = await this.agents.send(place, hidden(text, 'heartbeat'), { ensure: () => this.coordinator(place), idle: true, generation: r.id })
       this.pilots.outcome(r, sent.waiting ? 'Queued until idle' : 'Delivered')
     } catch (e) { this.pilots.outcome(r, `Failed: ${(e as Error).message}`, true); throw e }
     this.emit('snapshot')
@@ -1342,7 +1363,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
             : mode === 'regular'
               ? ' Act on it if the human asked you to handle such things; otherwise tell the human what matters in a line or two. Nothing matters: reply with only <no-reply>reason</no-reply>.'
               : ' Act on it by your Autopilot rules. Nothing worth saying: reply with only <no-reply>reason</no-reply>.'
-      this.agents.send(id, hidden(`${prefix}${text}.${tail}`, 'news', about), { ensure: () => this.coordinator(id) }).catch(() => undefined)
+      this.agents.send(id, hidden(`${prefix}${text}.${tail}`, 'news', about), { ensure: () => this.coordinator(id), generation: this.pilotOf(id)?.id }).catch(() => undefined)
     }
     const requester = about?.task ? this.engine.task(about.task)?.requester : undefined
     // Owner and home already heard above. The main home already receives the overview over the worker link.
@@ -1431,7 +1452,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       if (this.pilots.busy(p.id) || this.pilotOf(p.id)?.state !== 'on') continue
       const h = this.settings.heartbeat(this.levelOf(p.id))
       if (!this.heartbeats.due(p.id, h.time, h.zone, now) || !this.idle(p.id)) continue
-      void this.wakePilot(p.id, 'Schedule').catch(() => undefined)
+      void this.wakePilot(p.id, 'Schedule', now).catch(() => undefined)
     }
   }
 
@@ -2313,7 +2334,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         const place = this.placeList().find((x) => x.name === a1 || x.id === a1)
         const mode = asMode(rest[0])
         if (!place || !mode) throw new Error('shepherdr mode <place> autopilot|regular')
-        await this.act({ type: 'mode', place: place.id, mode })
+        const switched = await this.act({ type: 'mode', place: place.id, mode }) as { ok?: boolean; error?: string }
+        if (switched.error) throw new Error(switched.error)
         return `${place.name}: Autopilot ${mode === 'autopilot' ? 'on' : 'off'}.`
       }
       case 'task':
@@ -2504,6 +2526,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
         if (set) {
           if (ctx.stdin === undefined) throw new Error("Give the whole new HEARTBEAT.md on stdin: shepherdr heartbeat set [<place>] < file, or with a heredoc. Empty stops the heartbeat.")
           this.heartbeats.write(at.id, ctx.stdin.trim() ? ctx.stdin : '')
+          if (this.places.mode(at.id) === 'autopilot') await this.switchPilot(at.id, 'autopilot', false, true)
           this.emit('snapshot')
           return ctx.stdin.trim() ? `${at.name}'s HEARTBEAT.md is saved: the next heartbeat goes through it.` : `${at.name}'s HEARTBEAT.md is empty now: no heartbeat until it has a checklist again.`
         }

@@ -91,7 +91,7 @@ How to do the work inside a task is its agent's judgment, not yours.
      broker refuses; a prompt cannot grant permission. For isolated workers, `shepherdr checkpoint "message"` saves
      a commit through the trusted broker because host Git metadata is read-only.
    - Save what changed, evidence, blockers and the next step with `shepherdr progress "…"`. If a stopping goal is
-     proven, say so and ask the human to turn OFF. Without a stopping goal, continue useful permitted work on later wakes.
+     proven, save its evidence with `shepherdr complete "evidence"`; it ends your run and starts a fresh regular coordinator. Without a stopping goal, continue useful permitted work on later wakes.
    - Nothing useful to do: reply only `<no-reply>heartbeat: nothing to do</no-reply>`.
 8. **Automations**: `shepherdr automation add "<name>" --task "<title>" --brief "<brief>" [--when "<time rule>"]
    [--on "<events>"]` adds that task to the space on its trigger, each time with a fresh agent of its own; a brief as

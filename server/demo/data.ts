@@ -557,7 +557,11 @@ export function settings(stores = settingStores(), checklists: Record<string, st
       about: 'Every machine Shepherdr reaches, and how it is now.',
       rows: [r('vm-str', 'Main · reachable', '', { fixed: true }), r('mac', 'Reachable', '', { fixed: true }), r('nas', "Can't reach since 14:02", '', { fixed: true })],
     },
-  ]
+  ].map((section) => section.name === 'Autopilot' && section.level?.startsWith('p:') ? { ...section, rows: section.rows.map((row) => row.doc ? { ...row, instructions: 'Wake-ups: Every 30 minutes (Stockholm). Events: All news.\nAgent: Codex (inherited coordinator defaults).\nPermission profile: Isolated workspace. The coordinator reads this project; workers write their own worktrees. Host files, sockets and local network are hidden.\nNetwork: HTTPS to api.openai.com, chatgpt.com, api.anthropic.com.\nAccounts: agent provider login. Available secrets: none.\nHuman approval: merges. Settings, deleting tasks and unrelated work always need the human.\nShared reported tokens: off (delayed reports; not a hard token or money cap).\nShared runtime: off. Maximum parallel Shepherdr tasks: 3.\nNo automatic fallback.' } : row).concat([
+      { label: 'Time zone', key: '', value: 'Europe/Stockholm', fixed: true, group: 'Wake-up' },
+      { label: 'Next', key: '', value: 'Today 15:00 · Schedule', fixed: true, group: 'Wake-up' },
+      { label: 'Last run', key: '', value: 'Today 14:30 · Schedule · Turn ended; inspect chat for the result · 42 s', fixed: true, group: 'Wake-up' },
+    ]) } : section)
 }
 
 export const ASKS: Record<string, string> = { [GTM]: 'f1' }

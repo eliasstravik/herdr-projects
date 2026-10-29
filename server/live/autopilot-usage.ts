@@ -16,7 +16,7 @@ export class PilotUsage {
       const kind = file.includes('/.claude/') ? 'claude' : file.includes('/.codex/') ? 'codex' : 'pi'
       let tail = this.tails.get(file)
       if (!tail) { tail = new LogTail(file, readerFor(kind)!); this.tails.set(file, tail) }
-      for (const event of tail.read(256 * 1024)) if (event.kind === 'usage') values.set(`${kind}:${event.id}`, Math.max(values.get(`${kind}:${event.id}`) ?? 0, event.tokens))
+      for (const event of tail.read(256 * 1024)) if (event.kind === 'usage') values.set(`${kind}:${file}:${event.id}`, Math.max(values.get(`${kind}:${file}:${event.id}`) ?? 0, event.tokens))
     }
     return [...values.values()].reduce((n, x) => n + x, 0)
   }

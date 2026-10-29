@@ -1160,7 +1160,7 @@ describe('modes: regular and Autopilot', () => {
     expect(JSON.parse(readFileSync(join(process.env.SHEPHERDR_HOME!, 'modes.json'), 'utf8'))).toEqual({ 'p:h:auto': 'autopilot', 'p:h:reg': 'regular' })
   })
   test('shepherdr mode takes regular and autopilot, any case', async () => {
-    expect((await src.cli(['mode', 'home', 'Autopilot'], {})).out.trim()).toBe('home: Autopilot on.')
+    expect((await src.cli(['mode', 'home', 'Autopilot'], {})).out).toContain('repository space')
     expect((await src.cli(['mode', 'home', 'regular'], {})).out.trim()).toBe('home: Autopilot off.')
     for (const m of ['copilot', 'manual', 'sleepy']) expect((await src.cli(['mode', 'home', m], {})).code).toBe(1)
   })
@@ -1252,6 +1252,7 @@ describe('news for coordinators', () => {
       expect(news('added')).toEqual([])
       src.places.modes[project] = 'regular'
       src.places.modes[home] = 'autopilot'
+      const homeRun = src.pilots.begin(home, src.settings.pilot()); homeRun.state = 'on'
       expect(news('ready')).toEqual([home, project].sort())
       expect(news('added')).toEqual([home])
       // the home space's own news goes to it once
@@ -1359,38 +1360,14 @@ describe("every machine's news reaches the main machine's home space", () => {
   })
 })
 
-describe('Autopilot switched on or off', () => {
-  test("posts one card in the place's chat and tells its coordinator quietly; no change, no card", async () => {
+describe('Autopilot switch failures are truthful', () => {
+  test('unsupported home isolation fails without changing mode or posting an ON card', async () => {
     const place = placeId.home(HOST)
     src.places.setMode(place, 'regular')
-    // only this test's (shepherdr mode switched the home space before)
-    const since = Date.now()
-    const cards = () => src.chats.chat(place).messages.filter((m) => m.card?.mode && (m.at ?? 0) >= since)
-    const sent: string[] = []
-    const send = src.agents.send
-    const status = src.agents.status
-    src.agents.send = (async (_k: string, text: string) => (sent.push(text), { waiting: false })) as typeof send
-    src.agents.status = (() => 'idle') as typeof status
-    try {
-      expect(await src.act({ type: 'mode', place, mode: 'regular' })).toEqual({})
-      expect(cards()).toEqual([])
-      expect(sent).toEqual([])
-      expect((await src.cli(['mode', 'home', 'autopilot'], {})).code).toBe(0)
-      expect(await src.act({ type: 'mode', place, mode: 'autopilot' })).toEqual({})
-      expect((await src.cli(['mode', 'home', 'regular'], {})).code).toBe(0)
-      expect(await src.act({ type: 'mode', place, mode: 'copilot' as never })).toEqual({ ok: false, error: 'No such mode.' })
-    } finally {
-      src.agents.send = send
-      src.agents.status = status
-    }
-    expect(cards().map((m) => [m.card!.mode, m.text])).toEqual([
-      ['autopilot', 'Autopilot on · works on its own'],
-      ['autopilot', 'Autopilot off · does what you ask'],
-    ])
-    expect(sent).toHaveLength(2)
-    expect(sent[0]).toContain('<shepherdr><mode mode="autopilot">Autopilot is now on: you also work on your own')
-    expect(sent[1]).toContain('<shepherdr><mode mode="regular">Autopilot is now off: do what the human asks, nothing on your own, and no more heartbeats.')
-    expect(sent[0]).toContain("don't announce it, reply with only <no-reply>reason</no-reply>")
+    const result = await src.act({ type: 'mode', place, mode: 'autopilot' }) as { error?: string }
+    expect(result.error).toContain('repository space')
+    expect(src.places.mode(place)).toBe('regular')
+    expect(await src.act({ type: 'mode', place, mode: 'copilot' as never })).toEqual({ ok: false, error: 'No such mode.' })
   })
 })
 
@@ -1413,6 +1390,7 @@ describe("Autopilot's heartbeat", () => {
     // on a half hour: every 30 minutes runs on the clock's :00 and :30
     const t0 = Math.floor(Date.now() / (30 * min)) * 30 * min
     try {
+      const run = src.pilots.begin(place, src.settings.pilot(p.name)); run.state = 'on'
       src.places.setMode(place, 'autopilot')
       src.heartbeats.switched(place, true, t0)
       src.heartbeat(t0 + 29 * min)
@@ -1449,6 +1427,8 @@ describe("Autopilot's heartbeat", () => {
       // read and changed with the command, from any machine: the checklist itself, never its path
       expect((await src.cli(['heartbeat'], { chat: place })).out).toContain('HEARTBEAT.md:\n# Heartbeat')
       expect((await src.cli(['heartbeat', 'set'], { chat: place })).out).toContain('on stdin')
+      src.places.setMode(place, 'regular')
+      src.pilots.current(place)!.state = 'stopped'
       expect((await src.cli(['heartbeat', 'set', p.name], { stdin: '- Check the ROM builds\n' })).out).toContain('is saved')
       const shown = (await src.cli(['heartbeat', p.name], {})).out
       expect(shown).toContain('HEARTBEAT.md:\n- Check the ROM builds')

@@ -216,6 +216,7 @@ export const CATALOG: Section[] = [
       { group: 'Access and limits', label: 'Network hosts (HTTPS)', key: 'autopilot.hosts', value: 'api.openai.com, chatgpt.com, api.anthropic.com', text: true },
       { group: 'Access and limits', label: 'Available secrets (names)', key: 'autopilot.secrets', value: '', text: true },
       { group: 'Access and limits', label: 'Human approval required', key: 'autopilot.approvals', value: 'merge', options: ['merge', 'none'] },
+      { group: 'Access and limits', label: 'Shared HTTPS allowance', key: 'autopilot.traffic', value: 'off', num: { min: 1, max: 1000000, off: true, unit: 'MiB' } },
       { group: 'Access and limits', label: 'Shared reported tokens', key: 'autopilot.tokens', value: 'off', num: { min: 1, max: 1000000000, off: true } },
       { group: 'Access and limits', label: 'Shared runtime', key: 'autopilot.runtime', value: 'off', num: { min: 1, max: 10080, off: true, unit: 'min' } },
       { group: 'Access and limits', label: 'Maximum parallel tasks', key: 'autopilot.parallel', value: '3', num: { min: 1, max: 200 } },
@@ -492,10 +493,11 @@ export class Settings {
     const problem = pilotProblem(kind)
     if (problem) throw new Error(problem)
     const model = get('model') === 'inherit' ? base.model : modelArg(kind, get('model'))
+    if (model && knowsModels(kind) && !findModel(kind, model)) throw new Error(`Choose a model for ${CLI_NAME[kind]}, or set its Autopilot model to default.`)
     const effort = get('effort') === 'inherit' ? base.effort : get('effort') === 'default' ? undefined : get('effort')
     if (effort && !effortsOf(kind, model).includes(effort)) throw new Error(`${CLI_NAME[kind]} does not support ${effort} effort with this model.`)
     const num = (key: string) => Number.parseFloat(get(key)) || undefined
-    return { harness: { kind, model, effort }, hosts: hostList(get('hosts')), secrets: get('secrets').split(/[\s,]+/).filter(Boolean), approvals: get('approvals') === 'none' ? [] : ['merge'], tokens: num('tokens'), runtime: num('runtime') ? num('runtime')! * 60000 : undefined, parallel: num('parallel') ?? 3 }
+    return { harness: { kind, model, effort }, hosts: hostList(get('hosts')), secrets: get('secrets').split(/[\s,]+/).filter(Boolean), approvals: get('approvals') === 'none' ? [] : ['merge'], traffic: num('traffic') ? num('traffic')! * 1048576 : undefined, tokens: num('tokens'), runtime: num('runtime') ? num('runtime')! * 60000 : undefined, parallel: num('parallel') ?? 3 }
   }
 
   /** the time zone of every time rule */

@@ -1,15 +1,16 @@
 // Shared containment for every adapter. Agents cannot see the host home, network, PID space, Herdr socket,
 // Shepherdr store, or gateway policy. Descendant processes remain in the same namespaces.
+import { Transform } from 'node:stream'
 import { createServer, type Server } from 'node:http'
 import { connect, isIP, type Socket } from 'node:net'
 import { lookup } from 'node:dns/promises'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { homedir } from 'node:os'
 import { HOME } from '../store.ts'
 import { ROOT } from '../root.ts'
 import { BOX, q } from './box.ts'
-import { pilotCommand, pilotProblem, type PilotRun } from './autopilot.ts'
+import { reserveTraffic, pilotCommand, pilotProblem, type PilotRun } from './autopilot.ts'
 import type { Spec } from './agents.ts'
 
 export interface SandboxLaunch { wrapper: string; env: Record<string, string>; logsHome: string; close: () => Promise<void> }
@@ -30,12 +31,28 @@ export function sandboxArgs(o: { cwd: string; repo: string; home: string; state:
   for (const p of o.git ?? []) a.push('--ro-bind', p, p)
   a.push('--ro-bind', o.control, '/run/shepherdr', '--ro-bind', o.bun, '/run/shepherdr/bun')
   // Native Claude/Codex binaries, or pi's package (its script needs its relative modules).
-  if (o.kind === 'pi') a.push('--ro-bind', dirname(dirname(o.binary)), dirname(dirname(o.binary)))
+  if (o.kind === 'pi') { const modules = o.binary.includes('/node_modules/') ? o.binary.slice(0, o.binary.indexOf('/node_modules/') + 14) : dirname(dirname(o.binary)); a.push('--ro-bind', modules, modules) }
   a.push('--ro-bind', o.binary, `/run/shepherdr/${o.kind}`)
-  for (const [k, v] of Object.entries({ HOME: o.home, USER: 'agent', TERM: 'xterm-256color', PATH: '/run/shepherdr/bin:/usr/local/bin:/usr/bin:/bin', SHEPHERDR_CHAT: '', SHEPHERDR_COMMAND: '/run/shepherdr/bin/shepherdr', CODEX_HOME: join(o.home, '.codex'), PI_CODING_AGENT_DIR: join(o.home, '.pi/agent'), CLAUDE_CONFIG_DIR: join(o.home, '.claude') })) a.push('--setenv', k, v)
-  a.push('--chdir', o.cwd, '/run/shepherdr/bun', '/run/shepherdr/bootstrap.ts', `/run/shepherdr/${o.kind}`)
+  for (const [k, v] of Object.entries({ HOME: o.home, USER: 'agent', TERM: 'xterm-256color', PATH: '/run/shepherdr/bin:/usr/local/bin:/usr/bin:/bin', SHEPHERDR_CHAT: '', NODE_USE_ENV_PROXY: '1', SHEPHERDR_COMMAND: '/run/shepherdr/bin/shepherdr', CODEX_HOME: join(o.home, '.codex'), PI_CODING_AGENT_DIR: join(o.home, '.pi/agent'), CLAUDE_CONFIG_DIR: join(o.home, '.claude') })) a.push('--setenv', k, v)
+  a.push('--chdir', o.cwd, '/run/shepherdr/bun', '/run/shepherdr/bootstrap.ts', o.kind === 'pi' ? o.binary : `/run/shepherdr/${o.kind}`)
   return a
 }
+export function killSandbox(control: string) {
+  try {
+    const pid = Number(readFileSync(join(control, 'pid'), 'utf8'))
+    const argv = readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')
+    if (pid > 1 && argv.includes(control) && argv.some((v) => /(?:^|\/)(?:bwrap|timeout)$/.test(v))) process.kill(pid, 'SIGKILL')
+  } catch { /* already gone; never kill a reused PID */ }
+}
+function noHardlinks(root: string) {
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (entry.name === '.git') continue
+    const p = join(root, entry.name)
+    if (entry.isDirectory()) noHardlinks(p)
+    else if (entry.isFile() && lstatSync(p).nlink > 1) throw new Error('The workspace contains shared hardlinks. Copy those files before using isolated Autopilot.')
+  }
+}
+
 export async function sandboxAvailable() {
   if (BOX || process.platform !== 'linux') throw new Error('Isolated Autopilot currently needs a local Linux runtime. No unrestricted fallback was started.')
   const bwrap = Bun.which('bwrap')
@@ -45,10 +62,31 @@ export async function sandboxAvailable() {
   return bwrap
 }
 
+/** Keep provider configuration, not hooks, MCP servers, plugins or another machine's command executors. */
+export function providerConfig(kind: string, text: string) {
+  if (kind === 'codex') {
+    const input = Bun.TOML.parse(text) as Record<string, unknown>
+    const out: Record<string, unknown> = {}
+    for (const k of ['model_provider', 'model', 'model_reasoning_effort', 'forced_login_method', 'openai_base_url']) if (input[k] !== undefined) out[k] = input[k]
+    const providers = input.model_providers as Record<string, unknown> | undefined
+    const selected = typeof input.model_provider === 'string' ? input.model_provider : 'openai'
+    if (providers?.[selected]) out.model_providers = { [selected]: providers[selected] }
+    const toml = (value: unknown): string => Array.isArray(value) ? `[${value.map(toml).join(', ')}]` : value && typeof value === 'object' ? `{ ${Object.entries(value).filter(([, v]) => v !== null && v !== undefined).map(([k,v]) => `${JSON.stringify(k)} = ${toml(v)}`).join(', ')} }` : JSON.stringify(value)
+    return Object.entries(out).map(([k,v]) => `${k} = ${toml(v)}`).join('\n') + '\n[features]\napps = false\nplugins = false\n'
+  }
+  const input = JSON.parse(text) as Record<string, unknown>
+  if (kind === 'claude') {
+    const env = Object.fromEntries(Object.entries(input.env ?? {}).filter(([k]) => /^ANTHROPIC_/.test(k)))
+    return JSON.stringify({ env })
+  }
+  return JSON.stringify(Object.fromEntries(Object.entries(input).filter(([k]) => ['model', 'provider', 'thinkingLevel'].includes(k))))
+}
+
 export async function prepareSandbox(spec: Spec, run: PilotRun, repo: string, cli: (args: string[], ctx: { chat: string; cwd: string; stdin?: string }) => Promise<{ out: string; code: number; secrets?: Record<string, string> }>): Promise<SandboxLaunch> {
   const problem = pilotProblem(spec.kind)
   if (problem) throw new Error(problem)
   const bwrap = await sandboxAvailable()
+  if (spec.key.includes('/')) noHardlinks(spec.cwd)
   const executable = Bun.which(spec.kind)
   if (!executable) throw new Error(`${spec.kind} is not installed.`)
   const binary = realpathSync(executable)
@@ -56,11 +94,13 @@ export async function prepareSandbox(spec: Spec, run: PilotRun, repo: string, cl
   const state = join(root, 'home'), control = join(root, 'control'), bin = join(root, 'launcher')
   for (const p of [state, control, bin, join(control, 'bin')]) mkdirSync(p, { recursive: true, mode: 0o700 })
   // Only the chosen providers' own configuration/login files. Never mount the real home or arbitrary accounts.
-  const configs = spec.kind === 'codex' ? ['.codex/auth.json', '.codex/config.toml'] : spec.kind === 'claude' ? ['.claude/.credentials.json', '.claude/settings.json', '.claude.json'] : ['.pi/agent/auth.json', '.pi/agent/models.json', '.pi/agent/settings.json']
+  const configs = spec.kind === 'codex' ? ['.codex/auth.json', '.codex/config.toml'] : spec.kind === 'claude' ? ['.claude/.credentials.json', '.claude/settings.json'] : ['.pi/agent/auth.json', '.pi/agent/models.json', '.pi/agent/settings.json']
   for (const name of configs) {
     const src = join(homedir(), name), dst = join(state, name)
     if (!existsSync(src) || existsSync(dst)) continue
-    mkdirSync(dirname(dst), { recursive: true, mode: 0o700 }); copyFileSync(src, dst)
+    mkdirSync(dirname(dst), { recursive: true, mode: 0o700 })
+    if (name.endsWith('config.toml') || name.endsWith('settings.json')) writeFileSync(dst, providerConfig(spec.kind, readFileSync(src, 'utf8')), { mode: 0o600 })
+    else copyFileSync(src, dst)
   }
   // Scripts are copied once to the read-only control mount; worktree edits cannot change trusted broker code.
   copyFileSync(join(ROOT, 'helper/autopilot/bootstrap.ts'), join(control, 'bootstrap.ts'))
@@ -91,7 +131,11 @@ export async function prepareSandbox(spec: Spec, run: PilotRun, repo: string, cl
       if (!addresses.length || addresses.some((a) => !publicAddress(a.address))) throw new Error('Local/private network access is blocked.')
       const upstream = connect({ host: addresses[0].address, port: 443 })
       sockets.add(upstream); upstream.on('close', () => sockets.delete(upstream))
-      upstream.on('connect', () => { client.write('HTTP/1.1 200 Connection Established\r\n\r\n'); if (head.length) upstream.write(head); client.pipe(upstream).pipe(client) })
+      upstream.on('connect', () => { client.write('HTTP/1.1 200 Connection Established\r\n\r\n'); if (head.length) { try { reserveTraffic(run, head.length); upstream.write(head) } catch { upstream.destroy(); client.destroy(); return } }
+        const meter = () => new Transform({ transform(chunk, _encoding, done) { try { reserveTraffic(run, chunk.length); done(null, chunk) } catch (e) { done(e as Error) } } })
+        const outgoing = meter(), incoming = meter()
+        outgoing.on('error', () => { upstream.destroy(); client.destroy() }); incoming.on('error', () => { upstream.destroy(); client.destroy() })
+        client.pipe(outgoing).pipe(upstream); upstream.pipe(incoming).pipe(client) })
       upstream.on('error', () => client.destroy()); client.on('error', () => upstream.destroy()); client.on('close', () => upstream.destroy())
     } catch { client.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n') }
   })
@@ -114,11 +158,15 @@ export async function prepareSandbox(spec: Spec, run: PilotRun, repo: string, cl
   }
   const args = sandboxArgs({ cwd: realpathSync(spec.cwd), repo: realpathSync(repo), home: homedir(), state, control, binary, bun: realpathSync(process.execPath), kind: spec.kind, writable: spec.key.includes('/'), git: [...new Set(git)].sort((a, b) => a.length - b.length) })
   const start = args.indexOf('--chdir')
+  args.splice(start, 0, '--setenv', 'SHEPHERDR_CHAT', spec.key)
   const helper = join(homedir(), '.shepherdr/helper')
   const skills = join(ROOT, 'skill')
   args.splice(start, 0, '--ro-bind', join(control, 'bin/shepherdr'), spec.env?.SHEPHERDR_COMMAND ?? join(ROOT, 'bin/shepherdr'), '--ro-bind', skills, join(helper, 'skill'))
   // Herdr starts the canonical executable through this pane's PATH. There is no fallback to a host executable.
   const wrapper = join(bin, spec.kind)
-  writeFileSync(wrapper, `#!/bin/sh\nexec ${[bwrap, ...args].map(q).join(' ')} "$@"\n`, { mode: 0o500 })
-  return { wrapper, env: { PATH: `${bin}:/usr/local/bin:/usr/bin:/bin` }, logsHome: state, close: async () => { for (const s of sockets) s.destroy(); await new Promise<void>((resolve) => server.close(() => resolve())) } }
+  const deadline = run.config.runtime ? run.started + run.config.runtime - Date.now() : undefined
+  if (deadline !== undefined && deadline <= 0) { server.close(); throw new Error('Autopilot runtime limit reached.') }
+  const command = deadline === undefined ? [bwrap, ...args] : ['/usr/bin/timeout', '--foreground', '--signal=KILL', `${Math.max(0.001, deadline / 1000)}s`, bwrap, ...args]
+  writeFileSync(wrapper, `#!/bin/sh\nprintf '%s' "$$" > ${q(join(control, 'pid'))}\nexec ${command.map(q).join(' ')} "$@"\n`, { mode: 0o500 })
+  return { wrapper, env: { PATH: `${bin}:/usr/local/bin:/usr/bin:/bin` }, logsHome: state, close: async () => { killSandbox(control); for (const s of sockets) s.destroy(); await new Promise<void>((resolve) => server.close(() => resolve())) } }
 }

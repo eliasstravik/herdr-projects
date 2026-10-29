@@ -96,3 +96,8 @@ slots below are public: plugins outside the repo rely on them, so they change on
   `useUI()` and `setUI()` (what is on screen), `useStore()`, `getState()`, `act()` (send an action to the server),
   `has(name)` (is a plugin on), and helpers such as `openTask`, `goPlace`, `placeOf`, `taskOf`.
 - The server part: `definePlugin({ name, about })`; it runs when the server starts.
+
+Autopilot adds the `autopilot-run` action and optional `keepWorkers` on the existing `mode` action.
+`SettingRow.instructions` optionally supplies complete generated launch settings as plain text after Heartbeat.
+These additions preserve existing plugin names, `definePlugin` and registry slots. See [Autopilot](autopilot.md)
+for the runtime capability matrix and the `autopilot.*` settings.

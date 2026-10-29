@@ -518,6 +518,8 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
         this.emit('snapshot')
         return {}
       }
+      case 'autopilot-run':
+        this.emit('snapshot'); return { ok: true }
       case 'mode': {
         const p = this.places.find((x) => x.id === a.place)
         if (!p || p.mode === a.mode) return {}
