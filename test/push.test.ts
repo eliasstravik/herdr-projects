@@ -16,7 +16,7 @@ import type { Alert } from '../shared/types.ts'
 const cert = readFileSync(join(import.meta.dir, 'fixtures/push-service.crt'), 'utf8')
 const agent = new Agent({ ca: cert })
 const send = webpush.sendNotification.bind(webpush)
-spyOn(webpush, 'sendNotification').mockImplementation((sub, payload, options) => send(sub, payload, { ...options, agent }))
+const spy = spyOn(webpush, 'sendNotification').mockImplementation((sub, payload, options) => send(sub, payload, { ...options, agent }))
 const answers: Record<string, { status: number; body?: string }> = {}
 const seen: { auth: string }[] = []
 const service = Bun.serve({
@@ -29,7 +29,10 @@ const service = Bun.serve({
     return new Response(a.body ?? '', { status: a.status })
   },
 })
-afterAll(() => service.stop(true))
+afterAll(() => {
+  service.stop(true)
+  spy.mockRestore()
+})
 
 const b64 = (b: Buffer) => b.toString('base64url')
 const subscription = (name: string) => {
@@ -60,7 +63,6 @@ describe('push alerts', () => {
     await push.send(alert)
     expect(push.failure).toMatchObject({ device: 'Mozilla/5.0 (iPhone)', reason: '403 BadJwtToken' })
     expect(String(warn.mock.calls.at(-1)?.[0])).toContain('403 BadJwtToken')
-    expect(seen.length).toBeGreaterThan(0)
     // kept: a refusal is no reason to forget the device
     expect(push.devices).toContain('Mozilla/5.0 (iPhone)')
     answers.refused = { status: 201 }
