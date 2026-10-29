@@ -144,6 +144,10 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
 
   constructor() {
     super()
+    this.agents.secretScope = (chat) => {
+      const space = /^[^/]+\/(Agent|Reviewer)$/.test(chat) ? this.engine.task(chat.split('/')[0])?.project : this.places.find(chat)?.id === chat ? chat : undefined
+      return space ? [space, placeId.machine(), 'all'] : undefined
+    }
     mkdirSync(HOME, { recursive: true })
     // what the Watcher kept, from before agents reported their own progress
     for (const f of ['watcher.json', 'watcher-call.json']) rmSync(join(HOME, f), { force: true })
@@ -1885,13 +1889,15 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
 
   /* ---------- the shepherdr command ---------- */
 
-  async cli(args: string[], ctx: { chat?: string; cwd?: string; stdin?: string; local?: boolean }): Promise<{ out: string; code: number; secrets?: Record<string, string> }> {
+  async cli(args: string[], ctx: { chat?: string; cwd?: string; stdin?: string; local?: boolean; proof?: string }): Promise<{ out: string; code: number; secrets?: Record<string, string> }> {
     try {
       // the values themselves, for the shepherdr command to put in a command's environment or a file: never printed,
-      // and only to a program on a machine Shepherdr runs (never through the tailnet's web address)
+      // only with a worker-issued capability whose stored scope selects the secret chain
       if (args[0] === 'secret' && (args[1] === 'run' || args[1] === 'env')) {
-        if (ctx.local === false) throw new Error("Secrets go only to the shepherdr command on a machine Shepherdr runs, not over the web.")
-        return { out: '', code: 0, secrets: this.secretValues(parseArgs(args).words.slice(2), ctx) }
+        const owner = this.agents.secretAccess.authenticate(ctx.proof)
+        if (!owner || this.agents.record(owner.chat)?.finished) throw new Error('Secret access needs a current agent credential. Use the owning session command; older sessions must wait for route provisioning. No unauthenticated fallback.')
+        if (JSON.stringify(this.agents.secretScope(owner.chat)) !== JSON.stringify(owner.chain)) throw new Error('Secret credential scope is no longer valid.')
+        return { out: '', code: 0, secrets: this.secretValues(parseArgs(args).words.slice(2), owner.chain) }
       }
       const out = await this.command(parseArgs(args), ctx)
       return { out: out.endsWith('\n') ? out : `${out}\n`, code: 0 }
@@ -2223,12 +2229,12 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   }
 
   /** each name's value, for shepherdr secret run and env (names may come comma-separated) */
-  private secretValues(words: string[], ctx: { chat?: string; cwd?: string }) {
+  private secretValues(words: string[], chain: string[]) {
     const names = words.flatMap((w) => w.split(',')).map((w) => w.trim()).filter(Boolean)
     if (!names.length) throw new Error('shepherdr secret run NAME [NAME …] -- <command>, or shepherdr secret env NAME [NAME …] [--file .env]')
     const bad = names.filter((n) => !SECRET_NAME.test(n))
     if (bad.length) throw new Error(`Not a secret's name: ${bad.join(', ')} (letters, digits and _, like GITHUB_TOKEN)`)
-    const { found, missing } = this.vault.pick(names, this.secretChain(ctx))
+    const { found, missing } = this.vault.pick(names, chain)
     if (missing.length) throw new Error(`No secret ${missing.join(', ')} here. Ask the human for it: shepherdr secret ask ${missing[0]} --why "<what it is for>", then end your turn.`)
     return Object.fromEntries(Object.entries(found).map(([n, f]) => [n, f.value]))
   }

@@ -192,12 +192,12 @@ export function startApp({ source, dist, push, port, host = '127.0.0.1', updates
           return blob ? attachment(blob, basename(at).replace(/^[a-z0-9]+-/, ''), q.has('download')) : new Response('no such file', { status: 404 })
         }
         if (path === '/api/cli' && req.method === 'POST') {
-          const cli = (source as Source & { cli?(a: string[], c: { chat?: string; cwd?: string; stdin?: string; local?: boolean }): Promise<{ out: string; code: number }> }).cli
+          const cli = (source as Source & { cli?(a: string[], c: { chat?: string; cwd?: string; stdin?: string; local?: boolean; proof?: string }): Promise<{ out: string; code: number }> }).cli
           if (!cli) return json({ out: source.kind === 'demo' ? 'This demo server does not accept shepherdr commands. Target your owning live server or installed helper.\n' : 'This server does not provide the shepherdr command. Check the target URL or installed helper.\n', code: 1 })
           const b = (await req.json()) as { args: string[]; chat?: string; cwd?: string; stdin?: string }
           // some commands wait long (shepherdr checks waits for GitHub's): no idle cut-off for these
           srv.timeout(req, 0)
-          return json(await cli.call(source, b.args ?? [], { chat: b.chat, cwd: b.cwd, stdin: b.stdin, local: direct(req) }))
+          return json(await cli.call(source, b.args ?? [], { chat: b.chat, cwd: b.cwd, stdin: b.stdin, local: direct(req), proof: req.headers.get('authorization')?.match(/^Bearer ([a-f0-9]{64})$/)?.[1] }))
         }
         if (path === '/api/push/key') return json({ key: push?.publicKey ?? null })
         // what waits on you: the service worker sets the app icon's count with it after a notification button answers
@@ -318,8 +318,7 @@ export function sameSite(req: Request, path: string): boolean {
   return true
 }
 
-/** a request straight from a program on this machine (the shepherdr command, or another machine's over its SSH
- *  tunnel), not through tailscale serve or another proxy, nor from a browser: the only ones a secret's value goes to */
+/** Legacy routing hint only. Headers do not authenticate a caller; secret access requires a capability. */
 export const direct = (req: Request) => !['x-forwarded-for', 'x-forwarded-host', 'forwarded', 'tailscale-user-login', 'origin'].some((h) => req.headers.has(h))
 
 const TYPES: Record<string, string> = {

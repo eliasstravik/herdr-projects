@@ -91,6 +91,14 @@ Done or the merge question.
 - A red check you can't fix, or a must-fix finding left open: report it ready with that at the front of the facts, and
   don't merge.
 
+## Secret credentials
+
+Keep the launch-provisioned `SHEPHERDR_SECRET_FILE` reference when forwarding tool environments. A reviewer you
+start may inherit your same-space authority; never include credential contents in its prompt, arguments or review
+output. A separate reviewer started by Shepherdr receives its own scoped credential. Secret access failures are not
+fixed by changing chat/cwd, adding headers or starting a server. Legacy shared executors may need an approved restart;
+report that operational follow-up instead of using an unauthenticated fallback.
+
 ## QC
 
 - Nothing merged on a red check you know of, or past "ask the human first"; nothing irreversible without their yes.

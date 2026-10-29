@@ -17,4 +17,6 @@
   kept. Agents run commands with them (`shepherdr secret run NAME -- <command>`, which masks them in what the command prints) or write them to a file git ignores
   (`shepherdr secret env NAME --file .env`), and never see them in a chat, a terminal or a log. All of them are kept
   in one file on the main machine, readable by you only (`~/.shepherdr/vault.json`); a value goes to another machine
-  only when an agent there uses one, over its SSH link.
+  only when an authenticated agent there uses one, over its SSH link. Agent credentials bind access to that agent’s
+  own space and machine; loopback or a forwarded socket alone grants nothing. See [agent secret access](secrets.md)
+  for provisioning and the upgrade steps for already-running agents.

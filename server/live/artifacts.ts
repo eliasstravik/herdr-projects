@@ -4,7 +4,8 @@
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import * as task from './mfs.ts'
-import { isAbsolute, join, resolve } from 'node:path'
+import { isAbsolute, join, resolve, sep } from 'node:path'
+import { boxHome } from './box.ts'
 import { HOME, readJson, writeJson } from '../store.ts'
 
 export const MAX_HTML = 2 * 1024 * 1024
@@ -69,6 +70,21 @@ function isImage(b: Buffer, ext: string) {
   return head.startsWith('\x89PNG') || head.startsWith('\xff\xd8\xff') || head.startsWith('GIF8') || (head.startsWith('RIFF') && head.slice(8, 12) === 'WEBP') || /^ftyp(avif|avis|mif1)$/.test(head.slice(4, 12))
 }
 
+/** Imports must never publish the vault or private process routing (including via symlinks). */
+export function publicArtifactInput(path: string) {
+  const real = task.realpathSync(path)
+  const roots = [HOME, process.env.SHEPHERDR_MAIN_HOME, join(boxHome(), '.shepherdr')].filter((x): x is string => !!x)
+  for (const root of roots) {
+    let base = resolve(root)
+    try { base = task.realpathSync(root) } catch { /* a missing remote/local root has no files */ }
+    if (real === base || real.startsWith(base + sep)) {
+      if (['inbox', 'artifacts'].some((dir) => real.startsWith(join(base, dir) + sep))) continue
+      throw new Error('Private Shepherdr files cannot be imported into artifacts.')
+    }
+  }
+  return real
+}
+
 /** pictures named by an absolute path on this machine (src="/home/…/chart.png", url(/…/bg.jpg)) go in as data: the
  *  frame can't load anything */
 export function inlineImages(html: string): { html: string; missing: string[] } {
@@ -79,7 +95,7 @@ export function inlineImages(html: string): { html: string; missing: string[] } 
     const e = x.toLowerCase()
     try {
       if (!task.existsSync(path) || task.statSync(path).size > MAX_IMAGE) return (missing.push(path), all)
-      const b = task.readFileSync(path)
+      const b = task.readFileSync(publicArtifactInput(path))
       if (!isImage(b, e)) return (missing.push(path), all)
       return `${open}data:${IMAGE_TYPES[e]};base64,${b.toString('base64')}`
     } catch {
@@ -151,7 +167,7 @@ export class Artifacts {
     if (file) {
       const f = at(file)
       if (!task.existsSync(f)) throw new Error(`No file at ${f}`)
-      const r = inlineImages(task.readFileSync(f, 'utf8'))
+      const r = inlineImages(task.readFileSync(publicArtifactInput(f), 'utf8'))
       html = r.html
       missing = r.missing
       if (!html.trim()) throw new Error(`${f} is empty`)
@@ -160,7 +176,7 @@ export class Artifacts {
     if (dataFile) {
       const f = at(dataFile)
       if (!task.existsSync(f)) throw new Error(`No file at ${f}`)
-      data = task.readFileSync(f, 'utf8')
+      data = task.readFileSync(publicArtifactInput(f), 'utf8')
       if (Buffer.byteLength(data) > MAX_DATA) throw new Error(`${f} is over 1 MB`)
       try {
         JSON.parse(data)

@@ -5,6 +5,7 @@ use strict;
 use warnings;
 use JSON::PP;
 use File::Path qw(make_path);
+use Fcntl qw(O_WRONLY O_CREAT O_EXCL);
 use Cwd qw(getcwd abs_path);
 
 sub process_identity {
@@ -96,6 +97,15 @@ sub session_route {
     }
     closedir($d);
   }
+  # Credentials never follow caller-selected chat/cwd. Only process ancestry or a credential
+  # reference provisioned in the launch environment can supply proof to the command.
+  my $credential = $ancestor;
+  if (!$credential && (my $file = $ENV{SHEPHERDR_SECRET_FILE})) {
+    if (open(my $f, '<', $file)) {
+      my $v = eval { local $/; JSON::PP->new->decode(<$f>) }; close $f;
+      $credential = read_route($file, $v->{pid}) if $v && $v->{pid};
+    }
+  }
   my $r = $explicit // $ancestor;
   if (!$r && @best) {
     ($r) = grep { $_->{chat} eq $chat } @best;
@@ -106,7 +116,12 @@ sub session_route {
       $r //= $best[0];
     }
   }
-  $r->{toolInheritedUrl} = $executor->{url} if $r && $executor;
+  if ($r) {
+    $r = { %$r }; # do not let a folder match carry its credential
+    delete $r->{capability};
+    $r->{capability} = $credential->{capability} if $credential && $credential->{chat} eq $r->{chat};
+    $r->{toolInheritedUrl} = $executor->{url} if $executor;
+  }
   return $r;
 }
 
@@ -122,10 +137,12 @@ sub routed_chat {
 
 sub bind_route {
   my ($pid, $json) = @_;
+  $json //= do { local $/; <STDIN> };
   my (undef, $stamp) = process_identity($pid);
   die "Agent process $pid is gone\n" unless defined $stamp;
   my $r = JSON::PP->new->decode($json);
   $r->{stamp} = $stamp;
+  $r->{pid} = 0 + $pid;
   $r->{cwd} = abs_path($r->{cwd}) // $r->{cwd} if $r->{cwd};
   if (open(my $f, '<', "/proc/$pid/environ")) {
     local $/; my $e = <$f>; close $f;
@@ -139,17 +156,34 @@ sub bind_route {
     $r->{inheritedUrl} = $e =~ /(?:^|\s)SHEPHERDR_URL=(\S*)/ ? $1 : '';
     $r->{inheritedChat} = $e =~ /(?:^|\s)SHEPHERDR_CHAT=(\S*)/ ? $1 : '';
   }
-  my $d = route_dir(); make_path($d, { mode => 0700 });
+  my $d = route_dir();
+  die "Unsafe route directory\n" if -l $d;
+  make_path($d, { mode => 0700 });
+  die "Unsafe route directory owner\n" unless (stat($d))[4] == $<;
+  chmod(0700, $d) or die "route directory permissions: $!";
   my $tmp = "$d/$pid.$$.tmp";
-  open(my $f, '>', $tmp) or die "$tmp: $!";
-  chmod 0600, $tmp;
+  sysopen(my $f, $tmp, O_WRONLY | O_CREAT | O_EXCL, 0600) or die "route file creation failed: $!";
+  chmod(0600, $tmp) or die "route permissions: $!";
   print $f JSON::PP->new->canonical->encode($r); close $f;
   rename($tmp, "$d/$pid.json") or die "route: $!";
+  if (my $file = $r->{credentialFile}) {
+    my $base = "$ENV{HOME}/.shepherdr/helper/credentials";
+    die "Invalid credential path\n" unless $file =~ m{^\Q$base\E/[a-f0-9-]{36}$};
+    die "Unsafe credential directory\n" if -l $base;
+    make_path($base, { mode => 0700 });
+    die "Unsafe credential owner\n" unless (stat($base))[4] == $<;
+    chmod(0700, $base) or die "credential permissions: $!";
+    my $tmp = "$file.$$.tmp";
+    sysopen(my $f, $tmp, O_WRONLY | O_CREAT | O_EXCL, 0600) or die "credential creation failed: $!";
+    print $f JSON::PP->new->canonical->encode($r); close $f or die "credential write failed: $!";
+    rename($tmp, $file) or die "credential rename failed: $!";
+  }
 }
 
 unless (caller) {
   if (($ARGV[0] // '') eq '--bind') { shift @ARGV; bind_route(@ARGV); exit 0; }
   my $local = shift @ARGV;
+  delete $ENV{SHEPHERDR_SECRET_CAPABILITY};
   # SHEPHERDR_URL changed by the caller remains explicit; --url also targets even the inherited URL deliberately.
   if (($ARGV[0] // '') eq '--url') {
     shift @ARGV; $ENV{SHEPHERDR_URL} = shift @ARGV // die "--url needs a URL\n";
@@ -157,6 +191,7 @@ unless (caller) {
     my $r = session_route();
     if ($r && (!length($ENV{SHEPHERDR_URL} // '') || ($ENV{SHEPHERDR_URL} // '') eq ($r->{inheritedUrl} // '') || ($ENV{SHEPHERDR_URL} // '') eq ($r->{url} // '') || (defined($r->{toolInheritedUrl}) && ($ENV{SHEPHERDR_URL} // '') eq $r->{toolInheritedUrl}))) {
       $ENV{SHEPHERDR_CHAT} = routed_chat($r);
+      $ENV{SHEPHERDR_SECRET_CAPABILITY} = $r->{capability} // '';
       if ($r->{helper}) { exec($r->{helper}, @ARGV) or die "helper: $!"; }
       $ENV{SHEPHERDR_URL} = $r->{url};
     }

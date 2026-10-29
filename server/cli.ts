@@ -9,6 +9,8 @@ import { readJson } from './store.ts'
 const MASKED_MIN = 4
 const MASK = '********'
 
+const capability = process.env.SHEPHERDR_SECRET_CAPABILITY
+delete process.env.SHEPHERDR_SECRET_CAPABILITY
 const all = process.argv.slice(2)
 const url = process.env.SHEPHERDR_URL || `http://127.0.0.1:${process.env.SHEPHERDR_PORT || readJson<{ port?: number }>('server.json', {}).port || 7787}`
 // shepherdr secret run NAME … -- <command>: only the names go to Shepherdr; the command runs here, with the values in
@@ -33,7 +35,7 @@ let j: { out: string; code: number; secrets?: Record<string, string> }
 try {
   const r = await fetch(`${url}/api/cli`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...(capability ? { authorization: `Bearer ${capability}` } : {}) },
     body: JSON.stringify({ args, chat: process.env.SHEPHERDR_CHAT, cwd: process.cwd(), stdin }),
     signal: wait ? AbortSignal.timeout(wait) : undefined,
   })

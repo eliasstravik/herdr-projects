@@ -21,6 +21,7 @@ import { ROOT } from '../root.ts'
 import { leftAtPrompt } from './commands.ts'
 import { paneWrong, type Wrong } from './revive.ts'
 import { readCodexRuntime } from './codex-runtime.ts'
+import { SecretAccess } from './secret-access.ts'
 import { isAgentProcess } from './agent-process.ts'
 
 /** a log's name (its session id), wherever it lies: one named both by its mirrored path and by its own is one log */
@@ -183,6 +184,8 @@ export class Agents extends Emitter<Events> {
   private byName = new Map<string, string>()
   private timer: ReturnType<typeof setInterval> | null = null
   private sub: Subscription
+  readonly secretAccess = new SecretAccess()
+  secretScope: (chat: string) => string[] | undefined = () => undefined
   private routesAt = 0
   private routing = false
   private routes = new Map<string, string>()
@@ -376,6 +379,12 @@ export class Agents extends Emitter<Events> {
         this.told.set(key, now)
         if (was !== now) this.changed(key, now)
       }
+      for (const r of Object.values(this.records)) {
+        if (!this.live.has(r.name) || r.finished) {
+          this.secretAccess.revoke(r.key)
+          this.routes.delete(r.key)
+        }
+      }
       // Repair running sessions without interrupting them, including ones restored by herdr.
       if (Date.now() - this.routesAt > 30_000 && !this.routing) {
         this.routesAt = Date.now()
@@ -409,14 +418,21 @@ export class Agents extends Emitter<Events> {
   private async bindRoute(r: AgentRecord, pane: string) {
     const p = await herdr.processInfo(pane)
     const proc = p.foreground_processes?.find((x) => x.pid && isAgentProcess(r.kind, x.argv))
-    if (!proc?.pid) return
+    if (!proc?.pid || r.finished || this.records[r.key]?.finished || this.stopping.has(r.key)) { this.secretAccess.revoke(r.key); return }
     const env = agentEnv(r.key, ROOT)
-    const route = { chat: r.key, cwd: r.cwd, ...(BOX ? { helper: env.SHEPHERDR_COMMAND } : { url: env.SHEPHERDR_URL }) }
+    const chain = this.secretScope(r.key)
+    const capability = chain ? this.secretAccess.issue(r.key, `${proc.pid}:${r.started}`, chain) : undefined
+    const route = { chat: r.key, cwd: r.cwd, capability, credentialFile: this.records[r.key]?.env?.SHEPHERDR_SECRET_FILE ?? r.env?.SHEPHERDR_SECRET_FILE ?? env.SHEPHERDR_SECRET_FILE, ...(BOX ? { helper: env.SHEPHERDR_COMMAND } : { url: env.SHEPHERDR_URL }) }
     const signature = JSON.stringify([proc.pid, route])
     if (this.routes.get(r.key) === signature) return
     const router = BOX ? join(helperDir(BOX.home), 'route.pl') : join(ROOT, 'helper', 'route.pl')
-    const result = await run(['perl', router, '--bind', String(proc.pid), JSON.stringify(route)], { timeoutMs: 5000 })
-    if (result.code) throw new Error(result.err || 'Could not bind agent command routing')
+    const result = await run(['perl', router, '--bind', String(proc.pid)], { stdin: JSON.stringify(route), timeoutMs: 5000 })
+    if (result.code) {
+      this.secretAccess.revoke(r.key)
+      throw new Error('Could not provision private agent command routing')
+    }
+    // A stop may have raced the asynchronous provisioning write. Never restore its authority.
+    if (this.records[r.key]?.finished || this.stopping.has(r.key)) { this.secretAccess.revoke(r.key); return }
     this.routes.set(r.key, signature)
   }
 
@@ -640,6 +656,8 @@ export class Agents extends Emitter<Events> {
   }
 
   private async launch({ first, pane: place, was, ...spec }: Spec) {
+    this.secretAccess.revoke(spec.key)
+    this.routes.delete(spec.key)
     const old = this.records[spec.key]
     const resume = old && old.kind === spec.kind && (old.sessionId || old.logs.length)
     const r: AgentRecord = old ?? { ...spec, logs: [], started: Date.now() }
@@ -772,6 +790,8 @@ export class Agents extends Emitter<Events> {
   /** started again by `start` (that resumes its session), its pane closed first where it still holds it (its CLI
    *  exited, or runs on outdated files). Meanwhile what you send waits for the one it starts, as in a restart */
   async relaunch(key: string, close: boolean, start: () => Promise<unknown>) {
+    this.secretAccess.revoke(key)
+    this.routes.delete(key)
     this.stopping.add(key)
     try {
       const a = close ? this.info(key) : undefined
@@ -1022,6 +1042,8 @@ export class Agents extends Emitter<Events> {
 
   /** end a task agent's run: its pane closes; its chat stays and writing to it resumes it */
   async finish(key: string) {
+    this.secretAccess.revoke(key)
+    this.routes.delete(key)
     const r = this.records[key]
     const a = this.info(key)
     if (r) r.finished = true
@@ -1034,6 +1056,8 @@ export class Agents extends Emitter<Events> {
 
   /** a deleted task's agent, forgotten: its record (so its chat no longer reads its CLI's log) and what waited for it */
   forget(key: string) {
+    this.secretAccess.revoke(key)
+    this.routes.delete(key)
     const r = this.records[key]
     if (r && this.byName.get(r.name) === key) this.byName.delete(r.name)
     delete this.records[key]

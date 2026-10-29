@@ -20,8 +20,12 @@ if (-f $routing) {
   require $routing;
   my $route = session_route();
   $ENV{SHEPHERDR_CHAT} = routed_chat($route) if $route;
+  $ENV{SHEPHERDR_SECRET_CAPABILITY} = $route ? ($route->{capability} // '') : '';
 }
 
+my $proof = $ENV{SHEPHERDR_SECRET_CAPABILITY} // '';
+delete $ENV{SHEPHERDR_SECRET_CAPABILITY};
+my $authorization = $proof =~ /^[a-f0-9]{64}$/ ? "Authorization: Bearer $proof\r\n" : '';
 my $stdin;
 # shepherdr secret run NAME … -- <command>: only the names go to Shepherdr; the command runs here, with the values in
 # its environment. shepherdr secret env writes them to a file here. Neither prints a value (as server/cli.ts)
@@ -45,7 +49,7 @@ unless ($s) {
   print STDERR "Shepherdr can't be reached from this machine right now (its link from the main machine is down). Check the machine in Shepherdr, or run shepherdr doctor on the main machine.\n";
   exit 2;
 }
-print $s "POST /api/cli HTTP/1.0\r\nHost: shepherdr\r\nContent-Type: application/json\r\nContent-Length: " . length($json) . "\r\n\r\n$json";
+print $s "POST /api/cli HTTP/1.0\r\nHost: shepherdr\r\n${authorization}Content-Type: application/json\r\nContent-Length: " . length($json) . "\r\n\r\n$json";
 # shepherdr merge answers within 90 s: no answer a little after that means none is coming (Shepherdr restarted, or the
 # tunnel dropped and left this end open), never a wait on and on. The same words as server/cli.ts's
 my $merge = @ARGV && ($ARGV[0] eq 'merge' || ($ARGV[0] eq 'task' && ($ARGV[1] // '') eq 'merge'));

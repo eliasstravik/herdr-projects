@@ -123,6 +123,11 @@ API keys, tokens and passwords are the human's secrets: use them by name, never 
     shepherdr secret run GITHUB_TOKEN -- gh pr create --fill     # $GITHUB_TOKEN in its environment only
     shepherdr secret env STRIPE_KEY --file .env        # a file git ignores, readable by you only
 
+- **Authenticated session.** `secret run` and `secret env` need the current session's private credential. Use its
+  owning command. `SHEPHERDR_SECRET_FILE` is a launch-provisioned file reference: preserve it in tool environments,
+  never read or print its contents. Changing chat/cwd or using main.sock grants no secret authority. An older session
+  without proof fails closed until route repair; an older shared executor missing the reference needs a planned
+  restart with the human's approval. Never borrow another session's credential. See `docs/secrets.md`.
 - **Ask with the card.** Not there: `shepherdr secret ask NAME --why "…"`, then end your turn. The human gets a masked
   box; a `<secret from="…" name="NAME" for="…"/>` line says it is kept. Never ask for a secret in words, and if the
   human pastes one in the chat anyway, tell them to give it in the box instead (`--force` asks again).
