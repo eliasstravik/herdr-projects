@@ -44,7 +44,7 @@ import {
   CrookIcon,
   CogIcon,
   OpenIcon,
-  Count,
+  AttentionBadge,
   Dot,
   Empty,
   FitIcon,
@@ -370,16 +370,13 @@ function PinButton() {
   )
 }
 
-/** These badges count task requests in the panel’s scope; coordinator requests live in chat’s summary. */
+/** Task requests in the panel’s scope, excluding coordinator requests. */
 function TaskAttention() {
   const snap = useSnap()!
   const view = useStore((s) => listView(s.ui, snap))
   const ids = snap.places.filter((p) => !view.chips.length || view.chips.includes(p.id) || view.chips.includes(`m:${p.machine}`)).map((p) => p.id)
   const c = attentionCounts({ ...snap, asks: {}, attentionRequests: { ...snap.attentionRequests, ...Object.fromEntries(snap.places.map((p) => [p.chat, []])) } }, ids)
-  return <span className="inline-flex items-center gap-1 text-[0.75rem] tabular-nums" title={`${c.need} requests need you · ${c.ready} ready · panel scope`}>
-    <Count n={c.need} label={`${c.need} requests need you in the panel scope`} />
-    {c.ready ? <span aria-label={`${c.ready} ready tasks in the panel scope`} className="text-ready-fg">{c.ready} ready</span> : null}
-  </span>
+  return <AttentionBadge need={c.need} ready={c.ready} scope="panel scope" />
 }
 
 /** The lists' tasks, or their artifacts: what their chips hold */

@@ -152,7 +152,7 @@ describe.skipIf(!browser)('no chat attention summary and quiet health', () => {
     expect(await page.locator('[data-attention]').count()).toBe(0)
     expect(await page.getByText(/3 need you · 1 ready/).count()).toBe(0)
     // Tasks still counts its own requests, excluding the coordinator question.
-    expect(await panel.getByLabel('2 requests need you in the panel scope', { exact: true }).count()).toBe(1)
+    expect(await panel.getByLabel('2 needs you, 1 ready · panel scope', { exact: true }).count()).toBe(1)
     await page.close()
   })
 })

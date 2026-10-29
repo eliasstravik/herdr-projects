@@ -527,6 +527,22 @@ export function Count({ n, className, label }: { n: number; className?: string; 
   )
 }
 
+/** One notification, with separate counts: needs you on the left, ready on the right.
+ * Cap each printed count independently; the accessible name always keeps the exact numbers. */
+export function AttentionBadge({ need, ready, scope }: { need: number; ready: number; scope: string }) {
+  if (!need && !ready) return null
+  const split = need > 0 && ready > 0
+  const label = `${need} needs you, ${ready} ready · ${scope}`
+  const cap = (n: number) => n > 9 ? '9+' : String(n)
+  return (
+    <span role="img" aria-label={label} title={label} data-attention-badge={split ? 'both' : need ? 'need' : 'ready'}
+      className={clsx('attention-badge', split && 'attention-badge-split')}>
+      {need > 0 ? <span aria-hidden="true" className="attention-badge-need">{cap(need)}</span> : null}
+      {ready > 0 ? <span aria-hidden="true" className="attention-badge-ready">{cap(ready)}</span> : null}
+    </span>
+  )
+}
+
 type Btn = ButtonHTMLAttributes<HTMLButtonElement> & { ref?: Ref<HTMLButtonElement> }
 
 /** 28px icon button (44px on a phone), with a finger-sized hit area */

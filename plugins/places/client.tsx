@@ -26,7 +26,7 @@ import clsx from 'clsx'
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type LiHTMLAttributes, type ReactNode } from 'react'
 import { act, counts, definePlugin, getState, goPlace, manyMachines, openSplit, placeOf, removeSpace, setUI, splitClick, useSnap, useUI, type Pane, type UI } from '@client/kernel.ts'
 import { and, Dialog, RowMenu, RowMenuButton, useRowMenu } from '@client/rowmenu.tsx'
-import { BackIcon, BellIcon, BellSlashIcon, Count, DeleteIcon, DownIcon, HashIcon, ic, IconButton, List, MenuItem, MenuLabel, MenuSeparator, MenuSetting, Meta, NextIcon, PinnedIcon, PinTaskIcon, PlusIcon, Primary, ReadIcon, RemoveProjectIcon, RenameIcon, rowClass, RowText, SectionIcon, ServerIcon, SplitIcon, TasksIcon, UnpinIcon } from '@client/ui.tsx'
+import { BackIcon, BellIcon, BellSlashIcon, AttentionBadge, DeleteIcon, DownIcon, HashIcon, ic, IconButton, List, MenuItem, MenuLabel, MenuSeparator, MenuSetting, Meta, NextIcon, PinnedIcon, PinTaskIcon, PlusIcon, Primary, ReadIcon, RemoveProjectIcon, RenameIcon, rowClass, RowText, SectionIcon, ServerIcon, SplitIcon, TasksIcon, UnpinIcon } from '@client/ui.tsx'
 import { MarkRead, markPlaceRead, muted, placeUnread } from '@client/unread.ts'
 import { RestartItem } from '@client/restart.tsx'
 import { NOTIFY, NOTIFY_KEY, notifyOf, notifyRow } from '@shared/alerts.ts'
@@ -277,7 +277,7 @@ function usePlaceRow({ p, snap, where }: { p: Place; snap: Snapshot; where?: str
     end: (
       <>
         {quiet ? <BellSlashIcon aria-hidden className={clsx(ic, 'text-fg3')} /> : null}
-        {p.connecting || off ? null : <span className="inline-flex items-center gap-1"><Count n={c.ownNeed} label={`${c.ownNeed} need you here`} />{c.ownReady ? <span className="text-[0.75rem] text-ready-fg tabular-nums" aria-label={`${c.ownReady} ready here`}>{c.ownReady} ready</span> : null}</span>}
+        {p.connecting || off ? null : <AttentionBadge need={c.ownNeed} ready={c.ownReady} scope="here" />}
       </>
     ),
   }

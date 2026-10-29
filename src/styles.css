@@ -916,3 +916,30 @@
     }
   }
 }
+
+/* A single circular notification. A seam separates the categories even without colour.
+   Two 16px halves fit 9+ at 11px; phones get two 18px halves at 13px. */
+.attention-badge {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+  color: white;
+}
+.attention-badge > span { display: grid; flex: 1; min-width: 0; place-items: center; }
+.attention-badge-need { background: var(--need-fg); }
+.attention-badge-ready { background: var(--ready-fg); }
+.attention-badge-split { width: 32px; height: 32px; }
+.attention-badge-split > span + span { border-left: 1px solid var(--bg); }
+[data-theme="dark"] .attention-badge { color: black; }
+[data-device="phone"] .attention-badge { width: 26px; height: 26px; font-size: 13px; }
+[data-device="phone"] .attention-badge-split { width: 36px; height: 36px; }
+/* Keep the circle inside the existing segmented control's outline. */
+[role="group"]:has(> button .attention-badge-split) > button { min-height: 32px; }
