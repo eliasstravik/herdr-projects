@@ -6,7 +6,7 @@ import { LinkBackoff } from './recovery.ts'
 // text could pick an option, or is still starting; then it goes in as soon as it can.
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import { mkdirSync, statSync, watch, type FSWatcher } from 'node:fs'
+import { mkdirSync, readFileSync, statSync, watch, type FSWatcher } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { Emitter } from '../source.ts'
 import { readJson, writeJson } from '../store.ts'
@@ -19,7 +19,7 @@ import { tag } from './chatlines.ts'
 import { hookSettings, HookLogs, type Said } from './readers/hooks.ts'
 import * as task from './mfs.ts'
 import { boxDir, mirrored } from './mfs.ts'
-import { agentEnv, BOX, helperDir, run, runSync } from './box.ts'
+import { agentEnv, BOX, helperDir, q, run, runSync } from './box.ts'
 import { ROOT } from '../root.ts'
 import { leftAtPrompt } from './commands.ts'
 import { paneWrong, type Wrong } from './revive.ts'
@@ -38,6 +38,33 @@ export async function isolatedReady(kind: string, inspect: () => Promise<Pick<Ag
     await pause()
   }
   throw new Error(`${kind} did not become ready inside its isolation. Autopilot was not started.`)
+}
+
+/** Herdr starts a canonical command in the pane's shell. A login profile may have
+ * replaced its PATH or aliased that command: use a clean non-login sh and verify
+ * its actual process environment BEFORE asking Herdr to start any agent. */
+export const isolatedShellCommand = (wrapper: string) => `exec /usr/bin/env PATH=${q(`${dirname(wrapper)}:/usr/local/bin:/usr/bin:/bin`)} ENV=/dev/null /bin/sh -i`
+export async function isolatedShell(pane: string, wrapper: string, io = {
+  idle: herdr.paneIdle, text: herdr.paneText, keys: herdr.paneKeys, info: herdr.processInfo,
+  read: (file: string) => readFileSync(file, 'utf8'),
+  pause: () => new Promise<void>((resolve) => setTimeout(resolve, 100)),
+}) {
+  const path = `${dirname(wrapper)}:/usr/local/bin:/usr/bin:/bin`
+  let idle = false
+  for (let i = 0; i < 100; i++) { if (await io.idle(pane)) { idle = true; break }; await io.pause() }
+  if (!idle) throw new Error('The isolated launch shell did not become ready. No agent was started.')
+  await io.text(pane, isolatedShellCommand(wrapper))
+  await io.keys(pane, ['enter'])
+  for (let i = 0; i < 100; i++) {
+    const pid = (await io.info(pane)).shell_pid
+    try {
+      const argv = io.read(`/proc/${pid}/cmdline`).split('\0').filter(Boolean)
+      const env = io.read(`/proc/${pid}/environ`).split('\0')
+      if (argv.length === 2 && argv[0] === '/bin/sh' && argv[1] === '-i' && env.includes(`PATH=${path}`) && env.includes('ENV=/dev/null')) return
+    } catch { /* shell is replacing itself */ }
+    await io.pause()
+  }
+  throw new Error('Could not verify the clean isolated launch shell. No agent was started.')
 }
 
 /** the logs with each one once, where it first came, by the path it was named by last (a session carried to another
@@ -775,6 +802,10 @@ export class Agents extends Emitter<Events> {
     const pane = place && !r.isolation ? await place() : await this.paneFor(r, was)
     const args = this.args(r, !!resume)
     this.save()
+    if (r.isolation) {
+      try { await isolatedShell(pane, r.isolation.path) }
+      catch (e) { r.finished = true; this.save(); await herdr.closePane(pane).catch(() => undefined); throw e }
+    }
     // a new pane needs a moment before its shell is at the prompt
     for (let i = 0; ; i++) {
       try {

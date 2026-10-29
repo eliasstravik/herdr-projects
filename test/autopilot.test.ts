@@ -9,7 +9,7 @@ const { PilotRuns, AUTOPILOT_KINDS, hostList, pilotCommand, pilotProblem, reserv
 const { sandboxArgs, publicAddress, providerConfig, capturedTranscript } = await import('../server/live/autopilot-sandbox.ts')
 const { Settings } = await import('../server/live/settings.ts')
 const { herdr } = await import('../server/live/herdr.ts')
-const { Agents, isolatedReady } = await import('../server/live/agents.ts')
+const { Agents, isolatedReady, isolatedShell } = await import('../server/live/agents.ts')
 const { LiveSource } = await import('../server/live/source.ts')
 const { Heartbeats } = await import('../server/live/heartbeat.ts')
 const { placeId } = await import('../server/live/places.ts')
@@ -72,6 +72,22 @@ function world(kind = 'codex') {
 }
 
 describe('capabilities and exact launch settings', () => {
+  test.each(['claude', 'codex', 'pi'])('%s launch replaces a profile-altered PATH before starting an agent', async (kind) => {
+    const commands: string[] = [], wrapper = `/trusted/launcher/${kind}`
+    let polls = 0
+    const io = {
+      idle: async () => true,
+      text: async (_pane: string, text: string) => { commands.push(text) },
+      keys: async () => undefined,
+      info: async () => { polls++; return { shell_pid: 123 } },
+      read: (file: string) => file.endsWith('/cmdline') ? '/bin/sh\0-i\0' : polls < 2 ? 'PATH=/profile/host-binaries\0' : 'PATH=/trusted/launcher:/usr/local/bin:/usr/bin:/bin\0ENV=/dev/null\0',
+      pause: async () => {},
+    }
+    await isolatedShell('pane', wrapper, io)
+    expect(polls).toBe(2)
+    expect(commands).toEqual(["exec /usr/bin/env PATH='/trusted/launcher:/usr/local/bin:/usr/bin:/bin' ENV=/dev/null /bin/sh -i"])
+    await expect(isolatedShell('pane', wrapper, { ...io, read: () => 'unverified' })).rejects.toThrow('No agent was started')
+  })
   test.each(['claude', 'codex', 'pi'])('%s only reports startup once that exact adapter accepts input', async (kind) => {
     const seen = [undefined, { agent: kind, interactive_ready: false }, { agent: kind, interactive_ready: true }]
     let polls = 0

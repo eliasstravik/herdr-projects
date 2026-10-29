@@ -25,6 +25,8 @@ turning OFF/ON. Changing launch/access settings while ON replaces the coordinato
 Task/reviewer defaults are reused. Agent, Model and Effort accept optional Autopilot overrides; `inherit` follows
 the regular coordinator default and `default` uses the selected CLI's own default. An incompatible inherited model
 or effort is refused rather than silently substituted. Automatic fallback is disabled for owned tasks.
+Before an isolated launch, the new pane switches to a clean non-login `/bin/sh`; its actual process arguments and
+wrapper PATH are verified before Herdr starts any agent. A shell configuration that cannot make this handover is refused.
 
 ## Capabilities and limits
 

@@ -8,6 +8,7 @@ process.env.SHEPHERDR_HOME = mkdtempSync(join(tmpdir(), 'pilot-access-store-'))
 process.env.HERDR_SOCKET_PATH = join(process.env.SHEPHERDR_HOME, 'absent.sock')
 const { PilotRuns } = await import('../server/live/autopilot.ts')
 const { prepareSandbox, sandboxArgs, capturedTranscript } = await import('../server/live/autopilot-sandbox.ts')
+const { isolatedShellCommand } = await import('../server/live/agents.ts')
 
 const bwrap = Bun.which('bwrap')
 describe.skipIf(!bwrap)('Autopilot actual OS boundary', () => {
@@ -48,7 +49,9 @@ describe.skipIf(!bwrap)('Autopilot actual OS boundary', () => {
     const box = await prepareSandbox({ key: 'OWN-1/Agent', name: 'fixture', kind: 'claude', cwd, workspace: 'fixture' }, run, cwd, async (_args, ctx) => { calls.push(ctx); return { out: 'ok', code: 0 } }, 'codex', { providerHome, executable: (kind) => executables[kind] })
     try {
       expect(existsSync(join(box.logsHome, '.codex/auth.json'))).toBe(true)
-      const child = Bun.spawn([box.wrapper], { stdout: 'pipe', stderr: 'pipe' })
+      // The real launch handover must fix even a profile-altered PATH before the canonical name is run.
+      const child = Bun.spawn(['/bin/sh', '-c', isolatedShellCommand(box.wrapper)], { env: { ...process.env, PATH: '/unusable-profile-path' }, stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' })
+      child.stdin.end('claude\nexit\n')
       const [code, err] = await Promise.all([child.exited, new Response(child.stderr).text()])
       expect({ code, stderr: code ? err : '' }).toEqual({ code: 0, stderr: '' })
       expect(await Bun.file(join(cwd, 'reviewer-result')).text()).toBe('same-boundary\n')
