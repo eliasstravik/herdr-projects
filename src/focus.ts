@@ -40,7 +40,7 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, { focus = tru
 }
 
 // what takes typing: an arrow moves its caret and a key is a letter, not a checkbox's or a radio's
-const TYPED = 'input:not([type=checkbox], [type=radio]), textarea, [contenteditable=true]'
+const TYPED = 'input:not([type=checkbox], [type=radio]), textarea, [contenteditable=true], [data-term-screen]'
 
 /** The keyboard moved the focus, or the tasks' cursor (a place of its own, not the focus): that one's ring shows */
 export const keysMoved = (what: 'focus' | 'cursor' = 'focus') => {
@@ -60,7 +60,7 @@ export function watchKeys() {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       arrow = /^(Arrow\w+|Home|End)$/.test(e.key)
       if (e.key === 'Tab') keysMoved()
-      else if (!arrow && ((e.target as Element).closest?.(TYPED) ? e.key !== 'Escape' : e.key.length === 1 && e.key !== ' ')) delete root.dataset.keys
+      else if (!arrow && e.key !== 'Escape' && (e.target as Element).closest?.(TYPED)) delete root.dataset.keys
     },
     true,
   )

@@ -132,7 +132,7 @@ function NameDialog({ snap, kind, id, own, name: was = '', emoji: had = '', mach
           void save()
         }}
       >
-        <div className={clsx('flex h-10 shrink-0 items-center gap-1 rounded-row bg-bg pr-1.5 pl-1 shadow-[inset_0_0_0_1px_var(--line2)] focus-within:shadow-[inset_0_0_0_1.5px_var(--focus)] coarse:h-11 phone:h-12', problem && 'shadow-[inset_0_0_0_1.5px_var(--color-need-fg)]!', pinned && 'pl-3')}>
+        <div className={clsx('flex h-10 shrink-0 items-center gap-1 rounded-row bg-bg pr-1.5 pl-1 shadow-[inset_0_0_0_1px_var(--line2)] has-[input:focus]:shadow-[inset_0_0_0_1.5px_var(--focus)] coarse:h-11 phone:h-12', problem && 'shadow-[inset_0_0_0_1.5px_var(--color-need-fg)]!', pinned && 'pl-3')}>
           {pinned ? null : (
           <button
             type="button"

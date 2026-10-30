@@ -66,6 +66,17 @@ describe.skipIf(!browser)('a focus ring is for the keyboard moving the focus', (
     } finally { await page.close() }
   }, 30_000)
 
+  test('a button beside a text box leaves no ring on the box', async () => {
+    const page = await browser!.newPage({ viewport: { width: 1280, height: 800 } })
+    page.setDefaultTimeout(5000)
+    try {
+      await page.goto(url())
+      await page.getByRole('button', { name: 'New section' }).click()
+      await page.getByRole('button', { name: 'Pick an emoji' }).click()
+      expect(await rings(page)).toEqual([])
+    } finally { await page.close() }
+  }, 30_000)
+
   test('typing leaves no ring on what the focus goes to next, and the caret keys are not moving the focus', async () => {
     const page = await browser!.newPage({ viewport: { width: 1280, height: 800 } })
     page.setDefaultTimeout(5000)
@@ -104,6 +115,9 @@ describe.skipIf(!browser)('a focus ring is for the keyboard moving the focus', (
       await page.keyboard.press('Tab')
       expect(await rings(page)).toHaveLength(1)
       await page.keyboard.press('Tab')
+      expect(await rings(page)).toHaveLength(1)
+      // a letter that isn't typed anywhere (a shortcut, say) leaves the keys their ring
+      await page.keyboard.press('q')
       expect(await rings(page)).toHaveLength(1)
       await press()
       expect(await rings(page)).toEqual([])
