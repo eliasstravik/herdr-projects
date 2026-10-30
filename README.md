@@ -311,9 +311,8 @@ shepherdr secret set ELEVENLABS_API_KEY < key.txt
   and said so (in the task's chat), and its agent closes all the same.
   Another terminal still in the worktree keeps it too. You can also just ask its coordinator to merge it.
   Task agents learn the way from brief to merged from [shepherdr-agent](skill/shepherdr-agent/SKILL.md): the review the
-  brief's Settings block asks for (Settings → How tasks work → Review, Reviewer, Must fix and Review rounds: only words
-  in the brief; the agent runs it however it sees fit, a subagent or a
-  headless CLI), what the change broke, left undone or added beyond the brief; only the choices no experiment can
+  brief's Settings block asks for (Settings → How tasks work → Review, Reviewer, Must fix and Review rounds; the agent
+  starts it with `shepherdr review <id>`, and with Review on, `shepherdr ready` needs one of that very commit), what the change broke, left undone or added beyond the brief; only the choices no experiment can
   settle as cards for you, and your yes before anything irreversible; the proof in one small artifact; ready with a facts line; then merge or ask. How to
   build and check the work is the agent's own judgment: Shepherdr only gives it the brief, your defaults and the house
   rules.
@@ -467,7 +466,7 @@ shepherdr secret set ELEVENLABS_API_KEY < key.txt
     machine's heading says `Can't reach`, what you send waits until it is
     back, and its home space's coordinator hears what happened once core answers again.
 - Settings (sidebar, or `,` on a desktop) holds the few app settings, in two groups. What agents are told: How tasks
-  work, only words in each new brief's Settings block (review, the Reviewer a brief suggests, Must fix, Review rounds,
+  work, what goes in each new brief's Settings block (review, the Reviewer, Must fix, Review rounds,
   merge), each row offering its exact line under Brief wording. How Shepherdr runs: the agent, model and effort tasks and
   coordinators start with (model:
   an id or alias, or default for the CLI's own; effort: default, lowest, low, medium, high, xhigh or max, each CLI
