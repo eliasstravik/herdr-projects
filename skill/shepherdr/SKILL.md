@@ -101,6 +101,8 @@ and stays in its space's Artifacts list. Don't describe it in your reply: the hu
   them. `shepherdr artifact check <file>` checks without showing.
 - **Sealed.** No network and no app: styles, scripts, fonts and pictures all inline. `<img src="/abs/path.png">` on
   this machine goes in for you. At most 2 MB. Web links open in a new tab.
+- **Named for its task.** An artifact a task's agent makes is titled with the task's id, full title, then what it is:
+  `SHE-2: Stop Goes in note on every send · Proof`. Where it is left out, Shepherdr puts it in.
 - **Update, don't repeat.** A change is a new version of the same artifact; any agent here may update any artifact
   (`shepherdr artifact list`, `shepherdr artifact show <id>`).
 - **Data.** `window.shepherdr.data` holds the JSON. An update with only `--data` redraws open views without a reload:

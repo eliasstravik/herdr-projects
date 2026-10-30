@@ -3,7 +3,7 @@ import { age } from '../common/age.ts'
 import { randomBytes } from 'node:crypto'
 import { dirname, join, basename } from 'node:path'
 import { readFileSync } from 'node:fs'
-import { artifactChecker, titleCase, type Checker, type CheckResult } from '../artifact-check.ts'
+import { artifactChecker, taskArtifactTitle, titleCase, type Checker, type CheckResult } from '../artifact-check.ts'
 import { wrapPage } from '../frame.ts'
 import { one, parseArgs } from '../common/args.ts'
 import { browserNamespace } from './browser-id.ts'
@@ -14,7 +14,7 @@ import type { CoreAgent } from './model.ts'
 import type { Action, Artifact } from '../../shared/types.ts'
 
 interface Version { n: number; at: number; by: string; chat: string; note?: string; html: number; data?: number; what?: 'data' | 'title' }
-interface Record { id: string; title: string; place: string; at: number; versions: Version[]; sent?: { html: number; text: string }; thumb?: boolean }
+interface Record { id: string; title: string; place: string; at: number; maker?: string; versions: Version[]; sent?: { html: number; text: string }; thumb?: boolean }
 
 const IMAGE_TYPES: { [ext: string]: string } = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', avif: 'image/avif' }
 
@@ -48,6 +48,14 @@ export class CoreArtifacts {
     if (task) return `${task.id} ${chat.slice(chat.lastIndexOf('/') + 1).toLowerCase()}`
     const space = this.source.space(chat)
     return space ? coreSpaceName(this.source, space) : 'Coordinator'
+  }
+  /** the task an artifact is for is the one whose agent made it, whoever retitles it later; a coordinator's stays as
+   *  written. The limit is on what the title's writer adds: a task's id and name never count against it */
+  private titled(title: string, chat: string) {
+    const task = this.source.tasks.forChat(chat)
+    const named = task ? taskArtifactTitle(title, task) : titleCase(title), given = task ? taskArtifactTitle('', task).length + 3 : 0
+    if (named.length - given > 200) throw new Refusal('Keep the title under 200 characters')
+    return named
   }
   list(): Artifact[] {
     return this.source.store.all<Record>('core-artifact').map(artifact => ({ id: artifact.id, title: artifact.title, place: artifact.place, at: artifact.at,
@@ -152,9 +160,9 @@ export class CoreArtifacts {
     if (!['new', 'update', 'check'].includes(verb)) throw new Refusal('Use artifact new, update, check, show, list or remove')
     const previous = verb === 'update' ? this.get(id) : undefined
     const input = await this.inputs(agent, verb === 'update' ? file : id, one(parsed, 'data'), cwd)
-    const title = one(parsed, 'title')?.trim()
-    if (verb === 'new' && (!input.html || !title)) throw new Refusal('Use artifact new FILE.html --title TITLE')
-    if (title && title.length > 200) throw new Refusal('Keep the title under 200 characters')
+    const given = one(parsed, 'title')?.trim()
+    if (verb === 'new' && (!input.html || !given)) throw new Refusal('Use artifact new FILE.html --title TITLE')
+    const title = given ? this.titled(given, previous ? previous.maker ?? previous.versions[0].chat : agent.chat) : undefined
     if (verb === 'check' && !input.html) throw new Refusal('Give an HTML file to check')
     if (previous && !input.html && !input.hasData && !title) throw new Refusal('Give new HTML, data or a title')
     const page = previous && this.page(previous.id)
@@ -168,8 +176,8 @@ export class CoreArtifacts {
     if (current?.grant !== agent.grant || current.launch !== agent.launch || terminal?.state !== 'live' || agent.pid && terminal.pid !== agent.pid || !this.source.mailbox.permits(agent.grant, { chat: agent.chat, session: agent.launch, machine: agent.machine }, 'artifact')) throw new Refusal('This artifact request belongs to a stopped, revoked or replaced session; nothing was published')
     let newId = randomBytes(4).toString('hex')
     while (this.source.store.get('artifact-id', newId) || this.source.store.get('core-artifact', newId)) newId = randomBytes(4).toString('hex')
-    const artifact: Record = previous ?? { id: newId, title: titleCase(title!), place: space?.id || agent.space, at: Date.now(), versions: [] }
-    if (title) artifact.title = titleCase(title)
+    const artifact: Record = previous ?? { id: newId, title: title!, place: space?.id || agent.space, at: Date.now(), maker: agent.chat, versions: [] }
+    if (title) artifact.title = title
     const old = artifact.versions.at(-1), n = (old?.n ?? 0) + 1
     const by = agent.role === 'task' ? `${this.source.tasks.forChat(agent.chat)?.id || agent.chat} agent` : (this.source.space(agent.space) ? coreSpaceName(this.source, this.source.space(agent.space)!) : 'Coordinator')
     const version: Version = { n, at: Date.now(), by, chat: agent.chat, note: one(parsed, 'note'), html: input.html ? n : old!.html, data: input.hasData ? n : old?.data, ...(!input.html ? { what: input.hasData ? 'data' as const : 'title' as const } : {}) }

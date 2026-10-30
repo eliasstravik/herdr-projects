@@ -354,7 +354,9 @@ shepherdr secret set ELEVENLABS_API_KEY < key.txt
   forms and buttons send their answers to that agent, but only once you've tapped the page. Every artifact is checked at phone width, light and dark,
   before you see it: one whose scripts break, or that reaches for the network, is sent back to its agent. It runs
   sealed off: no network, no access to the app or your data, everything inline. Artifacts stay until you delete one
-  (its ⋯ menu); each keeps its last 20 versions.
+  (its ⋯ menu); each keeps its last 20 versions. An artifact a task's agent makes always names its task, then what it
+  is (`SHE-2: Stop Goes in note on every send · Proof`), so you can tell what it was for; Shepherdr puts the name in
+  when the agent left it out. Artifacts made earlier keep their titles.
 - Every coordinator is an agent that does what you ask, standing requests too ("merge tasks as soon as they pass"):
   it wakes on news and acts on it when you asked it to handle such things, or tells you what matters. **Autopilot**
   is a switch at the top of its chat's ⋯ menu: it replaces the coordinator with a fresh one in the same chat that also

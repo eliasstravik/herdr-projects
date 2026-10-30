@@ -29,6 +29,23 @@ export function titleCase(title: string) {
   return m ? m[1] + up(m[2]) : up(t)
 }
 
+const pattern = (text: string) => text.trim().split(/\s+/).map((word) => word.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')).join('\\s+')
+/** what sets a title's parts apart; a tight hyphen is inside a word */
+const APART = String.raw`(?:\s*[:·•|,–—]\s*|\s+-\s+)`
+
+/** a task's artifact says which task it is for, whatever its agent wrote: "SHE-2: Stop Goes in note · Proof". The task's
+ *  name stays exactly as it is, once, before what the artifact is, so a cut-off title still says what it was for; used
+ *  as a word inside a sentence ("Migration from v1 to v2" in task v1) it is left there, and that sentence stays whole */
+export function taskArtifactTitle(title: string, task: { id: string; localId?: string; name: string }) {
+  const id = task.localId || task.id, ids = [...new Set([task.id, task.id.replace('/', ':'), id])].map(pattern).join('|')
+  const name = String.raw`(?<![\p{L}\p{N}-])${pattern(task.name)}(?![\p{L}\p{N}-])`
+  const apart = new RegExp(String.raw`(?:${APART}|(?:^|\s+)(?:for|of|on|about)\s+|^)${name}(?:${APART})?`, 'iu'), inside = new RegExp(name, 'iu')
+  const rest = title.trim().replace(new RegExp(String.raw`^(?:${ids})(?![\w-])${APART}?\s*`, 'i'), '')
+  if (!apart.test(rest) && inside.test(rest)) return `${id}: ${titleCase(rest.replace(inside, () => task.name))}`
+  const what = rest.replace(apart, ' ').replace(/\s{2,}/g, ' ').trim()
+  return what ? `${id}: ${task.name} · ${titleCase(what)}` : `${id}: ${task.name}`
+}
+
 /** opens the page the way the app frames it, at phone width, light then dark: script errors and anything it tried to
  *  load are what breaks it */
 export function artifactChecker(home: string, run: (args: string[]) => Promise<{ ok: boolean; out: string; err: string }>, wrap: (html: string, data?: unknown) => string, session = 'shep-artifacts'): Checker {

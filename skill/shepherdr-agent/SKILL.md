@@ -53,7 +53,7 @@ build, check and review the work is your own judgment.
    or above Must fix, then review again; stop once a round has none at or above it, or after Review rounds. Never agree
    with a finding just to end the loop: one you judge wrong goes in the facts with why. Findings below the bar go in
    the facts, unfixed; an open choice no experiment can settle goes to the human as a card.
-4. **Proof.** One artifact, `shepherdr artifact new <file> --title "<id>: Proof"`: what changed in one to three plain
+4. **Proof.** One artifact, `shepherdr artifact new <file> --title "<id>: <task's full title> · Proof"`: what changed in one to three plain
    lines, each proof with a one-line caption, and a "Not proven" list. Every proof is real and from this branch now;
    never staged, and a mocked test is no proof of what users see. A bug fix first reproduces the bug: the same repro
    failing before and passing after. A change too small to show gets a line in your chat instead. Its files stay out

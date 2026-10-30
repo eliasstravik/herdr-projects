@@ -46,6 +46,43 @@ test('artifact data/title updates retain HTML, versions prune without losing ref
   expect(source.store.get('artifact-id', id)).toBe(id) // Old chat links can never resolve to a reused ID.
 }))
 
+test('a task agent\'s artifact gets the task\'s full name, once, and past the title limit; a coordinator\'s stays as written', async () => fixture(async (source, coordinator) => {
+  const cwd = source.space(coordinator.space)!.folder, chat = 'machine/ONE-7/Agent', name = 'Stop Goes in note on every send'
+  source.store.set('task', 'machine/ONE-7', { id: 'machine/ONE-7', localId: 'ONE-7', name, chat, place: coordinator.space, machine: coordinator.machine, workflow: 'working' })
+  const agent: CoreAgent = { ...coordinator, chat, role: 'task', launch: 'task-launch' }
+  agent.grant = source.mailbox.issue(chat, agent.launch, agent.machine, ['artifact']).id
+  source.store.set('agent', chat, agent)
+  const title = (id: string) => source.artifacts.list().find(artifact => artifact.id === id)!.title
+  const made = async (who: CoreAgent, words: string) => /artifact (\S+) /.exec(await source.artifacts.cli(who, ['artifact', 'new', 'page.html', '--title', words], cwd))![1]
+
+  const proof = await made(agent, 'ONE-7: proof')
+  expect(title(proof)).toBe(`ONE-7: ${name} · Proof`)
+  expect(title(await made(agent, `ONE-7: ${name} · Proof`))).toBe(`ONE-7: ${name} · Proof`)
+  await source.artifacts.cli(agent, ['artifact', 'update', proof, '--data', 'data.json'], cwd)
+  expect(title(proof)).toBe(`ONE-7: ${name} · Proof`)
+  await source.artifacts.cli(agent, ['artifact', 'update', proof, '--title', 'Screens'], cwd)
+  expect(title(proof)).toBe(`ONE-7: ${name} · Screens`)
+  const long = 'x'.repeat(200)
+  const longest = await made(agent, long)
+  expect(title(longest)).toBe(`ONE-7: ${name} · X${'x'.repeat(199)}`)
+  await source.artifacts.cli(agent, ['artifact', 'update', longest, '--title', title(longest)], cwd)
+  await expect(made(agent, long + 'x')).rejects.toThrow('under 200')
+
+  const report = await made(coordinator, 'weekly report')
+  expect(title(report)).toBe('Weekly report')
+  // a task's agent may update it, but it is still not for that task
+  await source.artifacts.cli(agent, ['artifact', 'update', report, '--title', 'Weekly numbers'], cwd)
+  expect(title(report)).toBe('Weekly numbers')
+  // made for the task, it keeps saying so when the coordinator retitles it; before this, a title stays until it is changed
+  await source.artifacts.cli(coordinator, ['artifact', 'update', proof, '--title', 'Final'], cwd)
+  expect(title(proof)).toBe(`ONE-7: ${name} · Final`)
+  for (let n = 0; n < 21; n++) await source.artifacts.cli(coordinator, ['artifact', 'update', proof, '--title', `Final ${n}`], cwd)
+  expect(title(proof)).toBe(`ONE-7: ${name} · Final 20`)
+  source.store.set('core-artifact', proof, { ...source.store.get('core-artifact', proof) as object, title: 'ONE-7: Proof' })
+  await source.artifacts.cli(agent, ['artifact', 'update', proof, 'page.html'], cwd)
+  expect(title(proof)).toBe('ONE-7: Proof')
+}))
+
 test('private files and symlink aliases cannot be imported', async () => fixture(async (source, agent, root) => {
   const cwd = source.space(agent.space)!.folder, privateFile = join(source.config.home, 'vault.txt')
   writeFileSync(privateFile, 'SYNTHETIC_PRIVATE_MATERIAL')
