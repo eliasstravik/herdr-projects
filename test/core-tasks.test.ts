@@ -161,6 +161,63 @@ test('headless review relay waits for a successful core holder exit', async () =
 })
 
 
+test('a turn ended for a running recorded review stays Working until the review ends without reaching the agent', async () => {
+  await withTask(async ({ tasks, task }) => {
+    const source = (tasks as unknown as { source: CoreSource }).source
+    const now = Date.now(), chat = `${task.id}/Reviewer-1`, original = source.agents.get.bind(source.agents)
+    const reviewer = { chat, launch: 'review-launch', role: 'reviewer', started: now - 60000, activityAt: now - 1000 }
+    const reviewerTerminal = { address: 't2', state: 'live' }, parentTerminal = { address: 't1', state: 'live' }
+    const parent = { ...original(task.chat)!, started: now - 600000, activityAt: now - 30000 }
+    let reviewerStatus = 'work'
+    source.agents.get = key => key === chat ? reviewer as ReturnType<typeof original> : key === task.chat ? parent : undefined
+    source.agents.terminal = (agent => agent?.chat === chat ? reviewerTerminal : parentTerminal) as typeof source.agents.terminal
+    source.status = (agent => agent?.chat === chat ? reviewerStatus : 'idle') as typeof source.status
+    Object.defineProperty(source, 'logs', { value: { waiting: () => true } })
+    const saved = { ...task, report: { msg: 'Fixing the bug', progress: 80 } } as CoreTask
+    const view = (patch: Partial<CoreTask> = {}) => tasks.view({ ...saved, ...patch })
+
+    expect(view({ reviewChat: undefined })).toMatchObject({ status: 'need', state: 'Needs you' })
+    saved.reviewChat = chat
+    expect(view()).toMatchObject({ status: 'work', state: 'Working', sub: 'Waiting for review', waitsFor: 'review', report: { msg: 'Waiting for review', progress: 80 } })
+    expect(view().agent?.note).toBe('Waiting for review')
+
+    reviewerStatus = 'need'
+    expect(view()).toMatchObject({ status: 'need', state: 'Needs you' })
+    expect(view().waitsFor).toBeUndefined()
+
+    reviewerStatus = 'idle' // Ended its turn: the report is on its way for a moment, then the silence surfaces.
+    expect(view().status).toBe('work')
+    reviewer.activityAt = reviewer.started = now - 3 * 60000
+    expect(view().status).toBe('need')
+
+    reviewerStatus = 'work'; reviewerTerminal.state = 'finished' // Died.
+    expect(view().status).toBe('need')
+    reviewerTerminal.state = 'live' // Quiet, but within what a stall allows.
+    expect(view().status).toBe('work')
+    reviewer.activityAt = reviewer.started = now - 21 * 60000 // Stalled.
+    expect(view().status).toBe('need')
+    reviewer.activityAt = reviewer.started = now - 1000
+
+    saved.reviewTurn = 'turn' // Relayed, until the agent has taken it up.
+    parent.activityAt = now - 30000
+    expect(view().status).toBe('work')
+    parent.activityAt = now
+    expect(view().status).toBe('need')
+    delete saved.reviewTurn; saved.reviewFailure = 'review-launch'
+    expect(view().status).toBe('need')
+    delete saved.reviewFailure
+
+    expect(view({ workflow: 'ready' })).toMatchObject({ status: 'ready' })
+    expect(view({ workflow: 'ready' }).waitsFor).toBeUndefined()
+    source.status = (agent => agent?.chat === chat ? 'work' : 'need') as typeof source.status // A prompt still wins.
+    expect(view()).toMatchObject({ status: 'need' })
+    source.status = (agent => agent?.chat === chat ? 'work' : 'idle') as typeof source.status
+    parentTerminal.state = 'finished' // So does an agent that exited.
+    expect(view()).toMatchObject({ status: 'need' })
+  })
+})
+
+
 test('CLI and screen mutations cannot race a merge already in flight', async () => withTask(async ({ tasks, task, grant, repo }) => {
   await tasks.ready(grant, task.id, 'Changed example')
   await tasks.answer(tasks.get(task.id)!.mergeQuestion!, 0, task.chat)

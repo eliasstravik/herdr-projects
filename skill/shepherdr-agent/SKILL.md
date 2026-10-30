@@ -40,14 +40,14 @@ build, check and review the work is your own judgment.
 2. **Work** in your worktree and branch only. Say how far along you are, `shepherdr status <id> "<at most 40
    characters>" --done <0-100> --left <5m, 1h20m>`, once you know the size of the work: `--left` is your own time until
    `ready`, and Shepherdr shows nothing you didn't report. Ask the human only what no experiment can settle: once, a
-   card with your recommended choice first, then end your turn (a turn ended without `ready` and nothing running in
-   the background shows Needs you). Decide the rest yourself and list those decisions in the facts.
-3. **Review**, unless Review is off or the brief says none: fresh eyes that didn't write the change (a subagent, or
-   a headless `codex exec`, `claude -p` or `pi -p` as the Reviewer setting suggests). Run a headless one in the
-   foreground, its stdin closed (or it waits on stdin forever) and under a timeout, with your shell's timeout at its
-   most: `timeout 540 codex exec -s read-only -o <out> "<prompt>" < /dev/null`. Never in the background, and never end
-   your turn while a review runs. Timed out or failed: one subagent review instead. Give it the authoritative command from your launch prompt and `SHEPHERDR_CHAT=<task-id>/Reviewer` (never an inherited other task), the brief, the diff and the
-   repo's rules, never your own reasoning; ask for what this change
+   card with your recommended choice first, then end your turn (a turn ended without `ready`, nothing running in
+   the background and no review under way shows Needs you). Decide the rest yourself and list those decisions in the facts.
+3. **Review**, unless Review is off or the brief says none: fresh eyes that didn't write the change. Commit, then run
+   `shepherdr review <id>`: it starts a read-only reviewer of the Reviewer setting on that exact commit, gives it the
+   brief and uses one of the Review rounds. Then end your turn: the report arrives in your chat as `<review round="…"
+   head="…">`, and `ready` refuses until a report matches your commit. Meanwhile the task shows Working, "Waiting for
+   review". `<review-failed>`: its partial words are no findings, run `shepherdr review` again. A reviewer that asks,
+   dies, stalls or ends with no report reaching you shows Needs you. The reviewer reports what this change
    broke, left undone or added beyond the brief, each with proof and tagged critical (breaks or loses users' work),
    major (a user would hit it, or it proves a claim false), minor (rarely hit) or trivial (style). Fix every finding at
    or above Must fix, then review again; stop once a round has none at or above it, or after Review rounds. Never agree

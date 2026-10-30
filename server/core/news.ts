@@ -58,7 +58,8 @@ export class CoreTaskNews {
     if (notice.event === 'failed') return task.startError === was.startError && (task.startError || terminal?.state === 'finished' && terminal.exit_code === was.exit && terminal.signal === was.signal)
     if (notice.event === 'stalled') {
       const quiet = was.quietLife !== undefined && life(task, agent, terminal?.status_ms) <= was.quietLife
-      return terminal?.state === 'live' && this.source.tasks.view(task).status === 'work' && (quiet || overdue(was, task, now))
+      const view = this.source.tasks.view(task)
+      return terminal?.state === 'live' && view.status === 'work' && !view.waitsFor && (quiet || overdue(was, task, now))
     }
     if (notice.event === 'needs-you') return this.source.tasks.view(task).status === 'need'
     return true

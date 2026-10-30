@@ -80,6 +80,10 @@ export interface CoreTask extends Task {
   kept?: string[]
 }
 
+const REVIEW_LINE = 'Waiting for review'
+const REVIEW_QUIET = 20 * 60000 // As long as a task may stay quiet before its stalled news.
+const REVIEW_RELAY = 2 * 60000 // A finished reviewer's report reaches the agent within a few polls.
+
 /** Workflow is explicit persisted metadata, mirrored to core labels. It is never inferred from process exit. */
 export class CoreTasks {
   readonly git: CoreGit
@@ -117,8 +121,9 @@ export class CoreTasks {
     const terminal = agent && this.source.agents.terminal(agent), nativeStatus = agent && this.source.status(agent)
     const waiting = agent && nativeStatus === 'idle' && this.source.logs?.waiting?.(agent)
     const provider = task.workflow === 'working' && agent && this.source.providerRetries?.get(agent)
+    const review = waiting && !provider && this.reviewRunning(task)
     const status = task.startError ? 'need' : task.workflow === 'merged' || task.workflow === 'closed' ? 'done' : task.workflow === 'ready' ? 'ready' : task.workflow === 'merging' ? 'merging'
-      : task.workflow === 'queued' ? 'queued' : task.workflow === 'todo' || !agent ? 'todo' : nativeStatus === 'need' || waiting && !provider || terminal?.state === 'finished' ? 'need' : 'work'
+      : task.workflow === 'queued' ? 'queued' : task.workflow === 'todo' || !agent ? 'todo' : nativeStatus === 'need' || waiting && !provider && !review || terminal?.state === 'finished' ? 'need' : 'work'
     const retryLine = provider ? `${provider.reason}${provider.due ? ` · retry in ${Math.max(1, Math.ceil((provider.due - Date.now()) / 60000))}m` : provider.over ? '' : ' · retrying'}` : undefined
     const created = Date.parse(task.created)
     const observed = this.source.store.get<{ status: string; at?: number }>('automation-seen', task.id)
@@ -126,8 +131,19 @@ export class CoreTasks {
     const when = task.archived ?? (status === 'done' ? task.doneAt ?? changed : status === 'todo' ? created : changed)
     const taskAge = Number.isFinite(when) && when > 0 ? age(when) : task.age
     const agentAge = agent?.started && Number.isFinite(agent.started) ? age(agent.started) : taskAge
-    return { ...task, age: taskAge, on: CLI_NAME[agent?.kind ?? task.kind], status, sub: task.capacity ? `Waiting: ${task.capacity}` : retryLine || task.sub, browser: agent?.browser ? { ready: this.source.machineConnected?.(task.machine) ?? true, hint: this.source.machineConnected?.(task.machine) === false ? 'This machine is reconnecting' : undefined } : { ready: false, hint: 'Start or restart the task agent to provision its shared browser' }, agent: agent ? { chat: task.chat, role: 'Agent', cli: CLI_NAME[agent.kind], status: nativeStatus === 'off' ? 'off' : status, age: agentAge, note: retryLine || task.report?.msg || '' } : undefined,
+    const reviewLine = review && status === 'work' ? REVIEW_LINE : undefined
+    return { ...task, ...(reviewLine ? { waitsFor: 'review' as const, report: task.report && { ...task.report, msg: reviewLine } } : {}), age: taskAge, on: CLI_NAME[agent?.kind ?? task.kind], status, sub: task.capacity ? `Waiting: ${task.capacity}` : retryLine || reviewLine || task.sub, browser: agent?.browser ? { ready: this.source.machineConnected?.(task.machine) ?? true, hint: this.source.machineConnected?.(task.machine) === false ? 'This machine is reconnecting' : undefined } : { ready: false, hint: 'Start or restart the task agent to provision its shared browser' }, agent: agent ? { chat: task.chat, role: 'Agent', cli: CLI_NAME[agent.kind], status: nativeStatus === 'off' ? 'off' : status, age: agentAge, note: retryLine || reviewLine || task.report?.msg || '' } : undefined,
       state: status === 'done' ? task.workflow === 'closed' ? 'Done' : 'Merged' : status === 'ready' ? 'Ready' : status === 'need' ? 'Needs you' : status === 'queued' ? 'Queued' : status === 'todo' ? 'To do' : status === 'merging' ? 'Merging' : 'Working' }
+  }
+  /** Its recorded reviewer is at work, or its report is on the way. A reviewer that asks, dies, stalls or ends without a report reaching the agent is no wait. */
+  private reviewRunning(task: CoreTask, now = Date.now()) {
+    const reviewer = task.workflow === 'working' && task.reviewChat ? this.source.agents.get(task.reviewChat) : undefined
+    if (!reviewer) return false
+    const terminal = this.source.agents.terminal(reviewer), status = this.source.status(reviewer)
+    const life = Math.max(reviewer.started ?? 0, reviewer.activityAt ?? 0, terminal?.status_ms ?? 0)
+    const reported = !!task.reviewTurn || task.reviewFailure === reviewer.launch
+    if (reported ? (this.source.agents.get(task.chat)?.activityAt ?? 0) > life : status === 'need') return false
+    return now - life < (!reported && terminal?.state === 'live' && status === 'work' ? REVIEW_QUIET : REVIEW_RELAY)
   }
   async add(grant: Grant, input: CoreTaskInput) {
     const caller = this.source.agents.get(grant.chat)

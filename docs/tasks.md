@@ -38,7 +38,9 @@
   while work it started in the background (a reviewer subagent, a shell, a monitor) still runs and will wake it: that
   is still Working (shells alone for up to 10 minutes, since a server it started for you never wakes it; a shell
   running a headless reviewer of another CLI, `codex exec` or `claude -p`, counts as a subagent), unless its last
-  words ask you something. A task that needs you says why in at most 40
+  words ask you something. So is a task whose agent ended its turn for the reviewer `shepherdr review` started: its
+  line says Waiting for review, with no card, news or alert. A reviewer that asks, dies, stays quiet for 20 minutes or
+  ends with no report reaching the agent ends that wait, and the task needs you. A task that needs you says why in at most 40
   characters, never by pasting the agent's message and never in a model's words: a standard reason (Plan to approve,
   Asks permission, Signed out, Question for you, Waits for your reply), or the agent's own question cut to fit
   (from its question tool, its choice card, or the last sentence of its last message that asks). The tasks list, the

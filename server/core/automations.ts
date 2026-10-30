@@ -117,7 +117,7 @@ export class CoreAutomations {
     try {
       for (const task of this.source.tasks.all()) {
         if (!this.source.space(task.place) || this.source.places.removing(task.place) || task.archived || this.source.tasks.busy(task.id) || !this.source.machineConnected(task.machine)) continue
-        const previous = this.source.store.get<Seen>('automation-seen', task.id), status = this.source.tasks.view(task).status
+        const previous = this.source.store.get<Seen>('automation-seen', task.id), view = this.source.tasks.view(task), status = view.status
         const agent = this.source.agents.get(task.chat), terminal = agent && this.source.agents.terminal(agent)
         const attempt = task.launchAttempt ?? agent?.launch
         const failure = task.startError && !['merged', 'closed', 'merging'].includes(task.workflow) ? `start:${attempt ? attempt + ':' : ''}${task.startError}` : task.workflow === 'working' && terminal?.state === 'finished' &&
@@ -130,7 +130,7 @@ export class CoreAutomations {
         else if (failure && failure !== previous?.failure) events.push('failed')
         else if (previous && previous.status !== status && status === 'need' && !failure) events.push('needs-you')
         let stall: StallCause | undefined
-        if (status === 'work' && terminal?.state === 'live' && agent) {
+        if (status === 'work' && !view.waitsFor && terminal?.state === 'live' && agent) {
           const life = Math.max(agent.started, agent.activityAt ?? 0, terminal.status_ms ?? 0, task.reportedAt ?? 0)
           if (next.quietLife !== undefined && life > next.quietLife) delete next.quietLife
           const quiet = now - life >= 20 * 60000 && next.quietLife === undefined

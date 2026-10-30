@@ -204,6 +204,8 @@ export interface Task {
   place: string
   /** second line in lists */
   sub?: string
+  /** still Working, its turn over: what Shepherdr itself knows it waits for */
+  waitsFor?: 'review'
   age: string
   /** when a Done task finished (ms): the Done group shows newest first */
   doneAt?: number

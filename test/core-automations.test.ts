@@ -111,6 +111,23 @@ test('confirmed failures emit once across restart; intentional To-do stops and o
   await scheduler.scan(); await scheduler.drain(); expect(launches).toHaveLength(1)
 }))
 
+test('a task waiting for its own review raises no stalled news, then its needs-you once the wait ends', async () => fixture(async ({ source, scheduler, tasks, space }) => {
+  const start = 1000000, agent = { launch: 'live', started: start, activityAt: start }, terminal = { state: 'live' }
+  const task = { id: 'WAIT-1', chat: 'WAIT-1/Agent', place: space.id, machine: space.machine, name: 'Waits', workflow: 'working', status: 'work', reportedAt: start, report: { eta: 1, msg: 'Working', progress: 1 } } as CoreTask
+  tasks.push(task)
+  const recorded: string[] = []
+  Object.defineProperty(source, 'news', { value: { record: (_task: CoreTask, event: string) => recorded.push(event), deliver() {} } })
+  source.agents.get = ((chat: string) => chat === task.chat ? agent : undefined) as unknown as typeof source.agents.get
+  source.agents.terminal = (() => terminal) as unknown as typeof source.agents.terminal
+  const view = source.tasks.view
+  source.tasks.view = (item => ({ ...view(item), waitsFor: 'review' })) as typeof source.tasks.view
+  await scheduler.scan(start); await scheduler.scan(start + 30 * 60000)
+  expect(recorded).not.toContain('stalled')
+  source.tasks.view = (item => ({ ...view(item), status: 'need' })) as typeof source.tasks.view
+  await scheduler.scan(start + 31 * 60000)
+  expect(recorded).toContain('needs-you')
+}))
+
 test('quiet and over-estimate stalls persist and re-arm only with new activity or a new report', async () => fixture(async ({ source, scheduler, tasks, launches, space }) => {
   scheduler.model.add({ place: space.id, name: 'stall', trigger: { on: [{ event: 'stalled' }] }, task: { title: 'Inspect stall' } })
   const start = 1000000, agent = { launch: 'live', started: start, activityAt: start }, terminal = { state: 'live' }
