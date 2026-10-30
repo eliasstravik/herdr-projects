@@ -232,10 +232,9 @@ shepherdr secret set ELEVENLABS_API_KEY < key.txt
   those at or above Must fix, `review.mustFix`, major by default, and reviews again, at most Review rounds,
   `review.rounds`, 3 by default), and whether it merges on its own (by default once its own quick checks pass,
   without waiting for GitHub's checks), on its own after GitHub's checks, or asks you first, and the agent, model
-  and effort it runs on (only so it knows). A line that differs from Shepherdr's default says who changed it: this
-  space's setting, this machine's, yours for every machine, or set by the coordinator for this task (`task add --set
-  review.rounds=1 --set merge="ask me first"`). The brief's own words win, so a wish for one task needs no setting
-  changed. The task's chat shows the block at the end of its first message, the changed lines picked out. The rest is the agent's judgment, by its
+  and effort it runs on (only so it knows). The coordinator can set a line for this task alone, and the block says so
+  (`task add --set review.rounds=1 --set merge="ask me first"`). The brief's own words win, so a wish for one task needs no setting
+  changed. The task's chat shows the block at the end of its first message. The rest is the agent's judgment, by its
   skills: whether to plan first, how to build and check it, what to fix after a review and what proof to show. Ask for another CLI, model or effort for one task and the coordinator adds
   `--agent`, `--model` or `--effort` to `task add`; for another reviewer, `--reviewer`, `--reviewer-model` or
   `--reviewer-effort`. Tap the task and you are in its agent's chat, where it asks, shows
@@ -256,7 +255,7 @@ shepherdr secret set ELEVENLABS_API_KEY < key.txt
   for other tasks), To do (it waits for a go, or is still starting up; a To do row is its title alone), Ready
   (`shepherdr ready`: finished, waits for you to merge it), Merging (`shepherdr merge` under way: GitHub's checks run,
   a rebase or the merge itself, nothing for you to do) and Done (`shepherdr merge`: Merged, or closed: Nothing to merge). The list and the task's chat always show
-  the same. Once started, only the agent puts a task in To do; one that stops for any other reason needs you, except
+  the same. Once started, only the agent, or stopping the task, puts it in To do; one that stops for any other reason needs you, except
   while work it started in the background (a reviewer subagent, a shell, a monitor) still runs and will wake it: that
   is still Working (shells alone for up to 10 minutes, since a server it started for you never wakes it; a shell
   running a headless reviewer of another CLI, `codex exec` or `claude -p`, counts as a subagent), unless its last
@@ -273,7 +272,7 @@ shepherdr secret set ELEVENLABS_API_KEY < key.txt
   written to the agent starts the count again. Each CLI's log says what cut it off (`server/common/provider-error.ts` decides).
 - When a task's agent can't go on (out of allowance, signed out, its provider still down after the tries), its
   **backup agent** takes over, once: Settings → Agents → Backup (`task.fallback`, Codex unless set, or off).
-  It starts in the same worktree and branch, on its CLI's own model, with the brief and a short handover: who it takes
+  It starts in the same worktree and branch, on Backup's model and effort, with the brief and a short handover: who it takes
   over from and why, the branch's commits, what lies uncommitted and the chat so far. A card in the task's chat says
   so. Tasks of an Autopilot run never switch agent. If the backup can't go on either, or isn't installed, the task needs you.
 - Status, coordinators' too, is what the agent reports of itself. Every Claude Code and Codex Shepherdr starts gets hooks of
@@ -283,8 +282,8 @@ shepherdr secret set ELEVENLABS_API_KEY < key.txt
   no log, hook or the agent's own OSC 7501 report says stays unknown, and a process that lives or ends never means Done.
 - On a repo with a GitHub remote that `gh` is logged in to, each task gets a pull request. The shepherdr-agent skill runs
   `shepherdr pr <id>`: it pushes the branch and opens a draft (its title the task's, its words the agent's summary, the
-  brief's gist and a "Generated with" footer), and pushes to it again after new commits. `shepherdr checks <id>` waits
-  for GitHub's checks (merging waits for them only when Settings → How tasks work → Merge is "after GitHub checks", or the task's --set says so);
+  brief's gist and a "Generated with" footer), and pushes to it again after new commits. `shepherdr checks <id>` shows
+  GitHub's checks (merging needs them green first only when Settings → How tasks work → Merge is "after GitHub checks", or the task's --set says so);
   failed ones go back to the agent to fix. Reporting it ready takes the pull request out of draft.
   While it waits, Shepherdr looks at it every minute or so and passes news on to the resting agent once, in
   `<shepherdr>` tags: a check that failed (its link and the end of its log) and new reviews and comments with words (a
@@ -319,8 +318,8 @@ shepherdr secret set ELEVENLABS_API_KEY < key.txt
   build and check the work is the agent's own judgment: Shepherdr only gives it the brief, your defaults and the house
   rules.
 - A task with nothing to merge (an answer, research, or work no longer wanted) is closed: `shepherdr task close <id>
-  [--summary "..."]`, or just ask its coordinator. Its agent stops, its worktree and branch go when
-  they hold nothing unsaved or unmerged (else they are kept, and it says so) and it shows in Done with its summary
+  [--summary "..."]`, or just ask its coordinator. Its agent stops, its worktree and branch go (one holding
+  unsaved or unmerged work is refused with what it holds, unless `--force`, which keeps it and says so) and it shows in Done with its summary
   (Nothing to merge by default); its card in the space's chat says so. An agent whose `shepherdr ready` finds no changes on
   its branch goes straight to Done the same way.
 - `shepherdr task stop <id>` closes a task's agent. Its work stays: a worktree with unsaved or unmerged work
@@ -445,7 +444,7 @@ shepherdr secret set ELEVENLABS_API_KEY < key.txt
   costs a core); an agent whose page must move turns that off with `set media no-preference`. agent-browser is
   pinned in package.json (`bin/agent-browser` runs that version, for agents too: they are told its full path, since a
   shell's start-up files can put another version first on the PATH, and two versions on one session keep restarting
-  its daemon); it needs Chrome on each machine once (`bin/agent-browser install`, there with its helper's copy); other machines get it with
+  its daemon); it needs Chrome on each machine once (`bin/agent-browser install`); other machines get agent-browser, not Chrome, with
   their helper. Without it the item is greyed, with a
   hint. A browser that won't start says why over the panel, with Try again.
 - Each machine watches its own health: every 30 seconds it reads its 1-minute load against its cores, memory in use,
@@ -501,7 +500,7 @@ shepherdr secret set ELEVENLABS_API_KEY < key.txt
   the end of the task's header, resized by its edge, its tabs **Terminal**, **Files**, **Diff** and **Pull request**
   (open or shut, width and tab remembered on the device); on a phone or tablet the same items in the task header's ⋯,
   each a full-screen sheet that Back closes (on a desktop its ⋯ lists them too). Every chat's ⋯, a task's or a
-  coordinator's, starts with **Search in this chat**. All of it is read only. Terminal is the agent's live core terminal: click
+  coordinator's, starts with **Search in this chat**. All but Terminal is read only. Terminal is the agent's live core terminal: click
   it and every key goes in, Esc too; `Ctrl+`` ` opens it and goes back to the chat. Files lists the worktree (tracked
   files and new ones git doesn't ignore), finds one by name and shows it highlighted. Diff shows what the task changed
   against where it left main, committed or not: its files as a tree with lines added and taken out, and each file's
