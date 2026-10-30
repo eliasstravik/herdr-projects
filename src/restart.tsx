@@ -215,8 +215,8 @@ function SpeedWords({ speed }: { speed: Worn }) {
 export function AgentLine({ chatKey, cli }: { chatKey: string; cli: string }) {
   const agent = useStore((s) => s.chats[chatKey]?.agent)
   const { model, effort, speed } = runsOn(agent)
-  // Normal is left out: only a speed out of the ordinary earns its place on the line
-  const bits = [model, effort && { ...effort, text: effort.text.toLowerCase() }, speed?.text === 'Normal' ? undefined : speed].filter((w): w is Worn => !!w)
+  // Normal that runs is left out: only a speed out of the ordinary earns its place on the line
+  const bits = [model, effort && { ...effort, text: effort.text.toLowerCase() }, speed?.text === 'Normal' && !speed.requested ? undefined : speed].filter((w): w is Worn => !!w)
   const seen = bits.filter((w) => !w.requested), requested = bits.filter((w) => w.requested)
   const words = [...seen.map((w) => w.text), requested.length ? `Requested: ${requested.map((w) => w.text).join(' · ')}` : ''].filter(Boolean).join(' · ') || `${cli} · Not reported`
   // a long model id is what gives way: effort and speed stay in view
