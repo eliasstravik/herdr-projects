@@ -161,7 +161,7 @@ shepherdr secret set ELEVENLABS_API_KEY < key.txt
   under the message, with Retry and Remove; it is still there after a reload.
 - Write to a busy agent any time: it goes in at once and steers the agent mid-turn (Claude Code and Codex take it
   at their next step). It waits only while the agent has a permission card open (it goes in once that is answered), or
-  while the agent is still starting. A model or effort change restarts the agent, from the message box's + menu.
+  while the agent is still starting. The line under the message box always says what really runs: model, effort and speed. A model, effort or speed change restarts the agent, from the message box's + menu.
 - Permission prompts appear as choice cards. Answers are checked before messages go in. A CLI's own startup prompts
   (trusting a folder, Codex's hooks) stay in its terminal, since Shepherdr never reads the screen: answer them in the
   Terminal panel; for Codex the chat says so.

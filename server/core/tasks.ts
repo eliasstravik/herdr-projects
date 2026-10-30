@@ -11,6 +11,7 @@ import { CoreTaskProcesses } from './task-processes.ts'
 import { taskOptions, validateTaskSettings } from './task-options.ts'
 import { CLI_NAME, kindOf } from './settings.ts'
 import { CoreGit } from './git.ts'
+import { pickSpeed } from '../common/restart.ts'
 import type { CoreSource } from './source.ts'
 import type { AgentKind, CoreSpace } from './model.ts'
 import type { CorePilotRun } from './pilot-policy.ts'
@@ -28,6 +29,8 @@ export interface CoreTaskInput {
 }
 
 export interface CoreTask extends Task {
+  /** the speed its agent was restarted on, normal or fast; none: the CLI's own */
+  speed?: string
   branch: string
   base: string
   machine: string
@@ -359,7 +362,7 @@ export class CoreTasks {
     const role = readFileSync(join(import.meta.dir, '../../skill/shepherdr-agent/SKILL.md'), 'utf8')
     const instructions = `${role}\n\nYou are ${task.id} in standalone Shepherdr on core. Use the launch-provisioned authenticated shepherdr command. ${pilot ? 'Your Git metadata is read-only: use shepherdr checkpoint MESSAGE to commit, and shepherdr review TASK for a fresh managed reviewer. Use the product broker for managed agents and messages; no core socket or outside helper is available.' : 'Use hc for child agents, messages and waits.'} Do not use legacy helpers, SSH workers, a web URL or screen scraping. Your branch is ${task.branch}; stay in this worktree.\n`
     const prompt = `${task.desc}\n\n${wait}\n\nSettings:\n- Agent: ${task.kind}${task.model ? `, model ${task.model}` : ''}${task.effort ? `, effort ${task.effort}` : ''}\n- Review: ${task.review.on ? 'on' : 'off'}\n- Reviewer: ${task.review.kind}${task.reviewerModel ? `, model ${task.reviewerModel}` : ''}${task.reviewerEffort ? `, effort ${task.reviewerEffort}` : ''}\n- Must fix: ${task.review.mustFix}\n- Review rounds: ${task.review.rounds}\n- Merge: ${task.mergePolicy === 'ask' ? 'ask the human first' : task.mergePolicy === 'checks' ? 'after GitHub checks' : 'on its own'}\n${Object.keys(task.overrides ?? {}).length ? `Set by the coordinator for this task: ${Object.entries(task.overrides!).map(([key, value]) => `${key}=${value}`).join(', ')}\n` : ''}${message ? `\n<go>${message}</go>` : ''}`
-    const launched = await this.source.agents.launch(space, task.chat, task.kind, prompt, { role: 'task', parent, folder: task.folder, task: task.id, instructions, model, effort, resume: !pilot && !prior?.pilot, pilot: pilot ? { run: pilot.id, hosts: pilot.config.hosts, deadline: pilot.config.runtime ? pilot.started + pilot.config.runtime : undefined, repo: task.repo } : undefined })
+    const launched = await this.source.agents.launch(space, task.chat, task.kind, prompt, { role: 'task', parent, folder: task.folder, task: task.id, instructions, model, effort, speed: task.speed, resume: !pilot && !prior?.pilot, pilot: pilot ? { run: pilot.id, hosts: pilot.config.hosts, deadline: pilot.config.runtime ? pilot.started + pilot.config.runtime : undefined, repo: task.repo } : undefined })
     if (pilot) this.source.pilots.policy.bind(pilot.id, { chat: launched.chat, launch: launched.launch, role: 'task', task: task.id })
     await this.label(task)
     const takeover = task.providerTakeover
@@ -587,7 +590,7 @@ export class CoreTasks {
         if (terminal?.state === 'live') await this.source.core.call('terminal.interrupt', { terminal: terminal.address })
         await this.source.browsers?.close(task.id)
         task.workflow = 'todo'; delete task.reservedAt; this.save(task); await this.label(task); return { ok: true }
-      case 'restart-info': return { ok: true, info: { role: 'task', space: this.source.space(task.place)?.name, on: { kind: agent?.kind ?? task.kind, model: agent?.model, effort: agent?.effort }, onKnown: !!agent,
+      case 'restart-info': return { ok: true, info: { role: 'task', space: this.source.space(task.place)?.name, on: { kind: agent?.kind ?? task.kind, model: agent?.model, effort: agent?.effort, speed: agent?.speed }, onKnown: !!agent,
         onWords: agent?.kind ?? task.kind, want: this.source.settings.agent('task', task.place), working: agent?.state === 'working',
         clis: this.source.settings.clis(task.place) } }
       case 'restart':
@@ -598,10 +601,11 @@ export class CoreTasks {
         const profile = owned && ['on', 'workers'].includes(owned.state) ? this.source.pilots.policy.live(owned.id) : current?.state === 'on' ? this.source.pilots.policy.live(current.id) : undefined
         if (profile && !task.pilot) throw new Refusal('This task needs its worktree moved out of legacy helper storage before contained adoption')
         const choice = this.source.settings.checkedAgent(task.place, { kind: action.kind || task.kind, model: action.model, effort: action.effort })
+        const speed = pickSpeed(action.speed, task.speed)
         if (agent) await this.finishForRestart(agent)
         await this.profile(task, profile)
         await this.source.browsers?.close(task.id)
-        task.kind = choice.kind; task.model = choice.model; task.effort = choice.effort
+        task.kind = choice.kind; task.model = choice.model; task.effort = choice.effort; task.speed = speed
         delete task.startError; this.save(task)
         await this.launchNow(task, task.workflow === 'working' ? 'Continue your agreed task. Preserve existing work.' : undefined, task.model, task.effort)
         if (action.save && !this.get(task.id)?.capacity) this.source.settings.saveAgent('task', task.place, choice)

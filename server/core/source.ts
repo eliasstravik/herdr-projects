@@ -27,6 +27,7 @@ import { CoreQuestions } from './questions.ts'
 import { terminalBridge } from './terminal.ts'
 import { CoreError } from './client.ts'
 import { CLI_NAME, CoreSettings } from './settings.ts'
+import { pickSpeed } from '../common/restart.ts'
 import { CoreSecrets } from './secrets.ts'
 import { CoreProviderRetries } from './provider-retries.ts'
 import { CoreArtifacts } from './artifacts.ts'
@@ -279,7 +280,15 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     if (agent?.kind === 'codex' && agent.state === 'starting' && !agent.transcript) messages.push({ id: `setup-${agent.launch}`, who: 'agent', text: 'Codex may ask you to trust its folder or Shepherdr’s hooks. Open Terminal to review its own prompts. After trusting, close Codex’s hooks view. If chat still waits, send a short message in Terminal once: its next native hook connects chat and recovers earlier replies.', at: agent.started })
     return { key, ...this.activities.chat(key, messages, terminal?.state === 'live' && status === 'work'), cli: CLI_NAME[agent?.kind ?? this.agentKind()], working: status === 'work',
       failed: this.store.all<PendingSend>('pending-send').filter(item => item.chat === key && item.state === 'uncertain').map(item => ({ cid: item.id, error: 'Delivery was interrupted; check the chat before sending again' })),
-      finished: !!agent && terminal?.state === 'finished', agent: { kind: agent?.kind ?? this.agentKind(), model: agent?.model, effort: agent?.effort, runtime: agent?.runtime } }
+      finished: !!agent && terminal?.state === 'finished', agent: this.agentWords(agent) }
+  }
+  /** what it was asked to run on and what its records say runs, with the names the catalog knows */
+  private agentWords(agent?: CoreAgent): NonNullable<Chat['agent']> {
+    const kind = agent?.kind ?? this.agentKind(), runtime = agent?.runtime
+    // a hook may report a model with its context size: claude-opus-5-5[1m]
+    const label = (model?: string) => (model ? this.settings.findModel(kind, model, agent?.space ?? '')?.label : undefined)
+    const modelLabel = label(agent?.model), runtimeLabel = label(runtime?.model?.replace(/\[.*\]$/, ''))
+    return { kind, model: agent?.model, ...(modelLabel ? { modelLabel } : {}), effort: agent?.effort, speed: agent?.speed, runtime: runtime && runtimeLabel ? { ...runtime, modelLabel: runtimeLabel } : runtime }
   }
   /** What keeps a message out of this chat's agent now; {} is a machine out of reach. A working agent keeps nothing out: it takes it at once. */
   private hold(chat: string): { waitsFor?: Message['waitsFor'] } | undefined {
@@ -432,7 +441,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
       }
       case 'restart-info': {
         const agent = this.agents.get(action.chat)
-        return { ok: true, info: { role: 'coordinator', space: this.space(action.chat)?.name, on: { kind: agent?.kind ?? this.agentKind(), model: agent?.model, effort: agent?.effort }, onKnown: !!agent,
+        return { ok: true, info: { role: 'coordinator', space: this.space(action.chat)?.name, on: { kind: agent?.kind ?? this.agentKind(), model: agent?.model, effort: agent?.effort, speed: agent?.speed }, onKnown: !!agent,
           onWords: agent?.kind ?? this.agentKind(), want: this.settings.agent(this.space(action.chat)?.mode === 'autopilot' ? 'autopilot' : 'coordinator', action.chat), clis: this.settings.clis(action.chat), working: agent?.state === 'working' } }
       }
       case 'restart': {
@@ -440,7 +449,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
           const agent = this.agents.get(action.chat), kind = action.kind || agent?.kind
           if (kind !== 'claude' && kind !== 'codex') throw Error('Choose Claude Code or Codex')
           const choice = this.settings.checkedAgent(action.chat, { kind, model: action.model, effort: action.effort })
-          await this.pilots.lifecycle.restart(action.chat, choice)
+          await this.pilots.lifecycle.restart(action.chat, { ...choice, speed: pickSpeed(action.speed, agent?.speed) })
           if (action.save) this.settings.saveAgent('autopilot', action.chat, choice)
           return {}
         }
@@ -450,7 +459,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
         const agent = this.agents.get(action.chat)
         const kind = action.kind || agent?.kind || this.agentKind()
         if (kind !== 'claude' && kind !== 'codex') throw new Error('Choose Claude Code or Codex')
-        await this.pilots.lifecycle.regularRestart(space.id, { kind, model: action.model, effort: action.effort }, action.save)
+        await this.pilots.lifecycle.regularRestart(space.id, { kind, model: action.model, effort: action.effort, speed: pickSpeed(action.speed, agent?.speed) }, action.save)
         return {}
       }
       default: throw new Error(`This rewrite slice has not implemented ${action.type} yet; see the parity checklist`)
@@ -501,7 +510,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
           else {
             if (space.mode === 'autopilot' || agent?.pilot) throw new Error('This contained coordinator has stopped; change mode or explicitly restart its contained run before sending')
             const pick = this.settings.agent('coordinator', space.id)
-            await this.agents.launch(space, chat, agent?.kind ?? pick.kind, item.text, agent ? { model: agent.model, effort: agent.effort, resume: true } : { ...pick, resume: true })
+            await this.agents.launch(space, chat, agent?.kind ?? pick.kind, item.text, agent ? { model: agent.model, effort: agent.effort, speed: agent.speed, resume: true } : { ...pick, resume: true })
           }
           progressed = true
           const message = this.store.get<Message>(`message:${chat}`, item.id)

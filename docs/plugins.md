@@ -129,9 +129,11 @@ slots below are public: plugins outside the repo rely on them, so they change on
   - headers and menus: `placeHeader`, `placeMark`, `placeMenu` (a coordinator's), `agentHeader`, `agentMenu` (a task's)
   - the composer: `composerAbove`, `composerLive`, `composerSettings`, `composerIdle`, `composerPlus`, `composerMic`
     (unchanged). The base chat shows launch controls inside its + popup; attachment menu contributions still
-    use `composerSettings`. Model/effort changes use `restart-info` and `restart`; legacy `model`/`effort` actions
-    return a restart-required error rather than claim an unapplied change. `Chat.agent` is optional launch metadata,
-    not telemetry of terminal changes.
+    use `composerSettings`. Model/effort/speed changes use `restart-info` and `restart` (`restart` takes an optional
+    `speed`: `normal`, `fast`, `''` for the CLI's own, left out to keep the current one; `RestartCli.speeds` lists what
+    a CLI offers); legacy `model`/`effort` actions return a restart-required error rather than claim an unapplied
+    change. `Chat.agent` is optional launch metadata, with `speed` added beside `model` and `effort`, not telemetry of
+    terminal changes; `Chat.agent.runtime` is what native records say runs, with `speed` and `effortDefault` added.
   - the screen: `taskPanel` (side panel items), `overlays`, `topBars`, `tasksFooter`, `keys` (keyboard handlers)
   - the lists show what their chips hold, `listView(ui, snap)`: `tasks`, `artifacts` and `tasksMenu` still get the
     place picked (`placeId`, `place`), and `tasksFooter` also gets the `list` shown. `ListView.attention`

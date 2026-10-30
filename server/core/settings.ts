@@ -1,5 +1,5 @@
 import type { SettingRow, SettingSection, RestartCli } from '../../shared/types.ts'
-import { TABLE, nearest, parseCodex, type CliModels } from '../../shared/models.ts'
+import { SPEEDS, TABLE, nearest, parseCodex, type CliModels } from '../../shared/models.ts'
 import type { CoreStore } from './store.ts'
 import type { CoreFiles } from './files.ts'
 import type { MachineLimits } from '../health.ts'
@@ -137,7 +137,7 @@ export class CoreSettings {
     const effort = nearest(catalog.models.find(item => item.id === model)?.efforts ?? catalog.efforts, this.get(`${role}.effort`, level))
     return { kind, model, effort }
   }
-  private findModel(kind: AgentKind, value: string, level: string) {
+  findModel(kind: AgentKind, value: string, level: string) {
     const catalog = this.catalog(kind, level), raw = value.toLowerCase()
     return [...catalog.models, ...catalog.others ?? []].find(item => item.id.toLowerCase() === raw || item.label.toLowerCase() === raw || kind === 'claude' && ['opus', 'sonnet', 'haiku', 'fable'].includes(raw) && item.id.includes(`-${raw}-`))
   }
@@ -180,7 +180,7 @@ export class CoreSettings {
     return machine && this.store.get<CliModels>('models', `${machine}:${kind}`) || TABLE[kind]
   }
   clis(level: string): RestartCli[] {
-    return (['claude', 'codex'] as const).map(kind => ({ kind, name: names[kind], ...this.catalog(kind, level) }))
+    return (['claude', 'codex'] as const).map(kind => ({ kind, name: names[kind], ...this.catalog(kind, level), speeds: SPEEDS }))
   }
   sections(devices: string[] = [], pushWarnings: string[] = []): SettingSection[] {
     const levels = ['all', ...new Set(this.spaces().map(space => `m:${space.machine}`)), ...this.spaces().map(space => space.id)]

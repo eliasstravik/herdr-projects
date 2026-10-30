@@ -20,7 +20,7 @@ import { Markdown } from './markdown.tsx'
 import { answeredBy, cancelReply, canReply, isArtifact, jumpTo, startReply } from './reply.ts'
 import { typing, working } from './typing.ts'
 import { JobsSheet, JobsTag, LiveLine, TurnLine } from './activity.tsx'
-import { AgentControls, PlaceRestartItem, RestartSheet, TaskRestartItem } from '@client/restart.tsx'
+import { AgentControls, AgentLine, PlaceRestartItem, RestartSheet, TaskRestartItem } from '@client/restart.tsx'
 
 /* ---------- messages ---------- */
 
@@ -1654,7 +1654,7 @@ function Composer({ chatKey, placeholder, cli }: { chatKey: string; placeholder:
   }
   return (
     // what goes with the box (send, +, a file's x, its menu) leaves the box the focus: a phone's keyboard stays up
-    <div data-kb data-keep-box className={clsx('mx-auto w-full max-w-read shrink-0 px-4 pt-2', keyboard && device === 'phone' ? 'pb-1.5' : 'pb-4')}>
+    <div data-kb data-keep-box className={clsx('mx-auto w-full max-w-read shrink-0 px-4 pt-2', keyboard && device === 'phone' ? 'pb-1' : 'pb-2.5')}>
       {registry.composerAbove.map(({ View }, i) => (
         <View key={i} chatKey={chatKey} cli={cli} />
       ))}
@@ -1761,6 +1761,7 @@ function Composer({ chatKey, placeholder, cli }: { chatKey: string; placeholder:
           )}
         </div>
       </div>
+      <AgentLine chatKey={chatKey} cli={cli} />
     </div>
   )
 }

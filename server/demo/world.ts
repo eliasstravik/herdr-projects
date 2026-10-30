@@ -636,7 +636,7 @@ export class DemoWorld extends Emitter<SourceEvents> implements Source {
         const problem = harnessProblem({ kind, model: a.model, effort: a.effort })
         if (problem) return { ok: false, error: problem }
         const words = harnessWords({ kind, model: a.model, effort: a.effort })
-        c.agent = { kind, model: a.model, effort: a.effort }
+        c.agent = { kind, model: a.model, effort: a.effort, speed: a.speed || undefined }
         c.cli = CLI_NAME[kind] ?? kind
         c.restart = undefined
         c.messages.push(cardMessage({ id: `restart-${id()}`, restart: true, text: `Restarted on ${words}` }, Date.now() + seq))

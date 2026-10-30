@@ -2087,3 +2087,20 @@ its main PID was 742764 at inspection. helper/main.sock currently has exedev own
 identify every live supervisor/forward owner or authorize stopping anything. Re-inventory at cutover; do not rely
 on older ownership/PID observations as permanent launch configuration. Only the owned baseline UI reference
 servers were stopped; the isolated core preview remains available in the shared browser for review.
+
+### Native effort and speed, correcting the 2026-10-30 display note (2026-10-30)
+
+"Native model/effort display" above said Claude's session did not report effort. That
+was wrong: main assistant records from Claude Code 2.1.285 on (the oldest kept here) carry
+top-level `effort`, and the reader only took the model. Its Codex note was right for
+that session (no effort was set, so none is logged) but missed why effort stayed blank
+even when set: Codex hooks report `model` on every event with the hook's later time,
+and that time then rejected the transcript's own records. Records now always outrank
+hooks. Speed comes from Claude `usage.speed` and Codex `thread_settings_applied`
+(`priority` shows as Fast); see [runtime state](../runtime-state.md).
+
+Manual proof in an isolated app on Claude Code 2.1.308 and Codex 0.163.0, phone and
+desktop width. Codex: Fast and Normal through the restart sheet and live `/fast`.
+Claude: effort and `/effort`. `--fast-mode on` was real but this account has no usage
+credits for Fast, so its records stayed `standard` and the line correctly showed no
+Fast. A real Claude `usage.speed: "fast"` record is not proven; a fixture covers it.

@@ -184,7 +184,20 @@ test('native runtime observations preserve launch policy and reject historical o
     expect(store.get('agent', 'chat')).toMatchObject({ model: 'selected-policy', effort: 'low', runtime: { model: 'reported-model', effort: 'xhigh', source: 'session', at: at + 1 } })
     appendFileSync(agent.transcript!, runtime(at + 2, 'new-model'))
     await logs.poll()
-    expect(store.get<import('../server/core/model.ts').CoreAgent>('agent', 'chat')?.runtime).toEqual({ model: 'new-model', source: 'session', at: at + 2 })
+    expect(store.get<import('../server/core/model.ts').CoreAgent>('agent', 'chat')?.runtime).toEqual({ model: 'new-model', effortDefault: true, source: 'session', at: at + 2 })
+    // Speed only comes in Codex's thread settings: a later turn record, which names no speed, keeps it.
+    const settings = (time: number, tier: string) => JSON.stringify({ timestamp: new Date(time).toISOString(), type: 'event_msg', payload: { type: 'thread_settings_applied', thread_settings: { model: 'new-model', service_tier: tier } } }) + '\n'
+    appendFileSync(agent.transcript!, settings(at + 3, 'priority') + runtime(at + 4, 'new-model', 'high'))
+    await logs.poll()
+    expect(store.get<import('../server/core/model.ts').CoreAgent>('agent', 'chat')?.runtime).toEqual({ model: 'new-model', effort: 'high', speed: 'fast', source: 'session', at: at + 4 })
+    appendFileSync(agent.transcript!, settings(at + 5, 'default'))
+    await logs.poll()
+    expect(store.get<import('../server/core/model.ts').CoreAgent>('agent', 'chat')?.runtime).toEqual({ model: 'new-model', effortDefault: true, speed: 'normal', source: 'session', at: at + 5 })
+    // A hook fires after the turn it reports: its later time must not hide the record of that turn.
+    store.set('agent', 'chat', { ...store.get<import('../server/core/model.ts').CoreAgent>('agent', 'chat'), runtime: { model: 'new-model', source: 'hook', at: at + 50 } })
+    appendFileSync(agent.transcript!, settings(at + 6, 'priority'))
+    await logs.poll()
+    expect(store.get<import('../server/core/model.ts').CoreAgent>('agent', 'chat')?.runtime).toEqual({ model: 'new-model', effortDefault: true, speed: 'fast', source: 'session', at: at + 6 })
     const replacement = { ...agent, launch: 'replacement', grant: 'new-grant', started: at + 100, runtime: undefined }; store.set('agent', 'chat', replacement)
     await logs.poll()
     expect(store.get<import('../server/core/model.ts').CoreAgent>('agent', 'chat')?.runtime).toBeUndefined()

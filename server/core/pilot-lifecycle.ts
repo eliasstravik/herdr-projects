@@ -126,7 +126,7 @@ export class CorePilotLifecycle {
       }
       if (this.source.quiescing) throw Error('Shepherdr is stopping')
       if (this.source.agents.get(place)?.launch !== old?.launch || this.source.space(place)?.mode === 'autopilot') throw Error('A newer coordinator replaced this restart')
-      await this.source.agents.launch(space, place, pick.kind, '', { ...pick, resume: true })
+      await this.source.agents.launch(space, place, pick.kind, '', { ...pick, speed: harness.speed, resume: true })
       if (save) this.source.settings.saveAgent('coordinator', place, pick)
     }).finally(() => this.source.retry(place))
   }

@@ -167,8 +167,10 @@ export class CoreLogs {
     this.store.set(`event:${agent.chat}`, event.id + ':' + event.kind, event)
     this.revisions.set(agent.chat, (this.revisions.get(agent.chat) ?? 0) + 1)
     if (event.kind === 'turn-end' && Number.isFinite(event.at) && event.at >= agent.started && event.at <= Date.now() + 60000) { const cursor = this.logs.get(agent.chat); if (cursor && cursor.path === agent.transcript) cursor.ended = true }
-    if (event.kind === 'runtime' && Number.isFinite(event.at) && event.at >= agent.started && event.at <= Date.now() + 60000 && event.at >= (agent.runtime?.at ?? 0)) {
-      agent.runtime = event.replace ? event.runtime : { ...agent.runtime, ...event.runtime }
+    if (event.kind === 'runtime' && Number.isFinite(event.at) && event.at >= agent.started && event.at <= Date.now() + 60000 && (agent.runtime?.source !== 'session' || event.at >= agent.runtime.at)) {
+      // a hook's time is when it fired, often after the turn it reports, so any record beats a hook; a whole record
+      // names model and effort; speed only ever comes in Codex's thread settings
+      agent.runtime = event.replace ? { ...(agent.runtime?.speed ? { speed: agent.runtime.speed } : {}), ...event.runtime } : { ...agent.runtime, ...event.runtime }
       this.store.set('agent', agent.chat, agent); this.changed(agent.chat)
     }
     if (event.kind === 'session') { agent.session = event.sessionId; this.store.set('agent', agent.chat, agent) }

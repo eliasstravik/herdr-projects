@@ -3,10 +3,11 @@
 // What the restart sheet offers (restartInfo) and the calm hint a chat shows once Settings say something else than
 // what its agent runs on (restartHint) come from here.
 import type { Message, RestartCli, RestartHint, RestartInfo } from '../../shared/types.ts'
+import { SPEEDS } from '../../shared/models.ts'
 import { effortFor, effortsOf, findModel, modelArg, modelsOf } from './models.ts'
 import { chatProblem } from './readers/index.ts'
 import { CLI_NAME } from './settings.ts'
-export interface Harness { kind: string; model?: string; effort?: string }
+export interface Harness { kind: string; model?: string; effort?: string; speed?: string }
 
 
 const name = (kind: string) => CLI_NAME[kind] ?? kind
@@ -61,6 +62,7 @@ export function restartClis(kinds: string[]): RestartCli[] {
       kind,
       name: name(kind),
       ...(c ? { models: c.models.map((m) => ({ id: m.id, label: m.label, efforts: m.efforts, defaultEffort: m.effort })), efforts: effortsOf(kind), defaultModel: c.default, defaultEffort: findModel(kind, c.default)?.effort } : {}),
+      ...(kind === 'claude' || kind === 'codex' ? { speeds: SPEEDS } : {}),
     }
   })
 }
@@ -77,7 +79,7 @@ export function restartInfo(o: { role: 'task' | 'coordinator'; space?: string; o
     const cli = clis.find((c) => c.kind === h.kind)
     if (m && cli?.models && !cli.models.some((x) => x.id === m.id)) cli.models.push({ id: m.id, label: m.label, efforts: m.efforts, defaultEffort: m.effort })
   }
-  const on = launchHarness(o.on)
+  const on = { ...launchHarness(o.on), ...(o.on.speed ? { speed: o.on.speed } : {}) }
   return { role: o.role, space: o.space, onKnown: o.onKnown, on, onWords: harnessWords(on), want: fitHarness(o.want), clis, working: o.working }
 }
 
@@ -89,6 +91,13 @@ export function recentChat(messages: Message[], them: string, skip?: string) {
     .slice(-12)
     .map((m) => `${m.who === 'you' ? 'Human' : them}: ${m.text!.length > 400 ? `${m.text!.slice(0, 400)}…` : m.text}`)
     .join('\n\n')
+}
+
+/** the speed a restart asks for: normal, fast, nothing for the CLI's own; left out, the one it was on */
+export function pickSpeed(speed: string | undefined, kept?: string): string | undefined {
+  if (speed === undefined) return kept
+  if (speed && !SPEEDS.includes(speed)) throw new Error('Choose Normal or Fast')
+  return speed || undefined
 }
 
 /** Reject unsupported choices before restarting or saving anything; never silently round effort. */

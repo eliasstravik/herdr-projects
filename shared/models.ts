@@ -24,6 +24,17 @@ export interface CliModels {
   at?: number
 }
 
+/** the speeds a chat can be restarted on; each CLI's own word for them is in server/core/agents.ts */
+export const SPEEDS = ['normal', 'fast']
+
+/** a speed as a CLI logs it, in plain words: Claude Code's usage.speed and Codex's service_tier (priority is what its
+ *  config calls fast); one Shepherdr doesn't know stays as logged */
+export function speedWord(value: unknown): string | undefined {
+  const v = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (!v) return undefined
+  return v === 'standard' || v === 'default' ? 'normal' : v === 'priority' ? 'fast' : v
+}
+
 /** every level any CLI takes, lowest first; off and none are the same, lowest is the old name for the lowest level */
 const RANK: Record<string, number> = { off: 0, none: 0, lowest: 1, minimal: 1, low: 2, medium: 3, high: 4, xhigh: 5, max: 6, ultra: 7 }
 export const LEVELS = Object.keys(RANK)

@@ -3,7 +3,9 @@
 // its steps: each item it logs once over (event_msg item_completed: a command, a patch, a tool), and while one runs the
 // call that runs it. Its subagents start and end there too (SubAgentActivity); their own steps are in their own log.
 import { words } from '../../../shared/activity.ts'
+import { speedWord } from '../../../shared/models.ts'
 import { codexCall, codexItem } from './steps.ts'
+import type { AgentRuntime } from '../../../shared/types.ts'
 import type { CliQuestionItem, LogEvent, Reader } from './types.ts'
 
 type Json = any
@@ -37,6 +39,16 @@ const parseLine = (text: string): Json => {
     return JSON.parse(text)
   } catch {
     return undefined
+  }
+}
+
+/** a whole record of what runs: a model or effort left out, or 'default', is the CLI's own */
+function settings(model: Json, effort: Json, at: number): AgentRuntime {
+  const set = typeof effort === 'string' && effort && effort !== 'default'
+  return {
+    source: 'session', at,
+    ...(typeof model === 'string' && model !== 'default' ? { model } : {}),
+    ...(set ? { effort } : { effortDefault: true }),
   }
 }
 
@@ -103,7 +115,7 @@ export class CodexReader implements Reader {
     const out: LogEvent[] = []
     for (const { text, offset } of lines) {
       // skip token counts, reasoning and tool runs without parsing them
-      if (!/"type":\s*"(turn_context|session_meta|message|function_call|custom_tool_call|function_call_output|custom_tool_call_output|task_started|task_complete|turn_aborted|token_count|item_completed)"/.test(text))
+      if (!/"type":\s*"(thread_settings_applied|turn_context|session_meta|message|function_call|custom_tool_call|function_call_output|custom_tool_call_output|task_started|task_complete|turn_aborted|token_count|item_completed)"/.test(text))
         continue
       const l = parseLine(text)
       const p = l?.payload
@@ -112,11 +124,12 @@ export class CodexReader implements Reader {
 
       if (l.type === 'turn_context') {
         const effort = p.effort ?? p.reasoning_effort ?? p.collaboration_mode?.settings?.reasoning_effort
-        out.push({ kind: 'runtime', file, replace: true, id: `runtime-${offset}`, at: t, runtime: {
-          source: 'session', at: t,
-          ...(typeof p.model === 'string' && p.model !== 'default' ? { model: p.model } : {}),
-          ...(typeof effort === 'string' && effort !== 'default' ? { effort } : {}),
-        } })
+        out.push({ kind: 'runtime', file, replace: true, id: `runtime-${offset}`, at: t, runtime: settings(p.model, effort, t) })
+      } else if (l.type === 'event_msg' && p.type === 'thread_settings_applied') {
+        // written at each turn's start and at once on /fast or /model; a thread with no tier set runs on the normal one
+        const set = p.thread_settings
+        if (!set || typeof set !== 'object') continue
+        out.push({ kind: 'runtime', file, replace: true, id: `runtime-${offset}`, at: t, runtime: { ...settings(set.model, set.reasoning_effort, t), speed: speedWord(set.service_tier) ?? 'normal' } })
       } else if (l.type === 'session_meta') {
         const id = p.id ?? p.session_id
         if (s.session || typeof id !== 'string') continue

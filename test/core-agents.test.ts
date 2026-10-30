@@ -74,6 +74,25 @@ test('read-only Codex reviewers capture native JSON events without bypassing hoo
   } finally { store.close(); rmSync(home, { recursive: true, force: true }) }
 })
 
+test('a picked speed reaches each CLI in its own words, for that launch only', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'shep-speed-start-')), store = new CoreStore(home)
+  try {
+    let argv: string[] = [], count = 0
+    const core = { current: { terminals: new Map() }, call: async (_method: string, input: { argv: string[] }) => { argv = input.argv; return { address: `t${++count}`, pid: count } } } as unknown as CoreSession
+    const mailbox = { issue: () => ({ id: `speed-grant-${count}`, credential: {} }) } as unknown as Mailbox
+    const agents = new CoreAgents({ home, port: 0, session: 'test', socket: '/unused', binary: 'hc' }, { format: 'shepherdr-core', schema: 1, id: 'installation' }, core, store, mailbox, async () => undefined, () => {})
+    const space = { id: 'space', name: 'Example', machine: 'machine', folder: '/unused', base: 'main', prefix: 'EX', mode: 'regular' as const, added: 1 }
+    const start = async (chat: string, kind: 'claude' | 'codex', speed?: string) => { await agents.launch(space, chat, kind, 'Wait', { speed }); return argv.join(' ') }
+    expect(await start('a', 'claude', 'fast')).toContain('--fast-mode on')
+    expect(await start('b', 'claude', 'normal')).toContain('--fast-mode off')
+    expect(await start('c', 'claude')).not.toContain('--fast-mode')
+    expect(await start('d', 'codex', 'fast')).toContain('service_tier="fast"')
+    expect(await start('e', 'codex', 'normal')).toContain('service_tier="default"')
+    expect(await start('f', 'codex')).not.toContain('service_tier')
+    expect(store.get('agent', 'd')).toMatchObject({ speed: 'fast' })
+  } finally { store.close(); rmSync(home, { recursive: true, force: true }) }
+})
+
 test('ordinary replacement preserves both private launch identities for later descendant cleanup', async () => {
   const home = mkdtempSync(join(tmpdir(), 'shep-ordinary-history-')), store = new CoreStore(home)
   try {

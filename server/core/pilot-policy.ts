@@ -3,7 +3,7 @@ import type { CoreStore } from './store.ts'
 import type { AgentKind } from './model.ts'
 import { Refusal } from './client.ts'
 
-export interface PilotHarness { kind: AgentKind; model?: string; effort?: string }
+export interface PilotHarness { kind: AgentKind; model?: string; effort?: string; speed?: string }
 export interface CorePilotConfig {
   harness: PilotHarness
   reviewer: PilotHarness

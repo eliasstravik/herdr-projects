@@ -69,7 +69,7 @@ export class CoreAgents {
   }
 
   async launch(space: CoreSpace, chat: string, kind: AgentKind, prompt: string, options: {
-    role?: CoreAgent['role']; parent?: CoreAgent; model?: string; effort?: string; resume?: boolean; folder?: string; task?: string; instructions?: string; readOnly?: boolean
+    role?: CoreAgent['role']; parent?: CoreAgent; model?: string; effort?: string; speed?: string; resume?: boolean; folder?: string; task?: string; instructions?: string; readOnly?: boolean
     pilot?: { run: string; hosts: string[]; deadline?: number; repo: string }
   } = {}): Promise<CoreAgent> {
     if (this.launching.has(chat)) throw new Error('This agent is already starting')
@@ -125,7 +125,7 @@ export class CoreAgents {
     if (prepared && options.pilot) new CorePilotRepositories(this.store).remember(space.machine, options.pilot.repo, [options.folder ?? space.folder], [prepared.paths.state])
     const record: CoreAgent = {
       chat, space: space.id, machine: space.machine, role, kind, launch, grant: grant.id, hook, browser: options.pilot ? undefined : { namespace: shellEnv.AGENT_BROWSER_NAMESPACE, session: browserSession, profile: shellEnv.AGENT_BROWSER_PROFILE }, command: options.pilot ? '/run/shepherdr/bin/shepherdr' : join(root, 'bin/shepherdr'), started: Date.now(), state: 'starting',
-      session: !options.pilot && options.resume && previous?.kind === kind ? previous.session : undefined, model: options.model, effort: options.effort,
+      session: !options.pilot && options.resume && previous?.kind === kind ? previous.session : undefined, model: options.model, effort: options.effort, speed: options.speed,
       pilot: options.pilot && prepared ? { run: options.pilot.run, home: prepared.sandbox.home, captures: prepared.paths.captures, pending: true } : undefined,
     }
     launchRecord = record
@@ -142,6 +142,7 @@ export class CoreAgents {
       if (record.session) argv.push('--resume', record.session)
       if (options.model) argv.push('--model', options.model)
       if (options.effort) argv.push('--effort', options.effort)
+      if (options.speed) argv.push('--fast-mode', options.speed === 'fast' ? 'on' : 'off')
     } else {
       if (headless) argv.push('exec', '--json', '--sandbox', 'read-only')
       else {
@@ -157,6 +158,7 @@ export class CoreAgents {
       if (!options.pilot) argv.push('-c', `shell_environment_policy.set={${Object.entries(shellEnv).map(([key, value]) => `${key}=${toml(value)}`).join(',')}}`)
       if (options.model) argv.push('--model', options.model)
       if (options.effort) argv.push('-c', `model_reasoning_effort=${toml(options.effort)}`)
+      if (options.speed) argv.push('-c', `service_tier=${toml(options.speed === 'fast' ? 'fast' : 'default')}`)
       if (record.session) argv.push('resume', record.session)
     }
     // A native CLI can defer SessionStart until its first turn. An explicit, harmless restart turn
@@ -239,7 +241,8 @@ export class CoreAgents {
     if (Number.isFinite(event.at) && event.at > 0 && event.at <= Date.now() + 60000) record.activityAt = Math.max(record.activityAt ?? record.started, event.at)
     if (event.session) record.session = event.session
     if (event.transcript) record.transcript = event.transcript
-    if (event.model && event.at >= (record.runtime?.at ?? 0)) record.runtime = { ...record.runtime, model: event.model, source: 'hook', at: event.at }
+    // The early word until the transcript says more: a hook must not outrank the records it fires around.
+    if (event.model && record.runtime?.source !== 'session' && event.at >= (record.runtime?.at ?? 0)) record.runtime = { ...record.runtime, model: event.model, source: 'hook', at: event.at }
     if (event.event === 'SessionStart' || event.event === 'Stop' || event.event === 'SessionEnd') record.state = 'idle'
     else if (event.event === 'UserPromptSubmit' || event.event === 'PreToolUse') record.state = 'working'
     // Only authenticated mailbox dispatch owns a permission card. Re-reading an old hook after
