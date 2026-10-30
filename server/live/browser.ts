@@ -26,6 +26,10 @@ export const NAMESPACE = 'shepherdr'
 /** the agent-browser command at the pinned version (bin/agent-browser picks the package's binary) */
 export const browserBin = () => process.env.SHEPHERDR_AGENT_BROWSER ?? join(BOX ? helperDir(BOX.home) : ROOT, 'bin', 'agent-browser')
 
+/** the same command for work that always runs on this machine (the artifact checker): a worker for another machine
+ *  runs here itself, so the box's helper layout is not where its binary is */
+export const hereBrowserBin = () => process.env.SHEPHERDR_AGENT_BROWSER ?? join(ROOT, 'bin', 'agent-browser')
+
 /** a task's id (SHE-61): the only session names Shepherdr closes or forgets. agent-browser takes any name, so one an
  *  agent made up ("..") must never lead the clean-up to a folder that is not a task's own profile */
 export const isTaskId = (s: string) => /^[A-Za-z0-9]+-\d+$/.test(s)
