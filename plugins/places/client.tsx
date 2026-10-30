@@ -308,7 +308,7 @@ function Heading({ id, label, folds, icon: mark, shut, held, className, children
           aria-expanded={!shut}
           // a finger held to open its menu folds nothing
           onClick={() => !held?.() && toggleFold(id)}
-          className="flex min-w-0 flex-1 cursor-pointer text-left outline-none after:absolute after:inset-0 after:rounded-[inherit] focus-visible:after:shadow-[inset_0_0_0_1.5px_var(--focus)]"
+          className="flex min-w-0 flex-1 cursor-pointer text-left outline-none after:absolute after:inset-0 after:rounded-[inherit] keys:focus-visible:after:shadow-[inset_0_0_0_1.5px_var(--focus)]"
         >
           <RowText className="font-medium text-fg2">{label}</RowText>
         </button>
@@ -550,7 +550,7 @@ function Go({ p, said, sel, sort, onClick, children }: { p: Place; said: string;
       aria-keyshortcuts={sort && sort.ids.length > 1 ? 'Alt+Shift+ArrowUp Alt+Shift+ArrowDown' : undefined}
       onKeyDown={sort ? (e) => moveKey(e, p.id, sort) : undefined}
       onClick={onClick ?? ((e) => openPlace(p.id, e))}
-      className="flex min-w-0 flex-1 cursor-pointer text-left outline-none after:absolute after:inset-0 after:rounded-[inherit] focus-visible:after:shadow-[inset_0_0_0_1.5px_var(--focus)]"
+      className="flex min-w-0 flex-1 cursor-pointer text-left outline-none after:absolute after:inset-0 after:rounded-[inherit] keys:focus-visible:after:shadow-[inset_0_0_0_1.5px_var(--focus)]"
     >
       {children}
     </button>

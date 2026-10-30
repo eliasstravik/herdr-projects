@@ -17,6 +17,7 @@ import {
   toggleWide,
   type UI,
 } from '@client/kernel.ts'
+import { keysMoved } from '@client/focus.ts'
 import { toggleDictation } from '@plugins/chat/client.tsx'
 import { ALT, CTRL, Kbd, KeyboardIcon, MOD, SHIFT } from '@client/ui.tsx'
 import { rowLook, sectionOf } from '@client/Settings.tsx'
@@ -142,8 +143,9 @@ export default definePlugin({
         }
         // an artifact full screen keeps the keys: the chat behind it is out of reach
         if (ui.viewer) return false
-        if ((k === 'ArrowDown' || k === 'j') && list) return go({ cur: Math.min(list.length - 1, ui.cur + 1) })
-        if ((k === 'ArrowUp' || k === 'k') && list) return go({ cur: Math.max(0, ui.cur - 1) })
+        const move = (cur: number) => (keysMoved(), go({ cur }))
+        if ((k === 'ArrowDown' || k === 'j') && list) return move(Math.min(list.length - 1, ui.cur + 1))
+        if ((k === 'ArrowUp' || k === 'k') && list) return move(Math.max(0, ui.cur - 1))
         if (k === 'Enter' && list && list[ui.cur] && !(e.target as HTMLElement)?.closest?.('button, a, [role=button]')) return go({ task: list[ui.cur].id, cur: 0 })
         if (k === '[' || k === ']') {
           const places = shownPlaces(snap)

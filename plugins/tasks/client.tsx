@@ -46,6 +46,7 @@ import {
   type TaskGroup,
 } from '@client/kernel.ts'
 import { ListChips } from '@client/chips.tsx'
+import { keysMoved } from '@client/focus.ts'
 import {
   ArchivedIcon,
   ArchiveIcon,
@@ -111,7 +112,7 @@ function TaskRow({ t, ix, where }: { t: Task; ix: number; where?: string[] }) {
         // with ⌘ (Ctrl off a Mac), beside the focused pane in split view
         onClick={(e) => !menu.held() && (splitClick(e) ? openSplit({ kind: 'task', id: t.id }) : openTask(t.id))}
         className={clsx(
-          'flex min-h-[inherit] min-w-0 flex-1 cursor-pointer gap-2 rounded-[inherit] px-2 text-left outline-none focus-visible:shadow-[inset_0_0_0_1.5px_var(--focus)] phone:px-3',
+          'flex min-h-[inherit] min-w-0 flex-1 cursor-pointer gap-2 rounded-[inherit] px-2 text-left outline-none keys:focus-visible:shadow-[inset_0_0_0_1.5px_var(--focus)] phone:px-3',
           sub ? 'items-start py-1.5 [&>.dot]:mt-[3px] phone:[&>.dot]:mt-1' : 'items-center',
         )}
       >
@@ -463,7 +464,7 @@ function FoldHeading({ name, fold, flip, className, children, count }: { name: s
           type="button"
           aria-expanded={!fold.shut}
           onClick={(e) => fold.toggle(e.altKey)}
-          className={clsx(look, 'press group/h cursor-pointer outline-none select-none hover:bg-hover focus-visible:shadow-[inset_0_0_0_1.5px_var(--color-focus)] coarse:min-h-11')}
+          className={clsx(look, 'press group/h cursor-pointer outline-none select-none hover:bg-hover keys:focus-visible:shadow-[inset_0_0_0_1.5px_var(--color-focus)] coarse:min-h-11')}
         >
           {inner}
         </button>
@@ -513,6 +514,7 @@ function TaskFilter({ listKey, order }: { listKey: string; order: Task[] }) {
       onKey={(e) => {
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault()
+          keysMoved()
           setUI({ kb: true, cur: Math.max(0, Math.min(order.length - 1, cur + (e.key === 'ArrowDown' ? 1 : -1))) })
         } else if (e.key === 'Enter' && order[Math.max(0, cur)]) {
           e.preventDefault()
@@ -532,7 +534,7 @@ function DoneToggle({ more, onClick }: { more: number; onClick: () => void }) {
       <button
         type="button"
         aria-expanded={!more}
-        className="press flex min-h-8 items-center gap-1 rounded-full px-2.5 text-[0.75rem] font-medium text-fg3 hover:text-fg2 focus-visible:shadow-[inset_0_0_0_1.5px_var(--color-focus)] focus-visible:outline-none coarse:min-h-11 phone:min-h-11 phone:px-3 phone:text-[0.875rem]"
+        className="press flex min-h-8 items-center gap-1 rounded-full px-2.5 text-[0.75rem] font-medium text-fg3 hover:text-fg2 keys:focus-visible:shadow-[inset_0_0_0_1.5px_var(--color-focus)] focus-visible:outline-none coarse:min-h-11 phone:min-h-11 phone:px-3 phone:text-[0.875rem]"
         onClick={onClick}
       >
         {more ? `Show all ${more}` : 'Show less'}

@@ -556,7 +556,7 @@ function AppearancePick({ phone }: { phone: boolean }) {
   return (
     <div role="radiogroup" aria-label="Appearance" className={phone ? clsx(card, 'overflow-hidden') : 'w-full'}>
       {APPEARANCES.map((a) => (
-        <label key={a} className={clsx(rowLook(phone), 'group cursor-pointer has-focus-visible:shadow-[inset_0_0_0_1.5px_var(--focus)]', phone && 'press')}>
+        <label key={a} className={clsx(rowLook(phone), 'group cursor-pointer keys:has-focus-visible:shadow-[inset_0_0_0_1.5px_var(--focus)]', phone && 'press')}>
           <input type="radio" name="appearance" value={a} checked={now === a} onChange={() => setAppearance(a)} className="sr-only" />
           <span className="flex min-w-0 flex-col">
             {LOOKS[a].label}

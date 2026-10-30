@@ -19,7 +19,7 @@
     }
   }
 }
-/* the keyboard was used last (focus.ts): rings only keys should see */
+/* the keyboard is moving the focus (focus.ts): rings only keys should see, so every focus ring carries it */
 @custom-variant keys (:where([data-keys]) &);
 /* a row's own button tucked away until the pointer is over the row or the keyboard is in it (still in the Tab
    order); where nothing hovers, a finger always sees it */
@@ -291,7 +291,7 @@
   button {
     cursor: pointer;
   }
-  :focus-visible {
+  :where([data-keys]) :focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
   }

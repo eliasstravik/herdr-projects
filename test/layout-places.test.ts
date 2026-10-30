@@ -811,8 +811,13 @@ describe.skipIf(!browser)('removing a space', () => {
       await page.keyboard.press('Escape')
       await ask.waitFor({ state: 'detached' })
       expect(await more.evaluate((b) => b === document.activeElement)).toBe(true)
-      // its ring shows as the keyboard was used last, and goes at the press of a pointer
+      // no ring for that: it was the mouse's menu. It shows once the keyboard moves the focus back to it, and goes at
+      // the press of a pointer
       const ring = () => more.evaluate((b) => getComputedStyle(b).boxShadow)
+      expect(await ring()).toBe('none')
+      await page.keyboard.press('Tab')
+      await page.keyboard.press('Shift+Tab')
+      expect(await more.evaluate((b) => b === document.activeElement)).toBe(true)
       expect(await ring()).not.toBe('none')
       await page.evaluate(() => dispatchEvent(new PointerEvent('pointerdown')))
       expect(await ring()).toBe('none')
