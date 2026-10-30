@@ -25,7 +25,7 @@ import { HELP, one, parseArgs, summaryOpts, type Parsed } from './args.ts'
 import { Automations, type Automation, type Template } from './automations.ts'
 import { Heartbeats, heartbeatFile } from './heartbeat.ts'
 import { eventRules, eventsText, eventWords, matches, nextWords, runWords, timeRule, timeWords, triggerWords, type Happened, type TriggerEvent } from './trigger.ts'
-import { Browsers, type BrowserBridge, type BrowserClient } from './browser.ts'
+import { Browsers, hereBrowserBin, type BrowserBridge, type BrowserClient } from './browser.ts'
 import { excerpt, line, tag } from './chatlines.ts'
 import { Chats, menuId, menuKeys, rememberReply } from './chats.ts'
 import { age, checkTitle, ended, Engine, fitStatus, type TaskRec } from './engine/engine.ts'
@@ -89,7 +89,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   /** opens an artifact at phone width before anyone sees it (a test puts its own here) */
   checker: Checker = browserChecker(
     // on this machine, whichever machine the artifact came from
-    (args) => sh(['agent-browser', ...args], HOME, { timeoutMs: 45_000, here: true }),
+    (args) => sh([hereBrowserBin(), ...args], HOME, { timeoutMs: 45_000, here: true }),
     (html, data) => wrapPage(html, { check: true, phone: true, data }),
   )
   /** turns the model's provider cut off: waited out and tried again, then a task's backup agent or the human (retry.ts) */
