@@ -1,11 +1,11 @@
 // Machine health: every 30 seconds Shepherdr reads how loaded this machine is (its 1-minute load against its cores,
 // memory in use, how full home and /tmp are, a GPU's use where nvidia-smi is there) and whether herdr answers. Cheap:
-// /proc, statfs and one nvidia-smi call. It only measures and tells: past a limit in Settings (machine.*) its
+// /proc on Linux (sysctl, vm_stat and ps on macOS), statfs and one nvidia-smi call. It only measures and tells: past a limit in Settings (machine.*) its
 // coordinator hears once, with the numbers and what uses the machine most, and again only after it came back under.
 // What to do about it (pause or queue tasks, clean the disk, tell the human) is the coordinator's call. The same
 // numbers decide when Shepherdr starts more tasks (engine.release).
 import { readdirSync, readFileSync, readlinkSync, statfsSync, statSync } from 'node:fs'
-import { cpus, homedir, tmpdir } from 'node:os'
+import { cpus, homedir, loadavg, tmpdir, totalmem } from 'node:os'
 import type { HealthLevel, HealthMeter } from '../../shared/types.ts'
 import type { MachineLimits } from './settings.ts'
 import { BOX, helperDir, runSync, type BoxInfo } from './box.ts'
@@ -44,8 +44,7 @@ export interface Sample {
   gpus: Gpu[]
 }
 
-/** 1-minute load from /proc/loadavg */
-export const parseLoad = (text: string) => Number.parseFloat(text.split(/\s+/)[0]) || 0
+const LINUX = process.platform === 'linux'
 
 /** total and in-use memory (bytes) from /proc/meminfo: in use is what is not available */
 export function parseMem(text: string) {
@@ -53,6 +52,15 @@ export function parseMem(text: string) {
   const total = kb('MemTotal')
   const avail = kb('MemAvailable') || kb('MemFree')
   return { total, used: Math.max(0, total - avail) }
+}
+
+/** total and in-use memory (bytes) on macOS from vm_stat, as health.pl counts it: in use is what is not free,
+ * inactive, speculative or purgeable */
+export function parseVmStat(text: string, total: number) {
+  const page = Number(text.match(/page size of (\d+)/)?.[1] ?? 4096)
+  const pages = (name: string) => Number(text.match(new RegExp(`^Pages ${name}:\\s+(\\d+)`, 'm'))?.[1] ?? 0)
+  const free = (pages('free') + pages('inactive') + pages('speculative') + pages('purgeable')) * page
+  return { total, used: Math.max(0, total - free) }
 }
 
 /** nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits */
@@ -106,13 +114,13 @@ export function sample(): Sample {
       return ''
     }
   }
-  const mem = parseMem(read('/proc/meminfo'))
+  const mem = LINUX ? parseMem(read('/proc/meminfo')) : parseVmStat(Bun.spawnSync(['vm_stat'], { stdout: 'pipe', stderr: 'ignore' }).stdout?.toString() ?? '', totalmem())
   const disks: Disk[] = []
   for (const p of [homedir(), tmpdir()]) {
     const d = diskOf(p)
     if (d && !disks.some((x) => x.dev === d.dev)) disks.push(d)
   }
-  return { at: Date.now(), cores: cpus().length || 1, load: parseLoad(read('/proc/loadavg')), memTotal: mem.total, memUsed: mem.used, disks, gpus: gpus() }
+  return { at: Date.now(), cores: cpus().length || 1, load: loadavg()[0], memTotal: mem.total, memUsed: mem.used, disks, gpus: gpus() }
 }
 
 export const cpuPct = (s: Sample) => Math.round((s.load / s.cores) * 100)
@@ -216,10 +224,32 @@ function procStats() {
   return out
 }
 
+/** every process on macOS from ps: its recent % CPU (decaying, as the kernel keeps it), resident memory, command;
+ * the folder it runs in only for the few listed, from lsof */
+function psProcs(by: 'cpu' | 'memory', n: number): Proc[] {
+  const out = Bun.spawnSync(['ps', '-axo', 'pid=,%cpu=,rss=,command='], { stdout: 'pipe', stderr: 'ignore' }).stdout?.toString() ?? ''
+  const all = out.split('\n').flatMap((l) => {
+    const m = l.match(/^\s*(\d+)\s+([\d.]+)\s+(\d+)\s+(.*)$/)
+    return m ? [{ pid: Number(m[1]), cpu: Math.round(Number(m[2])), rss: Number(m[3]) * 1024, cmd: m[4].slice(0, 80) } as Proc] : []
+  })
+  const top = all.sort((p, q) => (by === 'cpu' ? q.cpu - p.cpu || q.rss - p.rss : q.rss - p.rss)).slice(0, n)
+  const lsof = Bun.spawnSync(['lsof', '-a', '-d', 'cwd', '-Fpn', '-p', top.map((p) => p.pid).join(',')], { stdout: 'pipe', stderr: 'ignore' }).stdout?.toString() ?? ''
+  let pid = 0
+  for (const l of lsof.split('\n')) {
+    if (l[0] === 'p') pid = Number(l.slice(1))
+    else if (l[0] === 'n') {
+      const p = top.find((x) => x.pid === pid)
+      if (p) p.cwd = l.slice(1)
+    }
+  }
+  return top
+}
+
 /** the processes using this machine most over a moment (one second): by CPU, or by memory */
 export async function topProcs(by: 'cpu' | 'memory', n = 8, ms = 1000): Promise<Proc[]> {
   // another machine's processes aren't listed: its numbers alone say how it is doing
   if (BOX) return []
+  if (!LINUX) return psProcs(by, n)
   const a = procStats()
   await Bun.sleep(ms)
   const b = procStats()

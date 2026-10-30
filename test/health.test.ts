@@ -21,11 +21,13 @@ const at = (load: number, memPct = 40, disk = 50, gpus: { name: string; util: nu
 })
 
 describe('reading the machine', () => {
-  test('/proc/loadavg, /proc/meminfo and nvidia-smi', () => {
-    expect(H.parseLoad('27.31 21.63 22.17 29/4304 1205109\n')).toBe(27.31)
+  test('/proc/meminfo, vm_stat and nvidia-smi', () => {
     const m = H.parseMem('MemTotal:       32858064 kB\nMemFree:         3661672 kB\nMemAvailable:   20015576 kB\n')
     expect(m.total).toBe(32858064 * 1024)
     expect(m.used).toBe((32858064 - 20015576) * 1024)
+    const v = H.parseVmStat('Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                     3653.\nPages active:                                 206061.\nPages inactive:                               200000.\nPages speculative:                              1000.\nPages purgeable:                                 347.\n', 17179869184)
+    expect(v.total).toBe(17179869184)
+    expect(v.used).toBe(17179869184 - (3653 + 200000 + 1000 + 347) * 16384)
     expect(H.parseGpus('NVIDIA A10G, 37, 4096, 23028\n\n')).toEqual([{ name: 'NVIDIA A10G', util: 37, memPct: 18 }])
     expect(H.parseGpus('')).toEqual([])
   })
