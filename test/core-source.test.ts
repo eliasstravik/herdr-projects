@@ -168,6 +168,26 @@ test('a truly held message says why, and its note goes when it goes in', async (
   } finally { await f.close() }
 })
 
+test('a message to a machine out of reach waits for it instead of failing, and goes in once it is back', async () => {
+  const f = deliveryFixture()
+  let state = 'reconnecting'
+  f.source.core.call = async <T>(method: string) => (method === 'server.status' ? { core: { id: 'local', name: 'local' } }
+    : { machines: [{ id: 'machine', name: 'box', state }] }) as T
+  f.source.files.exec = async () => Buffer.from('/home/box')
+  try {
+    await f.source.refresh()
+    expect(await f.source.act({ type: 'send', chat: f.task.chat, text: 'Out of reach', cid: 'held-machine' })).toEqual({ ok: true, waiting: true })
+    await Bun.sleep(0)
+    expect(f.sent).toEqual([])
+    expect(f.source.store.get('pending-send', 'held-machine')).toMatchObject({ state: 'queued' })
+    expect(f.source.chat(f.task.chat)!.messages.at(-1)).toMatchObject({ text: 'Out of reach', waiting: true })
+    state = 'connected'
+    await f.source.refresh(); await Bun.sleep(0)
+    expect(f.sent).toEqual([{ chat: f.task.chat, text: 'Out of reach' }])
+    expect(f.source.chat(f.task.chat)!.messages.at(-1)).toMatchObject({ text: 'Out of reach', waiting: false })
+  } finally { await f.close() }
+})
+
 test('core refusing a message for a menu leaves it held, and the chat hears', async () => {
   const f = deliveryFixture()
   f.source.machineConnected = () => true

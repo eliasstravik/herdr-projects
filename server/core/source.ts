@@ -220,7 +220,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
         machine.state = 'unreachable'; this.faults.set(`machine:${machine.id}`, error.message); this.emit('snapshot')
       }).finally(() => this.discoveringHomes.delete(machine.id))
     }
-    this.agents.reconcile(); this.emit('snapshot')
+    this.agents.reconcile(); this.emit('snapshot'); this.retryPending()
     this.settings.probe(this.local.id)
     for (const machine of this.machines.filter(item => item.state === 'connected')) this.settings.probe(machine.id)
   }
@@ -490,6 +490,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
         if (this.pilots.lifecycle.busy(space.id) || this.pilots.completion.busy(space.id)) return
         if (task && this.tasks.busy(task.id)) return
         const agent = this.agents.get(chat)
+        if (this.machines.some(machine => machine.id === (agent?.machine ?? space.machine) && machine.state !== 'connected')) return // Held until refresh sees it back.
         if (item.launch && (agent?.launch !== item.launch || this.agents.terminal(agent)?.state !== 'live')) { item.state = 'uncertain'; this.store.set('pending-send', item.id, item); this.deliveryNotice(item, true); continue }
         if (agent && (agent.state === 'starting' || this.openPermissions(agent).length)) return
         item.state = 'sending'; this.store.set('pending-send', item.id, item)
