@@ -188,7 +188,8 @@ type Events = {
   sent: [item: OutItem]
   /** what a screen sent couldn't go in */
   failed: [key: string]
-  output: [key: string]
+  /** a watched terminal's screen changed */
+  screen: [key: string, screen: TermScreen]
 }
 
 /** where the hooks of the agents Shepherdr starts record their events */
@@ -269,7 +270,18 @@ export class Agents extends Emitter<Events> {
   unreadyFor = 60_000
   reachable = true
   lastReach = Date.now()
-  watchedPanes = new Set<string>()
+  /** the terminals a screen shows: herdr tells no change on a pane's screen, so each is read again while watched, often
+   *  for a while after a key went in (its echo), seldom otherwise; told ('screen') only when it changed */
+  private watchedTerms: string[] = []
+  private lastScreens = new Map<string, string>()
+  private termTimer: ReturnType<typeof setTimeout> | null = null
+  private termReading = false
+  private termAgain = false
+  private typedAt = 0
+  /** how often a watched terminal is read: just after typing, and otherwise (over SSH each read is a connection) */
+  termFast = BOX ? 300 : 50
+  termSlow = BOX ? 3000 : 1000
+  termFastFor = 3000
   sessions = new ClaudeSessions()
   /** headless reviewers of another CLI (codex exec, claude -p) each chat's agent runs: subagents, not shells */
   reviewers = new Reviewers()
@@ -342,6 +354,7 @@ export class Agents extends Emitter<Events> {
     if (this.soon) clearTimeout(this.soon)
     this.hookWatch?.close()
     this.sub.stop()
+    if (this.termTimer) clearTimeout(this.termTimer)
   }
 
   save() {
@@ -483,7 +496,6 @@ export class Agents extends Emitter<Events> {
         { type: 'pane.agent_status_changed' },
         { type: 'pane.closed' },
         { type: 'pane.created' },
-        ...[...this.watchedPanes].map((pane_id) => ({ type: 'pane.output_changed', pane_id })),
       ])
     } catch {
       if (BOX) this.retryAt = Date.now() + this.recovery.fail()
@@ -623,12 +635,6 @@ export class Agents extends Emitter<Events> {
   }
 
   private onEvent(e: HerdrEvent) {
-    const type = String(e.data?.type ?? e.event)
-    if (type.includes('output_changed')) {
-      const pane = String(e.data.pane_id ?? '')
-      for (const [name, key] of this.byName) if (this.live.get(name)?.pane_id === pane) this.emit('output', key)
-      return
-    }
     // status and pane changes: read the authoritative list again
     this.refresh()
   }
@@ -1164,11 +1170,20 @@ export class Agents extends Emitter<Events> {
   async keys(key: string, keys: string[]) {
     const a = this.info(key)
     if (a) await herdr.paneKeys(a.pane_id, keys)
+    this.echo(key)
   }
 
   async text(key: string, text: string) {
     const a = this.info(key)
     if (a) await herdr.paneText(a.pane_id, text)
+    this.echo(key)
+  }
+
+  /** a key went in by a screen: its terminal is read at once, and often for a while, so what it typed shows */
+  private echo(key: string) {
+    if (!this.watchedTerms.includes(key)) return
+    this.typedAt = Date.now()
+    this.readTerms(0)
   }
 
   /** its terminal's recent lines and the pane's size, so a screen draws them at its real width; the size is read again
@@ -1191,10 +1206,40 @@ export class Agents extends Emitter<Events> {
 
   watchTerminals(keys: string[]) {
     const panes = new Set(keys.map((k) => this.info(k)?.pane_id).filter(Boolean) as string[])
-    const changed = panes.size !== this.watchedPanes.size || [...panes].some((p) => !this.watchedPanes.has(p))
-    this.watchedPanes = panes
     for (const p of this.sizes.keys()) if (!panes.has(p)) this.sizes.delete(p)
-    if (changed) this.refresh()
+    this.watchedTerms = keys
+    for (const k of this.lastScreens.keys()) if (!keys.includes(k)) this.lastScreens.delete(k)
+    if (!keys.length) this.readTerms(0)
+    else if (!this.termTimer && !this.termReading) this.readTerms(this.termSlow)
+  }
+
+  /** the watched terminals, read again in `ms`: each one whose screen changed is told */
+  private readTerms(ms: number) {
+    if (this.termTimer) clearTimeout(this.termTimer)
+    this.termTimer = null
+    if (this.stopped || !this.watchedTerms.length) return
+    if (this.termReading) {
+      // a read under way: one more right after it, so a key typed meanwhile shows
+      if (ms === 0) this.termAgain = true
+      return
+    }
+    this.termTimer = setTimeout(() => void this.readTermsNow(), ms)
+  }
+
+  private async readTermsNow() {
+    this.termTimer = null
+    this.termReading = true
+    this.termAgain = false
+    await Promise.all(this.watchedTerms.map(async (key) => {
+      const s = await this.screen(key).catch(() => null)
+      if (!s || !this.watchedTerms.includes(key)) return
+      const was = this.lastScreens.get(key)
+      const now = `${s.cols}x${s.rows}\n${s.ansi}`
+      this.lastScreens.set(key, now)
+      if (was !== now) this.emit('screen', key, s)
+    }))
+    this.termReading = false
+    this.readTerms(this.termAgain ? 0 : Date.now() - this.typedAt < this.termFastFor ? this.termFast : this.termSlow)
   }
 
   /** end a task agent's run: its pane closes; its chat stays and writing to it resumes it */
