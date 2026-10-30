@@ -43,6 +43,8 @@ test("Claude Code's own /model, /effort and /fast change what shows before its n
   expect(said('system', 'Fast mode ON')).toMatchObject({ speed: 'fast' })
   expect(said('system', 'Fast mode OFF')).toMatchObject({ speed: 'normal' })
   expect(said('user', 'Current model: Opus 5.5')).toBeUndefined()
+  expect(said('user', 'Fast mode OFF\nFast mode is unavailable on this model')).toMatchObject({ speed: 'normal' })
+  expect(said('user', 'Set model to `Sonnet 5.5`\nFast mode was turned off')).toMatchObject({ model: 'Sonnet 5.5' })
 })
 
 const codexContext = (effort: string | null) => ({ timestamp: at, type: 'turn_context', payload: { model: 'gpt-6.1-sol', effort, collaboration_mode: { settings: { model: 'gpt-6.1-sol', reasoning_effort: effort } } } })

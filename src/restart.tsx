@@ -218,8 +218,15 @@ export function AgentLine({ chatKey, cli }: { chatKey: string; cli: string }) {
   // Normal is left out: only a speed out of the ordinary earns its place on the line
   const bits = [model, effort && { ...effort, text: effort.text.toLowerCase() }, speed?.text === 'Normal' ? undefined : speed].filter((w): w is Worn => !!w)
   const seen = bits.filter((w) => !w.requested), requested = bits.filter((w) => w.requested)
-  const part = (w: Worn, i: number) => <span key={w.text}>{i ? ' · ' : ''}{w === speed ? <SpeedWords speed={w} /> : w.text}</span>
   const words = [...seen.map((w) => w.text), requested.length ? `Requested: ${requested.map((w) => w.text).join(' · ')}` : ''].filter(Boolean).join(' · ') || `${cli} · Not reported`
+  // a long model id is what gives way: effort and speed stay in view
+  const part = (w: Worn, i: number) => (
+    <span key={w.text} className={clsx(w === model ? 'min-w-0 truncate' : 'shrink-0', w.requested && 'italic')}>
+      {i ? '\u00a0·\u00a0' : ''}
+      {w === requested[0] ? 'Requested: ' : ''}
+      {w === speed ? <SpeedWords speed={w} /> : w.text}
+    </span>
+  )
   return (
     <button
       type="button"
@@ -227,14 +234,9 @@ export function AgentLine({ chatKey, cli }: { chatKey: string; cli: string }) {
       aria-label={`Runs on: ${words}. Open agent settings`}
       title={words}
       onClick={() => setUI({ plus: chatKey })}
-      className="press-dim relative mt-1 block h-4 max-w-full truncate pl-3 text-left text-xs/4 text-fg3 after:absolute after:-inset-y-1.5 after:inset-x-0"
+      className="press-dim relative mt-1 flex h-4 w-full justify-start pl-3 text-left text-xs/4 text-fg3 after:absolute after:-inset-y-1.5 after:inset-x-0"
     >
-      {!agent ? null : bits.length ? (
-        <>
-          {seen.map(part)}
-          {requested.length ? <span key="requested" className="italic">{seen.length ? ' · ' : ''}Requested: {requested.map(part)}</span> : null}
-        </>
-      ) : `${cli} · Not reported`}
+      {bits.length ? [...seen, ...requested].map(part) : `${cli} · Not reported`}
     </button>
   )
 }

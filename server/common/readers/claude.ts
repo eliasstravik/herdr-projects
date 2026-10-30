@@ -87,7 +87,9 @@ function commandOutput(t: string): string | undefined {
 
 /** what Claude Code's own /model, /effort and /fast say they changed: they log no other record until its next reply */
 function commandRuntime(said: string, at: number): AgentRuntime | undefined {
-  const model = /^Set model to `?([^`\n]+?)`?(?= and | for | with | \(|$)/.exec(said)?.[1]
+  // output of more lines than one comes in a code fence (commandOutput)
+  said = said.replace(/^```\n/, '')
+  const model = /^Set model to `?([^`\n]+?)`?(?= and | for | with | \(|$)/m.exec(said)?.[1]
   if (model) return { model, source: 'session', at }
   const effort = /^(?:Set effort level to|Effort level set to) ([a-z]+)\b/.exec(said)?.[1]
   if (effort) return { effort, source: 'session', at }
