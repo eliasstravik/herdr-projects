@@ -87,14 +87,13 @@ function commandOutput(t: string): string | undefined {
 
 /** what Claude Code's own /model, /effort and /fast say they changed: they log no other record until its next reply */
 function commandRuntime(said: string, at: number): AgentRuntime | undefined {
-  // output of more lines than one comes in a code fence (commandOutput)
-  said = said.replace(/^```\n/, '')
-  const model = /^Set model to `?([^`\n]+?)`?(?= and | for | with | \(|$)/m.exec(said)?.[1]
-  if (model) return { model, source: 'session', at }
-  const effort = /^(?:Set effort level to|Effort level set to) ([a-z]+)\b/.exec(said)?.[1]
-  if (effort) return { effort, source: 'session', at }
-  const fast = /^Fast mode (ON|OFF)\b/.exec(said)?.[1]
-  return fast ? { speed: fast === 'ON' ? 'fast' : 'normal', source: 'session', at } : undefined
+  // output of more lines than one comes in a code fence (commandOutput); one command can say two things
+  const line = (re: RegExp) => re.exec(said.replace(/^```\n/, ''))?.[1]
+  const model = line(/^Set model to `?([^`\n]+?)`?(?= and | for | with | \(|$)/m)
+  const effort = line(/^(?:Set effort level to|Effort level set to) ([a-z]+)\b/m)
+  const fast = line(/^Fast mode (ON|OFF)\b/m)
+  if (!model && !effort && !fast) return undefined
+  return { ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(fast ? { speed: fast === 'ON' ? 'fast' : 'normal' } : {}), source: 'session', at }
 }
 
 /** the human's words in one text, or '' when it is something Claude Code wrote */
