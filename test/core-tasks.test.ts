@@ -183,6 +183,12 @@ test('a turn ended for a running recorded review stays Working until the review 
     expect(view().agent?.note).toBe('Waiting for review')
 
     const said = last
+    for (const text of ['Which option should I use? I’ll wait for your answer.', 'Which one?\n\nI’ll wait here.', 'Use **this one?**']) {
+      last = [{ id: 'asks', who: 'agent', text, at: 2 }]
+      expect(view().status).toBe('need')
+    }
+    last = [{ id: 'link', who: 'agent', text: 'See https://example.test/run?id=7 for the run.', at: 2 }]
+    expect(view().status).toBe('work')
     last = [{ id: 'asks', who: 'agent', text: 'Which option should I use?', at: 2 }, { id: 'card', who: 'agent', at: 3 }]
     expect(view()).toMatchObject({ status: 'need', state: 'Needs you' })
     last = [...last, { id: 'answer', who: 'you', text: 'The first', at: 4 }]

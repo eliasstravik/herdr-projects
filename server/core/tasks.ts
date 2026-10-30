@@ -138,7 +138,7 @@ export class CoreTasks {
   /** A question put in plain words still needs the human, whatever else the agent waits for. */
   private lastWordsAsk(task: CoreTask) {
     const last = this.source.logs.messages(task.chat).findLast(message => message.text)
-    return last?.who === 'agent' && /\?[\s*_`"')\]]*$/.test(last.text!)
+    return last?.who === 'agent' && /\?(?=[\s*_`"')\]]|$)/.test(last.text!)
   }
   /** Its recorded reviewer is at work, or its report is on the way. A reviewer that asks, dies, stalls or ends without a report reaching the agent is no wait. */
   private reviewRunning(task: CoreTask, now = Date.now()) {
