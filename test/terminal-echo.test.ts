@@ -25,6 +25,9 @@ const server = createServer((c) => {
     buf = buf.slice(i + 1)
     if (method === 'events.subscribe') {
       subscribed.push(params.subscriptions)
+      // as herdr 0.9 does: an event it doesn't have turns the whole subscription down
+      const unknown = params.subscriptions.find((s: { type: string }) => s.type === 'pane.output_changed')
+      if (unknown) return void c.end(`${JSON.stringify({ id, error: { code: 'invalid_request', message: 'unknown variant `pane.output_changed`' } })}\n`)
       return void c.write(`${JSON.stringify({ id, result: { type: 'subscription_started' } })}\n`)
     }
     if (method === 'pane.send_text') typed += params.text
@@ -73,6 +76,8 @@ describe('a watched terminal', () => {
 
   test('herdr is never asked for an event it does not have: that would turn the whole subscription down', async () => {
     const a = new Agents()
+    // its pane known first, then watched: the next look would have asked for its output's changes
+    await a.refresh()
     a.watchTerminals(['T-1/Agent'])
     await a.refresh()
     await Bun.sleep(50)
