@@ -10,7 +10,7 @@ import { act, agentChat, definePlugin, getState, openItem, placeOf, setUI, shown
 import { CTRL, ic, MenuItem, shortcut, Small, TermIcon } from '@client/ui.tsx'
 import type { Place, TermScreen } from '@shared/types.ts'
 import { connectTerminal, streamInput } from './stream.ts'
-import { colsOf, fitFont, frame, LINE, MAX, MIN, PAD, ZOOM } from './screen.ts'
+import { colsOf, fitFont, foldedRows, frame, LINE, MAX, MIN, PAD, ZOOM } from './screen.ts'
 
 const KEYMAP: Record<string, string> = {
   Enter: 'enter',
@@ -57,9 +57,10 @@ function cellOf(family: string) {
 
 const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 
-/** The CLI's screen drawn by a real terminal (xterm.js), read only, at the pane's own columns: nothing wraps. The font
- *  scales so the width fits; too small for a phone, it stops at MIN and the screen pans sideways. A pinch (or Ctrl and
- *  the wheel) zooms. */
+/** The CLI's screen drawn by a real terminal (xterm.js), read only, at the pane's own columns: nothing wraps. The view
+ *  fits the terminal, never the other way round: the agent draws for its own size whoever watches, so opening or
+ *  resizing a view disturbs nobody. The font scales so the width fits; too small, it stops at MIN and the screen pans
+ *  sideways. A pinch (or Ctrl and the wheel) zooms. */
 function Screen({ screen, stream, className, ...p }: { screen: TermScreen | undefined; stream?: string } & HTMLAttributes<HTMLDivElement>) {
   const box = useRef<HTMLDivElement>(null)
   const host = useRef<HTMLDivElement>(null)
@@ -69,7 +70,9 @@ function Screen({ screen, stream, className, ...p }: { screen: TermScreen | unde
   /** following the newest line: scrolled to the bottom (and kept there as lines come in) */
   const stuck = useRef(true)
   const [streamStatus, setStreamStatus] = useState('Reading the terminal…')
-  const cols = screen ? colsOf(screen) : 80
+  /** the live terminal's own columns, as the server says them */
+  const [streamCols, setStreamCols] = useState<number | null>(null)
+  const cols = stream ? streamCols ?? 80 : screen ? colsOf(screen) : 80
   const family = useMemo(() => css('--font-mono') || 'monospace', [])
   const whole = width ? fitFont(width, cols, cellOf(family)) : MAX
   const font = zoom ?? Math.min(MAX, Math.max(MIN, whole))
@@ -174,11 +177,21 @@ function Screen({ screen, stream, className, ...p }: { screen: TermScreen | unde
   const bottom = () => {
     if (stuck.current && box.current) box.current.scrollTop = box.current.scrollHeight
   }
+  /** a live terminal's blank rows fold away, its rows staying where it drew them, and the view follows its last line */
+  const fit = (t: Terminal) => {
+    const b = t.buffer.active, rows = t.element?.querySelectorAll<HTMLElement>('.xterm-rows > div'), drawn = t.element?.querySelector<HTMLElement>('.xterm-screen')
+    if (host.current && rows?.length && drawn) {
+      const folded = foldedRows(t.rows, b.cursorY, (y) => !!b.getLine(b.viewportY + y)?.translateToString(true))
+      rows.forEach((row, y) => (row.style.display = folded[y] ? 'none' : ''))
+      host.current.style.height = `${(drawn.offsetHeight / t.rows) * folded.filter((f) => !f).length}px`
+    }
+    bottom()
+  }
   useEffect(() => {
     if (!term) return
     term.options.fontSize = font
-    requestAnimationFrame(bottom)
-  }, [term, font])
+    requestAnimationFrame(() => (stream ? fit(term) : bottom()))
+  }, [term, font, stream])
   useEffect(() => {
     if (!term || !screen || stream) return
     const { rows, data } = frame(screen.ansi)
@@ -187,12 +200,12 @@ function Screen({ screen, stream, className, ...p }: { screen: TermScreen | unde
   }, [term, screen, cols, stream])
 
   useEffect(() => {
-    if (!term || !stream || !box.current) return
-    const dimensions = () => ({ cols: 80, rows: Math.max(8, Math.min(200, Math.floor((box.current!.clientHeight - PAD * 2) / (fontRef.current * LINE)))) })
-    const resize = () => { const { cols, rows } = dimensions(); term.resize(cols, rows); connection.resize() }
-    const connection = connectTerminal(stream, (bytes, done) => term.write(bytes, () => { bottom(); done() }), () => term.reset(), dimensions, setStreamStatus)
-    const observer = new ResizeObserver(resize); observer.observe(box.current)
-    return () => { observer.disconnect(); connection.close() }
+    if (!term || !stream) return
+    const connection = connectTerminal(stream, (bytes, done) => term.write(bytes, () => { fit(term); done() }), () => term.reset(), (cols, rows) => {
+      // in turn with what was written before it: a first paint at this size comes next
+      term.write('', () => { term.reset(); term.resize(cols, rows); setStreamCols(cols) })
+    }, setStreamStatus)
+    return () => connection.close()
   }, [term, stream])
 
   return (
@@ -204,7 +217,7 @@ function Screen({ screen, stream, className, ...p }: { screen: TermScreen | unde
       className={clsx('term-screen min-h-0 flex-1 touch-pan-x touch-pan-y overflow-auto bg-term', className)}
       style={{ padding: PAD }}
     >
-      <div ref={host} className="w-max" />
+      <div ref={host} className="w-max overflow-hidden" />
       {stream ? (streamStatus ? <div className="text-[0.75rem] text-(--ansi-0b)">{streamStatus}</div> : null) : screen ? null : <div className="text-[0.75rem] text-(--ansi-0b) phone:text-[0.8125rem]">Reading the terminal…</div>}
     </div>
   )

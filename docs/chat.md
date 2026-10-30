@@ -58,7 +58,9 @@ Every agent, coordinator or task agent, gets the same chat.
   (open or shut, width and tab remembered on the device); on a phone or tablet the same items in the task header's ⋯,
   each a full-screen sheet that Back closes (on a desktop its ⋯ lists them too). Every chat's ⋯, a task's or a
   coordinator's, starts with **Search in this chat**. All of it is read only. Terminal is the agent's live herdr terminal: click
-  it and every key goes in, Esc too; `Ctrl+`` ` opens it and goes back to the chat. Files lists the worktree (tracked
+  it and every key goes in, Esc too; `Ctrl+`` ` opens it and goes back to the chat. It is drawn at the terminal's own
+  size, whoever watches: opening a view never resizes the agent, a phone and a desktop see the same screen, a narrow
+  view pans sideways and a pinch (or `Ctrl` and the wheel) zooms. Files lists the worktree (tracked
   files and new ones git doesn't ignore), finds one by name and shows it highlighted. Diff shows what the task changed
   against where it left main, committed or not: its files as a tree with lines added and taken out, and each file's
   unified diff. Pull request shows the task's PR on GitHub (state, checks, a link), asked of `gh` on the remote's own

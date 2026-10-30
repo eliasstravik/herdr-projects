@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { colsOf, fitFont, frame, MAX, MIN, PAD } from '../plugins/terminal/screen.ts'
+import { colsOf, fitFont, foldedRows, frame, GAP, MAX, MIN, PAD } from '../plugins/terminal/screen.ts'
 
 describe('the screen', () => {
   test("its width is the pane's; from an older machine (no size), the widest line without its colours", () => {
@@ -14,6 +14,25 @@ describe('the screen', () => {
     expect(colsOf({ ansi: 'x'.repeat(140), cols: 138, rows: 43 })).toBe(140)
     expect(colsOf({ ansi: '\x1b[38;2;1;2;3mabcdef\x1b[0m\r\nabc' })).toBe(6)
     expect(colsOf({ ansi: '' })).toBe(80)
+  })
+
+  test("a live screen's blank rows fold: all below its last line, a long run down to two, the cursor's row stays", () => {
+    /** x a line, c the cursor, . a blank row; what shows */
+    const shown = (screen: string) => {
+      const rows = [...screen]
+      const folded = foldedRows(rows.length, rows.indexOf('c'), (y) => rows[y] === 'x')
+      return rows.filter((_, y) => !folded[y]).join('')
+    }
+    expect(GAP).toBe(2)
+    // a CLI's prompt pinned to the last row of a tall terminal comes up under its newest line
+    expect(shown('x' + '.'.repeat(100) + 'c')).toBe('x..c')
+    // a program that has only drawn its first rows
+    expect(shown('xxc' + '.'.repeat(100))).toBe('xxc')
+    expect(shown('c....')).toBe('c')
+    // short gaps are the program's own
+    expect(shown('x..x')).toBe('x..x')
+    expect(shown('.'.repeat(20) + 'x')).toBe('..x')
+    expect(shown('x.....x.....c....')).toBe('x..x..c')
   })
 
   test('one write from a clear screen, no cursor, rows joined as a terminal moves; blank rows at the end go', () => {

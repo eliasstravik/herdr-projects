@@ -138,9 +138,9 @@ export class CoreClient {
     return snapshot
   }
 
-  async attach(terminal: string, receive: Stream, cols = 80, rows = 24) {
+  async attach(terminal: string, receive: Stream, cols = 80, rows = 24, options: { observe?: boolean } = {}) {
     // The server sends the reply before the first paint. Register synchronously while parsing that reply.
-    const result = await this.call<{ channel: number }>('terminal.attach', { terminal, cols, rows }, 15_000, result => {
+    const result = await this.call<{ channel: number }>('terminal.attach', { terminal, cols, rows, ...options }, 15_000, result => {
       this.streams.set(result.channel, receive)
     })
     const channel = result.channel

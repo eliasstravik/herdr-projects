@@ -25,6 +25,25 @@ export function frame(ansi: string) {
   return { rows: lines.length, data: `\x1b[?25l\x1b[0m\x1b[H\x1b[2J${lines.join('\r\n')}` }
 }
 
+/** blank rows a live screen keeps where a longer gap folds */
+export const GAP = 2
+
+/** the rows of a live screen to fold away: every blank row below its last line, and a long blank run within it down to
+ *  GAP rows. A CLI pins its prompt to the last of a tall terminal's rows; folded, it sits under the newest line. `text`
+ *  says whether a row holds any, `cursor` is a row that stays. */
+export function foldedRows(rows: number, cursor: number, text: (row: number) => boolean) {
+  const kept = Array.from({ length: rows }, (_, y) => y === cursor || text(y))
+  const folded = kept.map(() => false)
+  let end = kept.lastIndexOf(true)
+  for (let y = rows - 1; y > end; y--) folded[y] = true
+  for (let y = end - 1, run = 0; y >= -1; y--) {
+    if (y >= 0 && !kept[y]) { run++; continue }
+    for (let i = y + 1 + GAP; i <= y + run; i++) folded[i] = true
+    run = 0
+  }
+  return folded
+}
+
 /** the font size whose cells fill `width` px with `cols` cells, unclamped */
 export function fitFont(width: number, cols: number, cell: number) {
   return Math.floor(((width - 2 * PAD) / (cols * cell)) * 4) / 4

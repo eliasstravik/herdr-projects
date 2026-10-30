@@ -4,7 +4,7 @@ export function streamInput(chat: string, message: { type: 'keys'; keys: string[
   inputs.get(chat)?.(message)
 }
 export function connectTerminal(chat: string, output: (bytes: Uint8Array, done: () => void) => void,
-  reset: () => void, size: () => { cols: number; rows: number }, status: (text: string) => void) {
+  reset: () => void, size: (cols: number, rows: number) => void, status: (text: string) => void) {
   let disposed = false, socket: WebSocket | undefined, retry: ReturnType<typeof setTimeout> | undefined
   let attempt = 0, queued = 0, serial = 0, acknowledged = 0, painting = 0, uncertain = false
   const send = (message: object) => {
@@ -20,11 +20,15 @@ export function connectTerminal(chat: string, output: (bytes: Uint8Array, done: 
     url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'; url.search = ''; url.searchParams.set('chat', chat)
     const ws = socket = new WebSocket(url); ws.binaryType = 'arraybuffer'
     const generation = ++painting
-    ws.onopen = () => { serial = 0; acknowledged = 0; queued = 0; reset(); status(uncertain ? 'Reconnected. Last input may have arrived; check before typing it again.' : ''); send({ type: 'open', ...size() }); attempt = 0 }
+    ws.onopen = () => { serial = 0; acknowledged = 0; queued = 0; reset(); status(uncertain ? 'Reconnected. Last input may have arrived; check before typing it again.' : ''); send({ type: 'open' }); attempt = 0 }
     ws.onmessage = event => {
       if (socket !== ws || disposed) return
       if (typeof event.data === 'string') {
-        try { const ack = JSON.parse(event.data); if (ack.type === 'ack' && Number.isSafeInteger(ack.id)) acknowledged = Math.max(acknowledged, ack.id) } catch { ws.close() }
+        try {
+          const said = JSON.parse(event.data)
+          if (said.type === 'ack' && Number.isSafeInteger(said.id)) acknowledged = Math.max(acknowledged, said.id)
+          else if (said.type === 'size' && Number.isInteger(said.cols) && Number.isInteger(said.rows)) size(said.cols, said.rows)
+        } catch { ws.close() }
       } else {
         const bytes = new Uint8Array(event.data)
         queued += bytes.length
@@ -42,7 +46,6 @@ export function connectTerminal(chat: string, output: (bytes: Uint8Array, done: 
   }
   connect()
   return {
-    resize: () => send({ type: 'resize', ...size() }),
     close() { disposed = true; clearTimeout(retry); if (inputs.get(chat) === input) inputs.delete(chat); socket?.close() },
   }
 }

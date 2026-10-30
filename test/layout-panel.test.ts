@@ -1,6 +1,6 @@
 // A task's side panel: terminal, files, diff, pull request and browser, in a real browser (layout.ts).
 import { describe, expect, test } from 'bun:test'
-import type { Page } from 'playwright-core'
+import type { Page, WebSocketRoute } from 'playwright-core'
 import { Browsers, browserEnv } from '../server/demo/browser.ts'
 import { fakeAgentBrowser } from './fake-agent-browser.ts'
 import { layout, settled, until } from './layout.ts'
@@ -304,6 +304,65 @@ describe.skipIf(!browser)("a task's side panel", () => {
     await page.locator(panel).click()
     await page.keyboard.type('yo')
     await page.locator(panel).getByText('> yo').waitFor()
+    await page.close()
+  }, 30_000)
+
+  test("a live terminal is drawn at the terminal's own size, whatever the view's: told by the server, followed when it moves", async () => {
+    const snapshot = world!.snapshot.bind(world)
+    world!.snapshot = () => ({ ...snapshot(), terminalTransport: 'core' })
+    const page = await browser!.newPage({ viewport: { width: 1600, height: 900 } })
+    const from: { type: string; text?: string; cols?: number }[] = []
+    let core: WebSocketRoute | undefined
+    const paint = (ws: WebSocketRoute, cols: number, rows: number) => {
+      ws.send(JSON.stringify({ type: 'size', cols, rows }))
+      // what Claude Code draws: its text at the top, a whole-width ruler, its prompt pinned to the last row
+      ws.send(Buffer.from(`\x1b[H\x1b[2JHello from the top\r\n${'─'.repeat(cols)}\x1b[${rows};1H> prompt`))
+    }
+    await page.routeWebSocket(/\/api\/terminal/, (ws) => {
+      core = ws
+      ws.onMessage((raw) => {
+        const message = JSON.parse(String(raw))
+        from.push(message)
+        if (message.type === 'open') paint(ws, 200, 120)
+        ws.send(JSON.stringify({ type: 'ack', id: message.id }))
+      })
+    })
+    await page.goto(task('GTM-14'))
+    await page.getByRole('textbox', { name: /Message GTM-14/ }).waitFor()
+    await page.keyboard.press('Control+`')
+    const panel = '#task-panel [role=log][aria-label=Terminal]'
+    await page.locator(panel).getByText('> prompt').waitFor()
+    const shown = async () => {
+      const t = await drawn(page, panel)
+      return { ...t, rows: t.rows.filter(Boolean), lines: await page.$eval(panel, (el) => [...el.querySelectorAll<HTMLElement>('.xterm-rows > div')].filter((r) => r.offsetHeight).length) }
+    }
+    let t = await until(shown, (v) => v.cols === 200)
+    expect(t.cols).toBe(200)
+    // nothing wraps: the ruler fills one row; too wide for the panel, it pans at the smallest font
+    expect(ruled(t.rows).map((r) => r.length)).toEqual([200])
+    expect(t.font).toBe(8)
+    expect(t.wide).toBeGreaterThan(t.width)
+    // the blank rows of a tall terminal fold: the prompt pinned to its row 120 sits under the text, in view
+    expect(t.lines).toBeLessThan(10)
+    const prompt = await page.locator(panel).getByText('> prompt').boundingBox()
+    const box = await page.locator(panel).boundingBox()
+    expect(prompt!.y + prompt!.height).toBeLessThanOrEqual(box!.y + box!.height)
+    // resizing the window says no size to the server
+    await page.setViewportSize({ width: 1300, height: 800 })
+    await page.waitForTimeout(200)
+    expect(from.map((m) => m.type)).toEqual(['open'])
+    expect(from[0].cols).toBeUndefined()
+    // keys still go in
+    await page.locator(panel).click()
+    await page.keyboard.type('y')
+    await until(() => Promise.resolve(from.at(-1)?.type), (v) => v === 'text')
+    expect(from.at(-1)!.text).toBe('y')
+    // something else moved the terminal: the view follows, from a clean paint
+    paint(core!, 90, 30)
+    t = await until(shown, (v) => v.cols === 90)
+    expect(ruled(t.rows).map((r) => r.length)).toEqual([90])
+    expect(t.rows.filter((r) => r.includes('prompt'))).toEqual(['> prompt'])
+    world!.snapshot = snapshot
     await page.close()
   }, 30_000)
 
