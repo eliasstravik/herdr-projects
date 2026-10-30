@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { colsOf, fitFont, foldedRows, frame, GAP, MAX, MIN, PAD } from '../plugins/terminal/screen.ts'
+import { colsOf, fitFont, foldedRows, foldShown, frame, GAP, MAX, MIN, PAD } from '../plugins/terminal/screen.ts'
 
 describe('the screen', () => {
   test("its width is the pane's; from an older machine (no size), the widest line without its colours", () => {
@@ -33,6 +33,17 @@ describe('the screen', () => {
     expect(shown('x..x')).toBe('x..x')
     expect(shown('.'.repeat(20) + 'x')).toBe('..x')
     expect(shown('x.....x.....c....')).toBe('x..x..c')
+  })
+
+  test('scrolled back, the history shows whole: a fold follows the rows on show, not the live screen', () => {
+    const lines = ['old', 'old', 'old', 'old', 'old', 'live', '', '', '', '', '> prompt']
+    const shown = (viewportY: number) => {
+      const rows = Array.from({ length: 6 }, () => ({ style: { display: '' } }))
+      const t = { rows: 6, buffer: { active: { baseY: 5, viewportY, cursorY: 5, getLine: (y: number) => ({ translateToString: () => lines[y] ?? '' }) } } }
+      return [foldShown(t, rows as unknown as HTMLElement[]), rows.map((r) => r.style.display)]
+    }
+    expect(shown(5)).toEqual([4, ['', '', '', 'none', 'none', '']])
+    expect(shown(0)).toEqual([6, ['', '', '', '', '', '']])
   })
 
   test('one write from a clear screen, no cursor, rows joined as a terminal moves; blank rows at the end go', () => {

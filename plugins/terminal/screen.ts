@@ -44,6 +44,17 @@ export function foldedRows(rows: number, cursor: number, text: (row: number) => 
   return folded
 }
 
+/** folds what a terminal shows now, its live screen or the history scrolled back to, in its drawn `rows`; how many stay */
+export function foldShown(
+  t: { rows: number; buffer: { active: { baseY: number; viewportY: number; cursorY: number; getLine(y: number): { translateToString(trim: boolean): string } | undefined } } },
+  rows: ArrayLike<HTMLElement>,
+) {
+  const b = t.buffer.active
+  const folded = foldedRows(t.rows, b.viewportY === b.baseY ? b.cursorY : -1, (y) => !!b.getLine(b.viewportY + y)?.translateToString(true))
+  Array.from(rows).forEach((row, y) => (row.style.display = folded[y] ? 'none' : ''))
+  return folded.filter((f) => !f).length
+}
+
 /** the font size whose cells fill `width` px with `cols` cells, unclamped */
 export function fitFont(width: number, cols: number, cell: number) {
   return Math.floor(((width - 2 * PAD) / (cols * cell)) * 4) / 4

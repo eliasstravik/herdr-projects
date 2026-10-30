@@ -10,7 +10,7 @@ import { act, agentChat, definePlugin, getState, openItem, placeOf, setUI, shown
 import { CTRL, ic, MenuItem, shortcut, Small, TermIcon } from '@client/ui.tsx'
 import type { Place, TermScreen } from '@shared/types.ts'
 import { connectTerminal, streamInput } from './stream.ts'
-import { colsOf, fitFont, foldedRows, frame, LINE, MAX, MIN, PAD, ZOOM } from './screen.ts'
+import { colsOf, fitFont, foldShown, frame, LINE, MAX, MIN, PAD, ZOOM } from './screen.ts'
 
 const KEYMAP: Record<string, string> = {
   Enter: 'enter',
@@ -179,12 +179,8 @@ function Screen({ screen, stream, className, ...p }: { screen: TermScreen | unde
   }
   /** a live terminal's blank rows fold away, its rows staying where it drew them, and the view follows its last line */
   const fit = (t: Terminal) => {
-    const b = t.buffer.active, rows = t.element?.querySelectorAll<HTMLElement>('.xterm-rows > div'), drawn = t.element?.querySelector<HTMLElement>('.xterm-screen')
-    if (host.current && rows?.length && drawn) {
-      const folded = foldedRows(t.rows, b.cursorY, (y) => !!b.getLine(b.viewportY + y)?.translateToString(true))
-      rows.forEach((row, y) => (row.style.display = folded[y] ? 'none' : ''))
-      host.current.style.height = `${(drawn.offsetHeight / t.rows) * folded.filter((f) => !f).length}px`
-    }
+    const rows = t.element?.querySelectorAll<HTMLElement>('.xterm-rows > div'), drawn = t.element?.querySelector<HTMLElement>('.xterm-screen')
+    if (host.current && rows?.length && drawn) host.current.style.height = `${(drawn.offsetHeight / t.rows) * foldShown(t, rows)}px`
     bottom()
   }
   useEffect(() => {
@@ -201,11 +197,13 @@ function Screen({ screen, stream, className, ...p }: { screen: TermScreen | unde
 
   useEffect(() => {
     if (!term || !stream) return
-    const connection = connectTerminal(stream, (bytes, done) => term.write(bytes, () => { fit(term); done() }), () => term.reset(), (cols, rows) => {
+    // every draw: new output, or the history scrolled to
+    const drawn = term.onRender(() => fit(term))
+    const connection = connectTerminal(stream, (bytes, done) => term.write(bytes, done), () => term.reset(), (cols, rows) => {
       // in turn with what was written before it: a first paint at this size comes next
       term.write('', () => { term.reset(); term.resize(cols, rows); setStreamCols(cols) })
     }, setStreamStatus)
-    return () => connection.close()
+    return () => { drawn.dispose(); connection.close() }
   }, [term, stream])
 
   return (
