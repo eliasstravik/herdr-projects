@@ -172,7 +172,8 @@ test('a turn ended for a running recorded review stays Working until the review 
     source.agents.get = key => key === chat ? reviewer as ReturnType<typeof original> : key === task.chat ? parent : undefined
     source.agents.terminal = (agent => agent?.chat === chat ? reviewerTerminal : parentTerminal) as typeof source.agents.terminal
     source.status = (agent => agent?.chat === chat ? reviewerStatus : 'idle') as typeof source.status
-    Object.defineProperty(source, 'logs', { value: { waiting: () => true } })
+    let last: Message[] = [{ id: 'said', who: 'agent', text: 'The reviewer is running. Its report comes next.', at: 1 }]
+    Object.defineProperty(source, 'logs', { value: { waiting: () => true, messages: () => last } })
     const saved = { ...task, report: { msg: 'Fixing the bug', progress: 80 } } as CoreTask
     const view = (patch: Partial<CoreTask> = {}) => tasks.view({ ...saved, ...patch })
 
@@ -180,6 +181,13 @@ test('a turn ended for a running recorded review stays Working until the review 
     saved.reviewChat = chat
     expect(view()).toMatchObject({ status: 'work', state: 'Working', sub: 'Waiting for review', waitsFor: 'review', report: { msg: 'Waiting for review', progress: 80 } })
     expect(view().agent?.note).toBe('Waiting for review')
+
+    const said = last
+    last = [{ id: 'asks', who: 'agent', text: 'Which option should I use?', at: 2 }, { id: 'card', who: 'agent', at: 3 }]
+    expect(view()).toMatchObject({ status: 'need', state: 'Needs you' })
+    last = [...last, { id: 'answer', who: 'you', text: 'The first', at: 4 }]
+    expect(view().status).toBe('work')
+    last = said
 
     reviewerStatus = 'need'
     expect(view()).toMatchObject({ status: 'need', state: 'Needs you' })
