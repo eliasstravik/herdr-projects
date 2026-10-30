@@ -514,7 +514,7 @@ function TaskFilter({ listKey, order }: { listKey: string; order: Task[] }) {
       onKey={(e) => {
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault()
-          keysMoved()
+          keysMoved('cursor')
           setUI({ kb: true, cur: Math.max(0, Math.min(order.length - 1, cur + (e.key === 'ArrowDown' ? 1 : -1))) })
         } else if (e.key === 'Enter' && order[Math.max(0, cur)]) {
           e.preventDefault()

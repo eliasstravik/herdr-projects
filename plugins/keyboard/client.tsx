@@ -143,7 +143,7 @@ export default definePlugin({
         }
         // an artifact full screen keeps the keys: the chat behind it is out of reach
         if (ui.viewer) return false
-        const move = (cur: number) => (keysMoved(), go({ cur }))
+        const move = (cur: number) => (keysMoved('cursor'), go({ cur }))
         if ((k === 'ArrowDown' || k === 'j') && list) return move(Math.min(list.length - 1, ui.cur + 1))
         if ((k === 'ArrowUp' || k === 'k') && list) return move(Math.max(0, ui.cur - 1))
         if (k === 'Enter' && list && list[ui.cur] && !(e.target as HTMLElement)?.closest?.('button, a, [role=button]')) return go({ task: list[ui.cur].id, cur: 0 })

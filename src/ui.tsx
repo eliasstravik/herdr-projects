@@ -859,7 +859,7 @@ export function rowClass(sel?: boolean, kb?: boolean, dense?: boolean) {
     dense ? 'min-h-7 text-[0.9375rem]/5 phone:text-base/6' : 'min-h-8',
     'press relative flex cursor-pointer items-center gap-2 rounded-row px-2 text-fg hover:bg-hover keys:focus-visible:shadow-[inset_0_0_0_1.5px_var(--color-focus)] focus-visible:outline-none coarse:min-h-11 phone:min-h-12 phone:px-3',
     sel && 'bg-sel hover:bg-sel',
-    kb && 'keys:shadow-[inset_0_0_0_1.5px_var(--focus)]',
+    kb && 'cursor:shadow-[inset_0_0_0_1.5px_var(--focus)]',
   )
 }
 

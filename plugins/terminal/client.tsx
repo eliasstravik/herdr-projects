@@ -231,7 +231,7 @@ function TerminalView({ chatKey, panel }: { chatKey: string; panel?: boolean }) 
         tabIndex={typed ? 0 : undefined}
         data-term-screen={typed ? chatKey : undefined}
         onClick={(e) => (touch ? input.current?.focus() : typed && (e.currentTarget as HTMLElement).focus())}
-        className={clsx(typed && 'cursor-text focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-focus')}
+        className={clsx(typed && 'cursor-text focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-line2')}
       />
       {touch ? (
         <>

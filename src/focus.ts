@@ -42,9 +42,9 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, { focus = tru
 // what takes typing: an arrow moves its caret and a key is a letter, not a checkbox's or a radio's
 const TYPED = 'input:not([type=checkbox], [type=radio]), textarea, [contenteditable=true]'
 
-/** The keyboard moved something (the focus, the tasks' cursor): its rings show */
-export const keysMoved = () => {
-  document.documentElement.dataset.keys = ''
+/** The keyboard moved the focus, or the tasks' cursor (a place of its own, not the focus): that one's ring shows */
+export const keysMoved = (what: 'focus' | 'cursor' = 'focus') => {
+  document.documentElement.dataset.keys = what
 }
 
 /** Mark <html data-keys> while the keyboard moves the focus, for rings that keys should see and a mouse or finger

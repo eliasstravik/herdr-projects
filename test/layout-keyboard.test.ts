@@ -5,8 +5,9 @@ import { layout, still } from './layout.ts'
 
 const { browser, url } = await layout()
 
-/** what wears the blue of a focus ring now, by what is drawn on the screen, not by its classes. A text box keeps its
- *  own edge while it is typed in (it, and what holds it, don't count) */
+/** what wears a focus ring now, by what is drawn on the screen, not by its classes: our blue, or any outline at all
+ *  (the browser's own ring is another blue). A text box keeps its own edge while it is typed in (it, and what holds
+ *  it, don't count) */
 const rings = (page: Page) =>
   page.evaluate(() => {
     const swatch = document.body.appendChild(document.createElement('i'))
@@ -18,7 +19,7 @@ const rings = (page: Page) =>
       .filter((el) => !typing || !el.contains(typing))
       .filter((el) => {
         const [c, after] = [getComputedStyle(el), getComputedStyle(el, '::after')]
-        return (c.outlineStyle !== 'none' && c.outlineColor === blue) || c.boxShadow.includes(blue) || after.boxShadow.includes(blue)
+        return (c.outlineStyle !== 'none' && parseFloat(c.outlineWidth) > 0) || c.boxShadow.includes(blue) || after.boxShadow.includes(blue)
       })
       .map((el) => el.getAttribute('aria-label') ?? el.dataset.flip ?? el.textContent?.slice(0, 30) ?? el.tagName)
   })
@@ -98,13 +99,23 @@ describe.skipIf(!browser)('a focus ring is for the keyboard moving the focus', (
     try {
       await page.goto(url())
       await row(page, 'GTM-15').waitFor()
-      const press = () => page.mouse.click(900, 200)
+      // the chat's header, where a click opens nothing
+      const press = () => page.mouse.click(560, 18)
       await page.keyboard.press('Tab')
       expect(await rings(page)).toHaveLength(1)
       await page.keyboard.press('Tab')
       expect(await rings(page)).toHaveLength(1)
       await press()
       expect(await rings(page)).toEqual([])
+      // a row Esc came back to keeps the cursor's place: a Tab elsewhere doesn't light it again
+      await openAndShut(page, () => row(page, 'GTM-15').getByRole('button').first().click())
+      await page.keyboard.press('Tab')
+      expect(await rings(page)).toHaveLength(1)
+      expect(await rings(page)).not.toContain('GTM-15')
+      await press()
+      expect(await rings(page)).toEqual([])
+      await page.reload()
+      await row(page, 'GTM-15').waitFor()
       // the tasks' own cursor: not the focus, the same ring
       const cursor = await page.$$eval('section[aria-label="Tasks"] li[data-flip]', (li) => li.slice(0, 2).map((l) => (l as HTMLElement).dataset.flip!))
       await page.keyboard.press('ArrowDown')
@@ -131,14 +142,15 @@ describe.skipIf(!browser)('a focus ring is for the keyboard moving the focus', (
     try {
       await page.goto(url())
       const menu = page.getByRole('button', { name: 'Menu', exact: true })
+      // focus put on it by code on a new page: the browser would show it
+      await menu.evaluate((b: HTMLElement) => b.focus())
+      expect(await menu.evaluate((b) => b.matches(':focus-visible'))).toBe(true)
+      expect(await rings(page)).toEqual([])
       await menu.tap()
       await page.getByRole('menu').waitFor()
       expect(await rings(page)).toEqual([])
       await page.touchscreen.tap(195, 600)
       await page.getByRole('menu').waitFor({ state: 'detached' })
-      expect(await rings(page)).toEqual([])
-      // focus put on it by code, as a sheet gives it back on closing
-      await menu.evaluate((b: HTMLElement) => b.focus())
       expect(await rings(page)).toEqual([])
     } finally { await page.close() }
   }, 30_000)
