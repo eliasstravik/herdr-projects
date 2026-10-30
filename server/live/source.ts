@@ -89,7 +89,7 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
   /** opens an artifact at phone width before anyone sees it (a test puts its own here) */
   checker: Checker = browserChecker(
     // on this machine, whichever machine the artifact came from
-    (args) => sh(['agent-browser', ...args], HOME, { timeoutMs: 45_000, here: true }),
+    (args) => sh([process.env.SHEPHERDR_AGENT_BROWSER ?? join(ROOT, 'bin', 'agent-browser'), ...args], HOME, { timeoutMs: 45_000, here: true }),
     (html, data) => wrapPage(html, { check: true, phone: true, data }),
   )
   /** turns the model's provider cut off: waited out and tried again, then a task's backup agent or the human (retry.ts) */
