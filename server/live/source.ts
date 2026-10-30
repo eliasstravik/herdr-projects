@@ -215,8 +215,8 @@ export class LiveSource extends Emitter<SourceEvents> implements Source {
       this.emit('chat', item.key)
     })
     this.agents.on('failed', (key) => this.emit('chat', key))
-    this.agents.on('output', (key) => {
-      if (this.terms.includes(key)) this.agents.screen(key).then((s) => this.emit('terminal', key, s))
+    this.agents.on('screen', (key, s) => {
+      if (this.terms.includes(key)) this.emit('terminal', key, s)
     })
     this.engine.on('changed', () => this.emit('snapshot'))
     this.engine.retry = (key) => this.retries.get(key)
