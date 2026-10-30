@@ -372,10 +372,11 @@ export interface Message {
   artifact?: ArtifactPost
   question?: Question
   reactions?: Reaction[]
-  /** waits to go in: the agent shows a menu or permission prompt, or is still starting (a busy one takes it at once) */
+  /** really held: the agent shows a menu or permission prompt, is still starting, or is out of reach (a busy one takes
+   *  it at once, so an ordinary message never has this) */
   waiting?: boolean
-  /** why it waits: a menu is up (typed text could pick an option), the agent is starting, or a CLI command waits for the
-   *  turn to end */
+  /** why it waits: a menu is up (typed text could pick an option), the agent is starting, a CLI command waits for the
+   *  turn to end, or nothing here: its machine is out of reach */
   waitsFor?: 'menu' | 'start' | 'turn'
   /** an attached file: each one is a message of its own, right after the text it came with */
   file?: { name: string; path: string }

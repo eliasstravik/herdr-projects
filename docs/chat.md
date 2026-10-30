@@ -7,8 +7,9 @@ Every agent, coordinator or task agent, gets the same chat.
   under the message, with Retry and Remove; it is still there after a reload.
 - Write to a busy agent any time: it goes in at once and steers the agent mid-turn (Claude Code, Codex and pi take it
   at their next step). It waits only while the agent shows a menu or permission prompt, where typed text could pick an
-  option (the bubble says so, and it goes in once the prompt is answered), or while the agent is still starting.
-  Commands like /compact or a model change wait for the turn to end.
+  option (the bubble says so, and it goes in once the prompt is answered), or while the agent is still starting or
+  its machine is out of reach; only then does the bubble carry a note. Commands like /compact or a model change wait
+  for the turn to end.
 - Startup trust and MCP approval prompts appear as choice cards, even before the first message. The card keeps the
   CLI's screen text and offers Open terminal if it cannot read the choices. Answers are checked before messages go
   in. Only task worktrees Shepherdr creates are pre-trusted in Claude Code and Codex; a space you picked still asks.

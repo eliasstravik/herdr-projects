@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { CoreError } from '../server/core/client.ts'
 import { CoreSource } from '../server/core/source.ts'
 
 test('a dropping remote cannot block local startup snapshot or refresh', async () => {
@@ -98,6 +99,92 @@ test('a send to an idle reviewer leaves the preparation gate and reaches that re
     await Bun.sleep(0)
     expect(f.sent).toEqual([{ chat: 'DEMO-1/Reviewer-1', text: 'Check again' }])
     expect(f.source.store.all('pending-send')).toHaveLength(0)
+  } finally { await f.close() }
+})
+
+test('an ordinary message never reads as held, idle or mid-turn, while it goes in', async () => {
+  const f = deliveryFixture()
+  f.source.machineConnected = () => true
+  const views: (boolean | undefined)[] = []
+  f.source.on('chat', (chat: string) => views.push(...f.source.chat(chat)!.messages.map(message => message.waiting)))
+  const deliver = f.source.agents.send
+  try {
+    for (const state of ['idle', 'working'] as const) {
+      const agent = f.source.agents.get(f.task.chat)!
+      f.source.store.set('agent', f.task.chat, { ...agent, state })
+      let release!: () => void
+      const landing = new Promise<void>(resolve => { release = resolve })
+      f.source.agents.send = async (chat, text) => { await landing; await deliver(chat, text) }
+      const answer = await f.source.act({ type: 'send', chat: f.task.chat, text: `While ${state}`, cid: `ordinary-${state}` })
+      expect(answer).toEqual({ ok: true, waiting: false, waitsFor: undefined })
+      await Bun.sleep(0) // on its way, not in yet: the terminal hasn't taken it
+      expect(f.source.store.get('pending-send', `ordinary-${state}`)).toMatchObject({ state: 'sending' })
+      expect(f.source.chat(f.task.chat)!.messages.at(-1)).toMatchObject({ text: `While ${state}`, cid: `ordinary-${state}`, waiting: false })
+      release(); await Bun.sleep(0)
+    }
+    expect(f.sent.map(item => item.text)).toEqual(['While idle', 'While working'])
+    expect(views.length).toBeGreaterThan(0)
+    expect(views.some(Boolean)).toBe(false)
+  } finally { await f.close() }
+})
+
+test('a truly held message says why, and its note goes when it goes in', async () => {
+  const f = deliveryFixture()
+  f.source.machineConnected = () => true
+  const view = () => f.source.chat(f.task.chat)!.messages.at(-1)
+  const agent = f.source.agents.get(f.task.chat)!
+  const live = f.source.agents.terminal
+  try {
+    // still starting
+    f.source.store.set('agent', f.task.chat, { ...agent, state: 'starting' })
+    expect(await f.source.act({ type: 'send', chat: f.task.chat, text: 'Starting', cid: 'held-start' })).toEqual({ ok: true, waiting: true, waitsFor: 'start' })
+    await Bun.sleep(0)
+    expect(f.sent).toEqual([])
+    expect(view()).toMatchObject({ waiting: true, waitsFor: 'start' })
+    // a menu: an open permission, and the CLI's own that core refuses text on
+    f.source.store.set('agent', f.task.chat, { ...agent, state: 'blocked' })
+    f.source.store.set('permission', 'open', { id: 'open', chat: f.task.chat, grant: 'grant', expires: Date.now() + 60_000, settled: false, question: { id: 'open', title: 'Allow?', choices: [] } })
+    expect(view()).toMatchObject({ waiting: true, waitsFor: 'menu' })
+    f.source.store.delete('permission', 'open')
+    f.source.agents.terminal = (() => ({ state: 'live', status: { state: 'blocked' } })) as unknown as typeof f.source.agents.terminal
+    expect(view()).toMatchObject({ waiting: true, waitsFor: 'menu' })
+    f.source.agents.terminal = live
+    // no room on its machine yet
+    f.source.store.set('agent', f.task.chat, { ...agent, state: 'idle' })
+    f.source.store.set('task', f.task.id, { ...f.task, capacity: 'its machine is full' })
+    expect(view()).toMatchObject({ waiting: true, waitsFor: 'start' })
+    f.source.store.set('task', f.task.id, f.task)
+    // its machine out of reach: no reason to name but that
+    f.source.machineConnected = () => false
+    expect(view()).toMatchObject({ waiting: true })
+    expect(view()!.waitsFor).toBeUndefined()
+    f.source.machineConnected = () => true
+    // nothing holds it now: it goes in, and the chat hears
+    let pushed: unknown
+    f.source.on('chat', (chat: string) => { pushed = f.source.chat(chat)!.messages.at(-1) })
+    f.source.retry(f.task.chat); await Bun.sleep(0)
+    expect(f.sent).toEqual([{ chat: f.task.chat, text: 'Starting' }])
+    expect(pushed).toMatchObject({ text: 'Starting', waiting: false })
+  } finally { await f.close() }
+})
+
+test('core refusing a message for a menu leaves it held, and the chat hears', async () => {
+  const f = deliveryFixture()
+  f.source.machineConnected = () => true
+  let blocked = true
+  f.source.agents.terminal = (() => ({ state: 'live', status: { state: blocked ? 'blocked' : 'idle' } })) as unknown as typeof f.source.agents.terminal
+  const deliver = f.source.agents.send
+  f.source.agents.send = async (chat, text) => { if (blocked) throw new CoreError('blocked', 'A menu is open'); await deliver(chat, text) }
+  let pushed: unknown
+  f.source.on('chat', (chat: string) => { pushed = f.source.chat(chat)!.messages.at(-1) })
+  try {
+    await f.source.act({ type: 'send', chat: f.task.chat, text: 'Menu up', cid: 'held-menu' }); await Bun.sleep(0)
+    expect(f.source.store.get('pending-send', 'held-menu')).toMatchObject({ state: 'queued' })
+    expect(pushed).toMatchObject({ text: 'Menu up', waiting: true, waitsFor: 'menu' })
+    blocked = false
+    f.source.retry(f.task.chat); await Bun.sleep(0)
+    expect(f.sent).toEqual([{ chat: f.task.chat, text: 'Menu up' }])
+    expect(pushed).toMatchObject({ text: 'Menu up', waiting: false })
   } finally { await f.close() }
 })
 
