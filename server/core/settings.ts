@@ -99,7 +99,8 @@ export class CoreSettings {
   private usableDefault(key: string, level: string) {
     const own = kindOf(this.get('task.agent', level)) ?? 'claude', other: AgentKind = own === 'claude' ? 'codex' : 'claude', machines = this.machinesAt(level)
     const order = key === 'task.fallback' ? [other] : [other, own]
-    const pick = order.find(kind => this.cliAt(kind, machines) === 'ready') ?? (machines.some(machine => !this.store.get('machine-check', machine)) ? other : undefined)
+    // Everywhere only shows it: each space follows its own machine
+    const pick = order.find(kind => machines.some(machine => this.cliAt(kind, [machine]) === 'ready')) ?? (machines.some(machine => !this.store.get('machine-check', machine)) ? other : undefined)
     return pick ? names[pick] : key === 'task.fallback' ? 'off' : names[own]
   }
   get(key: string, level = 'all') { return this.pick(key, level).value }
@@ -208,8 +209,12 @@ export class CoreSettings {
   /** Why a chosen reviewer or backup can't work: which CLI, and where. */
   private cliWarning(key: string, level: string) {
     const value = this.get(key, level), kind = kindOf(value), machines = this.machinesAt(level), what = key === 'reviewer.agent' ? 'Reviews' : 'A backup'
-    if (key === 'task.fallback' && value === 'off') return this.pick(key, level).level === 'default' ? 'No other signed-in CLI, so tasks have no backup.' : undefined
-    if (!kind) return undefined
+    const chosen = this.pick(key, level).level !== 'default'
+    if (key === 'task.fallback' && !chosen) {
+      const off = machines.filter(machine => this.usableDefault(key, `m:${machine}`) === 'off').map(machine => this.machineName(machine) || 'this machine')
+      return off.length ? `No other signed-in CLI on ${off.join(', ')}, so tasks there have no backup.` : undefined
+    }
+    if (!kind || !chosen && level === 'all') return undefined
     const bad = machines.flatMap(machine => { const state = this.cliAt(kind, [machine]); return state && state !== 'ready' ? [{ machine, state }] : [] })
     if (!bad.length) return undefined
     const lines = bad.map(({ machine, state }) => `${names[kind]} is ${state === 'missing' ? 'not installed' : 'not signed in'} on ${this.machineName(machine) || 'this machine'}.`)

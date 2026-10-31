@@ -212,7 +212,7 @@ describe.skipIf(!browser)('sidebars', () => {
 })
 
 describe.skipIf(!browser)("a place's Autopilot", () => {
-  test('where it cannot run, the switch is greyed with the reason and asks nothing; on Autopilot it can always go off', async () => {
+  test('where it cannot run, the switch is greyed with the reason and asks nothing', async () => {
     const was = world.sections
     const reason = 'Autopilot needs Linux. mac runs macOS.'
     world.sections = was.map((s) => (s.name === 'Autopilot' && s.level === 'p:vm-str:~' ? { ...s, rows: [{ label: PILOT_BLOCKED, key: '', value: reason, fixed: true }, ...s.rows] } : s))

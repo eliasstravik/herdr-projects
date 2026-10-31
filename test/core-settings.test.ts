@@ -179,6 +179,17 @@ test('reviewer and backup default to a CLI that is installed and signed in, not 
   expect(settings.get('task.fallback', 'p:other:one')).toBe('Claude Code')
 }))
 
+test('Everywhere warns only of the machines without a backup: each space follows its own', () => fixture(settings => {
+  check(settings, 'box', { claude: 'ready', codex: 'signed-out' })
+  check(settings, 'other', { claude: 'ready', codex: 'ready' })
+  expect(settings.get('task.fallback')).toBe('Codex')
+  expect(settings.get('task.fallback', 'p:box:one')).toBe('off')
+  expect(settings.get('task.fallback', 'p:other:one')).toBe('Codex')
+  expect(warning(settings, 'all', 'task.fallback')).toBe('No other signed-in CLI on box, so tasks there have no backup.')
+  expect(warning(settings, 'all', 'reviewer.agent')).toBeUndefined()
+  expect(warning(settings, 'p:other:one', 'task.fallback')).toBeUndefined()
+}))
+
 test('a saved reviewer or backup stays, and its row says where that CLI is unusable', () => fixture(settings => {
   check(settings, 'box', { claude: 'ready', codex: 'signed-out' })
   check(settings, 'other', { claude: 'ready', codex: 'missing' })
