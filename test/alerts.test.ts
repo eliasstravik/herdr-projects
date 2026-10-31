@@ -133,9 +133,8 @@ describe('what goes to the device', () => {
 describe("the app icon's count", () => {
   test('what waits on you: tasks that need you or are ready (not archived ones), and open coordinator questions', () => {
     const wt = waiting(snap)
-    const asked = new Set(snap.needs.map((n) => n.task))
-    expect(wt.count).toBe(snap.needs.length + snap.tasks.filter((t) => !t.archived && t.status === 'ready' && !asked.has(t.id)).length)
-    expect(wt.count).toBe(7)
+    expect(wt.count).toBe(snap.needs.length + snap.tasks.filter((t) => !t.archived && t.status === 'ready').length)
+    expect(wt.count).toBe(8)
     expect(wt.tags).not.toContain('GTM-11')
     expect(wt.tags).toContain('GTM-15')
     expect(wt.tags).toContain('ask:p:vm-str:gtm')
@@ -155,6 +154,7 @@ describe("the app icon's count", () => {
     const before = waiting(world.snapshot()).count
     const card = world.chat('GTM-15/Agent').messages.find((m) => m.question?.title === 'Merge GTM-15?')!.question!
     await world.act({ type: 'answer', chat: 'GTM-15/Agent', question: card.id, choice: 0 })
-    expect(waiting(world.snapshot()).count).toBe(before - 1)
+    // its card and its Ready row both go
+    expect(waiting(world.snapshot()).count).toBe(before - 2)
   })
 })

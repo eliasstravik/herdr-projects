@@ -43,7 +43,7 @@ test('asks at once on two machines: both listed oldest first, each once, whateve
   } finally { f.close() }
 })
 
-test('a plan and a merge keep their Send; a merge is a need, not also Ready', () => {
+test('a plan and a merge keep their Send; a merge shows in Needs you as its task stays Ready', () => {
   const f = fixture()
   try {
     f.ask('A-1/Agent', 'A-1', 'plan', 100, { kind: 'Plan', steps: ['one'] })
@@ -54,7 +54,7 @@ test('a plan and a merge keep their Send; a merge is a need, not also Ready', ()
     f.source.post(task.chat, { id: 'merge', who: 'agent', question: card('merge'), at: 200 })
     const snap = f.source.snapshot()
     expect(snap.needs.map(n => [n.id, !!n.tap])).toEqual([['plan', false], ['merge', false]])
-    expect(attentionCounts(snap, ['two'])).toEqual({ need: 1, ready: 0 })
+    expect(attentionCounts(snap, ['two'])).toEqual({ need: 1, ready: 1 })
     task.workflow = 'merged'; f.source.store.set('task', task.id, task)
     expect(f.source.snapshot().needs.map(n => n.id)).toEqual(['plan'])
   } finally { f.close() }
@@ -76,7 +76,8 @@ test('an ordinary card sends on a tap; an archived task and a removed space wait
 test('an agent that waits with no card shows what it last said, and the reply quotes that', () => {
   const f = fixture()
   try {
-    f.source.tasks.view = (task => ({ ...task, status: 'need', sub: 'Waits for your reply' })) as unknown as typeof f.source.tasks.view
+    const view = f.source.tasks.view.bind(f.source.tasks)
+    f.source.tasks.view = (task: Parameters<typeof view>[0]) => ({ ...view(task), status: 'need' as const, sub: 'Waits for your reply' })
     f.source.post('A-1/Agent', { id: 'said', who: 'agent', text: 'Keep the old API around?', at: 100 })
     expect(f.source.snapshot().needs.find(n => n.task === 'A-1')).toMatchObject({ id: 'attention', text: 'Keep the old API around?', reply: 'said' })
     // nothing said yet: why it waits

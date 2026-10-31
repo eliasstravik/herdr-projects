@@ -100,7 +100,7 @@ permissions, plans, merges, secrets, CLI screens, and agents that just wait for 
   keeps its place and its height while any card stays open; opening Needs you again, or answering the last, clears them.
 - Every red count comes from this one list, so they can't differ: a space's count in the sidebar is its cards here,
   those counts add up to the number on Needs you, and the app icon adds the Ready tasks. Tasks shows only Ready in its
-  tab, and a task with two cards counts as two in its Needs you group. A task whose merge waits on you counts as
-  needing you, not also as Ready.
+  tab, and a task with two cards counts as two in its Needs you group. A task whose merge waits on you is on both
+  lists: its card here, and its row under Ready in Tasks.
 - A card still lives in its agent's chat, and can be answered there too. A task's card in the coordinator's chat is
   only a row saying what happened: while it waits, a tap on it opens Needs you.

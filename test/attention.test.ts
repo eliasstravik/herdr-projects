@@ -6,11 +6,10 @@ import { DemoWorld } from '../server/demo/world.ts'
 
 const need = (id: string, chat: string, place: string, task?: string): Need => ({ id, chat, place, task, at: 1 })
 
-test('every count is the needs list: one per card, within its scope; Ready apart, and no task in both', () => {
+test('every count is its own list: needs one per card, within its scope; Ready the Ready tasks', () => {
   const snap = new DemoWorld().snapshot()
   const all = snap.places.map((p) => p.id)
-  const asked = new Set(snap.needs.map((n) => n.task))
-  const ready = snap.tasks.filter((t) => t.status === 'ready' && !t.archived && !asked.has(t.id))
+  const ready = snap.tasks.filter((t) => t.status === 'ready' && !t.archived)
   expect(attentionCounts(snap, all)).toEqual({ need: snap.needs.length, ready: ready.length })
   // the same scope named twice counts once
   expect(attentionCounts(snap, [...all, ...all]).need).toBe(snap.needs.length)
@@ -19,15 +18,15 @@ test('every count is the needs list: one per card, within its scope; Ready apart
   expect(attentionCounts(snap, [])).toEqual({ need: 0, ready: 0 })
 })
 
-test('two cards of one task count as two, a Ready task with a merge to answer as one need, and answered cards go', () => {
+test('two cards of one task count as two, a Ready task with a merge to answer is on both lists, and answered cards go', () => {
   const snap = new DemoWorld().snapshot()
   const task = snap.tasks.find((t) => t.status === 'need')!
   const p = task.place
   snap.tasks = [task, { ...task, id: 'READY', status: 'ready' }, { ...task, id: 'ASKED', status: 'ready' }]
   snap.needs = [need('q1', 'T/Agent', p, task.id), need('q2', 'T/Agent', p, task.id), need('merge', 'ASKED/Agent', p, 'ASKED'), need('c1', p, p)]
-  expect(attentionCounts(snap, [p])).toEqual({ need: 4, ready: 1 })
+  expect(attentionCounts(snap, [p])).toEqual({ need: 4, ready: 2 })
   snap.needs = snap.needs.slice(1)
-  expect(attentionCounts(snap, [p])).toEqual({ need: 3, ready: 1 })
+  expect(attentionCounts(snap, [p])).toEqual({ need: 3, ready: 2 })
 })
 
 test('coordinator questions survive later news, count separately and stop counting when answered', () => {

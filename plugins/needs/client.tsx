@@ -25,8 +25,14 @@ function Slot({ held, snap }: { held: HeldNeed; snap: Snapshot }) {
   const box = useRef<HTMLDivElement>(null)
   const height = useRef(0)
   useLayoutEffect(() => {
-    if (!gone && box.current) height.current = box.current.offsetHeight
-  })
+    const el = box.current
+    if (gone || !el) return
+    // it grows with a note typed in its card, right up to the moment it goes
+    height.current = el.offsetHeight
+    const sized = new ResizeObserver(() => { height.current = el.offsetHeight })
+    sized.observe(el)
+    return () => sized.disconnect()
+  }, [gone])
   const place = snap.places.find((p) => p.id === need.place)
   const machine = place ? machineName(snap.machines, place.machine) : ''
   const off = place?.status === 'off'

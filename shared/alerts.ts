@@ -20,13 +20,13 @@ export const clip = (text: string, n: number) => excerpt(text, n)
 export const askTag = (place: string) => `ask:${place}`
 
 /** what waits on you everywhere: the count the app icon shows (the sidebar's own counts added up: every need, and each
- *  Ready task with none) and the tag of each thing, so alerts about what no longer waits can go */
+ *  Ready task) and the tag of each thing, so alerts about what no longer waits can go */
 export function waiting(snap: Pick<Snapshot, 'places' | 'tasks' | 'asks' | 'needs'>): { count: number; tags: string[] } {
   const places = new Set(snap.places.map((p) => p.id))
   const tasks = snap.tasks.filter((t) => places.has(t.place) && !t.archived && (t.status === 'need' || t.status === 'ready')).map((t) => t.id)
   const asks = Object.keys(snap.asks).filter((p) => places.has(p) && snap.asks[p]).map(askTag)
-  const needs = snap.needs.filter((n) => places.has(n.place)), asked = new Set(needs.map((n) => n.task))
-  const ready = snap.tasks.filter((t) => places.has(t.place) && !t.archived && t.status === 'ready' && !asked.has(t.id))
+  const needs = snap.needs.filter((n) => places.has(n.place))
+  const ready = snap.tasks.filter((t) => places.has(t.place) && !t.archived && t.status === 'ready')
   return { count: needs.length + ready.length, tags: [...tasks, ...asks] }
 }
 
