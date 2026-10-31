@@ -160,6 +160,26 @@ test('words changed for good make a new card: a late tap on the old one presses 
   expect(keys).toEqual([['enter']])
 })
 
+test('nothing is pressed once a mark that is no letter or number has changed under the card', async () => {
+  screen = 'Trust /repo/🔒?\n\n ❯ Yes\n   No\n'
+  await settle()
+  const card = open()
+  screen = 'Trust /repo/🚀?\n\n ❯ Yes\n   No\n'
+  await expect(source.act({ type: 'answer', chat: 'space', question: card.id, choice: 0 })).rejects.toThrow('changed')
+  expect(keys).toEqual([])
+})
+
+test('a spinner above the menu and a moved cursor keep the card, and the tap still lands', async () => {
+  screen = '⠋ Loading the project\n\n ❯ Yes\n   No\n'
+  await settle()
+  const card = open()
+  screen = '⠙ Loading the project\n\n   Yes\n ❯ No\n'
+  await settle(started + 20_000)
+  expect(open().id).toBe(card.id)
+  await source.act({ type: 'answer', chat: 'space', question: card.id, choice: 0 })
+  expect(keys).toEqual([['up', 'enter']])
+})
+
 test('the next screen is the next card, and the one before it says it went in the terminal', async () => {
   await settle()
   const first = open().id

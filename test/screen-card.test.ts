@@ -1,6 +1,6 @@
 // Screens as Claude Code 2.1 and Codex 0.163 draw them, whatever a later version adds: the reader knows no prompt by name.
 import { expect, test } from 'bun:test'
-import { allWords, pressKeys, readScreen, sameScreen } from '../server/common/screen-card.ts'
+import { pressKeys, readScreen, sameScreen, screenText } from '../server/common/screen-card.ts'
 
 const LOGO = `Welcome to Claude Code v2.1.308
 ..........................................................
@@ -125,10 +125,16 @@ test('a blank screen says nothing', () => {
 test('a spinner, a timer or the cursor leave a screen the same; other words do not', () => {
   expect(sameScreen('⠋ Starting (3s)\n› 1. Yes\n  2. No')).toBe(sameScreen('⠙ Starting (5s)\n  1. Yes\n› 2. No'))
   expect(sameScreen('Trust this folder?')).not.toBe(sameScreen('Hooks need review'))
-  expect(allWords('⠋ Plan 1\n› 1. Yes\n  2. No')).toBe(allWords('⠙ Plan 1\n  1. Yes\n› 2. No'))
-  expect(allWords('Plan 1')).not.toBe(allWords('Plan 2'))
-  expect(allWords('/repo/a-b')).not.toBe(allWords('/repo/a/b'))
-  expect(allWords('/repo/🔒')).not.toBe(allWords('/repo/🚀'))
+})
+
+test('what a tap checks: a spinner or the menu cursor may move, every other mark on the screen counts', () => {
+  expect(screenText('⠋ Plan 1\n› 1. Yes\n  2. No')).toBe(screenText('⠙ Plan 1\n  1. Yes\n› 2. No'))
+  expect(screenText('│ ✳ Plan 1\n ❯ ✔ Yes\n     No')).toBe(screenText('│ ✶ Plan 1\n   ✔ Yes\n ❯   No'))
+  for (const [one, other] of [
+    ['Plan 1', 'Plan 2'], ['/repo/a-b', '/repo/a/b'], ['/repo/🔒', '/repo/🚀'], ['/repo/a─b', '/repo/a━b'], ['/repo/a✔', '/repo/a✓'],
+    ['/repo/✳a', '/repo/✶a'], ['✳a', '✶a'], ['a  b', 'a b'], ['one\ntwo', 'one two'], ['✔ Dark mode', '✓ Dark mode'], ['Use port 80 ❯ 81', 'Use port 80 › 81'],
+    ['> quoted', '→ quoted'], ['> /repo/a\n> /repo/b', '  /repo/a\n  /repo/b'], ['> /repo/a\n\n ❯ Yes\n   No', '  /repo/a\n\n ❯ Yes\n   No'],
+  ]) expect(screenText(one)).not.toBe(screenText(other))
 })
 
 test('a choice is reached with arrows from where the cursor is, then taken', () => {
