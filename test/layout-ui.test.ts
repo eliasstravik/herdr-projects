@@ -146,7 +146,8 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
       const [allX, machineX, projectX] = [await textX('Everywhere'), await textX('vm-str'), await textX('gtm · vm-str')]
       expect(machineX).toBeGreaterThan(allX)
       expect(projectX).toBeGreaterThan(machineX)
-      expect(await menu.getByRole('menuitemradio', { name: 'gtm · vm-str' }).getAttribute('aria-checked')).toBe('true')
+      // Settings opens on Everywhere, wherever it was opened from
+      expect(await menu.getByRole('menuitemradio', { name: 'Everywhere', exact: true }).getAttribute('aria-checked')).toBe('true')
       // too many to show whole: it scrolls, the menu stays on the screen
       const box = (await menu.boundingBox())!
       expect(box.y + box.height).toBeLessThanOrEqual(800)

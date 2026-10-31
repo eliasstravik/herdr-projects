@@ -332,7 +332,9 @@ test('a restart closes open cards and says in the chat and to the agent what was
 test('a restart names a tool call once, even with its first question answered already', async () => {
   const f = fixture()
   try {
+    const sent: string[] = []
     f.source.agents.terminal = (() => ({ state: 'live' })) as unknown as typeof f.source.agents.terminal
+    f.source.tasks.deliver = (async (_id: string, _chat: string, text: string) => { sent.push(text) }) as unknown as typeof f.source.tasks.deliver
     const options = [{ label: 'One' }, { label: 'Two' }]
     const { id, reply } = f.ask({ tool: 'AskUserQuestion', input: { questions: [{ question: 'First?', options }, { question: 'Second?', options }, { question: 'Third?', options }] } })
     await f.source.act({ type: 'answer', chat, question: id, choice: 0 })
@@ -342,6 +344,8 @@ test('a restart names a tool call once, even with its first question answered al
     expect(lines).toHaveLength(1)
     expect(lines[0].text).toContain('Second?')
     expect(lines[0].text).not.toContain('Third?')
+    await Bun.sleep(0)
+    expect(sent).toEqual([`<restart>${lines[0].text}</restart>`])
   } finally { f.close() }
 })
 
