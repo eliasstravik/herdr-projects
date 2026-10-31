@@ -260,6 +260,25 @@ test('what ended a card before it arrived still closes it, after a reconnect', a
   } finally { f.close() }
 })
 
+test('a card of several questions whose end came first closes whole, and nothing says it waits', async () => {
+  const f = fixture()
+  try {
+    const alerts: Alert[] = [], at = Date.now(), asked = { questions: [{ question: 'One?', options: [{ label: 'A' }] }, { question: 'Two?', options: [{ label: 'B' }] }] }
+    f.source.on('alert', alert => alerts.push(alert))
+    f.called('call', asked, 'AskUserQuestion', at - 2)
+    f.hook({ event: 'PostToolUse', tool: 'AskUserQuestion', use: 'call', at: at + 1 })
+    const { id, reply } = f.ask({ at, tool: 'AskUserQuestion', input: asked })
+    await reply
+    for (const card of [id, `${id}-1`]) {
+      expect(f.card(card).closed).toBe('Answered in the terminal')
+      expect(f.forwarded(card)?.ask?.open).toBe(false)
+    }
+    expect(f.open()).toHaveLength(0)
+    expect(f.agent().state).toBe('working')
+    expect(alerts.filter(alert => !alert.clear)).toHaveLength(0)
+  } finally { f.close() }
+})
+
 test('reading the hook line after its card closed leaves no wait behind, and a stopped turn stays stopped', async () => {
   const f = fixture()
   try {
