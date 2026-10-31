@@ -57,6 +57,7 @@ test('the card goes with its own tool call, whichever record says so first, and 
     f.hook({ event: 'PostToolUse', tool: 'Bash', use: 'call' })
     await closed(f, id, reply, 'Answered in the terminal')
     expect(f.source.status(f.agent())).toBe('work')
+    expect(f.agent()).toMatchObject({ state: 'working', activityAt: expect.any(Number) })
     expect(f.agent().permission).toBeUndefined()
   } finally { f.close() }
 })
