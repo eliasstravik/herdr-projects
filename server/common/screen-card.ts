@@ -8,8 +8,8 @@ const TICK = /^[✔✓]\s+/u
 const NUMBER = /^\d{1,2}[.)]\s+/
 const ENTER = /press enter|enter to continue/i
 const MOST_WORDS = 8
-/** one frame of a spinner starting a line, in a box or not */
-const SPINNER = /^([\s│┃]*)[⠀-⣿✢✳✶✻✽](?=\s|$)/u
+/** a frame of the usual Braille spinner or Claude Code's, starting a line, in a box or not: any other symbol there may mean something */
+const SPINNER = /^([\s│┃]*)[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏✢✳✶✻✽](?=\s|$)/u
 
 /** box sides turn to spaces, so columns stay where the CLI drew them */
 const cleaned = (text: string) => text.split('\n').map(line => line.replace(/[│┃]/g, ' ').trimEnd())

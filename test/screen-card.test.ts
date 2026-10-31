@@ -132,7 +132,7 @@ test('what a tap checks: a spinner or the menu cursor may move, every other mark
   expect(screenText('│ ✳ Plan 1\n ❯ ✔ Yes\n     No')).toBe(screenText('│ ✶ Plan 1\n   ✔ Yes\n ❯   No'))
   for (const [one, other] of [
     ['Plan 1', 'Plan 2'], ['/repo/a-b', '/repo/a/b'], ['/repo/🔒', '/repo/🚀'], ['/repo/a─b', '/repo/a━b'], ['/repo/a✔', '/repo/a✓'],
-    ['/repo/✳a', '/repo/✶a'], ['✳a', '✶a'], ['a  b', 'a b'], ['one\ntwo', 'one two'], ['✔ Dark mode', '✓ Dark mode'], ['Use port 80 ❯ 81', 'Use port 80 › 81'],
+    ['/repo/✳a', '/repo/✶a'], ['✳a', '✶a'], ['⠁ means allow access', '⠃ means allow access'], ['a  b', 'a b'], ['one\ntwo', 'one two'], ['✔ Dark mode', '✓ Dark mode'], ['Use port 80 ❯ 81', 'Use port 80 › 81'],
     ['> quoted', '→ quoted'], ['> /repo/a\n> /repo/b', '  /repo/a\n  /repo/b'], ['> /repo/a\n\n ❯ Yes\n   No', '  /repo/a\n\n ❯ Yes\n   No'],
   ]) expect(screenText(one)).not.toBe(screenText(other))
 })
