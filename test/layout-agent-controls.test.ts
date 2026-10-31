@@ -68,7 +68,7 @@ describe.skipIf(!browser)('composer + agent controls', () => {
     await page.close()
   }, 30_000)
 
-  test('before an agent starts, the line and the menu say what Settings will use, and the sheet starts from it', async () => {
+  test('before an agent starts, the line and the menu say what Settings will use, and the sheet still opens', async () => {
     const key = 'GTM-17/Agent', chat = world.chats[key]
     const saved = chat.agent
     chat.agent = { kind: 'claude', planned: { model: 'claude-haiku-5-5', modelLabel: 'Haiku 5.5' } }
@@ -87,6 +87,9 @@ describe.skipIf(!browser)('composer + agent controls', () => {
       chat.agent = { kind: 'claude', planned: { model: 'claude-haiku-5-5', modelLabel: 'Haiku 5.5', effort: 'high' } }
       world.emit('chat', key)
       await page.locator('[data-agent-line]:visible', { hasText: /^Haiku 5\.5 · high, from Settings$/ }).last().waitFor({ state: 'attached' })
+      // nothing runs yet, so the sheet starts from Settings, here what the demo gives as its want
+      await controls.getByRole('menuitem', { name: /^Model: / }).click()
+      await page.locator('[data-restart]').waitFor()
     } finally { chat.agent = saved; await page.close() }
   }, 30_000)
 

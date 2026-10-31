@@ -308,7 +308,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
   private plannedWords(key: string): NonNullable<Chat['agent']> {
     const task = this.tasks.forChat(key), level = task?.place ?? key, own = task?.chat === key ? task : undefined
     const want = this.settings.agent(own ? 'task' : task ? 'reviewer' : this.space(key)?.mode === 'autopilot' ? 'autopilot' : 'coordinator', level)
-    const { kind, model, effort } = own ?? want
+    const { kind, model, effort } = own ?? (task ? { kind: task.review.kind, model: task.reviewerModel, effort: task.reviewerEffort } : want)
     const modelLabel = model ? this.settings.findModel(kind, model, level)?.label : undefined
     const words = { model, ...(modelLabel ? { modelLabel } : {}), effort }
     return kind === want.kind && model === want.model && effort === want.effort ? { kind, planned: words } : { kind, ...words }

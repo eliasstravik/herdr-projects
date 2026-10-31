@@ -380,5 +380,9 @@ test('before an agent starts its chat says what Settings will use, and a task\'s
     const own = source.chat(task.chat)?.agent
     expect(own?.planned).toBeUndefined()
     expect(own).toMatchObject({ kind: 'codex', model: 'small', modelLabel: 'Small 1', effort: 'high' })
+    // a reviewer starts on what its task saved, not on today's Settings
+    const reviewer = { ...task, review: { kind: 'claude' }, reviewerModel: 'small', reviewerEffort: 'low' }
+    source.tasks.forChat = (() => reviewer) as unknown as typeof source.tasks.forChat
+    expect(source.chat('DEMO-1/Reviewer')?.agent).toMatchObject({ kind: 'claude', model: 'small', effort: 'low' })
   } finally { source.stop(); source.mailbox.close(); source.store.close(); rmSync(home, { recursive: true, force: true }) }
 })

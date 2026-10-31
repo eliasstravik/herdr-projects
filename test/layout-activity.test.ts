@@ -13,7 +13,7 @@ describe.skipIf(!browser)('activity', () => {
     const chat = world.chats['GTM-15/Agent'], old = chat.messages
     const row = { kind: 'search' as const, steps: [] }
     chat.messages = [...old, { id: 'quiet-step', who: 'agent', at: Date.now(), text: 'Nothing to change.', activity: { id: 'quiet', at: Date.now(), steps: 2, failed: 2, rows: [
-      { ...row, key: 'a', text: 'Searched for a word', failed: 1 },
+      { ...row, key: 'a', text: 'Searched for failed', failed: 1 },
       { ...row, key: 'b', text: 'Ran the tests: 1 failed', failed: 1 },
     ] } }]
     const page = await browser!.newPage({ viewport: { width: 390, height: 844 } })
@@ -21,7 +21,7 @@ describe.skipIf(!browser)('activity', () => {
       await page.goto(GTM15)
       const rows = page.locator('[data-row="a"] > button, [data-row="b"] > button')
       await rows.first().waitFor()
-      expect((await rows.nth(0).innerText()).replace(/\s+/g, ' ')).toBe('Searched for a word had an error')
+      expect((await rows.nth(0).innerText()).replace(/\s+/g, ' ')).toBe('Searched for failed had an error')
       const fill = (i: number) => rows.nth(i).locator('svg').evaluate((s) => getComputedStyle(s).fill)
       expect(await fill(0)).not.toBe(await fill(1))
     } finally { chat.messages = old; await page.close() }
