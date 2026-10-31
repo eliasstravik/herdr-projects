@@ -25,7 +25,8 @@ beforeEach(() => {
   source.store.set('agent', 'space', agent)
   screen = CLAUDE; launches = []
   terminal = { address: 'box/t7', labels: {}, argv: [], cwd: '/', state: 'finished', reason: 'exited', exit_code: 1, created_ms: 1, cols: 120, rows: 40 }
-  source.agents.terminal = () => terminal
+  // Terminals go by launch: the start that failed stays finished, a new one runs.
+  source.agents.terminal = record => record.launch === 'one' ? terminal : { ...terminal, state: 'live' }
   source.connected = () => true
   source.machineConnected = () => true
   source.core.call = (async (method: string) => method === 'terminal.read' ? { text: screen } : {}) as typeof source.core.call
@@ -36,7 +37,7 @@ beforeEach(() => {
     return record
   }) as typeof source.agents.launch
 })
-afterEach(async () => { source.stop(); await Promise.resolve(); source.mailbox.close(); source.store.close(); rmSync(home, { recursive: true, force: true }) })
+afterEach(async () => { source.quiescing = true; source.stop(); await Promise.resolve(); source.mailbox.close(); source.store.close(); rmSync(home, { recursive: true, force: true }) })
 
 for (const [name, words, kind] of [['Claude Code', CLAUDE, 'claude'], ['Codex', CODEX, 'codex']] as const) {
   test(`${name}: a resume with no session starts anew, keeps what it had to say and says so once`, async () => {
@@ -58,12 +59,14 @@ for (const [name, words, kind] of [['Claude Code', CLAUDE, 'claude'], ['Codex', 
 }
 
 test('with no room to start anew, what it had to say waits for that start', async () => {
-  Object.assign(source.tasks, { launchNow: async () => {} })
+  source.health.room = () => 'No room yet'
   source.store.set('agent', 'EX-1/Agent', { ...agent, chat: 'EX-1/Agent', role: 'task' })
   source.store.delete('agent', 'space')
   source.store.set('task', 'EX-1', { id: 'EX-1', chat: 'EX-1/Agent', place: 'space', machine: 'machine', workflow: 'working', review: {} })
   source.store.set('resume-start', 'one', { chat: 'EX-1/Agent', launch: 'one', message: 'Are you done?' } satisfies ResumeStart)
   await settle()
+  await Bun.sleep(0) // the idle agent tries the saved message at once, and the machine refuses it
+  expect(source.tasks.get('EX-1')).toMatchObject({ workflow: 'queued', capacity: 'No room yet' })
   expect(source.store.get('pending-send', 'session-gone-one')).toMatchObject({ chat: 'EX-1/Agent', text: 'Are you done?', state: 'queued' })
   expect(source.store.get<CoreAgent>('agent', 'EX-1/Agent')).toMatchObject({ state: 'idle' })
   expect(source.store.get<CoreAgent>('agent', 'EX-1/Agent')?.session).toBeUndefined()
