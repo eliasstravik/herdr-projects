@@ -290,7 +290,7 @@ describe.skipIf(!browser)('artifacts', () => {
     await dialog.getByText('v1 · LV-3 agent').waitFor()
     await dialog.getByRole('textbox').fill('Make the button bigger')
     await dialog.getByRole('button', { name: 'Send', exact: true }).click()
-    await dialog.getByText('Sent to LV-3 agent.').waitFor()
+    await dialog.getByText("Sent. A new version shows here when it's in.").waitFor()
     expect(world.chat('LV-3/Agent').messages.find((m) => m.text === 'Make the button bigger')).toMatchObject({ who: 'you', answered: 'About "Upload page draft"' })
     await dialog.getByText('Updated to v2').waitFor({ timeout: 8000 })
     await dialog.getByText('v2 · LV-3 agent').waitFor()

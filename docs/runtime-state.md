@@ -5,9 +5,13 @@ A quiet line under every chat's message box says what its agent runs on, for exa
 the same Model, Effort and Speed. Normal speed is left out of the line. Native CLI
 observations stay separate from selected launch settings: a configured model or catalog
 default is not evidence of what a turn actually used. What was asked for at launch shows
-only until a record says otherwise, marked as such (`Requested: Opus 5.5 · high`, per
-field: `Opus 5.5 · Requested: high`). Not reported means nothing either way. Restart
-keeps the recorded running agent and requested replacement distinct.
+only until a record says otherwise, marked as such (`Asked for: Opus 5.5 · high`, per
+field: `Opus 5.5 · Asked for: high`). Not known yet means nothing either way. Before any
+agent has started, the line says what Settings will use, marked as that too
+(`Haiku 5.5, from Settings`): nothing runs yet, so it is never shown as observed. Restart
+keeps the recorded running agent and requested replacement distinct, and starts from
+Settings while nothing has run. Its Default names no level, so where a record says what
+that came to, the sheet says so beside it.
 
 | | Model | Effort | Speed |
 |---|---|---|---|

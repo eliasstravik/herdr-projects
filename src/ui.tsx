@@ -56,7 +56,7 @@ export {
   FolderOpenIcon,
   GlobeAltIcon as GlobeIcon,
   ListBulletIcon as TasksIcon,
-  LockClosedIcon as LockIcon,
+  FunnelIcon as KeepFiltersIcon,
   MagnifyingGlassIcon as SearchIcon,
   MicrophoneIcon as MicIcon,
   MinusCircleIcon,
@@ -527,6 +527,9 @@ export function Count({ n, className, label }: { n: number; className?: string; 
     </span>
   )
 }
+
+/** what the badge's two colours count, in words: a space's menu says it, as a finger gets no hover */
+export const attentionWords = (need: number, ready: number) => [need ? `${need} need${need === 1 ? 's' : ''} you` : '', ready ? `${ready} ready` : ''].filter(Boolean).join(' · ')
 
 /** One notification, with separate counts: needs you on the left, ready on the right.
  * Cap each printed count independently; the accessible name always keeps the exact numbers. */

@@ -100,7 +100,7 @@ describe.skipIf(!browser)('Home attention defaults', () => {
     await search.fill('')
     await panel.getByRole('button', { name: 'Show all tasks', exact: true }).click()
     await panel.getByText('HP-202', { exact: true }).waitFor()
-    await page.getByRole('button', { name: 'Lock filters: keep them when switching spaces', exact: true }).click()
+    await page.getByRole('button', { name: 'Keep filters: hold them when switching space', exact: true }).click()
     await page.getByRole('button', { name: /^lilla-varlden,/ }).click()
     await panel.getByText('HP-202', { exact: true }).waitFor()
     expect(await panel.getByText('Everything', { exact: true }).count()).toBe(1)

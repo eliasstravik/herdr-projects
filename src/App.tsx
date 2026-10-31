@@ -58,7 +58,7 @@ import {
   MoreIcon,
   PageIcon,
   PhoneTop,
-  LockIcon,
+  KeepFiltersIcon,
   PlaceIcon,
   RoundButton,
   SearchIcon,
@@ -218,7 +218,7 @@ function Drawer() {
       open={open}
       onOpen={(drawer) => setUI({ drawer })}
       can={can}
-      label="Places"
+      label="Spaces"
       panel={phone ? 'w-[84%] pt-[env(safe-area-inset-top)]' : 'w-[320px]'}
     >
       <Brand />
@@ -234,11 +234,11 @@ function MenuButton() {
   const docked = useStore((s) => placesDocked(s.ui, s.snap))
   if (docked) return null
   return device === 'phone' ? (
-    <RoundButton label="Places" onClick={() => setUI({ drawer: true })}>
+    <RoundButton label="Spaces" onClick={() => setUI({ drawer: true })}>
       <MenuIcon className={ic} />
     </RoundButton>
   ) : (
-    <IconButton label="Places" onClick={() => setUI({ drawer: true })}>
+    <IconButton label="Spaces" onClick={() => setUI({ drawer: true })}>
       <MenuIcon className={ic} />
     </IconButton>
   )
@@ -342,16 +342,16 @@ function TaskColumn({ snap }: { snap: Snapshot }) {
   )
 }
 
-/** Locks the lists' filters while switching spaces; the stored pin behaviour stays compatible. */
+/** Keeps the lists' filters while switching spaces; the stored pin behaviour stays compatible. */
 function PinButton() {
   const pinned = useStore((s) => listsPinned(s.ui, s.snap!))
   const phone = useUI((u) => u.device === 'phone')
-  const name = pinned ? 'Locked' : 'Lock'
-  const label = pinned ? 'Locked: unlock filters to follow the space picked' : 'Lock filters: keep them when switching spaces'
+  const name = pinned ? 'Filters kept' : 'Keep filters'
+  const label = pinned ? 'Filters kept: tap to follow the space picked' : 'Keep filters: hold them when switching space'
   if (phone)
     return (
       <RoundButton label={label} pressed={pinned} onClick={togglePin}>
-        <LockIcon className={ic} />
+        <KeepFiltersIcon className={ic} />
       </RoundButton>
     )
   return (
@@ -363,7 +363,7 @@ function PinButton() {
       onClick={togglePin}
       className={clsx('press-dim inline-flex h-7 max-w-40 min-w-7 shrink items-center justify-center gap-1.5 rounded-full px-2 text-[0.8125rem] text-fg coarse:h-9 @sm/side:pr-2.5', pinned && 'bg-sel')}
     >
-      <LockIcon className={ic} />
+      <KeepFiltersIcon className={ic} />
       {/* a narrow column has room for the lock alone */}
       <span className="truncate @max-sm/side:hidden">{name}</span>
     </button>
@@ -809,7 +809,7 @@ function PhoneHome({ snap }: { snap: Snapshot }) {
         left={<MenuButton />}
         name={lists ? (view.chips.length ? chipName(snap, view.chips[0]) + (view.chips.length > 1 ? ` +${view.chips.length - 1}` : '') : 'Everything') : place.name}
         icon={<PlaceIcon level={2} className="text-fg2" />}
-        kind={lists ? 'Locked' : placeKind(snap, place)}
+        kind={lists ? 'Filters kept' : placeKind(snap, place)}
         mark={tab === 'chat' ? <PlaceMarks place={place} /> : undefined}
         right={
           tab === 'chat' ? (

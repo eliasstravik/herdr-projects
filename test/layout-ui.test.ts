@@ -15,7 +15,7 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
     test(`hover titles stay limited to the verified legacy attention, target and filter hints (${name})`, async () => {
       const page = await browser!.newPage({ viewport, hasTouch: name === 'tablet' })
       // an artifact frame's title only names it to screen readers
-      const titled = () => page.evaluate(() => [...document.querySelectorAll('[title]:not(iframe):not([data-attention-badge]):not([title^="Merges into "]):not([aria-label^="Lock filters:"]):not([aria-label^="Locked:"]), svg title')].map((e) => e.outerHTML.slice(0, 120)))
+      const titled = () => page.evaluate(() => [...document.querySelectorAll('[title]:not(iframe):not([data-attention-badge]):not([title^="Merges into "]):not([aria-label^="Keep filters:"]):not([aria-label^="Filters kept:"]), svg title')].map((e) => e.outerHTML.slice(0, 120)))
       await page.goto(at('place=p:mac:lilla-varlden&task=LV-3'))
       await page.locator('[data-card]').first().waitFor()
       expect(await titled()).toEqual([])
@@ -49,7 +49,7 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
   test("a tablet's first key adds Keyboard shortcuts to Settings, and the page shown stays in view", async () => {
     const page = await browser!.newPage({ viewport: { width: 834, height: 1112 }, hasTouch: true })
     await page.goto(at('place=vm-str/home'))
-    await page.getByRole('button', { name: 'Places' }).click()
+    await page.getByRole('button', { name: /^(Show |Hide )?Spaces$/ }).click()
     await page.getByRole('button', { name: 'Settings', exact: true }).click()
     const nav = page.getByRole('navigation', { name: 'Sections' })
     expect(await nav.getByRole('button', { name: 'Keyboard shortcuts' }).count()).toBe(0)
@@ -66,7 +66,7 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
   test("a phone's Settings lists its sections in groups, as iOS's does; one opens over the list and Back goes back to it", async () => {
     const page = await browser!.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
     await page.goto(at('place=vm-str/home'))
-    await page.getByRole('button', { name: 'Places' }).click()
+    await page.getByRole('button', { name: /^(Show |Hide )?Spaces$/ }).click()
     await page.getByRole('button', { name: 'Settings', exact: true }).click()
     const settings = page.getByRole('region', { name: 'Settings' })
     const list = settings.getByRole('navigation', { name: 'Sections' })
@@ -180,7 +180,7 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
       // a phone on its side: the menu fits the room it has, and scrolls
       const phone = await browser!.newPage({ viewport: { width: 600, height: 360 }, hasTouch: true, isMobile: true })
       await phone.goto(at(`place=${encodeURIComponent(gtm.id)}`))
-      await phone.getByRole('button', { name: 'Places' }).click()
+      await phone.getByRole('button', { name: /^(Show |Hide )?Spaces$/ }).click()
       await phone.getByRole('button', { name: 'Settings', exact: true }).click()
       await phone.getByRole('button', { name: 'Editing: Everywhere' }).click()
       const small = phone.getByRole('menu', { name: 'Choices' })
@@ -201,7 +201,7 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
   test("Settings → Autopilot: one Heartbeat, schedule/events, agent and collapsed access (phone)", async () => {
     const page = await browser!.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
     await page.goto(at(`place=${encodeURIComponent('p:vm-str:gtm')}`))
-    await page.getByRole('button', { name: 'Places' }).click()
+    await page.getByRole('button', { name: /^(Show |Hide )?Spaces$/ }).click()
     await page.getByRole('button', { name: 'Settings', exact: true }).click()
     const settings = page.getByRole('region', { name: 'Settings' })
     const list = settings.getByRole('navigation', { name: 'Sections' })
@@ -262,7 +262,7 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
       const ctx = await browser!.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, colorScheme })
       const page = await ctx.newPage()
       await page.goto(at(`place=${encodeURIComponent('p:vm-str:~')}`))
-      await page.getByRole('button', { name: 'Places' }).click()
+      await page.getByRole('button', { name: /^(Show |Hide )?Spaces$/ }).click()
       await page.getByRole('button', { name: 'Settings', exact: true }).click()
       const settings = page.getByRole('region', { name: 'Settings' })
       const list = settings.getByRole('navigation', { name: 'Sections' })
@@ -324,7 +324,7 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
         bg: getComputedStyle(document.body).backgroundColor,
       }))
     expect((await look()).theme).toBe('light')
-    await page.getByRole('button', { name: 'Places' }).click()
+    await page.getByRole('button', { name: /^(Show |Hide )?Spaces$/ }).click()
     await page.getByRole('button', { name: 'Settings', exact: true }).click()
     await page.getByRole('button', { name: 'Appearance System' }).click()
     await page.getByRole('radiogroup', { name: 'Appearance' }).getByText('Dark', { exact: true }).click()
@@ -341,7 +341,7 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
     await page.exposeFunction('seenTheme', (t: string) => seen.push(t))
     await page.addInitScript(() => document.addEventListener('readystatechange', () => document.readyState === 'interactive' && (window as unknown as { seenTheme: (t: string) => void }).seenTheme(document.documentElement.dataset.theme ?? '')))
     await page.reload()
-    await page.getByRole('button', { name: 'Places' }).waitFor()
+    await page.getByRole('button', { name: /^(Show |Hide )?Spaces$/ }).waitFor()
     expect(seen[0]).toBe('dark')
     expect((await look()).bar).toBe('#0b0b0d')
     // an artifact opens in the app's dark, and is told when it changes

@@ -120,7 +120,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     const changed = (chat: string) => { this.reconcilePermissions(chat); this.questions?.reconcile(chat); this.screens?.reconcile(chat); this.secrets?.reconcile(chat); this.emit('chat', chat); this.emit('snapshot'); void this.flush(chat); void this.tasks?.tick().catch(error => this.faults.set('queue', error.message)) }
     this.agents = new CoreAgents(config, installation, this.core, this.store, this.mailbox, machine => this.route(machine), changed, machine => this.machines.find(item => item.id === machine) ?? {})
     this.logs = new CoreLogs(this.agents, this.files, this.store, changed, (chat, message) => { this.faults.set(chat, message) }, (chat, message) => this.fresh(chat, message), agent => this.pilots.usage.observe(agent), (agent, event) => this.nativeEnded(agent, logEnd(event)))
-    this.settings = new CoreSettings(this.store, this.files, () => this.spaces(), id => this.store.get<string>('name', `m:${id}`) || (id === this.local.id ? this.local.name : this.machineName(id) || id), () => this.emit('snapshot'))
+    this.settings = new CoreSettings(this.store, this.files, () => this.spaces(), id => this.store.get<string>('name', `m:${id}`) || (id === this.local.id ? this.local.name : this.machineName(id) || id), () => { this.emit('snapshot'); this.plannedChanged() })
     this.agents.settings = this.settings
     this.agents.observed = (agent, event) => {
       if (event.event === 'PreToolUse' && event.use) this.ends.called(agent.launch, event.use, { tool: event.tool, hash: event.input, sub: event.agent })
@@ -284,21 +284,34 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     if (!agent && !this.space(key) && !this.tasks.forChat(key)) return undefined
     const terminal = agent && this.agents.terminal(agent)
     const status = this.status(agent)
-    const saved = this.cards.messages(key, this.logs.messages(key))
+    const saved = this.cards.messages(key, this.logs.messages(key)), words = agent ? this.agentWords(agent) : this.plannedWords(key)
     // Saved as waiting until delivered; the chat says so only while something really keeps it out.
     const hold = saved.some(message => message.waiting) ? this.hold(key) : undefined
     const messages = saved.map(message => message.waiting ? { ...message, waiting: !!hold, waitsFor: hold?.waitsFor } : message)
-    return { key, ...this.activities.chat(key, messages, terminal?.state === 'live' && status === 'work'), cli: CLI_NAME[agent?.kind ?? this.agentKind()], working: status === 'work',
+    return { key, ...this.activities.chat(key, messages, terminal?.state === 'live' && status === 'work'), cli: CLI_NAME[words.kind as AgentKind], working: status === 'work',
       failed: this.store.all<PendingSend>('pending-send').filter(item => item.chat === key && item.state === 'uncertain').map(item => ({ cid: item.id, error: 'Delivery was interrupted; check the chat before sending again' })),
-      finished: !!agent && terminal?.state === 'finished', agent: this.agentWords(agent) }
+      finished: !!agent && terminal?.state === 'finished', agent: words }
   }
   /** what it was asked to run on and what its records say runs, with the names the catalog knows */
-  private agentWords(agent?: CoreAgent): NonNullable<Chat['agent']> {
-    const kind = agent?.kind ?? this.agentKind(), runtime = agent?.runtime
+  private agentWords(agent: CoreAgent): NonNullable<Chat['agent']> {
+    const kind = agent.kind, runtime = agent.runtime
     // a hook may report a model with its context size: claude-opus-5-5[1m]
-    const label = (model?: string) => (model ? this.settings.findModel(kind, model, agent?.space ?? '')?.label : undefined)
-    const modelLabel = label(agent?.model), runtimeLabel = label(runtime?.model?.replace(/\[.*\]$/, ''))
-    return { kind, model: agent?.model, ...(modelLabel ? { modelLabel } : {}), effort: agent?.effort, speed: agent?.speed, runtime: runtime && runtimeLabel ? { ...runtime, modelLabel: runtimeLabel } : runtime }
+    const label = (model?: string) => (model ? this.settings.findModel(kind, model, agent.space ?? '')?.label : undefined)
+    const modelLabel = label(agent.model), runtimeLabel = label(runtime?.model?.replace(/\[.*\]$/, ''))
+    return { kind, model: agent.model, ...(modelLabel ? { modelLabel } : {}), effort: agent.effort, speed: agent.speed, runtime: runtime && runtimeLabel ? { ...runtime, modelLabel: runtimeLabel } : runtime }
+  }
+  /** Settings changed: an open chat with no agent yet says what they will use now */
+  private plannedChanged() {
+    for (const chat of [...this.spaces().map(space => space.id), ...this.tasks.all().filter(task => !['merged', 'closed'].includes(task.workflow)).map(task => task.chat)]) if (!this.agents.get(chat)) this.emit('chat', chat)
+  }
+  /** no agent yet: what Settings will start it on. A task's own pick is no Setting: that stays what was asked for */
+  private plannedWords(key: string): NonNullable<Chat['agent']> {
+    const task = this.tasks.forChat(key), level = task?.place ?? key, own = task?.chat === key ? task : undefined
+    const want = this.settings.agent(own ? 'task' : task ? 'reviewer' : this.space(key)?.mode === 'autopilot' ? 'autopilot' : 'coordinator', level)
+    const { kind, model, effort } = own ?? (task ? { kind: task.review.kind, model: task.reviewerModel, effort: task.reviewerEffort } : want)
+    const modelLabel = model ? this.settings.findModel(kind, model, level)?.label : undefined
+    const words = { model, ...(modelLabel ? { modelLabel } : {}), effort }
+    return kind === want.kind && model === want.model && effort === want.effort ? { kind, planned: words } : { kind, ...words }
   }
   /** What keeps a message out of this chat's agent now; {} is a machine out of reach. A working agent keeps nothing out: it takes it at once. */
   private hold(chat: string): { waitsFor?: Message['waitsFor'] } | undefined {
@@ -728,7 +741,8 @@ Use hc for starting, messaging and waiting on core child agents. Never use a web
   }
 
   async folders(machine: string, path: string): Promise<Folders> {
-    const script = `const f=require('node:fs'),p=require('node:path'),o=require('node:os'),c=require('node:child_process');const raw=process.argv.at(-1),home=o.homedir(),target=p.resolve(raw==='~'?home:raw.startsWith('~/')?p.join(home,raw.slice(2)):raw);let x={path:target,exists:f.existsSync(target),dir:false,repo:null,entries:[]};if(x.exists){const real=f.realpathSync(target);if(real!==home&&!real.startsWith(home+p.sep))throw Error('Choose a folder in your home');x.dir=f.statSync(real).isDirectory();if(x.dir){let g=c.spawnSync('git',['-C',real,'rev-parse','--show-toplevel'],{encoding:'utf8'});x.repo=g.status===0?g.stdout.trim():null;x.entries=f.readdirSync(real,{withFileTypes:true}).filter(e=>e.isDirectory()&&!e.name.startsWith('.')).slice(0,200).map(e=>({name:e.name,path:p.join(real,e.name),repo:f.existsSync(p.join(real,e.name,'.git'))}));}}console.log(JSON.stringify(x))`
+    // a refusal reaches the screen as its own words: bun's report of an uncaught throw holds the script and its paths
+    const script = `const f=require('node:fs'),p=require('node:path'),o=require('node:os'),c=require('node:child_process');try{const raw=process.argv.at(-1),home=f.realpathSync(o.homedir()),target=p.resolve(raw==='~'?home:raw.startsWith('~/')?p.join(home,raw.slice(2)):raw);let x={path:target,exists:f.existsSync(target),dir:false,repo:null,entries:[]};let near=target;while(!f.existsSync(near))near=p.dirname(near);const real=f.realpathSync(near);if(real!==home&&!real.startsWith(home+p.sep))throw Error('Choose a folder in your home.');if(x.exists){x.dir=f.statSync(real).isDirectory();if(x.dir){let g=c.spawnSync('git',['-C',real,'rev-parse','--show-toplevel'],{encoding:'utf8'});x.repo=g.status===0?g.stdout.trim():null;x.entries=f.readdirSync(real,{withFileTypes:true}).filter(e=>e.isDirectory()&&!e.name.startsWith('.')).slice(0,200).map(e=>({name:e.name,path:p.join(real,e.name),repo:f.existsSync(p.join(real,e.name,'.git'))}));}}console.log(JSON.stringify(x))}catch(e){process.stderr.write(e.message);process.exit(1)}`
     const result = JSON.parse((await this.files.exec(machine, [await this.agents.bun(machine), '-e', script, '--', path])).toString('utf8')) as Folders
     for (const entry of result.entries) entry.added = this.spaces().some(space => space.machine === machine && space.folder === entry.path)
     result.added = this.spaces().some(space => space.machine === machine && space.folder === result.repo)

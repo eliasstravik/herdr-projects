@@ -759,7 +759,7 @@ function AutomationDetail({ id, place, a }: { id: string; place: Place; a: Autom
         <dd className="text-pretty break-words text-fg2">{a.what}</dd>
         {a.brief ? (
           <>
-            <dt className="font-medium text-fg">Brief</dt>
+            <dt className="font-medium text-fg">Instructions</dt>
             <dd className="text-pretty break-words whitespace-pre-wrap text-fg2">{a.brief}</dd>
           </>
         ) : null}

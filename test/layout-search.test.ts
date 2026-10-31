@@ -33,7 +33,7 @@ describe.skipIf(!browser)('unified search', () => {
       // The old exact chat route remains, alongside a scoped entrance to unified search.
       await page.getByRole('button', { name: 'More', exact: true }).click()
       expect(await page.getByRole('menuitem', { name: 'Search in this chat', exact: true }).count()).toBe(1)
-      await page.getByRole('menuitem', { name: 'Search this chat and beyond' }).click()
+      await page.getByRole('menuitem', { name: 'Open full search' }).click()
       await search.waitFor()
       expect(await page.getByRole('button', { name: 'This chat', exact: true }).getAttribute('aria-pressed')).toBe('true')
       expect(await page.getByRole('button', { name: 'Space: lilla-varlden', exact: true }).count()).toBe(1)

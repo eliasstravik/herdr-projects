@@ -1302,7 +1302,7 @@ export function CardShell({ title, plan, icon, action, source, children }: { tit
 function answeredHow(q: Question) {
   if (q.via === 'chat') return 'Answered in chat'
   if (q.via === 'terminal') return 'Answered in the terminal'
-  return q.sent === -1 && !q.said ? 'Answered' : `Sent to ${q.to}`
+  return q.sent === -1 && !q.said ? 'Answered' : 'Sent'
 }
 
 /** a task's terminal is in its panel, a space's in its chat */
@@ -2377,7 +2377,7 @@ function FindItem({ chatKey }: { chatKey: string }) {
         Search in this chat
       </MenuItem>
       {registry.views.search ? <MenuItem icon={<SearchIcon className={ic} />} onClick={() => setUI({ search: true, searchScope: { kind: 'chat', id: chatKey }, menu: false, taskMenu: false })}>
-        Search this chat and beyond
+        Open full search
       </MenuItem> : null}
     </>
   )

@@ -45,8 +45,8 @@ describe.skipIf(!browser)('notification settings', () => {
       const wording = settings.locator('details').first()
       expect(await wording.getAttribute('open')).toBeNull()
       await wording.locator('summary').click()
-      expect(await wording.innerText()).toContain('Adds:')
-      expect(await settings.textContent()).toContain('Every new brief ends with')
+      expect(await wording.innerText()).toContain('“')
+      expect(await settings.textContent()).toContain("Every new task's instructions end with")
     } finally {
       world.stores['vm-str'].set('notify', null, { space: '~' })
       world.sections = before
@@ -66,7 +66,7 @@ describe.skipIf(!browser)('notification settings', () => {
     const page = await browser!.newPage({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true })
     try {
       await page.goto(url())
-      await page.getByRole('button', { name: 'Places', exact: true }).click()
+      await page.getByRole('button', { name: 'Spaces', exact: true }).click()
       await page.getByRole('button', { name: 'Settings', exact: true }).click()
       await page.getByRole('button', { name: 'Editing: Everywhere', exact: true }).click()
       await page.getByRole('textbox', { name: 'Find scope or value' }).fill('home · machine-20')
@@ -92,7 +92,7 @@ describe.skipIf(!browser)('chat agent choices', () => {
     const page = await browser!.newPage({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true })
     try {
       await page.goto(url())
-      await page.getByRole('button', { name: 'Places', exact: true }).click()
+      await page.getByRole('button', { name: 'Spaces', exact: true }).click()
       await page.getByRole('button', { name: 'Settings', exact: true }).click()
       const settings = page.getByRole('region', { name: 'Settings' })
       await settings.getByRole('button', { name: 'Agents', exact: true }).click()
@@ -160,7 +160,7 @@ describe.skipIf(!browser)('private instruction settings', () => {
     const page = await browser!.newPage({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true })
     try {
       await page.goto(url())
-      await page.getByRole('button', { name: 'Places', exact: true }).click()
+      await page.getByRole('button', { name: 'Spaces', exact: true }).click()
       await page.getByRole('button', { name: 'Settings', exact: true }).click()
       await pickLevel(page, 'home · vm-str')
       await page.getByRole('button', { name: 'Private instructions', exact: true }).click()
@@ -233,7 +233,7 @@ describe.skipIf(!browser)('Settings opens on Everywhere', () => {
       const page = await browser!.newPage({ viewport, hasTouch: phone, isMobile: phone })
       try {
         await page.goto(url().replace('vm-str/home', 'vm-str/gtm'))
-        if (phone) await page.getByRole('button', { name: 'Places', exact: true }).click()
+        if (phone) await page.getByRole('button', { name: 'Spaces', exact: true }).click()
         await page.getByRole('button', { name: 'Settings', exact: true }).click()
         const settings = page.getByRole('region', { name: 'Settings' })
         await settings.getByRole('button', { name: 'Editing: Everywhere', exact: true }).waitFor()

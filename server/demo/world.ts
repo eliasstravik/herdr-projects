@@ -40,7 +40,7 @@ function demoPath(path: string) {
     if (seg === '..') parts.pop()
     else parts.push(seg)
   }
-  if (path.trim().startsWith('/')) throw new Error('Only folders in your home can be added.')
+  if (path.trim().startsWith('/')) throw new Error('Choose a folder in your home.')
   return ['~', ...parts].join('/')
 }
 

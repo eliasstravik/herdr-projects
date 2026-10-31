@@ -78,6 +78,12 @@ async function ensureCore(config: CoreConfig) {
   core.close()
 }
 
+/** Without the built page every visit is an error, while start would still say it runs. A Vite preview serves its own. */
+export function buildProblem(config: Pick<CoreConfig, 'plugins'>, root = join(import.meta.dir, '../..')) {
+  if (config.plugins === false || existsSync(join(root, 'dist/index.html'))) return
+  return `Shepherdr is not built, so its page cannot open. Nothing was started. Run bun run build in ${root}, then start again.`
+}
+
 async function start(config: CoreConfig, foreground: boolean) {
   prepareHome(config.home)
   await withLock(config.home, async () => {
@@ -85,6 +91,8 @@ async function start(config: CoreConfig, foreground: boolean) {
     const confirmed = record && await health(record)
     if (record && confirmed) { console.log(await launcherStatus(config, { record, current: confirmed })); return }
     if (record && alive(record.pid)) throw new Error('The recorded process is alive but its identity cannot be verified. No process was stopped; inspect it before restarting.')
+    const problem = buildProblem(config)
+    if (problem) throw new Error(problem)
     await ensureCore(config)
     const boot = randomUUID()
     const args = ['--home', config.home, '--port', String(config.port), '--core-bin', config.binary, '--core-session', config.session, '--core-socket', config.socket]
