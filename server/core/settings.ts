@@ -245,9 +245,12 @@ export class CoreSettings {
     if (!space) return undefined
     if (space.home) return "Autopilot needs a repository space. A home space can't run it."
     const check = this.store.get<MachineCheck>('machine-check', space.machine), where = this.machineName(space.machine) || 'this machine'
-    if (check?.platform && check.platform !== 'Linux') return `Autopilot needs Linux. ${where} runs ${check.platform === 'Darwin' ? 'macOS' : check.platform}.`
-    if (check?.sandbox === 'missing') return `Autopilot needs bubblewrap, which is not installed on ${where}.`
-    if (check?.sandbox === 'blocked') return `Autopilot's sandbox is blocked on ${where}: its user namespaces are off.`
+    const mac = this.get('autopilot.access', level) === 'Mac sandbox'
+    if (check?.platform === 'Darwin' && !mac) return `Isolated workspace needs Linux. ${where} runs macOS: choose the Mac sandbox permission profile.`
+    if (check?.platform === 'Linux' && mac) return `The Mac sandbox permission profile needs macOS. ${where} runs Linux.`
+    if (check?.platform && check.platform !== 'Linux' && check.platform !== 'Darwin') return `Autopilot needs Linux or macOS. ${where} runs ${check.platform}.`
+    if (!mac && check?.sandbox === 'missing') return `Autopilot needs bubblewrap, which is not installed on ${where}.`
+    if (!mac && check?.sandbox === 'blocked') return `Autopilot's sandbox is blocked on ${where}: its user namespaces are off.`
     const kind = this.agent('autopilot', level).kind, state = check?.cli[kind]
     if (state && state !== 'ready') return `Autopilot runs on ${names[kind]}, which is ${state === 'missing' ? 'not installed' : 'not signed in'} on ${where}.`
   }

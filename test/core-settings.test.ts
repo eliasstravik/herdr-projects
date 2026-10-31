@@ -260,11 +260,20 @@ test('an answer it cannot read proves nothing: never picked, never warned about,
   expect(parseMachineCheck('platform=Linux\nclaude=missing\ncodex=missing')?.cli).toEqual({ claude: 'missing', codex: 'missing' })
 }))
 
-test('Autopilot says why it cannot run: home space, not Linux, no sandbox, or its CLI unusable', () => fixture(settings => {
+test('Autopilot says why it cannot run: home space, wrong profile for the system, no sandbox, or its CLI unusable', () => fixture(settings => {
   const ready = { claude: 'ready', codex: 'ready' } as const
   expect(settings.pilotBlock('p:box:one')).toBeUndefined()
   check(settings, 'box', ready, { platform: 'Darwin', sandbox: 'missing' })
-  expect(settings.pilotBlock('p:box:one')).toBe('Autopilot needs Linux. box runs macOS.')
+  expect(settings.pilotBlock('p:box:one')).toBe('Isolated workspace needs Linux. box runs macOS: choose the Mac sandbox permission profile.')
+  settings.set('autopilot.access', 'Mac sandbox', 'p:box:one')
+  expect(settings.pilotBlock('p:box:one')).toBeUndefined() // bubblewrap is missing on every Mac, and the Mac profile doesn't use it.
+  check(settings, 'box', { claude: 'signed-out', codex: 'ready' }, { platform: 'Darwin', sandbox: 'missing' })
+  expect(settings.pilotBlock('p:box:one')).toBe('Autopilot runs on Claude Code, which is not signed in on box.')
+  check(settings, 'box', ready, { platform: 'Linux', sandbox: 'ok' })
+  expect(settings.pilotBlock('p:box:one')).toBe('The Mac sandbox permission profile needs macOS. box runs Linux.')
+  settings.set('autopilot.access', 'Isolated workspace', 'p:box:one')
+  check(settings, 'box', ready, { platform: 'FreeBSD', sandbox: 'missing' })
+  expect(settings.pilotBlock('p:box:one')).toBe('Autopilot needs Linux or macOS. box runs FreeBSD.')
   check(settings, 'box', ready, { platform: 'Linux', sandbox: 'missing' })
   expect(settings.pilotBlock('p:box:one')).toContain('bubblewrap')
   check(settings, 'box', ready, { platform: 'Linux', sandbox: 'blocked' })

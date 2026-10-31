@@ -38,8 +38,11 @@ wrapper PATH are verified before Herdr starts any agent. A shell configuration t
 | --- | --- | --- | --- |
 | Shepherdr chat reader, model/effort adapter | Yes | Yes | Not currently viable for coordinator chat; refused |
 | Shared Linux isolation, schedule, fresh mode replacement | Yes | Yes | Refused |
-| Local Linux repository space with usable bubblewrap namespaces | Required | Required | — |
-| Remote workers, macOS, home-space Autopilot | Currently refused | Currently refused | — |
+| Isolated workspace: local Linux repository space with usable bubblewrap namespaces | Required | Required | — |
+| Mac sandbox profile on a local macOS repository space | Yes | Partly, see below | Refused |
+| Mac sandbox profile on a connected Mac | Nothing refuses it; not verified | Not verified | Refused |
+| Home-space Autopilot | Refused | Refused | — |
+| Connected Linux machines | Nothing refuses them; not verified | Nothing refuses them; not verified | — |
 
 The **Isolated workspace** profile uses bubblewrap PID, mount, user and network namespaces, drops capabilities,
 clears inherited environment and starts with a private provider home. It applies to the whole process tree,
@@ -71,6 +74,81 @@ allowance/deadline. Unrelated earlier tasks are neither stopped nor relabelled. 
 parent's namespace, and stopping that runtime kills the namespace. Server restart fails closed: old runs stop and
 need explicit retry, rather than being revived without their gateway.
 
+## The Mac sandbox profile
+
+macOS has no namespaces, so **Isolated workspace** is refused there and you choose **Mac sandbox** instead (Settings →
+Autopilot → Permission profile). It is refused on Linux. Coordinator, workers and reviewers, Claude Code or Codex, all
+run under one generated Seatbelt profile that denies by default, through `sandbox-exec`. If it can't start, Autopilot
+stays stopped; nothing runs unrestricted. It needs Bun 1.4.2 or newer on that machine, and `flock` (`brew install
+flock`) to adopt an existing task into a run. The gateway, exact-host allowlist, broker Git, secrets and limits are the
+same code as on Linux.
+
+What it does not give you, compared with Linux:
+
+- **Files are denied, not hidden.** Other home files, Git metadata writes and control sockets are refused by rule. An
+  agent can't list or read them, but can test whether a path it guesses exists and see its size and dates. It can
+  start a program elsewhere in the home folder, under the same profile. Linux shows it an empty world instead.
+- **No PID namespace.** Other processes are visible by PID and name through `sysctl`, and they can't be signalled. Seatbelt
+  doesn't stop a direct `sysctl` asking for another same-user process's arguments and environment. So an agent can read
+  tokens in the environment of host processes on this Mac, and a secret another agent is using through
+  `shepherdr secret run` while it runs. Setuid programs, including `ps` and `sudo`, don't run.
+- **Stopping is a sweep, not a kernel guarantee.** A process can't leave its profile, and the kernel answers for any
+  PID what that profile allows, so a watcher outside finds this run's processes exactly, detached daemons included.
+  It lives in its own session and ends them when the runtime stops, its wrapper crashes or the shared runtime is up.
+  Killing that watcher and the wrapper together from outside could leave one running. So could a process that keeps
+  forking to dodge each pass: the watcher keeps trying for an hour, and its failure shows only on that terminal, so
+  Autopilot can show the run as stopped meanwhile. Until it's caught, that process has no gateway or network, but can
+  still write its worktree.
+- **Loopback is shared with the whole Mac.** There's no private localhost, and Shepherdr's own web port would be on
+  it, so an agent reaches only this run's CONNECT port. Anything that talks to itself over localhost fails, including
+  local test servers. Gradle can't run at all, even with `--no-daemon`: it binds a local socket at startup and stops at
+  `FileLockContentionHandler` with `SocketException: Operation not permitted`. Unix sockets inside the private home work.
+- **Java needs settings of its own.** A JVM's default sockets use IPv4-mapped addresses, which the rule for this run's
+  CONNECT port doesn't match, so it can't reach even that port without `-Djava.net.preferIPv4Stack=true`. It also
+  ignores `HTTPS_PROXY`, and takes its home folder from the system rather than `HOME`, so it's denied the real one
+  unless told otherwise. A JDK kept in the home folder, or linked there from `/Library/Java`, can't be read.
+- **There's no private `/tmp` or `/dev`.** `TMPDIR` points into the private home; a tool that hardcodes `/tmp` fails.
+  Only named devices and the run's own terminal are open, so a tool that needs a new pseudo-terminal fails too.
+- **`sandbox-exec` is deprecated.** Apple marks it deprecated but still ships it and uses Seatbelt itself; Claude Code
+  and Codex rely on it too. A future macOS could remove it, and Autopilot would then refuse to start on a Mac.
+
+Readable system locations are `/usr`, `/bin`, `/sbin`, parts of `/System` and `/Library`, Xcode, Homebrew and
+`/private/etc`, without the Data volume's second path to user files. The Keychain, LaunchServices (`open`), AppleEvents,
+launchd, the pasteboard, Spotlight and preferences are out of reach. macOS refuses nested sandboxes, so Claude Code's
+and Codex's own are turned off inside and the outer profile is the boundary. A tool that builds its own sandbox fails
+too: for `xcodebuild`, pass `-IDEPackageSupportDisableManifestSandbox=1 -IDEPackageSupportDisablePluginExecutionSandbox=1`.
+Apple's `trustd` is out of reach because it fetches URLs named in a certificate from outside the sandbox, so Go and
+Swift programs that verify TLS through the system fail. `xcrun` and the `/usr/bin` developer shims can't run, because their shared cache would steer the host's own tools;
+Xcode's own tools and its toolchain's compilers come first on `PATH` instead. iOS simulators and full Xcode builds are untested.
+
+**Codex is only partly proven here.** Its tools ran inside the profile against a local fake endpoint, and a real
+Codex turn answered through the gateway. With a current real model it uses a `codex-code-mode-host` helper, and macOS
+stopped that helper from starting inside the sandbox (`timed out negotiating with the code-mode host`), so that
+coordinator could not run commands. This wasn't solved. Autopilot's default reviewer is Codex too, so without a working
+Codex login set the reviewer to Claude Code. Rust and OpenSSL clients get their trust roots from `/etc/ssl/cert.pem`,
+not the Keychain, so a private certificate authority isn't trusted.
+
+**Logins.** Claude Code on a Mac keeps its login in the Keychain, and the profile denies the Keychain. A process outside
+the sandbox writes the host's live login to a file in the private home, the only file Claude falls back to, and
+rewrites it within about a second of any change; Claude rereads it on its next request, with no restart. So a running
+agent moves to whichever login the host switches to, where on Linux it stays on the login it started with. Only the
+short-lived access token crosses: no refresh token, other Keychain items or MCP logins. When it nears expiry that
+process runs the host's own `claude auth status`, which refreshes through Claude's own lock and store. The agent can't
+change this file or move its folder. Codex's login file is copied at launch, as on Linux.
+
+**Usage readings.** Claude's status line reports each session's 5-hour and weekly usage. If an executable
+`~/.config/shepherdr/autopilot-usage` exists on the machine, not writable by group or others, it runs outside the
+sandbox with each reading on stdin, latest first and one at a time, its output ignored:
+
+```json
+{"rate_limits":{"five_hour":{"used_percentage":42,"resets_at":1793456338},"seven_day":{"used_percentage":17,"resets_at":1793539138}}}
+```
+
+Only those numbers cross, and an agent can write them, so treat them as a hint.
+
+To rerun the escape attempts on a Mac: `TMPDIR=/private/tmp bun test test/core-pilot-mac-escape.test.ts`. The scratch
+folders must be outside `/var/folders`, the usual `TMPDIR`, which the profile doesn't allow.
+
 Access and limits are behind an expansion:
 
 - **Shared HTTPS allowance (MiB):** a hard cap on encrypted traffic through the gateway, both directions, including
@@ -81,7 +159,7 @@ Access and limits are behind an expansion:
   opened from an agent-supplied host path. Reports are delayed and agent-written, so they can overshoot or be missing; this
   is not a hard token or money cap. No exact financial spending cap is offered.
 - **Shared runtime:** elapsed wall time since ON, including idle time. Every runtime gets the same absolute deadline
-  through an external timeout; the manager also checks it. This ends all descendants, not just a turn.
+  through an external timeout (on a Mac, the watcher above); the manager also checks it. This ends all descendants, not just a turn.
 - **Maximum parallel tasks:** the number of active managed Shepherdr tasks belonging to this run. It does not count
   native helper processes as separate tasks; they share their parent's namespace, network allowance and deadline.
 

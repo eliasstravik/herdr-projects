@@ -17,6 +17,8 @@ export interface PilotProxyBackend {
   hook(input: unknown, id: string, signal: AbortSignal): Promise<unknown>
   lease(signal: AbortSignal): Promise<void>
   reserve(bytes: number, signal: AbortSignal): Promise<void>
+  /** Only where a backend offers it; the reading is agent-written and checked by whoever receives it. */
+  usage?(reading: unknown): unknown
 }
 export class PilotProxy {
   private sockets = new Set<Socket>()
@@ -89,6 +91,9 @@ export class PilotProxy {
           answer = await this.backend.secret(names, input.id, cancel.signal); break
         }
         case 'hook': answer = await this.backend.hook(input.args, input.id, cancel.signal); break
+        case 'usage':
+          if (!this.backend.usage) throw Error('Only isolated product commands, hooks and native captures are available')
+          answer = this.backend.usage(input.args); break
         default: throw Error('Only isolated product commands, hooks and native captures are available')
       }
       this.reply(res, answer)
