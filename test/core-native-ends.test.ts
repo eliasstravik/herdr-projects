@@ -77,17 +77,30 @@ test('a real waiting card stays open whatever else the agent records', async () 
   } finally { f.close() }
 })
 
-test('two cards of the same command each need their own result', async () => {
+test('two cards of the same command each need their own result, whichever ends first', async () => {
   const f = fixture()
   try {
     f.called('first'); f.called('second')
     const first = f.ask({ at: Date.now() - 1 }), second = f.ask()
-    f.hook({ event: 'PostToolUse', tool: 'Bash', use: 'first' })
-    f.log({ kind: 'step-end', id: 'first', at: Date.now() + 1 })
-    await first.reply
-    expect(f.open().map(item => item.id)).toEqual([second.id])
+    f.hook({ event: 'PostToolUse', tool: 'Bash', use: 'second' })
     f.log({ kind: 'step-end', id: 'second', at: Date.now() + 1 })
-    await closed(f, second.id, second.reply, 'Answered in the terminal')
+    await second.reply
+    expect(f.open().map(item => item.id)).toEqual([first.id])
+    f.log({ kind: 'step-end', id: 'first', at: Date.now() + 1 })
+    await closed(f, first.id, first.reply, 'Answered in the terminal')
+  } finally { f.close() }
+})
+
+test('a finished run of the same command does not stand for the card that asks to run it again', () => {
+  const f = fixture()
+  try {
+    const at = Date.now()
+    f.called('old', input, 'Bash', at - 3)
+    f.hook({ event: 'PostToolUse', tool: 'Bash', use: 'old', at: at - 2 })
+    f.called('new', input, 'Bash', at - 1)
+    const { id } = f.ask({ at })
+    f.log({ kind: 'step-end', id: 'old', at: at + 1 })
+    expect(f.open().map(item => item.id)).toEqual([id])
   } finally { f.close() }
 })
 
@@ -290,10 +303,10 @@ test('kept evidence is bounded and a call matches only its own tool and input', 
   const ends = new NativeEnds()
   for (let index = 0; index < 200; index++) { ends.called('launch', `use-${index}`, { tool: 'Bash', hash: 'h' }); ends.ended('launch', { at: 2, use: `use-${index}`, reason: 'old' }) }
   ends.called('launch', 'mine', { tool: 'Bash', hash: 'mine' }); ends.ended('launch', { at: 3, use: 'mine', reason: 'mine' })
-  expect(ends.over('launch', { at: 1, tool: 'Bash', hash: 'other' })).toBeUndefined()
-  expect(ends.over('other-launch', { at: 1, tool: 'Bash', hash: 'mine' })).toBeUndefined()
-  expect(ends.over('launch', { at: 1, tool: 'Bash', hash: 'mine' })).toBe('mine')
-  expect(ends.over('launch', { at: 1, tool: 'Bash', hash: 'mine' })).toBeUndefined()
+  expect(ends.over('launch', { id: 'a', at: 1, tool: 'Bash', hash: 'other' })).toBeUndefined()
+  expect(ends.over('other-launch', { id: 'a', at: 1, tool: 'Bash', hash: 'mine' })).toBeUndefined()
+  expect(ends.over('launch', { id: 'a', at: 1, tool: 'Bash', hash: 'mine' })).toBe('mine')
+  expect(ends.over('launch', { id: 'b', at: 1, tool: 'Bash', hash: 'mine' })).toBeUndefined()
 })
 
 test('a clearing alert says so to the service worker, with what still waits', () => {

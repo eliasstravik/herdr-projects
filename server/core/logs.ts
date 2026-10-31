@@ -22,7 +22,7 @@ export class CoreLogs {
   private waits = new Map<string, { launch: string; started: number; activity: number; revision: number; waiting: boolean }>()
   private hooks = new Map<string, Cursor>()
   private logs = new Map<string, Cursor>()
-  private busy = new Set<string>()
+  private reading = new Map<string, Promise<void>>()
   private machines = new Map<string, number>()
   private next = 0
   private timer?: ReturnType<typeof setInterval>
@@ -37,9 +37,9 @@ export class CoreLogs {
     const agents = this.agents.all()
     const first = this.next++ % Math.max(1, agents.length)
     for (const agent of [...agents.slice(first), ...agents.slice(0, first)]) {
-      if (this.busy.has(agent.chat) || (this.machines.get(agent.machine) ?? 0) >= 4) continue
-      this.busy.add(agent.chat); this.machines.set(agent.machine, (this.machines.get(agent.machine) ?? 0) + 1)
-      jobs.push(this.read(agent).finally(() => { this.busy.delete(agent.chat); this.machines.set(agent.machine, (this.machines.get(agent.machine) ?? 1) - 1) }))
+      if (this.reading.has(agent.chat) || (this.machines.get(agent.machine) ?? 0) >= 4) continue
+      this.machines.set(agent.machine, (this.machines.get(agent.machine) ?? 0) + 1)
+      jobs.push(this.claim(agent).finally(() => this.machines.set(agent.machine, (this.machines.get(agent.machine) ?? 1) - 1)))
     }
     await Promise.all(jobs)
   }
@@ -51,12 +51,16 @@ export class CoreLogs {
       if (current.transcript) await this.transcript(current)
     } catch (error) { this.error(agent.chat, (error as Error).message) }
   }
-  /** Reads this agent's records now, for an answer that must not outrun what they already say. A poll under way will do. */
+  private claim(agent: CoreAgent) {
+    const job = this.read(agent).finally(() => this.reading.delete(agent.chat))
+    this.reading.set(agent.chat, job)
+    return job
+  }
+  /** Reads this agent's records from now, for an answer that must not outrun what they already say: a read under way may have begun too early. */
   async catchUp(chat: string) {
+    for (let running = this.reading.get(chat); running; running = this.reading.get(chat)) await running
     const agent = this.agents.get(chat)
-    if (!agent || this.busy.has(chat)) return
-    this.busy.add(chat)
-    await this.read(agent).finally(() => this.busy.delete(chat))
+    if (agent) await this.claim(agent)
   }
 
   messages(chat: string): Message[] {
