@@ -9,8 +9,9 @@ import type { CoreSource } from './source.ts'
 
 interface ScreenCard { id: string; chat: string; launch: string; screen: string; question: Question; state: 'open' | 'answered'; at: number }
 
-const FIRST_LOOK = 6000 // two matching reads, a poll or two apart, put the card up by about 10 seconds
+const FIRST_LOOK = 6000 // two matching reads, a poll or two apart, put a card with choices up by about 10 seconds
 const POLL = 2000
+const NO_CHOICES = 30_000 // with nothing to tap, it may yet be a slow start: a card comes later
 const RETRY = 10_000 // a pressed choice has this long to leave the screen before it is asked again
 
 /** An agent with no session yet may be stopped at a screen of its CLI's own: folder trust, theme, sign-in, hooks, or one
@@ -20,7 +21,7 @@ const RETRY = 10_000 // a pressed choice has this long to leave the screen befor
 export class CoreScreens {
   private timer?: ReturnType<typeof setInterval>
   private looking = new Set<string>()
-  private last = new Map<string, { seen: string; words: string }>()
+  private last = new Map<string, { seen: string; shown: string }>()
   private pressing = new Set<string>()
   constructor(private readonly source: CoreSource) {}
   start() { this.timer = setInterval(() => { if (!this.source.quiescing) void this.tick() }, POLL) }
@@ -39,7 +40,7 @@ export class CoreScreens {
   async tick(now = Date.now()) {
     if (!this.source.connected()) return
     for (const chat of new Set(this.cards().filter(row => row.state === 'open').map(row => row.chat))) this.reconcile(chat)
-    const starting = this.source.agents.all().filter(agent => agent.state === 'starting' && agent.role !== 'reviewer' && now - agent.started >= FIRST_LOOK)
+    const starting = this.source.agents.all().filter(agent => agent.state === 'starting' && agent.role !== 'reviewer' && !agent.pilot && now - agent.started >= FIRST_LOOK)
     for (const launch of this.last.keys()) if (!starting.some(agent => agent.launch === launch)) this.last.delete(launch)
     // A machine out of reach shows as that, the next poll looks again, and it holds up no other agent's card.
     await Promise.allSettled(starting.filter(agent => !this.looking.has(agent.launch)).map(async agent => {
@@ -56,16 +57,17 @@ export class CoreScreens {
     const read = await this.read(agent)
     if (!read) return
     const seen = sameScreen(read.text), { words, choices } = readScreen(read.text, read.terminal.cols), before = this.last.get(agent.launch)
-    this.last.set(agent.launch, { seen, words })
+    const shown = JSON.stringify([words, choices])
+    this.last.set(agent.launch, { seen, shown })
     const current = this.source.agents.get(agent.chat)
     if (before?.seen !== seen || current?.launch !== agent.launch || current.state !== 'starting') return // still moving
     const cards = this.cards().filter(row => row.chat === agent.chat && row.launch === agent.launch)
     const open = cards.find(row => row.state === 'open' && row.screen === seen)
     // the same screen with a new code or number on it: a timer never reads the same twice, so it stays out
-    if (open && before.words === words && open.question.screen !== words) { open.question.screen = words; this.settle(open) }
+    if (open && before.shown === shown && JSON.stringify([open.question.screen, open.question.choices]) !== shown) { open.question.screen = words; open.question.choices = choices; this.settle(open) }
     if (open || cards.some(row => row.screen === seen && now - row.at < RETRY)) return
     for (const row of cards) if (row.state === 'open') this.finish(row)
-    if (words || choices.length) this.post(agent, seen, words, choices)
+    if (choices.length || words && now - agent.started >= NO_CHOICES) this.post(agent, seen, words, choices)
   }
   private post(agent: CoreAgent, screen: string, words: string, choices: Question['choices']) {
     const task = this.source.tasks.forChat(agent.chat), id = randomUUID(), cli = CLI_NAME[agent.kind]
@@ -100,8 +102,9 @@ export class CoreScreens {
     try {
       // The cursor may have moved, or the screen gone, since the card was drawn. Nothing is pressed on a screen it doesn't show.
       const read = await this.read(this.source.agents.get(row.chat)!)
-      if (!read || sameScreen(read.text) !== row.screen) throw new Refusal('That screen has changed, so nothing was pressed')
-      await this.source.core.call('terminal.keys', { terminal: read.terminal.address, keys: pressKeys(readScreen(read.text, read.terminal.cols).at, action.choice) })
+      const screen = read && readScreen(read.text, read.terminal.cols)
+      if (!read || !screen || sameScreen(read.text) !== row.screen || JSON.stringify(screen.choices) !== JSON.stringify(row.question.choices)) throw new Refusal('That screen has changed, so nothing was pressed')
+      await this.source.core.call('terminal.keys', { terminal: read.terminal.address, keys: pressKeys(screen.at, action.choice) })
       row.state = 'answered'; row.at = Date.now(); row.question.sent = action.choice
       this.settle(row, row.question.choices[action.choice].label, 'Answered', action.space ? 'space' : 'task')
       return true

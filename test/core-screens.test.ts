@@ -46,10 +46,20 @@ test('no card before the agent has had time to start, nor for one with a session
   expect(cards()).toEqual([])
 })
 
-test('a reviewer has no chat to show a card in', async () => {
+test('a reviewer has no chat to show a card in, and Autopilot answers its own start', async () => {
   source.store.set('agent', 'space', { ...agent, role: 'reviewer' })
   await settle()
+  source.store.set('agent', 'space', { ...agent, pilot: { run: 'run', home: '/unused', captures: '/unused' } })
+  await settle()
   expect(cards()).toEqual([])
+})
+
+test('words with nothing to tap may be a slow start, so they wait longer', async () => {
+  screen = 'Starting the servers (3s)\n'
+  await settle()
+  expect(cards()).toEqual([])
+  await settle(started + 30_000)
+  expect(open().screen).toContain('Starting the servers')
 })
 
 test('a screen still moving waits; a blank one never shows', async () => {
@@ -94,6 +104,15 @@ test('nothing is pressed once the screen has changed under the card', async () =
   await expect(source.act({ type: 'answer', chat: 'space', question: card.id, choice: 1 })).rejects.toThrow('changed')
   expect(keys).toEqual([])
   expect(open().id).toBe(card.id)
+})
+
+test('nothing is pressed once a number in a choice has changed under the card', async () => {
+  screen = 'Which?\n\n ❯ Plan 1\n   Plan 2\n'
+  await settle()
+  const card = open()
+  screen = 'Which?\n\n ❯ Plan 3\n   Plan 4\n'
+  await expect(source.act({ type: 'answer', chat: 'space', question: card.id, choice: 1 })).rejects.toThrow('changed')
+  expect(keys).toEqual([])
 })
 
 test('the next screen is the next card, and the one before it says it went in the terminal', async () => {
@@ -143,16 +162,16 @@ test('an agent gone, or replaced, ends its card honestly', async () => {
 
 test('a new code on the same screen comes to the card; a running timer does not', async () => {
   screen = 'Enter this code: 1234\n'
-  await settle()
+  await settle(started + 30_000)
   const id = open().id
   screen = 'Enter this code: 5678\n'
-  await settle(started + 20_000)
+  await settle(started + 40_000)
   expect(cards()).toHaveLength(1)
   expect(open()).toMatchObject({ id, screen: 'Enter this code: 5678' })
   screen = 'Enter this code: 5678 · 11\n'
-  await source.screens.tick(started + 30_000)
+  await source.screens.tick(started + 50_000)
   screen = 'Enter this code: 5678 · 13\n'
-  await source.screens.tick(started + 32_000)
+  await source.screens.tick(started + 52_000)
   expect(open().screen).toBe('Enter this code: 5678')
 })
 
@@ -178,7 +197,7 @@ test('an open card closes on the next poll when its terminal has ended', async (
 
 test('with no choices to read it is still a card, for the terminal', async () => {
   screen = 'Paste code here if prompted >\n'
-  await settle()
+  await settle(started + 30_000)
   expect(open()).toMatchObject({ choices: [], terminal: true })
   await expect(source.act({ type: 'answer', chat: 'space', question: open().id, choice: 0 })).rejects.toThrow('answers')
 })

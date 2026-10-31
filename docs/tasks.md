@@ -59,7 +59,8 @@
 - Status comes from native logs/hooks and explicit OSC 7501 reports. Both Claude Code and Codex receive their
   launch-specific hook configuration; personal settings are not changed. A native ended turn with no recorded
   background work needs you, but remains a Working task until its workflow changes. Process liveness never means
-  Done. Shepherdr does not infer status from the terminal screen. Missing observations remain unknown.
+  Done. Shepherdr reads the terminal screen only for an agent with no session yet, to show it as a card
+  ([Chats](chat.md)); readiness and every later status never come from the screen. Missing observations remain unknown.
 - On a repo with a GitHub remote that `gh` is logged in to, each task gets a pull request. The shepherdr-agent skill runs
   `shepherdr pr <id>`: it pushes the branch and opens a draft (its title the task's, its words the agent's summary, the
   brief's gist and a "Generated with" footer), and pushes to it again after new commits. `shepherdr checks <id>` waits
