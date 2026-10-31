@@ -96,8 +96,8 @@ export class CoreSettings {
   /** Another CLI than the task agent's, for fresh eyes and for a backup when its provider cuts out. A reviewer may fall
    *  back on the task agent's own CLI; a backup can't, as a task never fails over to the CLI it runs on. Only a machine
    *  never yet checked keeps the plain order: an answer it couldn't read proves nothing, so that CLI isn't picked. */
-  private usableDefault(key: string, level: string) {
-    const own = kindOf(this.get('task.agent', level)) ?? 'claude', other: AgentKind = own === 'claude' ? 'codex' : 'claude', machines = this.machinesAt(level)
+  private usableDefault(key: string, level: string, running?: AgentKind) {
+    const own = running ?? kindOf(this.get('task.agent', level)) ?? 'claude', other: AgentKind = own === 'claude' ? 'codex' : 'claude', machines = this.machinesAt(level)
     const order = key === 'task.fallback' ? [other] : [other, own]
     // Everywhere only shows it: each space follows its own machine
     const pick = order.find(kind => machines.some(machine => this.cliAt(kind, [machine]) === 'ready')) ?? (machines.some(machine => !this.store.get('machine-check', machine)) ? other : undefined)
@@ -155,7 +155,15 @@ export class CoreSettings {
       const effort = this.get('autopilot.effort', level)
       return { kind, model, effort: effort === 'inherit' ? base.effort : effort === 'default' ? undefined : effort }
     }
-    const kind = kindOf(this.get(role === 'backup' ? 'task.fallback' : `${role}.agent`, level)) ?? (role === 'reviewer' || role === 'backup' ? 'codex' : 'claude')
+    return this.harness(role, kindOf(this.get(role === 'backup' ? 'task.fallback' : `${role}.agent`, level)) ?? (role === 'reviewer' || role === 'backup' ? 'codex' : 'claude'), level)
+  }
+  /** The backup of an agent running on this CLI: the saved one, else by the default's rule from that CLI, as the space's
+   *  own default may have changed since it started. Nothing where backup is off. */
+  backupFor(level: string, running: AgentKind) {
+    const kind = kindOf(this.pick('task.fallback', level).level === 'default' ? this.usableDefault('task.fallback', level, running) : this.get('task.fallback', level))
+    return kind && this.harness('backup', kind, level)
+  }
+  private harness(role: Role, kind: AgentKind, level: string) {
     const raw = this.get(`${role}.model`, level), catalog = this.catalog(kind, level)
     const model = raw === 'default' || !raw ? undefined : this.findModel(kind, raw, level)?.id ?? (!catalog.models.length ? raw : undefined)
     const effort = nearest(catalog.models.find(item => item.id === model)?.efforts ?? catalog.efforts, this.get(`${role}.effort`, level))
@@ -214,10 +222,14 @@ export class CoreSettings {
       const off = machines.filter(machine => this.usableDefault(key, level === 'all' ? `m:${machine}` : level) === 'off').map(machine => this.machineName(machine) || 'this machine')
       return off.length ? `No other signed-in CLI on ${off.join(', ')}, so tasks there have no backup.` : undefined
     }
-    if (!kind || !chosen && level === 'all') return undefined
-    const bad = machines.flatMap(machine => { const state = this.cliAt(kind, [machine]); return state && state !== 'ready' ? [{ machine, state }] : [] })
+    if (!kind) return undefined
+    // left to the default on Everywhere, each machine has its own pick
+    const bad = machines.flatMap(machine => {
+      const cli = chosen || level !== 'all' ? kind : kindOf(this.usableDefault(key, `m:${machine}`)) ?? kind, state = this.cliAt(cli, [machine])
+      return state && state !== 'ready' ? [{ machine, cli, state }] : []
+    })
     if (!bad.length) return undefined
-    const lines = bad.map(({ machine, state }) => `${names[kind]} is ${state === 'missing' ? 'not installed' : 'not signed in'} on ${this.machineName(machine) || 'this machine'}.`)
+    const lines = bad.map(({ machine, cli, state }) => `${names[cli]} is ${state === 'missing' ? 'not installed' : 'not signed in'} on ${this.machineName(machine) || 'this machine'}.`)
     return `${lines.join('\n')}\n${what} can't run there until that is fixed, or you choose another agent.`
   }
   /** Backup's own row is under Agents: How tasks work repeats it only to warn. */

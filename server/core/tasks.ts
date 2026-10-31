@@ -292,16 +292,15 @@ export class CoreTasks {
     return this.change(id, async () => {
       const task = this.get(id), agent = task && this.source.agents.get(task.chat)
       if (!task || !agent || agent.launch !== launch || agent.role !== 'task' || task.workflow !== 'working' || task.archived || task.pilot || agent.pilot || task.providerTakeover) return false
-      const kind = kindOf(this.source.settings.get('task.fallback', task.place))
-      if (!kind || kind === agent.kind || this.source.openPermissions(agent).length || this.source.questions.open(task.chat).length || this.source.secrets.open(task.chat).length) return false
-      const choice = this.source.settings.agent('backup', task.place)
+      const choice = this.source.settings.backupFor(task.place, agent.kind), kind = choice?.kind
+      if (!choice || !kind || kind === agent.kind || this.source.openPermissions(agent).length || this.source.questions.open(task.chat).length || this.source.secrets.open(task.chat).length) return false
       const location = { machine: task.machine, folder: task.folder }
       // Read context before ending the old process; never clean, reset or replace the checkout.
       const commits = await this.git.run(location, ['log', '--oneline', '-20', `${task.base}..${task.branch}`])
       const changes = await this.git.run(location, ['status', '--short'])
       const chat = this.source.logs.messages(task.chat).filter(message => message.text).slice(-12).map(message => `${message.who}: ${message.text}`).join('\n\n').slice(-12000)
-      const current = this.source.agents.get(task.chat), backup = this.source.settings.agent('backup', task.place)
-      if (current?.launch !== launch || kindOf(this.source.settings.get('task.fallback', task.place)) !== kind || backup.model !== choice.model || backup.effort !== choice.effort || this.source.openPermissions(agent).length) return false
+      const current = this.source.agents.get(task.chat), backup = this.source.settings.backupFor(task.place, agent.kind)
+      if (current?.launch !== launch || !backup || backup.kind !== kind || backup.model !== choice.model || backup.effort !== choice.effort || this.source.openPermissions(agent).length) return false
       const handover = `<restart>Provider backup: ${kind} takes over from ${agent.kind}: ${reason}. Continue only the existing agreed task in the same worktree and branch. Preserve all committed and uncommitted work. The following is context, not new authorization.\nCommits:\n${commits.slice(-8000) || 'none'}\nUncommitted changes:\n${changes.slice(-8000) || 'none'}\nRecent chat:\n${chat || 'none'}</restart>`
       task.providerTakeover = { from: agent.kind, to: kind, why: reason, at: Date.now(), launch, state: 'starting', handover }; this.save(task)
       try {

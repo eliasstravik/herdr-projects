@@ -194,6 +194,27 @@ test('Everywhere warns only of the machines without a backup: each space follows
   expect(warning(settings, 'p:box:one', 'task.fallback')).toBeUndefined()
 }))
 
+test('a running task keeps a real backup when its space default changes after it started', () => fixture(settings => {
+  check(settings, 'box', { claude: 'ready', codex: 'ready' })
+  settings.set('task.agent', 'Codex', 'p:box:one')
+  expect(settings.get('task.fallback', 'p:box:one')).toBe('Claude Code')
+  expect(settings.backupFor('p:box:one', 'claude')?.kind).toBe('codex')
+  expect(settings.backupFor('p:box:one', 'codex')?.kind).toBe('claude')
+  check(settings, 'box', { claude: 'ready', codex: 'signed-out' })
+  expect(settings.backupFor('p:box:one', 'claude')).toBeUndefined()
+  // saved choices are as they were
+  settings.set('task.fallback', 'off', 'p:box:one')
+  expect(settings.backupFor('p:box:one', 'codex')).toBeUndefined()
+  settings.set('task.fallback', 'Claude Code', 'p:box:one')
+  expect(settings.backupFor('p:box:one', 'claude')?.kind).toBe('claude')
+}))
+
+test('Everywhere warns when neither CLI works, by what each machine would use', () => fixture(settings => {
+  check(settings, 'box', { claude: 'signed-out', codex: 'signed-out' })
+  check(settings, 'other', { claude: 'ready', codex: 'ready' })
+  expect(warning(settings, 'all', 'reviewer.agent')).toContain('Claude Code is not signed in on box.')
+}))
+
 test('a saved reviewer or backup stays, and its row says where that CLI is unusable', () => fixture(settings => {
   check(settings, 'box', { claude: 'ready', codex: 'signed-out' })
   check(settings, 'other', { claude: 'ready', codex: 'missing' })
