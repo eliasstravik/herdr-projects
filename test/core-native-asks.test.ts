@@ -75,12 +75,14 @@ test('a plan is the Plan to approve card with Claude’s real choices, and each 
 
     const second = f.ask('ExitPlanMode', plan)
     await f.source.act(answer(second.id, 0, { note: 'Keep it short' }))
-    expect(f.source.store.get<{ text: string }>('pending-send', `answer-${second.id}`)?.text).toContain('Keep it short')
-    expect(await second.reply).toEqual({ allow: true, updatedInput: plan, updatedPermissions: [{ type: 'setMode', mode: 'auto', destination: 'session' }] })
+    const approved = await second.reply
+    expect(approved.updatedInput?.plan).toStartWith(plan.plan)
+    expect(approved.updatedInput?.plan).toContain('Keep it short')
+    expect(approved.updatedPermissions).toEqual([{ type: 'setMode', mode: 'auto', destination: 'session' }])
 
     const third = f.ask('ExitPlanMode', plan)
     await f.source.act(answer(third.id, 1))
-    expect((await third.reply).updatedPermissions).toEqual([{ type: 'setMode', mode: 'default', destination: 'session' }])
+    expect(await third.reply).toEqual({ allow: true, updatedInput: plan, updatedPermissions: [{ type: 'setMode', mode: 'default', destination: 'session' }] })
   } finally { f.close() }
 })
 

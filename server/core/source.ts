@@ -28,7 +28,6 @@ import { terminalBridge } from './terminal.ts'
 import { CoreError } from './client.ts'
 import { CLI_NAME, CoreSettings } from './settings.ts'
 import { pickSpeed } from '../common/restart.ts'
-import { tag } from '../common/chatlines.ts'
 import { CoreSecrets } from './secrets.ts'
 import { CoreProviderRetries } from './provider-retries.ts'
 import { CoreArtifacts } from './artifacts.ts'
@@ -407,9 +406,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
         if (native && answer) {
           const cards = this.nativeRows(native.head)
           if (cards.some(card => !card.settled)) return { answered: true }
-          this.replyNative(native, nativeReply(native, cards, answer.sent, answer.said))
-          // The tool takes no words with a yes: a note on an approved plan follows as a message.
-          if (allow && native.tool === 'ExitPlanMode' && action.note?.trim()) this.saveAndDeliver(action.chat, `answer-${permission.id}`, tag('answer', { from: this.snapshot().user, question: permission.question.title }, action.note.trim()), () => {})
+          this.replyNative(native, nativeReply(native, cards, answer.sent, action.note?.trim()))
           return { answered: true }
         }
         this.permissions.get(permission.id)?.({ allow }); this.permissions.delete(permission.id)

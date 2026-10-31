@@ -51,12 +51,14 @@ export function nativeAnswer(question: Question, action: Extract<Action, { type:
 }
 
 /** The hook's reply once every card of a call is answered. Claude keeps its own prompt up unless an allow carries the input. */
-export function nativeReply(native: NativeAsk, cards: { question: Question; native?: NativeAsk }[], sent: number, note: string): PermissionAnswer {
+export function nativeReply(native: NativeAsk, cards: { question: Question; native?: NativeAsk }[], sent: number, note = ''): PermissionAnswer {
   if (native.tool === 'AskUserQuestion') {
     return { allow: true, updatedInput: { ...native.input, answers: Object.fromEntries(cards.map(card => [card.question.title, card.native?.answer ?? ''])) } }
   }
   if (sent === 2) return { allow: false, message: `The human read your plan and wants it changed. Stay in plan mode, change the plan as they say, then present it again. Their words:\n\n${note}` }
-  return { allow: true, updatedInput: native.input, updatedPermissions: [{ type: 'setMode', mode: sent === 0 ? native.stop : 'default', destination: 'session' }] }
+  // Claude takes no words with a yes, so a note on an approved plan goes back as part of the plan.
+  const input = note ? { ...native.input, plan: `${text(native.input.plan)}\n\n## The human's note on this plan\n\n${note}` } : native.input
+  return { allow: true, updatedInput: input, updatedPermissions: [{ type: 'setMode', mode: sent === 0 ? native.stop : 'default', destination: 'session' }] }
 }
 
 export const nativeClosed = (reason: string): PermissionAnswer => ({ allow: false, message: `Shepherdr closed this without an answer: ${reason}. Nothing was approved or chosen. Ask again if you still need it.` })
