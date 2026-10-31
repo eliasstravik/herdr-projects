@@ -11,7 +11,7 @@ interface ScreenCard { id: string; chat: string; launch: string; screen: string;
 
 const FIRST_LOOK = 6000 // two matching reads, a poll or two apart, put a card with choices up by about 10 seconds
 const POLL = 2000
-const NO_CHOICES = 30_000 // with nothing to tap, it may yet be a slow start: a card comes later
+const NO_CHOICES = 30_000 // with nothing to tap and no card yet, it may be a slow start: its first card comes later
 const RETRY = 10_000 // a pressed choice has this long to leave the screen before it is asked again
 
 /** An agent with no session yet may be stopped at a screen of its CLI's own: folder trust, theme, sign-in, hooks, or one
@@ -67,7 +67,7 @@ export class CoreScreens {
     if (open && before.shown === shown && JSON.stringify([open.question.screen, open.question.choices]) !== shown) { open.question.screen = words; open.question.choices = choices; this.settle(open) }
     if (open || cards.some(row => row.screen === seen && now - row.at < RETRY)) return
     for (const row of cards) if (row.state === 'open') this.finish(row)
-    if (choices.length || words && now - agent.started >= NO_CHOICES) this.post(agent, seen, words, choices)
+    if (choices.length || words && (cards.length || now - agent.started >= NO_CHOICES)) this.post(agent, seen, words, choices)
   }
   private post(agent: CoreAgent, screen: string, words: string, choices: Question['choices']) {
     const task = this.source.tasks.forChat(agent.chat), id = randomUUID(), cli = CLI_NAME[agent.kind]

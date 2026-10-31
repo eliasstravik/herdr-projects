@@ -62,6 +62,14 @@ test('words with nothing to tap may be a slow start, so they wait longer', async
   expect(open().screen).toContain('Starting the servers')
 })
 
+test('words with nothing to tap come at once after a card, as a sign-in link does', async () => {
+  await settle()
+  await source.act({ type: 'answer', chat: 'space', question: open().id, choice: 1 })
+  screen = 'Paste code here if prompted >\n'
+  await settle(started + 12_000)
+  expect(open().screen).toContain('Paste code here')
+})
+
 test('a screen still moving waits; a blank one never shows', async () => {
   screen = 'Loading the project'
   await source.screens.tick(started + 10_000)
