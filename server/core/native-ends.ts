@@ -4,7 +4,7 @@ import type { AgentHook } from './model.ts'
 /** What an agent's own records say it moved past: one tool call (use), or its whole turn. */
 export interface NativeEnd { at: number; reason: string; use?: string; sub?: string; prompt?: boolean; turn?: string }
 /** The part of a waiting card that evidence is matched against. */
-export interface NativeCall { at?: number; tool?: string; hash?: string; turn?: string; sub?: string; spent?: boolean; native?: unknown }
+export interface NativeCall { id?: string; at?: number; tool?: string; hash?: string; turn?: string; sub?: string; native?: unknown }
 
 const ANSWERED = 'Answered in the terminal', DECLINED = 'Declined or interrupted in the terminal', TIMED_OUT = 'Timed out in the CLI and was denied'
 const INTERRUPTED = 'Interrupted in the terminal', MOVED_ON = 'The agent moved on in the terminal'
@@ -40,19 +40,24 @@ export class NativeEnds {
     this.ends.set(launch, ends); ends.push(end)
     if (ends.length > KEEP) ends.shift()
   }
-  /** Why this card is over, if its call or its turn is. One tool result ends one card, whichever record said it first. */
+  /** The tool call a card waits on. Each card holds on to its own, oldest first, so identical calls never trade results. */
+  private call(launch: string, card: NativeCall) {
+    const calls = this.calls.get(launch), ends = this.ends.get(launch) ?? []
+    for (const [use, call] of calls ?? []) if (call.id === card.id) return use
+    for (const [use, call] of calls ?? []) {
+      // Claude's question and plan tools run alone, and it fills in their input after the call.
+      if (call.id || call.sub !== card.sub || call.tool !== card.tool || call.hash !== card.hash && !card.native) continue
+      if (ends.some(end => end.use === use && end.at < (card.at ?? 0))) continue
+      call.id = card.id
+      return use
+    }
+  }
+  /** Why this card is over, if its call or its turn is. */
   over(launch: string, card: NativeCall) {
-    const calls = this.calls.get(launch)
+    const use = this.call(launch, card)
     for (const end of this.ends.get(launch) ?? []) {
       if (end.at < (card.at ?? 0)) continue
-      if (end.use) {
-        const call = calls?.get(end.use)
-        // Claude's question and plan tools run alone, and it fills in their input after the call.
-        if (!call || call.spent || call.sub !== card.sub || call.tool !== card.tool || call.hash !== card.hash && !card.native) continue
-        call.spent = true
-        return end.reason
-      }
-      if (end.at > (card.at ?? 0) && end.sub === card.sub && !(end.prompt && end.turn && end.turn === card.turn)) return end.reason
+      if (end.use ? end.use === use : end.at > (card.at ?? 0) && end.sub === card.sub && !(end.prompt && end.turn && end.turn === card.turn)) return end.reason
     }
   }
   forget(launch: string) { this.calls.delete(launch); this.ends.delete(launch) }
