@@ -15,5 +15,5 @@ independent of the app. Retain the prior build and a consistent private state ba
 for rollback. Never run two application writers on one home. Plugins are rebuilt
 from the selected build/home; a failed plugin update keeps the working version.
 
-Version bumps, tags, releases and publication require Elias's separate approval.
-This development branch performs none of those actions.
+Shepherdr never bumps its version, tags, releases or publishes on its own. A release needs the maintainer's separate
+approval.

@@ -2,8 +2,7 @@
 
 Shepherdr 2.1 is a standalone web application beside herdr-core, not a terminal-herdr
 plugin. Follow [installation, startup and private sharing](core/start.md).
-The rewrite's [acceptance record](core/implementation.md) identifies remaining gaps;
-this branch is not an approved production deployment or release.
+The [acceptance record](core/implementation.md) identifies remaining gaps.
 
 After installation, run `shepherdr start`. Open its private Tailscale HTTPS URL from
 your phone, tablet or desktop. Add it to the home screen if wanted, and enable alerts

@@ -14,6 +14,8 @@ session. Never use live `~/.shepherdr` for development. The optional fictional d
 uses `SHEPHERDR_SOURCE=demo bun server/main.ts`; it is UI fixture data, not acceptance
 proof. Its optional browser is local-only, without any remote sharing or SSH code.
 Vite can proxy an isolated app through `SHEPHERDR_API_URL`.
+Codex keeps one trust fingerprint per hook slot for all Shepherdr installs, so trusting hooks in a second checkout
+untrusts the first; a preview or moved checkout will do this.
 
 ```text
 server/core/       core client, product state, tasks and standalone lifecycle

@@ -74,12 +74,6 @@ also has a side panel: its live core terminal, its files, its diff against main 
   into one, or back under its machine; a drag onto a section's heading or among its spaces does the same. A section
   folds, drags among its peers, and its ⋯ renames it (emoji and name) or deletes it: its spaces go back where they
   were. Pinned is one of them that can't be deleted.
-- From before spaces (projects, machine coordinators and an All machines coordinator): the first start moves it all
-  over once (`server/live/migrate.ts`). Projects become spaces with their ids, names and chats (`projects.json` becomes
-  `spaces.json`); each machine coordinator's chat moves into that machine's home space, and All machines' into the main
-  machine's home space, which takes over its jobs; modes, settings, pins, unread marks, heartbeats and artifacts
-  follow. A pinned machine becomes its pinned home space. `shepherdr project …` and `--project` still work, as
-  `space`.
 
 - A repository space starts with the base detected when it was added (usually `origin/HEAD`, then main or master).
   Change it under **Settings → Repository → Base branch**, or with
