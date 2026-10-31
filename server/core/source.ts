@@ -26,7 +26,8 @@ import { CoreTaskNews } from './news.ts'
 import { CoreQuestions } from './questions.ts'
 import { CoreScreens } from './screens.ts'
 import { terminalBridge } from './terminal.ts'
-import { CoreError } from './client.ts'
+import { CoreError, Refusal } from './client.ts'
+import { toolHash } from './envelope.ts'
 import { CLI_NAME, CoreSettings } from './settings.ts'
 import { pickSpeed } from '../common/restart.ts'
 import { CoreSecrets } from './secrets.ts'
@@ -47,12 +48,13 @@ import { CoreUnread } from './unread.ts'
 import { CoreCards } from './cards.ts'
 import { CorePilotMail } from './pilot-mail.ts'
 import { askText, clip, quickChoices, TITLE_MAX, BODY_MAX } from '../../shared/alerts.ts'
+import { CANCELLED, hookEnd, logEnd, NativeEnds, STOPPED } from './native-ends.ts'
 import { NATIVE_UNREADABLE, nativeAnswer, nativeCards, nativeClosed, nativeReply, type NativeAsk, type PermissionAnswer } from './native-asks.ts'
 import type { CorePluginUpdates } from './plugin-updates.ts'
 import type { ActivityAsk, WorktreeAsk } from '../../shared/types.ts'
 
 interface Machine { id: string; name: string; state: string; host?: string; version?: string; session?: string | null }
-interface Permission { id: string; chat: string; grant: string; question: Question; expires: number; settled?: boolean; allow?: boolean; at?: number; native?: NativeAsk }
+interface Permission { id: string; chat: string; grant: string; question: Question; expires: number; settled?: boolean; allow?: boolean; at?: number; native?: NativeAsk; tool?: string; hash?: string; turn?: string; sub?: string }
 interface PendingSend { id: string; chat: string; text: string; launch?: string; state: 'queued' | 'sending' | 'uncertain' | 'cancelled'; quiet?: boolean; work?: boolean }
 
 /** Product state is Shepherdr's; terminals, machine commands, files and agent children are core's. */
@@ -94,6 +96,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
   private local: { id: string; name: string }
   private machines: Machine[] = []
   private permissions = new Map<string, (answer: PermissionAnswer) => void>()
+  private ends = new NativeEnds()
   private faults = new Map<string, string>()
   private hooks = new Map<Action['type'], (action: Action) => Promise<unknown>>()
   private recovery?: ReturnType<typeof setInterval>
@@ -114,9 +117,13 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     this.mailbox = new Mailbox(config.home, this.core, machine => this.route(machine), (grant, request, id) => this.mail(grant, request, id))
     const changed = (chat: string) => { this.reconcilePermissions(chat); this.questions?.reconcile(chat); this.screens?.reconcile(chat); this.secrets?.reconcile(chat); this.emit('chat', chat); this.emit('snapshot'); void this.flush(chat); void this.tasks?.tick().catch(error => this.faults.set('queue', error.message)) }
     this.agents = new CoreAgents(config, installation, this.core, this.store, this.mailbox, machine => this.route(machine), changed, machine => this.machines.find(item => item.id === machine) ?? {})
-    this.logs = new CoreLogs(this.agents, this.files, this.store, changed, (chat, message) => { this.faults.set(chat, message) }, (chat, message) => this.fresh(chat, message), agent => this.pilots.usage.observe(agent))
+    this.logs = new CoreLogs(this.agents, this.files, this.store, changed, (chat, message) => { this.faults.set(chat, message) }, (chat, message) => this.fresh(chat, message), agent => this.pilots.usage.observe(agent), (agent, event) => this.nativeEnded(agent, logEnd(event)))
     this.settings = new CoreSettings(this.store, this.files, () => this.spaces(), id => this.store.get<string>('name', `m:${id}`) || (id === this.local.id ? this.local.name : this.machineName(id) || id), () => this.emit('snapshot'))
     this.agents.settings = this.settings
+    this.agents.observed = (agent, event) => {
+      if (event.event === 'PreToolUse' && event.use) this.ends.called(agent.launch, event.use, { tool: event.tool, hash: event.input })
+      this.nativeEnded(agent, hookEnd(event))
+    }
     this.places = new CorePlaces(this)
     this.tasks = new CoreTasks(this)
     this.news = new CoreTaskNews(this)
@@ -137,7 +144,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     this.heartbeats = new CoreHeartbeats(this)
     this.voices = new CoreVoice(this)
     this.plugins = new CorePlugins(this)
-    this.core.onChange(() => { this.agents.reconcile(); this.emit('snapshot'); for (const agent of this.agents.all()) { this.reconcilePermissions(agent.chat); this.screens.reconcile(agent.chat); void this.flush(agent.chat) } })
+    this.core.onChange(() => { this.agents.reconcile(); this.emit('snapshot'); for (const agent of this.agents.all()) { this.reconcilePermissions(agent.chat); this.questions.reconcile(agent.chat); this.screens.reconcile(agent.chat); this.secrets.reconcile(agent.chat); void this.flush(agent.chat) } })
     this.core.onDocument(event => { void this.mailbox.event(String(event.params.data?.name ?? ''), event.params.machine).catch(error => this.faults.set('mailbox', error.message)) })
     this.core.onResync(() => { void this.refresh().then(() => this.mailbox.resync()).catch(error => this.faults.set('core', error.message)) })
   }
@@ -158,6 +165,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     }
     for (const agent of this.agents.all()) {
       agent.permission = this.openPermissions(agent)[0]?.id
+      if (agent.state === 'blocked' && !agent.permission) agent.state = 'working'
       this.store.set('agent', agent.chat, agent)
     }
     await this.core.start(); await this.refresh(); this.human = await humanName(this.config.home, async () => (await this.files.exec(this.local.id, ['git', 'config', '--global', 'user.name'], undefined, undefined, 3)).toString('utf8')); this.tasks.recoverProviderFallbacks(); this.logs.start(); this.screens.start(); this.automations.start(); this.health.start(); this.github.start()
@@ -239,7 +247,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     if (terminal?.state === 'finished') return 'idle'
     if (agent.pid && terminal?.pid !== agent.pid) return 'need'
     const word = terminal?.status?.state ?? agent.state
-    if (word === 'blocked' || agent.permission) return 'need'
+    if (word === 'blocked') return 'need'
     const provider = this.providerRetries.get(agent)
     if (provider) return provider.over ? 'need' : 'work'
     return word === 'working' || word === 'starting' ? 'work' : 'idle'
@@ -323,17 +331,31 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     permission.settled = true; permission.allow = false; permission.question.sent = -1; permission.question.said = reason
     permission.question.closed = reason
     this.store.set('permission', permission.id, permission)
-    const current = this.agents.get(permission.chat)
-    if (current?.permission === permission.id) { current.permission = this.openPermissions(current)[0]?.id; if (current.grant === permission.grant) current.state = current.permission ? 'blocked' : 'working'; this.store.set('agent', current.chat, current) }
+    this.settleAgent(permission)
     const message = this.store.get<Message>(`message:${permission.chat}`, `permission-${permission.id}`)
     this.post(permission.chat, { ...message, id: `permission-${permission.id}`, who: 'agent', question: permission.question, at: message?.at ?? Date.now() })
     this.forwardQuestion(permission.chat, permission.question, reason, 'task', 'No longer waiting')
+    if (!permission.native || permission.native.head === permission.id) this.clearAlert(permission.chat, reason)
     if (permission.native) {
       this.replyNative(permission.native, nativeClosed(reason))
       for (const card of this.nativeRows(permission.native.head)) this.expirePermission(card, reason)
       return
     }
     this.permissions.get(permission.id)?.({ allow: false }); this.permissions.delete(permission.id)
+  }
+  /** A phone that showed this chat's card drops its alert and takes the new count, without a sound. */
+  clearAlert(chat: string, reason: string) {
+    const space = this.agents.get(chat)?.space, task = this.tasks.forChat(chat)
+    if (space) this.emit('alert', { id: randomUUID(), from: 'Shepherdr', title: 'No longer waiting', body: reason, go: { place: space }, tag: chat, ...(task ? { task: true as const } : {}), clear: true })
+  }
+  /** The agent's record follows its open cards; what ended a card may already have moved its state on. */
+  private settleAgent(permission: Permission) {
+    const agent = this.agents.get(permission.chat)
+    if (!agent || agent.grant !== permission.grant) return
+    agent.permission = this.openPermissions(agent)[0]?.id
+    if (agent.permission) agent.state = 'blocked'
+    else if (agent.state === 'blocked') agent.state = 'working'
+    this.store.set('agent', agent.chat, agent)
   }
   private nativeRows(head: string) { return this.store.all<Permission>('permission').filter(item => item.native?.head === head) }
   private replyNative(native: NativeAsk, reply: PermissionAnswer) {
@@ -344,12 +366,20 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
   denyPermissions(agent: CoreAgent, reason: string) {
     for (const permission of this.store.all<Permission>('permission')) if (permission.chat === agent.chat && permission.grant === agent.grant && !permission.settled) this.expirePermission(permission, reason)
   }
+  private nativeEnded(agent: CoreAgent, end?: ReturnType<typeof hookEnd>) {
+    if (!end) return
+    this.ends.ended(agent.launch, end)
+    this.reconcilePermissions(agent.chat)
+  }
+  /** Oldest first: a tool result closes the longest-waiting card of that call. */
   private reconcilePermissions(chat: string) {
-    for (const permission of this.store.all<Permission>('permission')) if (permission.chat === chat && !permission.settled) {
+    const cards = this.store.all<Permission>('permission').filter(permission => permission.chat === chat && !permission.settled).sort((a, b) => (a.at ?? 0) - (b.at ?? 0))
+    for (const permission of cards) {
+      if (this.store.get<Permission>('permission', permission.id)?.settled) continue
       const agent = this.agents.get(chat)
       const reason = permission.expires <= Date.now() ? 'Permission request expired' : agent?.grant !== permission.grant ? 'Session replaced; ask the agent for a fresh card'
-        : this.agents.terminal(agent)?.state === 'finished' ? 'Agent stopped; ask again after restarting it'
-        : permission.native && agent!.nativeEnded! > permission.at! ? 'Handled in the terminal' : undefined
+        : this.agents.terminal(agent)?.state === 'finished' ? STOPPED
+        : this.ends.over(agent.launch, permission)
       if (reason) this.expirePermission(permission, reason)
     }
   }
@@ -392,8 +422,11 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
         if (await this.tasks.answer(action.question, action.choice, action.chat)) return { ok: true }
         if (await this.questions.answer(action)) return { ok: true }
         if (await this.screens.answer(action)) return { ok: true }
+        // What the records already say must win this tap, without a slow machine holding the tap up.
+        const open = this.store.get<Permission>('permission', action.question)
+        if (open && !open.settled) await Promise.race([this.logs.catchUp(action.chat), Bun.sleep(1500)])
         const permission = this.store.get<Permission>('permission', action.question)
-        if (!permission || permission.chat !== action.chat || permission.settled) throw new Error('This request is no longer waiting for an answer')
+        if (!permission || permission.chat !== action.chat || permission.settled) throw new Refusal(permission?.question.closed ? `This card has closed: ${permission.question.closed}` : 'This request is no longer waiting for an answer')
         if (permission.expires <= Date.now() || this.agents.get(action.chat)?.grant !== permission.grant) throw new Error('This permission belongs to an expired or replaced agent session')
         const native = permission.native, answer = native && nativeAnswer(permission.question, action)
         if (!native && action.choice !== 0 && action.choice !== 1) throw new Error('Choose Allow once or Deny')
@@ -401,8 +434,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
         permission.settled = true; permission.allow = allow; permission.question.sent = answer ? answer.sent : action.choice
         if (native && answer) { native.answer = permission.question.said = answer.said }
         this.store.set('permission', permission.id, permission)
-        const agent = this.agents.get(action.chat)
-        if (agent && agent.permission === permission.id) { agent.permission = this.openPermissions(agent)[0]?.id; agent.state = agent.permission ? 'blocked' : 'working'; this.store.set('agent', agent.chat, agent) }
+        this.settleAgent(permission)
         const message = this.store.get<Message>(`message:${action.chat}`, `permission-${permission.id}`)
         this.post(action.chat, { ...message, id: `permission-${permission.id}`, who: 'agent', question: permission.question, at: message?.at ?? Date.now() })
         this.forwardQuestion(action.chat, permission.question, answer?.said ?? (allow ? 'Allow once' : 'Deny'), action.space ? 'space' : 'task')
@@ -628,21 +660,23 @@ Use hc for starting, messaging and waiting on core child agents. Never use a web
     }
     if (request.action === 'secret') return this.secrets.use(agent, request.args)
     if (request.action !== 'permission') throw new Error('This command is not connected in this rewrite slice')
+    const { cancel, gone } = request.args as { cancel?: unknown; gone?: unknown }
+    if (typeof cancel === 'string' && /^[a-f0-9-]{36}$/.test(cancel)) { this.cancelPermission(grant, cancel, gone === true ? STOPPED : CANCELLED); return {} }
     return this.requestPermission(agent, grant, request, requestId)
   }
 
-  cancelPermission(grant: Grant, id: string) {
+  cancelPermission(grant: Grant, id: string, reason = CANCELLED) {
     const now = Date.now(), kind = `permission-cancel:${grant.id}`
     for (const item of this.store.all<{ id: string; at: number }>(kind)) if (now - item.at > 24 * 60 * 60_000) this.store.delete(kind, item.id)
     if (!this.store.get(kind, id) && this.store.all(kind).length >= 10_000) throw Error('Too many cancelled permission requests in this session')
     this.store.set(kind, id, { id, at: now })
     const permission = this.store.get<Permission>('permission', id)
-    if (permission?.grant === grant.id && permission.chat === grant.chat) this.expirePermission(permission, 'The agent cancelled this request')
+    if (permission?.grant === grant.id && permission.chat === grant.chat) this.expirePermission(permission, reason)
   }
 
   /** Internal dispatch after authenticating the current launch; cancellation always wins a later answer. */
   requestPermission(agent: CoreAgent, grant: Grant, request: MailRequest, requestId: string): Promise<unknown> | PermissionAnswer {
-    const input = request.args as { id?: string; tool?: string; input?: unknown; at?: number }
+    const input = request.args as { id?: string; tool?: string; input?: unknown; at?: number; agent?: string; turn?: string }
     if (typeof input.id !== 'string' || !/^[a-f0-9-]{36}$/.test(input.id) || input.id !== requestId) throw new Error('Invalid permission request identity')
     if (this.store.get(`permission-cancel:${grant.id}`, input.id)) return { allow: false }
     const previous = this.store.get<Permission>('permission', input.id)
@@ -653,7 +687,7 @@ Use hc for starting, messaging and waiting on core child agents. Never use a web
     const questions = native?.questions ?? [{ id: input.id, title: `${agent.kind === 'claude' ? 'Claude Code' : 'Codex'} asks to use ${String(input.tool || 'a tool').slice(0, 100)}`,
       kind: 'Question' as const, choices: [{ label: 'Allow once' }, { label: 'Deny' }], to: grant.chat, noNote: true,
       screen: JSON.stringify(input.input, null, 2)?.slice(0, 16_000) }]
-    const rows = questions.map((question): Permission => ({ id: question.id, chat: grant.chat, grant: grant.id, question, expires: request.expires, at: Number.isFinite(input.at) ? input.at : Date.now(), ...(native ? { native: { ...native.native, head: input.id! } } : {}) }))
+    const rows = questions.map((question): Permission => ({ id: question.id, chat: grant.chat, grant: grant.id, question, expires: request.expires, at: Number.isFinite(input.at) ? input.at : Date.now(), tool: input.tool, hash: toolHash(input.input), turn: input.turn, sub: input.agent, ...(native ? { native: { ...native.native, head: input.id! } } : {}) }))
     const permission = rows[0], question = permission.question
     agent.state = 'blocked'; agent.permission = input.id; this.store.set('agent', agent.chat, agent)
     for (const row of rows) {
@@ -669,6 +703,7 @@ Use hc for starting, messaging and waiting on core child agents. Never use a web
         this.expirePermission(permission, 'Permission request expired')
       }, Math.max(1, request.expires - Date.now() - 1000))
       this.permissions.set(input.id!, answer => { clearTimeout(timer); resolve(answer) })
+      this.reconcilePermissions(grant.chat) // After a reconnect its end can be on record before the card is.
     })
   }
 
