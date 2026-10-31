@@ -50,7 +50,7 @@ import { CoreCards } from './cards.ts'
 import { CorePilotMail } from './pilot-mail.ts'
 import { askText, clip, quickChoices, TITLE_MAX, BODY_MAX } from '../../shared/alerts.ts'
 import { CANCELLED, hookEnd, logEnd, NativeEnds, STOPPED } from './native-ends.ts'
-import { NATIVE_UNREADABLE, nativeAnswer, nativeCards, nativeClosed, nativeReply, type NativeAsk, type PermissionAnswer } from './native-asks.ts'
+import { NATIVE_UNREADABLE, cardWords, nativeAnswer, nativeCards, nativeClosed, nativeReply, type NativeAsk, type PermissionAnswer } from './native-asks.ts'
 import type { CorePluginUpdates } from './plugin-updates.ts'
 import type { ActivityAsk, WorktreeAsk } from '../../shared/types.ts'
 
@@ -153,11 +153,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
   }
   async start() {
     // A previous server's in-flight mailbox claim cannot be re-executed. Mark its cards honestly as interrupted.
-    for (const permission of this.store.all<Permission>('permission')) {
-      if (!permission.settled) {
-        this.expirePermission(permission, 'Interrupted; ask again after reconnecting')
-      }
-    }
+    this.closeInterrupted()
     for (const pending of this.store.all<PendingSend>('pending-send')) {
       if (pending.state === 'sending') {
         pending.state = 'uncertain'; this.store.set('pending-send', pending.id, pending)
@@ -328,6 +324,19 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     const id = `ask-${question.id}`, previous = this.store.get<Message>(`message:${task.place}`, id)
     this.post(task.place, { id, who: 'agent', at: previous?.at ?? Date.now(), card: { id, task: task.id, status: answer ? this.tasks.view(task).status : 'need', text: answer ? outcome : 'Needs you',
       ask: { chat, questions: [question], open: answer === undefined, answered: answer === undefined ? undefined : { where, text: answer } } } })
+  }
+  /** Cards a previous server held. The agent's own answer says only that it was refused; alone with that, it can give up on the work. */
+  private closeInterrupted() {
+    const denied = new Map<string, string[]>()
+    for (const permission of this.store.all<Permission>('permission')) {
+      if (permission.settled) continue
+      this.expirePermission(permission, 'Shepherdr restarted; ask again')
+      if (this.agents.get(permission.chat)?.grant === permission.grant && (!permission.native || permission.native.head === permission.id)) denied.set(permission.chat, [...denied.get(permission.chat) ?? [], cardWords(permission.question, !!permission.native, permission.tool)])
+    }
+    for (const [chat, words] of denied) {
+      const text = `Shepherdr restarted, so this was denied, though nobody refused it: ${words.join('; ')}. Ask again if it's still needed.`, id = `restart-denied-${randomUUID()}`
+      this.saveAndDeliver(chat, id, `<restart>${text.replaceAll('<', '\\u003c')}</restart>`, () => this.post(chat, { id, who: 'agent', text, at: Date.now() }), true)
+    }
   }
   private expirePermission(permission: Permission, reason: string) {
     if (permission.settled) return
@@ -630,7 +639,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
   ask TITLE --choice LABEL --choice LABEL | plan [ID] --title TITLE --step TEXT --step TEXT
   review ID | pr ID | checks ID [--comments [--offset N] [--from nextFrom]]
   ready ID --summary TEXT [--facts TEXT]
-  merge ID (requires the human's exact-commit card approval)
+  merge ID (follows the task's Merge setting; only "ask the human first" needs their yes on its card)
   heartbeat [SPACE] | heartbeat set [SPACE] < FILE
   automation add NAME --task TITLE --brief TEXT --when "FREQ=MINUTELY;INTERVAL=30" | --on EVENTS [--space NAME]
   automation edit|list|pause|resume|run|remove NAME
@@ -755,7 +764,7 @@ Use hc for starting, messaging and waiting on core child agents. Never use a web
   }
   watch(_chats: string[], _terms: string[]) {}
   private deliveryNotice(item: PendingSend, uncertain = false) {
-    if (item.quiet && !uncertain) return
+    if (item.quiet && !uncertain || item.id.startsWith('restart-denied-')) return
     this.post(item.chat, { id: `delivery-${item.id}`, who: 'agent', text: item.quiet ? 'Browser handoff was not confirmed. Check with the agent before letting it use the browser.' : uncertain
       ? 'Shepherdr could not confirm delivery of your saved answer. Check with the agent before answering again; it will not be sent to a replacement session.'
       : 'Shepherdr saved your answer and is waiting for the agent to receive it.', at: Date.now() })

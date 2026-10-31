@@ -307,6 +307,28 @@ test('a killed agent’s card closes', async () => {
   } finally { f.close() }
 })
 
+test('a restart closes open cards and says in the chat and to the agent what was denied, and that nobody refused it', async () => {
+  const f = fixture()
+  try {
+    const sent: string[] = []
+    f.source.agents.terminal = (() => ({ state: 'live' })) as unknown as typeof f.source.agents.terminal
+    f.source.tasks.deliver = (async (_id: string, _chat: string, text: string) => { sent.push(text) }) as unknown as typeof f.source.tasks.deliver
+    const first = f.ask({ input: { command: 'git   push\n origin', description: 'Push' } }), second = f.ask({ tool: 'Write', input: { file_path: 'notes.txt', content: 'x' } })
+    f.source.store.set('permission', 'gone', { id: 'gone', chat, grant: 'older', tool: 'Bash', expires: Date.now() + 60_000, question: { id: 'gone', title: 'Old session', kind: 'Question', choices: [] } })
+    ;(f.source as unknown as { closeInterrupted(): void }).closeInterrupted()
+    await closed(f, first.id, first.reply, 'Shepherdr restarted; ask again')
+    await closed(f, second.id, second.reply, 'Shepherdr restarted; ask again')
+    const lines = f.source.chat(chat)!.messages.filter(message => message.id.startsWith('restart-denied-'))
+    expect(lines).toHaveLength(1)
+    expect(lines[0].text).toContain('Bash: git push origin; Write: notes.txt')
+    expect(lines[0].text).toContain('nobody refused it')
+    expect(lines[0].text).not.toContain('Old session')
+    await Bun.sleep(0)
+    expect(sent).toEqual([`<restart>${lines[0].text}</restart>`])
+    expect(f.source.chat(chat)!.messages.filter(message => message.id.startsWith('delivery-'))).toHaveLength(0)
+  } finally { f.close() }
+})
+
 test('a change in core closes a card of every kind at once', async () => {
   const f = fixture()
   try {

@@ -71,21 +71,21 @@ export class CoreSecrets {
   async act(action: Extract<Action, { type: 'secret' | 'secret-saved' }>) {
     if (action.type === 'secret-saved') throw new Refusal('Save the secret through its masked box')
     this.level(action.level)
-    let request: Request | undefined
     if (action.card) {
-      request = this.source.store.get<Request>('secret-request', action.card.id)
+      const request = this.source.store.get<Request>('secret-request', action.card.id)
       if (!request || request.chat !== action.card.chat || request.ask.name !== action.name || request.grant !== this.source.agents.get(request.chat)?.grant || !request.ask.levels.some(level => level.id === action.level)) throw new Refusal('This secret request belongs to an expired session or another scope')
     }
-    // Given in Settings instead of its card, the secret still answers the card.
-    request ??= this.open().find(open => open.ask.name === action.name && open.ask.levels.some(level => level.id === action.level))
+    // Given in Settings instead of its card, the secret still answers the card: every card it now reaches, as agents can ask at once.
+    const requests = action.value === null ? [] : this.open().filter(open => open.ask.name === action.name && open.ask.levels.some(level => level.id === action.level))
     const result = this.vault.set(action.level, action.name, action.value === null ? null : action.value.replace(/[\r\n]+$/, ''))
     if (!result.ok) throw new Refusal(result.error || 'The secret could not be saved')
-    if (request && action.value !== null) {
+    for (const request of requests) {
       const saved = this.name(action.level), message = this.source.store.get<Message>(`message:${request.chat}`, request.id)
       this.source.saveAndDeliver(request.chat, `secret-saved-${request.id}`, line.secret(this.source.snapshot().user || 'You', action.name, saved), () => {
-        this.source.store.delete('secret-request', request!.id)
-        if (message) this.source.store.set(`message:${request!.chat}`, request!.id, { ...message, secret: { ...request!.ask, saved } })
+        this.source.store.delete('secret-request', request.id)
+        if (message) this.source.store.set(`message:${request.chat}`, request.id, { ...message, secret: { ...request.ask, saved } })
       })
+      this.source.clearAlert(request.chat, `${action.name} is saved`)
       this.source.emit('chat', request.chat)
     }
     this.source.emit('snapshot'); return { ok: true }

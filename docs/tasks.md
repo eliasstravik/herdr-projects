@@ -50,7 +50,9 @@
   that is over: the tool call's result or the turn's end, on Claude Code and Codex alike, and the hook the CLI stops
   when its prompt is declined. The card then closes with what happened (Answered in the terminal, Timed out in the CLI
   and was denied), and so do its copy in the coordinator's chat, the count and the phone's alert. A tap on it fails and
-  says why. With no such record it stays open, however long it waits.
+  says why. With no such record it stays open, however long it waits. Shepherdr's own restart ends what it was waiting
+  on: its open cards close as denied, and a line in the chat says what was denied and that nobody refused it, so the
+  agent can ask again.
 - A turn cut off by the model's provider (overloaded, at capacity, a rate limit, a dropped connection) is no question
   for you: Shepherdr waits and tells the agent, task or coordinator, to carry on, after 1, 2, 4 and 8 minutes. Meanwhile
   a task stays Working, its line saying why and when (`Provider overloaded · retry in 2m`). Only when the fifth try is
@@ -93,7 +95,9 @@
   coordinator hears it once (news), with the failing run, the end of its log and the tasks merged since main was last
   green, and decides on a fix-forward task (Autopilot adds one by itself). It hears again only after main was green. GitHub's
   merge queue would test each one on top of the others, but it needs an organisation's repo. Elsewhere it is rebased
-  and squash-merged into main here (and main pushed when there is a remote). Then the task is marked merged. Once the
+  and squash-merged into main here (and main pushed when there is a remote). Uncommitted work in that checkout stops
+  this only when the merge would overwrite it, and the refusal names the file; on GitHub the merge goes ahead and main
+  here keeps retrying its update. Then the task is marked merged. Once the
   agent's turn ends, the task is put away through herdr: the worktree removed (which closes its space and agent), then
   the branch deleted. Nothing is forced: a checkout with uncommitted changes, or a branch with work main lacks, is kept
   and said so (in the coordinator's news and in `shepherdr status`), and its space and agent close all the same.
