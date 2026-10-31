@@ -103,7 +103,7 @@ export class CoreScreens {
       // The cursor may have moved, or the screen gone, since the card was drawn. Nothing is pressed on a screen it doesn't show.
       const read = await this.read(this.source.agents.get(row.chat)!)
       const screen = read && readScreen(read.text, read.terminal.cols)
-      if (!read || !screen || sameScreen(read.text) !== row.screen || JSON.stringify(screen.choices) !== JSON.stringify(row.question.choices)) throw new Refusal('That screen has changed, so nothing was pressed')
+      if (!read || !screen || JSON.stringify([screen.words, screen.choices]) !== JSON.stringify([row.question.screen, row.question.choices])) throw new Refusal('That screen has changed, so nothing was pressed')
       await this.source.core.call('terminal.keys', { terminal: read.terminal.address, keys: pressKeys(screen.at, action.choice) })
       row.state = 'answered'; row.at = Date.now(); row.question.sent = action.choice
       this.settle(row, row.question.choices[action.choice].label, 'Answered', action.space ? 'space' : 'task')

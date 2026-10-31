@@ -123,6 +123,15 @@ test('nothing is pressed once a number in a choice has changed under the card', 
   expect(keys).toEqual([])
 })
 
+test('nothing is pressed once a number in its words has changed under the card', async () => {
+  screen = 'Trust /repo/project-1?\n\n ❯ Yes\n   No\n'
+  await settle()
+  const card = open()
+  screen = 'Trust /repo/project-2?\n\n ❯ Yes\n   No\n'
+  await expect(source.act({ type: 'answer', chat: 'space', question: card.id, choice: 0 })).rejects.toThrow('changed')
+  expect(keys).toEqual([])
+})
+
 test('the next screen is the next card, and the one before it says it went in the terminal', async () => {
   await settle()
   const first = open().id
