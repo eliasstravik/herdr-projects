@@ -42,7 +42,7 @@ test('contained reviewer wraps only native args and keeps its endpoint credentia
   const f = fixture()
   try {
     const record = await f.launch()
-    const review = JSON.parse(readFileSync(f.argv[2]!, 'utf8'))
+    const review = JSON.parse(readFileSync(f.argv[6]!, 'utf8'))
     expect(review.argv[1]).toEndWith('/helper/core-pilot-launch.ts')
     const launch = JSON.parse(readFileSync(review.argv[2], 'utf8'))
     expect(launch.args.slice(0, 4)).toEqual(['exec', '--json', '--sandbox', 'read-only'])
@@ -53,7 +53,7 @@ test('contained reviewer wraps only native args and keeps its endpoint credentia
   } finally { f.close() }
 })
 
-test('a Mac launch starts host Bun outside the worktree, and its terminal still reports the worktree', async () => {
+test('a contained launch starts host Bun outside the worktree on either system, and its terminal still reports the worktree', async () => {
   const f = fixture(true), linux = fixture()
   try {
     await f.launch()
@@ -63,7 +63,7 @@ test('a Mac launch starts host Bun outside the worktree, and its terminal still 
     expect(launch.args.slice(0, 3)).toEqual(['exec', '--json', '--dangerously-bypass-approvals-and-sandbox'])
     expect(launch.args).not.toContain('--sandbox')
     await linux.launch()
-    expect(linux.argv[0]).not.toBe('/bin/sh')
+    expect(linux.argv.slice(0, 4)).toEqual(['/bin/sh', '-c', 'cd "$0" && exec "$@"', join(linux.home, 'sessions')])
     expect(linux.cwd).toBe('/repo')
   } finally { f.close(); linux.close() }
 })
@@ -90,8 +90,8 @@ test('a readonly Claude reviewer runs headlessly with inside hooks/settings and 
   const f = fixture()
   try {
     const record = await f.launch('claude')
-    expect(f.argv[1]).toEndWith('/helper/core-pilot-launch.ts')
-    const launch = JSON.parse(readFileSync(f.argv[2]!, 'utf8'))
+    expect(f.argv[5]).toEndWith('/helper/core-pilot-launch.ts')
+    const launch = JSON.parse(readFileSync(f.argv[6]!, 'utf8'))
     expect(launch.args).toContain('--print')
     expect(launch.args).toContain('/run/shepherdr/settings.json')
     expect(launch.args).toContain('/run/shepherdr/instructions.md')

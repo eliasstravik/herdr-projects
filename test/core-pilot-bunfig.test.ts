@@ -21,6 +21,9 @@ test('a bunfig.toml planted in a worktree runs in no host Bun the broker starts'
     expect(existsSync(marker)).toBe(false)
     await pilotGitCommand({ repo: root, cwd: root, args: ['fetch', 'origin'], writableRoots: [root], timeout: 8000 }).catch(() => {})
     expect(existsSync(marker)).toBe(false)
+    // The form an agent launch takes (server/core/agents.ts): its terminal reports the worktree, but its Bun starts elsewhere.
+    await Bun.spawn(['/bin/sh', '-c', 'cd "$0" && exec "$@"', tmpdir(), process.execPath, '-e', '0'], { cwd: root, stdin: 'ignore', stdout: 'ignore', stderr: 'ignore' }).exited
+    expect(existsSync(marker)).toBe(false)
     // The plant works: a Bun started here does run it, so the checks above can't pass by accident.
     await start(root)
     expect(existsSync(marker)).toBe(true)

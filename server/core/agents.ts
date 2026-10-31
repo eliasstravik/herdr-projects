@@ -187,9 +187,9 @@ export class CoreAgents {
       this.store.set('agent', chat, record)
       argv = [remote?.bun ?? process.execPath, join(root, 'helper/core-review.ts'), launchFile]
     }
-    // Bun reads bunfig.toml and .env from where it starts, and on a Mac this host process would start in a worktree the
-    // agent can write. The terminal stays there, since core reports that folder and task cleanup relies on it.
-    if (prepared?.mac) argv = ['/bin/sh', '-c', 'cd "$0" && exec "$@"', directory, ...argv]
+    // Bun reads bunfig.toml and .env from where it starts, and this host process would start in a worktree the agent can
+    // write. The terminal stays there, since core reports that folder and task cleanup relies on it.
+    if (prepared) argv = ['/bin/sh', '-c', 'cd "$0" && exec "$@"', directory, ...argv]
     const parent = options.parent && this.terminal(options.parent)
     submitted = true // A timed-out core request may still have created its holder; never erase its mounted state.
     const terminal = await this.core.call<CoreTerminal>('terminal.run', {
