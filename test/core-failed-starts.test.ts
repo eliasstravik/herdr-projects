@@ -37,7 +37,7 @@ beforeEach(() => {
     return record
   }) as typeof source.agents.launch
 })
-afterEach(async () => { source.stop(); await Promise.resolve(); source.mailbox.close(); source.store.close(); rmSync(home, { recursive: true, force: true }) })
+afterEach(async () => { source.quiescing = true; source.stop(); await Promise.resolve(); source.mailbox.close(); source.store.close(); rmSync(home, { recursive: true, force: true }) })
 
 for (const [name, words, kind] of [['Claude Code', CLAUDE, 'claude'], ['Codex', CODEX, 'codex']] as const) {
   test(`${name}: a resume with no session starts anew, keeps what it had to say and says so once`, async () => {
