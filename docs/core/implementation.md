@@ -2104,3 +2104,15 @@ desktop width. Codex: Fast and Normal through the restart sheet and live `/fast`
 Claude: effort and `/effort`. `--fast-mode on` was real but this account has no usage
 credits for Fast, so its records stayed `standard` and the line correctly showed no
 Fast. A real Claude `usage.speed: "fast"` record is not proven; a fixture covers it.
+
+## Device default permissions
+
+Regular Codex coordinators and task agents no longer pass `--sandbox`, `--ask-for-approval` or
+`sandbox_workspace_write.network_access`: the device's Codex configuration decides, as it already did for Claude
+Code. This replaces the ordinary Codex launch policy recorded above. Read-only reviewers and Isolated workspace
+launches are unchanged. Real Codex 0.163.0 runs: bypass config ran with no permission prompts, wrote a file and
+reached the network with hooks firing; default config kept its sandbox and fired PermissionRequest; `exec --sandbox
+read-only` stayed read-only on bypass config. Codex's trust screen in a new Git repository stays on any config, even
+with `--dangerously-bypass-approvals-and-sandbox`, and neither `-c projects...trust_level` nor a trusted parent
+folder clears it; a worktree inherits its repository's answer. Resuming a session started with the old flags took
+the device's sandbox but kept `on-request` approvals.

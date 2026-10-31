@@ -58,8 +58,11 @@ another checkout ref. Keep the installed source/dependencies available while it 
 
 ## First Codex start
 
-Codex can ask you to trust the new folder and Shepherdr's generated hooks. Open the chat's Terminal panel and
-review its native prompts. Trust only the intended folder and generated hooks, then close Codex's hooks view.
+Codex can ask you to trust the new folder and Shepherdr's generated hooks, whatever its permission settings: even
+`approval_policy = "never"` with `sandbox_mode = "danger-full-access"` still asks in a new Git repository. It asks
+once per repository (its worktrees share the answer) and again for hooks only when they change. Open the chat's
+Terminal panel and review its native prompts. Trust only the intended folder and generated hooks, then close
+Codex's hooks view.
 Codex can finish its first turn while hooks await approval. If chat still shows the setup notice afterward,
 send one short message directly in Terminal; the next native hook supplies its transcript identity, and chat
 recovers the earlier replies too. Normal chat messages saved during setup remain queued until that identity
@@ -227,15 +230,21 @@ No dependency installation or live service enablement is part of these checks.
 
 ### Ordinary Codex command access
 
-Ordinary Codex agents launch with workspace-write, on-request approvals and command networking enabled so their
-CLI can reach its own local core Unix socket. This also enables ordinary command network access; it is not a
-network-limited profile. Core socket access already grants shell/file authority as that account. Native workspace
-write restrictions are not a security boundary against an ordinary agent that can use core. Use the Isolated
-workspace profile when an enforced host/network boundary is required; its outer gateway/allowlist remains separate.
-Read-only reviewers keep their read-only native mode and do not receive this networking override.
+Ordinary Codex coordinators and task agents launch with no permission or sandbox flags, like Claude Code, so each
+machine’s own Codex configuration decides. With `approval_policy = "never"` and
+`sandbox_mode = "danger-full-access"` they run without asking. With Codex’s defaults they stay in its workspace-write
+sandbox, its prompts reach the human as permission cards through the PermissionRequest hook, and
+hooks run outside that sandbox, so chat keeps working. That sandbox has no network, and this includes the agent’s own
+local core Unix socket, so each `shepherdr` command needs an approved run outside it. A device that wants those
+commands to run freely can set `sandbox_workspace_write.network_access = true`; it also allows all other network use.
 
-The setting is per launch, not written to the human’s Codex configuration. Managed Codex requirements still apply;
-an incompatible managed policy must be resolved by the operator, never bypassed. See the official
+Core socket access already grants shell/file authority as that account. Native workspace write restrictions are not
+a security boundary against an ordinary agent that can use core. Use the Isolated workspace profile when an enforced
+host/network boundary is required; its outer gateway/allowlist remains separate. Read-only reviewers keep their
+read-only native mode, whatever the machine’s default.
+
+Shepherdr never writes the human’s Codex configuration. Managed Codex requirements still apply; an incompatible
+managed policy must be resolved by the operator, never bypassed. See the official
 [approval/security configuration](https://learn.chatgpt.com/docs/agent-approvals-security) and pinned
 [0.163.0 schema](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/core/config.schema.json).
 

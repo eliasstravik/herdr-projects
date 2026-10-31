@@ -148,7 +148,6 @@ export class CoreAgents {
       else {
         argv.push('--no-daemon', '--no-alt-screen')
         if (options.pilot) argv.push('--dangerously-bypass-approvals-and-sandbox')
-        else argv.push('--sandbox', 'workspace-write', '--ask-for-approval', 'on-request', '-c', 'sandbox_workspace_write.network_access=true')
       }
 
       for (const event of (headless || options.pilot ? [] : EVENTS).filter(e => !['Notification', 'PostToolUseFailure'].includes(e))) {

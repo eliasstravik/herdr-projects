@@ -142,10 +142,14 @@ for (const kind of ['claude', 'codex'] as const) test(`${kind} coordinator launc
     expect(env.SHEPHERDR_CORE_CREDENTIAL).toBe(join(home, 'sessions/guide-grant.credential.json'))
     if (kind === 'codex') {
       expect(argv.some(word => word.startsWith('shell_environment_policy.set=') && word.includes(env.SHEPHERDR_CORE_CREDENTIAL))).toBe(true)
-      expect(argv[argv.indexOf('--sandbox') + 1]).toBe('workspace-write')
-      expect(argv[argv.indexOf('--ask-for-approval') + 1]).toBe('on-request')
-      expect(argv).toContain('sandbox_workspace_write.network_access=true')
+      expect(argv).not.toContain('--sandbox')
+      expect(argv).not.toContain('--ask-for-approval')
+      expect(argv.some(word => word.startsWith('sandbox_workspace_write.'))).toBe(false)
       expect(argv).not.toContain('--dangerously-bypass-approvals-and-sandbox')
+      expect(argv.some(word => word.startsWith('hooks.PermissionRequest='))).toBe(true)
+    } else {
+      expect(argv).not.toContain('--permission-mode')
+      expect(argv).not.toContain('--dangerously-skip-permissions')
     }
   } finally { store.close(); rmSync(home, { recursive: true, force: true }) }
 })
