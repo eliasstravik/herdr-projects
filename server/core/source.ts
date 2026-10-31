@@ -379,7 +379,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
       const agent = this.agents.get(chat)
       const reason = permission.expires <= Date.now() ? 'Permission request expired' : agent?.grant !== permission.grant ? 'Session replaced; ask the agent for a fresh card'
         : this.agents.terminal(agent)?.state === 'finished' ? STOPPED
-        : this.ends.over(agent.launch, permission)
+        : this.ends.over(agent.launch, permission, agent.kind)
       if (reason) this.expirePermission(permission, reason)
     }
   }

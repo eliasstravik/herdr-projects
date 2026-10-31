@@ -175,6 +175,25 @@ test('an isolated agent’s hooks keep what ties a result to its card', () => {
   expect(pilotHook({ hook_event_name: 'PermissionRequest', prompt_id: 'prompt', tool_input: input }, randomUUID(), 'claude', '/home', '/captures')).toMatchObject({ turn: 'prompt', input: toolHash(input) })
 })
 
+test('a Codex turn that ends by itself leaves its card waiting, until something typed or an Esc says otherwise', async () => {
+  for (const [ending, reason] of [
+    [f => { f.hook({ event: 'UserPromptSubmit', turn: 'turn-1' }); f.hook({ event: 'Stop' }) }, 'The agent moved on in the terminal'],
+    [f => f.log({ kind: 'turn-end', id: 'turn', aborted: true, at: Date.now() + 1 }), 'Interrupted in the terminal'],
+  ] as [(f: Fixture) => void, string][]) {
+    const f = fixture('codex')
+    try {
+      f.called('call')
+      const { id, reply } = f.ask({ at: Date.now() - 5, turn: 'turn-1' })
+      f.hook({ event: 'Stop' })
+      f.log({ kind: 'turn-end', id: 'turn', at: Date.now() + 1 })
+      expect(f.open().map(item => item.id)).toEqual([id])
+      expect(f.source.status(f.agent())).toBe('need')
+      ending(f)
+      await closed(f, id, reply, reason)
+    } finally { f.close() }
+  }
+})
+
 test('a new prompt ends the turn the card was in, on Codex too', async () => {
   const f = fixture('codex')
   try {
