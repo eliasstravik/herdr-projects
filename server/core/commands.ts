@@ -42,7 +42,7 @@ export class CoreCommands {
       if (target && (!task || !this.source.tasks.list(grant, !!task.archived).some(item => item.id === task.id))) throw new Refusal('This session cannot read that task')
       if (task?.archived) throw new Refusal('Unarchive this task before alerting about it')
       const owner = task && this.source.agents.get(task.chat), status = task && this.source.tasks.view(task).status
-      const question = owner && this.source.openPermissions(owner).at(-1)?.question || task && this.source.questions.open(task.chat).at(-1)?.question
+      const question = owner && this.source.openPermissions(owner).at(-1)?.question || task && (this.source.questions.open(task.chat).at(-1) ?? this.source.screens.open(task.chat).at(-1))?.question
       const about = task && question ? askText(task.id, question) : undefined
       this.source.emit('alert', { id: randomUUID(), from: about ? 'Shepherdr' : this.source.store.get<string>('name', agent.space) || this.source.space(agent.space)!.name,
         title: about?.title || clip(title, TITLE_MAX), body: clip(about ? [about.body, [title, body].filter(Boolean).join(': ')].join('\n') : body, BODY_MAX),

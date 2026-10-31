@@ -277,6 +277,8 @@ export interface Question {
   /** CLI prompt context, read from its visible screen. */
   screen?: string
   terminal?: boolean
+  /** A CLI's own menu: a tap presses that choice at once. */
+  press?: boolean
   /** A terminal checkbox prompt can be declined without enabling any of its choices. */
   reject?: string
   choices: Choice[]

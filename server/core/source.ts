@@ -24,6 +24,7 @@ import { CoreTasks } from './tasks.ts'
 import { CoreCommands } from './commands.ts'
 import { CoreTaskNews } from './news.ts'
 import { CoreQuestions } from './questions.ts'
+import { CoreScreens } from './screens.ts'
 import { terminalBridge } from './terminal.ts'
 import { CoreError } from './client.ts'
 import { CLI_NAME, CoreSettings } from './settings.ts'
@@ -75,6 +76,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
   readonly news: CoreTaskNews
   readonly tasks: CoreTasks
   readonly questions: CoreQuestions
+  readonly screens: CoreScreens
   readonly settings: CoreSettings
   readonly unread: CoreUnread
   readonly cards: CoreCards
@@ -110,7 +112,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     this.core = new CoreSession(config.socket)
     this.files = new CoreFiles(this.core, machine => this.route(machine))
     this.mailbox = new Mailbox(config.home, this.core, machine => this.route(machine), (grant, request, id) => this.mail(grant, request, id))
-    const changed = (chat: string) => { this.reconcilePermissions(chat); this.questions?.reconcile(chat); this.secrets?.reconcile(chat); this.emit('chat', chat); this.emit('snapshot'); void this.flush(chat); void this.tasks?.tick().catch(error => this.faults.set('queue', error.message)) }
+    const changed = (chat: string) => { this.reconcilePermissions(chat); this.questions?.reconcile(chat); this.screens?.reconcile(chat); this.secrets?.reconcile(chat); this.emit('chat', chat); this.emit('snapshot'); void this.flush(chat); void this.tasks?.tick().catch(error => this.faults.set('queue', error.message)) }
     this.agents = new CoreAgents(config, installation, this.core, this.store, this.mailbox, machine => this.route(machine), changed, machine => this.machines.find(item => item.id === machine) ?? {})
     this.logs = new CoreLogs(this.agents, this.files, this.store, changed, (chat, message) => { this.faults.set(chat, message) }, (chat, message) => this.fresh(chat, message), agent => this.pilots.usage.observe(agent))
     this.settings = new CoreSettings(this.store, this.files, () => this.spaces(), id => this.store.get<string>('name', `m:${id}`) || (id === this.local.id ? this.local.name : this.machineName(id) || id), () => this.emit('snapshot'))
@@ -120,6 +122,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     this.news = new CoreTaskNews(this)
     this.pilots = new CorePilotMail(this)
     this.questions = new CoreQuestions(this)
+    this.screens = new CoreScreens(this)
     this.cards = new CoreCards(this)
     this.secrets = new CoreSecrets(this)
     this.providerRetries = new CoreProviderRetries(this)
@@ -157,7 +160,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
       agent.permission = this.openPermissions(agent)[0]?.id
       this.store.set('agent', agent.chat, agent)
     }
-    await this.core.start(); await this.refresh(); this.human = await humanName(this.config.home, async () => (await this.files.exec(this.local.id, ['git', 'config', '--global', 'user.name'], undefined, undefined, 3)).toString('utf8')); this.tasks.recoverProviderFallbacks(); this.logs.start(); this.automations.start(); this.health.start(); this.github.start()
+    await this.core.start(); await this.refresh(); this.human = await humanName(this.config.home, async () => (await this.files.exec(this.local.id, ['git', 'config', '--global', 'user.name'], undefined, undefined, 3)).toString('utf8')); this.tasks.recoverProviderFallbacks(); this.logs.start(); this.screens.start(); this.automations.start(); this.health.start(); this.github.start()
     this.recovery = setInterval(() => {
       if (!this.quiescing) void this.pilots.lifecycle.tick().then(() => this.pilots.completion.tick()).catch(error => this.faults.set('pilot-lifecycle', error.message))
       if (!this.quiescing) { this.pilots.wakes.tick(); this.news.deliver() }
@@ -231,7 +234,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     if (!this.connected()) return 'off'
     if (!agent) return 'idle'
     if (!this.machineConnected(agent.machine)) return 'off'
-    if (this.secrets.open(agent.chat).length || this.questions.open(agent.chat).length || this.openPermissions(agent).length) return 'need'
+    if (this.secrets.open(agent.chat).length || this.questions.open(agent.chat).length || this.screens.open(agent.chat).length || this.openPermissions(agent).length) return 'need'
     const terminal = this.agents.terminal(agent)
     if (terminal?.state === 'finished') return 'idle'
     if (agent.pid && terminal?.pid !== agent.pid) return 'need'
@@ -250,7 +253,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     const attentionRequests: Record<string, string[]> = {}
     for (const agent of this.agents.all()) {
       if (this.store.get<CoreSpace>('space', agent.space)?.removed) continue
-      const requests = [...new Set([...this.openPermissions(agent).map(item => item.id), ...this.questions.open(agent.chat).map(item => item.id), ...this.secrets.open(agent.chat).map(item => item.id)])]
+      const requests = [...new Set([...this.openPermissions(agent).map(item => item.id), ...this.questions.open(agent.chat).map(item => item.id), ...this.screens.open(agent.chat).map(item => item.id), ...this.secrets.open(agent.chat).map(item => item.id)])]
       if (requests.length) { attentionRequests[agent.chat] = requests; asks[agent.chat] = requests.at(-1)! }
       else if (this.status(agent) === 'need') attentionRequests[agent.chat] = ['attention']
     }
@@ -278,7 +281,6 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     // Saved as waiting until delivered; the chat says so only while something really keeps it out.
     const hold = saved.some(message => message.waiting) ? this.hold(key) : undefined
     const messages = saved.map(message => message.waiting ? { ...message, waiting: !!hold, waitsFor: hold?.waitsFor } : message)
-    if (agent?.kind === 'codex' && agent.state === 'starting' && !agent.transcript) messages.push({ id: `setup-${agent.launch}`, who: 'agent', text: 'Codex may ask you to trust its folder or Shepherdr’s hooks. Open Terminal to review its own prompts. After trusting, close Codex’s hooks view. If chat still waits, send a short message in Terminal once: its next native hook connects chat and recovers earlier replies.', at: agent.started })
     return { key, ...this.activities.chat(key, messages, terminal?.state === 'live' && status === 'work'), cli: CLI_NAME[agent?.kind ?? this.agentKind()], working: status === 'work',
       failed: this.store.all<PendingSend>('pending-send').filter(item => item.chat === key && item.state === 'uncertain').map(item => ({ cid: item.id, error: 'Delivery was interrupted; check the chat before sending again' })),
       finished: !!agent && terminal?.state === 'finished', agent: this.agentWords(agent) }
@@ -296,7 +298,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     const task = this.tasks.forChat(chat), space = this.space(chat) || task && this.space(task.place), agent = this.agents.get(chat)
     if (!space || !this.machineConnected(agent?.machine ?? space.machine)) return {}
     const terminal = agent && this.agents.terminal(agent)
-    if (agent && (this.openPermissions(agent).length || terminal?.status?.state === 'blocked')) return { waitsFor: 'menu' }
+    if (agent && (this.openPermissions(agent).length || this.screens.open(chat).length || terminal?.status?.state === 'blocked')) return { waitsFor: 'menu' }
     if (this.pilots.lifecycle.busy(space.id) || this.pilots.completion.busy(space.id) || task?.capacity) return { waitsFor: 'start' }
     if (!agent || agent.state === 'starting' || terminal?.state !== 'live') return { waitsFor: 'start' }
   }
@@ -389,6 +391,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
       case 'answer': {
         if (await this.tasks.answer(action.question, action.choice, action.chat)) return { ok: true }
         if (await this.questions.answer(action)) return { ok: true }
+        if (await this.screens.answer(action)) return { ok: true }
         const permission = this.store.get<Permission>('permission', action.question)
         if (!permission || permission.chat !== action.chat || permission.settled) throw new Error('This request is no longer waiting for an answer')
         if (permission.expires <= Date.now() || this.agents.get(action.chat)?.grant !== permission.grant) throw new Error('This permission belongs to an expired or replaced agent session')
@@ -740,6 +743,6 @@ Use hc for starting, messaging and waiting on core child agents. Never use a web
   async artifactThumb(id: string, dark: boolean) { if (!this.plugins.has('artifacts')) return null; try { return this.artifacts.thumb(id, dark) } catch { return null } }
   async upload(chat: string, name: string, data: Uint8Array) { return this.chats.upload(chat, name, data) }
   async attachment(chat: string, path: string) { return this.chats.attachment(chat, path) }
-  async drain() { this.quiescing = true; this.pluginUpdates?.stop(); await this.pluginUpdates?.drain(); this.plugins.stop(); this.voices.stop(); this.automations.stop(); this.github.stop(); this.health.stop(); await this.github.drain(); await this.health.drain(); await this.automations.drain(); await this.pilots.usage.drain(); await this.pilots.lifecycle.drain(); await this.pilots.completion.drain(); return this.tasks.drain() }
-  stop() { clearInterval(this.recovery); this.pluginUpdates?.stop(); this.plugins.stop(); this.voices.stop(); this.health.stop(); this.automations.stop(); this.github.stop(); this.logs.stop(); this.browsers.stop(); this.core.stop() }
+  async drain() { this.quiescing = true; this.screens.stop(); this.pluginUpdates?.stop(); await this.pluginUpdates?.drain(); this.plugins.stop(); this.voices.stop(); this.automations.stop(); this.github.stop(); this.health.stop(); await this.github.drain(); await this.health.drain(); await this.automations.drain(); await this.pilots.usage.drain(); await this.pilots.lifecycle.drain(); await this.pilots.completion.drain(); return this.tasks.drain() }
+  stop() { clearInterval(this.recovery); this.screens.stop(); this.pluginUpdates?.stop(); this.plugins.stop(); this.voices.stop(); this.health.stop(); this.automations.stop(); this.github.stop(); this.logs.stop(); this.browsers.stop(); this.core.stop() }
 }
