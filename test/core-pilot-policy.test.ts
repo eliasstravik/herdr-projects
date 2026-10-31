@@ -59,6 +59,7 @@ test('keep-workers never grants the stopped coordinator, unknown tasks or new ta
   expect(() => policy.command(run.id, coordinator, ['show'], 101)).toThrow('belong')
   expect(policy.command(run.id, worker, ['checkpoint', 'saved'], 101).state).toBe('workers')
   expect(() => policy.command(run.id, worker, ['task', 'add'], 101)).toThrow('human')
+  expect(() => policy.command(run.id, worker, ['task', 'review-more', worker.task!], 101)).toThrow('human')
   expect(() => policy.bind(run.id, { ...worker, task: 'UNRELATED-1' })).toThrow('own')
   expect(policy.owns(run.id, 'box/TASK-1')).toBe(true)
   expect(policy.owns(run.id, 'TASK-1')).toBe(false)
