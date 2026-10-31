@@ -112,7 +112,7 @@ test('only the task\'s coordinator adds one review round once all are used', asy
     const original = source.agents.get.bind(source.agents), sent: string[] = []
     const seat = (chat: string, role: string, space = task.place) => ({ chat, role, space, launch: chat, grant: chat, machine: task.machine, kind: 'codex' }) as ReturnType<typeof original>
     const seats = [seat('space', 'coordinator'), seat('other', 'coordinator', 'other-space'), seat(`${task.id}/Reviewer-3`, 'reviewer')]
-    source.agents.get = key => seats.find(agent => agent.chat === key) ?? original(key)
+    source.agents.get = key => seats.find(agent => agent!.chat === key) ?? original(key)
     source.agents.launch = (async () => ({ chat: `${task.id}/Reviewer-4`, terminal: 't4', launch: 'review-4' })) as unknown as typeof source.agents.launch
     source.saveAndDeliver = ((_chat: string, _id: string, text: string, save: () => void) => { sent.push(text); save() }) as typeof source.saveAndDeliver
     const as = (chat: string) => ({ ...grant, id: chat, chat, session: chat }) as Grant
