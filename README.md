@@ -102,7 +102,7 @@ Settings → Machines says how each one is, and each machine's home space shows 
 
 ### What permissions do the agents get?
 
-**Codex starts in its own sandbox** (`--sandbox workspace-write --ask-for-approval on-request`, with its network on), so anything beyond that asks you first. Claude Code starts with your own permission settings; Shepherdr adds only its hooks, from a settings file of its own, and yours are never touched. A permission prompt shows the task under `Needs you` (`Asks permission`), and a CLI's own startup prompts (trusting a folder, Codex's hooks) wait in its Terminal panel. The brief's rules and the review are guidance, not a sandbox. [Tasks](docs/tasks.md) has the details.
+**Codex starts in its own sandbox** (`--sandbox workspace-write --ask-for-approval on-request`, with its network on), a soft limit, since it can still reach herdr-core. Claude Code starts with your own permission settings; Shepherdr adds only its hooks, from a settings file of its own, and yours are never touched. A permission prompt shows the task under `Needs you` (`Asks permission`), and a CLI's own startup prompts (trusting a folder, Codex's hooks) wait in its Terminal panel. The brief's rules and the review are guidance, not a sandbox. [Tasks](docs/tasks.md) has the details.
 
 ### Does Shepherdr send my work to a hosted service?
 
