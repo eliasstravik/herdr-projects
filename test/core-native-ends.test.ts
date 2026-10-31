@@ -259,6 +259,24 @@ test('a killed agent’s card closes', async () => {
   } finally { f.close() }
 })
 
+test('a change in core closes a card of every kind at once', async () => {
+  const f = fixture()
+  try {
+    const { id, reply } = f.ask()
+    const question = f.source.questions.create({ id: 'current', chat } as Grant, ['ask', 'Which?', '--choice', 'A'])
+    f.source.store.set('secret-request', 'secret', { id: 'secret', chat, grant: 'current', ask: { id: 'secret', name: 'API_KEY', levels: [{ id: 'all', label: 'Everywhere' }] } })
+    f.source.store.set('screen-card', 'screen', { id: 'screen', chat, launch: 'one', screen: 'seen', question: { id: 'screen', title: 'On its screen', kind: 'Question', choices: [] }, state: 'open', at: 1 })
+    f.source.store.set('agent', chat, { ...f.agent(), state: 'starting' })
+    f.source.store.set('task', 'EX-1', { ...f.source.tasks.get('EX-1')!, workflow: 'merged' })
+    f.source.agents.terminal = (() => ({ state: 'finished' })) as unknown as typeof f.source.agents.terminal
+    ;(f.source.core as unknown as { publish(): void }).publish()
+    await closed(f, id, reply, 'Agent stopped; ask again after restarting it')
+    expect(f.card(question).closed).toBe('The task is done')
+    expect(f.card('screen').closed).toBe('The agent stopped')
+    expect(f.source.secrets.open(chat)).toHaveLength(0)
+  } finally { f.close() }
+})
+
 test('a question and a secret stay open while the human can still answer, and close once the task is done', () => {
   const f = fixture()
   try {
