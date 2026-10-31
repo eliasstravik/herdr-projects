@@ -1444,7 +1444,7 @@ export function QuestionCard({ q, chat, msg, from, source, oneTap }: { q: Questi
             />
           ) : null}
           {/* in Needs you, its room is kept: Sending… must not push the cards below under a thumb */}
-          <div className={clsx('flex items-center justify-end gap-2', oneTap && 'min-h-5')}>
+          <div className={clsx('flex items-center justify-end gap-2', oneTap && 'min-h-6')}>
             {err ? <span role="alert" className="mr-auto text-[0.75rem] text-need phone:text-[0.8125rem]">{err}</span> : null}
             {q.reject ? <button type="button" disabled={busy} onClick={() => send(true)}>{q.reject}</button> : null}
             {!immediate ? <Primary soft disabled={busy || !picked} onClick={() => send()}>
