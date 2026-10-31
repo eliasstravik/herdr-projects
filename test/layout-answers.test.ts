@@ -87,6 +87,7 @@ describe.skipIf(!browser)('answer cards', () => {
       { noteRequiredFor: 0 },
       { kind: 'Future' as unknown as 'Form' },
       { id: 'menu:permission' },
+      { kind: 'Plan' as const, plan: '# Build\n\n1. Build it' },
     ]
     chat.messages.push(...cases.map((c, i) => ({ id: `safe-${i}`, who: 'agent' as const, at: Date.now() + i, question: { ...base, id: `safe:${i}`, ...c } })))
     const sent: Action[] = []
@@ -105,6 +106,7 @@ describe.skipIf(!browser)('answer cards', () => {
         expect(sent.length).toBe(0)
         expect(await send.isEnabled()).toBe(true)
       }
+      expect(await page.locator('[data-whole="safe-7"] [data-plan]').innerText()).toContain('Build it')
       const required = page.locator('[data-whole="safe-4"] [data-card]')
       await required.getByRole('button', { name: 'Send', exact: true }).click()
       expect(sent.length).toBe(0)
@@ -112,6 +114,26 @@ describe.skipIf(!browser)('answer cards', () => {
     } finally {
       world.act = act
       chat.messages = chat.messages.filter((m) => !m.id.startsWith('safe-'))
+      await page.close()
+    }
+  }, 30_000)
+
+  test('a CLI screen card takes one tap, with no Send, note or Send: label, and its link is a link', async () => {
+    const chat = world.chats['p:vm-str:~']
+    chat.messages.push({ id: 'screen-card', who: 'agent', at: Date.now(), question: { id: 'screen-one', title: 'Claude Code is waiting on its screen', screen: 'Sign in at https://example.com/login', terminal: true, press: true, noNote: true, kind: 'Question', choices: [{ label: 'No, exit' }, { label: 'Yes, I trust this folder' }], to: 'Claude Code' } })
+    const page = await browser!.newPage({ viewport: { width: 390, height: 844 } })
+    try {
+      await page.goto(url())
+      const card = page.locator('[data-whole="screen-card"] [data-card]')
+      await card.waitFor()
+      expect(await card.getByRole('link', { name: 'https://example.com/login' }).getAttribute('href')).toBe('https://example.com/login')
+      expect(await card.getByRole('button', { name: 'Open terminal', exact: true }).count()).toBe(1)
+      expect(await card.getByRole('button', { name: 'Yes, I trust this folder', exact: true }).count()).toBe(1)
+      expect(await card.getByRole('button', { name: 'Send', exact: true }).count()).toBe(0)
+      expect(await card.getByRole('button', { name: 'Add a note', exact: true }).count()).toBe(0)
+      expect(await card.getByRole('textbox', { name: 'Note' }).count()).toBe(0)
+    } finally {
+      chat.messages = chat.messages.filter((m) => m.id !== 'screen-card')
       await page.close()
     }
   }, 30_000)

@@ -87,8 +87,8 @@ describe.skipIf(!browser)('the lists’ chips', () => {
     // what the filter says stays as they're pinned
     const box = list.getByRole('searchbox', { name: 'Filter tasks' })
     await box.fill('upload')
-    await list.getByRole('button', { name: 'Lock filters: keep them when switching spaces' }).click()
-    const pin = list.getByRole('button', { name: 'Locked: unlock filters to follow the space picked' })
+    await list.getByRole('button', { name: 'Keep filters: hold them when switching space' }).click()
+    const pin = list.getByRole('button', { name: 'Filters kept: tap to follow the space picked' })
     expect(await pin.getAttribute('aria-pressed')).toBe('true')
     expect(await box.inputValue()).toBe('upload')
     expect(await list.getByRole('button', { name: /GTM-16 Docs/ }).count()).toBe(0)
@@ -115,17 +115,17 @@ describe.skipIf(!browser)('the lists’ chips', () => {
     const arts = page.getByRole('region', { name: 'Artifacts' })
     await arts.getByRole('button', { name: /Upload page draft/ }).waitFor()
     expect(await arts.getByRole('button', { name: /This week across machines/ }).count()).toBe(0)
-    expect(await arts.getByRole('button', { name: 'Locked: unlock filters to follow the space picked' }).isVisible()).toBe(true)
+    expect(await arts.getByRole('button', { name: 'Filters kept: tap to follow the space picked' }).isVisible()).toBe(true)
     await arts.getByRole('button', { name: /^Tasks/ }).click()
 
     // kept on this device
     await page.reload()
-    await list.getByRole('button', { name: 'Locked: unlock filters to follow the space picked' }).waitFor()
+    await list.getByRole('button', { name: 'Filters kept: tap to follow the space picked' }).waitFor()
     expect(await chips(page)).toEqual(['p:vm-str:gtm', 'p:mac:lilla-varlden'])
 
     // unpinned, they follow the space picked again, and a task opens over the list as before
-    await list.getByRole('button', { name: 'Locked: unlock filters to follow the space picked' }).click()
-    await list.getByRole('button', { name: 'Lock filters: keep them when switching spaces' }).waitFor()
+    await list.getByRole('button', { name: 'Filters kept: tap to follow the space picked' }).click()
+    await list.getByRole('button', { name: 'Keep filters: hold them when switching space' }).waitFor()
     // Main Home's unlocked default still includes LV-3 because it needs you.
     await lv3.waitFor()
     expect(await chips(page)).toEqual([])
@@ -152,7 +152,7 @@ describe.skipIf(!browser)('the lists’ chips', () => {
         localStorage.setItem('shepherdr.pin', id)
       }, pin)
       await page.reload()
-      await list.getByRole('button', { name: 'Locked: unlock filters to follow the space picked' }).waitFor()
+      await list.getByRole('button', { name: 'Filters kept: tap to follow the space picked' }).waitFor()
       expect(await chips(page)).toEqual([...want])
       expect(await page.evaluate(() => localStorage.getItem('shepherdr.pin'))).toBeNull()
     }
@@ -173,19 +173,19 @@ describe.skipIf(!browser)('the lists’ chips', () => {
     const plus = (await page.getByRole('button', { name: 'Filter', exact: true }).boundingBox())!
     expect(plus.x + plus.width).toBeLessThanOrEqual(390)
 
-    await page.getByRole('button', { name: 'Lock filters: keep them when switching spaces' }).click()
-    await page.getByRole('button', { name: 'Locked: unlock filters to follow the space picked' }).waitFor()
+    await page.getByRole('button', { name: 'Keep filters: hold them when switching space' }).click()
+    await page.getByRole('button', { name: 'Filters kept: tap to follow the space picked' }).waitFor()
     // the top bar says so, naming the first chip and how many more
     expect(await page.getByText('gtm · vm-str +3', { exact: true }).isVisible()).toBe(true)
     // another space from the drawer, then its Tasks tab: the pinned chips still
-    await page.getByRole('button', { name: 'Places' }).click()
+    await page.getByRole('button', { name: /^(Show |Hide )?Spaces$/ }).click()
     await page.locator('li[data-project="p:vm-str:~"]').getByRole('button', { name: /^home\b/ }).click()
     await page.getByRole('textbox', { name: 'Message home…' }).waitFor()
     await page.getByRole('group', { name: 'View' }).getByRole('button', { name: /^Tasks/ }).click()
     await page.getByRole('button', { name: /LV-3 Upload page/ }).waitFor()
     expect(await chips(page)).toEqual(['p:vm-str:gtm', 'm:mac', 'p:vm-str:herdr-projects', 'm:nas'])
     // Unlocked main Home returns to cross-machine attention.
-    await page.getByRole('button', { name: 'Locked: unlock filters to follow the space picked' }).click()
+    await page.getByRole('button', { name: 'Filters kept: tap to follow the space picked' }).click()
     await page.getByRole('button', { name: /LV-3 Upload page/ }).waitFor()
     expect(await chips(page)).toEqual([])
     expect(await page.getByRole('button', { name: /GTM-17 Changelog/ }).count()).toBe(0)

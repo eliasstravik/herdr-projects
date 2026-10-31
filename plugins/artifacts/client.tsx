@@ -439,14 +439,13 @@ function Viewer() {
     const target = pick ? `${pick.text ? `"${pick.text.slice(0, 60)}" ` : ''}(${last}${pick.component ? ` in ${pick.component}` : ''})` : undefined
     const r = (await act(pick ? { type: 'artifact-note', place: art.place, artifact: art.id, v: shown, note: t, target } : { type: 'artifact-say', place: art.place, artifact: art.id, v: shown, text: t }).catch(() => ({ ok: false }))) as {
       ok?: boolean
-      to?: string
       error?: string
     }
     if (r.ok === false) return setSaid(r.error ?? "That didn't go through. Try again.")
     setText('')
     setPick(null)
     setMarkup(false)
-    setSaid(`Sent to ${r.to ?? art.keeper}. A new version shows here when it's in.`)
+    setSaid("Sent. A new version shows here when it's in.")
   }
   const del = async () => {
     const r = (await act({ type: 'artifact-delete', place: art.place, artifact: art.id }).catch(() => ({ ok: false }))) as { ok?: boolean; error?: string } | undefined

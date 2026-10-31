@@ -17,9 +17,10 @@ export class CoreSecrets {
   private chain(agent: CoreAgent) { return [agent.space, `m:${agent.machine}`, 'all'] }
   open(chat?: string) { return this.source.store.all<Request>('secret-request').filter(request => (!chat || request.chat === chat) && this.source.agents.get(request.chat)?.grant === request.grant) }
   reconcile(chat: string) {
-    for (const request of this.source.store.all<Request>('secret-request').filter(request => request.chat === chat && request.grant !== this.source.agents.get(chat)?.grant)) {
+    for (const request of this.source.store.all<Request>('secret-request').filter(request => request.chat === chat && (request.grant !== this.source.agents.get(chat)?.grant || this.source.tasks.finished(chat)))) {
       this.source.store.delete('secret-request', request.id)
-      this.source.store.set(`message:${chat}`, request.id, { id: request.id, who: 'agent', text: `The request for ${request.ask.name} belonged to the previous session. Ask again if it is still needed.`, at: Date.now() })
+      this.source.store.set(`message:${chat}`, request.id, { id: request.id, who: 'agent', text: request.grant === this.source.agents.get(chat)?.grant ? `The task is done, so the request for ${request.ask.name} is closed.` : `The request for ${request.ask.name} belonged to the previous session. Ask again if it is still needed.`, at: Date.now() })
+      this.source.clearAlert(chat, `${request.ask.name} is no longer needed`)
     }
   }
   private name(level: string) { return level === 'all' ? 'Everywhere' : level.startsWith('m:') ? machineName(this.source.snapshot().machines, level.slice(2)) : this.source.space(level)?.name || level }
@@ -70,19 +71,21 @@ export class CoreSecrets {
   async act(action: Extract<Action, { type: 'secret' | 'secret-saved' }>) {
     if (action.type === 'secret-saved') throw new Refusal('Save the secret through its masked box')
     this.level(action.level)
-    let request: Request | undefined
     if (action.card) {
-      request = this.source.store.get<Request>('secret-request', action.card.id)
+      const request = this.source.store.get<Request>('secret-request', action.card.id)
       if (!request || request.chat !== action.card.chat || request.ask.name !== action.name || request.grant !== this.source.agents.get(request.chat)?.grant || !request.ask.levels.some(level => level.id === action.level)) throw new Refusal('This secret request belongs to an expired session or another scope')
     }
+    // Given in Settings instead of its card, the secret still answers the card: every card it now reaches, as agents can ask at once.
+    const requests = action.value === null ? [] : this.open().filter(open => open.ask.name === action.name && open.ask.levels.some(level => level.id === action.level))
     const result = this.vault.set(action.level, action.name, action.value === null ? null : action.value.replace(/[\r\n]+$/, ''))
     if (!result.ok) throw new Refusal(result.error || 'The secret could not be saved')
-    if (request && action.value !== null) {
+    for (const request of requests) {
       const saved = this.name(action.level), message = this.source.store.get<Message>(`message:${request.chat}`, request.id)
       this.source.saveAndDeliver(request.chat, `secret-saved-${request.id}`, line.secret(this.source.snapshot().user || 'You', action.name, saved), () => {
-        this.source.store.delete('secret-request', request!.id)
-        if (message) this.source.store.set(`message:${request!.chat}`, request!.id, { ...message, secret: { ...request!.ask, saved } })
+        this.source.store.delete('secret-request', request.id)
+        if (message) this.source.store.set(`message:${request.chat}`, request.id, { ...message, secret: { ...request.ask, saved } })
       })
+      this.source.clearAlert(request.chat, `${action.name} is saved`)
       this.source.emit('chat', request.chat)
     }
     this.source.emit('snapshot'); return { ok: true }

@@ -1,4 +1,5 @@
 import { posix } from 'node:path'
+import { toolHash } from './envelope.ts'
 import type { AgentHook, AgentKind } from './model.ts'
 
 const EVENTS = new Set(['SessionStart', 'UserPromptSubmit', 'Stop', 'SessionEnd', 'PermissionRequest', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'SubagentStart', 'SubagentStop'])
@@ -17,5 +18,6 @@ export function pilotHook(input: unknown, id: string, kind: AgentKind, home: str
     if (!relative.startsWith(prefix) || !relative.endsWith('.jsonl') || relative.length > 2048 || relative.split('/').length > 64) throw Error('Contained transcript is outside its provider history')
     transcript = posix.join(captures, relative)
   }
-  return { id, event: value.hook_event_name, at: now, session: text('session_id', 128), transcript, agent: text('agent_id', 128), model: text('model', 128), tool: text('tool_name', 128) }
+  return { id, event: value.hook_event_name, at: now, session: text('session_id', 128), transcript, agent: text('agent_id', 128), model: text('model', 128), tool: text('tool_name', 128), mode: text('permission_mode', 32),
+    use: text('tool_use_id', 128), turn: text('turn_id', 128) ?? text('prompt_id', 128), input: value.tool_input === undefined ? text('tool_hash', 24) : toolHash(value.tool_input) }
 }

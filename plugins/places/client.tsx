@@ -26,7 +26,7 @@ import clsx from 'clsx'
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type LiHTMLAttributes, type ReactNode } from 'react'
 import { act, counts, definePlugin, getState, goPlace, manyMachines, openSplit, placeOf, removeSpace, setUI, splitClick, useSnap, useUI, type Pane, type UI } from '@client/kernel.ts'
 import { and, Dialog, RowMenu, RowMenuButton, useRowMenu } from '@client/rowmenu.tsx'
-import { BackIcon, BellIcon, BellSlashIcon, AttentionBadge, DeleteIcon, DownIcon, HashIcon, ic, IconButton, List, MenuItem, MenuLabel, MenuSeparator, MenuSetting, Meta, NextIcon, PinnedIcon, PinTaskIcon, PlusIcon, Primary, ReadIcon, RemoveProjectIcon, RenameIcon, rowClass, RowText, SectionIcon, ServerIcon, SplitIcon, TasksIcon, UnpinIcon } from '@client/ui.tsx'
+import { BackIcon, BellIcon, BellSlashIcon, AttentionBadge, attentionWords, DeleteIcon, DownIcon, HashIcon, ic, IconButton, List, MenuItem, MenuLabel, MenuSeparator, MenuSetting, Meta, NextIcon, PinnedIcon, PinTaskIcon, PlusIcon, Primary, ReadIcon, RemoveProjectIcon, RenameIcon, rowClass, RowText, SectionIcon, ServerIcon, SplitIcon, TasksIcon, UnpinIcon } from '@client/ui.tsx'
 import { MarkRead, markPlaceRead, muted, placeUnread } from '@client/unread.ts'
 import { RestartItem } from '@client/restart.tsx'
 import { NOTIFY, NOTIFY_KEY, notifyOf, notifyRow } from '@shared/alerts.ts'
@@ -331,6 +331,8 @@ function PlaceMenu({ p, snap, menu, unread, onRename, children }: { p: Place; sn
   const [moving, setMoving] = useState(false)
   const now = notifyOf(snap, p.id)
   const row = notifyRow(snap, p.id)
+  const { ownNeed, ownReady } = counts(snap, p.id)
+  const attention = p.status === 'off' || p.connecting ? '' : attentionWords(ownNeed, ownReady)
   const pick = (v: string) => act({ type: 'setting', key: NOTIFY_KEY, value: row?.inherits?.value === v ? null : v, place: p.id })
   const desktop = useUI((u) => u.device === 'desktop')
   const split = (pane: Pane) => () => {
@@ -345,6 +347,7 @@ function PlaceMenu({ p, snap, menu, unread, onRename, children }: { p: Place; sn
     )
   return (
     <RowMenu menu={menu} label={p.name} className="min-w-[min(16rem,calc(100%-0.5rem))]!">
+      {attention ? <MenuLabel>{attention}</MenuLabel> : null}
       {desktop ? (
         <>
           <MenuItem icon={<SplitIcon className={ic} />} onClick={split({ kind: 'place', id: p.id })}>

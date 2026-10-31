@@ -38,6 +38,8 @@ export interface CoreAgent {
   activityAt?: number
   state: 'starting' | 'idle' | 'working' | 'blocked'
   permission?: string
+  /** The native permission mode it last ran on outside plan mode. */
+  permissionMode?: string
   /** App-private contained launch metadata. Labels and request bodies never establish this ownership. */
   pilot?: { run: string; home: string; captures: string; pending?: boolean }
 }
@@ -51,4 +53,12 @@ export interface AgentHook {
   agent?: string
   model?: string
   tool?: string
+  /** the native permission mode */
+  mode?: string
+  /** the CLI's id of this tool call */
+  use?: string
+  /** toolHash of the tool call's input */
+  input?: string
+  /** the CLI's id of this turn */
+  turn?: string
 }

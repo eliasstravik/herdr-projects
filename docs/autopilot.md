@@ -16,6 +16,10 @@ waits for the next heartbeat. Run now queues a wake until the coordinator is idl
 time, wake reason and delivery/turn outcome; a turn ending is not a claim that the goal succeeded. The coordinator's
 actual messages and saved progress carry its results; Shepherdr generates no separate status report.
 
+The ⋯ switch asks first, with what it replaces and spends and the limits now set. Where it can't run (a home space,
+not Linux, no usable bubblewrap, or its CLI missing or signed out) the switch is greyed with the reason, and
+Settings → Autopilot shows the same line. Turning off is one tap.
+
 Turning ON closes/replaces the regular coordinator with a fresh selected Autopilot session. OFF starts a fresh
 regular coordinator using normal defaults. The chat key, old transcripts, queued human messages and saved progress
 stay. During replacement, messages wait and new launches are blocked. Old-run events are discarded. Failed starts

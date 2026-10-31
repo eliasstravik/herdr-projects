@@ -409,7 +409,7 @@ describe.skipIf(!browser)("a task's side panel", () => {
     await page.getByRole('button', { name: 'More', exact: true }).click()
     const menu = page.getByRole('menu', { name: 'More' })
     // like a coordinator's: Search in this chat first, then the items; no search button of its own in the header
-    expect(await menu.getByRole('menuitem').allTextContents()).toEqual(['Search in this chat', 'Search this chat and beyond', 'Restart agent…', 'Terminal', 'Files', 'Diff', 'Pull request', 'Browser', 'Artifacts'])
+    expect(await menu.getByRole('menuitem').allTextContents()).toEqual(['Search in this chat', 'Open full search', 'Restart agent…', 'Terminal', 'Files', 'Diff', 'Pull request', 'Browser', 'Artifacts'])
     expect(await page.getByRole('button', { name: 'Search in this chat' }).count()).toBe(0)
     // no PR: greyed out; opened, it says why
     await menu.locator('[role=menuitem][data-off]', { hasText: 'Pull request' }).click()
@@ -580,8 +580,7 @@ describe.skipIf(!browser)("a task's side panel", () => {
       const frame = () => fake.toPanels({ type: 'frame', seq: 1, data: white, metadata: { deviceWidth: 1280, deviceHeight: 720, scrollOffsetX: 0, scrollOffsetY: 0 } })
       const page = await browser!.newPage({ viewport: { width: 1600, height: 900 }, colorScheme: 'dark' })
       await page.goto(task('GTM-15'))
-      const toggle = page.getByRole('button', { name: 'Show task panel' })
-      if (await toggle.count()) await toggle.click()
+      await page.getByRole('button', { name: 'Show task panel' }).click()
       await page.getByRole('tab', { name: 'Browser' }).click()
       await until(() => fake.streamSocks.size > 0)
       frame()

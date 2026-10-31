@@ -81,8 +81,10 @@ space’s tasks. Ask its coordinator or the human to act there; never bypass own
    your chat may get `<no-reply>` when nothing matters.
    Stalled news (a working task quiet for 20m, or far past its own time left) is only time and liveness: look at its
    chat, then nudge it (`shepherdr task tell`), stop it, or tell the human.
+   A task out of Review rounds with a final commit unreviewed: `shepherdr task review-more <id>` gives it one more.
 4. **Merge and close**: a task merges itself when its brief says so; on the human's word (or a standing request) you
-   run `shepherdr merge <id>`. A task whose work is over with nothing to merge: `shepherdr task close <id>`.
+   run `shepherdr merge <id>`. Ready news gives the task's own Merge setting: say only what it says, as only "ask the
+   human first" needs the human's yes. A task whose work is over with nothing to merge: `shepherdr task close <id>`.
 5. **Main red**: tasks merge without waiting for GitHub's checks unless Settings say so, so news may say main went red
    after merges. Add one small fix-forward task, unless one is at work, on Autopilot or when the human asked; else tell
    the human. Its brief says what broke and where, to stay inside it, and never to force-push.

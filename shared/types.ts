@@ -272,9 +272,13 @@ export interface Question {
   /** Explicitly an ordinary question, never permission or approval. Missing means confirm. */
   ordinary?: boolean
   steps?: string[]
+  /** a plan in the CLI's own words, in Markdown */
+  plan?: string
   /** CLI prompt context, read from its visible screen. */
   screen?: string
   terminal?: boolean
+  /** A CLI's own menu: a tap presses that choice at once. */
+  press?: boolean
   /** A terminal checkbox prompt can be declined without enabling any of its choices. */
   reject?: string
   choices: Choice[]
@@ -561,6 +565,13 @@ export const doneNewestFirst = <T extends Pick<Task, 'status' | 'doneAt'>>(ts: T
   [...ts.filter((t) => t.status !== 'done'), ...ts.filter((t) => t.status === 'done').sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0))]
 
 /** a mode's name: "Autopilot" */
+/** the row of a space's Autopilot settings that says why it can't run there */
+export const PILOT_BLOCKED = "Can't run"
+
+/** a typed /model: the words after it ('' for none); anything else: nothing. A CLI saves its own /model as the device's
+ *  default for every later agent, so it never reaches one: it opens Restart, which changes this agent only */
+export const modelCommand = (text: string) => /^\/model(?:\s+([^]*))?$/i.exec(text.trim())?.[1]?.trim() ?? (/^\/model$/i.test(text.trim()) ? '' : undefined)
+
 export const modeName = (mode: Mode) => MODES.find(([m]) => m === mode)?.[1] ?? mode
 
 /** a mode card, Autopilot switched on or off: "Autopilot on · works on its own", "Autopilot off · does what you ask" */
@@ -599,9 +610,16 @@ export interface Chat {
   /** what this CLI lets the + menu change; only what it supports is listed */
   controls?: ChatControls
   /** Recorded launch values, never inferred from Settings. Missing values are CLI defaults, not observed telemetry. */
-  agent?: { kind: string; model?: string; modelLabel?: string; effort?: string; speed?: string; runtime?: AgentRuntime }
+  agent?: { kind: string; model?: string; modelLabel?: string; effort?: string; speed?: string; runtime?: AgentRuntime; planned?: PlannedAgent }
   /** Settings for its role now say something else than what its agent runs on: a calm hint offers a restart */
   restart?: RestartHint
+}
+
+/** no agent yet: what Settings will start it on, said as that and never as what runs (docs/runtime-state.md) */
+export interface PlannedAgent {
+  model?: string
+  modelLabel?: string
+  effort?: string
 }
 
 /** "Runs on {on} · Settings now say {want}", by the first that differs: the CLI, the model or the effort */
@@ -741,6 +759,8 @@ export interface Alert {
   message?: true
   /** about a task (from its agent, or what it needs): it buzzes whatever its place's Notify, which is its coordinator's */
   task?: true
+  /** nothing new: what this chat waited on is over, and its alert goes without a sound */
+  clear?: true
 }
 
 /** A folder on a machine, for adding a space from the sidebar (home only) */

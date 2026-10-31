@@ -2,6 +2,7 @@ import { Refusal } from './client.ts'
 import type { Parsed } from '../common/args.ts'
 const FLAGS: Record<string, string> = { agent: 'agent', 'task.agent': 'agent', model: 'model', 'task.model': 'model', effort: 'effort', 'task.effort': 'effort', reviewer: 'reviewer', 'reviewer.agent': 'reviewer', 'reviewer.model': 'reviewer-model', 'reviewer.effort': 'reviewer-effort' }
 const SETTINGS: Record<string, string> = { review: 'brief.review', 'brief.review': 'brief.review', merge: 'brief.merge', 'brief.merge': 'brief.merge', mustfix: 'review.mustFix', 'must-fix': 'review.mustFix', 'review.mustfix': 'review.mustFix', rounds: 'review.rounds', 'review-rounds': 'review.rounds', 'review.rounds': 'review.rounds' }
+export const mergeWords = (policy: 'ask' | 'checks' | 'auto') => policy === 'ask' ? 'ask the human first' : policy === 'checks' ? 'after GitHub checks' : 'on its own'
 /** Same one-task aliases and precedence as 2.0: repeated --set values override the corresponding flags. */
 export function taskOptions(parsed: Parsed) {
   const allowed = ['brief', 'desc', 'space', 'base', 'after', 'later', 'agent', 'model', 'effort', 'reviewer', 'reviewer-model', 'reviewer-effort', 'set']

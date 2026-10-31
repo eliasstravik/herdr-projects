@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { prepareHome } from '../server/core/home.ts'
-import { launcherStatus } from '../server/core/launcher.ts'
+import { buildProblem, launcherStatus } from '../server/core/launcher.ts'
 
 test('a live unconfirmed process never reports stopped or gets signaled', async () => {
   const home = mkdtempSync(join(tmpdir(), 'shep-launcher-'))
@@ -17,4 +17,14 @@ test('a live unconfirmed process never reports stopped or gets signaled', async 
     expect(text).toContain('not confirmed yet')
     expect(() => process.kill(process.pid, 0)).not.toThrow()
   } finally { server.stop(true); rmSync(home, { recursive: true, force: true }) }
+})
+
+test('start refuses an unbuilt application and names the step; a Vite preview serves its own page', () => {
+  const root = mkdtempSync(join(tmpdir(), 'shep-launcher-build-'))
+  try {
+    expect(buildProblem({}, root)).toContain(`bun run build in ${root}`)
+    expect(buildProblem({ plugins: false }, root)).toBeUndefined()
+    mkdirSync(join(root, 'dist')); writeFileSync(join(root, 'dist/index.html'), '<!doctype html>')
+    expect(buildProblem({}, root)).toBeUndefined()
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })

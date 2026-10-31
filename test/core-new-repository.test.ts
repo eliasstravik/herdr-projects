@@ -28,6 +28,10 @@ test('new and existing non-repository folders get a usable empty main commit wit
       expect(await newRepository(files, 'remote', process.execPath, path)).toBe(path)
       expect(git(path, 'rev-parse', 'HEAD')).toBe(head)
     }
-    await expect(newRepository(files, 'remote', process.execPath, home)).rejects.toThrow('not home itself')
+    await expect(newRepository(files, 'remote', process.execPath, home)).rejects.toThrow(/^Choose a folder inside your home, not home itself\.$/)
+    // a refusal is its words alone: no script, no stack, no paths of the app's own
+    await expect(newRepository(files, 'remote', process.execPath, join(tmpdir(), '..', 'outside-home', 'new'))).rejects.toThrow(/^Choose a folder in your home\.$/)
+    await expect(newRepository(files, 'remote', process.execPath, join(home, 'no-parent', 'new'))).rejects.toThrow(/^Choose an existing parent folder\.$/)
+    await expect(newRepository(files, 'remote', process.execPath, join(tmpdir(), 'not-this-home'))).rejects.toThrow(/^Choose a folder in your home\.$/)
   } finally { rmSync(home, { recursive: true, force: true }) }
 })

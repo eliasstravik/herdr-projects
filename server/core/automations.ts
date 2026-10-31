@@ -1,6 +1,7 @@
 import { findCoreSpace } from './space-names.ts'
 import { randomUUID } from 'node:crypto'
 import { Automations, type Automation, type Template } from '../automations.ts'
+import { mergeWords } from './task-options.ts'
 import { eventRules, timeRule, triggerWords, validZone, OWN_ZONE, matches, type Happened } from '../common/trigger.ts'
 import { one, parseArgs } from '../common/args.ts'
 import { TITLE_MAX, type Action } from '../../shared/types.ts'
@@ -119,6 +120,7 @@ export class CoreAutomations {
         if (!this.source.space(task.place) || this.source.places.removing(task.place) || task.archived || this.source.tasks.busy(task.id) || !this.source.machineConnected(task.machine)) continue
         const previous = this.source.store.get<Seen>('automation-seen', task.id), view = this.source.tasks.view(task), status = view.status
         const agent = this.source.agents.get(task.chat), terminal = agent && this.source.agents.terminal(agent)
+        if (agent && this.source.failedStarts?.pending(agent)) continue
         const attempt = task.launchAttempt ?? agent?.launch
         const failure = task.startError && !['merged', 'closed', 'merging'].includes(task.workflow) ? `start:${attempt ? attempt + ':' : ''}${task.startError}` : task.workflow === 'working' && terminal?.state === 'finished' &&
           (terminal.exit_code != null && terminal.exit_code !== 0 || terminal.signal != null) ? `${agent!.launch}:${terminal.reason}:${terminal.exit_code}:${terminal.signal}` : undefined
@@ -146,7 +148,7 @@ export class CoreAutomations {
         this.source.store.db.transaction(() => {
           this.source.store.set('automation-seen', task.id, next)
           for (const event of events) {
-            this.enqueue({ event, title: task.name, branch: task.branch, space: this.source.space(task.place)?.name }, task.place)
+            this.enqueue({ event, title: task.name, branch: task.branch, space: this.source.space(task.place)?.name, ...(event === 'ready' ? { detail: `Merge: ${mergeWords(task.mergePolicy)}` } : {}) }, task.place)
             if (event !== 'added' || events.length === 1) this.source.news?.record(task, event, now, stall)
           }
           if (previous?.workflow !== task.workflow && task.workflow === 'closed') this.source.news?.record(task, 'closed', now)

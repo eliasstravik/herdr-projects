@@ -56,7 +56,7 @@ export {
   FolderOpenIcon,
   GlobeAltIcon as GlobeIcon,
   ListBulletIcon as TasksIcon,
-  LockClosedIcon as LockIcon,
+  FunnelIcon as KeepFiltersIcon,
   MagnifyingGlassIcon as SearchIcon,
   MicrophoneIcon as MicIcon,
   MinusCircleIcon,
@@ -528,6 +528,9 @@ export function Count({ n, className, label }: { n: number; className?: string; 
   )
 }
 
+/** what the badge's two colours count, in words: a space's menu says it, as a finger gets no hover */
+export const attentionWords = (need: number, ready: number) => [need ? `${need} need${need === 1 ? 's' : ''} you` : '', ready ? `${ready} ready` : ''].filter(Boolean).join(' · ')
+
 /** One notification, with separate counts: needs you on the left, ready on the right.
  * Cap each printed count independently; the accessible name always keeps the exact numbers. */
 export function AttentionBadge({ need, ready, scope }: { need: number; ready: number; scope: string }) {
@@ -809,15 +812,16 @@ export function MenuSetting({ name, icon, choices, note }: { name: string; icon:
  * red when on (the colour of what it turns on, as the header's pill), and the whole row flips it. A note, when given, is
  * one quiet line under it.
  */
-export function MenuSwitch({ name, icon, on, note, onClick }: { name: string; icon: ReactNode; on: boolean; note?: string; onClick: () => void }) {
+export function MenuSwitch({ name, icon, on, note, disabled, onClick }: { name: string; icon: ReactNode; on: boolean; note?: string; disabled?: boolean; onClick: () => void }) {
   return (
     <div className="flex flex-col">
       <button
         type="button"
         role="menuitemcheckbox"
         aria-checked={on}
+        disabled={disabled}
         onClick={onClick}
-        className="group row-pop press flex h-8 w-full items-center gap-2 px-2 text-left whitespace-nowrap hover:bg-hover focus-visible:bg-hover focus-visible:outline-offset-[-2px] coarse:h-11 phone:h-11 phone:gap-3 phone:px-3"
+        className="group row-pop press flex h-8 w-full items-center gap-2 px-2 text-left whitespace-nowrap hover:bg-hover focus-visible:bg-hover focus-visible:outline-offset-[-2px] disabled:pointer-events-none disabled:opacity-50 coarse:h-11 phone:h-11 phone:gap-3 phone:px-3"
       >
         <span className="grid size-4 shrink-0 place-items-center text-fg2 max-[359px]:hidden">{icon}</span>
         <span className="min-w-0 flex-1 truncate">{name}</span>
@@ -826,7 +830,7 @@ export function MenuSwitch({ name, icon, on, note, onClick }: { name: string; ic
           <span className="aspect-square w-1/2 rounded-full bg-white shadow-xs ring-1 ring-black/5 transition-transform duration-200 ease-in-out group-aria-checked:translate-x-full" />
         </span>
       </button>
-      {note ? <Small className="truncate pr-2 pb-1 pl-8 text-fg3! tabular-nums phone:pr-3 phone:pl-10 max-[359px]:pl-2">{note}</Small> : null}
+      {note ? <Small className={clsx('pr-2 pb-1 pl-8 text-fg3! tabular-nums phone:pr-3 phone:pl-10 max-[359px]:pl-2', disabled ? 'max-w-72 text-pretty' : 'truncate')}>{note}</Small> : null}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import type { PilotRepositoryContext } from './pilot-repositories.ts'
+import { Refusal } from './client.ts'
 import type { CoreFiles } from './files.ts'
 
 export interface RepoLocation { machine: string; folder: string }
@@ -92,8 +93,16 @@ export class CoreGit {
     if (!await this.contains(repo, fetched, merged)) throw Error('The fetched base does not contain GitHub’s confirmed merge')
     if (await this.contains(repo, base, merged)) return
     if (await this.run(repo, ['symbolic-ref', '--quiet', 'HEAD']) !== `refs/heads/${base}`) throw Error('The base branch is not checked out')
-    if (!await this.clean(repo)) throw Error('The base checkout has uncommitted work')
-    await this.run(repo, ['merge', '--ff-only', fetched], 60)
+    await this.fastForward(repo, fetched)
+  }
+  /** Git alone judges what is at risk, so unrelated local work stays out of the way; a change to a file it ignores counts too. */
+  async fastForward(repo: RepoLocation, target: string) {
+    try { await this.run(repo, ['merge', '--ff-only', '--no-autostash', '--no-overwrite-ignore', target], 60) }
+    catch (error) {
+      const files = String((error as Error).message).split('\n').filter(row => row.startsWith('\t')).map(row => row.trim())
+      if (!files.length) throw error
+      throw new Refusal(`The base checkout's own copy of ${files.slice(0, 5).join(', ')}${files.length > 5 ? ` and ${files.length - 5} more` : ''} would be overwritten. Nothing was changed there. It needs committing, moving or removing first`)
+    }
   }
   async findPullRequest(repo: RepoLocation, branch: string, base: string) {
     const remote = await this.remote(repo)

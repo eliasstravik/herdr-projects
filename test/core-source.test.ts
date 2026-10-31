@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { CoreError } from '../server/core/client.ts'
@@ -99,6 +99,18 @@ test('a send to an idle reviewer leaves the preparation gate and reaches that re
     await Bun.sleep(0)
     expect(f.sent).toEqual([{ chat: 'DEMO-1/Reviewer-1', text: 'Check again' }])
     expect(f.source.store.all('pending-send')).toHaveLength(0)
+  } finally { await f.close() }
+})
+
+test('a typed /model never reaches the CLI, however it is sent, even as a reply to a message that is gone', async () => {
+  const f = deliveryFixture()
+  try {
+    await expect(f.source.act({ type: 'send', chat: f.task.chat, text: '/model sonnet', cid: 'model-send' })).rejects.toThrow('Use Restart agent')
+    await expect(f.source.act({ type: 'send', chat: f.task.chat, text: ' /MODEL' })).rejects.toThrow('Use Restart agent')
+    await expect(f.source.act({ type: 'send', chat: f.task.chat, text: '/model sonnet', reply: 'gone' })).rejects.toThrow('Use Restart agent')
+    await Bun.sleep(0)
+    expect(f.sent).toEqual([])
+    expect(f.source.store.all('pending-send')).toEqual([])
   } finally { await f.close() }
 })
 
@@ -325,5 +337,52 @@ test('main-home identity uses the stable core machine key independently of displ
     expect(source.voices.tools('p:main-stable-id:~').name).toBe('Renamed main:home')
     source.settings.set('task.agent', 'Codex', 'm:main-stable-id')
     expect(source.snapshot().settings!.find(section => section.name === 'Agents' && section.level === 'p:main-stable-id:~')?.rows.find(row => row.key === 'task.agent')?.from).toBe('Renamed main')
+  } finally { source.stop(); source.mailbox.close(); source.store.close(); rmSync(home, { recursive: true, force: true }) }
+})
+
+test('a folder outside home is refused in plain words, also when it does not exist yet', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'shep-source-folders-'))
+  const source = new CoreSource({ home: join(root, 'state'), port: 17887, socket: '/unused', session: 'test', binary: 'hc' })
+  const userHome = join(root, 'me')
+  mkdirSync(join(userHome, 'dev'), { recursive: true })
+  source.agents.bun = async () => process.execPath
+  source.files.exec = async (_machine, argv) => {
+    const run = Bun.spawnSync(argv, { env: { ...process.env, HOME: userHome } })
+    if (run.exitCode) throw Error(run.stderr.toString())
+    return Buffer.from(run.stdout)
+  }
+  try {
+    expect((await source.folders('m', '~/dev')).exists).toBe(true)
+    expect((await source.folders('m', '~/not-yet/deeper')).exists).toBe(false)
+    for (const outside of [root, join(root, 'not-yet/deeper')]) await expect(source.folders('m', outside)).rejects.toThrow(/^Choose a folder in your home\.$/)
+  } finally { source.stop(); await Bun.sleep(0); source.mailbox.close(); source.store.close(); rmSync(root, { recursive: true, force: true }) }
+})
+
+test('before an agent starts its chat says what Settings will use, and a task\'s own pick stays asked for', () => {
+  const home = mkdtempSync(join(tmpdir(), 'shep-source-planned-'))
+  const source = new CoreSource({ home, port: 17887, socket: '/unused', session: 'test', binary: 'hc' })
+  const space = { id: 'p:machine:demo', name: 'demo', machine: 'machine', folder: '/repo', base: 'main', prefix: 'DEMO', mode: 'regular' as const, added: 1 }
+  source.store.set('space', space.id, space)
+  source.settings.agent = (() => ({ kind: 'codex', model: 'small', effort: 'medium' })) as typeof source.settings.agent
+  source.settings.findModel = ((_kind: string, value: string) => (value === 'small' ? { id: 'small', label: 'Small 1' } : undefined)) as typeof source.settings.findModel
+  const task = { id: 'DEMO-1', chat: 'DEMO-1/Agent', place: space.id, kind: 'codex', model: 'small', effort: 'medium' }
+  try {
+    expect(source.chat(space.id)).toMatchObject({ cli: 'Codex', agent: { kind: 'codex', planned: { model: 'small', modelLabel: 'Small 1', effort: 'medium' } } })
+    expect(source.chat(space.id)?.agent?.model).toBeUndefined()
+    // an open chat follows Settings: nothing else would send it again
+    const sent: string[] = []
+    source.on('chat', (key: string) => sent.push(key))
+    source.settings.set('coordinator.effort', 'default', space.id)
+    expect(sent).toContain(space.id)
+    source.tasks.forChat = (() => task) as unknown as typeof source.tasks.forChat
+    expect(source.chat(task.chat)?.agent?.planned).toBeDefined()
+    task.effort = 'high'
+    const own = source.chat(task.chat)?.agent
+    expect(own?.planned).toBeUndefined()
+    expect(own).toMatchObject({ kind: 'codex', model: 'small', modelLabel: 'Small 1', effort: 'high' })
+    // a reviewer starts on what its task saved, not on today's Settings
+    const reviewer = { ...task, review: { kind: 'claude' }, reviewerModel: 'small', reviewerEffort: 'low' }
+    source.tasks.forChat = (() => reviewer) as unknown as typeof source.tasks.forChat
+    expect(source.chat('DEMO-1/Reviewer')?.agent).toMatchObject({ kind: 'claude', model: 'small', effort: 'low' })
   } finally { source.stop(); source.mailbox.close(); source.store.close(); rmSync(home, { recursive: true, force: true }) }
 })

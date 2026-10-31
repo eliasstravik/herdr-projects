@@ -22,33 +22,48 @@ export class CoreLogs {
   private waits = new Map<string, { launch: string; started: number; activity: number; revision: number; waiting: boolean }>()
   private hooks = new Map<string, Cursor>()
   private logs = new Map<string, Cursor>()
-  private busy = new Set<string>()
+  private reading = new Map<string, Promise<void>>()
   private machines = new Map<string, number>()
   private next = 0
   private timer?: ReturnType<typeof setInterval>
   constructor(private readonly agents: CoreAgents, private readonly files: CoreFiles, private readonly store: CoreStore,
     private readonly changed: (chat: string) => void, private readonly error: (chat: string, message: string) => void,
-    private readonly incoming: (chat: string, message: Message) => void = () => {}, private readonly observe: (agent: CoreAgent) => Promise<void> = async () => {}) {}
+    private readonly incoming: (chat: string, message: Message) => void = () => {}, private readonly observe: (agent: CoreAgent) => Promise<void> = async () => {},
+    private readonly ended: (agent: CoreAgent, event: LogEvent) => void = () => {}) {}
   start() { if (!this.timer) this.timer = setInterval(() => void this.poll(), 500); void this.poll() }
   stop() { clearInterval(this.timer); this.timer = undefined }
   async poll() {
     const jobs: Promise<void>[] = []
     const agents = this.agents.all()
-    const first = this.next++ % Math.max(1, agents.length)
-    for (const agent of [...agents.slice(first), ...agents.slice(0, first)]) {
-      if (this.busy.has(agent.chat) || (this.machines.get(agent.machine) ?? 0) >= 4) continue
-      this.busy.add(agent.chat); this.machines.set(agent.machine, (this.machines.get(agent.machine) ?? 0) + 1)
-      jobs.push((async () => {
-        try {
-          try { await this.hook(agent) } catch (error) { this.error(agent.chat, (error as Error).message) }
-          try { await this.observe(agent) } catch (error) { this.error(agent.chat, (error as Error).message) }
-          const current = this.agents.get(agent.chat) ?? agent
-          if (current.transcript) await this.transcript(current)
-        } catch (error) { this.error(agent.chat, (error as Error).message) }
-        finally { this.busy.delete(agent.chat); this.machines.set(agent.machine, (this.machines.get(agent.machine) ?? 1) - 1) }
-      })())
+    const turn = this.next++, spin = (list: CoreAgent[]) => { const first = turn % Math.max(1, list.length); return [...list.slice(first), ...list.slice(0, first)] }
+    // Each poll reads only so many: agents with a card open take turns first, so a card closes within seconds, and every
+    // other read stays with the rest, so many cards leave no agent unread.
+    const waiting = spin(agents.filter(agent => agent.permission)), rest = spin(agents.filter(agent => !agent.permission))
+    for (const agent of [...waiting.flatMap((agent, at) => at < rest.length ? [agent, rest[at]] : [agent]), ...rest.slice(waiting.length)]) {
+      if (this.reading.has(agent.chat) || (this.machines.get(agent.machine) ?? 0) >= 4) continue
+      this.machines.set(agent.machine, (this.machines.get(agent.machine) ?? 0) + 1)
+      jobs.push(this.claim(agent).finally(() => this.machines.set(agent.machine, (this.machines.get(agent.machine) ?? 1) - 1)))
     }
     await Promise.all(jobs)
+  }
+  private async read(agent: CoreAgent) {
+    try {
+      try { await this.hook(agent) } catch (error) { this.error(agent.chat, (error as Error).message) }
+      try { await this.observe(agent) } catch (error) { this.error(agent.chat, (error as Error).message) }
+      const current = this.agents.get(agent.chat) ?? agent
+      if (current.transcript) await this.transcript(current)
+    } catch (error) { this.error(agent.chat, (error as Error).message) }
+  }
+  private claim(agent: CoreAgent) {
+    const job = this.read(agent).finally(() => this.reading.delete(agent.chat))
+    this.reading.set(agent.chat, job)
+    return job
+  }
+  /** Reads this agent's records from now, for an answer that must not outrun what they already say: a read under way may have begun too early. */
+  async catchUp(chat: string) {
+    for (let running = this.reading.get(chat); running; running = this.reading.get(chat)) await running
+    const agent = this.agents.get(chat)
+    if (agent) await this.claim(agent)
   }
 
   messages(chat: string): Message[] {
@@ -166,6 +181,8 @@ export class CoreLogs {
     }
     this.store.set(`event:${agent.chat}`, event.id + ':' + event.kind, event)
     this.revisions.set(agent.chat, (this.revisions.get(agent.chat) ?? 0) + 1)
+    this.ended(agent, event)
+    agent = this.agents.get(agent.chat) ?? agent
     if (event.kind === 'turn-end' && Number.isFinite(event.at) && event.at >= agent.started && event.at <= Date.now() + 60000) { const cursor = this.logs.get(agent.chat); if (cursor && cursor.path === agent.transcript) cursor.ended = true }
     if (event.kind === 'runtime' && Number.isFinite(event.at) && event.at >= agent.started && event.at <= Date.now() + 60000 && (agent.runtime?.source !== 'session' || event.at >= agent.runtime.at)) {
       // a hook's time is when it fired, often after the turn it reports, so any record beats a hook; a whole record

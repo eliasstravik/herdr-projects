@@ -10,14 +10,15 @@ import { EffortIcon, ic, MenuItem, ModelIcon, ModeIcon, Primary, RestartIcon, Sp
 
 /* ---------- the sheet ---------- */
 
-type Opening = { chat: string; name: string; current?: boolean }
+type Opening = { chat: string; name: string; current?: boolean; typed?: string }
 let opening: Opening | null = null
 const listeners = new Set<() => void>()
 const subscribe = (f: () => void) => (listeners.add(f), () => void listeners.delete(f))
 
-/** open the restart sheet for a coordinator (chat: its place id) or a task's agent (ID/Agent); name: what it is called */
-export function openRestart(chat: string, name: string, current = false) {
-  opening = { chat, name, current }
+/** open the restart sheet for a coordinator (chat: its place id) or a task's agent (ID/Agent); name: what it is called;
+ *  typed: what a /model in its chat said, '' for nothing */
+export function openRestart(chat: string, name: string, current = false, typed?: string) {
+  opening = { chat, name, current, typed }
   listeners.forEach((f) => f())
 }
 
@@ -29,7 +30,7 @@ const close = () => {
 /** the sheet, while one is open: each anew, its picks fresh */
 export function RestartSheet() {
   const o = useSyncExternalStore(subscribe, () => opening)
-  return o ? <Sheet key={o.chat} chat={o.chat} name={o.name} current={o.current} /> : null
+  return o ? <Sheet key={o.chat} chat={o.chat} name={o.name} current={o.current} typed={o.typed} /> : null
 }
 
 /** "Restart agent" in a ⋯ menu */
@@ -53,7 +54,13 @@ const DEFAULT = 'default'
 const modelsOf = (c?: RestartCli) => c?.models ?? []
 const levelsOf = (c: RestartCli | undefined, model?: string) => (model ? modelsOf(c).find((m) => m.id === model)?.efforts : undefined) ?? c?.efforts ?? []
 
-function Sheet({ chat, name, current }: Opening) {
+/** the model a /model named: by its id, its label, or a word of its id ("sonnet") */
+const typedModel = (c: RestartCli | undefined, words: string) => {
+  const raw = words.toLowerCase()
+  return raw ? modelsOf(c).find((m) => m.id.toLowerCase() === raw || m.label.toLowerCase() === raw || m.id.toLowerCase().includes(`-${raw}-`)) : undefined
+}
+
+function Sheet({ chat, name, current, typed }: Opening) {
   const [info, setInfo] = useState<RestartInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -62,22 +69,27 @@ function Sheet({ chat, name, current }: Opening) {
   const [effort, setEffort] = useState('')
   const [speed, setSpeed] = useState('')
   const [save, setSave] = useState(false)
+  const agent = useStore((s) => s.chats[chat]?.agent)
   useEffect(() => {
     act({ type: 'restart-info', chat })
       .then((r: { ok?: boolean; error?: string; info?: RestartInfo; waiting?: boolean }) => {
         if (!r.info) return setError(r.waiting ? 'Its machine is out of reach: restart it once it is back.' : r.error || 'It could not be restarted.')
         setInfo(r.info)
-        const pick = current ? r.info.on : r.info.want
+        // not started yet: nothing runs to start from, so what Settings will use
+        const pick = current && r.info.onKnown !== false ? r.info.on : r.info.want
         setKind(pick.kind)
-        setModel(pick.model ?? '')
-        setEffort(pick.effort ?? '')
+        const cli = r.info.clis.find((c) => c.kind === pick.kind), named = typedModel(cli, typed ?? '')
+        setModel(typed?.toLowerCase() === DEFAULT ? '' : (named?.id ?? pick.model ?? ''))
+        setEffort(named && pick.effort && !levelsOf(cli, named.id).includes(pick.effort) ? '' : (pick.effort ?? ''))
         // Settings hold no speed: what it was started on stays unless changed
         setSpeed(r.info.on.speed ?? '')
       })
       .catch((e: Error) => setError(e.message))
-  }, [chat, current])
+  }, [chat, current, typed])
   const cli = info?.clis.find((c) => c.kind === kind)
   const levels = levelsOf(cli, model)
+  // Default names no level: where its records say what that came to, on the model that stays, the sheet says so too
+  const ran = agent?.runtime?.effort && !agent.effort && info?.on.kind === kind && (info.on.model ?? '') === model ? shown(agent.runtime.effort).toLowerCase() : ''
   const unavailable = !!(model && cli?.models?.length && !cli.models.some((m) => m.id === model))
   const pickKind = (k: string) => {
     const c = info?.clis.find((x) => x.kind === k)
@@ -114,6 +126,7 @@ function Sheet({ chat, name, current }: Opening) {
     >
       {info ? (
         <div data-restart className="flex flex-col gap-4">
+          {typed !== undefined ? <p className="text-sm text-fg3">Changes this agent only, not the device's default for later agents.{typed && typed.toLowerCase() !== DEFAULT && !typedModel(info.clis.find((c) => c.kind === info.on.kind), typed) ? ` ${typed} isn't one of its models.` : ''}</p> : null}
           <div className="flex flex-col gap-2.5 text-fg phone:gap-1">
             <Line label="Agent">
               <Pick label="Agent" value={cli?.name ?? kind} options={info.clis.map((c) => c.name)} onPick={(n) => pickKind(info.clis.find((c) => c.name === n)!.kind)} />
@@ -132,6 +145,7 @@ function Sheet({ chat, name, current }: Opening) {
                 <Pick label="Effort" value={effort || DEFAULT} options={[DEFAULT, ...levels]} ordered onPick={(v) => setEffort(v === DEFAULT ? '' : v)} />
               </Line>
             ) : <Line label="Effort"><span className="text-fg3">Default</span></Line>}
+            {ran && !effort ? <p data-effort-ran className="text-sm text-fg3">Default lets {cli?.name ?? 'the agent'} choose. It runs {ran} now.</p> : null}
             {cli?.speeds ? (
               <Line label="Speed">
                 <Pick label="Speed" value={speed || DEFAULT} options={[DEFAULT, ...cli.speeds]} ordered onPick={(v) => setSpeed(v === DEFAULT ? '' : v)} />
@@ -145,7 +159,7 @@ function Sheet({ chat, name, current }: Opening) {
             ) : null}
           </div>
           {speed === 'fast' && kind === 'claude' ? <p className="text-sm text-fg3">Fast needs a model and an account that allow it. The line under the message box shows what really runs.</p> : null}
-          {other ? <p className="text-sm text-fg3">{cli?.name ?? shown(kind)} starts a new session with this chat{task ? ', the brief and branch' : ''}.</p> : null}
+          {other ? <p className="text-sm text-fg3">{cli?.name ?? shown(kind)} starts a new session with this chat{task ? ', its instructions and branch' : ''}.</p> : null}
           {error ? <p className="text-need-fg">{error}</p> : null}
         </div>
       ) : (
@@ -188,11 +202,13 @@ export function PlaceRestartItem({ place }: { place: Place }) {
   return <RestartItem chat={place.chat} name={place.name} onPick={() => setUI({ menu: false })} />
 }
 
-/** one thing it runs on: what its records say, or else what was asked for, marked so; none: nothing either way */
-interface Worn { text: string; requested?: boolean }
+/** one thing it runs on: what its records say, or else what was asked for or what Settings will use, marked so; none: nothing either way */
+interface Worn { text: string; requested?: boolean; planned?: boolean }
 
 function runsOn(agent: Chat['agent']): { model?: Worn; effort?: Worn; speed?: Worn } {
-  const r = agent?.runtime
+  const r = agent?.runtime, plan = agent?.planned
+  // not started: Speed is no Setting, so it stays the CLI's own
+  if (plan) return { model: { text: plan.modelLabel ?? plan.model ?? shown(DEFAULT), planned: true }, effort: { text: shown(plan.effort ?? DEFAULT), planned: true }, speed: { text: shown(DEFAULT) } }
   const seen = (text?: string) => (text ? { text } : undefined)
   const asked = (text?: string) => (text ? { text, requested: true } : undefined)
   const model = r?.modelLabel ?? r?.model
@@ -203,7 +219,7 @@ function runsOn(agent: Chat['agent']): { model?: Worn; effort?: Worn; speed?: Wo
   }
 }
 
-const inMenu = (w?: Worn) => (!w ? 'Not reported' : w.requested ? `Requested: ${w.text}` : w.text)
+const inMenu = (w?: Worn) => (!w ? 'Not known yet' : w.requested ? `Asked for: ${w.text}` : w.planned ? `${w.text}, from Settings` : w.text)
 
 /** a fast speed wears the zap */
 function SpeedWords({ speed }: { speed: Worn }) {
@@ -215,15 +231,17 @@ function SpeedWords({ speed }: { speed: Worn }) {
 export function AgentLine({ chatKey, cli }: { chatKey: string; cli: string }) {
   const agent = useStore((s) => s.chats[chatKey]?.agent)
   const { model, effort, speed } = runsOn(agent)
+  const plan = agent?.planned
+  const planned = plan && `${plan.model ? model!.text : `${cli} default`}${plan.effort ? ` · ${effort!.text.toLowerCase()}` : ''}, from Settings`
   // Normal that runs is left out: only a speed out of the ordinary earns its place on the line
   const bits = [model, effort && { ...effort, text: effort.text.toLowerCase() }, speed?.text === 'Normal' && !speed.requested ? undefined : speed].filter((w): w is Worn => !!w)
   const seen = bits.filter((w) => !w.requested), requested = bits.filter((w) => w.requested)
-  const words = [...seen.map((w) => w.text), requested.length ? `Requested: ${requested.map((w) => w.text).join(' · ')}` : ''].filter(Boolean).join(' · ') || `${cli} · Not reported`
+  const words = planned ?? ([...seen.map((w) => w.text), requested.length ? `Asked for: ${requested.map((w) => w.text).join(' · ')}` : ''].filter(Boolean).join(' · ') || `${cli} · Not known yet`)
   // a long model id is what gives way: effort and speed stay in view
   const part = (w: Worn, i: number) => (
     <span key={w.text} className={clsx(w === model ? 'min-w-0 truncate' : 'shrink-0', w.requested && 'italic')}>
       {i ? '\u00a0·\u00a0' : ''}
-      {w === requested[0] ? 'Requested: ' : ''}
+      {w === requested[0] ? 'Asked for: ' : ''}
       {w === speed ? <SpeedWords speed={w} /> : w.text}
     </span>
   )
@@ -235,7 +253,7 @@ export function AgentLine({ chatKey, cli }: { chatKey: string; cli: string }) {
       onClick={() => setUI({ plus: chatKey })}
       className="press-dim relative mt-1 flex h-4 w-full justify-start pl-3 text-left text-xs/4 text-fg3 after:absolute after:-inset-y-1.5 after:inset-x-0"
     >
-      {bits.length ? [...seen, ...requested].map(part) : `${cli} · Not reported`}
+      {planned ? <span className="min-w-0 truncate italic">{planned}</span> : bits.length ? [...seen, ...requested].map(part) : `${cli} · Not known yet`}
     </button>
   )
 }

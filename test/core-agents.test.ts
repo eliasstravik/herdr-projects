@@ -32,6 +32,22 @@ test('late hooks cannot overwrite a replacement agent or erase its confirmed ter
   } finally { store.close(); rmSync(home, { recursive: true, force: true }) }
 })
 
+test('the end of a session that never began leaves its start unfinished', () => {
+  const home = mkdtempSync(join(tmpdir(), 'shep-agent-end-'))
+  const store = new CoreStore(home)
+  try {
+    const agents = new CoreAgents({ home, port: 17887, session: 'test', socket: '/unused', binary: 'hc' },
+      { format: 'shepherdr-core', schema: 1, id: 'installation' }, {} as CoreSession, store, {} as Mailbox, async () => undefined, () => {})
+    const record: CoreAgent = { chat: 'chat', space: 'space', machine: 'machine', role: 'coordinator', kind: 'claude', launch: 'launch', grant: 'grant', hook: '/one', started: 1, state: 'starting', session: 'gone' }
+    store.set('agent', 'chat', record)
+    agents.hook(record, { id: 'end', event: 'SessionEnd', at: 2, session: 'gone' })
+    expect(agents.get('chat')?.state).toBe('starting')
+    agents.hook(record, { id: 'start', event: 'SessionStart', at: 3, session: 'gone' })
+    agents.hook(record, { id: 'end-two', event: 'SessionEnd', at: 4, session: 'gone' })
+    expect(agents.get('chat')?.state).toBe('idle')
+  } finally { store.close(); rmSync(home, { recursive: true, force: true }) }
+})
+
 test('terminal confirmation preserves hooks received while terminal.run was pending', async () => {
   const home = mkdtempSync(join(tmpdir(), 'shep-agent-start-'))
   const store = new CoreStore(home)

@@ -520,7 +520,7 @@ describe.skipIf(!browser)('To do always shows; Automations only once there is on
     await row.tap()
     expect(await row.getAttribute('aria-expanded')).toBe('true')
     const detail = page.locator(`#${await row.getAttribute('aria-controls')}`)
-    expect(await detail.locator('dt').allInnerTexts()).toEqual(['When', 'Next', 'Task', 'Brief', 'Last runs'])
+    expect(await detail.locator('dt').allInnerTexts()).toEqual(['When', 'Next', 'Task', 'Instructions', 'Last runs'])
     // its next three runs
     expect((await detail.locator('dd').nth(1).innerText()).split(' · ')).toHaveLength(3)
     expect(await detail.locator('dd').nth(1).innerText()).toMatch(/7:00$/)

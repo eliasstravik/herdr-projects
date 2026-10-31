@@ -26,7 +26,8 @@
   `--after SHE-12` (`shepherdr task queue <id> --after …` changes or clears it on a task that exists). Its agent starts
   at once, reads the brief and waits; the task shows under Queued, its line naming what it still waits for (`after
   SHE-12, SHE-13`). Once they are all done (merged, or nothing to merge), Shepherdr tells its agent to go,
-  and a small card in its chat says why it started. A task of another machine is named with its machine first
+  and a small card in its chat says why it started. While it waits, `shepherdr todo` is refused: it would drop the task
+  out of its queue. A task of another machine is named with its machine first
   (`vm-str:SHE-12`), from the main machine's home space. If one it waits for is stopped or goes wrong, the queued task needs
   you, saying which; it goes back to waiting once that task is going again. Want it started early? Just write to it:
   its agent decides from your words, and clears its queue itself when they are a go (a note leaves it queued).
@@ -45,6 +46,13 @@
   Asks permission, Signed out, Question for you, Waits for your reply), or the agent's own question cut to fit
   (from its question tool, its choice card, or the last sentence of its last message that asks). The tasks list, the
   card in its space's chat, alerts and coordinator news all say the same; the full message stays in the task's chat.
+- A permission, question or plan card from the CLI lasts only as long as the CLI waits on it. Its own records say when
+  that is over: the tool call's result or the turn's end, on Claude Code and Codex alike, and the hook the CLI stops
+  when its prompt is declined. The card then closes with what happened (Answered in the terminal, Timed out in the CLI
+  and was denied), and so do its copy in the coordinator's chat, the count and the phone's alert. A tap on it fails and
+  says why. With no such record it stays open, however long it waits. Shepherdr's own restart ends what it was waiting
+  on: its open cards close as denied, and a line in the chat says what was denied and that nobody refused it, so the
+  agent can ask again.
 - A turn cut off by the model's provider (overloaded, at capacity, a rate limit, a dropped connection) is no question
   for you: Shepherdr waits and tells the agent, task or coordinator, to carry on, after 1, 2, 4 and 8 minutes. Meanwhile
   a task stays Working, its line saying why and when (`Provider overloaded · retry in 2m`). Only when the fifth try is
@@ -52,14 +60,15 @@
   alert. Errors waiting can't fix (signed out, out of allowance, a model that isn't there) go to you at once. Anything
   written to the agent starts the count again. Each CLI's log says what cut it off (`server/common/provider-error.ts` decides).
 - When a task's agent can't go on (out of allowance, signed out, its provider still down after the tries), its
-  **backup agent** takes over, once: Settings → Agents → Backup (`task.fallback`, Codex unless set, or off).
+  **backup agent** takes over, once: Settings → Agents → Backup (`task.fallback`: unless set, the other CLI where it is signed in, else off).
   It starts in the same worktree and branch, on its CLI's own model, with the brief and a short handover: who it takes
   over from and why, the branch's commits, what lies uncommitted and the chat so far. A card in the task's chat says
   so. Contained Autopilot tasks keep their selected run policy and never switch provider automatically. If the backup can't go on either, or isn't installed, the task needs you.
 - Status comes from native logs/hooks and explicit OSC 7501 reports. Both Claude Code and Codex receive their
   launch-specific hook configuration; personal settings are not changed. A native ended turn with no recorded
   background work needs you, but remains a Working task until its workflow changes. Process liveness never means
-  Done. Shepherdr does not infer status from the terminal screen. Missing observations remain unknown.
+  Done. Shepherdr reads the terminal screen only for an agent with no session yet, to show it as a card
+  ([Chats](chat.md)); readiness and every later status never come from the screen. Missing observations remain unknown.
 - On a repo with a GitHub remote that `gh` is logged in to, each task gets a pull request. The shepherdr-agent skill runs
   `shepherdr pr <id>`: it pushes the branch and opens a draft (its title the task's, its words the agent's summary, the
   brief's gist and a "Generated with" footer), and pushes to it again after new commits. `shepherdr checks <id>` waits
@@ -86,7 +95,9 @@
   coordinator hears it once (news), with the failing run, the end of its log and the tasks merged since main was last
   green, and decides on a fix-forward task (Autopilot adds one by itself). It hears again only after main was green. GitHub's
   merge queue would test each one on top of the others, but it needs an organisation's repo. Elsewhere it is rebased
-  and squash-merged into main here (and main pushed when there is a remote). Then the task is marked merged. Once the
+  and squash-merged into main here (and main pushed when there is a remote). Uncommitted work in that checkout stops
+  this only when the merge would overwrite it, and the refusal names the file; on GitHub the merge goes ahead and main
+  here keeps retrying its update. Then the task is marked merged. Once the
   agent's turn ends, the task is put away through herdr: the worktree removed (which closes its space and agent), then
   the branch deleted. Nothing is forced: a checkout with uncommitted changes, or a branch with work main lacks, is kept
   and said so (in the coordinator's news and in `shepherdr status`), and its space and agent close all the same.
@@ -98,6 +109,10 @@
   settle as cards for you, and your yes before anything irreversible; the proof in one small artifact; ready with a facts line; then merge or ask. How to
   build and check the work is the agent's own judgment: Shepherdr only gives it the brief, your defaults and the house
   rules.
+- Review rounds are a limit so no agent reviews for ever, and an agent can't raise its own. One that has used them all
+  with its final commit unreviewed is refused and told to ask its coordinator, who gives it exactly one more with
+  `shepherdr task review-more <id>`: you ask the coordinator, as for any task control. It works only once all are
+  used, and `task show` records it (`reviewRoundsAdded`).
 - A task with nothing to merge (an answer, research, or work no longer wanted) is closed: `shepherdr task close <id>
   [--summary "..."]`, or just ask its coordinator. Its agent stops, its space closes, its worktree and branch go when
   they hold nothing unsaved or unmerged (else they are kept, and it says so) and it shows in Done with its summary
