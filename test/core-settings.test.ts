@@ -188,6 +188,10 @@ test('Everywhere warns only of the machines without a backup: each space follows
   expect(warning(settings, 'all', 'task.fallback')).toBe('No other signed-in CLI on box, so tasks there have no backup.')
   expect(warning(settings, 'all', 'reviewer.agent')).toBeUndefined()
   expect(warning(settings, 'p:other:one', 'task.fallback')).toBeUndefined()
+  // a space on Codex has Claude Code as its backup, whatever its machine's other spaces lack
+  settings.set('task.agent', 'Codex', 'p:box:one')
+  expect(settings.get('task.fallback', 'p:box:one')).toBe('Claude Code')
+  expect(warning(settings, 'p:box:one', 'task.fallback')).toBeUndefined()
 }))
 
 test('a saved reviewer or backup stays, and its row says where that CLI is unusable', () => fixture(settings => {

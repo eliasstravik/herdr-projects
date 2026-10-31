@@ -211,7 +211,7 @@ export class CoreSettings {
     const value = this.get(key, level), kind = kindOf(value), machines = this.machinesAt(level), what = key === 'reviewer.agent' ? 'Reviews' : 'A backup'
     const chosen = this.pick(key, level).level !== 'default'
     if (key === 'task.fallback' && !chosen) {
-      const off = machines.filter(machine => this.usableDefault(key, `m:${machine}`) === 'off').map(machine => this.machineName(machine) || 'this machine')
+      const off = machines.filter(machine => this.usableDefault(key, level === 'all' ? `m:${machine}` : level) === 'off').map(machine => this.machineName(machine) || 'this machine')
       return off.length ? `No other signed-in CLI on ${off.join(', ')}, so tasks there have no backup.` : undefined
     }
     if (!kind || !chosen && level === 'all') return undefined
