@@ -1,6 +1,7 @@
 import { findCoreSpace } from './space-names.ts'
 import { randomUUID } from 'node:crypto'
 import { Automations, type Automation, type Template } from '../automations.ts'
+import { mergeWords } from './task-options.ts'
 import { eventRules, timeRule, triggerWords, validZone, OWN_ZONE, matches, type Happened } from '../common/trigger.ts'
 import { one, parseArgs } from '../common/args.ts'
 import { TITLE_MAX, type Action } from '../../shared/types.ts'
@@ -147,7 +148,7 @@ export class CoreAutomations {
         this.source.store.db.transaction(() => {
           this.source.store.set('automation-seen', task.id, next)
           for (const event of events) {
-            this.enqueue({ event, title: task.name, branch: task.branch, space: this.source.space(task.place)?.name }, task.place)
+            this.enqueue({ event, title: task.name, branch: task.branch, space: this.source.space(task.place)?.name, ...(event === 'ready' ? { detail: `Merge: ${mergeWords(task.mergePolicy)}` } : {}) }, task.place)
             if (event !== 'added' || events.length === 1) this.source.news?.record(task, event, now, stall)
           }
           if (previous?.workflow !== task.workflow && task.workflow === 'closed') this.source.news?.record(task, 'closed', now)

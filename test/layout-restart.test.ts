@@ -53,6 +53,27 @@ describe.skipIf(!browser)('restarting an agent', () => {
     await page.close()
   }, 30_000)
 
+  test('/model in a chat opens Restart for this agent, its model picked; nothing reaches the CLI', async () => {
+    const p = world.snapshot().places.find((x) => x.id === world.tasks.find(task => task.id === 'GTM-17')!.place)!
+    const sent = world.chats[p.chat].messages.length
+    const page = await browser!.newPage({ viewport: { width: 1280, height: 800 } })
+    await page.goto(`http://127.0.0.1:${server!.port}/?place=${encodeURIComponent(p.id)}`)
+    const box = page.locator('[data-composer]:visible textarea').last()
+    await box.fill('/model sonnet')
+    await box.press('Enter')
+    const sheet = page.getByRole('alertdialog', { name: 'Restart coordinator?' })
+    await sheet.locator('[data-restart]').waitFor()
+    expect(await sheet.textContent()).toContain('Changes this agent only')
+    await sheet.getByRole('button', { name: /^Model: Sonnet/ }).waitFor()
+    expect(await box.inputValue()).toBe('')
+    expect(await sheet.getByRole('switch').count()).toBe(1)
+    expect(await sheet.getByRole('switch').getAttribute('aria-checked')).toBe('false')
+    await sheet.getByRole('button', { name: 'Cancel' }).click()
+    await sheet.waitFor({ state: 'detached' })
+    expect(world.chats[p.chat].messages.length).toBe(sent)
+    await page.close()
+  }, 30_000)
+
   test('the sheet fits a phone, and Cancel leaves the agent as it was', async () => {
     const p = world.snapshot().places.find((x) => x.id === world.tasks.find(task => task.id === 'GTM-17')!.place)!
     const ctx = await browser!.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })

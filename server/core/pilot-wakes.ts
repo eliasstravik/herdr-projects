@@ -1,5 +1,5 @@
 import { CLI_NAME } from './settings.ts'
-import type { SettingSection } from '../../shared/types.ts'
+import { PILOT_BLOCKED, type SettingSection } from '../../shared/types.ts'
 import { randomUUID } from 'node:crypto'
 import type { CoreSource } from './source.ts'
 import { matches, eventRules, type Happened } from '../common/trigger.ts'
@@ -20,7 +20,8 @@ export class CorePilotWakes {
       const config = run?.state === 'on' ? run.config : this.source.settings.pilot(place.id)
       instructions = `Agent: ${CLI_NAME[config.harness.kind]}; reviewer: ${CLI_NAME[config.reviewer.kind]}.\nPermission profile: Linux isolated workspace. Coordinator reads project files; workers write only their own worktree. Git metadata is read-only; checkpoint through the checked product broker. Project files, including credentials stored there, are readable. Host home and core socket are hidden. No unrestricted fallback.\nNetwork: HTTPS to ${config.hosts.join(', ') || 'no hosts'}, measured as encrypted traffic. Application traffic is not inspected.\nAvailable secrets: ${config.secrets.join(', ') || 'none'}. Human approval: ${config.approvals.join(', ') || 'none'}.\nShared HTTPS allowance: ${config.traffic ? config.traffic / 1048576 + ' MiB' : 'off'}. Shared reported tokens: ${config.tokens || 'off'}; delayed, advisory and can overshoot, never a hard spending cap. Runtime: ${config.runtime ? config.runtime / 60000 + ' min' : 'off'}. Parallel tasks: ${config.parallel}. Repository SSH uses the checked account adapter with existing host trust. Host-command callbacks, dynamic account paths and custom Git remote programs require explicit adapters.`
     } catch (error) { instructions = (error as Error).message }
-    return { ...section, rows: [{ label: 'Heartbeat', key: 'heartbeat.md', value: this.source.heartbeats.read(place), doc: true, instructions }, ...section.rows,
+    const blocked = place.mode === 'autopilot' ? undefined : this.source.settings.pilotBlock(place.id)
+    return { ...section, rows: [...(blocked ? [{ label: PILOT_BLOCKED, key: '', value: blocked, fixed: true }] : []), { label: 'Heartbeat', key: 'heartbeat.md', value: this.source.heartbeats.read(place), doc: true, instructions }, ...section.rows,
       { label: 'State', key: '', value: this.source.pilots.lifecycle.busy(place.id) || this.source.pilots.completion.busy(place.id) ? 'Changing coordinator; messages wait' : run?.error || (place.mode === 'autopilot' ? 'On' : 'Off'), fixed: true, group: 'Wake-up' },
       { label: 'Time zone', key: '', value: zone, fixed: true, group: 'Wake-up' },
       { label: 'Next', key: '', value: next ? new Date(next).toLocaleString('en-GB', { timeZone: zone }) : 'No scheduled wake', fixed: true, group: 'Wake-up' },

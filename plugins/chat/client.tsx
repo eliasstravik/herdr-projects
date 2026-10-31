@@ -8,7 +8,7 @@ import { keyOf, partsOf, priorOf, reasonOf, SEND_TIMEOUT, type Outgoing } from '
 import { AlertIcon, BackIcon, CameraIcon, CheckIcon, Count, DeleteIcon, dimmed, Dot, DownIcon, DownloadIcon, Empty, field, FileIcon, ic, IconButton, KeyIcon, LinkButton, LiveWave, MachineIcon, Menu, MenuItem, MenuSeparator, MenuSetting, MicIcon, ModeIcon, MoreIcon, NextIcon, PageIcon, PlanIcon, PlusIcon, Primary, QuestionIcon, ReplyIcon, RestartIcon, roundBtn, SearchIcon, SecretField, Sent, SmileIcon, Tab, Tabs, TextBox, UpIcon, useElapsed, XIcon } from '@client/ui.tsx'
 import { canDictate, dictate, dictSample, type Dictation } from '@client/dictation.ts'
 import { extOf, isImage } from '@shared/files.ts'
-import { modeName, type CardAsk, type Chat, type Message, type Place, type Question, type ReplyQuote, type SecretAsk, type UpdateCard } from '@shared/types.ts'
+import { modelCommand, modeName, taskChatId, type CardAsk, type Chat, type Message, type Place, type Question, type ReplyQuote, type SecretAsk, type UpdateCard } from '@shared/types.ts'
 import { buzz, mine, openBar, openPicker, quick, react } from '@plugins/reactions/client.tsx'
 import { EDGE } from '@client/gestures.ts'
 import { still, useArrive } from '@client/motion.ts'
@@ -20,7 +20,7 @@ import { Markdown } from './markdown.tsx'
 import { answeredBy, cancelReply, canReply, isArtifact, jumpTo, startReply } from './reply.ts'
 import { typing, working } from './typing.ts'
 import { JobsSheet, JobsTag, LiveLine, TurnLine } from './activity.tsx'
-import { AgentControls, AgentLine, PlaceRestartItem, RestartSheet, TaskRestartItem } from '@client/restart.tsx'
+import { AgentControls, AgentLine, openRestart, PlaceRestartItem, RestartSheet, TaskRestartItem } from '@client/restart.tsx'
 
 /* ---------- messages ---------- */
 
@@ -1642,6 +1642,13 @@ function Composer({ chatKey, placeholder, cli }: { chatKey: string; placeholder:
     const t = text.trim()
     if (!t && !files.length) return
     const reply = getState().ui.reply[chatKey]
+    const model = reply ? undefined : modelCommand(t)
+    if (model !== undefined) {
+      setText('')
+      const place = getState().snap?.places.find((p) => p.chat === chatKey)
+      openRestart(chatKey, place?.name ?? taskChatId(chatKey) ?? chatKey, true, model)
+      return
+    }
     setText('')
     setUI((u) => {
       const { [chatKey]: _, ...replies } = u.reply

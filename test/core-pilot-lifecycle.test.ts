@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CoreStore } from '../server/core/store.ts'
-import { CorePilotPolicy } from '../server/core/pilot-policy.ts'
+import { CorePilotPolicy, type CorePilotConfig } from '../server/core/pilot-policy.ts'
 import { CorePilotLifecycle } from '../server/core/pilot-lifecycle.ts'
 import type { CoreSource } from '../server/core/source.ts'
 import type { CoreAgent } from '../server/core/model.ts'
@@ -99,3 +99,10 @@ test('default stop waits for accepted task mutations after holders finish; retai
   await f.lifecycle.tick()
   expect(f.policy.get(f.run.id)?.state).toBe('stopped')
 }))
+
+test('a start where Autopilot cannot run refuses before touching the coordinator', async () => {
+  let began = false
+  const source = { space: () => ({ id: 'space', machine: 'mac' }), settings: { pilotBlock: () => 'Autopilot needs Linux. mac runs macOS.' }, pilots: { policy: { begin() { began = true } } } } as unknown as CoreSource
+  expect(() => new CorePilotLifecycle(source).start('space', {} as CorePilotConfig)).toThrow('runs macOS')
+  expect(began).toBe(false)
+})

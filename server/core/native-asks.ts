@@ -1,4 +1,5 @@
 import { Refusal } from './client.ts'
+import { clip } from '../../shared/alerts.ts'
 import type { Action, Question } from '../../shared/types.ts'
 
 /** What a PermissionRequest hook hands back to its CLI. Extra fields go into the hook's decision as they are. */
@@ -61,5 +62,12 @@ export function nativeReply(native: NativeAsk, cards: { question: Question; nati
   return { allow: true, updatedInput: input, updatedPermissions: [{ type: 'setMode', mode: sent === 0 ? native.stop : 'default', destination: 'session' }] }
 }
 
+/** A card in a few words: a question's own, or the tool and the first thing its input names (a command, a file, a link). */
+export function cardWords(question: Question, native: boolean, tool = 'a tool') {
+  if (native) return clip(question.title, 120)
+  let target: unknown
+  try { target = Object.values(JSON.parse(question.screen ?? '{}') as object).find(value => typeof value === 'string') } catch { /* cut short, so not JSON: the tool alone says enough */ }
+  return target ? `${tool}: ${clip(String(target).replace(/\s+/g, ' '), 120)}` : tool
+}
 export const nativeClosed = (reason: string): PermissionAnswer => ({ allow: false, message: `Shepherdr closed this without an answer: ${reason}. Nothing was approved or chosen. Ask again if you still need it.` })
 export const NATIVE_UNREADABLE: PermissionAnswer = { allow: false, message: 'Shepherdr could not read this question. Ask it with shepherdr ask instead.' }

@@ -80,8 +80,8 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
       expect(r.x + r.width).toBeLessThanOrEqual(390.5)
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
-    // opened from a space, it sets that space's defaults; the picker switches to a machine's, another space's or Everywhere
-    await settings.getByRole('button', { name: 'Editing: home · vm-str' }).click()
+    // whichever space it was opened from, it starts on Everywhere; the picker switches to a machine's or a space's
+    await settings.getByRole('button', { name: 'Editing: Everywhere' }).click()
     await page.getByRole('menuitemradio', { name: 'gtm · vm-str' }).click()
     await settings.getByRole('button', { name: 'Editing: gtm · vm-str' }).waitFor()
     // a space has no Machine page: a machine's capacity is its own
@@ -129,7 +129,7 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
       await page.goto(at(`place=${encodeURIComponent(gtm.id)}`))
       await page.getByRole('button', { name: 'Settings', exact: true }).click()
       const settings = page.getByRole('region', { name: 'Settings' })
-      const pick = settings.getByRole('button', { name: 'Editing: gtm · vm-str' })
+      const pick = settings.getByRole('button', { name: 'Editing: Everywhere' })
       await pick.click()
       const menu = page.getByRole('menu', { name: 'Choices' })
       await menu.waitFor()
@@ -182,7 +182,7 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
       await phone.goto(at(`place=${encodeURIComponent(gtm.id)}`))
       await phone.getByRole('button', { name: 'Places' }).click()
       await phone.getByRole('button', { name: 'Settings', exact: true }).click()
-      await phone.getByRole('button', { name: 'Editing: gtm · vm-str' }).click()
+      await phone.getByRole('button', { name: 'Editing: Everywhere' }).click()
       const small = phone.getByRole('menu', { name: 'Choices' })
       await small.waitFor()
       await settled(phone)
@@ -205,6 +205,8 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
     await page.getByRole('button', { name: 'Settings', exact: true }).click()
     const settings = page.getByRole('region', { name: 'Settings' })
     const list = settings.getByRole('navigation', { name: 'Sections' })
+    await settings.getByRole('button', { name: 'Editing: Everywhere' }).click()
+    await page.getByRole('menuitemradio', { name: 'gtm · vm-str' }).click()
     await settings.getByRole('button', { name: 'Editing: gtm · vm-str' }).waitFor()
     await list.getByRole('button', { name: 'Autopilot' }).click()
     const pilot = settings.getByRole('region', { name: 'Autopilot' })
@@ -265,7 +267,7 @@ describe.skipIf(!browser)('the UI pass (SHE-81)', () => {
       const settings = page.getByRole('region', { name: 'Settings' })
       const list = settings.getByRole('navigation', { name: 'Sections' })
       // a machine's own defaults: picked, as a machine has no space of its own to open them from
-      await settings.getByRole('button', { name: 'Editing: home · vm-str' }).click()
+      await settings.getByRole('button', { name: 'Editing: Everywhere' }).click()
       await page.getByRole('menuitemradio', { name: 'vm-str', exact: true }).click()
       await settings.getByRole('button', { name: 'Editing: vm-str' }).waitFor()
       const open = async (name: string) => {

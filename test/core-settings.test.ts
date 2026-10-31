@@ -6,6 +6,7 @@ import { CoreStore } from '../server/core/store.ts'
 import { CoreSettings } from '../server/core/settings.ts'
 import type { CoreFiles } from '../server/core/files.ts'
 import type { CoreSpace } from '../server/core/model.ts'
+import { MACHINE_CHECK, parseMachineCheck, type MachineCheck } from '../server/core/machine-check.ts'
 
 function fixture(run: (settings: CoreSettings) => void) {
   const home = mkdtempSync(join(tmpdir(), 'shep-settings-')), store = new CoreStore(home)
@@ -150,3 +151,131 @@ test('global scheduling remains visible from every scope and familiar Browser an
   expect(sections.find(section => section.name === 'Browser' && section.level === 'p:box:one')).toBeDefined()
   expect(sections.find(section => section.name === 'Private instructions' && section.level === 'p:box:one')?.told).toBe(true)
 }))
+
+const check = (settings: CoreSettings, machine: string, cli: MachineCheck['cli'], rest: Partial<MachineCheck> = {}) => (settings as unknown as { store: CoreStore }).store.set('machine-check', machine, { at: Date.now(), cli, ...rest })
+const warning = (settings: CoreSettings, level: string, key: string) => settings.sections().find(section => section.level === level && section.rows.some(row => row.key === key))!.rows.find(row => row.key === key)!.warn
+
+test('reviewer and backup default to a CLI that is installed and signed in, not to Codex', () => fixture(settings => {
+  // before any check: the other CLI, as ever
+  expect(settings.get('reviewer.agent', 'p:box:one')).toBe('Codex')
+  expect(settings.get('task.fallback', 'p:box:one')).toBe('Codex')
+  check(settings, 'box', { claude: 'ready', codex: 'signed-out' })
+  check(settings, 'other', { claude: 'ready', codex: 'ready' })
+  expect(settings.agent('reviewer', 'p:box:one').kind).toBe('claude')
+  // a task never fails over to its own CLI, so a same-CLI backup would look set and do nothing
+  expect(settings.get('task.fallback', 'p:box:one')).toBe('off')
+  expect(warning(settings, 'p:box:one', 'task.fallback')).toContain('no backup')
+  // How tasks work says so too, though Backup's row is under Agents
+  const tasks = settings.sections().find(section => section.level === 'p:box:one' && section.name === 'How tasks work')!
+  expect(tasks.rows.at(-1)).toMatchObject({ group: 'Backup', value: 'off', fixed: true })
+  expect(tasks.rows.at(-1)!.warn).toContain('no backup')
+  expect(warning(settings, 'p:box:one', 'reviewer.agent')).toBeUndefined()
+  // each machine by its own check
+  expect(settings.get('reviewer.agent', 'p:other:one')).toBe('Codex')
+  expect(settings.get('task.fallback', 'p:other:one')).toBe('Codex')
+  // Codex on the task, Claude as the fresh eyes
+  settings.set('task.agent', 'Codex', 'p:other:one')
+  expect(settings.get('reviewer.agent', 'p:other:one')).toBe('Claude Code')
+  expect(settings.get('task.fallback', 'p:other:one')).toBe('Claude Code')
+}))
+
+test('Everywhere warns only of the machines without a backup: each space follows its own', () => fixture(settings => {
+  check(settings, 'box', { claude: 'ready', codex: 'signed-out' })
+  check(settings, 'other', { claude: 'ready', codex: 'ready' })
+  expect(settings.get('task.fallback')).toBe('Codex')
+  expect(settings.get('task.fallback', 'p:box:one')).toBe('off')
+  expect(settings.get('task.fallback', 'p:other:one')).toBe('Codex')
+  expect(warning(settings, 'all', 'task.fallback')).toBe('No other signed-in CLI on box, so tasks there have no backup.')
+  expect(warning(settings, 'all', 'reviewer.agent')).toBeUndefined()
+  expect(warning(settings, 'p:other:one', 'task.fallback')).toBeUndefined()
+  // a space on Codex has Claude Code as its backup, whatever its machine's other spaces lack
+  settings.set('task.agent', 'Codex', 'p:box:one')
+  expect(settings.get('task.fallback', 'p:box:one')).toBe('Claude Code')
+  expect(warning(settings, 'p:box:one', 'task.fallback')).toBeUndefined()
+}))
+
+test('a running task keeps a real backup when its space default changes after it started', () => fixture(settings => {
+  check(settings, 'box', { claude: 'ready', codex: 'ready' })
+  settings.set('task.agent', 'Codex', 'p:box:one')
+  expect(settings.get('task.fallback', 'p:box:one')).toBe('Claude Code')
+  expect(settings.backupFor('p:box:one', 'claude')?.kind).toBe('codex')
+  expect(settings.backupFor('p:box:one', 'codex')?.kind).toBe('claude')
+  check(settings, 'box', { claude: 'ready', codex: 'signed-out' })
+  expect(settings.backupFor('p:box:one', 'claude')).toBeUndefined()
+  // saved choices are as they were
+  settings.set('task.fallback', 'off', 'p:box:one')
+  expect(settings.backupFor('p:box:one', 'codex')).toBeUndefined()
+  settings.set('task.fallback', 'Claude Code', 'p:box:one')
+  expect(settings.backupFor('p:box:one', 'claude')?.kind).toBe('claude')
+}))
+
+test('Everywhere warns when neither CLI works, by what each machine would use', () => fixture(settings => {
+  check(settings, 'box', { claude: 'signed-out', codex: 'signed-out' })
+  check(settings, 'other', { claude: 'ready', codex: 'ready' })
+  expect(warning(settings, 'all', 'reviewer.agent')).toContain('Claude Code is not signed in on box.')
+}))
+
+test('a check that fails says so on the row, and goes quiet once one succeeds', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'shep-settings-')), store = new CoreStore(home)
+  let answer = ''
+  const spaces = [{ id: 'p:box:one', machine: 'box', name: 'one' }] as CoreSpace[], files = { exec: async () => { if (!answer) throw Error('out of reach'); return Buffer.from(answer) } } as unknown as CoreFiles
+  const settings = new CoreSettings(store, files, () => spaces, id => id, () => {})
+  try {
+    settings.probe('box')
+    await Bun.sleep(0)
+    expect(settings.get('reviewer.agent', 'p:box:one')).toBe('Codex')
+    expect(warning(settings, 'p:box:one', 'reviewer.agent')).toBe('Codex is not checked on box.\nReviews may not run there: the check failed.')
+    answer = 'platform=Linux\nclaude="loggedIn": true\ncodex=Logged in using ChatGPT'
+    ;(settings as unknown as { tried: Map<string, number> }).tried.clear()
+    settings.probe('box')
+    await Bun.sleep(0)
+    expect(warning(settings, 'p:box:one', 'reviewer.agent')).toBeUndefined()
+  } finally { store.close(); rmSync(home, { recursive: true, force: true }) }
+})
+
+test('a saved reviewer or backup stays, and its row says where that CLI is unusable', () => fixture(settings => {
+  check(settings, 'box', { claude: 'ready', codex: 'signed-out' })
+  check(settings, 'other', { claude: 'ready', codex: 'missing' })
+  settings.set('reviewer.agent', 'Codex')
+  settings.set('task.fallback', 'Codex')
+  expect(settings.get('reviewer.agent', 'p:box:one')).toBe('Codex')
+  expect(warning(settings, 'all', 'reviewer.agent')).toBe("Codex is not signed in on box.\nCodex is not installed on other.\nReviews can't run there until that is fixed, or you choose another agent.")
+  expect(warning(settings, 'p:other:one', 'task.fallback')).toBe("Codex is not installed on other.\nA backup can't run there until that is fixed, or you choose another agent.")
+  settings.set('task.fallback', 'off')
+  expect(warning(settings, 'all', 'task.fallback')).toBeUndefined()
+}))
+
+test('an answer it cannot read proves nothing: never picked, never warned about, never blocking', () => fixture(settings => {
+  check(settings, 'box', {})
+  expect(settings.get('reviewer.agent', 'p:box:one')).toBe('Claude Code')
+  expect(settings.get('task.fallback', 'p:box:one')).toBe('off')
+  expect(warning(settings, 'p:box:one', 'reviewer.agent')).toBeUndefined()
+  expect(settings.pilotBlock('p:box:one')).toBeUndefined()
+  // only a machine never checked keeps the plain order
+  expect(settings.get('reviewer.agent', 'p:other:one')).toBe('Codex')
+  expect(parseMachineCheck('/home/someone')).toBeUndefined()
+  expect(parseMachineCheck('platform=Linux\nsandbox=ok\nclaude=\ncodex=error: unknown command', 5)).toEqual({ at: 5, platform: 'Linux', sandbox: 'ok', cli: { claude: undefined, codex: undefined } })
+  expect(parseMachineCheck('platform=Linux\nclaude="loggedIn": false\ncodex=Logged in using ChatGPT')?.cli).toEqual({ claude: 'signed-out', codex: 'ready' })
+  expect(parseMachineCheck('platform=Linux\nclaude="loggedIn": true\ncodex=Not logged in')?.cli).toEqual({ claude: 'ready', codex: 'signed-out' })
+  expect(parseMachineCheck('platform=Linux\nclaude=missing\ncodex=missing')?.cli).toEqual({ claude: 'missing', codex: 'missing' })
+}))
+
+test('Autopilot says why it cannot run: home space, not Linux, no sandbox, or its CLI unusable', () => fixture(settings => {
+  const ready = { claude: 'ready', codex: 'ready' } as const
+  expect(settings.pilotBlock('p:box:one')).toBeUndefined()
+  check(settings, 'box', ready, { platform: 'Darwin', sandbox: 'missing' })
+  expect(settings.pilotBlock('p:box:one')).toBe('Autopilot needs Linux. box runs macOS.')
+  check(settings, 'box', ready, { platform: 'Linux', sandbox: 'missing' })
+  expect(settings.pilotBlock('p:box:one')).toContain('bubblewrap')
+  check(settings, 'box', ready, { platform: 'Linux', sandbox: 'blocked' })
+  expect(settings.pilotBlock('p:box:one')).toContain('user namespaces')
+  check(settings, 'box', { claude: 'signed-out', codex: 'ready' }, { platform: 'Linux', sandbox: 'ok' })
+  expect(settings.pilotBlock('p:box:one')).toBe('Autopilot runs on Claude Code, which is not signed in on box.')
+  settings.set('autopilot.agent', 'Codex', 'p:box:one')
+  expect(settings.pilotBlock('p:box:one')).toBeUndefined()
+}))
+
+test('the machine check names no account: only a yes or no leaves the CLI', () => {
+  expect(MACHINE_CHECK).toContain(`grep -o '"loggedIn"`)
+  expect(MACHINE_CHECK).not.toMatch(/email/)
+})
