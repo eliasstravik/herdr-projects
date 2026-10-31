@@ -3,7 +3,7 @@
 // their cards; a coordinator's only says a task needs you and leads here.
 import { useLayoutEffect, useRef } from 'react'
 import { definePlugin, goChat, openTask, useSnap } from '@client/kernel.ts'
-import { holdNeeds, type HeldNeed } from '@client/needs.ts'
+import { holdNeeds, needKey, type HeldNeed } from '@client/needs.ts'
 import { Empty, LinkButton } from '@client/ui.tsx'
 import { CardShell, QuestionCard, ReplyOnCard, SecretCard } from '@plugins/chat/client.tsx'
 import { machineName, type Chat, type Need, type Snapshot } from '@shared/types.ts'
@@ -55,7 +55,7 @@ function NeedsList() {
   if (!held.current.length) return <Empty>Nothing needs you.</Empty>
   return (
     <div data-needs className="flex flex-col gap-3 p-3 phone:px-4">
-      {held.current.map((h) => <Slot key={`${h.need.chat}\0${h.need.id}`} held={h} snap={snap} />)}
+      {held.current.map((h) => <Slot key={needKey(h.need)} held={h} snap={snap} />)}
     </div>
   )
 }

@@ -37,6 +37,12 @@ test('the same id in two chats is two needs, and one answered leaves the other',
   expect(ids(holdNeeds(holdNeeds([], [one, two]), [one]))).toEqual(['attention', 'attention gone'])
 })
 
+test('an agent that waits again is a new need at the end, not its old place back', () => {
+  const wait = (at: number): Need => ({ id: 'attention', chat: 'A/Agent', place: 'p', at })
+  const held = holdNeeds(holdNeeds([], [wait(1), need('b', 2)]), [need('b', 2)])
+  expect(holdNeeds(held, [need('b', 2), wait(3)]).map((h) => [h.need.id, h.need.at, !!h.gone])).toEqual([['attention', 1, true], ['b', 2, false], ['attention', 3, false]])
+})
+
 test('a snapshot that changes nothing changes nothing', () => {
   const held = holdNeeds(holdNeeds([], [need('a'), need('b')]), [need('b')])
   expect(holdNeeds(held, [need('b')])).toEqual(held)

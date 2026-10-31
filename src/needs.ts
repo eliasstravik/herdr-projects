@@ -10,16 +10,17 @@ export interface HeldNeed {
   gone?: boolean
 }
 
-const key = (n: Need) => `${n.chat}\0${n.id}`
+/** a plain wait has no id of its own: its time tells a new wait from the last, which joins the end like any new need */
+export const needKey = (n: Need) => `${n.chat}\0${n.id}\0${n.at}`
 
 /** the list after a new snapshot: needs is the server's, oldest first */
 export function holdNeeds(held: HeldNeed[], needs: Need[]): HeldNeed[] {
-  const now = new Map(needs.map((n) => [key(n), n]))
-  const known = new Set(held.map((h) => key(h.need)))
+  const now = new Map(needs.map((n) => [needKey(n), n]))
+  const known = new Set(held.map((h) => needKey(h.need)))
   const kept = held.map((h): HeldNeed => {
-    const need = now.get(key(h.need))
+    const need = now.get(needKey(h.need))
     return need ? { need } : { need: h.need, gone: true }
   })
-  const list: HeldNeed[] = [...kept, ...needs.filter((n) => !known.has(key(n))).map((need) => ({ need }))]
+  const list: HeldNeed[] = [...kept, ...needs.filter((n) => !known.has(needKey(n))).map((need) => ({ need }))]
   return list.every((h) => h.gone) ? [] : list
 }
