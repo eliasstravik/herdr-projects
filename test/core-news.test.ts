@@ -39,11 +39,25 @@ test('task news reaches its own regular coordinator and main overview once, neve
   f.source.news.deliver(10)
   expect(f.sent.map(item => item.chat)).toEqual(['app', 'main-home'])
   expect(f.sent.every(item => item.quiet && item.text.startsWith('<news>'))).toBe(true)
+  expect(f.sent.every(item => item.text.includes('"merge":"on its own"'))).toBe(true)
   new CoreTaskNews(f.source).deliver(11)
   expect(f.sent).toHaveLength(2)
   const rows = f.source.store.all<{ state: string; launch: string }>('task-news')
   expect(rows.every(item => item.state === 'queued' && item.launch)).toBe(true)
   expect(f.source.logs.messages('main-home').some(message => message.card?.task === f.task.id)).toBe(true)
+}))
+
+test('Ready news carries each task\'s real Merge setting, and other news does not', () => fixture(async f => {
+  f.task.workflow = 'ready'; f.task.readyAt = 10
+  for (const [policy, words] of [['ask', 'ask the human first'], ['checks', 'after GitHub checks'], ['auto', 'on its own']] as const) {
+    f.sent.length = 0; f.task.mergePolicy = policy; f.source.store.set('task', f.task.id, f.task)
+    f.source.news.record(f.task, 'ready', 10); f.source.news.deliver(10)
+    expect(f.sent[0].text).toContain(`"merge":"${words}"`)
+    for (const row of f.source.store.all<{ id: string; state: string }>('task-news')) f.source.store.set('task-news', row.id, { ...row, state: 'cancelled' })
+  }
+  f.sent.length = 0; f.task.workflow = 'working'; f.source.store.set('task', f.task.id, f.task)
+  f.source.news.record(f.task, 'needs-you', 11)
+  expect(f.source.store.all<{ state: string; text: string }>('task-news').filter(row => row.state === 'waiting').every(row => !row.text.includes('merge'))).toBe(true)
 }))
 
 test('waiting news waits for idle/reconnect, cancels changed evidence, and never starts an absent coordinator', () => fixture(async f => {

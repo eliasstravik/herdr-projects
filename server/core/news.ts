@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { mergeWords } from './task-options.ts'
 import type { CoreSource } from './source.ts'
 import type { CoreTask } from './tasks.ts'
 import type { CoreAgent } from './model.ts'
@@ -12,6 +13,8 @@ interface Notice {
 }
 const life = (task: CoreTask, agent?: CoreAgent, statusAt: number | null = 0) => Math.max(agent?.started ?? 0, agent?.activityAt ?? 0, statusAt ?? 0, task.reportedAt ?? 0)
 const overdue = (was: Notice['observed'], task: CoreTask, now: number) => was.overReport !== undefined && task.reportedAt === was.overReport && task.report?.eta === was.eta && was.eta !== undefined && now - was.overReport > (was.eta + Math.max(was.eta, 20)) * 60000
+/** Each task's own Merge setting: what the coordinator tells the human must come from here, never a guess. */
+const MERGE_NOTE = ' Its merge field is this task\'s own Merge setting: only "ask the human first" needs the human\'s yes; otherwise it merges without them.'
 const words: Record<TaskNewsEvent, string> = { added: 'Added', ready: 'Ready to merge', merged: 'Merged', closed: 'Done', failed: 'Went wrong', stalled: 'Quiet for too long', 'needs-you': 'Needs you' }
 
 /** Durable task news uses saved workflow/native evidence, never screen contents or caller labels. */
@@ -39,14 +42,14 @@ export class CoreTaskNews {
         old.state = 'cancelled'; this.source.store.set('task-news', old.id, old)
       }
       const id = `task-news-${randomUUID()}`, summary = words[event]
-      const text = JSON.stringify({ task: task.id, title: task.name, event, status: this.source.tasks.view(task).status, space: space.name, machine: task.machine }).replaceAll('<', '\\u003c').replaceAll('>', '\\u003e')
+      const text = JSON.stringify({ task: task.id, title: task.name, event, status: this.source.tasks.view(task).status, space: space.name, machine: task.machine, ...(event === 'ready' ? { merge: mergeWords(task.mergePolicy) } : {}) }).replaceAll('<', '\\u003c').replaceAll('>', '\\u003e')
       this.source.store.set('task-news', id, { id, task: task.id, place: task.place, target, event, at, state: 'waiting', observed, text } satisfies Notice)
       // Ordinary workflow cards already exist in the originating chat; failures/stalls need their own card.
       if (target !== space.id || ['failed', 'stalled', 'needs-you'].includes(event)) this.source.post(target, { id, who: 'agent', card: { id, task: task.id, status: this.source.tasks.view(task).status, text: summary }, at })
     }
     // A machine-home or main-home Autopilot keeps its own configured wake rules, with the original space identity.
     for (const home of this.source.spaces().filter(item => item.home && item.mode === 'autopilot' && item.id !== space.id && (item.machine === task.machine || item.machine === this.source.localMachineId()))) {
-      if (event !== 'closed') this.source.pilots.wakes.news({ event, title: task.name, branch: task.branch, space: space.name }, home.id)
+      if (event !== 'closed') this.source.pilots.wakes.news({ event, title: task.name, branch: task.branch, space: space.name, ...(event === 'ready' ? { detail: `Merge: ${mergeWords(task.mergePolicy)}` } : {}) }, home.id)
     }
   }
   private valid(notice: Notice, task: CoreTask, now: number) {
@@ -78,7 +81,7 @@ export class CoreTaskNews {
       if (queued.has(target.id)) continue
       const agent = this.source.agents.get(target.id)
       if (!agent || agent.role !== 'coordinator' || agent.space !== target.id || agent.machine !== target.machine || agent.pilot || this.source.status(agent) !== 'idle' || this.source.agents.terminal(agent)?.state !== 'live') continue
-      this.source.saveAndDeliver(target.id, notice.id, `<news>${notice.text}\nObserved product news, not a new human request. The card is already in this chat. Explain briefly what it means and what the human needs; act only within existing authorization and your own task ownership. Main-home overview does not grant cross-space mutation authority.</news>`, () => {
+      this.source.saveAndDeliver(target.id, notice.id, `<news>${notice.text}\nObserved product news, not a new human request. The card is already in this chat. Explain briefly what it means and what the human needs; act only within existing authorization and your own task ownership. Main-home overview does not grant cross-space mutation authority.${notice.event === 'ready' ? MERGE_NOTE : ''}</news>`, () => {
         notice.state = 'queued'; notice.launch = agent.launch; this.source.store.set('task-news', notice.id, notice); queued.add(target.id)
       }, true)
     }

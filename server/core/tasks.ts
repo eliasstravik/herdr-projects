@@ -8,7 +8,7 @@ import { SUMMARY_MAX, TITLE_MAX, STATUS_MAX, slugify, type Action, type Question
 import { CorePilotRepositories } from './pilot-repositories.ts'
 import { CoreTaskRelocation } from './task-relocation.ts'
 import { CoreTaskProcesses } from './task-processes.ts'
-import { taskOptions, validateTaskSettings } from './task-options.ts'
+import { mergeWords, taskOptions, validateTaskSettings } from './task-options.ts'
 import { CLI_NAME, kindOf } from './settings.ts'
 import { CoreGit } from './git.ts'
 import { pickSpeed } from '../common/restart.ts'
@@ -387,7 +387,7 @@ export class CoreTasks {
       : task.workflow === 'ready' ? 'This task is already Ready. Preserve the work and wait for the human. Do not begin implementation or merge.' : ''
     const role = readFileSync(join(import.meta.dir, '../../skill/shepherdr-agent/SKILL.md'), 'utf8')
     const instructions = `${role}\n\nYou are ${task.id} in standalone Shepherdr on core. Use the launch-provisioned authenticated shepherdr command. ${pilot ? 'Your Git metadata is read-only: use shepherdr checkpoint MESSAGE to commit, and shepherdr review TASK for a fresh managed reviewer. Use the product broker for managed agents and messages; no core socket or outside helper is available.' : 'Use hc for child agents, messages and waits.'} Do not use legacy helpers, SSH workers, a web URL or screen scraping. Your branch is ${task.branch}; stay in this worktree.\n`
-    const prompt = `${task.desc}\n\n${wait}\n\nSettings:\n- Agent: ${task.kind}${task.model ? `, model ${task.model}` : ''}${task.effort ? `, effort ${task.effort}` : ''}\n- Review: ${task.review.on ? 'on' : 'off'}\n- Reviewer: ${task.review.kind}${task.reviewerModel ? `, model ${task.reviewerModel}` : ''}${task.reviewerEffort ? `, effort ${task.reviewerEffort}` : ''}\n- Must fix: ${task.review.mustFix}\n- Review rounds: ${task.review.rounds}\n- Merge: ${task.mergePolicy === 'ask' ? 'ask the human first' : task.mergePolicy === 'checks' ? 'after GitHub checks' : 'on its own'}\n${Object.keys(task.overrides ?? {}).length ? `Set by the coordinator for this task: ${Object.entries(task.overrides!).map(([key, value]) => `${key}=${value}`).join(', ')}\n` : ''}${message ? `\n<go>${message}</go>` : ''}`
+    const prompt = `${task.desc}\n\n${wait}\n\nSettings:\n- Agent: ${task.kind}${task.model ? `, model ${task.model}` : ''}${task.effort ? `, effort ${task.effort}` : ''}\n- Review: ${task.review.on ? 'on' : 'off'}\n- Reviewer: ${task.review.kind}${task.reviewerModel ? `, model ${task.reviewerModel}` : ''}${task.reviewerEffort ? `, effort ${task.reviewerEffort}` : ''}\n- Must fix: ${task.review.mustFix}\n- Review rounds: ${task.review.rounds}\n- Merge: ${mergeWords(task.mergePolicy)}\n${Object.keys(task.overrides ?? {}).length ? `Set by the coordinator for this task: ${Object.entries(task.overrides!).map(([key, value]) => `${key}=${value}`).join(', ')}\n` : ''}${message ? `\n<go>${message}</go>` : ''}`
     const launched = await this.source.agents.launch(space, task.chat, task.kind, prompt, { role: 'task', parent, folder: task.folder, task: task.id, instructions, model, effort, speed: task.speed, resume: !pilot && !prior?.pilot, message: message ?? '', pilot: pilot ? { run: pilot.id, hosts: pilot.config.hosts, deadline: pilot.config.runtime ? pilot.started + pilot.config.runtime : undefined, repo: task.repo } : undefined })
     if (pilot) this.source.pilots.policy.bind(pilot.id, { chat: launched.chat, launch: launched.launch, role: 'task', task: task.id })
     await this.label(task)
@@ -518,7 +518,6 @@ export class CoreTasks {
         if (!merged || !/^[a-f0-9]{40,64}$/.test(merged)) throw new Refusal('GitHub confirmed the merge but has not returned its commit yet; retry to finish recording it')
         task.mergeCommit = merged; task.baseSyncPending = true; this.save(task)
       } else {
-        if (!await this.git.clean(repo)) throw new Refusal('The base checkout has uncommitted work')
         if (await this.git.run(repo, ['symbolic-ref', '--short', 'HEAD']) !== task.base) throw new Refusal('The base branch is not checked out')
         if (!task.mergeCommit || !await this.git.contains(repo, task.base!, task.mergeCommit)) {
           const base = await this.git.head(repo, task.base)
@@ -531,8 +530,10 @@ export class CoreTasks {
           const message = `${task.id}: ${task.name}\n\n${task.said || ''}${task.facts ? '\n\nFacts: ' + task.facts : ''}\n`
           task.mergeCommit = await this.git.run({ machine: task.machine, folder: task.repo }, ['commit-tree', tree, '-p', base, '-F', '-'], 30, message)
           this.save(task) // Persist the prepared commit before the only base-ref/worktree change.
+          const before = task.workflow
           task.workflow = 'merging'; this.save(task); await this.label(task)
-          await this.git.run(repo, ['merge', '--ff-only', task.mergeCommit])
+          try { await this.git.fastForward(repo, task.mergeCommit) }
+          catch (error) { task.workflow = before; this.save(task); await this.label(task); throw error }
         }
       }
       task.workflow = 'merged'; task.status = 'done'; task.doneAt = Date.now(); task.outcome = 'done'; task.cleanupPending = true

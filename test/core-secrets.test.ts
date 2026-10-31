@@ -39,6 +39,24 @@ test('secret cards expire on replacement and save only names into chat and deliv
   expect(records).toContain('DEMO_KEY')
 }))
 
+test('a secret saved in Settings closes every card it reaches, and only those', async () => fixture(async (source, agent) => {
+  const other: CoreAgent = { ...agent, chat: 'ONE-1/Agent', role: 'task', launch: 'second', grant: 'second' }
+  source.store.set('agent', other.chat, other)
+  const alerts: { clear?: boolean }[] = []
+  source.on('alert', alert => alerts.push(alert as { clear?: boolean }))
+  await source.secrets.cli(agent, ['secret', 'ask', 'DEMO_KEY', '--why', 'First'])
+  await source.secrets.cli(other, ['secret', 'ask', 'DEMO_KEY', '--why', 'Second'])
+  await source.secrets.cli(agent, ['secret', 'ask', 'OTHER_KEY', '--why', 'Unrelated'])
+  source.store.set('space', 'p:machine:two', { id: 'p:machine:two', name: 'two', machine: 'other-machine', folder: '/unused', base: 'main', prefix: 'TWO', mode: 'regular', added: 1 } as CoreSpace)
+  await source.secrets.act({ type: 'secret', level: 'p:machine:two', name: 'DEMO_KEY', value: 'out-of-reach' })
+  expect(source.secrets.open()).toHaveLength(3)
+  await source.secrets.act({ type: 'secret', level: 'all', name: 'DEMO_KEY', value: 'synthetic-value' })
+  expect(source.secrets.open().map(request => request.ask.name)).toEqual(['OTHER_KEY'])
+  for (const chat of [agent.chat, other.chat]) expect(source.logs.messages(chat).find(item => item.secret?.name === 'DEMO_KEY')?.secret?.saved).toBe('Everywhere')
+  expect(source.store.all<{ id: string; text: string }>('pending-send').filter(item => item.id.startsWith('secret-saved-')).map(item => item.text.includes('DEMO_KEY'))).toEqual([true, true])
+  expect(alerts.filter(alert => alert.clear)).toHaveLength(2)
+}))
+
 test('corrupt vault diagnostics never echo stored material', async () => fixture(async (source) => {
   const fs = await import('node:fs')
   fs.writeFileSync(join(source.config.home, 'vault.json'), 'DO_NOT_DISCLOSE invalid JSON', { mode: 0o600 })
