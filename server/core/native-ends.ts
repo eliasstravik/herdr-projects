@@ -53,12 +53,12 @@ export class NativeEnds {
     }
   }
   /** Why this card is over, if its call or its turn is. A Codex turn can end by itself with the approval still pending
-   *  (a long call only yields), so there a quiet end counts only after something typed since the card. */
+   *  (a long call only yields), so there a quiet end counts only with something typed between the card and it. */
   over(launch: string, card: NativeCall, kind?: string) {
     const use = this.call(launch, card), ends = this.ends.get(launch) ?? []
-    const typed = ends.some(end => end.prompt && end.at > (card.at ?? 0) && end.sub === card.sub)
+    const typed = (quiet: NativeEnd) => ends.some(end => end.prompt && end.at > (card.at ?? 0) && end.at <= quiet.at && end.sub === card.sub)
     for (const end of ends) {
-      if (end.at < (card.at ?? 0) || end.quiet && kind === 'codex' && !typed) continue
+      if (end.at < (card.at ?? 0) || end.quiet && kind === 'codex' && !typed(end)) continue
       if (end.use ? end.use === use : end.at > (card.at ?? 0) && end.sub === card.sub && !(end.prompt && end.turn && end.turn === card.turn)) return end.reason
     }
   }

@@ -194,6 +194,16 @@ test('a Codex turn that ends by itself leaves its card waiting, until something 
   }
 })
 
+test('text typed after a Codex turn ended by itself does not reach back to that end', () => {
+  const f = fixture('codex'), at = Date.now()
+  try {
+    const { id } = f.ask({ at, turn: 'turn-1' })
+    f.hook({ event: 'Stop', at: at + 1 })
+    f.hook({ event: 'UserPromptSubmit', turn: 'turn-1', at: at + 2 })
+    expect(f.open().map(item => item.id)).toEqual([id])
+  } finally { f.close() }
+})
+
 test('a new prompt ends the turn the card was in, on Codex too', async () => {
   const f = fixture('codex')
   try {
