@@ -327,11 +327,14 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
   }
   /** Cards a previous server held. The agent's own answer says only that it was refused; alone with that, it can give up on the work. */
   private closeInterrupted() {
-    const denied = new Map<string, string[]>()
+    const denied = new Map<string, string[]>(), calls = new Set<string>()
     for (const permission of this.store.all<Permission>('permission')) {
       if (permission.settled) continue
       this.expirePermission(permission, 'Shepherdr restarted; ask again')
-      if (this.agents.get(permission.chat)?.grant === permission.grant && (!permission.native || permission.native.head === permission.id)) denied.set(permission.chat, [...denied.get(permission.chat) ?? [], cardWords(permission.question, !!permission.native, permission.tool)])
+      // One line for a tool call: its first card may be answered already, with a later one still open.
+      const call = permission.native?.head ?? permission.id
+      if (this.agents.get(permission.chat)?.grant !== permission.grant || calls.has(call)) continue
+      calls.add(call); denied.set(permission.chat, [...denied.get(permission.chat) ?? [], cardWords(permission.question, !!permission.native, permission.tool)])
     }
     for (const [chat, words] of denied) {
       const text = `Shepherdr restarted, so this was denied, though nobody refused it: ${words.join('; ')}. Ask again if it's still needed.`, id = `restart-denied-${randomUUID()}`
