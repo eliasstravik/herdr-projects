@@ -28,7 +28,7 @@
   for provisioning and the upgrade steps for already-running agents.
 
 - Interactive task, coordinator and backup chat choices require both runtime log discovery and a chat reader.
-  Settings and Restart offer Claude Code, Codex and pi; other herdr CLIs are refused before a chat launch because
+  Settings and Restart offer Claude Code and Codex; other herdr CLIs are refused before a chat launch because
   their replies cannot be shown. Existing saved choices are kept, but an unsupported choice must be changed before
   launching again. Headless reviewer choices are separate; this does not add or prove support for other reviewers.
 
@@ -40,9 +40,9 @@ space > machine > Everywhere > empty. Values are not concatenated across scopes.
 inherited rules for that role; Reset restores inheritance. Backup agents use Task agents' rules. Home coordinators
 use their home space's settings, then the machine's and Everywhere's.
 
-These are personal rules, stored in `~/.shepherdr/settings.json` (or `SHEPHERDR_HOME`), outside the shared repo.
-They use the existing settings propagation to other machines: Everywhere comes from the main machine; each machine
-keeps its own machine and space values. No repository `AGENTS.md`, `CLAUDE.md`, override file or worktree copy is
+These are personal rules, stored with every other setting in the main machine's `~/.shepherdr/state.sqlite` (or
+`SHEPHERDR_HOME`), outside the shared repo. Every scope's value stays there; another machine gets a role's effective
+rules only in the launch of an agent it runs. No repository `AGENTS.md`, `CLAUDE.md`, override file or worktree copy is
 created or changed. Keep passwords, tokens and keys in **Secrets**, never here: this text is visible in settings,
 agent prompts and session history. Agents must never copy it into git, task briefs, proof reports or GitHub.
 
@@ -50,11 +50,10 @@ Private rules supplement repository/team rules. Explicit human instructions and 
 private rules. A conflict with team rules must be surfaced to the human, not silently resolved by replacing them.
 Shepherdr's normal role prompt and skills still apply.
 
-A new launch snapshots the role's current effective instructions. Claude Code and pi use the existing appended
-prompt file; other CLIs receive the existing hidden initial prompt. Saving does not interrupt, restart or update an
-already-running agent. Start a new agent or explicitly restart it to deliver changes. On resume, a changed prompt
-is sent again for CLIs without an append flag; it says the new private snapshot replaces the previous one, including
-when empty. This delivers words, not proof that a model read or obeyed them; old session history is still present.
+A new launch snapshots the role's current effective instructions. Claude Code gets them in its appended prompt file,
+Codex as its developer instructions. Saving does not interrupt, restart or update an
+already-running agent. Start a new agent or explicitly restart it to deliver changes. A resumed session gets the
+current snapshot the same way; it says the new private snapshot replaces the previous one, including when empty. This delivers words, not proof that a model read or obeyed them; old session history is still present.
 
 Reviewers are started by task agents, not by a separate settings service. A task launch includes a clearly marked
 reviewer-only snapshot and tells the task agent to pass that snapshot, privacy/precedence rules and repository rules

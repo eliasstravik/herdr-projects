@@ -5,7 +5,7 @@ Every agent, coordinator or task agent, gets the same chat.
 - Pick a space; write to its coordinator. Ask it for a task; tasks are created only through a coordinator.
 - What you send shows in the chat the moment you tap Send, faded until it is in. If it can't go through, it says so
   under the message, with Retry and Remove; it is still there after a reload.
-- Write to a busy agent any time: it goes in at once and steers the agent mid-turn (Claude Code, Codex and pi take it
+- Write to a busy agent any time: it goes in at once and steers the agent mid-turn (Claude Code and Codex take it
   at their next step). It waits only while the agent shows a menu or permission prompt, where typed text could pick an
   option (the bubble says so, and it goes in once the prompt is answered), or while the agent is still starting or
   its machine is out of reach; only then does the bubble carry a note. Commands like /compact or a model change wait
@@ -23,6 +23,8 @@ Every agent, coordinator or task agent, gets the same chat.
 - Claude Code's own question tool and plan approval are cards, never permissions: a question is a choice card with an
   Other answer, a plan is Plan to approve (stop asking, keep asking, or change the plan). The answer goes back to Claude
   through its permission hook, so nothing is typed into its screen. Handled in the terminal instead, the card closes.
+  Codex's own question tool (`request_user_input`, by default offered only in its Plan mode) has no card yet: answer it
+  in Terminal.
 - `/model` (with or without a name) never reaches the CLI, which would save it as the device's default for every later
   agent. It opens Restart agent instead, with the model you named picked, and that changes this agent only.
 - Any other slash command you type (`/clear`, `/new`, `/compact`, a custom one) goes into the agent's CLI as
@@ -83,5 +85,5 @@ Every agent, coordinator or task agent, gets the same chat.
 Every agent learns the chat lines, cards, artifacts and the `shepherdr` command from
 [skill/shepherdr](../skill/shepherdr/SKILL.md); coordinators their tasks, news, merges and Autopilot from
 [skill/shepherdr-coordinator](../skill/shepherdr-coordinator/SKILL.md); task agents the way from brief to merged from
-[skill/shepherdr-agent](../skill/shepherdr-agent/SKILL.md). Their prompts (`server/live/prompts.ts`) say only who they are,
-their space (and a home space's machine duties) or task, and which skills to read. `shepherdr help` lists the command.
+[skill/shepherdr-agent](../skill/shepherdr-agent/SKILL.md). Their launch prompts (`server/core/agents.ts`) carry those skills and say who they are and
+their space (and a home space's machine duties) or task. `shepherdr help` lists the command.

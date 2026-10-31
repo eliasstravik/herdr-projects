@@ -14,7 +14,7 @@
 
 ## Keep every project moving while you're away from the keyboard
 
-The app is an overview and a remote control; herdr-core is the engine. A space is a folder on a machine with its own coordinator, and each task gets its own agent on its own branch in a git worktree. No agent works in your checkout: it only gets main moved forward when a task merges. You answer the cards that need you and let the rest run, from whichever screen is in your hand.
+The app is an overview and a remote control; herdr-core is the engine. A space is a folder on a machine with its own coordinator, and each task gets its own agent on its own branch in a git worktree. Agents work outside your checkout, and it only gets main moved forward when a task merges. That's a rule agents follow, not a lock: a coordinator starts there and could still edit it. You answer the cards that need you and let the rest run, from whichever screen is in your hand.
 
 ## Choose between briefing each agent by hand, one long agent session, a cloud agents product, or mission control for herdr-core
 
