@@ -16,7 +16,7 @@ function NeedCard({ need, snap }: { need: Need; snap: Snapshot }) {
   const chat: Chat = { key: need.chat, cli: '', messages: [] }
   if (need.question) return <QuestionCard q={need.question} chat={chat} msg={need.question.id} from={who} source={source} oneTap={need.tap} />
   if (need.secret) return <SecretCard ask={need.secret} chat={chat} source={source} />
-  return <ReplyOnCard ask={{ chat: need.chat, open: true }} reply={{ text: need.text || 'Waits for your reply' }} task={who} source={source} />
+  return <ReplyOnCard ask={{ chat: need.chat, open: true }} reply={{ id: need.reply, text: need.text || 'Waits for your reply' }} task={who} source={source} />
 }
 
 /** one place on the list: where the need is from, and its card. Gone, it holds the height it had */

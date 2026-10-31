@@ -48,7 +48,7 @@ import { CorePlugins } from './plugins.ts'
 import { CoreUnread } from './unread.ts'
 import { CoreCards } from './cards.ts'
 import { CorePilotMail } from './pilot-mail.ts'
-import { askText, clip, quickChoices, TITLE_MAX, BODY_MAX } from '../../shared/alerts.ts'
+import { askText, clip, lastReply, quickChoices, TITLE_MAX, BODY_MAX } from '../../shared/alerts.ts'
 import { CANCELLED, hookEnd, logEnd, NativeEnds, STOPPED } from './native-ends.ts'
 import { NATIVE_UNREADABLE, cardWords, nativeAnswer, nativeCards, nativeClosed, nativeReply, type NativeAsk, type PermissionAnswer } from './native-asks.ts'
 import type { CorePluginUpdates } from './plugin-updates.ts'
@@ -56,6 +56,8 @@ import type { ActivityAsk, WorktreeAsk } from '../../shared/types.ts'
 
 interface Machine { id: string; name: string; state: string; host?: string; version?: string; session?: string | null }
 interface Permission { id: string; chat: string; grant: string; question: Question; expires: number; settled?: boolean; allow?: boolean; at?: number; native?: NativeAsk; tool?: string; hash?: string; turn?: string; sub?: string }
+/** the most of an agent's last words a card with no question carries: its card shows a few lines */
+const NEED_TEXT = 1000
 interface PendingSend { id: string; chat: string; text: string; launch?: string; state: 'queued' | 'sending' | 'uncertain' | 'cancelled'; quiet?: boolean; work?: boolean }
 
 /** Product state is Shepherdr's; terminals, machine commands, files and agent children are core's. */
@@ -254,6 +256,11 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
   openPermissions(agent: CoreAgent) {
     return this.store.all<Permission>('permission').filter(item => item.chat === agent.chat && item.grant === agent.grant && !item.settled && item.expires > Date.now())
   }
+  /** What an agent with no card last said: what its reply answers. */
+  private lastWords(chat: string): Pick<Need, 'text' | 'reply'> {
+    const last = lastReply({ key: chat, cli: '', messages: this.logs.messages(chat) })
+    return last?.text ? { text: clip(last.text, NEED_TEXT), reply: last.id } : {}
+  }
   /** Everything waiting on the human, oldest first: each agent's own open cards, and the plain waits with none. */
   private needs(tasks: Task[]): Need[] {
     const out: Need[] = []
@@ -267,14 +274,16 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
       for (const item of this.questions.open(agent.chat)) card(item.id, item.question, sentAt(agent.chat, item.id) ?? 0)
       for (const item of this.screens.open(agent.chat)) card(item.id, item.question, item.at)
       for (const item of this.secrets.open(agent.chat)) out.push({ ...need, id: item.id, at: sentAt(agent.chat, item.id) ?? 0, secret: item.ask })
-      if (!need.task && !out.some(item => item.chat === agent.chat) && this.status(agent) === 'need') out.push({ ...need, id: 'attention', at: agent.activityAt ?? agent.started ?? 0 })
+      // a task's own agent waits by its task's status, below
+      const waits = need.task ? agent.chat !== this.tasks.get(need.task)!.chat && this.agents.terminal(agent)?.status?.state === 'blocked' : this.status(agent) === 'need'
+      if (waits && !out.some(item => item.chat === agent.chat)) out.push({ ...need, id: 'attention', at: agent.activityAt ?? agent.started ?? 0, ...this.lastWords(agent.chat) })
     }
     for (const view of tasks.filter(view => !view.archived)) {
       const task = this.tasks.get(view.id)!, sent = task.workflow === 'ready' && task.mergeQuestion ? this.store.get<Message>(`message:${task.chat}`, task.mergeQuestion) : undefined
       const question = sent?.question && this.cards.messages(task.chat, [sent])[0].question
       // a merge asked of the human keeps its pick and Send
       if (question && question.sent === undefined) out.push({ id: question.id, chat: task.chat, place: task.place, task: task.id, at: sent!.at ?? 0, question })
-      else if (view.status === 'need' && !out.some(item => item.chat === task.chat)) out.push({ id: 'attention', chat: task.chat, place: task.place, task: task.id, at: this.agents.get(task.chat)?.activityAt ?? task.updatedAt ?? 0, text: view.sub })
+      else if (view.status === 'need' && !out.some(item => item.chat === task.chat)) out.push({ id: 'attention', chat: task.chat, place: task.place, task: task.id, at: this.agents.get(task.chat)?.activityAt ?? task.updatedAt ?? 0, text: view.sub, ...this.lastWords(task.chat) })
     }
     return out.sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1))
   }

@@ -570,8 +570,10 @@ export interface Need {
   at: number
   question?: Question
   secret?: SecretAsk
-  /** no card: why it waits, in Shepherdr's words, answered with a reply */
+  /** no card: what the agent last said, or why it waits, answered with a reply */
   text?: string
+  /** no card: the message that text is, for the reply to quote */
+  reply?: string
   /** a choice sends at once in the Needs you view; merges and plans keep their Send */
   tap?: boolean
 }

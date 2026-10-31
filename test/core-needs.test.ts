@@ -73,6 +73,26 @@ test('an ordinary card sends on a tap; an archived task and a removed space wait
   } finally { f.close() }
 })
 
+test('an agent that waits with no card shows what it last said, and the reply quotes that', () => {
+  const f = fixture()
+  try {
+    f.source.tasks.view = (task => ({ ...task, status: 'need', sub: 'Waits for your reply' })) as unknown as typeof f.source.tasks.view
+    f.source.post('A-1/Agent', { id: 'said', who: 'agent', text: 'Keep the old API around?', at: 100 })
+    expect(f.source.snapshot().needs.find(n => n.task === 'A-1')).toMatchObject({ id: 'attention', text: 'Keep the old API around?', reply: 'said' })
+    // nothing said yet: why it waits
+    expect(f.source.snapshot().needs.find(n => n.task === 'B-1')).toMatchObject({ id: 'attention', text: 'Waits for your reply' })
+  } finally { f.close() }
+})
+
+test('a reviewer blocked at its own screen with no card still counts', () => {
+  const f = fixture()
+  try {
+    f.source.store.set('agent', 'A-1/Reviewer', { chat: 'A-1/Reviewer', space: 'one', machine: 'm1', role: 'reviewer', kind: 'claude', launch: 'r', grant: 'r', state: 'idle', started: 1 })
+    f.source.agents.terminal = ((agent: { chat: string }) => agent.chat === 'A-1/Reviewer' ? { state: 'live', status: { state: 'blocked' } } : undefined) as unknown as typeof f.source.agents.terminal
+    expect(f.source.snapshot().needs.map(n => [n.id, n.chat, n.task])).toEqual([['attention', 'A-1/Reviewer', 'A-1']])
+  } finally { f.close() }
+})
+
 test('a reviewer asking counts: its task keeps its status, but the card waits on the human all the same', () => {
   const f = fixture()
   try {

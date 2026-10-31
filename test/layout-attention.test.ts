@@ -15,8 +15,10 @@ describe.skipIf(!browser)('attention count circles', () => {
       const template = saved.find((t) => t.status === 'ready')!
       const requests = world.chats[place].messages
       const asks = world.asks
-      // No coordinator request in the state matrix; scoped coordinator counting is checked below.
+      const others = world.places.filter((p) => p.id !== place && world.chats[p.chat]).map((p) => [p.chat, world.chats[p.chat].messages] as const)
+      // No coordinator request in the state matrix, in any space: Needs you counts them all. Scoped counting is checked below.
       world.chats[place].messages = []
+      for (const [chat] of others) world.chats[chat].messages = []
       world.asks = {}
       const tasks = (need: number, ready: number) => Array.from({ length: need + ready }, (_, i) => ({
         ...template, id: `BADGE-${i}`, place, status: i < need ? 'need' as const : 'ready' as const,
@@ -85,6 +87,7 @@ describe.skipIf(!browser)('attention count circles', () => {
       } finally {
         world.tasks = saved
         world.chats[place].messages = requests
+        for (const [chat, messages] of others) world.chats[chat].messages = messages
         world.asks = asks
         world.emit('snapshot')
         await page.close()

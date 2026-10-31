@@ -22,17 +22,19 @@ test('one that no longer waits keeps its place above an open one, so nothing sli
   expect(ids(holdNeeds(after, [need('b'), need('c'), need('d')]))).toEqual(['a gone', 'b', 'c', 'd'])
 })
 
-test('with nothing open below, the kept places go: nothing can move', () => {
-  let held = holdNeeds([], [need('a'), need('b')])
-  held = holdNeeds(held, [need('b')])
+test('the last card answered keeps its place too: a page scrolled to its end must not get shorter', () => {
+  const held = holdNeeds([], [need('a'), need('b')])
+  expect(ids(holdNeeds(held, [need('a')]))).toEqual(['a', 'b gone'])
+})
+
+test('with nothing open left, the kept places go', () => {
+  const held = holdNeeds(holdNeeds([], [need('a'), need('b')]), [need('b')])
   expect(ids(holdNeeds(held, []))).toEqual([])
-  held = holdNeeds(holdNeeds([], [need('a'), need('b'), need('c')]), [need('a'), need('c')])
-  expect(ids(holdNeeds(held, [need('a')]))).toEqual(['a'])
 })
 
 test('the same id in two chats is two needs, and one answered leaves the other', () => {
   const one: Need = { id: 'attention', chat: 'A/Agent', place: 'p', at: 1 }, two: Need = { ...one, chat: 'B/Agent' }
-  expect(ids(holdNeeds(holdNeeds([], [one, two]), [one]))).toEqual(['attention'])
+  expect(ids(holdNeeds(holdNeeds([], [one, two]), [one]))).toEqual(['attention', 'attention gone'])
 })
 
 test('a snapshot that changes nothing changes nothing', () => {

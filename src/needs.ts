@@ -1,6 +1,7 @@
 // The Needs you view's list as it stands on a screen: oldest first when it opens, and from then on nothing under the
 // thumb moves. A new need only ever joins the end. One that stops waiting (answered here or elsewhere) keeps its place
-// until no open need sits below it, so the next card never slides up into a tap that was meant for this one.
+// while any need stays open, so no card slides into a tap meant for another, and the list never gets shorter under a
+// page scrolled to its end.
 import type { Need } from '@shared/types.ts'
 
 export interface HeldNeed {
@@ -20,6 +21,5 @@ export function holdNeeds(held: HeldNeed[], needs: Need[]): HeldNeed[] {
     return need ? { need } : { need: h.need, gone: true }
   })
   const list: HeldNeed[] = [...kept, ...needs.filter((n) => !known.has(key(n))).map((need) => ({ need }))]
-  while (list.at(-1)?.gone) list.pop()
-  return list
+  return list.every((h) => h.gone) ? [] : list
 }
