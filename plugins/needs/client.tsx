@@ -1,7 +1,7 @@
 // Needs you: everything waiting on the human, from every space on every machine, on one list beside the chat. Each card
 // is the agent's own, answered here as in its chat (src/needs.ts keeps the list still under the thumb). The chats keep
 // their cards; a coordinator's only says a task needs you and leads here.
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { definePlugin, goChat, openTask, useSnap } from '@client/kernel.ts'
 import { holdNeeds, needKey, type HeldNeed } from '@client/needs.ts'
 import { Empty, LinkButton } from '@client/ui.tsx'
@@ -51,10 +51,17 @@ function NeedsList() {
   const snap = useSnap()!
   // kept while the view is open: leaving it and coming back starts oldest first again, without what no longer waits
   const held = useRef<HeldNeed[]>([])
+  const [, redraw] = useState(0)
   held.current = holdNeeds(held.current, snap.needs)
   if (!held.current.length) return <Empty>Nothing needs you.</Empty>
+  const clear = () => {
+    held.current = []
+    redraw((n) => n + 1)
+  }
   return (
     <div data-needs className="flex flex-col gap-3 p-3 phone:px-4">
+      {/* only with nothing open, so it moves nothing; its room is always there, so its coming and going moves nothing either */}
+      <div className="-mb-2 flex min-h-6 justify-end px-1">{held.current.every((h) => h.gone) ? <LinkButton onClick={clear}>Clear</LinkButton> : null}</div>
       {held.current.map((h) => <Slot key={needKey(h.need)} held={h} snap={snap} />)}
     </div>
   )

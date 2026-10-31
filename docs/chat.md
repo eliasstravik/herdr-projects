@@ -97,7 +97,7 @@ permissions, plans, merges, secrets, CLI screens, and agents that just wait for 
 - One tap answers a question or a permission, and presses a CLI screen's choice. Merges and plans keep their pick and
   Send, and so does a card with a note typed.
 - The list stays still under your thumb. A new card only ever joins the end. A card answered, here or anywhere else,
-  keeps its place and its height while any card stays open; opening Needs you again, or answering the last, clears them.
+  keeps its place and its height until you leave Needs you, or tap Clear once none is open.
 - Every red count comes from this one list, so they can't differ: a space's count in the sidebar is its cards here,
   those counts add up to the number on Needs you, and the app icon adds the Ready tasks. Tasks shows only Ready in its
   tab, and a task with two cards counts as two in its Needs you group. A task whose merge waits on you is on both

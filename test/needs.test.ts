@@ -27,9 +27,10 @@ test('the last card answered keeps its place too: a page scrolled to its end mus
   expect(ids(holdNeeds(held, [need('a')]))).toEqual(['a', 'b gone'])
 })
 
-test('with nothing open left, the kept places go', () => {
-  const held = holdNeeds(holdNeeds([], [need('a'), need('b')]), [need('b')])
-  expect(ids(holdNeeds(held, []))).toEqual([])
+test('with nothing open left the places stay too: the next card must not land under a tap', () => {
+  const held = holdNeeds(holdNeeds([], [need('a')]), [])
+  expect(ids(held)).toEqual(['a gone'])
+  expect(ids(holdNeeds(held, [need('b')]))).toEqual(['a gone', 'b'])
 })
 
 test('the same id in two chats is two needs, and one answered leaves the other', () => {
