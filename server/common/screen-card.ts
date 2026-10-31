@@ -87,5 +87,7 @@ export function readScreen(text: string, width = Infinity): ReadScreen {
 
 /** Two reads match when only a spinner, a timer or the cursor moved. */
 export const sameScreen = (text: string) => cleaned(text).join(' ').replace(/[^\p{L}]+/gu, ' ').trim()
+/** Everything the screen says, but for the cursor, spinners and rules: a tap is checked against words the card has no room for, and a timer refuses it. */
+export const allWords = (text: string) => cleaned(text).map(line => line.replace(MARKER, '$2')).join(' ').replace(/[\s─-▟⠀-⣿✔✓✢✳✶✻✽]+/gu, ' ').trim()
 /** the keys that move from the cursor to a choice and take it */
 export const pressKeys = (at: number, choice: number) => [...Array(Math.abs(choice - at)).fill(choice < at ? 'up' : 'down'), 'enter']

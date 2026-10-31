@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { askText, quickChoices } from '../../shared/alerts.ts'
 import type { Action, Message, Question } from '../../shared/types.ts'
-import { pressKeys, readScreen, sameScreen } from '../common/screen-card.ts'
+import { allWords, pressKeys, readScreen, sameScreen } from '../common/screen-card.ts'
 import { Refusal } from './client.ts'
 import type { CoreAgent } from './model.ts'
 import { CLI_NAME } from './settings.ts'
 import type { CoreSource } from './source.ts'
 
-interface ScreenCard { id: string; chat: string; launch: string; screen: string; question: Question; state: 'open' | 'answered'; at: number }
+interface ScreenCard { id: string; chat: string; launch: string; screen: string; all?: string; question: Question; state: 'open' | 'answered'; at: number }
 
 const FIRST_LOOK = 6000 // two matching reads, a poll or two apart, put a card with choices up by about 10 seconds
 const POLL = 2000
@@ -56,23 +56,24 @@ export class CoreScreens {
   private async look(agent: CoreAgent, now: number) {
     const read = await this.read(agent)
     if (!read) return
-    const seen = sameScreen(read.text), { words, choices } = readScreen(read.text, read.terminal.cols), before = this.last.get(agent.launch)
-    const shown = JSON.stringify([words, choices])
+    const seen = sameScreen(read.text), all = allWords(read.text), { words, choices } = readScreen(read.text, read.terminal.cols), before = this.last.get(agent.launch)
+    const shown = JSON.stringify([all, words, choices])
     this.last.set(agent.launch, { seen, shown })
     const current = this.source.agents.get(agent.chat)
     if (before?.seen !== seen || current?.launch !== agent.launch || current.state !== 'starting') return // still moving
     const cards = this.cards().filter(row => row.chat === agent.chat && row.launch === agent.launch)
     const open = cards.find(row => row.state === 'open' && row.screen === seen)
-    // the same screen with a new code or number on it: a timer never reads the same twice, so it stays out
-    if (open && before.shown === shown && JSON.stringify([open.question.screen, open.question.choices]) !== shown) { open.question.screen = words; open.question.choices = choices; this.settle(open) }
+    // the same screen with a new code or number on it: a timer never reads the same twice, so it stays out. A new card,
+    // so a tap on the old one, from a phone yet to hear of this, can't reach words it didn't show.
+    if (open && before.shown === shown && JSON.stringify([open.all, open.question.screen, open.question.choices]) !== shown) { this.finish(open, 'The screen changed'); this.post(agent, seen, all, words, choices); return }
     if (open || cards.some(row => row.screen === seen && now - row.at < RETRY)) return
     for (const row of cards) if (row.state === 'open') this.finish(row)
-    if (choices.length || words && (cards.length || now - agent.started >= NO_CHOICES)) this.post(agent, seen, words, choices)
+    if (choices.length || words && (cards.length || now - agent.started >= NO_CHOICES)) this.post(agent, seen, all, words, choices)
   }
-  private post(agent: CoreAgent, screen: string, words: string, choices: Question['choices']) {
+  private post(agent: CoreAgent, screen: string, all: string, words: string, choices: Question['choices']) {
     const task = this.source.tasks.forChat(agent.chat), id = randomUUID(), cli = CLI_NAME[agent.kind]
     const question: Question = { id, title: `${cli} is waiting on its screen`, kind: 'Question', screen: words, terminal: true, press: true, choices, noNote: true, to: cli }
-    this.source.store.set('screen-card', id, { id, chat: agent.chat, launch: agent.launch, screen, question, state: 'open', at: Date.now() } satisfies ScreenCard)
+    this.source.store.set('screen-card', id, { id, chat: agent.chat, launch: agent.launch, screen, all, question, state: 'open', at: Date.now() } satisfies ScreenCard)
     this.source.post(agent.chat, { id, who: 'agent', question, at: Date.now() })
     this.source.forwardQuestion(agent.chat, question)
     this.source.emit('alert', { id, from: 'Shepherdr', ...askText(task?.id || this.source.space(agent.space)?.name || 'Shepherdr', question), go: { place: agent.space, task: task?.id, focus: id }, tag: task?.id || `ask:${agent.space}`,
@@ -103,7 +104,7 @@ export class CoreScreens {
       // The cursor may have moved, or the screen gone, since the card was drawn. Nothing is pressed on a screen it doesn't show.
       const read = await this.read(this.source.agents.get(row.chat)!)
       const screen = read && readScreen(read.text, read.terminal.cols)
-      if (!read || !screen || sameScreen(read.text) !== row.screen || JSON.stringify(screen.choices) !== JSON.stringify(row.question.choices)) throw new Refusal('That screen has changed, so nothing was pressed')
+      if (!read || !screen || allWords(read.text) !== row.all || JSON.stringify([screen.words, screen.choices]) !== JSON.stringify([row.question.screen, row.question.choices])) throw new Refusal('That screen has changed, so nothing was pressed')
       await this.source.core.call('terminal.keys', { terminal: read.terminal.address, keys: pressKeys(screen.at, action.choice) })
       row.state = 'answered'; row.at = Date.now(); row.question.sent = action.choice
       this.settle(row, row.question.choices[action.choice].label, 'Answered', action.space ? 'space' : 'task')
