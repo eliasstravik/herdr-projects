@@ -1,0 +1,62 @@
+// Needs you: everything waiting on the human, from every space on every machine, on one list beside the chat. Each card
+// is the agent's own, answered here as in its chat (src/needs.ts keeps the list still under the thumb). The chats keep
+// their cards; a coordinator's only says a task needs you and leads here.
+import { useLayoutEffect, useRef } from 'react'
+import { definePlugin, goChat, openTask, useSnap } from '@client/kernel.ts'
+import { holdNeeds, type HeldNeed } from '@client/needs.ts'
+import { Empty, LinkButton } from '@client/ui.tsx'
+import { CardShell, QuestionCard, ReplyOnCard, SecretCard } from '@plugins/chat/client.tsx'
+import { machineName, type Chat, type Need, type Snapshot } from '@shared/types.ts'
+
+function NeedCard({ need, snap }: { need: Need; snap: Snapshot }) {
+  const task = snap.tasks.find((t) => t.id === need.task)
+  const place = snap.places.find((p) => p.id === need.place)
+  const who = need.task ?? place?.name ?? need.chat
+  const source = { id: who, title: task?.name }
+  const chat: Chat = { key: need.chat, cli: '', messages: [] }
+  if (need.question) return <QuestionCard q={need.question} chat={chat} msg={need.question.id} from={who} source={source} oneTap={need.tap} />
+  if (need.secret) return <SecretCard ask={need.secret} chat={chat} source={source} />
+  return <ReplyOnCard ask={{ chat: need.chat, open: true }} reply={{ text: need.text || 'Waits for your reply' }} task={who} source={source} />
+}
+
+/** one place on the list: where the need is from, and its card. Gone, it holds the height it had */
+function Slot({ held, snap }: { held: HeldNeed; snap: Snapshot }) {
+  const { need, gone } = held
+  const box = useRef<HTMLDivElement>(null)
+  const height = useRef(0)
+  useLayoutEffect(() => {
+    if (!gone && box.current) height.current = box.current.offsetHeight
+  })
+  const place = snap.places.find((p) => p.id === need.place)
+  const machine = place ? machineName(snap.machines, place.machine) : ''
+  const off = place?.status === 'off'
+  return (
+    <div ref={box} data-need={need.id} data-need-gone={gone ? '' : undefined} style={gone ? { minHeight: height.current } : undefined} className="min-w-0">
+      <div className="flex items-baseline justify-between gap-2 px-1 text-[0.8125rem] text-fg2 phone:text-[0.9375rem]">
+        <span data-need-where className="min-w-0 truncate">{[machine, place?.name].filter(Boolean).join(' · ')}{off ? " · can't reach it now" : ''}</span>
+        <LinkButton onClick={() => (need.task ? openTask(need.task) : goChat(need.chat))}>Open chat</LinkButton>
+      </div>
+      {gone ? <CardShell title={need.question?.title ?? (need.secret ? `Secret: ${need.secret.name}` : `${need.task ?? 'Agent'} waited for a reply`)}><span className="text-fg2">No longer waiting</span></CardShell> : <NeedCard need={need} snap={snap} />}
+    </div>
+  )
+}
+
+function NeedsList() {
+  const snap = useSnap()!
+  // kept while the view is open: leaving it and coming back starts oldest first again, without what no longer waits
+  const held = useRef<HeldNeed[]>([])
+  held.current = holdNeeds(held.current, snap.needs)
+  if (!held.current.length) return <Empty>Nothing needs you.</Empty>
+  return (
+    <div data-needs className="flex flex-col gap-3 p-3 phone:px-4">
+      {held.current.map((h) => <Slot key={`${h.need.chat}\0${h.need.id}`} held={h} snap={snap} />)}
+    </div>
+  )
+}
+
+export default definePlugin({
+  name: 'needs',
+  setup(reg) {
+    reg.views.needs = NeedsList
+  },
+})

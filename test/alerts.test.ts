@@ -133,8 +133,8 @@ describe('what goes to the device', () => {
 describe("the app icon's count", () => {
   test('what waits on you: tasks that need you or are ready (not archived ones), and open coordinator questions', () => {
     const wt = waiting(snap)
-    const red = snap.tasks.filter((t) => !t.archived && (t.status === 'need' || t.status === 'ready')).length + Object.keys(snap.asks).length
-    expect(wt.count).toBe(red)
+    const asked = new Set(snap.needs.map((n) => n.task))
+    expect(wt.count).toBe(snap.needs.length + snap.tasks.filter((t) => !t.archived && t.status === 'ready' && !asked.has(t.id)).length)
     expect(wt.count).toBe(7)
     expect(wt.tags).not.toContain('GTM-11')
     expect(wt.tags).toContain('GTM-15')
@@ -148,7 +148,7 @@ describe("the app icon's count", () => {
     expect(keptTags(snap, ['p:vm-str:gtm', 'HP-201/Agent'])).toEqual(all.filter((t) => t !== 'ask:p:vm-str:gtm' && t !== 'HP-201'))
   })
   test('nothing waits: no count', () => {
-    expect(waiting({ places: snap.places, tasks: [], asks: {} })).toEqual({ count: 0, tags: [] })
+    expect(waiting({ places: snap.places, tasks: [], asks: {}, needs: [] })).toEqual({ count: 0, tags: [] })
   })
   test('it follows an answer', async () => {
     const world = new DemoWorld()
