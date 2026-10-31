@@ -36,7 +36,8 @@ export class CoreLogs {
     const jobs: Promise<void>[] = []
     const agents = this.agents.all()
     const first = this.next++ % Math.max(1, agents.length)
-    for (const agent of [...agents.slice(first), ...agents.slice(0, first)]) {
+    // Each poll reads only so many: an agent with a card open goes first, so a card it moved past closes within seconds.
+    for (const agent of [...agents.slice(first), ...agents.slice(0, first)].sort((a, b) => Number(!!b.permission) - Number(!!a.permission))) {
       if (this.reading.has(agent.chat) || (this.machines.get(agent.machine) ?? 0) >= 4) continue
       this.machines.set(agent.machine, (this.machines.get(agent.machine) ?? 0) + 1)
       jobs.push(this.claim(agent).finally(() => this.machines.set(agent.machine, (this.machines.get(agent.machine) ?? 1) - 1)))

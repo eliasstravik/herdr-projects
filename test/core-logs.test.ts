@@ -204,3 +204,13 @@ test('native runtime observations preserve launch policy and reject historical o
     expect(faults).toEqual([])
   } finally { logs.stop(); store.close(); rmSync(home, { recursive: true, force: true }) }
 })
+
+test('an agent with a card open is read first, however many agents wait their turn', async () => {
+  const list = ['a', 'b', 'c', 'd', 'e', 'f'].map(chat => ({ chat, machine: 'machine', permission: chat === 'f' ? 'card' : undefined }))
+  const logs = new CoreLogs({ all: () => list } as unknown as CoreAgents, {} as CoreFiles, {} as CoreStore, () => {}, () => {})
+  const read: string[] = []
+  ;(logs as unknown as { read(agent: { chat: string }): Promise<void> }).read = async agent => { read.push(agent.chat) }
+  await logs.poll()
+  expect(read[0]).toBe('f')
+  expect(read).toHaveLength(4)
+})
