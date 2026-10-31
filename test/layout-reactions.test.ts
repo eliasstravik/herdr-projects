@@ -184,7 +184,7 @@ describe.skipIf(!browser)('reactions on a phone', () => {
       await page.keyboard.press('Escape')
       await gone()
     }
-    await noBar.evaluate((tag) => tag.remove())
+    await noBar.evaluate((tag) => (tag as Element).remove())
     await page.evaluate(() => document.documentElement.style.setProperty('--app-h', '844px'))
     await page.$eval('[data-msg="long-agent"]', (m) => m.scrollIntoView({ block: 'center' }))
     await page.waitForTimeout(350)
