@@ -68,6 +68,7 @@ const CHECK_MS = 15 * 60_000, RETRY_MS = 60_000
 export class CoreSettings {
   private probing = new Set<string>()
   private tried = new Map<string, number>()
+  private unchecked = new Set<string>()
   private saving = false
   constructor(private store: CoreStore, private files: CoreFiles, private spaces: () => CoreSpace[], private machineName: (id: string) => string, private changed: () => void) {}
   private chain(level = 'all'): string[] {
@@ -225,12 +226,13 @@ export class CoreSettings {
     if (!kind) return undefined
     // left to the default on Everywhere, each machine has its own pick
     const bad = machines.flatMap(machine => {
-      const cli = chosen || level !== 'all' ? kind : kindOf(this.usableDefault(key, `m:${machine}`)) ?? kind, state = this.cliAt(cli, [machine])
+      const cli = chosen || level !== 'all' ? kind : kindOf(this.usableDefault(key, `m:${machine}`)) ?? kind
+      const state = this.cliAt(cli, [machine]) ?? (this.unchecked.has(machine) ? 'unchecked' : undefined)
       return state && state !== 'ready' ? [{ machine, cli, state }] : []
     })
     if (!bad.length) return undefined
-    const lines = bad.map(({ machine, cli, state }) => `${names[cli]} is ${state === 'missing' ? 'not installed' : 'not signed in'} on ${this.machineName(machine) || 'this machine'}.`)
-    return `${lines.join('\n')}\n${what} can't run there until that is fixed, or you choose another agent.`
+    const lines = bad.map(({ machine, cli, state }) => `${names[cli]} is ${state === 'missing' ? 'not installed' : state === 'unchecked' ? 'not checked' : 'not signed in'} on ${this.machineName(machine) || 'this machine'}.`)
+    return `${lines.join('\n')}\n${what} ${bad.every(item => item.state === 'unchecked') ? 'may not run there: the check failed' : "can't run there until that is fixed, or you choose another agent"}.`
   }
   /** Backup's own row is under Agents: How tasks work repeats it only to warn. */
   private backupRow(level: string): SettingRow[] {
@@ -301,9 +303,12 @@ export class CoreSettings {
     this.tried.set(machine, now)
     void this.files.exec(machine, ['sh', '-c', MACHINE_CHECK], undefined, undefined, 30).then(bytes => {
       const next = parseMachineCheck(bytes.toString('utf8'))
-      if (!next) return
+      if (!next) throw Error('No answer')
       this.store.set('machine-check', machine, next)
-      if (!saved || !sameCheck(saved, next)) this.changed()
-    }).catch(() => {}).finally(() => this.probing.delete(key))
+      if (!saved || !sameCheck(saved, next) || this.unchecked.delete(machine)) this.changed()
+    }).catch(() => {
+      if (saved || this.unchecked.has(machine)) return
+      this.unchecked.add(machine); this.changed()
+    }).finally(() => this.probing.delete(key))
   }
 }

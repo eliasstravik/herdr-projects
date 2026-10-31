@@ -215,6 +215,24 @@ test('Everywhere warns when neither CLI works, by what each machine would use', 
   expect(warning(settings, 'all', 'reviewer.agent')).toContain('Claude Code is not signed in on box.')
 }))
 
+test('a check that fails says so on the row, and goes quiet once one succeeds', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'shep-settings-')), store = new CoreStore(home)
+  let answer = ''
+  const spaces = [{ id: 'p:box:one', machine: 'box', name: 'one' }] as CoreSpace[], files = { exec: async () => { if (!answer) throw Error('out of reach'); return Buffer.from(answer) } } as unknown as CoreFiles
+  const settings = new CoreSettings(store, files, () => spaces, id => id, () => {})
+  try {
+    settings.probe('box')
+    await Bun.sleep(0)
+    expect(settings.get('reviewer.agent', 'p:box:one')).toBe('Codex')
+    expect(warning(settings, 'p:box:one', 'reviewer.agent')).toBe('Codex is not checked on box.\nReviews may not run there: the check failed.')
+    answer = 'platform=Linux\nclaude="loggedIn": true\ncodex=Logged in using ChatGPT'
+    ;(settings as unknown as { tried: Map<string, number> }).tried.clear()
+    settings.probe('box')
+    await Bun.sleep(0)
+    expect(warning(settings, 'p:box:one', 'reviewer.agent')).toBeUndefined()
+  } finally { store.close(); rmSync(home, { recursive: true, force: true }) }
+})
+
 test('a saved reviewer or backup stays, and its row says where that CLI is unusable', () => fixture(settings => {
   check(settings, 'box', { claude: 'ready', codex: 'signed-out' })
   check(settings, 'other', { claude: 'ready', codex: 'missing' })
