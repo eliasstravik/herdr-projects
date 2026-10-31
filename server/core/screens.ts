@@ -11,7 +11,7 @@ interface ScreenCard { id: string; chat: string; launch: string; screen: string;
 
 const FIRST_LOOK = 6000 // two matching reads, a poll or two apart, put a card with choices up by about 10 seconds
 const POLL = 2000
-const NO_CHOICES = 30_000 // with nothing to tap and no card yet, it may be a slow start: its first card comes later
+const NO_CHOICES = 13_000 // with nothing to tap and no card yet, it may be a slow start: its first card comes a little later
 const RETRY = 10_000 // a pressed choice has this long to leave the screen before it is asked again
 
 /** An agent with no session yet may be stopped at a screen of its CLI's own: folder trust, theme, sign-in, hooks, or one
