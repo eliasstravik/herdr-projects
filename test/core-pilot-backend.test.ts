@@ -63,7 +63,7 @@ test('ordinary hook results never enter core docs; oversized permission input is
   const backend = pilotCoreBackend('/core', credential, '/own', async (...args) => { calls.push(args); return {} })
   const signal = new AbortController().signal
   await backend.hook({ hook_event_name: 'PostToolUse', tool_name: 'Read', tool_response: 'x'.repeat(500_000), tool_input: { file: 'large' } }, randomUUID(), signal)
-  expect(calls[0]![3]).toEqual({ op: 'hook', input: { hook_event_name: 'PostToolUse', tool_name: 'Read' } })
+  expect(calls[0]![3]).toEqual({ op: 'hook', input: { hook_event_name: 'PostToolUse', tool_name: 'Read', tool_hash: toolHash({ file: 'large' }) } })
   await expect(backend.hook({ hook_event_name: 'PermissionRequest', tool_input: 'x'.repeat(70_000) }, randomUUID(), signal)).rejects.toThrow('mailbox limit')
   await expect(backend.hook({ hook_event_name: 'PermissionRequest', tool_input: 'x'.repeat(17_000) }, randomUUID(), signal)).rejects.toThrow('show in full')
   expect(calls).toHaveLength(1)

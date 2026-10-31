@@ -689,22 +689,26 @@ Use hc for starting, messaging and waiting on core child agents. Never use a web
       screen: JSON.stringify(input.input, null, 2)?.slice(0, 16_000) }]
     const rows = questions.map((question): Permission => ({ id: question.id, chat: grant.chat, grant: grant.id, question, expires: request.expires, at: Number.isFinite(input.at) ? input.at : Date.now(), tool: input.tool, hash: toolHash(input.input), turn: input.turn, sub: input.agent, ...(native ? { native: { ...native.native, head: input.id! } } : {}) }))
     const permission = rows[0], question = permission.question
-    agent.state = 'blocked'; agent.permission = input.id; this.store.set('agent', agent.chat, agent)
-    for (const row of rows) {
-      this.store.set('permission', row.id, row)
-      this.post(grant.chat, { id: `permission-${row.id}`, who: 'agent', question: row.question, at: Date.now() })
-      this.forwardQuestion(grant.chat, row.question)
-    }
-    const task = this.tasks.forChat(grant.chat)
-    this.emit('alert', { id: input.id, from: 'Shepherdr', ...(native ? askText(task?.id || this.space(agent.space)?.name || 'Shepherdr', question) : { title: question.title, body: 'Waiting for your permission' }), go: { place: agent.space, focus: input.id }, tag: grant.chat,
-      card: { chat: grant.chat, question: input.id, choices: native ? quickChoices(question) : question.choices.map((choice, index) => ({ label: choice.label, choice: index })) } })
-    return new Promise(resolve => {
+    // Posting a card reconciles it, and after a reconnect its end can be on record already: the wait comes first.
+    const answered = new Promise<PermissionAnswer>(resolve => {
       const timer = setTimeout(() => {
         this.expirePermission(permission, 'Permission request expired')
       }, Math.max(1, request.expires - Date.now() - 1000))
       this.permissions.set(input.id!, answer => { clearTimeout(timer); resolve(answer) })
-      this.reconcilePermissions(grant.chat) // After a reconnect its end can be on record before the card is.
     })
+    agent.state = 'blocked'; agent.permission = input.id; this.store.set('agent', agent.chat, agent)
+    for (const row of rows) this.store.set('permission', row.id, row)
+    const waiting = () => !this.store.get<Permission>('permission', input.id!)?.settled
+    for (const row of rows) {
+      if (!waiting()) return answered
+      this.post(grant.chat, { id: `permission-${row.id}`, who: 'agent', question: row.question, at: Date.now() })
+      if (waiting()) this.forwardQuestion(grant.chat, row.question)
+    }
+    if (!waiting()) return answered
+    const task = this.tasks.forChat(grant.chat)
+    this.emit('alert', { id: input.id, from: 'Shepherdr', ...(native ? askText(task?.id || this.space(agent.space)?.name || 'Shepherdr', question) : { title: question.title, body: 'Waiting for your permission' }), go: { place: agent.space, focus: input.id }, tag: grant.chat,
+      card: { chat: grant.chat, question: input.id, choices: native ? quickChoices(question) : question.choices.map((choice, index) => ({ label: choice.label, choice: index })) } })
+    return answered
   }
 
   async folders(machine: string, path: string): Promise<Folders> {
