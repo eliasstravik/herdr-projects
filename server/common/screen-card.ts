@@ -8,6 +8,8 @@ const TICK = /^[✔✓]\s+/u
 const NUMBER = /^\d{1,2}[.)]\s+/
 const ENTER = /press enter|enter to continue/i
 const MOST_WORDS = 8
+/** a frame of the usual Braille spinner or Claude Code's, starting a line, in a box or not: any other symbol there may mean something */
+const SPINNER = /^([\s│┃]*)[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏✢✳✶✻✽](?=\s|$)/u
 
 /** box sides turn to spaces, so columns stay where the CLI drew them */
 const cleaned = (text: string) => text.split('\n').map(line => line.replace(/[│┃]/g, ' ').trimEnd())
@@ -74,18 +76,28 @@ const links = (lines: string[], width: number, words: string) => {
 const withLinks = (words: string, lines: string[], width: number) => [words, ...links(lines, width, words)].filter(Boolean).join('\n\n')
 
 /** The menu lowest on the screen, for it is the one in play: a line with the CLI's cursor mark and at least one sibling
- *  beside it. The choices are in screen order, and `at` is the one the cursor is on. */
+ *  beside it. */
+const cursorLine = (lines: string[]) => lines.findLastIndex((_, line) => menuAt(lines, line))
+
+/** The choices are in screen order, and `at` is the one the cursor is on. */
 export function readScreen(text: string, width = Infinity): ReadScreen {
-  const lines = cleaned(text)
-  for (let line = lines.length - 1; line >= 0; line--) {
-    const menu = menuAt(lines, line)
-    if (menu) return { words: withLinks(wordsAbove(lines, menu.top, MOST_WORDS), lines.slice(0, menu.top), width), choices: menu.options.map(({ label, description }) => ({ label, ...(description ? { description } : {}) })), at: menu.current }
+  const lines = cleaned(text), line = cursorLine(lines)
+  if (line >= 0) {
+    const menu = menuAt(lines, line)!
+    return { words: withLinks(wordsAbove(lines, menu.top, MOST_WORDS), lines.slice(0, menu.top), width), choices: menu.options.map(({ label, description }) => ({ label, ...(description ? { description } : {}) })), at: menu.current }
   }
   const enter = lines.findLastIndex(line => ENTER.test(line))
   return { words: withLinks(wordsAbove(lines, enter >= 0 ? enter : lines.length, MOST_WORDS), lines, width), choices: enter >= 0 ? [{ label: 'Continue' }] : [], at: 0 }
 }
 
-/** Two reads match when only a spinner, a timer or the cursor moved. */
+/** Letters only, so a screen with a timer on it still settles enough to show. It says nothing went unseen: that is `screenText`. */
 export const sameScreen = (text: string) => cleaned(text).join(' ').replace(/[^\p{L}]+/gu, ' ').trim()
+/** The screen as it is, all but what moves with no one touching the words: the menu's cursor and a spinner's frame. A tap
+ *  needs this to match what the card was drawn from, whatever the card had room for. */
+export function screenText(text: string) {
+  const lines = text.split('\n'), plain = cleaned(text), cursor = cursorLine(plain)
+  if (cursor >= 0) { const mark = plain[cursor].search(/\S/); lines[cursor] = `${lines[cursor].slice(0, mark)} ${lines[cursor].slice(mark + 1)}` }
+  return lines.map(line => line.replace(SPINNER, '$1 ').trimEnd()).join('\n')
+}
 /** the keys that move from the cursor to a choice and take it */
 export const pressKeys = (at: number, choice: number) => [...Array(Math.abs(choice - at)).fill(choice < at ? 'up' : 'down'), 'enter']

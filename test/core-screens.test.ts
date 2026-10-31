@@ -123,6 +123,63 @@ test('nothing is pressed once a number in a choice has changed under the card', 
   expect(keys).toEqual([])
 })
 
+test('nothing is pressed once a number in its words has changed under the card', async () => {
+  screen = 'Trust /repo/project-1?\n\n ❯ Yes\n   No\n'
+  await settle()
+  const card = open()
+  screen = 'Trust /repo/project-2?\n\n ❯ Yes\n   No\n'
+  await expect(source.act({ type: 'answer', chat: 'space', question: card.id, choice: 0 })).rejects.toThrow('changed')
+  expect(keys).toEqual([])
+})
+
+test('nothing is pressed once words too far up for the card have changed under it', async () => {
+  const below = 'Is this right?\n'.repeat(8) + '\n ❯ Yes\n   No\n'
+  screen = `Trust /repo/project-1\n${below}`
+  await settle()
+  const card = open()
+  screen = `Trust /repo/project-2\n${below}`
+  await expect(source.act({ type: 'answer', chat: 'space', question: card.id, choice: 0 })).rejects.toThrow('changed')
+  expect(keys).toEqual([])
+  await settle(started + 20_000) // the new words have held still, so a new card goes with them
+  await source.act({ type: 'answer', chat: 'space', question: open().id, choice: 0 })
+  expect(keys).toEqual([['enter']])
+})
+
+test('words changed for good make a new card: a late tap on the old one presses nothing, one on the new does', async () => {
+  screen = 'Trust /repo/project-1?\n\n ❯ Yes\n   No\n'
+  await settle()
+  const card = open()
+  screen = 'Trust /repo/project-2?\n\n ❯ Yes\n   No\n'
+  await settle(started + 20_000)
+  expect(open().id).not.toBe(card.id)
+  expect(open().screen).toContain('project-2')
+  expect(cards().find(({ id }) => id === card.id)?.closed).toBe('The screen changed')
+  await expect(source.act({ type: 'answer', chat: 'space', question: card.id, choice: 0 })).rejects.toThrow('no longer waiting')
+  expect(keys).toEqual([])
+  await source.act({ type: 'answer', chat: 'space', question: open().id, choice: 0 })
+  expect(keys).toEqual([['enter']])
+})
+
+test('nothing is pressed once a mark that is no letter or number has changed under the card', async () => {
+  screen = 'Trust /repo/🔒?\n\n ❯ Yes\n   No\n'
+  await settle()
+  const card = open()
+  screen = 'Trust /repo/🚀?\n\n ❯ Yes\n   No\n'
+  await expect(source.act({ type: 'answer', chat: 'space', question: card.id, choice: 0 })).rejects.toThrow('changed')
+  expect(keys).toEqual([])
+})
+
+test('a spinner above the menu and a moved cursor keep the card, and the tap still lands', async () => {
+  screen = '⠋ Loading the project\n\n ❯ Yes\n   No\n'
+  await settle()
+  const card = open()
+  screen = '⠙ Loading the project\n\n   Yes\n ❯ No\n'
+  await settle(started + 20_000)
+  expect(open().id).toBe(card.id)
+  await source.act({ type: 'answer', chat: 'space', question: card.id, choice: 0 })
+  expect(keys).toEqual([['up', 'enter']])
+})
+
 test('the next screen is the next card, and the one before it says it went in the terminal', async () => {
   await settle()
   const first = open().id
@@ -168,14 +225,15 @@ test('an agent gone, or replaced, ends its card honestly', async () => {
   await expect(source.act({ type: 'answer', chat: 'space', question: replaced, choice: 0 })).rejects.toThrow('no longer waiting')
 })
 
-test('a new code on the same screen comes to the card; a running timer does not', async () => {
+test('a new code on the same screen comes as a new card; a running timer does not', async () => {
   screen = 'Enter this code: 1234\n'
   await settle(started + 30_000)
   const id = open().id
   screen = 'Enter this code: 5678\n'
   await settle(started + 40_000)
-  expect(cards()).toHaveLength(1)
-  expect(open()).toMatchObject({ id, screen: 'Enter this code: 5678' })
+  expect(cards()).toHaveLength(2)
+  expect(cards().find(card => card.id === id)?.closed).toBe('The screen changed')
+  expect(open().screen).toBe('Enter this code: 5678')
   screen = 'Enter this code: 5678 · 11\n'
   await source.screens.tick(started + 50_000)
   screen = 'Enter this code: 5678 · 13\n'
