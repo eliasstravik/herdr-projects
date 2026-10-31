@@ -120,7 +120,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     const changed = (chat: string) => { this.reconcilePermissions(chat); this.questions?.reconcile(chat); this.screens?.reconcile(chat); this.secrets?.reconcile(chat); this.emit('chat', chat); this.emit('snapshot'); void this.flush(chat); void this.tasks?.tick().catch(error => this.faults.set('queue', error.message)) }
     this.agents = new CoreAgents(config, installation, this.core, this.store, this.mailbox, machine => this.route(machine), changed, machine => this.machines.find(item => item.id === machine) ?? {})
     this.logs = new CoreLogs(this.agents, this.files, this.store, changed, (chat, message) => { this.faults.set(chat, message) }, (chat, message) => this.fresh(chat, message), agent => this.pilots.usage.observe(agent), (agent, event) => this.nativeEnded(agent, logEnd(event)))
-    this.settings = new CoreSettings(this.store, this.files, () => this.spaces(), id => this.store.get<string>('name', `m:${id}`) || (id === this.local.id ? this.local.name : this.machineName(id) || id), () => this.emit('snapshot'))
+    this.settings = new CoreSettings(this.store, this.files, () => this.spaces(), id => this.store.get<string>('name', `m:${id}`) || (id === this.local.id ? this.local.name : this.machineName(id) || id), () => { this.emit('snapshot'); this.plannedChanged() })
     this.agents.settings = this.settings
     this.agents.observed = (agent, event) => {
       if (event.event === 'PreToolUse' && event.use) this.ends.called(agent.launch, event.use, { tool: event.tool, hash: event.input, sub: event.agent })
@@ -299,6 +299,10 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     const label = (model?: string) => (model ? this.settings.findModel(kind, model, agent.space ?? '')?.label : undefined)
     const modelLabel = label(agent.model), runtimeLabel = label(runtime?.model?.replace(/\[.*\]$/, ''))
     return { kind, model: agent.model, ...(modelLabel ? { modelLabel } : {}), effort: agent.effort, speed: agent.speed, runtime: runtime && runtimeLabel ? { ...runtime, modelLabel: runtimeLabel } : runtime }
+  }
+  /** Settings changed: an open chat with no agent yet says what they will use now */
+  private plannedChanged() {
+    for (const chat of [...this.spaces().map(space => space.id), ...this.tasks.all().filter(task => !['merged', 'closed'].includes(task.workflow)).map(task => task.chat)]) if (!this.agents.get(chat)) this.emit('chat', chat)
   }
   /** no agent yet: what Settings will start it on. A task's own pick is no Setting: that stays what was asked for */
   private plannedWords(key: string): NonNullable<Chat['agent']> {

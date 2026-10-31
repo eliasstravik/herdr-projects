@@ -369,6 +369,11 @@ test('before an agent starts its chat says what Settings will use, and a task\'s
   try {
     expect(source.chat(space.id)).toMatchObject({ cli: 'Codex', agent: { kind: 'codex', planned: { model: 'small', modelLabel: 'Small 1', effort: 'medium' } } })
     expect(source.chat(space.id)?.agent?.model).toBeUndefined()
+    // an open chat follows Settings: nothing else would send it again
+    const sent: string[] = []
+    source.on('chat', (key: string) => sent.push(key))
+    source.settings.set('coordinator.effort', 'default', space.id)
+    expect(sent).toContain(space.id)
     source.tasks.forChat = (() => task) as unknown as typeof source.tasks.forChat
     expect(source.chat(task.chat)?.agent?.planned).toBeDefined()
     task.effort = 'high'
