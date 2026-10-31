@@ -328,7 +328,7 @@ describe.skipIf(!browser)("a place's Autopilot", () => {
     await page.getByRole('menuitem', { name: 'File or photo' }).waitFor()
     expect(await page.getByRole('combobox', { name: 'Model' }).count()).toBe(0)
     expect(await page.getByRole('group', { name: 'Mode', exact: true }).count()).toBe(0)
-    expect(await page.locator('[data-agent-controls] [role=menuitem]').count()).toBe(3)
+    expect(await page.locator('[data-agent-controls] [role=menuitem]').count()).toBe(4)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.close()
   }, 30_000)

@@ -114,7 +114,7 @@ function Sheet({ chat, name, current }: Opening) {
     >
       {info ? (
         <div data-restart className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2.5 text-fg">
+          <div className="flex flex-col gap-2.5 text-fg phone:gap-1">
             <Line label="Agent">
               <Pick label="Agent" value={cli?.name ?? kind} options={info.clis.map((c) => c.name)} onPick={(n) => pickKind(info.clis.find((c) => c.name === n)!.kind)} />
             </Line>
@@ -231,8 +231,7 @@ export function AgentLine({ chatKey, cli }: { chatKey: string; cli: string }) {
     <button
       type="button"
       data-agent-line
-      aria-label={`Runs on: ${words}. Open agent settings`}
-      title={words}
+      aria-label={`Runs on: ${words}. Change it`}
       onClick={() => setUI({ plus: chatKey })}
       className="press-dim relative mt-1 flex h-4 w-full justify-start pl-3 text-left text-xs/4 text-fg3 after:absolute after:-inset-y-1.5 after:inset-x-0"
     >

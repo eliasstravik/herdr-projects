@@ -21,7 +21,7 @@ describe.skipIf(!browser)('restarting an agent', () => {
       await page.locator('[data-composer]:visible button[aria-label="Attach files and more"]').last().click()
       await controls.waitFor()
       expect(await page.locator('[data-restart-hint]').count()).toBe(0)
-      expect(await controls.getByRole('menuitem').count()).toBe(3)
+      expect(await controls.getByRole('menuitem').count()).toBe(4)
       expect(JSON.stringify(c.agent)).toBe(before)
       expect(c.messages.filter((m) => m.card?.restart).length).toBe(cards)
       await page.close()
