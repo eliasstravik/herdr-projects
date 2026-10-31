@@ -19,8 +19,8 @@ const RETRY = 10_000 // a pressed choice has this long to leave the screen befor
  *  stays the hooks' word. */
 export class CoreScreens {
   private timer?: ReturnType<typeof setInterval>
-  private looking = false
-  private last = new Map<string, string>()
+  private looking = new Set<string>()
+  private last = new Map<string, { seen: string; words: string }>()
   private pressing = new Set<string>()
   constructor(private readonly source: CoreSource) {}
   start() { this.timer = setInterval(() => { if (!this.source.quiescing) void this.tick() }, POLL) }
@@ -37,13 +37,15 @@ export class CoreScreens {
     }
   }
   async tick(now = Date.now()) {
-    if (this.looking || !this.source.connected()) return
-    this.looking = true
-    try {
-      const starting = this.source.agents.all().filter(agent => agent.state === 'starting' && agent.role !== 'reviewer' && now - agent.started >= FIRST_LOOK)
-      for (const launch of this.last.keys()) if (!starting.some(agent => agent.launch === launch)) this.last.delete(launch)
-      for (const agent of starting) await this.look(agent, now).catch(() => {}) // a machine out of reach shows as that; the next poll looks again
-    } finally { this.looking = false }
+    if (!this.source.connected()) return
+    for (const chat of new Set(this.cards().filter(row => row.state === 'open').map(row => row.chat))) this.reconcile(chat)
+    const starting = this.source.agents.all().filter(agent => agent.state === 'starting' && agent.role !== 'reviewer' && now - agent.started >= FIRST_LOOK)
+    for (const launch of this.last.keys()) if (!starting.some(agent => agent.launch === launch)) this.last.delete(launch)
+    // A machine out of reach shows as that, the next poll looks again, and it holds up no other agent's card.
+    await Promise.allSettled(starting.filter(agent => !this.looking.has(agent.launch)).map(async agent => {
+      this.looking.add(agent.launch)
+      try { await this.look(agent, now) } finally { this.looking.delete(agent.launch) }
+    }))
   }
   private async read(agent: CoreAgent) {
     const terminal = this.source.agents.terminal(agent)
@@ -53,14 +55,16 @@ export class CoreScreens {
   private async look(agent: CoreAgent, now: number) {
     const read = await this.read(agent)
     if (!read) return
-    const seen = sameScreen(read.text), before = this.last.get(agent.launch)
-    this.last.set(agent.launch, seen)
+    const seen = sameScreen(read.text), { words, choices } = readScreen(read.text, read.terminal.cols), before = this.last.get(agent.launch)
+    this.last.set(agent.launch, { seen, words })
     const current = this.source.agents.get(agent.chat)
-    if (before !== seen || current?.launch !== agent.launch || current.state !== 'starting') return // still moving
+    if (before?.seen !== seen || current?.launch !== agent.launch || current.state !== 'starting') return // still moving
     const cards = this.cards().filter(row => row.chat === agent.chat && row.launch === agent.launch)
-    if (cards.some(row => row.screen === seen && (row.state === 'open' || now - row.at < RETRY))) return
+    const open = cards.find(row => row.state === 'open' && row.screen === seen)
+    // the same screen with a new code or number on it: a timer never reads the same twice, so it stays out
+    if (open && before.words === words && open.question.screen !== words) { open.question.screen = words; this.settle(open) }
+    if (open || cards.some(row => row.screen === seen && now - row.at < RETRY)) return
     for (const row of cards) if (row.state === 'open') this.finish(row)
-    const { words, choices } = readScreen(read.text, read.terminal.cols)
     if (words || choices.length) this.post(agent, seen, words, choices)
   }
   private post(agent: CoreAgent, screen: string, words: string, choices: Question['choices']) {
@@ -80,7 +84,7 @@ export class CoreScreens {
     else row.question.via = 'terminal'
     this.settle(row, closed ?? 'Answered in the terminal', closed ? 'No longer waiting' : 'Answered')
   }
-  private settle(row: ScreenCard, words: string, outcome: string, where?: 'space' | 'task') {
+  private settle(row: ScreenCard, words?: string, outcome?: string, where?: 'space' | 'task') {
     this.source.store.set('screen-card', row.id, row)
     const message = this.source.store.get<Message>(`message:${row.chat}`, row.id)
     this.source.post(row.chat, { ...message, id: row.id, who: 'agent', question: row.question, at: message?.at ?? Date.now() })

@@ -137,7 +137,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     this.heartbeats = new CoreHeartbeats(this)
     this.voices = new CoreVoice(this)
     this.plugins = new CorePlugins(this)
-    this.core.onChange(() => { this.agents.reconcile(); this.emit('snapshot'); for (const agent of this.agents.all()) { this.reconcilePermissions(agent.chat); void this.flush(agent.chat) } })
+    this.core.onChange(() => { this.agents.reconcile(); this.emit('snapshot'); for (const agent of this.agents.all()) { this.reconcilePermissions(agent.chat); this.screens.reconcile(agent.chat); void this.flush(agent.chat) } })
     this.core.onDocument(event => { void this.mailbox.event(String(event.params.data?.name ?? ''), event.params.machine).catch(error => this.faults.set('mailbox', error.message)) })
     this.core.onResync(() => { void this.refresh().then(() => this.mailbox.resync()).catch(error => this.faults.set('core', error.message)) })
   }

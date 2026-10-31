@@ -141,6 +141,41 @@ test('an agent gone, or replaced, ends its card honestly', async () => {
   await expect(source.act({ type: 'answer', chat: 'space', question: replaced, choice: 0 })).rejects.toThrow('no longer waiting')
 })
 
+test('a new code on the same screen comes to the card; a running timer does not', async () => {
+  screen = 'Enter this code: 1234\n'
+  await settle()
+  const id = open().id
+  screen = 'Enter this code: 5678\n'
+  await settle(started + 20_000)
+  expect(cards()).toHaveLength(1)
+  expect(open()).toMatchObject({ id, screen: 'Enter this code: 5678' })
+  screen = 'Enter this code: 5678 · 11\n'
+  await source.screens.tick(started + 30_000)
+  screen = 'Enter this code: 5678 · 13\n'
+  await source.screens.tick(started + 32_000)
+  expect(open().screen).toBe('Enter this code: 5678')
+})
+
+test('one machine that doesn\'t answer holds up no other agent', async () => {
+  source.store.set('agent', 'other', { ...agent, chat: 'other', launch: 'other' })
+  const read = source.core.call as (method: string, params: { terminal: string }) => Promise<unknown>
+  source.core.call = ((method: string, params: { terminal: string }) => params.terminal === 'late' ? new Promise(() => {}) : read(method, params)) as typeof source.core.call
+  source.agents.terminal = found => found.chat === 'space' ? { ...terminal, address: 'late' } : terminal
+  void source.screens.tick(started + 10_000)
+  await Bun.sleep(5)
+  void source.screens.tick(started + 12_000)
+  await Bun.sleep(5)
+  expect(source.store.all<Message>('message:other').filter(message => message.question)).toHaveLength(1)
+})
+
+test('an open card closes on the next poll when its terminal has ended', async () => {
+  await settle()
+  const id = open().id
+  terminal = { ...terminal, state: 'finished' }
+  await source.screens.tick(started + 20_000)
+  expect(cards().find(card => card.id === id)?.closed).toBe('The agent stopped')
+})
+
 test('with no choices to read it is still a card, for the terminal', async () => {
   screen = 'Paste code here if prompted >\n'
   await settle()
