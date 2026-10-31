@@ -16,4 +16,4 @@ const code = await runPilotRuntime({ home, sandbox: prepared.sandbox, bwrap: pre
   cli: async () => ({ out: 'product command reached the gateway\n', code: 0 }), secret: async () => ({ secrets: {} }), hook: async () => ({}), lease: async () => {}, reserve: async () => {},
 } })
 console.log(JSON.stringify({ code }))
-process.exit(0)
+// No process.exit: like the real launcher, this must end by itself, with nothing left holding it open.

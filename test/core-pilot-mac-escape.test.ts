@@ -1,5 +1,5 @@
 // Real escape attempts from inside the real Mac profile. macOS only, so GitHub's Linux runners skip it; on a Mac:
-//   bun test test/core-pilot-mac-escape.test.ts
+//   TMPDIR=/private/tmp bun test test/core-pilot-mac-escape.test.ts
 // Everything uses a scratch home and repository. It never reads the real login, and it reaches two public hosts.
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -150,11 +150,14 @@ attempt keychain-list /usr/bin/security list-keychains
 attempt pasteboard /usr/bin/pbpaste
 attempt nested-sandbox /usr/bin/sandbox-exec -p '(version 1)(allow default)' /usr/bin/true
 attempt setuid-tool /usr/bin/sudo -n true
-attempt other-process-env /bin/ps -E -p 1
+attempt setuid-ps /bin/ps -E -p 1
+attempt known-open-process-environment "$(command -v python3)" -I -c 'import ctypes,sys;l=ctypes.CDLL(None);m=(ctypes.c_int*3)(1,49,${process.pid});n=ctypes.c_size_t(1048576);b=ctypes.create_string_buffer(1048576);sys.exit(1 if l.sysctl(m,3,b,ctypes.byref(n),None,0) else 0)'
 attempt signal-host kill -0 ${process.pid}
 `)
-    for (const name of ['open-app', 'open-app-path', 'apple-events', 'launchd-submit', 'launchd-session', 'keychain-search', 'keychain-list', 'pasteboard', 'nested-sandbox', 'setuid-tool', 'other-process-env', 'signal-host']) expect([name, row(rows, name).code === 0]).toEqual([name, false])
+    for (const name of ['open-app', 'open-app-path', 'apple-events', 'launchd-submit', 'launchd-session', 'keychain-search', 'keychain-list', 'pasteboard', 'nested-sandbox', 'setuid-tool', 'setuid-ps', 'signal-host']) expect([name, row(rows, name).code === 0]).toEqual([name, false])
     expect(row(rows, 'setuid-tool').out).not.toContain('password') // sudo itself never got to run.
+    // Known open and documented: Seatbelt doesn't stop this read. If it ever fails here, the docs can say so.
+    expect(row(rows, 'known-open-process-environment').code).toBe(0)
     expect(Bun.spawnSync(['/usr/bin/pgrep', '-x', 'Calculator']).stdout.toString()).toBe(before)
     expect(existsSync(join(home, 'launchd-written'))).toBe(false)
     expect(Bun.spawnSync(['/bin/launchctl', 'list', 'shep.mac.escape.test'], { stdout: 'ignore', stderr: 'ignore' }).exitCode).not.toBe(0)

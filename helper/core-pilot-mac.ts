@@ -168,7 +168,9 @@ export async function startPilotMac(home: PilotHome, sandbox: PilotSandbox, mac:
     login?.stop(); relay.close()
     await watcher.stdin.end()
     // Normally seconds. A process still dodging keeps the watcher going on its own, past this wrapper's exit.
-    const finished = await Promise.race([watcher.exited.then(() => true), Bun.sleep(70_000).then(() => false)])
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const finished = await Promise.race([watcher.exited.then(() => true), new Promise<boolean>(done => { timer = setTimeout(() => done(false), 70_000) })])
+    clearTimeout(timer) // A pending timer would hold this wrapper's exit open for the whole wait.
     watcher.unref()
     // A second sweep here covers a watcher something else killed.
     const swept = finished && await pilotMacSweep(mac.marker).catch(() => false)

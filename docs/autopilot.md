@@ -35,7 +35,8 @@ wrapper PATH are verified before Herdr starts any agent. A shell configuration t
 | Shepherdr chat reader, model/effort adapter | Yes | Yes | Yes | Not currently viable for coordinator chat; refused |
 | Shared Linux isolation, schedule, fresh mode replacement | Yes | Yes | Yes | Refused |
 | Isolated workspace: local Linux repository space with usable bubblewrap namespaces | Required | Required | Required | — |
-| Mac sandbox profile on a macOS repository space, local or connected | Yes | Yes | Refused | Refused |
+| Mac sandbox profile on a local macOS repository space | Yes | Partly, see below | Refused | Refused |
+| Mac sandbox profile on a connected Mac | Nothing refuses it; not verified | Not verified | Refused | Refused |
 | Home-space Autopilot | Refused | Refused | Refused | — |
 | Connected Linux machines | Nothing refuses them; not verified | Nothing refuses them; not verified | Refused | — |
 
@@ -84,8 +85,9 @@ What it does not give you, compared with Linux:
   agent can't list or read them, but can test whether a path it guesses exists and see its size and dates. It can
   start a program elsewhere in the home folder, under the same profile. Linux shows it an empty world instead.
 - **No PID namespace.** Other processes are visible by PID and name through `sysctl`, and they can't be signalled. Seatbelt
-  doesn't stop a direct `sysctl` asking for another same-user process's arguments and environment, so don't keep
-  secrets in the environment of host processes on this Mac. Setuid programs, including `ps` and `sudo`, don't run.
+  doesn't stop a direct `sysctl` asking for another same-user process's arguments and environment. So an agent can read
+  tokens in the environment of host processes on this Mac, and a secret another agent is using through
+  `shepherdr secret run` while it runs. Setuid programs, including `ps` and `sudo`, don't run.
 - **Stopping is a sweep, not a kernel guarantee.** A process can't leave its profile, and the kernel answers for any
   PID what that profile allows, so a watcher outside finds this run's processes exactly, detached daemons included.
   It lives in its own session and ends them when the runtime stops, its wrapper crashes or the shared runtime is up.
