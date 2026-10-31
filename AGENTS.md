@@ -26,6 +26,14 @@ How to run, build and lay out the code: [docs/develop.md](docs/develop.md).
   your done summary.
 - A plugin the human asks you to make for them goes in `~/.shepherdr/plugins/<name>/`, never in the repo.
 
+## README
+
+- `README.md` is the project's landing page, and its design is the human's. Never change its design, layout, structure,
+  hero or length, in a release or any other task, without the human's explicit yes.
+- Only fix facts that became false, in place, in the same voice. Detailed docs go in `docs/` ([docs/guide.md](docs/guide.md)
+  has the long guide), not the README.
+- "The previous README" means the one on main just before (`git log main -- README.md`), never a tag's.
+
 ## Releases
 
 - Never cut a new release (version bump, tag, GitHub release, publish) without asking the human first and getting a
