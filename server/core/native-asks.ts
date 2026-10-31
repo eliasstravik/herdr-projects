@@ -30,7 +30,7 @@ export function nativeCards(tool: string | undefined, input: unknown, id: string
   const asked = Array.isArray(value.questions) ? value.questions.map(record) : []
   const questions = asked.flatMap((item, index): Question[] => {
     const options = Array.isArray(item?.options) ? item.options.map(record).filter(option => text(option?.label)) : []
-    if (!item || !text(item.question) || !options.length) return []
+    if (!item || !text(item.question)) return []
     return [{ id: index ? `${id}-${index}` : id, title: text(item.question), kind: 'Question', multi: item.multiSelect === true || undefined, other: true, to: 'Claude',
       choices: options.map(option => ({ label: text(option!.label), description: [text(option!.description), text(option!.preview)].filter(Boolean).join('\n') || undefined })) }]
   })

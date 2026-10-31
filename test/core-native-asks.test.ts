@@ -89,6 +89,12 @@ test('stop asking keeps the mode the agent ran on, or edits for a device that as
   expect([stop('auto'), stop('bypassPermissions'), stop('default'), stop(undefined)]).toEqual(['auto', 'bypassPermissions', 'acceptEdits', 'acceptEdits'])
 })
 
+test('a question without options still takes a typed answer', () => {
+  const [question] = nativeCards('AskUserQuestion', { questions: [{ question: 'Which colour?' }] }, 'id')!.questions
+  expect(question.choices).toEqual([])
+  expect(nativeAnswer(question, answer('id', -1, { other: 'Blue' })).said).toBe('Blue')
+})
+
 test('a card only takes an answer it offered', () => {
   const question = nativeCards('AskUserQuestion', fruit, 'id')!.questions[0]
   expect(() => nativeAnswer(question, answer('id', 5))).toThrow('Choose one')
@@ -100,7 +106,7 @@ test('other tools and other CLIs stay permissions, and an unreadable question re
   expect(nativeCards('Bash', { command: 'ls' }, 'id')).toBeUndefined()
   const f = fixture()
   try {
-    const { reply } = f.ask('AskUserQuestion', { questions: [{ question: 'No options' }] })
+    const { reply } = f.ask('AskUserQuestion', { questions: [{ options: [{ label: 'No question' }] }] })
     expect((await reply).allow).toBe(false)
     expect(f.source.store.all('permission')).toHaveLength(0)
   } finally { f.close() }
