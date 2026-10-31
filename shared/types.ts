@@ -610,9 +610,16 @@ export interface Chat {
   /** what this CLI lets the + menu change; only what it supports is listed */
   controls?: ChatControls
   /** Recorded launch values, never inferred from Settings. Missing values are CLI defaults, not observed telemetry. */
-  agent?: { kind: string; model?: string; modelLabel?: string; effort?: string; speed?: string; runtime?: AgentRuntime }
+  agent?: { kind: string; model?: string; modelLabel?: string; effort?: string; speed?: string; runtime?: AgentRuntime; planned?: PlannedAgent }
   /** Settings for its role now say something else than what its agent runs on: a calm hint offers a restart */
   restart?: RestartHint
+}
+
+/** no agent yet: what Settings will start it on, said as that and never as what runs (docs/runtime-state.md) */
+export interface PlannedAgent {
+  model?: string
+  modelLabel?: string
+  effort?: string
 }
 
 /** "Runs on {on} · Settings now say {want}", by the first that differs: the CLI, the model or the effort */

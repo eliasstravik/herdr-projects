@@ -42,7 +42,7 @@ describe.skipIf(!browser)('restarting an agent', () => {
     expect(await sheet.getByRole('switch').count()).toBe(0)
     await sheet.getByRole('button', { name: /^Agent: / }).click()
     await page.getByRole('menuitemradio', { name: 'Codex' }).click()
-    expect(await sheet.textContent()).toContain('Codex starts a new session with this chat, the brief and branch.')
+    expect(await sheet.textContent()).toContain('Codex starts a new session with this chat, its instructions and branch.')
     await sheet.getByRole('button', { name: /^Model: / }).click()
     await page.getByRole('menuitemradio', { name: 'GPT-6-Sol', exact: true }).click()
     await sheet.getByRole('button', { name: /^Effort: / }).click()

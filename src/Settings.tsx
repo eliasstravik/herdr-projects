@@ -625,8 +625,8 @@ function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phon
     <>
       {row.key in registry.settingActions ? <Small className="text-pretty">{row.value}</Small> : null}
       {row.hint ? <Small className="text-pretty">{row.hint}</Small> : null}
-      {/* the exact words it adds to every new brief, as it is set now */}
-      {row.line ? <details className="text-[0.8125rem] text-fg2"><summary className="cursor-pointer">Brief wording</summary><p className="text-pretty">Adds: “{row.line}”</p></details> : null}
+      {/* the exact words it adds to every new task's brief, as it is set now */}
+      {row.line ? <details className="text-[0.8125rem] text-fg2"><summary className="cursor-pointer">Words this adds to each new task</summary><p className="text-pretty">“{row.line}”</p></details> : null}
       {row.from ? <Small className="text-pretty">From {row.from}</Small> : null}
       <SpaceOnly row={row} />
       {row.inherits ? (
@@ -712,7 +712,7 @@ function PageBody({ page, phone, set, refused, clear, hint }: { page: Page; phon
       })}
       {page.note ? (
         <figure className="w-full">
-          <figcaption className={heading(phone)}>{page.noteTitle ?? 'Every new brief ends with'}</figcaption>
+          <figcaption className={heading(phone)}>{page.noteTitle ?? "Every new task's instructions end with"}</figcaption>
           <blockquote className={clsx('text-pretty whitespace-pre-wrap text-fg2', phone ? clsx(card, 'px-4 py-3 text-[0.9375rem]') : 'rounded-box bg-hover px-3 py-2.5 text-[0.8125rem]')}>{page.note}</blockquote>
         </figure>
       ) : null}

@@ -32,7 +32,8 @@ shepherdr status
 shepherdr stop
 ```
 
-Start is idempotent. It returns the running PID, core connection status, and
+Start refuses an application that has not been built, and names the step: it would
+otherwise report running while its page is an error. Start is idempotent. It returns the running PID, core connection status, and
 any existing private Tailscale Serve URL for that port. Stop stops only the
 application: core and its agent terminals keep running. A stopped application
 does not receive new phone requests until restarted.

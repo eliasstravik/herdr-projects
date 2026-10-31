@@ -80,7 +80,8 @@ export function useRowMenu({ beside = false }: { beside?: boolean } = {}) {
   }
 }
 
-/** the ⋯ at a row's end: tucked away until the pointer is on the row; none where nothing hovers (a finger holds the row).
+/** the ⋯ at a row's end: tucked away until the pointer is on the row; none where nothing hovers (a finger holds the row),
+ *  and never seen through what sits under it on a screen that reports neither hover nor a finger.
  *  Its name doesn't repeat the row's: the row's own button is the one named by it */
 export function RowMenuButton({ menu, label, className }: { menu: RowMenuState; label: string; className?: string }) {
   return (
@@ -92,7 +93,7 @@ export function RowMenuButton({ menu, label, className }: { menu: RowMenuState; 
       onClick={(e) => (menu.open ? menu.close() : menu.show(e.currentTarget.closest('li')))}
       className={clsx(
         // its ring only for the keyboard: a browser that gives the focus back to it as a question closes shows none
-        'hit grid size-6 place-items-center rounded-full text-fg3 outline-none! keys:focus-visible:shadow-[0_0_0_1.5px_var(--focus)] hover:bg-sel hover:text-fg aria-expanded:bg-sel aria-expanded:text-fg pointer-coarse:hidden tucked:not-aria-expanded:pointer-events-none tucked:not-aria-expanded:absolute tucked:not-aria-expanded:opacity-0',
+        'hit grid size-6 place-items-center rounded-full text-fg3 outline-none! keys:focus-visible:shadow-[0_0_0_1.5px_var(--focus)] hover:bg-sel hover:text-fg aria-expanded:bg-sel aria-expanded:text-fg pointer-coarse:hidden [@media(hover:none)]:not-aria-expanded:not-focus-visible:opacity-0 tucked:not-aria-expanded:pointer-events-none tucked:not-aria-expanded:absolute tucked:not-aria-expanded:opacity-0',
         className,
       )}
     >

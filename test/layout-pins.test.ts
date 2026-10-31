@@ -152,8 +152,8 @@ describe.skipIf(!browser)('pinned spaces', () => {
     page.setDefaultTimeout(10_000) // Surface the failing locator before the enclosing test deadline.
     try {
       await page.goto(url())
-      await page.getByRole('button', { name: 'Places' }).first().click()
-      const nav = 'nav[aria-label="Places"]'
+      await page.getByRole('button', { name: /^(Show |Hide )?Spaces$/ }).first().click()
+      const nav = 'nav[aria-label="Spaces"]'
       await page.locator(`${nav} li[data-pin]`).first().waitFor()
       await settled(page)
       // moved out of the tree; the machines stay, vm-str with the spaces not pinned

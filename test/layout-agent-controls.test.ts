@@ -58,14 +58,52 @@ describe.skipIf(!browser)('composer + agent controls', () => {
     await page.goto(`http://127.0.0.1:${server!.port}/?place=all&task=GTM-17`)
     await page.locator('[data-composer]:visible button[aria-label="Attach files and more"]').last().click()
     const controls = page.locator('[data-agent-controls]:visible')
-    await controls.getByRole('menuitem', { name: 'Model: Not reported. Select and restart', exact: true }).waitFor()
-    expect(await controls.getByRole('menuitem', { name: 'Effort: Not reported. Select and restart', exact: true }).count()).toBe(1)
+    await controls.getByRole('menuitem', { name: 'Model: Not known yet. Select and restart', exact: true }).waitFor()
+    expect(await controls.getByRole('menuitem', { name: 'Effort: Not known yet. Select and restart', exact: true }).count()).toBe(1)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
     await page.getByRole('button', { name: 'Attach files and more', exact: true }).last().click()
     await controls.waitFor({ state: 'hidden' })
     expect(await controls.count()).toBe(0)
     expect(world.chats[key].agent).toEqual({ kind: 'codex' })
     await page.close()
+  }, 30_000)
+
+  test('before an agent starts, the line and the menu say what Settings will use, and the sheet starts from it', async () => {
+    const key = 'GTM-17/Agent', chat = world.chats[key]
+    const saved = chat.agent
+    chat.agent = { kind: 'claude', planned: { model: 'claude-haiku-5-5', modelLabel: 'Haiku 5.5' } }
+    const page = await browser!.newPage({ viewport: { width: 390, height: 844 } })
+    page.setDefaultTimeout(10_000) // Surface the failing locator before the enclosing test deadline.
+    try {
+      await page.goto(`http://127.0.0.1:${server!.port}/?place=all&task=GTM-17`)
+      const line = page.locator('[data-agent-line]:visible', { hasText: /^Haiku 5\.5, from Settings$/ }).last()
+      await line.waitFor()
+      await line.click()
+      const controls = page.locator('[data-agent-controls]:visible').last()
+      await controls.getByRole('menuitem', { name: 'Model: Haiku 5.5, from Settings. Select and restart', exact: true }).waitFor()
+      expect(await controls.getByRole('menuitem', { name: 'Effort: Default, from Settings. Select and restart', exact: true }).count()).toBe(1)
+      expect(await controls.getByRole('menuitem', { name: 'Speed: Default. Select and restart', exact: true }).count()).toBe(1)
+      expect(await controls.textContent()).not.toContain('Not known yet')
+      chat.agent = { kind: 'claude', planned: { model: 'claude-haiku-5-5', modelLabel: 'Haiku 5.5', effort: 'high' } }
+      world.emit('chat', key)
+      await page.locator('[data-agent-line]:visible', { hasText: /^Haiku 5\.5 · high, from Settings$/ }).last().waitFor({ state: 'attached' })
+    } finally { chat.agent = saved; await page.close() }
+  }, 30_000)
+
+  test('the restart sheet says what Default came to where the composer shows an effort', async () => {
+    const key = 'GTM-17/Agent', chat = world.chats[key]
+    const saved = chat.agent
+    chat.agent = { kind: 'claude', runtime: { model: 'claude-opus-5-5', modelLabel: 'Opus 5.5', effort: 'medium', source: 'session', at: Date.now() } }
+    const page = await browser!.newPage({ viewport: { width: 390, height: 844 } })
+    page.setDefaultTimeout(10_000) // Surface the failing locator before the enclosing test deadline.
+    try {
+      await page.goto(`http://127.0.0.1:${server!.port}/?place=all&task=GTM-17`)
+      await page.locator('[data-composer]:visible button[aria-label="Attach files and more"]').last().click()
+      await page.locator('[data-agent-controls]:visible').last().getByRole('menuitem', { name: /^Effort: Medium/ }).click()
+      const note = page.locator('[data-effort-ran]')
+      await note.waitFor()
+      expect(await note.textContent()).toBe('Default lets Claude Code choose. It runs medium now.')
+    } finally { chat.agent = saved; await page.close() }
   }, 30_000)
 
   test('default policy shows runtime values in both roles and updates without changing the policy', async () => {
@@ -101,10 +139,10 @@ describe.skipIf(!browser)('composer + agent controls', () => {
         await page.goto(`http://127.0.0.1:${server!.port}/?place=${encodeURIComponent(p.id)}${chat === key ? '&task=GTM-17' : ''}`)
         const line = page.locator('[data-agent-line]:visible').last()
         const shows = (words: string | RegExp) => page.locator('[data-agent-line]:visible', { hasText: words }).last().waitFor()
-        await shows(/^Requested: Opus 5\.5\s·\shigh$/)
+        await shows(/^Asked for: Opus 5\.5\s·\shigh$/)
         const box = (await page.locator('[data-composer]:visible').last().boundingBox())!
         set({ kind: 'claude', model: 'claude-opus-5-5', effort: 'high', runtime: { model: 'claude-opus-5-5', modelLabel: 'Opus 5.5', source: 'hook', at: Date.now() } })
-        await shows(/^Opus 5\.5\s·\sRequested: high$/)
+        await shows(/^Opus 5\.5\s·\sAsked for: high$/)
         set({ kind: 'claude', runtime: { model: 'claude-opus-5-5', modelLabel: 'Opus 5.5', effort: 'medium', speed: 'fast', source: 'session', at: Date.now() } })
         await shows(/^Opus 5\.5\s·\smedium\s·\sFast$/)
         expect(await line.locator('svg').count()).toBe(1)
@@ -116,11 +154,11 @@ describe.skipIf(!browser)('composer + agent controls', () => {
         const fast = (await line.getByText('Fast').boundingBox())!
         expect(fast.x + fast.width).toBeLessThanOrEqual(width)
         set({ kind: 'codex' }, 'Codex')
-        await shows('Codex · Not reported')
+        await shows('Codex · Not known yet')
         expect((await page.locator('[data-composer]:visible').last().boundingBox())!.y).toBe(box.y)
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
         await line.click()
-        await page.locator('[data-agent-controls]:visible').last().getByRole('menuitem', { name: 'Speed: Not reported. Select and restart', exact: true }).waitFor()
+        await page.locator('[data-agent-controls]:visible').last().getByRole('menuitem', { name: 'Speed: Not known yet. Select and restart', exact: true }).waitFor()
         await page.close()
       }
     }
@@ -135,9 +173,9 @@ describe.skipIf(!browser)('composer + agent controls', () => {
     await page.goto(`http://127.0.0.1:${server!.port}/?place=all&task=GTM-17`)
     await page.locator('[data-composer]:visible button[aria-label="Attach files and more"]').last().click()
     const controls = page.locator('[data-agent-controls]:visible').last()
-    await controls.getByRole('menuitem', { name: 'Model: Requested: Opus 5.5. Select and restart', exact: true }).waitFor()
-    await controls.getByRole('menuitem', { name: 'Effort: Requested: High. Select and restart', exact: true }).waitFor()
-    await controls.getByRole('menuitem', { name: 'Speed: Requested: Fast. Select and restart', exact: true }).waitFor()
+    await controls.getByRole('menuitem', { name: 'Model: Asked for: Opus 5.5. Select and restart', exact: true }).waitFor()
+    await controls.getByRole('menuitem', { name: 'Effort: Asked for: High. Select and restart', exact: true }).waitFor()
+    await controls.getByRole('menuitem', { name: 'Speed: Asked for: Fast. Select and restart', exact: true }).waitFor()
     world.chats[key].agent!.runtime = { model: 'claude-opus-5-5', modelLabel: 'Opus 5.5', effort: 'high', speed: 'normal', source: 'session', at: Date.now() }
     world.emit('chat', key)
     await controls.getByRole('menuitem', { name: 'Speed: Normal. Select and restart', exact: true }).waitFor()

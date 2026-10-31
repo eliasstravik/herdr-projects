@@ -48,8 +48,8 @@ describe.skipIf(!browser)('attention count circles', () => {
             expect(geometry.radius).toBe('50%')
             expect(geometry.fits).toBe(true)
             expect(geometry.colour).toBe(theme === 'dark' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)')
-            const row = page.locator(`nav[aria-label="Places"] li[data-project="${place}"]`)
-            if (!await row.isVisible()) await page.getByRole('button', { name: 'Places', exact: true }).click()
+            const row = page.locator(`nav[aria-label="Spaces"] li[data-project="${place}"]`)
+            if (!await row.isVisible()) await page.getByRole('button', { name: 'Spaces', exact: true }).click()
             // The hovered desktop row gives the badge's room to its More button.
             await page.mouse.move(width - 1, 1)
             await page.locator('[aria-label^="Message"]').first().focus()
@@ -71,7 +71,7 @@ describe.skipIf(!browser)('attention count circles', () => {
         world.emit('snapshot')
         const panel = page.locator(`${badge}[aria-label$="panel scope"]`).filter({ visible: true }).first()
         expect(await until(() => panel.getAttribute('aria-label'), (s) => s === '1 needs you, 1 ready · panel scope')).toBe('1 needs you, 1 ready · panel scope')
-        if (!await page.locator(`li[data-project="${place}"]`).isVisible()) await page.getByRole('button', { name: 'Places', exact: true }).click()
+        if (!await page.locator(`li[data-project="${place}"]`).isVisible()) await page.getByRole('button', { name: 'Spaces', exact: true }).click()
         expect(await until(() => page.locator(`li[data-project="${place}"] ${badge}`).getAttribute('aria-label'), (s) => s === '2 needs you, 1 ready · here')).toBe('2 needs you, 1 ready · here')
       } finally {
         world.tasks = saved

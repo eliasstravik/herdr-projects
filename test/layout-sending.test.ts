@@ -182,7 +182,7 @@ describe.skipIf(!browser)('replies', () => {
     await slide(at2.left + 40, at2.top + 16, 110, 6)
     await page.waitForSelector(`${strip}:has-text("It is the clock.")`)
     // a slide right on a message is a reply, never the places drawer coming out
-    expect(await page.$eval('nav[aria-label=Places]', (n) => n.getBoundingClientRect().right)).toBeLessThanOrEqual(0)
+    expect(await page.$eval('nav[aria-label=Spaces]', (n) => n.getBoundingClientRect().right)).toBeLessThanOrEqual(0)
     // one slim line inside the round box, over the words: it starts in line with the + icon, its x over send
     expect(await page.$(`[data-composer] ${strip}`)).not.toBeNull()
     expect(await page.$eval(strip, (b) => b.textContent)).toContain('Replying to home')
