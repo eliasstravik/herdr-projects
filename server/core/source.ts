@@ -119,7 +119,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     this.settings = new CoreSettings(this.store, this.files, () => this.spaces(), id => this.store.get<string>('name', `m:${id}`) || (id === this.local.id ? this.local.name : this.machineName(id) || id), () => this.emit('snapshot'))
     this.agents.settings = this.settings
     this.agents.observed = (agent, event) => {
-      if (event.event === 'PreToolUse' && event.use) this.ends.called(agent.launch, event.use, { tool: event.tool, hash: event.input })
+      if (event.event === 'PreToolUse' && event.use) this.ends.called(agent.launch, event.use, { tool: event.tool, hash: event.input, sub: event.agent })
       this.nativeEnded(agent, hookEnd(event))
     }
     this.places = new CorePlaces(this)
