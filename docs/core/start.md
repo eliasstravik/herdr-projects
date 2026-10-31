@@ -60,13 +60,12 @@ another checkout ref. Keep the installed source/dependencies available while it 
 
 Codex can ask you to trust the new folder and Shepherdr's generated hooks, whatever its permission settings: even
 `approval_policy = "never"` with `sandbox_mode = "danger-full-access"` still asks in a new Git repository. It asks
-once per repository (its worktrees share the answer) and again for hooks only when they change. Open the chat's
-Terminal panel and review its native prompts. Trust only the intended folder and generated hooks, then close
-Codex's hooks view.
-Codex can finish its first turn while hooks await approval. If chat still shows the setup notice afterward,
-send one short message directly in Terminal; the next native hook supplies its transcript identity, and chat
-recovers the earlier replies too. Normal chat messages saved during setup remain queued until that identity
-arrives. This never bypasses native trust or infers readiness from the screen.
+once per repository (its worktrees share the answer) and again for hooks only when they change. Each of its screens
+comes to the chat as a card ([Chats](../chat.md)); trust only the intended folder and generated hooks.
+Codex reads hooks as it starts, so `Trust all and continue` connects the chat straight away. Reviewing them one by one
+leaves that first turn unconnected: the card then shows Codex's message box, and one short message in Terminal
+connects the chat and recovers earlier replies. Normal chat messages saved during setup stay queued until then.
+Readiness still comes from native hooks, never from the screen.
 
 ## Your chat name
 

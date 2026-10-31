@@ -118,6 +118,26 @@ describe.skipIf(!browser)('answer cards', () => {
     }
   }, 30_000)
 
+  test('a CLI screen card takes one tap, with no Send, note or Send: label, and its link is a link', async () => {
+    const chat = world.chats['p:vm-str:~']
+    chat.messages.push({ id: 'screen-card', who: 'agent', at: Date.now(), question: { id: 'screen-one', title: 'Claude Code is waiting on its screen', screen: 'Sign in at https://example.com/login', terminal: true, press: true, noNote: true, kind: 'Question', choices: [{ label: 'No, exit' }, { label: 'Yes, I trust this folder' }], to: 'Claude Code' } })
+    const page = await browser!.newPage({ viewport: { width: 390, height: 844 } })
+    try {
+      await page.goto(url())
+      const card = page.locator('[data-whole="screen-card"] [data-card]')
+      await card.waitFor()
+      expect(await card.getByRole('link', { name: 'https://example.com/login' }).getAttribute('href')).toBe('https://example.com/login')
+      expect(await card.getByRole('button', { name: 'Open terminal', exact: true }).count()).toBe(1)
+      expect(await card.getByRole('button', { name: 'Yes, I trust this folder', exact: true }).count()).toBe(1)
+      expect(await card.getByRole('button', { name: 'Send', exact: true }).count()).toBe(0)
+      expect(await card.getByRole('button', { name: 'Add a note', exact: true }).count()).toBe(0)
+      expect(await card.getByRole('textbox', { name: 'Note' }).count()).toBe(0)
+    } finally {
+      chat.messages = chat.messages.filter((m) => m.id !== 'screen-card')
+      await page.close()
+    }
+  }, 30_000)
+
   test('an unreadable startup prompt keeps its screen and offers the terminal without a dead Send button', async () => {
     const chat = world.chats['p:vm-str:~']
     chat.messages.push({ id: 'startup-fallback', who: 'agent', at: Date.now(), question: { id: 'menu:fallback', title: 'The terminal is waiting for you', screen: 'A CLI asks for your input', terminal: true, noNote: true, kind: 'Form', choices: [], to: 'home' } })

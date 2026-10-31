@@ -3,7 +3,7 @@
 // or is starting does it wait, and the bubble says why.
 import clsx from 'clsx'
 import { createContext, Fragment, memo, useContext, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ComponentType, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
-import { act, chatName, definePlugin, getDraft, getState, goChat, has, holdReload, openTask, registry, setDraft, setOutbox, setUI, taskOf, useDraft, useSnap, useStore, useUI, type UI } from '@client/kernel.ts'
+import { act, chatName, definePlugin, getDraft, getState, goChat, has, holdReload, openItem, openTask, registry, setDraft, setOutbox, setUI, taskOf, useDraft, useSnap, useStore, useUI, type UI } from '@client/kernel.ts'
 import { keyOf, partsOf, priorOf, reasonOf, SEND_TIMEOUT, type Outgoing } from '@client/outbox.ts'
 import { AlertIcon, BackIcon, CameraIcon, CheckIcon, Count, DeleteIcon, dimmed, Dot, DownIcon, DownloadIcon, Empty, field, FileIcon, ic, IconButton, KeyIcon, LinkButton, LiveWave, MachineIcon, Menu, MenuItem, MenuSeparator, MenuSetting, MicIcon, ModeIcon, MoreIcon, NextIcon, PageIcon, PlanIcon, PlusIcon, Primary, QuestionIcon, ReplyIcon, RestartIcon, roundBtn, SearchIcon, SecretField, Sent, SmileIcon, Tab, Tabs, TextBox, UpIcon, useElapsed, XIcon } from '@client/ui.tsx'
 import { canDictate, dictate, dictSample, type Dictation } from '@client/dictation.ts'
@@ -1305,6 +1305,13 @@ function answeredHow(q: Question) {
   return q.sent === -1 && !q.said ? 'Answered' : `Sent to ${q.to}`
 }
 
+/** a task's terminal is in its panel, a space's in its chat */
+function openTerminal(key: string) {
+  if (!key.includes('/')) return setUI({ term: key, arts: null, kb: true })
+  goChat(key)
+  openItem('terminal')
+}
+
 const noteBox = clsx('min-h-10 w-full resize-none rounded-row bg-transparent px-3 py-[9px] placeholder:text-fg3 coarse:min-h-11 phone:min-h-11 phone:text-[1rem]', field)
 
 /** space: a copy of a task's question on its needs-you card in that space's chat, answered there */
@@ -1326,7 +1333,7 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
   const picked = sel.length > 0 || !!other.trim()
   // Positive opt-in, plus structural exclusions: unknown kinds and older/plugin cards remain confirmed.
   const ordinary = q.ordinary === true && (q.kind === 'Form' || q.kind === 'Question') && !q.multi && !q.terminal && !q.screen && !q.steps && !q.reject && !q.noNote && q.noteRequiredFor === undefined && !q.id.startsWith('menu:')
-  const immediate = ordinary && !sent && !composing && !note && !other
+  const immediate = (ordinary && !composing && !note && !other || q.press === true) && !sent
   const choose = (j: number) => setSel(q.multi ? (sel.includes(j) ? sel.filter((x) => x !== j) : [...sel, j]) : [j])
   const send = async (reject = false, choice = sel[0] ?? -1) => {
     if (sent || sending.current) return
@@ -1359,8 +1366,8 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
   }, [composing])
   return (
     <CardShell title={q.title} plan={q.kind === 'Plan'} source={source}>
-      {q.screen ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-fg2">{q.screen}</pre> : null}
-      {q.terminal && has('terminal') ? <button type="button" className="text-left text-accent" onClick={() => setUI({ term: chat.key, arts: null, kb: true })}>Open terminal</button> : null}
+      {q.screen ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-fg2">{q.press ? q.screen.split(/(https?:\/\/\S+)/).map((part, j) => j % 2 ? <a key={j} href={part} target="_blank" rel="noreferrer" className="text-accent">{part}</a> : part) : q.screen}</pre> : null}
+      {q.terminal && !sent && has('terminal') ? <button type="button" className="text-left text-accent" onClick={() => openTerminal(chat.key)}>Open terminal</button> : null}
       {q.plan ? <div data-plan className="max-h-96 overflow-auto"><Markdown text={q.plan} /></div> : null}
       {q.steps ? (
         <ol className="flex list-decimal flex-col gap-0.5 pl-5">
@@ -1369,9 +1376,10 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
           ))}
         </ol>
       ) : null}
-      {immediate && !sent ? <p className="text-[0.8125rem] text-fg2">Choose an answer to send it now.</p> : null}
+      {immediate && !q.press ? <p className="text-[0.8125rem] text-fg2">Choose an answer to send it now.</p> : null}
       {q.choices.map((c, j) => {
         const on = sent ? q.sent === j : sel.includes(j)
+        const word = immediate && !q.press ? `Send: ${c.label}` : c.label
         return (
           <button
             key={j}
@@ -1395,11 +1403,11 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
             />}
             {c.description ? (
               <span>
-                <span className="block">{immediate ? `Send: ${c.label}` : c.label}</span>
+                <span className="block">{word}</span>
                 <span className="block whitespace-pre-line text-[0.75rem]/[18px] text-fg2 phone:text-[0.8125rem]/5">{c.description}</span>
               </span>
             ) : (
-              (immediate ? `Send: ${c.label}` : c.label)
+              word
             )}
           </button>
         )
@@ -1434,7 +1442,7 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
       {by ? <Quote q={by} chat={chat.key} from={from} you={false} loose label="Answered by" /> : null}
       {sent || (q.terminal && !q.choices.length) ? null : (
         <>
-          {immediate ? (
+          {immediate && !q.noNote ? (
             <button type="button" disabled={busy} className="min-h-11 text-left text-accent" onClick={() => setComposing(true)}>Add a note</button>
           ) : null}
           {(!q.other || ordinary) && !q.noNote && !immediate ? (

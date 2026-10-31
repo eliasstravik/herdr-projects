@@ -10,9 +10,14 @@ Every agent, coordinator or task agent, gets the same chat.
   option (the bubble says so, and it goes in once the prompt is answered), or while the agent is still starting or
   its machine is out of reach; only then does the bubble carry a note. Commands like /compact or a model change wait
   for the turn to end.
-- Startup trust and MCP approval prompts appear as choice cards, even before the first message. The card keeps the
-  CLI's screen text and offers Open terminal if it cannot read the choices. Answers are checked before messages go
-  in. Outside Isolated workspaces Shepherdr pre-trusts nothing, and Codex asks in any new Git repository, even on a machine set to bypass; its task worktrees share their repository's answer.
+- An agent stopped at its CLI's own screen before its session starts (trusting a folder, the theme, signing in, Codex's
+  hooks, or anything a later CLI version adds) shows that screen in the chat as a card within about 10 seconds, and
+  counts as Needs you. The card shows the choices it can read, and one tap presses that choice in the terminal. A
+  screen with no choices to read may still be a slow start, so its card comes a few seconds later, and Open terminal
+  is the way on. Each next screen is its own card. Nothing is pressed if the screen
+  has changed since the card was drawn, and a card that goes unused closes when its answer comes from the terminal or
+  the agent starts. Outside Isolated workspaces Shepherdr pre-trusts nothing, and Codex asks in any new Git repository,
+  even on a machine set to bypass; its task worktrees share their repository's answer.
 - Claude Code's own question tool and plan approval are cards, never permissions: a question is a choice card with an
   Other answer, a plan is Plan to approve (stop asking, keep asking, or change the plan). The answer goes back to Claude
   through its permission hook, so nothing is typed into its screen. Handled in the terminal instead, the card closes.
