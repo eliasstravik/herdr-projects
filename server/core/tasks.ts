@@ -112,6 +112,8 @@ export class CoreTasks {
   all() { return this.source.store.all<CoreTask>('task') }
   get(id: string) { return this.source.store.get<CoreTask>('task', id) }
   forChat(chat: string) { return this.all().find(task => task.chat === chat || `${task.id}/Reviewer` === chat || chat.startsWith(`${task.id}/Reviewer-`)) }
+  /** Nobody is left to read an answer in a merged or closed task's own chat. */
+  finished(chat: string) { const task = this.forChat(chat); return task?.chat === chat && ['merged', 'closed'].includes(task.workflow) }
   private save(task: CoreTask) { task.updatedAt = Date.now(); this.source.store.set('task', task.id, task); this.source.emit('snapshot') }
   private assert(grant: Grant, task: CoreTask) {
     const agent = this.source.agents.get(grant.chat)

@@ -1427,7 +1427,7 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
           {/* answered on its other copy: a link to that chat */}
           {q.elsewhere && !q.closed ? <LinkButton onClick={() => goChat(q.elsewhere!.chat)}>{q.elsewhere.name}</LinkButton> : null}
           {/* the words it was answered with, on one line (a message in the chat shows as its quote, below) */}
-          {q.closed ? <span className="min-w-0 truncate text-fg2">{q.closed}</span> : q.said && q.via !== 'chat' ? <span className="min-w-0 truncate text-fg2">“{q.said.replace(/\s+/g, ' ')}”</span> : null}
+          {q.closed ? <span className="min-w-0 text-pretty text-fg2">{q.closed}</span> : q.said && q.via !== 'chat' ? <span className="min-w-0 truncate text-fg2">“{q.said.replace(/\s+/g, ' ')}”</span> : null}
         </Sent>
       ) : null}
       {/* the message that answered it, as a reply's quote: a tap jumps to it */}

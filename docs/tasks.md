@@ -45,6 +45,11 @@
   Asks permission, Signed out, Question for you, Waits for your reply), or the agent's own question cut to fit
   (from its question tool, its choice card, or the last sentence of its last message that asks). The tasks list, the
   card in its space's chat, alerts and coordinator news all say the same; the full message stays in the task's chat.
+- A permission, question or plan card from the CLI lasts only as long as the CLI waits on it. Its own records say when
+  that is over: the tool call's result or the turn's end, on Claude Code and Codex alike, and the hook the CLI stops
+  when its prompt is declined. The card then closes with what happened (Answered in the terminal, Timed out in the CLI
+  and was denied), and so do its copy in the coordinator's chat, the count and the phone's alert. A tap on it fails and
+  says why. With no such record it stays open, however long it waits.
 - A turn cut off by the model's provider (overloaded, at capacity, a rate limit, a dropped connection) is no question
   for you: Shepherdr waits and tells the agent, task or coordinator, to carry on, after 1, 2, 4 and 8 minutes. Meanwhile
   a task stays Working, its line saying why and when (`Provider overloaded · retry in 2m`). Only when the fifth try is

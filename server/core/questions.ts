@@ -13,12 +13,15 @@ export class CoreQuestions {
   open(chat?: string) { return this.source.store.all<SavedQuestion>('question').filter(row => !row.answered && (!chat || row.chat === chat) && this.source.agents.get(row.chat)?.grant === row.grant) }
   reconcile(chat: string) {
     for (const row of this.source.store.all<SavedQuestion>('question')) {
-      if (row.chat !== chat || row.answered || this.source.agents.get(chat)?.grant === row.grant) continue
-      row.answered = true; row.question.sent = -1; row.question.said = 'Session replaced; ask the agent for a fresh card'
+      if (row.chat !== chat || row.answered) continue
+      const replaced = this.source.agents.get(chat)?.grant !== row.grant, done = this.source.tasks.finished(chat)
+      if (!replaced && !done) continue
+      row.answered = true; row.question.sent = -1; row.question.said = replaced ? 'Session replaced; ask the agent for a fresh card' : 'The task is done'
       row.question.closed = row.question.said
       this.source.store.set('question', row.id, row)
       this.source.post(chat, { id: row.id, who: 'agent', question: row.question, at: Date.now() })
-      this.source.forwardQuestion(chat, row.question, row.question.said, 'task', 'Session replaced')
+      this.source.forwardQuestion(chat, row.question, row.question.said, 'task', replaced ? 'Session replaced' : 'No longer waiting')
+      this.source.clearAlert(chat, row.question.said)
     }
   }
   create(grant: Grant, args: string[]) {

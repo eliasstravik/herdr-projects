@@ -33,6 +33,8 @@ export class CoreAgents {
     this.remotes = new CoreRemotes(this.files, installation.id, profile)
   }
   settings?: CoreSettings
+  /** every hook of the current launch, before anything below may drop it */
+  observed?: (agent: CoreAgent, event: AgentHook) => void
   async worktreeRoot(machine: string) {
     if (!await this.route(machine)) return join(this.config.home, 'worktrees')
     return join(dirname((await this.remotes.prepare(machine)).root), 'worktrees')
@@ -235,20 +237,19 @@ export class CoreAgents {
     if (!current || current.launch !== record.launch || current.grant !== record.grant) return
     // File reads are asynchronous: preserve newer terminal/session fields written while a hook read was pending.
     record = current
+    this.observed?.(record, event) // Evidence about cards, a helper's too, whatever its age: a card goes by the times themselves.
     if (event.agent) return // A helper's lifecycle must not replace its parent's status/session.
     if (!Number.isFinite(event.at) || event.at < Math.max(record.started, record.activityAt ?? 0) || event.at > Date.now() + 60000) return // Historical replay cannot rewind a newer observation.
     if (Number.isFinite(event.at) && event.at > 0 && event.at <= Date.now() + 60000) record.activityAt = Math.max(record.activityAt ?? record.started, event.at)
     if (event.session) record.session = event.session
     if (event.transcript) record.transcript = event.transcript
     if (event.mode && event.mode !== 'plan') record.permissionMode = event.mode
-    if (event.event === 'UserPromptSubmit' || event.event === 'Stop' || (event.event === 'PostToolUse' || event.event === 'PostToolUseFailure') && (event.tool === 'AskUserQuestion' || event.tool === 'ExitPlanMode')) record.nativeEnded = event.at
     // The early word until the transcript says more: a hook must not outrank the records it fires around.
     if (event.model && record.runtime?.source !== 'session' && event.at >= (record.runtime?.at ?? 0)) record.runtime = { ...record.runtime, model: event.model, source: 'hook', at: event.at }
     if (event.event === 'SessionStart' || event.event === 'Stop' || event.event === 'SessionEnd') record.state = 'idle'
     else if (event.event === 'UserPromptSubmit' || event.event === 'PreToolUse') record.state = 'working'
-    // Only authenticated mailbox dispatch owns a permission card. Re-reading an old hook after
-    // restart must not resurrect an answered card or grant authority from observation text.
-    else if (event.event === 'PermissionRequest') record.state = 'blocked'
+    // Only authenticated mailbox dispatch owns a permission card and its blocked state. Re-reading an old hook after
+    // restart, or after its card closed, must not resurrect a wait or grant authority from observation text.
     this.store.set('agent', record.chat, record); this.changed(record.chat)
   }
 }

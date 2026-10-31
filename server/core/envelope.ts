@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 
 export interface MailCredential {
   version: 1
@@ -9,6 +9,9 @@ export interface MailCredential {
 }
 export interface Envelope { version: 1; iv: string; tag: string; body: string }
 const LIMIT = 128 * 1024
+
+/** Names a tool call's input in hook records without copying it there. */
+export const toolHash = (input: unknown) => createHash('sha256').update(JSON.stringify(input ?? null)).digest('hex').slice(0, 24)
 
 function aad(credential: MailCredential, id: string, direction: 'request' | 'response') {
   return Buffer.from(JSON.stringify([1, credential.server, credential.grant, credential.machine, id, direction]))

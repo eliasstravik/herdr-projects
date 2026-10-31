@@ -167,6 +167,8 @@ export interface PushPayload {
   badge: number
   /** the tags of what still waits on you: alerts with other tags go */
   open: string[]
+  /** nothing new: it only takes what no longer waits off the screen, quietly */
+  clear?: true
   /** the card a button answers, and the buttons (devices that show them) */
   answer?: { chat: string; question: string }
   actions?: { action: string; title: string }[]
@@ -189,6 +191,7 @@ export function pushPayload(a: Alert, w: { count: number; tags: string[] }): Pus
     url: alertUrl(a.go),
     badge: w.count,
     open: w.tags,
+    ...(a.clear ? { clear: true as const } : {}),
     ...(a.card?.choices.length
       ? { answer: { chat: a.card.chat, question: a.card.question }, actions: a.card.choices.map((c) => ({ action: String(c.choice), title: clip(c.label, ACTION_MAX) })) }
       : {}),

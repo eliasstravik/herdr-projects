@@ -743,6 +743,8 @@ export interface Alert {
   message?: true
   /** about a task (from its agent, or what it needs): it buzzes whatever its place's Notify, which is its coordinator's */
   task?: true
+  /** nothing new: what this chat waited on is over, and its alert goes without a sound */
+  clear?: true
 }
 
 /** A folder on a machine, for adding a space from the sidebar (home only) */
