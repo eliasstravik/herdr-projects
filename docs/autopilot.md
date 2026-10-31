@@ -95,7 +95,12 @@ What it does not give you, compared with Linux:
   still write its worktree.
 - **Loopback is shared with the whole Mac.** There's no private localhost, and Shepherdr's own web port would be on
   it, so an agent reaches only this run's CONNECT port. Anything that talks to itself over localhost fails, including
-  local test servers and Gradle's daemon. Unix sockets inside the private home work.
+  local test servers. Gradle can't run at all, even with `--no-daemon`: it binds a local socket at startup and stops at
+  `FileLockContentionHandler` with `SocketException: Operation not permitted`. Unix sockets inside the private home work.
+- **Java needs settings of its own.** A JVM's default sockets use IPv4-mapped addresses, which the rule for this run's
+  CONNECT port doesn't match, so it can't reach even that port without `-Djava.net.preferIPv4Stack=true`. It also
+  ignores `HTTPS_PROXY`, and takes its home folder from the system rather than `HOME`, so it's denied the real one
+  unless told otherwise. A JDK kept in the home folder, or linked there from `/Library/Java`, can't be read.
 - **There's no private `/tmp` or `/dev`.** `TMPDIR` points into the private home; a tool that hardcodes `/tmp` fails.
   Only named devices and the run's own terminal are open, so a tool that needs a new pseudo-terminal fails too.
 - **`sandbox-exec` is deprecated.** Apple marks it deprecated but still ships it and uses Seatbelt itself; Claude Code

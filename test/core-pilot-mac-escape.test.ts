@@ -107,11 +107,34 @@ attempt gateway-private-address curl https://100.100.100.100/
 attempt gateway-other-port curl https://example.com:8443/
 attempt proxy-port-mail /bin/sh -c 'printf "POST /mail HTTP/1.1\\r\\nHost: x\\r\\nContent-Length: 2\\r\\n\\r\\n{}" | /usr/bin/nc -w 3 127.0.0.1 "\${HTTPS_PROXY##*:}" | grep -q "403 Forbidden" && exit 1; exit 0'
 attempt control-socket /usr/bin/nc -w 2 -U "$HOST_HOME/control.sock"
+attempt mapped-address-other-port "$(command -v python3)" -I -c "import os,socket;s=socket.socket(socket.AF_INET6);s.settimeout(3);s.connect(('::ffff:127.0.0.1',int(os.environ['LISTENER'])))"
 attempt host-allowed curl https://example.com/
 attempt product-command "$SHEPHERDR_COMMAND" status
 `)
-    for (const name of ['direct-internet', 'direct-address', 'direct-tailscale', 'direct-private', 'direct-host-service', 'host-not-allowed', 'gateway-private-address', 'gateway-other-port', 'proxy-port-mail', 'control-socket']) expect([name, row(rows, name).code === 0]).toEqual([name, false])
+    for (const name of ['direct-internet', 'direct-address', 'direct-tailscale', 'direct-private', 'direct-host-service', 'host-not-allowed', 'gateway-private-address', 'gateway-other-port', 'proxy-port-mail', 'control-socket', 'mapped-address-other-port']) expect([name, row(rows, name).code === 0]).toEqual([name, false])
     for (const name of ['host-allowed', 'product-command']) expect([name, row(rows, name).code, row(rows, name).out]).toEqual([name, 0, name === 'product-command' ? 'product command reached the gateway' : ''])
+  }, 90_000)
+
+  // Skipped without this JDK, the one common install the profile can read.
+  const java = '/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home/bin/java'
+  test.skipIf(!existsSync(java))('a JVM reaches only its own CONNECT port, in IPv4 mode, and never another loopback port', async () => {
+    writeFileSync(join(task, 'Reach.java'), 'public class Reach { public static void main(String[] a) throws Exception { new java.net.Socket().connect(new java.net.InetSocketAddress(java.net.InetAddress.getByName(a[0]), Integer.parseInt(a[1])), 4000); } }\n')
+    try {
+      const rows = await attempts(`
+own=\${HTTPS_PROXY##*:}
+jvm() { ${java} -XX:-UsePerfData "$@"; }
+ipv4=-Djava.net.preferIPv4Stack=true
+attempt own-port-default-sockets jvm Reach.java 127.0.0.1 "$own"
+attempt own-port-ipv4 jvm $ipv4 Reach.java 127.0.0.1 "$own"
+attempt other-port-default-sockets jvm Reach.java 127.0.0.1 "$LISTENER"
+attempt other-port-mapped-default-sockets jvm Reach.java ::ffff:127.0.0.1 "$LISTENER"
+attempt other-port-ipv4 jvm $ipv4 Reach.java 127.0.0.1 "$LISTENER"
+attempt other-port-mapped-ipv4 jvm $ipv4 Reach.java ::ffff:127.0.0.1 "$LISTENER"
+`)
+      expect(row(rows, 'own-port-ipv4').code).toBe(0) // The JVM itself works here, so the refusals below mean something.
+      for (const name of ['own-port-default-sockets', 'other-port-default-sockets', 'other-port-mapped-default-sockets', 'other-port-ipv4', 'other-port-mapped-ipv4']) expect([name, row(rows, name).code === 0]).toEqual([name, false])
+      expect(row(rows, 'other-port-mapped-default-sockets').out).toContain('Operation not permitted')
+    } finally { rmSync(join(task, 'Reach.java'), { force: true }) }
   }, 90_000)
 
   test('apps, AppleEvents, launchd, the Keychain and nested sandboxes are out of reach', async () => {
