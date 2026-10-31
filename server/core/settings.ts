@@ -62,11 +62,12 @@ CATALOG.sort((a, b) => SECTION_ORDER.indexOf(a.name) - SECTION_ORDER.indexOf(b.n
 const rows = CATALOG.flatMap(section => section.rows)
 /** Settings whose default is a CLI the machine can really use, not a fixed name. */
 const CHOSEN = new Set(['reviewer.agent', 'task.fallback'])
-const CHECK_MS = 15 * 60_000
+const CHECK_MS = 15 * 60_000, RETRY_MS = 60_000
 
 /** Explicit store + machine identity; importing this module never reads the live installation. */
 export class CoreSettings {
   private probing = new Set<string>()
+  private tried = new Map<string, number>()
   private saving = false
   constructor(private store: CoreStore, private files: CoreFiles, private spaces: () => CoreSpace[], private machineName: (id: string) => string, private changed: () => void) {}
   private chain(level = 'all'): string[] {
@@ -93,13 +94,13 @@ export class CoreSettings {
     return states.find(state => state && state !== 'ready') ?? (states.length && states.every(Boolean) ? 'ready' : undefined)
   }
   /** Another CLI than the task agent's, for fresh eyes and for a backup when its provider cuts out. A reviewer may fall
-   *  back on the task agent's own CLI; a backup can't, as a task never fails over to the CLI it runs on. Not yet checked
-   *  counts as usable, so a machine out of reach changes nothing. */
+   *  back on the task agent's own CLI; a backup can't, as a task never fails over to the CLI it runs on. Only a machine
+   *  never yet checked keeps the plain order: an answer it couldn't read proves nothing, so that CLI isn't picked. */
   private usableDefault(key: string, level: string) {
     const own = kindOf(this.get('task.agent', level)) ?? 'claude', other: AgentKind = own === 'claude' ? 'codex' : 'claude', machines = this.machinesAt(level)
     const order = key === 'task.fallback' ? [other] : [other, own]
-    const pick = order.find(kind => this.cliAt(kind, machines) === 'ready') ?? order.find(kind => !this.cliAt(kind, machines))
-    return pick ? names[pick] : key === 'task.fallback' ? 'off' : names[other]
+    const pick = order.find(kind => this.cliAt(kind, machines) === 'ready') ?? (machines.some(machine => !this.store.get('machine-check', machine)) ? other : undefined)
+    return pick ? names[pick] : key === 'task.fallback' ? 'off' : names[own]
   }
   get(key: string, level = 'all') { return this.pick(key, level).value }
   set(key: string, value: string | null, level = 'all') {
@@ -214,6 +215,11 @@ export class CoreSettings {
     const lines = bad.map(({ machine, state }) => `${names[kind]} is ${state === 'missing' ? 'not installed' : 'not signed in'} on ${this.machineName(machine) || 'this machine'}.`)
     return `${lines.join('\n')}\n${what} can't run there until that is fixed, or you choose another agent.`
   }
+  /** Backup's own row is under Agents: How tasks work repeats it only to warn. */
+  private backupRow(level: string): SettingRow[] {
+    const warn = this.cliWarning('task.fallback', level)
+    return warn ? [{ group: 'Backup', label: 'Agent', key: '', value: this.get('task.fallback', level), fixed: true, warn }] : []
+  }
   /** Why Autopilot can't start in a space, by what launch needs; nothing where it can, or before its machine is checked. */
   pilotBlock(level: string): string | undefined {
     const space = this.spaces().find(item => item.id === level)
@@ -228,7 +234,7 @@ export class CoreSettings {
   }
   sections(devices: string[] = [], pushWarnings: string[] = []): SettingSection[] {
     const levels = ['all', ...new Set(this.spaces().map(space => `m:${space.machine}`)), ...this.spaces().map(space => space.id)]
-    return levels.flatMap(level => CATALOG.filter(section => (!section.global || level === 'all') && (level === 'all' || section.name !== 'Time zone') && (section.name !== 'Machine' || level === 'all' || level.startsWith('m:'))).map(section => ({ ...section, level, machine: this.machine(level), rows: section.rows.map(row => {
+    return levels.flatMap(level => CATALOG.filter(section => (!section.global || level === 'all') && (level === 'all' || section.name !== 'Time zone') && (section.name !== 'Machine' || level === 'all' || level.startsWith('m:'))).map(section => ({ ...section, level, machine: this.machine(level), rows: [...section.rows.map(row => {
       if (row.key === 'alerts') return { ...row, value: devices.length ? devices.join(', ') : 'No device yet', ...(pushWarnings.length ? { warn: `${pushWarnings.length} device${pushWarnings.length === 1 ? '' : 's'} could not receive the last alert.\n${pushWarnings.slice(0, 3).join('\n')}` } : {}) }
       const picked = this.pick(row.key, level), inherited = this.chain(level).slice(1).map(at => this.pick(row.key, at)).find(value => value.level !== 'default') ?? { value: this.fallback(row.key, level), level: 'default' }
       let dynamic = { ...row }
@@ -247,7 +253,7 @@ export class CoreSettings {
       if (row.key === 'heartbeat.on') dynamic.trigger = { words: eventWords(eventRules(value)), next: [], presets: [{ label: 'All news', value: 'all news' }, { label: 'None: it waits', value: 'none' }] }
       const words = (at: string) => at === 'default' ? 'Shepherdr’s default' : at === 'all' ? 'Everywhere' : at.startsWith('m:') ? this.machineName(at.slice(2)) : this.spaces().find(space => space.id === at)?.name || at
       return { ...dynamic, value, ...(picked.level === level ? { inherits: { value: inherited.value, from: words(inherited.level) } } : { from: words(picked.level) }) }
-    }) })))
+    }), ...(section.name === 'How tasks work' ? this.backupRow(level) : [])] })))
   }
   describe(level: string, name?: string) {
     const sections = CATALOG.filter(section => !name || section.name.toLowerCase() === name.toLowerCase())
@@ -272,11 +278,13 @@ export class CoreSettings {
   }
   /** What the machine can run: a failed check keeps the last one, and never counts against a CLI. */
   private check(machine: string) {
-    const key = `check:${machine}`, saved = this.store.get<MachineCheck>('machine-check', machine)
-    if (this.probing.has(key) || saved && Date.now() - saved.at < CHECK_MS) return
+    const key = `check:${machine}`, saved = this.store.get<MachineCheck>('machine-check', machine), now = Date.now()
+    if (this.probing.has(key) || saved && now - saved.at < CHECK_MS || now - (this.tried.get(machine) ?? 0) < RETRY_MS) return
     this.probing.add(key)
+    this.tried.set(machine, now)
     void this.files.exec(machine, ['sh', '-c', MACHINE_CHECK], undefined, undefined, 30).then(bytes => {
       const next = parseMachineCheck(bytes.toString('utf8'))
+      if (!next) return
       this.store.set('machine-check', machine, next)
       if (!saved || !sameCheck(saved, next)) this.changed()
     }).catch(() => {}).finally(() => this.probing.delete(key))

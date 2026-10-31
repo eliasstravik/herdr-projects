@@ -398,7 +398,6 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
       case 'plugin': return this.plugins.act(action)
       case 'send': {
         if (!action.text.trim() && !action.attachments?.length) return {}
-        if (!action.reply && modelCommand(action.text) !== undefined) throw new Error('/model would change every later agent on this device. Use Restart agent to change this one')
         const run = async () => {
           const task = this.tasks.forChat(action.chat)
           const space = this.space(action.chat) || task && this.space(task.place)
@@ -406,6 +405,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
           const prepare = async () => {
             this.providerRetries.clear(action.chat)
             const text = await this.chats.text(action, space.machine)
+            if (modelCommand(text) !== undefined) throw new Error('/model would change every later agent on this device. Use Restart agent to change this one')
             const id = action.cid || randomUUID()
             this.store.db.transaction(() => {
               this.store.set('pending-send', id, { id, chat: action.chat, text, state: 'queued' } satisfies PendingSend)

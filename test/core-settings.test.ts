@@ -165,6 +165,10 @@ test('reviewer and backup default to a CLI that is installed and signed in, not 
   // a task never fails over to its own CLI, so a same-CLI backup would look set and do nothing
   expect(settings.get('task.fallback', 'p:box:one')).toBe('off')
   expect(warning(settings, 'p:box:one', 'task.fallback')).toContain('no backup')
+  // How tasks work says so too, though Backup's row is under Agents
+  const tasks = settings.sections().find(section => section.level === 'p:box:one' && section.name === 'How tasks work')!
+  expect(tasks.rows.at(-1)).toMatchObject({ group: 'Backup', value: 'off', fixed: true })
+  expect(tasks.rows.at(-1)!.warn).toContain('no backup')
   expect(warning(settings, 'p:box:one', 'reviewer.agent')).toBeUndefined()
   // each machine by its own check
   expect(settings.get('reviewer.agent', 'p:other:one')).toBe('Codex')
@@ -187,15 +191,19 @@ test('a saved reviewer or backup stays, and its row says where that CLI is unusa
   expect(warning(settings, 'all', 'task.fallback')).toBeUndefined()
 }))
 
-test('an unchecked machine or an unreadable answer never counts against a CLI', () => fixture(settings => {
+test('an answer it cannot read proves nothing: never picked, never warned about, never blocking', () => fixture(settings => {
   check(settings, 'box', {})
-  expect(settings.get('reviewer.agent', 'p:box:one')).toBe('Codex')
+  expect(settings.get('reviewer.agent', 'p:box:one')).toBe('Claude Code')
+  expect(settings.get('task.fallback', 'p:box:one')).toBe('off')
   expect(warning(settings, 'p:box:one', 'reviewer.agent')).toBeUndefined()
   expect(settings.pilotBlock('p:box:one')).toBeUndefined()
+  // only a machine never checked keeps the plain order
+  expect(settings.get('reviewer.agent', 'p:other:one')).toBe('Codex')
+  expect(parseMachineCheck('/home/someone')).toBeUndefined()
   expect(parseMachineCheck('platform=Linux\nsandbox=ok\nclaude=\ncodex=error: unknown command', 5)).toEqual({ at: 5, platform: 'Linux', sandbox: 'ok', cli: { claude: undefined, codex: undefined } })
-  expect(parseMachineCheck('claude="loggedIn": false\ncodex=Logged in using ChatGPT').cli).toEqual({ claude: 'signed-out', codex: 'ready' })
-  expect(parseMachineCheck('claude="loggedIn": true\ncodex=Not logged in').cli).toEqual({ claude: 'ready', codex: 'signed-out' })
-  expect(parseMachineCheck('claude=missing\ncodex=missing').cli).toEqual({ claude: 'missing', codex: 'missing' })
+  expect(parseMachineCheck('platform=Linux\nclaude="loggedIn": false\ncodex=Logged in using ChatGPT')?.cli).toEqual({ claude: 'signed-out', codex: 'ready' })
+  expect(parseMachineCheck('platform=Linux\nclaude="loggedIn": true\ncodex=Not logged in')?.cli).toEqual({ claude: 'ready', codex: 'signed-out' })
+  expect(parseMachineCheck('platform=Linux\nclaude=missing\ncodex=missing')?.cli).toEqual({ claude: 'missing', codex: 'missing' })
 }))
 
 test('Autopilot says why it cannot run: home space, not Linux, no sandbox, or its CLI unusable', () => fixture(settings => {

@@ -77,7 +77,7 @@ function Sheet({ chat, name, current, typed }: Opening) {
         const pick = current ? r.info.on : r.info.want
         setKind(pick.kind)
         const cli = r.info.clis.find((c) => c.kind === pick.kind), named = typedModel(cli, typed ?? '')
-        setModel(named?.id ?? pick.model ?? '')
+        setModel(typed?.toLowerCase() === DEFAULT ? '' : (named?.id ?? pick.model ?? ''))
         setEffort(named && pick.effort && !levelsOf(cli, named.id).includes(pick.effort) ? '' : (pick.effort ?? ''))
         // Settings hold no speed: what it was started on stays unless changed
         setSpeed(r.info.on.speed ?? '')
@@ -122,7 +122,7 @@ function Sheet({ chat, name, current, typed }: Opening) {
     >
       {info ? (
         <div data-restart className="flex flex-col gap-4">
-          {typed !== undefined ? <p className="text-sm text-fg3">Changes this agent only, not the device's default for later agents.{typed && !typedModel(info.clis.find((c) => c.kind === info.on.kind), typed) ? ` ${typed} isn't one of its models.` : ''}</p> : null}
+          {typed !== undefined ? <p className="text-sm text-fg3">Changes this agent only, not the device's default for later agents.{typed && typed.toLowerCase() !== DEFAULT && !typedModel(info.clis.find((c) => c.kind === info.on.kind), typed) ? ` ${typed} isn't one of its models.` : ''}</p> : null}
           <div className="flex flex-col gap-2.5 text-fg phone:gap-1">
             <Line label="Agent">
               <Pick label="Agent" value={cli?.name ?? kind} options={info.clis.map((c) => c.name)} onPick={(n) => pickKind(info.clis.find((c) => c.name === n)!.kind)} />

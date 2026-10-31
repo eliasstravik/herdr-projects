@@ -102,11 +102,12 @@ test('a send to an idle reviewer leaves the preparation gate and reaches that re
   } finally { await f.close() }
 })
 
-test('a typed /model never reaches the CLI, however it is sent; words after a reply are only words', async () => {
+test('a typed /model never reaches the CLI, however it is sent, even as a reply to a message that is gone', async () => {
   const f = deliveryFixture()
   try {
     await expect(f.source.act({ type: 'send', chat: f.task.chat, text: '/model sonnet', cid: 'model-send' })).rejects.toThrow('Use Restart agent')
     await expect(f.source.act({ type: 'send', chat: f.task.chat, text: ' /MODEL' })).rejects.toThrow('Use Restart agent')
+    await expect(f.source.act({ type: 'send', chat: f.task.chat, text: '/model sonnet', reply: 'gone' })).rejects.toThrow('Use Restart agent')
     await Bun.sleep(0)
     expect(f.sent).toEqual([])
     expect(f.source.store.all('pending-send')).toEqual([])

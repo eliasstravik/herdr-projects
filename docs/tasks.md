@@ -58,7 +58,7 @@
   alert. Errors waiting can't fix (signed out, out of allowance, a model that isn't there) go to you at once. Anything
   written to the agent starts the count again. Each CLI's log says what cut it off (`server/common/provider-error.ts` decides).
 - When a task's agent can't go on (out of allowance, signed out, its provider still down after the tries), its
-  **backup agent** takes over, once: Settings → Agents → Backup (`task.fallback`, Codex unless set, or off).
+  **backup agent** takes over, once: Settings → Agents → Backup (`task.fallback`: unless set, the other CLI where it is signed in, else off).
   It starts in the same worktree and branch, on its CLI's own model, with the brief and a short handover: who it takes
   over from and why, the branch's commits, what lies uncommitted and the chat so far. A card in the task's chat says
   so. Contained Autopilot tasks keep their selected run policy and never switch provider automatically. If the backup can't go on either, or isn't installed, the task needs you.

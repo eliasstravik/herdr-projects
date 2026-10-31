@@ -14,7 +14,9 @@
 - Reviewer and Backup default to a CLI that is installed and signed in, checked on each machine with the CLI's own
   status command every 15 minutes: the other CLI than the task agent's where it works. A reviewer falls back on the task
   agent's CLI. A backup doesn't, because a task never fails over to the CLI it runs on, so with no other CLI Backup is
-  off and says so. A saved choice stays as it is, and its row warns where that CLI is missing or signed out.
+  off and says so. A saved choice stays as it is, and warns where that CLI is missing or signed out: on its row, and
+  How tasks work repeats a backup's. A machine not checked yet (it just connected, or the check can't run there)
+  keeps the other CLI, unverified, until one succeeds.
 - Secrets (How Shepherdr runs) holds the keys, tokens and passwords agents use, by name: add, replace and remove them
   in masked boxes, Everywhere (or tick For this space only), for a machine or for a space; the most specific one wins. An agent that needs one asks
   with `shepherdr secret ask NAME --why "…"`: its chat shows a masked box, and the agent is told by name once it is
