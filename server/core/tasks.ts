@@ -20,6 +20,7 @@ import { one, parseArgs, summaryOpts, type Parsed } from '../common/args.ts'
 import type { LogEvent } from '../common/readers/types.ts'
 import { reserveTaskId } from './ids.ts'
 import { taskDependencies } from './dependencies.ts'
+import { FRESH_SESSION } from './failed-starts.ts'
 import { archiveAfterMs } from '../../shared/archive.ts'
 
 export interface CoreTaskInput {
@@ -387,7 +388,7 @@ export class CoreTasks {
     const role = readFileSync(join(import.meta.dir, '../../skill/shepherdr-agent/SKILL.md'), 'utf8')
     const instructions = `${role}\n\nYou are ${task.id} in standalone Shepherdr on core. Use the launch-provisioned authenticated shepherdr command. ${pilot ? 'Your Git metadata is read-only: use shepherdr checkpoint MESSAGE to commit, and shepherdr review TASK for a fresh managed reviewer. Use the product broker for managed agents and messages; no core socket or outside helper is available.' : 'Use hc for child agents, messages and waits.'} Do not use legacy helpers, SSH workers, a web URL or screen scraping. Your branch is ${task.branch}; stay in this worktree.\n`
     const prompt = `${task.desc}\n\n${wait}\n\nSettings:\n- Agent: ${task.kind}${task.model ? `, model ${task.model}` : ''}${task.effort ? `, effort ${task.effort}` : ''}\n- Review: ${task.review.on ? 'on' : 'off'}\n- Reviewer: ${task.review.kind}${task.reviewerModel ? `, model ${task.reviewerModel}` : ''}${task.reviewerEffort ? `, effort ${task.reviewerEffort}` : ''}\n- Must fix: ${task.review.mustFix}\n- Review rounds: ${task.review.rounds}\n- Merge: ${task.mergePolicy === 'ask' ? 'ask the human first' : task.mergePolicy === 'checks' ? 'after GitHub checks' : 'on its own'}\n${Object.keys(task.overrides ?? {}).length ? `Set by the coordinator for this task: ${Object.entries(task.overrides!).map(([key, value]) => `${key}=${value}`).join(', ')}\n` : ''}${message ? `\n<go>${message}</go>` : ''}`
-    const launched = await this.source.agents.launch(space, task.chat, task.kind, prompt, { role: 'task', parent, folder: task.folder, task: task.id, instructions, model, effort, speed: task.speed, resume: !pilot && !prior?.pilot, pilot: pilot ? { run: pilot.id, hosts: pilot.config.hosts, deadline: pilot.config.runtime ? pilot.started + pilot.config.runtime : undefined, repo: task.repo } : undefined })
+    const launched = await this.source.agents.launch(space, task.chat, task.kind, prompt, { role: 'task', parent, folder: task.folder, task: task.id, instructions, model, effort, speed: task.speed, resume: !pilot && !prior?.pilot, message: message ?? '', pilot: pilot ? { run: pilot.id, hosts: pilot.config.hosts, deadline: pilot.config.runtime ? pilot.started + pilot.config.runtime : undefined, repo: task.repo } : undefined })
     if (pilot) this.source.pilots.policy.bind(pilot.id, { chat: launched.chat, launch: launched.launch, role: 'task', task: task.id })
     await this.label(task)
     const takeover = task.providerTakeover
@@ -398,6 +399,19 @@ export class CoreTasks {
       this.source.post(task.chat, { id: card, who: 'agent', card: { id: card, text: `${name(takeover.to)} took over from ${name(takeover.from)}: ${takeover.why}` }, at: Date.now() })
     }
     } catch (error) { task.startError = (error as Error).message; this.save(task); throw error }
+  }
+  /** A resume found no session: the same start again, without it. Says whether a new agent is on its way. */
+  async startFresh(id: string, launch: string, message: string) {
+    return this.change(id, async () => {
+      const task = this.get(id), agent = task && this.source.agents.get(task.chat)
+      if (!task || agent?.launch !== launch) return false
+      this.source.agents.update(agent, { session: undefined })
+      await this.launchNow(task, task.workflow === 'working' || message ? `${FRESH_SESSION} ${message || 'Continue your agreed task.'}` : undefined)
+      return this.source.agents.get(task.chat)?.launch !== launch
+    })
+  }
+  async startFailed(id: string, error: string) {
+    return this.change(id, async () => { const task = this.get(id); if (task) { task.startError = error; this.save(task) } })
   }
   private async label(task: CoreTask) {
     const agent = this.source.agents.get(task.chat), terminal = agent && this.source.agents.terminal(agent)
@@ -824,7 +838,7 @@ export class CoreTasks {
           const end = this.source.store.all<LogEvent>(`event:${task.reviewChat}`).filter(event => event.kind === 'turn-end').at(-1)
           const terminal = reviewer && this.source.agents.terminal(reviewer)
           const completed = reviewer?.transcriptFormat !== 'codex-exec' || terminal?.state === 'finished' && terminal.exit_code === 0
-          if (reviewer && task.reviewFailure !== reviewer.launch && (end?.kind === 'turn-end' && end.aborted || reviewer.transcriptFormat === 'codex-exec' && terminal?.state === 'finished' && terminal.exit_code !== 0)) {
+          if (reviewer && task.reviewFailure !== reviewer.launch && (end?.kind === 'turn-end' && end.aborted || (reviewer.transcriptFormat === 'codex-exec' || !end) && terminal?.state === 'finished' && terminal.exit_code !== 0)) {
             this.source.saveAndDeliver(task.chat, `review-failed-${reviewer.launch}`, '<review-failed>The reviewer stopped without a successful report. Do not treat its partial words as findings or report ready; request another fresh review.</review-failed>', () => {
               task.reviewFailure = reviewer.launch; this.source.store.set('task', task.id, task)
             })
@@ -1004,7 +1018,7 @@ export class CoreTasks {
       const result = await this.merge(grant, id)
       return text(`${result.id} is merged${result.cleanupReceipt ? `\nInternal completion receipt: ${result.cleanupReceipt}; do not repeat it in chat.` : ''}`)
     }
-    if (verb === 'todo') return this.change(id, async () => { if (['merged', 'closed'].includes(task.workflow)) throw new Refusal('This task is Done; ask its coordinator for follow-up work'); task.workflow = 'todo'; delete task.reservedAt; this.save(task); await this.label(task); return text(`${id} is To do`) })
+    if (verb === 'todo') return this.change(id, async () => { if (['merged', 'closed'].includes(task.workflow)) throw new Refusal('This task is Done; ask its coordinator for follow-up work'); if (task.workflow === 'queued') throw new Refusal(`${id} is queued and stays queued: its <go> comes on its own. End your turn and wait for it. Only a coordinator's task queue ${id} --after none takes it out of the queue`); task.workflow = 'todo'; delete task.reservedAt; this.save(task); await this.label(task); return text(`${id} is To do`) })
     if (verb === 'task' && sub === 'tell') { await this.source.act({ type: 'send', cid: randomUUID(), chat: task.chat, text: rest.slice(1).join(' ') }); return text('Saved for delivery through core') }
     if (verb === 'task' && sub === 'queue') return this.change(id, async () => {
       if (['merged', 'closed', 'merging'].includes(task.workflow)) throw new Refusal(`${task.id} is already ${task.workflow}; its queue cannot change`)

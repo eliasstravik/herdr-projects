@@ -26,7 +26,8 @@
   `--after SHE-12` (`shepherdr task queue <id> --after …` changes or clears it on a task that exists). Its agent starts
   at once, reads the brief and waits; the task shows under Queued, its line naming what it still waits for (`after
   SHE-12, SHE-13`). Once they are all done (merged, or nothing to merge), Shepherdr tells its agent to go,
-  and a small card in its chat says why it started. A task of another machine is named with its machine first
+  and a small card in its chat says why it started. While it waits, `shepherdr todo` is refused: it would drop the task
+  out of its queue. A task of another machine is named with its machine first
   (`vm-str:SHE-12`), from the main machine's home space. If one it waits for is stopped or goes wrong, the queued task needs
   you, saying which; it goes back to waiting once that task is going again. Want it started early? Just write to it:
   its agent decides from your words, and clears its queue itself when they are a go (a note leaves it queued).

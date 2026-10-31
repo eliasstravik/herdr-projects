@@ -15,6 +15,7 @@ import { browserNamespace, browserSession as sessionForBrowser } from './browser
 import type { CoreSettings } from './settings.ts'
 import { CorePilotRepositories } from './pilot-repositories.ts'
 import type { PilotPrepared, PilotLaunch } from '../../helper/core-pilot-launch.ts'
+import type { ResumeStart } from './failed-starts.ts'
 
 const EVENTS = ['SessionStart', 'UserPromptSubmit', 'Stop', 'SessionEnd', 'PermissionRequest', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'SubagentStart', 'SubagentStop']
 const quote = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`
@@ -72,6 +73,8 @@ export class CoreAgents {
 
   async launch(space: CoreSpace, chat: string, kind: AgentKind, prompt: string, options: {
     role?: CoreAgent['role']; parent?: CoreAgent; model?: string; effort?: string; speed?: string; resume?: boolean; folder?: string; task?: string; instructions?: string; readOnly?: boolean
+    /** what a fresh start must still say if this resume finds no session; the prompt, when none is given */
+    message?: string
     pilot?: { run: string; hosts: string[]; deadline?: number; repo: string }
   } = {}): Promise<CoreAgent> {
     if (this.launching.has(chat)) throw new Error('This agent is already starting')
@@ -134,6 +137,7 @@ export class CoreAgents {
     this.store.set('agent', chat, record)
     this.store.set('agent-launch', record.launch, record)
     if (record.pilot) this.store.set('pilot-capture', record.launch, record)
+    if (record.session) this.store.set('resume-start', launch, { chat, launch, message: options.message ?? prompt } satisfies ResumeStart)
     let argv: string[] = [kind]
     const headless = kind === 'codex' && options.readOnly
     if (kind === 'claude') {
@@ -232,6 +236,13 @@ export class CoreAgents {
     await this.core.call('terminal.send', { terminal: terminal.address, text })
   }
 
+  update(agent: CoreAgent, change: Partial<CoreAgent>) {
+    const current = this.get(agent.chat)
+    if (current?.launch !== agent.launch) return
+    Object.assign(current, change)
+    this.store.set('agent', current.chat, current); this.store.set('agent-launch', current.launch, current); this.changed(current.chat)
+  }
+
   hook(record: CoreAgent, event: AgentHook) {
     const current = this.get(record.chat)
     if (!current || current.launch !== record.launch || current.grant !== record.grant) return
@@ -247,7 +258,8 @@ export class CoreAgents {
     if (event.mode && event.mode !== 'plan') record.permissionMode = event.mode
     // The early word until the transcript says more: a hook must not outrank the records it fires around.
     if (event.model && record.runtime?.source !== 'session' && event.at >= (record.runtime?.at ?? 0)) record.runtime = { ...record.runtime, model: event.model, source: 'hook', at: event.at }
-    if (event.event === 'SessionStart' || event.event === 'Stop' || event.event === 'SessionEnd') record.state = 'idle'
+    // A resume that finds no session still reports its end: only a session that began can end idle.
+    if (event.event === 'SessionStart' || event.event === 'Stop' || event.event === 'SessionEnd' && record.state !== 'starting') record.state = 'idle'
     else if (event.event === 'UserPromptSubmit' || event.event === 'PreToolUse') record.state = 'working'
     // Only authenticated mailbox dispatch owns a permission card and its blocked state. Re-reading an old hook after
     // restart, or after its card closed, must not resurrect a wait or grant authority from observation text.

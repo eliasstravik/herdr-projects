@@ -119,6 +119,7 @@ export class CoreAutomations {
         if (!this.source.space(task.place) || this.source.places.removing(task.place) || task.archived || this.source.tasks.busy(task.id) || !this.source.machineConnected(task.machine)) continue
         const previous = this.source.store.get<Seen>('automation-seen', task.id), view = this.source.tasks.view(task), status = view.status
         const agent = this.source.agents.get(task.chat), terminal = agent && this.source.agents.terminal(agent)
+        if (agent && this.source.failedStarts?.pending(agent)) continue
         const attempt = task.launchAttempt ?? agent?.launch
         const failure = task.startError && !['merged', 'closed', 'merging'].includes(task.workflow) ? `start:${attempt ? attempt + ':' : ''}${task.startError}` : task.workflow === 'working' && terminal?.state === 'finished' &&
           (terminal.exit_code != null && terminal.exit_code !== 0 || terminal.signal != null) ? `${agent!.launch}:${terminal.reason}:${terminal.exit_code}:${terminal.signal}` : undefined

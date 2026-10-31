@@ -61,6 +61,18 @@ test('installation IDs cannot inject paths into remote helper or export location
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
+test('standalone core startup drops what a launching agent leaves in its environment', async () => {
+  const { coreEnvironment } = await import('../server/core/config.ts')
+  const left = ['CLAUDECODE', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_SESSION_ID', 'HC_SCOPE', 'HC_TERMINAL_SOCKET', 'HC_TERMINAL_ID']
+  const before = Object.fromEntries(['KEEP_THIS', ...left].map(key => [key, process.env[key]]))
+  try {
+    for (const key of ['KEEP_THIS', ...left]) process.env[key] = '1'
+    const env = coreEnvironment({ home: '/private/preview', port: 17887, session: 'preview', socket: '/private/core.sock', binary: 'hc' })
+    for (const key of left) expect(env[key]).toBeUndefined()
+    expect(env).toMatchObject({ KEEP_THIS: '1', HC_SESSION: 'preview', HC_SOCKET: '/private/core.sock' })
+  } finally { for (const [key, value] of Object.entries(before)) { if (value === undefined) delete process.env[key]; else process.env[key] = value } }
+})
+
 test('standalone core startup never inherits another task browser route', async () => {
   const { coreEnvironment } = await import('../server/core/config.ts')
   const before = process.env.AGENT_BROWSER_CDP

@@ -10,6 +10,8 @@ Every agent, coordinator or task agent, gets the same chat.
   option (the bubble says so, and it goes in once the prompt is answered), or while the agent is still starting or
   its machine is out of reach; only then does the bubble carry a note. Commands like /compact or a model change wait
   for the turn to end.
+- An agent whose saved session is gone starts anew by itself, in the same chat, with "Earlier session was gone, started
+  a new one." Any other start that fails shows its CLI's own words as a line in the chat, and your next message tries again.
 - An agent stopped at its CLI's own screen before its session starts (trusting a folder, the theme, signing in, Codex's
   hooks, or anything a later CLI version adds) shows that screen in the chat as a card within about 10 seconds, and
   counts as Needs you. The card shows the choices it can read, and one tap presses that choice in the terminal. A
