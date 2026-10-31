@@ -1,6 +1,7 @@
 // The sidebars and places: modes, the ⋯ menu, the places tree, one machine or many, in a real browser (layout.ts).
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { Page } from 'playwright-core'
+import { PILOT_BLOCKED } from '../shared/types.ts'
 import { layout, settled, type Box } from './layout.ts'
 
 const { browser, world, server, url } = await layout()
@@ -211,6 +212,30 @@ describe.skipIf(!browser)('sidebars', () => {
 })
 
 describe.skipIf(!browser)("a place's Autopilot", () => {
+  test('where it cannot run, the switch is greyed with the reason and asks nothing', async () => {
+    const was = world.sections
+    const reason = 'Autopilot needs Linux. mac runs macOS.'
+    world.sections = was.map((s) => (s.name === 'Autopilot' && s.level === 'p:vm-str:~' ? { ...s, rows: [{ label: PILOT_BLOCKED, key: '', value: reason, fixed: true }, ...s.rows] } : s))
+    world.emit('snapshot')
+    const page = await browser!.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+    try {
+      await page.goto(url())
+      await page.getByRole('button', { name: 'Menu', exact: true }).click()
+      const pop = page.getByRole('menu', { name: 'Menu' })
+      const sw = pop.getByRole('menuitemcheckbox', { name: 'Autopilot' })
+      await sw.waitFor()
+      expect(await sw.isDisabled()).toBe(true)
+      await pop.getByText(reason).waitFor()
+      // the whole reason, on a phone, not cut off
+      expect(await pop.getByText(reason).evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true)
+      expect(await page.getByRole('alertdialog').count()).toBe(0)
+    } finally {
+      await page.close()
+      world.sections = was
+      world.emit('snapshot')
+    }
+  }, 30_000)
+
   for (const [name, opts] of [
     ['phone, dark', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, colorScheme: 'dark' }],
     ['phone, light', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, colorScheme: 'light' }],
@@ -248,9 +273,24 @@ describe.skipIf(!browser)("a place's Autopilot", () => {
       const [menu, s] = [(await pop.boundingBox())!, (await sw.boundingBox())!]
       expect(s.x).toBeGreaterThanOrEqual(menu.x)
       expect(s.x + s.width).toBeLessThanOrEqual(menu.x + menu.width + 0.5)
-      // on: the pill shows, red, and the switch says so; the menu stays open
+      // a tap only asks: what it replaces and spends, and Cancel leaves it off
       await sw.click()
+      const sheet = page.getByRole('alertdialog', { name: /^Turn on Autopilot/ })
+      await sheet.waitFor()
+      expect(await sheet.innerText()).toContain('replaces this one')
+      expect(await sheet.innerText()).toContain('allowance')
+      expect(await pop.count()).toBe(0)
+      await sheet.getByRole('button', { name: 'Cancel' }).click()
+      await sheet.waitFor({ state: 'detached' })
+      expect(await pill.count()).toBe(0)
+      // on: the pill shows, red, and the switch says so
+      await page.getByRole('button', { name: 'Menu', exact: true }).click()
+      await sw.click()
+      await sheet.getByRole('button', { name: 'Turn on' }).click()
       await pill.waitFor()
+      await sheet.waitFor({ state: 'detached' })
+      await page.getByRole('button', { name: 'Menu', exact: true }).click()
+      await sw.waitFor()
       expect(await sw.getAttribute('aria-checked')).toBe('true')
       expect(await pill.innerText()).toBe('Autopilot')
       expect(await pill.getAttribute('aria-label')).toBe('Autopilot is on. Change it')
@@ -562,7 +602,7 @@ describe.skipIf(!browser)('places, calm like Slack', () => {
       await page.getByRole('navigation', { name: 'Places' }).getByRole('button', { name: 'Settings', exact: true }).click()
       const pick = page.getByRole('button', { name: /^Editing: / }).first()
       await pick.waitFor()
-      expect(await pick.locator('[data-icon]').getAttribute('data-icon')).toBe('hash')
+      expect(await pick.locator('[data-icon]').getAttribute('data-icon')).toBe('layers')
       await pick.click()
       const menu = page.getByRole('menu', { name: 'Choices' })
       expect(await menu.getByRole('menuitemradio').evaluateAll((ms) => ms.slice(0, 6).map((m) => m.querySelector('[data-icon]')?.getAttribute('data-icon')))).toEqual(['layers', 'server', 'hash', 'hash', 'server', 'hash'])

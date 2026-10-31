@@ -10,14 +10,15 @@ import { EffortIcon, ic, MenuItem, ModelIcon, ModeIcon, Primary, RestartIcon, Sp
 
 /* ---------- the sheet ---------- */
 
-type Opening = { chat: string; name: string; current?: boolean }
+type Opening = { chat: string; name: string; current?: boolean; typed?: string }
 let opening: Opening | null = null
 const listeners = new Set<() => void>()
 const subscribe = (f: () => void) => (listeners.add(f), () => void listeners.delete(f))
 
-/** open the restart sheet for a coordinator (chat: its place id) or a task's agent (ID/Agent); name: what it is called */
-export function openRestart(chat: string, name: string, current = false) {
-  opening = { chat, name, current }
+/** open the restart sheet for a coordinator (chat: its place id) or a task's agent (ID/Agent); name: what it is called;
+ *  typed: what a /model in its chat said, '' for nothing */
+export function openRestart(chat: string, name: string, current = false, typed?: string) {
+  opening = { chat, name, current, typed }
   listeners.forEach((f) => f())
 }
 
@@ -29,7 +30,7 @@ const close = () => {
 /** the sheet, while one is open: each anew, its picks fresh */
 export function RestartSheet() {
   const o = useSyncExternalStore(subscribe, () => opening)
-  return o ? <Sheet key={o.chat} chat={o.chat} name={o.name} current={o.current} /> : null
+  return o ? <Sheet key={o.chat} chat={o.chat} name={o.name} current={o.current} typed={o.typed} /> : null
 }
 
 /** "Restart agent" in a ⋯ menu */
@@ -53,7 +54,13 @@ const DEFAULT = 'default'
 const modelsOf = (c?: RestartCli) => c?.models ?? []
 const levelsOf = (c: RestartCli | undefined, model?: string) => (model ? modelsOf(c).find((m) => m.id === model)?.efforts : undefined) ?? c?.efforts ?? []
 
-function Sheet({ chat, name, current }: Opening) {
+/** the model a /model named: by its id, its label, or a word of its id ("sonnet") */
+const typedModel = (c: RestartCli | undefined, words: string) => {
+  const raw = words.toLowerCase()
+  return raw ? modelsOf(c).find((m) => m.id.toLowerCase() === raw || m.label.toLowerCase() === raw || m.id.toLowerCase().includes(`-${raw}-`)) : undefined
+}
+
+function Sheet({ chat, name, current, typed }: Opening) {
   const [info, setInfo] = useState<RestartInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -69,13 +76,14 @@ function Sheet({ chat, name, current }: Opening) {
         setInfo(r.info)
         const pick = current ? r.info.on : r.info.want
         setKind(pick.kind)
-        setModel(pick.model ?? '')
-        setEffort(pick.effort ?? '')
+        const cli = r.info.clis.find((c) => c.kind === pick.kind), named = typedModel(cli, typed ?? '')
+        setModel(typed?.toLowerCase() === DEFAULT ? '' : (named?.id ?? pick.model ?? ''))
+        setEffort(named && pick.effort && !levelsOf(cli, named.id).includes(pick.effort) ? '' : (pick.effort ?? ''))
         // Settings hold no speed: what it was started on stays unless changed
         setSpeed(r.info.on.speed ?? '')
       })
       .catch((e: Error) => setError(e.message))
-  }, [chat, current])
+  }, [chat, current, typed])
   const cli = info?.clis.find((c) => c.kind === kind)
   const levels = levelsOf(cli, model)
   const unavailable = !!(model && cli?.models?.length && !cli.models.some((m) => m.id === model))
@@ -114,6 +122,7 @@ function Sheet({ chat, name, current }: Opening) {
     >
       {info ? (
         <div data-restart className="flex flex-col gap-4">
+          {typed !== undefined ? <p className="text-sm text-fg3">Changes this agent only, not the device's default for later agents.{typed && typed.toLowerCase() !== DEFAULT && !typedModel(info.clis.find((c) => c.kind === info.on.kind), typed) ? ` ${typed} isn't one of its models.` : ''}</p> : null}
           <div className="flex flex-col gap-2.5 text-fg phone:gap-1">
             <Line label="Agent">
               <Pick label="Agent" value={cli?.name ?? kind} options={info.clis.map((c) => c.name)} onPick={(n) => pickKind(info.clis.find((c) => c.name === n)!.kind)} />

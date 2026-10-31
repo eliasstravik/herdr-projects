@@ -565,6 +565,13 @@ export const doneNewestFirst = <T extends Pick<Task, 'status' | 'doneAt'>>(ts: T
   [...ts.filter((t) => t.status !== 'done'), ...ts.filter((t) => t.status === 'done').sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0))]
 
 /** a mode's name: "Autopilot" */
+/** the row of a space's Autopilot settings that says why it can't run there */
+export const PILOT_BLOCKED = "Can't run"
+
+/** a typed /model: the words after it ('' for none); anything else: nothing. A CLI saves its own /model as the device's
+ *  default for every later agent, so it never reaches one: it opens Restart, which changes this agent only */
+export const modelCommand = (text: string) => /^\/model(?:\s+([^]*))?$/i.exec(text.trim())?.[1]?.trim() ?? (/^\/model$/i.test(text.trim()) ? '' : undefined)
+
 export const modeName = (mode: Mode) => MODES.find(([m]) => m === mode)?.[1] ?? mode
 
 /** a mode card, Autopilot switched on or off: "Autopilot on · works on its own", "Autopilot off · does what you ask" */
