@@ -24,6 +24,8 @@ function Slot({ held, snap }: { held: HeldNeed; snap: Snapshot }) {
   const { need, gone } = held
   const box = useRef<HTMLDivElement>(null)
   const height = useRef(0)
+  // from a tap on, it doesn't shrink: an answer clears its note before the server says it went
+  const [floor, setFloor] = useState(0)
   useLayoutEffect(() => {
     const el = box.current
     if (gone || !el) return
@@ -37,7 +39,7 @@ function Slot({ held, snap }: { held: HeldNeed; snap: Snapshot }) {
   const machine = place ? machineName(snap.machines, place.machine) : ''
   const off = place?.status === 'off'
   return (
-    <div ref={box} data-need={need.id} data-need-gone={gone ? '' : undefined} style={gone ? { minHeight: height.current } : undefined} className="min-w-0">
+    <div ref={box} data-need={need.id} data-need-gone={gone ? '' : undefined} onClickCapture={() => setFloor(box.current?.offsetHeight ?? 0)} style={{ minHeight: gone ? height.current : floor }} className="min-w-0">
       <div className="flex items-baseline justify-between gap-2 px-1 text-[0.8125rem] text-fg2 phone:text-[0.9375rem]">
         <span data-need-where className="min-w-0 truncate">{[machine, place?.name].filter(Boolean).join(' · ')}{off ? " · can't reach it now" : ''}</span>
         <LinkButton onClick={() => (need.task ? openTask(need.task) : goChat(need.chat))}>Open chat</LinkButton>
