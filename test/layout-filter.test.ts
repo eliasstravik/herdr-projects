@@ -153,7 +153,7 @@ describe.skipIf(!browser)('no chat attention summary and quiet health', () => {
     expect(await page.getByText(/4 need you/).count()).toBe(0)
     // What needs you is counted once, on Needs you, which holds the coordinator's question too; Tasks shows Ready alone.
     expect(await panel.getByLabel(/^\d+ needs you, 0 ready · everywhere$/).count()).toBe(1)
-    expect(await panel.getByLabel(/panel scope$/).count()).toBe(0)
+    expect(await panel.getByLabel('0 needs you, 1 ready · panel scope', { exact: true }).count()).toBe(1)
     await page.close()
   })
 })
