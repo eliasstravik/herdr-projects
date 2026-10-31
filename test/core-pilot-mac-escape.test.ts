@@ -1,5 +1,6 @@
 // Real escape attempts from inside the real Mac profile. macOS only, so GitHub's Linux runners skip it; on a Mac:
 //   TMPDIR=/private/tmp bun test test/core-pilot-mac-escape.test.ts
+// (The scratch folders must be outside /var/folders, the usual TMPDIR, which the profile doesn't allow.)
 // Everything uses a scratch home and repository. It never reads the real login, and it reaches two public hosts.
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -56,6 +57,7 @@ attempt read-host-login cat "$HOST_HOME/.claude/.credentials.json"
 attempt read-through-data-volume cat "/System/Volumes/Data$HOST_HOME/.ssh/id_scratch"
 attempt read-by-inode cat "/.vol/$(stat -f %d "$HOST_HOME/.ssh/id_scratch")/$(stat -f %i "$HOST_HOME/.ssh/id_scratch")"
 attempt hardlink-into-worktree ln "$HOST_HOME/.ssh/id_scratch" "$TASK/stolen"
+attempt hardlink-readable-into-worktree ln "$REPO/README" "$TASK/linked"
 ln -s "$HOST_HOME/.ssh/id_scratch" "$TASK/link" 2>/dev/null
 attempt read-through-symlink cat "$TASK/link"
 attempt write-home touch "$HOST_HOME/written"
@@ -73,11 +75,14 @@ attempt read-git-metadata cat "$REPO/.git/HEAD"
 attempt write-worktree touch "$TASK/written"
 attempt write-private-home touch "$HOME/written"
 attempt write-private-tmp touch "$TMPDIR/written"
+attempt compile-c sh -c 'printf "#include <stdio.h>\nint main(void){return 0;}\n" > "$TMPDIR/c.c" && clang -o "$TMPDIR/c" "$TMPDIR/c.c" && "$TMPDIR/c"'
 attempt run-system-tool /usr/bin/uname -s
 attempt git-status git -C "$TASK" status --short
 `)
-    for (const name of ['read-ssh', 'read-other-home-file', 'list-home', 'read-host-login', 'read-through-data-volume', 'read-by-inode', 'hardlink-into-worktree', 'read-through-symlink', 'write-home', 'write-shared-tmp', 'write-repo', 'write-git-pointer', 'replace-git-pointer', 'move-worktree', 'write-git-config', 'write-git-hook', 'write-worktree-git-metadata']) expect([name, row(rows, name).code === 0]).toEqual([name, false])
+    for (const name of ['read-ssh', 'read-other-home-file', 'list-home', 'read-host-login', 'read-through-data-volume', 'read-by-inode', 'hardlink-into-worktree', 'hardlink-readable-into-worktree', 'read-through-symlink', 'write-home', 'write-shared-tmp', 'write-repo', 'write-git-pointer', 'replace-git-pointer', 'move-worktree', 'write-git-config', 'write-git-hook', 'write-worktree-git-metadata']) expect([name, row(rows, name).code === 0]).toEqual([name, false])
     for (const name of ['read-worktree', 'read-repo', 'read-git-metadata', 'write-worktree', 'write-private-home', 'write-private-tmp', 'run-system-tool', 'git-status']) expect([name, row(rows, name).code]).toEqual([name, 0])
+    const developer = Bun.spawnSync(['/usr/bin/xcode-select', '-p']).stdout.toString().trim()
+    if (['usr/bin/clang', 'Toolchains/XcodeDefault.xctoolchain/usr/bin/clang'].some(path => existsSync(join(developer, path)))) expect([row(rows, 'compile-c').code, row(rows, 'compile-c').out]).toEqual([0, ''])
     expect(existsSync(join(home, 'written'))).toBe(false); expect(existsSync('/private/tmp/shep-mac-escape-written')).toBe(false); expect(existsSync(join(repo, 'written'))).toBe(false)
     expect(existsSync(join(task, 'stolen'))).toBe(false); expect(existsSync(join(task, 'written'))).toBe(true)
     rmSync(join(task, 'written')); rmSync(join(task, 'link'), { force: true })

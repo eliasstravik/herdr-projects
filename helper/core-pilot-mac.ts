@@ -87,10 +87,13 @@ export function pilotMacText(text: string, map: { control: string; gateway: stri
     .replaceAll('/run/shepherdr', map.control)
 }
 // The /usr/bin developer tools are shims that insist on a cache in the shared temporary folder. Writing that cache
-// would steer the host's own tools, so the profile denies it and the real tools go first on PATH.
-const pilotMacPath = (control: string, developer?: string) => `${join(control, 'bin')}:${developer ? `${join(developer, 'usr/bin')}:` : ''}/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`
+// would steer the host's own tools, so the profile denies it and the real tools go first on PATH. Xcode keeps its
+// compilers in its toolchain, not its usr/bin.
+const pilotMacPath = (control: string, developer?: string) => `${join(control, 'bin')}:${developer ? `${join(developer, 'Toolchains/XcodeDefault.xctoolchain/usr/bin')}:${join(developer, 'usr/bin')}:` : ''}/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`
 export function pilotMacEnvironment(input: { state: string; control: string; gateway: string; proxyPort: number; developer?: string }) {
-  return { HOME: input.state, USER: 'agent', TERM: 'xterm-256color', LANG: 'en_US.UTF-8', SHELL: '/bin/zsh', TMPDIR: join(input.state, 'tmp') + '/', CLAUDE_CODE_TMPDIR: join(input.state, 'tmp'),
+  // xcrun would tell a compiler where the SDK is.
+  const sdk = input.developer && ['Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk', 'SDKs/MacOSX.sdk'].map(path => join(input.developer!, path)).find(path => existsSync(path))
+  return { ...(sdk ? { SDKROOT: sdk } : {}), HOME: input.state, USER: 'agent', TERM: 'xterm-256color', LANG: 'en_US.UTF-8', SHELL: '/bin/zsh', TMPDIR: join(input.state, 'tmp') + '/', CLAUDE_CODE_TMPDIR: join(input.state, 'tmp'),
     PATH: pilotMacPath(input.control, input.developer), NODE_USE_ENV_PROXY: '1', SHEPHERDR_COMMAND: join(input.control, 'bin/shepherdr'),
     SHEPHERDR_PILOT_GATEWAY: input.gateway, SHEPHERDR_PILOT_PROXY: `http://127.0.0.1:${input.proxyPort}`, CODEX_HOME: join(input.state, '.codex'), CLAUDE_CONFIG_DIR: join(input.state, '.claude'), DISABLE_AUTOUPDATER: '1',
     // Rust and OpenSSL clients otherwise ask the denied Keychain for trust roots.

@@ -119,7 +119,7 @@ and Codex's own are turned off inside and the outer profile is the boundary. A t
 too: for `xcodebuild`, pass `-IDEPackageSupportDisableManifestSandbox=1 -IDEPackageSupportDisablePluginExecutionSandbox=1`.
 Apple's `trustd` is out of reach because it fetches URLs named in a certificate from outside the sandbox, so Go and
 Swift programs that verify TLS through the system fail. `xcrun` and the `/usr/bin` developer shims can't run, because their shared cache would steer the host's own tools;
-the real tools come first on `PATH`. iOS simulators and full Xcode builds are untested.
+Xcode's own tools and its toolchain's compilers come first on `PATH` instead. iOS simulators and full Xcode builds are untested.
 
 **Codex is only partly proven here.** Its tools ran inside the profile against a local fake endpoint, and a real
 Codex turn answered through the gateway. With a current real model it uses a `codex-code-mode-host` helper, and macOS
@@ -130,7 +130,8 @@ not the Keychain, so a private certificate authority isn't trusted.
 
 **Logins.** Claude Code on a Mac keeps its login in the Keychain, and the profile denies the Keychain. A process outside
 the sandbox writes the host's live login to a file in the private home, the only file Claude falls back to, and
-rewrites it within about a second of any change; Claude rereads it on its next request, with no restart. Only the
+rewrites it within about a second of any change; Claude rereads it on its next request, with no restart. So a running
+agent moves to whichever login the host switches to, where on Linux it stays on the login it started with. Only the
 short-lived access token crosses: no refresh token, other Keychain items or MCP logins. When it nears expiry that
 process runs the host's own `claude auth status`, which refreshes through Claude's own lock and store. The agent can't
 change this file or move its folder. Codex's login file is copied at launch, as on Linux.
@@ -143,10 +144,10 @@ sandbox with each reading on stdin, latest first and one at a time, its output i
 {"rate_limits":{"five_hour":{"used_percentage":42,"resets_at":1793456338},"seven_day":{"used_percentage":17,"resets_at":1793539138}}}
 ```
 
-Only those numbers cross, and an agent can write them, so treat them as a hint. Together with the live login this lets
-a host tool that rotates logins keep working while only sandboxed agents run.
+Only those numbers cross, and an agent can write them, so treat them as a hint.
 
-To rerun the escape attempts on a Mac: `TMPDIR=/private/tmp bun test test/core-pilot-mac-escape.test.ts`.
+To rerun the escape attempts on a Mac: `TMPDIR=/private/tmp bun test test/core-pilot-mac-escape.test.ts`. The scratch
+folders must be outside `/var/folders`, the usual `TMPDIR`, which the profile doesn't allow.
 
 Access and limits are behind an expansion:
 

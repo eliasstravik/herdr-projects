@@ -54,7 +54,7 @@ test('fixed launch paths become their real locations', () => {
     .toBe('/real/control/bin/shepherdr /real/control/settings.json /real/gateway.sock /real/bun /real/claude')
   const env = pilotMacEnvironment({ state: '/real/home', control: '/real/control', gateway: '/real/gateway.sock', proxyPort: 4242, developer: '/dev/tools' })
   expect(env.HOME).toBe('/real/home'); expect(env.CLAUDE_CONFIG_DIR).toBe('/real/home/.claude'); expect(env.SHEPHERDR_PILOT_PROXY).toBe('http://127.0.0.1:4242')
-  expect(env.PATH.split(':').slice(0, 2)).toEqual(['/real/control/bin', '/dev/tools/usr/bin'])
+  expect(env.PATH.split(':').slice(0, 3)).toEqual(['/real/control/bin', '/dev/tools/Toolchains/XcodeDefault.xctoolchain/usr/bin', '/dev/tools/usr/bin'])
   expect(JSON.stringify(env)).not.toContain('CREDENTIAL')
 })
 test('only the live access token crosses into the sandbox', () => {
