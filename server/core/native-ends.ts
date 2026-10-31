@@ -48,7 +48,7 @@ export class NativeEnds {
       if (end.use) {
         const call = calls?.get(end.use)
         // Claude's question and plan tools run alone, and it fills in their input after the call.
-        if (!call || call.spent || call.tool !== card.tool || call.hash !== card.hash && !card.native) continue
+        if (!call || call.spent || call.sub !== card.sub || call.tool !== card.tool || call.hash !== card.hash && !card.native) continue
         call.spent = true
         return end.reason
       }

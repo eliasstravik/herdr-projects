@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { CoreSource } from '../server/core/source.ts'
 import { toolHash } from '../server/core/envelope.ts'
+import { pilotHook } from '../server/core/pilot-hook.ts'
 import { hookEnd, logEnd, NativeEnds } from '../server/core/native-ends.ts'
 import { ClaudeReader } from '../server/common/readers/claude.ts'
 import { pushPayload } from '../shared/alerts.ts'
@@ -139,6 +140,25 @@ test('a helper’s tool result closes its card though its hook says nothing abou
     f.hook({ event: 'PostToolUse', tool: 'Bash', use: 'call', agent: 'helper' })
     await closed(f, id, reply, 'Answered in the terminal')
   } finally { f.close() }
+})
+
+test('a helper finishing the same command leaves the parent’s card open, and the other way round', async () => {
+  const f = fixture()
+  try {
+    f.called('parent')
+    f.hook({ event: 'PreToolUse', tool: 'Bash', use: 'helper', input: toolHash(input), agent: 'one', at: Date.now() - 1 })
+    const { id, reply } = f.ask()
+    f.hook({ event: 'PostToolUse', tool: 'Bash', use: 'helper', agent: 'one' })
+    expect(f.open().map(item => item.id)).toEqual([id])
+    f.hook({ event: 'PostToolUse', tool: 'Bash', use: 'parent' })
+    await closed(f, id, reply, 'Answered in the terminal')
+  } finally { f.close() }
+})
+
+test('an isolated agent’s hooks keep what ties a result to its card', () => {
+  expect(pilotHook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'call', turn_id: 'turn', tool_hash: toolHash(input) }, randomUUID(), 'codex', '/home', '/captures'))
+    .toMatchObject({ use: 'call', turn: 'turn', input: toolHash(input), tool: 'Bash' })
+  expect(pilotHook({ hook_event_name: 'PermissionRequest', prompt_id: 'prompt', tool_input: input }, randomUUID(), 'claude', '/home', '/captures')).toMatchObject({ turn: 'prompt', input: toolHash(input) })
 })
 
 test('a new prompt ends the turn the card was in, on Codex too', async () => {
