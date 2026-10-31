@@ -23,10 +23,12 @@ Every agent, coordinator or task agent, gets the same chat.
 - Claude Code's own question tool and plan approval are cards, never permissions: a question is a choice card with an
   Other answer, a plan is Plan to approve (stop asking, keep asking, or change the plan). The answer goes back to Claude
   through its permission hook, so nothing is typed into its screen. Handled in the terminal instead, the card closes.
-- A slash command you type (`/clear`, `/new`, `/compact`, `/model sonnet`, a custom one) goes into the agent's CLI as
+- `/model` (with or without a name) never reaches the CLI, which would save it as the device's default for every later
+  agent. It opens Restart agent instead, with the model you named picked, and that changes this agent only.
+- Any other slash command you type (`/clear`, `/new`, `/compact`, a custom one) goes into the agent's CLI as
   you typed it, once its turn is over, and the CLI runs it. The chat shows it as you typed it, and what the CLI printed
   as its answer. After `/clear` or `/new` a quiet New session line starts the new session, whose log the chat reads
-  from then on. A menu or view the command opens in the terminal (`/model` alone, `/usage`) comes into the chat and is
+  from then on. A menu or view the command opens in the terminal (`/usage`) comes into the chat and is
   closed, so your next message goes in; one that asks a question (Codex's `/new`: where should the new conversation
   run?) is a card to answer, and what you write meanwhile waits for it. A command the CLI didn't run fails with Retry.
 - Every chat shows what its agent does, calmly and in plain words (Claude Code and Codex, read from their logs). Just

@@ -9,7 +9,7 @@ import { basename, join } from 'node:path'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { Emitter, type Source, type SourceEvents } from '../source.ts'
-import { nameProblem, slugify, type Action, type AddSpace, type Artifact, type Chat, type Folders, type Message, type Question, type Snapshot, type Status, type Task } from '../../shared/types.ts'
+import { modelCommand, nameProblem, slugify, type Action, type AddSpace, type Artifact, type Chat, type Folders, type Message, type Question, type Snapshot, type Status, type Task } from '../../shared/types.ts'
 import { CoreSession } from './session.ts'
 import { CoreStore } from './store.ts'
 import { CoreFiles } from './files.ts'
@@ -398,6 +398,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
       case 'plugin': return this.plugins.act(action)
       case 'send': {
         if (!action.text.trim() && !action.attachments?.length) return {}
+        if (!action.reply && modelCommand(action.text) !== undefined) throw new Error('/model would change every later agent on this device. Use Restart agent to change this one')
         const run = async () => {
           const task = this.tasks.forChat(action.chat)
           const space = this.space(action.chat) || task && this.space(task.place)

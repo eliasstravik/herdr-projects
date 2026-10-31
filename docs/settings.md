@@ -7,12 +7,16 @@
   an id or alias, or default for the CLI's own; effort: default, lowest, low, medium, high, xhigh or max, each CLI
   taking it its own way) and tasks' backup agent, when Done tasks archive themselves, Autopilot's heartbeat (its trigger) and checklist, the time zone of every schedule, each machine's limits, the idle browser, Notifications and Voice. Notifications gathers scoped delivery rules and device enrolment; device delivery is Everywhere. Space menus still offer Notify. Its
   defaults are set Everywhere, for a machine or for a space (`shepherdr set <key> <value> [--machine | --space NAME]`, from any machine);
-  the most specific one set wins. Editing above the content names the scope; its searchable hierarchy handles many machines and spaces. Values set here are highlighted, with their inherited value, source and Reset beside them. And, kept on each device, its Appearance: System (the device's own light
+  the most specific one set wins. Settings always opens on Everywhere, whichever space it came from. Editing above the content names the scope; its searchable hierarchy handles many machines and spaces, and each row on Everywhere offers **For this space only** for the space it came from, or says that space sets its own. Values set here are highlighted, with their inherited value, source and Reset beside them. And, kept on each device, its Appearance: System (the device's own light
   or dark), Light or Dark, set before the first paint, with the browser's bar and artifacts following it. A phone
   lists the sections in groups, as iOS's Settings does, and opens one over the list; a wider screen keeps the list
   down its side.
+- Reviewer and Backup default to a CLI that is installed and signed in, checked on each machine with the CLI's own
+  status command every 15 minutes: the other CLI than the task agent's where it works. A reviewer falls back on the task
+  agent's CLI. A backup doesn't, because a task never fails over to the CLI it runs on, so with no other CLI Backup is
+  off and says so. A saved choice stays as it is, and its row warns where that CLI is missing or signed out.
 - Secrets (How Shepherdr runs) holds the keys, tokens and passwords agents use, by name: add, replace and remove them
-  in masked boxes, Everywhere, for a machine or for a space; the most specific one wins. An agent that needs one asks
+  in masked boxes, Everywhere (or tick For this space only), for a machine or for a space; the most specific one wins. An agent that needs one asks
   with `shepherdr secret ask NAME --why "…"`: its chat shows a masked box, and the agent is told by name once it is
   kept. Agents run commands with them (`shepherdr secret run NAME -- <command>`, which masks them in what the command prints) or write them to a file git ignores
   (`shepherdr secret env NAME --file .env`), and never see them in a chat, a terminal or a log. All of them are kept

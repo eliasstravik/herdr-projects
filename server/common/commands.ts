@@ -1,7 +1,7 @@
-// A slash command you type in a chat (/clear, /model sonnet, /compact, a custom /review) goes into the agent's CLI as
+// A slash command you type in a chat (/clear, /compact, a custom /review) goes into the agent's CLI as
 // typed, between turns, so the CLI itself runs it. Shepherdr then follows what it did: a new session's log after /clear
 // or /new, and a menu or view it opened in the terminal, which waits for keys there and would take your next message:
-// what it showed comes into the chat, and it is closed.
+// what it showed comes into the chat, and it is closed. /model is the exception: it opens Restart (modelCommand).
 
 /** a slash command as you would type it at the CLI's prompt: "/name" (or "/plugin:name"), then its arguments; a path
  *  ("/home/me/x is broken") is not one */

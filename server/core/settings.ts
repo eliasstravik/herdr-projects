@@ -8,6 +8,7 @@ import { PILOT_SETTINGS, corePilotConfig } from './pilot-settings.ts'
 import { pilotHosts } from './pilot-policy.ts'
 import type { AgentKind, CoreSpace } from './model.ts'
 import { NOTIFY, NOTIFY_DEFAULT, NOTIFY_KEY } from '../../shared/alerts.ts'
+import { MACHINE_CHECK, parseMachineCheck, sameCheck, type CliState, type MachineCheck } from './machine-check.ts'
 
 export type Role = 'coordinator' | 'task' | 'reviewer' | 'backup'
 export const CLI_NAME = { claude: 'Claude Code', codex: 'Codex' }
@@ -59,6 +60,9 @@ const CATALOG: SettingSection[] = [
 const SECTION_ORDER = ['Private instructions', 'How tasks work', 'Agents', 'Tasks', 'Autopilot', 'Browser', 'Notify', 'Machine', 'Time zone', 'Alerts and voice']
 CATALOG.sort((a, b) => SECTION_ORDER.indexOf(a.name) - SECTION_ORDER.indexOf(b.name))
 const rows = CATALOG.flatMap(section => section.rows)
+/** Settings whose default is a CLI the machine can really use, not a fixed name. */
+const CHOSEN = new Set(['reviewer.agent', 'task.fallback'])
+const CHECK_MS = 15 * 60_000
 
 /** Explicit store + machine identity; importing this module never reads the live installation. */
 export class CoreSettings {
@@ -72,12 +76,30 @@ export class CoreSettings {
     if (!space) throw new Error('No such settings level')
     return [space.id, `m:${space.machine}`, 'all']
   }
-  pick(key: string, level = 'all') {
+  pick(key: string, level = 'all'): { value: string; level: string } {
     for (const at of this.chain(level)) {
       const value = this.store.get<string>('settings', `${at}\0${key}`)
       if (value !== undefined) return { value, level: at }
     }
-    return { value: rows.find(row => row.key === key)?.value ?? '', level: 'default' }
+    return { value: this.fallback(key, level), level: 'default' }
+  }
+  private fallback(key: string, level: string): string {
+    return CHOSEN.has(key) ? this.usableDefault(key, level) : rows.find(row => row.key === key)?.value ?? ''
+  }
+  /** The machines a level reaches: one, or every machine with a space for Everywhere. */
+  private machinesAt(level: string) { return [...new Set(level === 'all' ? this.spaces().map(space => space.machine) : [this.machine(level)!])] }
+  private cliAt(kind: AgentKind, machines: string[]): CliState | undefined {
+    const states = machines.map(machine => this.store.get<MachineCheck>('machine-check', machine)?.cli[kind])
+    return states.find(state => state && state !== 'ready') ?? (states.length && states.every(Boolean) ? 'ready' : undefined)
+  }
+  /** Another CLI than the task agent's, for fresh eyes and for a backup when its provider cuts out. A reviewer may fall
+   *  back on the task agent's own CLI; a backup can't, as a task never fails over to the CLI it runs on. Not yet checked
+   *  counts as usable, so a machine out of reach changes nothing. */
+  private usableDefault(key: string, level: string) {
+    const own = kindOf(this.get('task.agent', level)) ?? 'claude', other: AgentKind = own === 'claude' ? 'codex' : 'claude', machines = this.machinesAt(level)
+    const order = key === 'task.fallback' ? [other] : [other, own]
+    const pick = order.find(kind => this.cliAt(kind, machines) === 'ready') ?? order.find(kind => !this.cliAt(kind, machines))
+    return pick ? names[pick] : key === 'task.fallback' ? 'off' : names[other]
   }
   get(key: string, level = 'all') { return this.pick(key, level).value }
   set(key: string, value: string | null, level = 'all') {
@@ -182,12 +204,35 @@ export class CoreSettings {
   clis(level: string): RestartCli[] {
     return (['claude', 'codex'] as const).map(kind => ({ kind, name: names[kind], ...this.catalog(kind, level), speeds: SPEEDS }))
   }
+  /** Why a chosen reviewer or backup can't work: which CLI, and where. */
+  private cliWarning(key: string, level: string) {
+    const value = this.get(key, level), kind = kindOf(value), machines = this.machinesAt(level), what = key === 'reviewer.agent' ? 'Reviews' : 'A backup'
+    if (key === 'task.fallback' && value === 'off') return this.pick(key, level).level === 'default' ? 'No other signed-in CLI, so tasks have no backup.' : undefined
+    if (!kind) return undefined
+    const bad = machines.flatMap(machine => { const state = this.cliAt(kind, [machine]); return state && state !== 'ready' ? [{ machine, state }] : [] })
+    if (!bad.length) return undefined
+    const lines = bad.map(({ machine, state }) => `${names[kind]} is ${state === 'missing' ? 'not installed' : 'not signed in'} on ${this.machineName(machine) || 'this machine'}.`)
+    return `${lines.join('\n')}\n${what} can't run there until that is fixed, or you choose another agent.`
+  }
+  /** Why Autopilot can't start in a space, by what launch needs; nothing where it can, or before its machine is checked. */
+  pilotBlock(level: string): string | undefined {
+    const space = this.spaces().find(item => item.id === level)
+    if (!space) return undefined
+    if (space.home) return "Autopilot needs a repository space. A home space can't run it."
+    const check = this.store.get<MachineCheck>('machine-check', space.machine), where = this.machineName(space.machine) || 'this machine'
+    if (check?.platform && check.platform !== 'Linux') return `Autopilot needs Linux. ${where} runs ${check.platform === 'Darwin' ? 'macOS' : check.platform}.`
+    if (check?.sandbox === 'missing') return `Autopilot needs bubblewrap, which is not installed on ${where}.`
+    if (check?.sandbox === 'blocked') return `Autopilot's sandbox is blocked on ${where}: its user namespaces are off.`
+    const kind = this.agent('autopilot', level).kind, state = check?.cli[kind]
+    if (state && state !== 'ready') return `Autopilot runs on ${names[kind]}, which is ${state === 'missing' ? 'not installed' : 'not signed in'} on ${where}.`
+  }
   sections(devices: string[] = [], pushWarnings: string[] = []): SettingSection[] {
     const levels = ['all', ...new Set(this.spaces().map(space => `m:${space.machine}`)), ...this.spaces().map(space => space.id)]
     return levels.flatMap(level => CATALOG.filter(section => (!section.global || level === 'all') && (level === 'all' || section.name !== 'Time zone') && (section.name !== 'Machine' || level === 'all' || level.startsWith('m:'))).map(section => ({ ...section, level, machine: this.machine(level), rows: section.rows.map(row => {
       if (row.key === 'alerts') return { ...row, value: devices.length ? devices.join(', ') : 'No device yet', ...(pushWarnings.length ? { warn: `${pushWarnings.length} device${pushWarnings.length === 1 ? '' : 's'} could not receive the last alert.\n${pushWarnings.slice(0, 3).join('\n')}` } : {}) }
-      const picked = this.pick(row.key, level), inherited = this.chain(level).slice(1).map(at => this.pick(row.key, at)).find(value => value.level !== 'default') ?? { value: row.value, level: 'default' }
+      const picked = this.pick(row.key, level), inherited = this.chain(level).slice(1).map(at => this.pick(row.key, at)).find(value => value.level !== 'default') ?? { value: this.fallback(row.key, level), level: 'default' }
       let dynamic = { ...row }
+      if (CHOSEN.has(row.key)) { const warn = this.cliWarning(row.key, level); if (warn) dynamic.warn = warn }
       let value = picked.value
       if (/\.(model|effort)$/.test(row.key)) {
         const role = row.key.split('.')[0] as Role | 'autopilot', config = this.agent(role, level), catalog = this.catalog(config.kind, level)
@@ -215,6 +260,7 @@ export class CoreSettings {
   }
   /** Query the CLI on its own machine, through core only. No app startup dependency. */
   probe(machine: string) {
+    this.check(machine)
     if (this.probing.has(machine)) return
     const saved = this.store.get<CliModels>('models', `${machine}:codex`)
     if (saved?.at && Date.now() - saved.at < 6 * 3_600_000) return
@@ -223,5 +269,16 @@ export class CoreSettings {
       const catalog = parseCodex(bytes.toString('utf8'))
       if (catalog) { this.store.set('models', `${machine}:codex`, { ...catalog, at: Date.now() }); this.changed() }
     }).catch(() => {}).finally(() => this.probing.delete(machine))
+  }
+  /** What the machine can run: a failed check keeps the last one, and never counts against a CLI. */
+  private check(machine: string) {
+    const key = `check:${machine}`, saved = this.store.get<MachineCheck>('machine-check', machine)
+    if (this.probing.has(key) || saved && Date.now() - saved.at < CHECK_MS) return
+    this.probing.add(key)
+    void this.files.exec(machine, ['sh', '-c', MACHINE_CHECK], undefined, undefined, 30).then(bytes => {
+      const next = parseMachineCheck(bytes.toString('utf8'))
+      this.store.set('machine-check', machine, next)
+      if (!saved || !sameCheck(saved, next)) this.changed()
+    }).catch(() => {}).finally(() => this.probing.delete(key))
   }
 }
