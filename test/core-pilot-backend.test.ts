@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { pilotCoreBackend } from '../helper/core-pilot-backend.ts'
 import { pilotHook } from '../server/core/pilot-hook.ts'
-import type { MailCredential } from '../server/core/envelope.ts'
+import { toolHash, type MailCredential } from '../server/core/envelope.ts'
 
 test('contained backend fixes its endpoint credential and cwd outside caller input', async () => {
   const credential = { version: 1, server: 'server', grant: 'grant', machine: 'machine', key: 'private' } satisfies MailCredential
@@ -32,6 +32,15 @@ test('contained hook mapping accepts only the chosen provider tree and strips ca
   expect(pilotHook({ hook_event_name: 'Stop' }, id, 'codex', '/home/agent', '/private/captures', 101).transcript).toBeUndefined()
   for (const path of ['/etc/secret.jsonl', '/home/agent-other/.claude/projects/x.jsonl', '/home/agent/.claude/projects/../../secret.jsonl', '/home/agent/.claude/projects//x.jsonl', '/home/agent/.codex/sessions/x.jsonl', '/home/agent/.claude/projects/x.jsonl\n']) expect(() => pilotHook({ ...input, transcript_path: path }, id, 'claude', '/home/agent', '/private/captures')).toThrow()
   expect(() => pilotHook({ hook_event_name: 'Unknown' }, id, 'claude', '/home/agent', '/private/captures')).toThrow()
+})
+
+test('ordinary hooks keep the ids that tie a result to its card, never the tool input', async () => {
+  const calls: unknown[][] = [], input = { command: 'secret'.repeat(100) }
+  const backend = pilotCoreBackend('/private/core.sock', { version: 1, server: 'server', grant: 'grant', machine: 'machine', key: 'private' }, '/own', async (...args) => { calls.push(args); return {} })
+  await backend.hook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'call', turn_id: 'turn', tool_input: input }, randomUUID(), new AbortController().signal)
+  const sent = (calls[0]![3] as { input: Record<string, unknown> }).input
+  expect(sent).toMatchObject({ tool_use_id: 'call', turn_id: 'turn', tool_hash: toolHash(input) })
+  expect(sent.tool_input).toBeUndefined()
 })
 
 test('cancelling a published hook sends a separate authenticated deny tombstone', async () => {

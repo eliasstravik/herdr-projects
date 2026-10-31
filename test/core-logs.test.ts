@@ -204,3 +204,24 @@ test('native runtime observations preserve launch policy and reject historical o
     expect(faults).toEqual([])
   } finally { logs.stop(); store.close(); rmSync(home, { recursive: true, force: true }) }
 })
+
+test('an agent with a card open is read first, however many agents wait their turn', async () => {
+  const list = ['a', 'b', 'c', 'd', 'e', 'f'].map(chat => ({ chat, machine: 'machine', permission: chat === 'f' ? 'card' : undefined }))
+  const logs = new CoreLogs({ all: () => list } as unknown as CoreAgents, {} as CoreFiles, {} as CoreStore, () => {}, () => {})
+  const read: string[] = []
+  ;(logs as unknown as { read(agent: { chat: string }): Promise<void> }).read = async agent => { read.push(agent.chat) }
+  await logs.poll()
+  expect(read[0]).toBe('f')
+  expect(read).toHaveLength(4)
+})
+
+test('many open cards take turns, and the agents without one still get read', async () => {
+  const list = Array.from({ length: 38 }, (_, at) => ({ chat: `a${at}`, machine: 'machine', permission: [0, 1, 2, 3, 37].includes(at) ? 'card' : undefined }))
+  const logs = new CoreLogs({ all: () => list } as unknown as CoreAgents, {} as CoreFiles, {} as CoreStore, () => {}, () => {})
+  const read = new Set<string>()
+  ;(logs as unknown as { read(agent: { chat: string }): Promise<void> }).read = async agent => { read.add(agent.chat) }
+  for (let poll = 0; poll < 4; poll++) await logs.poll()
+  expect(list.filter(agent => agent.permission && !read.has(agent.chat))).toEqual([])
+  for (let poll = 0; poll < 28; poll++) await logs.poll()
+  expect(read.size).toBe(38)
+})

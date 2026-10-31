@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { CoreSource } from '../server/core/source.ts'
 import { nativeAnswer, nativeCards, type PermissionAnswer } from '../server/core/native-asks.ts'
+import { toolHash } from '../server/core/envelope.ts'
 import type { AgentHook, CoreAgent } from '../server/core/model.ts'
 import type { Grant, MailRequest } from '../server/core/mailbox.ts'
 
@@ -140,12 +141,13 @@ test('an answer in the terminal closes the card, and earlier hooks do not', asyn
     const at = Date.now()
     const { reply } = f.ask('ExitPlanMode', plan, at)
     const hook = (event: AgentHook) => f.source.agents.hook(f.source.store.get<CoreAgent>('agent', chat)!, event)
-    hook({ id: 'old', event: 'PostToolUse', tool: 'ExitPlanMode', at: at - 1 })
-    hook({ id: 'other', event: 'PostToolUse', tool: 'Bash', at: at + 1 })
+    hook({ id: 'called', event: 'PreToolUse', tool: 'ExitPlanMode', use: 'plan-call', input: toolHash(plan), at: at - 2 })
+    hook({ id: 'old', event: 'PostToolUse', tool: 'ExitPlanMode', use: 'plan-call', at: at - 1 })
+    hook({ id: 'other', event: 'PostToolUse', tool: 'Bash', use: 'other-call', at: at + 1 })
     expect(open(f)).toHaveLength(1)
-    hook({ id: 'done', event: 'PostToolUse', tool: 'ExitPlanMode', at: at + 2 })
+    hook({ id: 'done', event: 'PostToolUse', tool: 'ExitPlanMode', use: 'plan-call', at: at + 2 })
     expect((await reply).allow).toBe(false)
     const card = f.source.chat(chat)!.messages.find(message => message.question)!.question!
-    expect(card.closed).toBe('Handled in the terminal')
+    expect(card.closed).toBe('Answered in the terminal')
   } finally { f.close() }
 })

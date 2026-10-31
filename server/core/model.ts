@@ -40,8 +40,6 @@ export interface CoreAgent {
   permission?: string
   /** The native permission mode it last ran on outside plan mode. */
   permissionMode?: string
-  /** When a native question or plan last ended by hook: answered or dismissed in the terminal if its card is still open. */
-  nativeEnded?: number
   /** App-private contained launch metadata. Labels and request bodies never establish this ownership. */
   pilot?: { run: string; home: string; captures: string; pending?: boolean }
 }
@@ -57,4 +55,10 @@ export interface AgentHook {
   tool?: string
   /** the native permission mode */
   mode?: string
+  /** the CLI's id of this tool call */
+  use?: string
+  /** toolHash of the tool call's input */
+  input?: string
+  /** the CLI's id of this turn */
+  turn?: string
 }
