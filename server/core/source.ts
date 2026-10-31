@@ -25,6 +25,7 @@ import { CoreCommands } from './commands.ts'
 import { CoreTaskNews } from './news.ts'
 import { CoreQuestions } from './questions.ts'
 import { CoreScreens } from './screens.ts'
+import { CoreFailedStarts } from './failed-starts.ts'
 import { terminalBridge } from './terminal.ts'
 import { CoreError, Refusal } from './client.ts'
 import { toolHash } from './envelope.ts'
@@ -79,6 +80,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
   readonly tasks: CoreTasks
   readonly questions: CoreQuestions
   readonly screens: CoreScreens
+  readonly failedStarts: CoreFailedStarts
   readonly settings: CoreSettings
   readonly unread: CoreUnread
   readonly cards: CoreCards
@@ -130,6 +132,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     this.pilots = new CorePilotMail(this)
     this.questions = new CoreQuestions(this)
     this.screens = new CoreScreens(this)
+    this.failedStarts = new CoreFailedStarts(this)
     this.cards = new CoreCards(this)
     this.secrets = new CoreSecrets(this)
     this.providerRetries = new CoreProviderRetries(this)
@@ -168,7 +171,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
       if (agent.state === 'blocked' && !agent.permission) agent.state = 'working'
       this.store.set('agent', agent.chat, agent)
     }
-    await this.core.start(); await this.refresh(); this.human = await humanName(this.config.home, async () => (await this.files.exec(this.local.id, ['git', 'config', '--global', 'user.name'], undefined, undefined, 3)).toString('utf8')); this.tasks.recoverProviderFallbacks(); this.logs.start(); this.screens.start(); this.automations.start(); this.health.start(); this.github.start()
+    await this.core.start(); await this.refresh(); this.human = await humanName(this.config.home, async () => (await this.files.exec(this.local.id, ['git', 'config', '--global', 'user.name'], undefined, undefined, 3)).toString('utf8')); this.tasks.recoverProviderFallbacks(); this.logs.start(); this.screens.start(); this.failedStarts.start(); this.automations.start(); this.health.start(); this.github.start()
     this.recovery = setInterval(() => {
       if (!this.quiescing) void this.pilots.lifecycle.tick().then(() => this.pilots.completion.tick()).catch(error => this.faults.set('pilot-lifecycle', error.message))
       if (!this.quiescing) { this.pilots.wakes.tick(); this.news.deliver() }
@@ -783,6 +786,6 @@ Use hc for starting, messaging and waiting on core child agents. Never use a web
   async artifactThumb(id: string, dark: boolean) { if (!this.plugins.has('artifacts')) return null; try { return this.artifacts.thumb(id, dark) } catch { return null } }
   async upload(chat: string, name: string, data: Uint8Array) { return this.chats.upload(chat, name, data) }
   async attachment(chat: string, path: string) { return this.chats.attachment(chat, path) }
-  async drain() { this.quiescing = true; this.screens.stop(); this.pluginUpdates?.stop(); await this.pluginUpdates?.drain(); this.plugins.stop(); this.voices.stop(); this.automations.stop(); this.github.stop(); this.health.stop(); await this.github.drain(); await this.health.drain(); await this.automations.drain(); await this.pilots.usage.drain(); await this.pilots.lifecycle.drain(); await this.pilots.completion.drain(); return this.tasks.drain() }
-  stop() { clearInterval(this.recovery); this.screens.stop(); this.pluginUpdates?.stop(); this.plugins.stop(); this.voices.stop(); this.health.stop(); this.automations.stop(); this.github.stop(); this.logs.stop(); this.browsers.stop(); this.core.stop() }
+  async drain() { this.quiescing = true; this.screens.stop(); this.failedStarts.stop(); this.pluginUpdates?.stop(); await this.pluginUpdates?.drain(); this.plugins.stop(); this.voices.stop(); this.automations.stop(); this.github.stop(); this.health.stop(); await this.github.drain(); await this.health.drain(); await this.automations.drain(); await this.pilots.usage.drain(); await this.pilots.lifecycle.drain(); await this.pilots.completion.drain(); return this.tasks.drain() }
+  stop() { clearInterval(this.recovery); this.screens.stop(); this.failedStarts.stop(); this.pluginUpdates?.stop(); this.plugins.stop(); this.voices.stop(); this.health.stop(); this.automations.stop(); this.github.stop(); this.logs.stop(); this.browsers.stop(); this.core.stop() }
 }

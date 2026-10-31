@@ -357,6 +357,15 @@ test('an archived queued task never starts in the queue scheduler', async () => 
   })
 })
 
+test('a queued task stays in its queue when its agent says todo', async () => {
+  await withTask(async ({ tasks, task, grant }) => {
+    const store = (tasks as unknown as { source: CoreSource }).source.store
+    store.set('task', task.id, { ...task, workflow: 'queued', after: ['EX-9'] })
+    await expect(tasks.cli(grant, ['todo', task.id])).rejects.toThrow('wait for it')
+    expect(tasks.get(task.id)).toMatchObject({ workflow: 'queued', after: ['EX-9'] })
+  })
+})
+
 test('task show reports current workflow instead of its initial cached Working text', async () => {
   await withTask(async ({ tasks, task, grant }) => {
     await tasks.cli(grant, ['todo', task.id])
