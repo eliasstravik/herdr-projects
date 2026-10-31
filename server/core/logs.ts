@@ -35,9 +35,11 @@ export class CoreLogs {
   async poll() {
     const jobs: Promise<void>[] = []
     const agents = this.agents.all()
-    const first = this.next++ % Math.max(1, agents.length)
-    // Each poll reads only so many: an agent with a card open goes first, so a card it moved past closes within seconds.
-    for (const agent of [...agents.slice(first), ...agents.slice(0, first)].sort((a, b) => Number(!!b.permission) - Number(!!a.permission))) {
+    const turn = this.next++, spin = (list: CoreAgent[]) => { const first = turn % Math.max(1, list.length); return [...list.slice(first), ...list.slice(0, first)] }
+    // Each poll reads only so many: agents with a card open take turns first, so a card closes within seconds, and every
+    // other read stays with the rest, so many cards leave no agent unread.
+    const waiting = spin(agents.filter(agent => agent.permission)), rest = spin(agents.filter(agent => !agent.permission))
+    for (const agent of [...waiting.flatMap((agent, at) => at < rest.length ? [agent, rest[at]] : [agent]), ...rest.slice(waiting.length)]) {
       if (this.reading.has(agent.chat) || (this.machines.get(agent.machine) ?? 0) >= 4) continue
       this.machines.set(agent.machine, (this.machines.get(agent.machine) ?? 0) + 1)
       jobs.push(this.claim(agent).finally(() => this.machines.set(agent.machine, (this.machines.get(agent.machine) ?? 1) - 1)))
