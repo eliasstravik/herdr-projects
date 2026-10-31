@@ -6,7 +6,7 @@
 
 <p align="center"><a href="https://github.com/eliasstravik/shepherdr/blob/main/assets/shepherdr-launch.mp4"><img src="assets/shepherdr-launch.webp" width="88%" alt="Animation: Shepherdr on a desktop and a phone; you ask the gtm space's coordinator, it adds two tasks that run in parallel, each in its own worktree, reviewed and merged; then a voice call with the home space asks what needs you today" /></a></p>
 
-<p align="center"><a href="https://github.com/eliasstravik/shepherdr/blob/main/docs/guide.md#install"><img src="assets/buttons/install-shepherdr.svg" alt="Install Shepherdr" /></a></p>
+<p align="center"><a href="https://github.com/eliasstravik/shepherdr/blob/main/docs/core/start.md#requirements-and-installation"><img src="assets/buttons/install-shepherdr.svg" alt="Install Shepherdr" /></a></p>
 
 <p align="center"><sub>✓&nbsp;Free,&nbsp;MIT&nbsp;licensed &nbsp; ✓&nbsp;Runs&nbsp;on&nbsp;your&nbsp;machines,&nbsp;private&nbsp;on&nbsp;your&nbsp;tailnet &nbsp; ✓&nbsp;macOS&nbsp;and&nbsp;Linux,&nbsp;herdr-core&nbsp;0.1.14</sub></p>
 
@@ -48,7 +48,7 @@ Write what needs doing to a space's coordinator: it makes it a task or several, 
 
 ### 💬 Know when a task needs an answer
 
-An agent that asks you something, wants a permission or a plan approved shows under `Needs you`, and its question comes as a card you answer with a tap, from the chat or straight from an [alert](docs/guide.md#install-it-as-an-app-with-alerts) on your lock screen. Each task's chat also shows its live terminal, files, diff, pull request and a [shared browser](docs/browser.md) you can take over. Reports and draft screens come as [artifacts](docs/artifacts.md) you mark up beside the chat, and you can call a coordinator by [voice](docs/guide.md#voice).
+An agent that asks you something, wants a permission or a plan approved shows under `Needs you`, and its question comes as a card you answer with a tap, from the chat or straight from an [alert](docs/get-started.md) on your lock screen. Each task's chat also shows its live terminal, files, diff, pull request and a [shared browser](docs/browser.md) you can take over. Reports and draft screens come as [artifacts](docs/artifacts.md) you mark up beside the chat, and you can call a coordinator by [voice](docs/get-started.md).
 
 ## Open Shepherdr in three steps
 
@@ -60,7 +60,7 @@ An agent that asks you something, wants a permission or a plan approved shows un
 </tr>
 </table>
 
-[The guide](docs/guide.md) has the full install, every screen and setting, and how it all works.
+[The docs](docs/) have the full install, every screen and setting, and how it all works.
 
 ## Get everything included, free
 
@@ -69,7 +69,7 @@ An agent that asks you something, wants a permission or a plan approved shows un
 <td align="center" valign="top"><sub>For developers who run coding agents on herdr-core on macOS or Linux</sub><br /><h2>Free</h2><div align="left">&nbsp;&nbsp;&nbsp;✓&nbsp; A coordinator for every space that turns what you write into tasks<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Every task on its own worktree and branch, with its own agent<br />&nbsp;&nbsp;&nbsp;✓&nbsp; A review by fresh eyes before it merges, through a pull request on GitHub<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Cards, alerts and voice calls on your phone, tablet or desktop<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Every machine you added to herdr-core, from one app<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Your own plugins and themes, kept through every update<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Autopilot, automations, artifacts, a shared browser and split view</div></td>
 </tr>
 <tr>
-<td align="center"><a href="https://github.com/eliasstravik/shepherdr/blob/main/docs/guide.md#install"><img src="assets/buttons/install-shepherdr.svg" alt="Install Shepherdr" /></a></td>
+<td align="center"><a href="https://github.com/eliasstravik/shepherdr/blob/main/docs/core/start.md#requirements-and-installation"><img src="assets/buttons/install-shepherdr.svg" alt="Install Shepherdr" /></a></td>
 </tr>
 </table>
 
@@ -88,7 +88,7 @@ Shepherdr doesn't update itself: it never follows main, so a merge can't change 
 
 ### Do I need to know how to code?
 
-You need to be comfortable in a terminal for the install. After that everything happens in the app: you write to coordinators and answer cards, and Settings holds the few defaults. You'll need macOS or Linux, herdr-core 0.1.14, Bun 1.4.2, Git, Tailscale to reach it from your other devices, and Claude Code or Codex, installed and signed in. `gh` (pull requests), Chrome for the shared browser and an ElevenLabs key for voice are optional. [Get started](docs/guide.md#install) covers the prerequisites.
+You need to be comfortable in a terminal for the install. After that everything happens in the app: you write to coordinators and answer cards, and Settings holds the few defaults. You'll need macOS or Linux, herdr-core 0.1.14, Bun 1.4.2, Git, Tailscale to reach it from your other devices, and Claude Code or Codex, installed and signed in. `gh` (pull requests), Chrome for the shared browser and an ElevenLabs key for voice are optional. [Get started](docs/core/start.md#requirements-and-installation) covers the prerequisites.
 
 ### How do I check that Shepherdr is running?
 
@@ -142,12 +142,12 @@ The small engine under Shepherdr, with the `hc` command. It holds your agents' t
 
 ### I'm on 2.0. Where do I go?
 
-Nowhere until you want to: 2.0 and its data stay as they are, on the `v2.0` branch with its own README, and 2.1 never imports them. Don't pull main into it or update it from main. When you want 2.1, [Upgrading from 2.0](docs/guide.md#upgrading-from-20) has the steps.
+Nowhere until you want to: 2.0 and its data stay as they are, on the `v2.0` branch with its own README, and 2.1 never imports them. Don't pull main into it or update it from main. When you want 2.1, [Upgrading from 2.0](docs/core/cutover.md) has the steps.
 
 ## Open Shepherdr in three steps
 
 <p align="center">Shepherdr starts with an install, one link, and one sentence to a coordinator about what needs doing. It starts the agents, follows their work and brings what needs you to your phone. You choose what to answer and what to merge.</p>
 
-<p align="center"><a href="https://github.com/eliasstravik/shepherdr/blob/main/docs/guide.md#install"><img src="assets/buttons/install-shepherdr.svg" alt="Install Shepherdr" /></a></p>
+<p align="center"><a href="https://github.com/eliasstravik/shepherdr/blob/main/docs/core/start.md#requirements-and-installation"><img src="assets/buttons/install-shepherdr.svg" alt="Install Shepherdr" /></a></p>
 
 <p align="center"><sub>✓&nbsp;Free,&nbsp;MIT&nbsp;licensed &nbsp; ✓&nbsp;Runs&nbsp;on&nbsp;your&nbsp;machines,&nbsp;private&nbsp;on&nbsp;your&nbsp;tailnet &nbsp; ✓&nbsp;macOS&nbsp;and&nbsp;Linux,&nbsp;herdr-core&nbsp;0.1.14</sub></p>
