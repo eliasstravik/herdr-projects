@@ -1361,6 +1361,7 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
     <CardShell title={q.title} plan={q.kind === 'Plan'} source={source}>
       {q.screen ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-fg2">{q.screen}</pre> : null}
       {q.terminal && has('terminal') ? <button type="button" className="text-left text-accent" onClick={() => setUI({ term: chat.key, arts: null, kb: true })}>Open terminal</button> : null}
+      {q.plan ? <div data-plan className="max-h-96 overflow-auto"><Markdown text={q.plan} /></div> : null}
       {q.steps ? (
         <ol className="flex list-decimal flex-col gap-0.5 pl-5">
           {q.steps.map((x) => (
@@ -1395,7 +1396,7 @@ export function QuestionCard({ q, chat, msg, from, space, source }: { q: Questio
             {c.description ? (
               <span>
                 <span className="block">{immediate ? `Send: ${c.label}` : c.label}</span>
-                <span className="block text-[0.75rem]/[18px] text-fg2 phone:text-[0.8125rem]/5">{c.description}</span>
+                <span className="block whitespace-pre-line text-[0.75rem]/[18px] text-fg2 phone:text-[0.8125rem]/5">{c.description}</span>
               </span>
             ) : (
               (immediate ? `Send: ${c.label}` : c.label)

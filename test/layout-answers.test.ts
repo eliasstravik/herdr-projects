@@ -87,6 +87,7 @@ describe.skipIf(!browser)('answer cards', () => {
       { noteRequiredFor: 0 },
       { kind: 'Future' as unknown as 'Form' },
       { id: 'menu:permission' },
+      { kind: 'Plan' as const, plan: '# Build\n\n1. Build it' },
     ]
     chat.messages.push(...cases.map((c, i) => ({ id: `safe-${i}`, who: 'agent' as const, at: Date.now() + i, question: { ...base, id: `safe:${i}`, ...c } })))
     const sent: Action[] = []
@@ -105,6 +106,7 @@ describe.skipIf(!browser)('answer cards', () => {
         expect(sent.length).toBe(0)
         expect(await send.isEnabled()).toBe(true)
       }
+      expect(await page.locator('[data-whole="safe-7"] [data-plan]').innerText()).toContain('Build it')
       const required = page.locator('[data-whole="safe-4"] [data-card]')
       await required.getByRole('button', { name: 'Send', exact: true }).click()
       expect(sent.length).toBe(0)

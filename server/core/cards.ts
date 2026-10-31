@@ -9,7 +9,7 @@ export class CoreCards {
     if (permission?.chat === chat) {
       if (permission.settled) {
         const sent = permission.question.sent ?? (permission.allow ? 0 : -1)
-        return { ...question, ...permission.question, sent, ...(sent < 0 ? { closed: permission.question.closed || permission.question.said || 'This request is no longer waiting' } : {}) }
+        return { ...question, ...permission.question, sent, ...(sent < 0 && !permission.allow ? { closed: permission.question.closed || permission.question.said || 'This request is no longer waiting' } : {}) }
       }
       const reason = permission.expires <= Date.now() ? 'Permission request expired' : this.source.agents.get(chat)?.grant !== permission.grant ? 'Session replaced; ask the agent for a fresh card' : undefined
       if (reason) return { ...question, sent: -1, said: reason, closed: reason }

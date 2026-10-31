@@ -7,6 +7,7 @@ import { coreRequest } from '../server/core/request.ts'
 import type { CoreEndpoint } from '../server/core/client.ts'
 import type { MailCredential } from '../server/core/envelope.ts'
 import type { AgentHook } from '../server/core/model.ts'
+import type { PermissionAnswer } from '../server/core/native-asks.ts'
 
 const credentialFile = process.env.SHEPHERDR_CORE_CREDENTIAL
 const hookFile = process.env.SHEPHERDR_CORE_HOOK_FILE
@@ -21,15 +22,16 @@ try {
   const cut = (value: unknown, max: number) => typeof value === 'string' ? value.slice(0, max) : undefined
   const event: AgentHook = {
     id: randomUUID(), event: input.hook_event_name, at: Date.now(), session: cut(input.session_id, 128),
-    transcript: cut(input.transcript_path, 4096), agent: cut(input.agent_id, 128), model: cut(input.model, 128), tool: cut(input.tool_name, 128),
+    transcript: cut(input.transcript_path, 4096), agent: cut(input.agent_id, 128), model: cut(input.model, 128), tool: cut(input.tool_name, 128), mode: cut(input.permission_mode, 32),
   }
   appendFileSync(hookFile, JSON.stringify(event) + '\n', { mode: 0o600 })
   if (permission) {
     const answer = await coreRequest(credential.endpoint ?? credential.socket ?? (() => { throw new Error('Missing core endpoint') })(), credential.mail, 'permission', {
-      id: event.id, tool: event.tool, input: input.tool_input, session: event.session, agent: event.agent,
-    }, { id: event.id, timeout: 3_500_000 }) as { allow: boolean }
+      id: event.id, tool: event.tool, input: input.tool_input, session: event.session, agent: event.agent, at: event.at,
+    }, { id: event.id, timeout: 3_500_000 }) as PermissionAnswer
+    const { allow, ...reply } = answer
     console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: {
-      behavior: answer.allow === true ? 'allow' : 'deny', ...(answer.allow === true ? {} : { message: 'The human declined this request.' }),
+      behavior: allow === true ? 'allow' : 'deny', ...(allow === true ? {} : { message: 'The human declined this request.' }), ...reply,
     } } }))
   }
 } catch {

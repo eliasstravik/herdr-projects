@@ -45,12 +45,13 @@ import { CorePlugins } from './plugins.ts'
 import { CoreUnread } from './unread.ts'
 import { CoreCards } from './cards.ts'
 import { CorePilotMail } from './pilot-mail.ts'
-import { clip, TITLE_MAX, BODY_MAX } from '../../shared/alerts.ts'
+import { askText, clip, quickChoices, TITLE_MAX, BODY_MAX } from '../../shared/alerts.ts'
+import { NATIVE_UNREADABLE, nativeAnswer, nativeCards, nativeClosed, nativeReply, type NativeAsk, type PermissionAnswer } from './native-asks.ts'
 import type { CorePluginUpdates } from './plugin-updates.ts'
 import type { ActivityAsk, WorktreeAsk } from '../../shared/types.ts'
 
 interface Machine { id: string; name: string; state: string; host?: string; version?: string; session?: string | null }
-interface Permission { id: string; chat: string; grant: string; question: Question; expires: number; settled?: boolean; allow?: boolean }
+interface Permission { id: string; chat: string; grant: string; question: Question; expires: number; settled?: boolean; allow?: boolean; at?: number; native?: NativeAsk }
 interface PendingSend { id: string; chat: string; text: string; launch?: string; state: 'queued' | 'sending' | 'uncertain' | 'cancelled'; quiet?: boolean; work?: boolean }
 
 /** Product state is Shepherdr's; terminals, machine commands, files and agent children are core's. */
@@ -90,7 +91,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
   readonly worktrees: CoreWorktree
   private local: { id: string; name: string }
   private machines: Machine[] = []
-  private permissions = new Map<string, (answer: { allow: boolean }) => void>()
+  private permissions = new Map<string, (answer: PermissionAnswer) => void>()
   private faults = new Map<string, string>()
   private hooks = new Map<Action['type'], (action: Action) => Promise<unknown>>()
   private recovery?: ReturnType<typeof setInterval>
@@ -325,7 +326,18 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     const message = this.store.get<Message>(`message:${permission.chat}`, `permission-${permission.id}`)
     this.post(permission.chat, { ...message, id: `permission-${permission.id}`, who: 'agent', question: permission.question, at: message?.at ?? Date.now() })
     this.forwardQuestion(permission.chat, permission.question, reason, 'task', 'No longer waiting')
+    if (permission.native) {
+      this.replyNative(permission.native, nativeClosed(reason))
+      for (const card of this.nativeRows(permission.native.head)) this.expirePermission(card, reason)
+      return
+    }
     this.permissions.get(permission.id)?.({ allow: false }); this.permissions.delete(permission.id)
+  }
+  private nativeRows(head: string) { return this.store.all<Permission>('permission').filter(item => item.native?.head === head) }
+  private replyNative(native: NativeAsk, reply: PermissionAnswer) {
+    const head = this.store.get<Permission>('permission', native.head)
+    if (head?.native) { head.native.reply ??= reply; this.store.set('permission', head.id, head) }
+    this.permissions.get(native.head)?.(head?.native?.reply ?? reply); this.permissions.delete(native.head)
   }
   denyPermissions(agent: CoreAgent, reason: string) {
     for (const permission of this.store.all<Permission>('permission')) if (permission.chat === agent.chat && permission.grant === agent.grant && !permission.settled) this.expirePermission(permission, reason)
@@ -334,7 +346,8 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
     for (const permission of this.store.all<Permission>('permission')) if (permission.chat === chat && !permission.settled) {
       const agent = this.agents.get(chat)
       const reason = permission.expires <= Date.now() ? 'Permission request expired' : agent?.grant !== permission.grant ? 'Session replaced; ask the agent for a fresh card'
-        : this.agents.terminal(agent)?.state === 'finished' ? 'Agent stopped; ask again after restarting it' : undefined
+        : this.agents.terminal(agent)?.state === 'finished' ? 'Agent stopped; ask again after restarting it'
+        : permission.native && agent!.nativeEnded! > permission.at! ? 'Handled in the terminal' : undefined
       if (reason) this.expirePermission(permission, reason)
     }
   }
@@ -379,14 +392,23 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
         const permission = this.store.get<Permission>('permission', action.question)
         if (!permission || permission.chat !== action.chat || permission.settled) throw new Error('This request is no longer waiting for an answer')
         if (permission.expires <= Date.now() || this.agents.get(action.chat)?.grant !== permission.grant) throw new Error('This permission belongs to an expired or replaced agent session')
-        if (action.choice !== 0 && action.choice !== 1) throw new Error('Choose Allow once or Deny')
-        const allow = action.choice === 0
-        permission.settled = true; permission.allow = allow; permission.question.sent = action.choice
+        const native = permission.native, answer = native && nativeAnswer(permission.question, action)
+        if (!native && action.choice !== 0 && action.choice !== 1) throw new Error('Choose Allow once or Deny')
+        const allow = answer ? answer.allow : action.choice === 0
+        permission.settled = true; permission.allow = allow; permission.question.sent = answer ? answer.sent : action.choice
+        if (native && answer) { native.answer = permission.question.said = answer.said }
         this.store.set('permission', permission.id, permission)
         const agent = this.agents.get(action.chat)
         if (agent && agent.permission === permission.id) { agent.permission = this.openPermissions(agent)[0]?.id; agent.state = agent.permission ? 'blocked' : 'working'; this.store.set('agent', agent.chat, agent) }
-        this.post(action.chat, { id: `permission-${permission.id}`, who: 'agent', question: permission.question, at: Date.now() })
-        this.forwardQuestion(action.chat, permission.question, allow ? 'Allow once' : 'Deny', action.space ? 'space' : 'task')
+        const message = this.store.get<Message>(`message:${action.chat}`, `permission-${permission.id}`)
+        this.post(action.chat, { ...message, id: `permission-${permission.id}`, who: 'agent', question: permission.question, at: message?.at ?? Date.now() })
+        this.forwardQuestion(action.chat, permission.question, answer?.said ?? (allow ? 'Allow once' : 'Deny'), action.space ? 'space' : 'task')
+        if (native && answer) {
+          const cards = this.nativeRows(native.head)
+          if (cards.some(card => !card.settled)) return { answered: true }
+          this.replyNative(native, nativeReply(native, cards, answer.sent, action.note?.trim()))
+          return { answered: true }
+        }
         this.permissions.get(permission.id)?.({ allow }); this.permissions.delete(permission.id)
         return { answered: true }
       }
@@ -615,23 +637,29 @@ Use hc for starting, messaging and waiting on core child agents. Never use a web
   }
 
   /** Internal dispatch after authenticating the current launch; cancellation always wins a later answer. */
-  requestPermission(agent: CoreAgent, grant: Grant, request: MailRequest, requestId: string): Promise<unknown> | { allow: boolean } {
-    const input = request.args as { id?: string; tool?: string; input?: unknown }
+  requestPermission(agent: CoreAgent, grant: Grant, request: MailRequest, requestId: string): Promise<unknown> | PermissionAnswer {
+    const input = request.args as { id?: string; tool?: string; input?: unknown; at?: number }
     if (typeof input.id !== 'string' || !/^[a-f0-9-]{36}$/.test(input.id) || input.id !== requestId) throw new Error('Invalid permission request identity')
     if (this.store.get(`permission-cancel:${grant.id}`, input.id)) return { allow: false }
     const previous = this.store.get<Permission>('permission', input.id)
     if (previous && (previous.grant !== grant.id || previous.chat !== grant.chat)) throw new Error('Permission id belongs to another session')
-    if (previous?.settled) return { allow: previous.allow === true }
-    const question: Question = { id: input.id, title: `${agent.kind === 'claude' ? 'Claude Code' : 'Codex'} asks to use ${String(input.tool || 'a tool').slice(0, 100)}`,
-      kind: 'Question', choices: [{ label: 'Allow once' }, { label: 'Deny' }], to: grant.chat, noNote: true,
-      screen: JSON.stringify(input.input, null, 2)?.slice(0, 16_000) }
-    const permission: Permission = { id: input.id, chat: grant.chat, grant: grant.id, question, expires: request.expires }
-    this.store.set('permission', input.id, permission)
+    if (previous?.settled) return previous.native?.reply ?? { allow: previous.allow === true }
+    const native = agent.kind === 'claude' ? nativeCards(input.tool, input.input, input.id, agent.permissionMode) : undefined
+    if (native && !native.questions.length) return NATIVE_UNREADABLE
+    const questions = native?.questions ?? [{ id: input.id, title: `${agent.kind === 'claude' ? 'Claude Code' : 'Codex'} asks to use ${String(input.tool || 'a tool').slice(0, 100)}`,
+      kind: 'Question' as const, choices: [{ label: 'Allow once' }, { label: 'Deny' }], to: grant.chat, noNote: true,
+      screen: JSON.stringify(input.input, null, 2)?.slice(0, 16_000) }]
+    const rows = questions.map((question): Permission => ({ id: question.id, chat: grant.chat, grant: grant.id, question, expires: request.expires, at: Number.isFinite(input.at) ? input.at : Date.now(), ...(native ? { native: { ...native.native, head: input.id! } } : {}) }))
+    const permission = rows[0], question = permission.question
     agent.state = 'blocked'; agent.permission = input.id; this.store.set('agent', agent.chat, agent)
-    this.post(grant.chat, { id: `permission-${input.id}`, who: 'agent', question, at: Date.now() })
-    this.forwardQuestion(grant.chat, question)
-    this.emit('alert', { id: input.id, from: 'Shepherdr', title: question.title, body: 'Waiting for your permission', go: { place: agent.space, focus: input.id }, tag: grant.chat,
-      card: { chat: grant.chat, question: input.id, choices: question.choices.map((choice, index) => ({ label: choice.label, choice: index })) } })
+    for (const row of rows) {
+      this.store.set('permission', row.id, row)
+      this.post(grant.chat, { id: `permission-${row.id}`, who: 'agent', question: row.question, at: Date.now() })
+      this.forwardQuestion(grant.chat, row.question)
+    }
+    const task = this.tasks.forChat(grant.chat)
+    this.emit('alert', { id: input.id, from: 'Shepherdr', ...(native ? askText(task?.id || this.space(agent.space)?.name || 'Shepherdr', question) : { title: question.title, body: 'Waiting for your permission' }), go: { place: agent.space, focus: input.id }, tag: grant.chat,
+      card: { chat: grant.chat, question: input.id, choices: native ? quickChoices(question) : question.choices.map((choice, index) => ({ label: choice.label, choice: index })) } })
     return new Promise(resolve => {
       const timer = setTimeout(() => {
         this.expirePermission(permission, 'Permission request expired')
