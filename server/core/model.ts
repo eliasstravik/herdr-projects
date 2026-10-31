@@ -38,6 +38,10 @@ export interface CoreAgent {
   activityAt?: number
   state: 'starting' | 'idle' | 'working' | 'blocked'
   permission?: string
+  /** The native permission mode it last ran on outside plan mode. */
+  permissionMode?: string
+  /** When a native question or plan last ended by hook: answered or dismissed in the terminal if its card is still open. */
+  nativeEnded?: number
   /** App-private contained launch metadata. Labels and request bodies never establish this ownership. */
   pilot?: { run: string; home: string; captures: string; pending?: boolean }
 }
@@ -51,4 +55,6 @@ export interface AgentHook {
   agent?: string
   model?: string
   tool?: string
+  /** the native permission mode */
+  mode?: string
 }

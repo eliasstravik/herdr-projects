@@ -17,5 +17,5 @@ export function pilotHook(input: unknown, id: string, kind: AgentKind, home: str
     if (!relative.startsWith(prefix) || !relative.endsWith('.jsonl') || relative.length > 2048 || relative.split('/').length > 64) throw Error('Contained transcript is outside its provider history')
     transcript = posix.join(captures, relative)
   }
-  return { id, event: value.hook_event_name, at: now, session: text('session_id', 128), transcript, agent: text('agent_id', 128), model: text('model', 128), tool: text('tool_name', 128) }
+  return { id, event: value.hook_event_name, at: now, session: text('session_id', 128), transcript, agent: text('agent_id', 128), model: text('model', 128), tool: text('tool_name', 128), mode: text('permission_mode', 32) }
 }

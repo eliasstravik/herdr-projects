@@ -272,6 +272,8 @@ export interface Question {
   /** Explicitly an ordinary question, never permission or approval. Missing means confirm. */
   ordinary?: boolean
   steps?: string[]
+  /** a plan in the CLI's own words, in Markdown */
+  plan?: string
   /** CLI prompt context, read from its visible screen. */
   screen?: string
   terminal?: boolean

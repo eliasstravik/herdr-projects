@@ -240,6 +240,8 @@ export class CoreAgents {
     if (Number.isFinite(event.at) && event.at > 0 && event.at <= Date.now() + 60000) record.activityAt = Math.max(record.activityAt ?? record.started, event.at)
     if (event.session) record.session = event.session
     if (event.transcript) record.transcript = event.transcript
+    if (event.mode && event.mode !== 'plan') record.permissionMode = event.mode
+    if (event.event === 'UserPromptSubmit' || event.event === 'Stop' || (event.event === 'PostToolUse' || event.event === 'PostToolUseFailure') && (event.tool === 'AskUserQuestion' || event.tool === 'ExitPlanMode')) record.nativeEnded = event.at
     // The early word until the transcript says more: a hook must not outrank the records it fires around.
     if (event.model && record.runtime?.source !== 'session' && event.at >= (record.runtime?.at ?? 0)) record.runtime = { ...record.runtime, model: event.model, source: 'hook', at: event.at }
     if (event.event === 'SessionStart' || event.event === 'Stop' || event.event === 'SessionEnd') record.state = 'idle'

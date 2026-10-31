@@ -63,7 +63,7 @@ export class CorePilotMail {
     if (event.event === 'PermissionRequest' && (JSON.stringify(raw.tool_input, null, 2)?.length ?? 0) > 16_000) throw Error('Native permission input is too large to show in full; review it in Terminal')
     this.source.agents.hook(agent, event)
     if (event.event !== 'PermissionRequest') return {}
-    const answer = await this.source.requestPermission(agent, grant, { ...request, args: { id, tool: event.tool, input: raw.tool_input } }, id)
+    const answer = await this.source.requestPermission(agent, grant, { ...request, args: { id, tool: event.tool, input: raw.tool_input, at: event.at } }, id)
     // A response may have been waiting while the human stopped this run.
     try { this.policy.actor(runId, actor) } catch { return { allow: false } }
     return answer
