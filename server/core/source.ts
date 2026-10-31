@@ -590,6 +590,7 @@ export class CoreSource extends Emitter<SourceEvents> implements Source {
   task queue ID --after ID,ID|none | task stop ID
   task pause|pin|unpin|archive|unarchive ID (coordinator only, when the human asks)
   task close|delete ID [--force] (coordinator only; force may discard held work on delete)
+  task review-more ID (coordinator only; one more review round once all are used)
   status ID TEXT --done 0..100 --left 5m|1h20m
   ask TITLE --choice LABEL --choice LABEL | plan [ID] --title TITLE --step TEXT --step TEXT
   review ID | pr ID | checks ID [--comments [--offset N] [--from nextFrom]]

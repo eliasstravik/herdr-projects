@@ -99,6 +99,10 @@
   settle as cards for you, and your yes before anything irreversible; the proof in one small artifact; ready with a facts line; then merge or ask. How to
   build and check the work is the agent's own judgment: Shepherdr only gives it the brief, your defaults and the house
   rules.
+- Review rounds are a limit so no agent reviews for ever, and an agent can't raise its own. One that has used them all
+  with its final commit unreviewed is refused and told to ask its coordinator, who gives it exactly one more with
+  `shepherdr task review-more <id>`: you ask the coordinator, as for any task control. It works only once all are
+  used, and `task show` records it (`reviewRoundsAdded`).
 - A task with nothing to merge (an answer, research, or work no longer wanted) is closed: `shepherdr task close <id>
   [--summary "..."]`, or just ask its coordinator. Its agent stops, its space closes, its worktree and branch go when
   they hold nothing unsaved or unmerged (else they are kept, and it says so) and it shows in Done with its summary

@@ -46,6 +46,8 @@ export interface CoreTask extends Task {
   review: { on: boolean; kind: AgentKind; rounds: number; mustFix: string }
   reviewTerminal?: string
   reviewRound?: number
+  /** rounds a coordinator added past the task's setting; each is already in review.rounds */
+  reviewRoundsAdded?: number
   reviewChat?: string
   reviewHead?: string
   reviewReport?: string
@@ -424,7 +426,7 @@ export class CoreTasks {
       this.save(task); await this.label(task); this.card(task, summary)
       return task
     }
-    if (task.review.on && (!task.reviewReport || !task.reviewTurn || task.reviewHead !== task.readyHead)) throw new Refusal('Complete a fresh review of this exact commit before reporting ready')
+    if (task.review.on && (!task.reviewReport || !task.reviewTurn || task.reviewHead !== task.readyHead)) throw new Refusal(`Complete a fresh review of this exact commit before reporting ready${this.roundsLeft(task) || this.reviewRunning(task) ? '' : `. ${this.roundsUsed(task)}`}`)
     if (task.pr) {
       const location = { machine: task.machine, folder: task.folder }, remote = await this.git.remote(location)
       if (!remote) throw new Refusal('The saved pull request no longer has its GitHub origin')
@@ -751,14 +753,30 @@ export class CoreTasks {
     this.source.store.delete('task', task.id); this.source.emit('snapshot')
     return { ok: true, stopped: true }
   }
+  private roundsLeft(task: CoreTask) { return task.review.rounds - (task.reviewRound ?? 0) }
+  private roundsUsed(task: CoreTask) { return `All ${task.review.rounds} review rounds are used. If a commit still needs a review, say why in your chat and end your turn: only your coordinator can add a round (shepherdr task review-more ${task.id})` }
+  /** One more round past the setting. The limit stops an agent reviewing for ever, so its own agent can never raise it. */
+  private async reviewMore(grant: Grant, id: string) {
+    const task = this.get(id)
+    if (!task) throw new Refusal('No such task')
+    if (this.source.agents.get(grant.chat)?.role !== 'coordinator') throw new Refusal('Only this task’s coordinator adds a review round; ask it')
+    if (!task.review.on) throw new Refusal('Review is off for this task')
+    if (['merged', 'closed', 'merging'].includes(task.workflow)) throw new Refusal(`${task.id} is already ${task.workflow}; it needs no more review`)
+    if (this.roundsLeft(task)) throw new Refusal(`${task.id} has used ${task.reviewRound ?? 0} of ${task.review.rounds} review rounds; add one only when they are all used`)
+    task.review.rounds++; task.reviewRoundsAdded = (task.reviewRoundsAdded ?? 0) + 1
+    const words = `<shepherdr>Your coordinator added one review round: ${task.review.rounds} in all. Run shepherdr review ${task.id} on your final commit.</shepherdr>`
+    if (this.source.agents.get(task.chat)) this.source.saveAndDeliver(task.chat, `review-more-${randomUUID()}`, words, () => this.save(task), true)
+    else this.save(task)
+    return `${task.id} may now use ${task.review.rounds} review rounds`
+  }
   async review(grant: Grant, id: string) { return this.change(id, () => this.reviewNow(grant, id)) }
   private async reviewNow(grant: Grant, id: string) {
     const task = this.get(id)
     if (!task) throw new Refusal('No such task')
     this.assert(grant, task)
     if (!task.review.on) throw new Refusal('Review is off for this task')
+    if (!this.roundsLeft(task)) throw new Refusal(this.roundsUsed(task))
     const round = (task.reviewRound ?? 0) + 1
-    if (round > task.review.rounds) throw new Refusal('The configured review rounds have been used; report the remaining findings')
     const parent = this.source.agents.get(task.chat), space = this.source.space(task.place)
     if (!parent || !space) throw new Refusal('The task agent must be running before its reviewer starts')
     const pilot = task.pilot ? this.source.pilots.policy.live(task.pilot) : undefined
@@ -943,6 +961,7 @@ export class CoreTasks {
         : sub === 'pin' || sub === 'unpin' ? { type: 'pin' as const, on: sub === 'pin' } : { type: 'pause' as const }
       return text(await this.act({ ...action, chat: task.chat }))
     }
+    if (verb === 'task' && sub === 'review-more') return text(await this.change(id, () => this.reviewMore(grant, id)))
     if (verb === 'task' && sub === 'start') return text(this.details(await this.start(grant, id, rest.slice(1).join(' ') || undefined)))
     if (verb === 'task' && sub === 'stop') return text(this.details(await this.stop(grant, id)))
     if (verb === 'status') {

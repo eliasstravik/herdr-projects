@@ -106,6 +106,39 @@ test('review-on ready requires a finished report for the exact commit', async ()
   })
 })
 
+test('only the task\'s coordinator adds one review round once all are used', async () => {
+  await withTask(async ({ tasks, task, grant }) => {
+    const source = (tasks as unknown as { source: CoreSource }).source
+    const original = source.agents.get.bind(source.agents), sent: string[] = []
+    const seat = (chat: string, role: string, space = task.place) => ({ chat, role, space, launch: chat, grant: chat, machine: task.machine, kind: 'codex' }) as ReturnType<typeof original>
+    const seats = [seat('space', 'coordinator'), seat('other', 'coordinator', 'other-space'), seat(`${task.id}/Reviewer-3`, 'reviewer')]
+    source.agents.get = key => seats.find(agent => agent!.chat === key) ?? original(key)
+    source.agents.launch = (async () => ({ chat: `${task.id}/Reviewer-4`, terminal: 't4', launch: 'review-4' })) as unknown as typeof source.agents.launch
+    source.saveAndDeliver = ((_chat: string, _id: string, text: string, save: () => void) => { sent.push(text); save() }) as typeof source.saveAndDeliver
+    const as = (chat: string) => ({ ...grant, id: chat, chat, session: chat }) as Grant
+    const more = (who: Grant) => tasks.cli(who, ['task', 'review-more', task.id])
+    source.store.set('task', task.id, { ...task, review: { ...task.review, on: true }, reviewRound: 2 })
+
+    await expect(more(as('space'))).rejects.toThrow('used 2 of 3')
+    source.store.set('task', task.id, { ...tasks.get(task.id)!, reviewRound: 3 })
+    await expect(tasks.review(grant, task.id)).rejects.toThrow('only your coordinator can add a round')
+    await expect(tasks.ready(grant, task.id, 'Changed example')).rejects.toThrow('only your coordinator can add a round')
+    await expect(more(grant)).rejects.toThrow('Only this task’s coordinator')
+    await expect(more(as(`${task.id}/Reviewer-3`))).rejects.toThrow('does not own')
+    await expect(more(as('other'))).rejects.toThrow('does not own')
+    expect(tasks.get(task.id)).toMatchObject({ review: { rounds: 3 } })
+
+    expect((await more(as('space'))).out).toContain('4 review rounds')
+    expect(tasks.get(task.id)).toMatchObject({ review: { rounds: 4 }, reviewRoundsAdded: 1 })
+    expect(sent).toEqual([expect.stringContaining('one review round')])
+    await expect(more(as('space'))).rejects.toThrow('used 3 of 4')
+
+    await tasks.review(grant, task.id)
+    expect(tasks.get(task.id)).toMatchObject({ reviewRound: 4 })
+    await expect(tasks.review(grant, task.id)).rejects.toThrow('All 4 review rounds are used')
+  })
+})
+
 test('review relay waits for a successful native turn end, not idle or commentary', async () => {
   await withTask(async ({ tasks, task }) => {
     const source = (tasks as unknown as { source: CoreSource }).source
